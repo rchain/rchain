@@ -1,0 +1,36 @@
+# Eclipse Project Files
+#######################
+.settings
+.classpath
+.project
+.springBeans
+bin
+
+.cache-main
+.cache-tests
+.worksheet/
+.tmpBin/
+
+# Maven Output #
+#################
+target
+
+# Intellij IDEA Project Files
+#############################
+*.iml
+.idea
+Springsprout.iml
+
+# OS generated files
+####################
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
+
+# SBT
+#####
+target/
+lib_managed/
+src_managed/
+boot/
