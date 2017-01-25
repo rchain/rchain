@@ -8,67 +8,49 @@
 package coop.rchain.trie
 
 import org.mongodb.scala._
-import org.mongodb.scala.model.Filters._
-import java.util.concurrent.TimeUnit
-import scala.concurrent.Await
-import scala.concurrent.duration.Duration
+import org.mongodb.scala.model.Filters
+
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 import org.json4s.jackson.Serialization
-import org.json4s.jackson.Serialization.{read, write}
 
-object MongoDB {
-  private val client: MongoClient = MongoClient()
-  private val db: MongoDatabase = client.getDatabase("rchain")
-  val trie: MongoCollection[Document] = db.getCollection("trie")
-  
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
+class MongoDB extends Store {
+  //TODO move to config
+  lazy private val client: MongoClient = MongoClient()
+  lazy private val db: MongoDatabase = client.getDatabase("rchain")
+  lazy val trie: MongoCollection[Document] = db.getCollection("trie")
+
   implicit val formats = Serialization.formats(NoTypeHints)
-  
-  implicit private def trieToDocument(t: Trie): Document = {
-    Document("_id" -> t.id, "sx" -> t.suffixes, "kx" -> t.keys, "v" -> t.value)
-  }
-  
-  implicit private def documentToTrie(doc: Document): Trie = {
-    val json = parse(doc.toJson).transformField {
-      case ("sx", x) => ("suffixes", x)
-      case ("kx", x) => ("keys",  x)
-      case ("v",  x) => ("value", x)
-    }
-    json.extract[NonEmptyTrie]
-  }
-  
-  def get(k: String) = {
-    val query = Document("_id" -> k) 
-    trie.find(query).subscribe(
-      (doc: Document) => documentToTrie(doc),
-      (error: Throwable) => println(s"Query failed: ${error.getMessage}")
-    )
+
+  implicit private def trieToDocument(t: Trie): Document = t match {
+    case Node(id,p,v) if p.isEmpty => Document("_id" -> id, "v" -> v)
+    case Node(id,p,v) if v == None => Document("_id" -> id, "sx" -> p.sx, "kx" -> p.kx)
+    case Node(id,p,v) if v != None => Document("_id" -> id, "sx" -> p.sx, "kx" -> p.kx, "v" -> v)
   }
 
-  def put(t: Trie): Unit = {
-    trie.insertOne(trieToDocument(t)).subscribe(
-      (result: Completed) => println(s"MongoDB put: $t"),
-      (error: Throwable) => println(s"Query failed: ${error.getMessage}")
-    )
+  implicit private def documentToTrie(doc: Document): Trie = {
+    val json = parse(doc.toJson)
+    Node((json \ "_id").extract[String], json.extract[SuffixMap], (json \ "v").extract[Option[String]])
   }
-  
-  def delete(k: String) = {
-    println(s"MongoDB delete $k")
-    Await.result(trie.deleteOne(Document("_id" -> k)).toFuture, Duration(5, TimeUnit.SECONDS ))
+
+  implicit private def optionDocToOptionTrie(doc: Option[Document]):
+    Option[Trie] = doc match {
+      case None      => None
+      case Some(doc) => Some(doc)
   }
-  
-  def getNode(id: String): Trie = {
-    val results = getResult(Document("_id" -> id) )
-    results(0)
-  }
-  
-  def getParent(childId: String): Option[Trie] = {
-    val results = getResult(Document("kx" -> childId))
-    if(results.isEmpty) None
-    else Some(results(0))
-  }
- 
-  private def getResult(query: Document) = {
-    Await.result(trie.find(query).toFuture, Duration(5, TimeUnit.SECONDS))
-  }
+
+  def get(id: String): Option[Trie] = getKey("_id", id)
+
+  def put(t: Trie): Unit = trie.replaceOne(Filters.eq("_id", t.id), t).toFuture
+
+  def insert(t: Trie): Unit = trie.insertOne(t).toFuture
+
+  def delete(id: String): Unit = trie.deleteOne(Document("_id" -> id)).toFuture
+
+  def getKey(k: String, v: String): Option[Trie] = getAwait(Document(k -> v)).headOption
+
+  private def getAwait(query: Document) = Await.result(trie.find(query).toFuture, 1000.milliseconds)
 }
