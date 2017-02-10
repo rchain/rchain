@@ -69,12 +69,12 @@ class SuffixMapSpec extends FlatSpec with Matchers {
   
   it should "match on overlapping prefixes (PartialLeft)" in {
     val sm = SuffixMap("an" -> "an-key")    
-    assert(sm.checkPrefix("andover") == PartialLeft("an-key", "an", "dover")) 
+    assert(sm.checkPrefix("andover") == Partial("an-key", ("an", "dover"), Trie.Terminator)) 
   }
   
   it should "match on sub-prefixes (PartialRight)" in {
     val sm = SuffixMap("ralism" ->"ralism-key")    
-    assert(sm.checkPrefix("r") == PartialRight("ralism-key", "r", "alism")) 
+    assert(sm.checkPrefix("r") == Partial("ralism-key", ("r", "alism"), Trie.Terminator)) 
   }
   
   it should "match on whole prefixes" in {

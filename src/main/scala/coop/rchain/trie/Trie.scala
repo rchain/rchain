@@ -151,19 +151,17 @@ object Trie {
   def put(ns: String, k: String, v: String): Trie = {
     root(ns).put(k, v)
   }
-
+  
   def get(ns: String, k: String): Option[String] = {
     def explore(t: Trie, s: String, depth: Int): Option[String] = {
       if (depth == k.length) t.terminatorKey match {
         case None => t.get(k)
         case Some(id) => ioGet(id).get.get(k)
       }
-      else t.children.findPrefix(s) match {
-        case None => println(s"Not found $k"); None
-        case Some(hit) => ioGet(hit.id) match {
-          case Some(x) => explore(x, s substring hit.depth, depth + hit.depth)
-          case _ => None // db missing node -> Explode
-        }
+      else t.children.checkPrefix(s) match {
+        case Miss(_) => None
+        case Hit(id) => ioGet(id).flatMap(x => explore(x, "", depth + s.length))
+        case Partial(id,h,_) => ioGet(id).flatMap(x => explore(x, s substring h._1.length, depth + h._1.length))
       }
     }
     if (ns.isEmpty || k.isEmpty) None

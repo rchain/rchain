@@ -29,8 +29,8 @@ object XMatchResult {
     val tails = (query.splitAt(m.length)._2, suffix.splitAt(m.length)._2)
     (tails._1.isEmpty, tails._2.isEmpty) match {
       case (true,true)   => Hit(id)
-      case (true,false)  => PartialRight(id, m, tails._2)
-      case (false,true)  => PartialLeft(id, m, tails._1)
+      case (true,false)  => Partial(id, (m, tails._2), Trie.Terminator)
+      case (false,true)  => Partial(id, (m, tails._1), Trie.Terminator)
       case (false,false) => Partial(id, (m, tails._1), tails._2)
     }
   }
@@ -38,8 +38,8 @@ object XMatchResult {
 case class Hit(id: String) extends XMatchResult
 case class Miss(key: String) extends XMatchResult
 case class Partial(id: String, h: (String, String), t: String) extends XMatchResult
-case class PartialRight(id: String, h: String, t: String) extends XMatchResult
-case class PartialLeft(id: String, h: String, t: String) extends XMatchResult
+case class PartialRight(id: String, h: (String, String), t: String) extends XMatchResult
+case class PartialLeft(id: String, h: (String, String), t: String) extends XMatchResult
 
 case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String, String] with MapLike[String, String, SuffixMap] {
   
