@@ -33,11 +33,19 @@ class SuffixMapSpec extends FlatSpec with Matchers {
   }
   
   it should "remove keys" in {
-    smv - "a" should equal(SuffixMap.empty)
+    assert((SuffixMap("a" -> "b", "c" -> "d") - "a") === (SuffixMap("c" -> "d")))
+  }
+  
+  it should "chain add and remove ops" in {
+    assert(smv - "a" + ("foo" -> "bar") == (SuffixMap("foo" -> "bar")))
   }
   
   it should "get keys when present" in {
     assert(SuffixMap("foo" -> "bar").get("foo") == Some("bar"))
+  }
+  
+  it should "get terminator keys when present" in {
+    assert(SuffixMap(Trie.Terminator -> "bar").get(Trie.Terminator) == Some("bar"))
   }
   
   it should "return None when key not present" in {
@@ -64,22 +72,28 @@ class SuffixMapSpec extends FlatSpec with Matchers {
   
   it should "match on shared prefixes (Partial)" in {
     val sm = SuffixMap("and" -> "and-key")
-    assert(sm.checkPrefix("ant") == Partial("and-key", ("an", "t"), "d")) 
+    val found = sm.checkPrefix("ant") 
+    assert(found == Partial("and-key", ("an", "d"), "t")) 
+    assert(found.suffix == "and") 
   }
   
-  it should "match on overlapping prefixes (PartialLeft)" in {
-    val sm = SuffixMap("an" -> "an-key")    
-    assert(sm.checkPrefix("andover") == Partial("an-key", ("an", "dover"), Trie.Terminator)) 
+  it should "match on overlapping prefixes (PartialRight)" in {
+    val sm = SuffixMap("an" -> "an-key")   
+    val found = sm.checkPrefix("andover")
+    assert(found == PartialRight("an-key", ("an", Trie.Terminator), "dover")) 
+    assert(found.suffix == "an") 
   }
   
-  it should "match on sub-prefixes (PartialRight)" in {
+  it should "match on sub-prefixes (PartialLeft)" in {
     val sm = SuffixMap("ralism" ->"ralism-key")    
-    assert(sm.checkPrefix("r") == Partial("ralism-key", ("r", "alism"), Trie.Terminator)) 
+    val found = sm.checkPrefix("r")
+    assert(found == PartialLeft("ralism-key", ("r", "alism"), Trie.Terminator)) 
+    assert(found.suffix == "ralism") 
   }
   
   it should "match on whole prefixes" in {
     val sm = SuffixMap("foo" -> "foo-key")
-    (sm.findPrefix("foo") == Hit("foo-key")) 
+    (sm.checkPrefix("foo") == Hit("foo-key")) 
   }
   
   it should "not match on non-overlapping prefixes" in {

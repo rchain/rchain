@@ -9,7 +9,6 @@ package coop.rchain.trie
 
 import scala.collection.immutable.Vector
 
-import org.mongodb.scala.bson.Document
 import io.jvm.uuid._
 import coop.rchain.trie.Datastore._
 
@@ -17,89 +16,64 @@ sealed trait Trie {
   val id: String
   val children: SuffixMap
   val v: Option[String]
-  def isLeaf: Boolean = children.isEmpty || terminatorKey != None
 
-  val terminatorKey: Option[String] = children.get(Trie.Terminator)
+  def tKey: Option[String] = children.get(Trie.Terminator)
 
-  def get(k: String): Option[String] = v
-
-  /**
-   * Insert a key value pair
-   *
-   */
-  def put(k: String, v: String): Trie = {
-    if (k.isEmpty) IO.Update(Node(id, children, v)).run
-    else children.findPrefix(k) match {
-      case None                    => doAppend(k, v).run
-      case Some(px) if px.exact    => Trie.ioGet(px.id).get.put(px.query.tail, v)
-      case Some(px) if px.partial2 => expand2(px, v)
-      case Some(px)                => expand(px, v)
-    }
+  def get(k: String): Option[String] = {
+    if (v == None) println("Missing Value")
+    v
   }
 
   /**
-   * Insert a partially matched key 1 (suffix) or both remainders
+   * Partial(id, (an, d) t) - remainders on both query and suffix
+   * 
+   * => Always Expand 
    *
-   * Split on the shared prefix. Create a branch pointing to a new leaf whilst
-   * preserving the subtree at the existing path.
+   *  (and)   put(ant,789) =>   (an)         (px.h._1)         
+   *    |                       /  \          /      \
+   *   456                   (d)    (t)    (px.h._2)(px.t) 
+   *                          |      |        |       |
+   *                         456    789     px.id    789
    *
-   *       (and)       put(ant,789) =>       (an)
-   *         |                               /  \
-   *        456                           (d)    (t)
-   *                                      /        \
-   *                                    456        789
+   * Partial(id, (an, d) t) - with existing TS
    *
-   * Where a prefix match has no remainder on the key we use a terminator
-   * symbol to maintain a path to the existing key value.
+   *     (and)   put(ant,123) =>  (an)               (px.h._1)         
+   *     /   \                    /  \               /      \
+   *   (TS) (over)              (d)  (t)        (px.h._2) (px.t) 
+   *    |     |                /   \    \           |        |     
+   *   456   789            (TS) (over) 123      (px.id)    123
+   *                          |     |             |    |
+   *                         456   789           456  789
+   * 
+   * PartialLeft(id, (an, d) TS) - remainder on existing suffix
+   * 
+   * => Always Expand 
    *
-   *       (and)       put(a,789) =>         (a)
-   *         |                               /  \
-   *        456                           (TS)   (nd)
-   *                                      /        \
-   *                                    789        456
+   *  (and)   put(an,789) =>   (an)           (px.h._1)
+   *    |                      /  \            /     \
+   *   456                  (d)   (TS)     (px.h._2) (px.t)     
+   *                         |      |          |       |
+   *                        456    789       px.id    789                        
    *
-   * @param px prefix match details
-   * @param v the value to insert at the new branch
-   */
-  private def expand(px: PrefixMatch, v: String): Trie = {
-    val tail = if (px.query.tail.isEmpty) Trie.Terminator else px.query.tail
-    doExpand(px, v, tail, px.suffix.tail, px.suffix.head).run
-  }
-
-  private def doExpand(px: PrefixMatch, v: String, sfx1: String, sfx2: String, updated: String): IO[Trie] = for {
-    leaf   <- IO.Insert(Node(v))
-    node   <- IO.Insert(Node(SuffixMap.empty + (sfx1 -> leaf.id) + (sfx2 -> px.id)))
-    parent <- IO.Update(Node(id, children - px.suffix.word + (updated -> node.id)))
-  } yield parent
-
-  /**
-   * Insert a partially matched key with 1 (key) remainder
+   * PartialLeft(id, (a, n) TS) - with existing TS
    *
-   * Where a prefix match has no remainder on the existing suffix we use a terminator
-   * symbol to maintain the path to values where they exist.
+   *     (an)    put(a, 345) =>  (a)             (px.h._1)
+   *     /  \                   /   \             /     \
+   *  (d)   (TS)              (n)   (TS)     (px.h._2)  (px.t)
+   *   |      |               / \      \        / \       \
+   *  456    789           (d)  (TS)   345    (px.id)     345
+   *                        |     |           |     |
+   *                       456   789         456   789
    *
-   * If the matched suffix has no value we can continue to the next node
+   * PartialRight(id, (and, TS) over) - remainder on query
+   * 
+   *  (and)  put(andover,789) =>  (and)          (px.h._1)
+   *    |                         /  \             /    \
+   *   456                     (TS)  (over)   (px.h._2) (px.t)
+   *                             |     |          |       |
+   *                            456   789       px.id    789
    *
-   *       (dog)       put(dogs,789) =>      (dog)            (dog)
-   *         |                               /  \                \
-   *        456                           (TS)   (s)            (e s)
-   *                                      /        \            /   \
-   *                                    456        789       (...)  789
-   *
-   * @param px prefix match details
-   * @param v the value to insert at the new branch
-   */
-  private def expand2(px: PrefixMatch, v: String): Trie = {
-    db.get(px.id) match {
-      case Some(n) if (n.children.isEmpty) =>
-        doExpand(px, v, px.query.tail, Trie.Terminator, px.suffix.word).run
-      case Some(n) => n.put(px.query.tail, v)
-      case None => expand2(px, v) // retry
-    }
-  }
-
-  /**
-   * Append a non-matching key
+   * Miss - append a non-matching key
    *
    * When a new key does not match any existing suffixes we can simply append
    * a new leaf onto this node
@@ -111,7 +85,39 @@ sealed trait Trie {
    * @param s the suffix string
    * @param v the value to insert at the leaf
    */
-  private def doAppend(s: String, v: String): IO[Trie] = for {
+  def put(k: String, v: String): Trie = {
+    if (k.isEmpty) IO.Update(Node(id, children, v)).run
+    else children.checkPrefix(k) match {
+      case Hit(id)              => Trie.ioGet(id).get.put("", v)
+      case Miss(_)              => append(k, v).run
+      case p @ (_:Partial)      => expand(p, v).run
+      case p @ (_:PartialLeft)  => expand(p, v).run
+      case p @ (_:PartialRight) => expandRight(p, v)
+    }
+  }
+  
+  private def expandRight(px: PartialMatch, v: String): Trie = {
+    Trie.ioGet(px.id) match {
+      case None => println("RETRY -------"); expandRight(px, v) //retry if the next node is not yet in the database
+      case Some(node) =>
+        node.children.checkPrefix(px.t) match {
+          case Hit(_)            => node.put("", v)
+          case (_: PartialMatch) => node.put(px.t, v)
+          case Miss(_)           => {
+            if (node.children.isEmpty) expand(px, v).run
+            else node.append(px.t, v).run
+          }
+        }
+    }
+  }
+
+  private def expand(px: PartialMatch, v: String): IO[Trie] = for {
+    leaf   <- IO.Insert(Node(v))
+    node   <- IO.Insert(Node(SuffixMap(px.t -> leaf.id, px.h._2 -> px.id)))
+    parent <- IO.Update(Node(id, children - px.suffix + (px.h._1 -> node.id)))
+  } yield leaf
+
+  private def append(s: String, v: String): IO[Trie] = for {
     leaf   <- IO.Insert(Node(v))
     parent <- IO.Update(Node(id, children + (s -> leaf.id)))
   } yield leaf
@@ -132,7 +138,7 @@ object Node {
 }
 
 object Trie {
-  val Terminator = ">"
+  val Terminator = "$"
 
   def empty: Trie = leaf(None)
 
@@ -151,17 +157,17 @@ object Trie {
   def put(ns: String, k: String, v: String): Trie = {
     root(ns).put(k, v)
   }
-  
+
   def get(ns: String, k: String): Option[String] = {
     def explore(t: Trie, s: String, depth: Int): Option[String] = {
-      if (depth == k.length) t.terminatorKey match {
-        case None => t.get(k)
-        case Some(id) => ioGet(id).get.get(k)
+      if (depth == k.length) t.tKey match {
+        case None     => t.get(k)
+        case Some(id) => ioGet(id).flatMap(_.get(k))
       }
       else t.children.checkPrefix(s) match {
-        case Miss(_) => None
-        case Hit(id) => ioGet(id).flatMap(x => explore(x, "", depth + s.length))
-        case Partial(id,h,_) => ioGet(id).flatMap(x => explore(x, s substring h._1.length, depth + h._1.length))
+        case Miss(_)            => None
+        case Hit(id)            => ioGet(id).flatMap(x => explore(x, "", depth + s.length))
+        case (px: PartialMatch) => ioGet(px.id).flatMap(x => explore(x, s substring px.h._1.length, depth + px.h._1.length))
       }
     }
     if (ns.isEmpty || k.isEmpty) None
