@@ -33,7 +33,8 @@ class MongoDB extends Store {
 
   implicit private def documentToTrie(doc: Document): Trie = {
     val json = parse(doc.toJson)
-    Node((json \ "_id").extract[String], json.extract[SuffixMap], (json \ "v").extract[Option[String]])
+    Node((json \ "_id").extract[String], SuffixMap((json \ "sx").extract[Vector[String]], 
+        (json \ "kx").extract[Vector[String]]), (json \ "v").extract[Option[String]])
   }
 
   implicit private def optionDocToOptionTrie(doc: Option[Document]):

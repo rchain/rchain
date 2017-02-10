@@ -19,7 +19,7 @@ sealed trait Trie {
   val v: Option[String]
   def isLeaf: Boolean = children.isEmpty || terminatorKey != None
 
-  val terminatorKey: Option[String] = children.keyAt(Trie.Terminator)
+  val terminatorKey: Option[String] = children.get(Trie.Terminator)
 
   def get(k: String): Option[String] = v
 
@@ -68,8 +68,8 @@ sealed trait Trie {
 
   private def doExpand(px: PrefixMatch, v: String, sfx1: String, sfx2: String, updated: String): IO[Trie] = for {
     leaf   <- IO.Insert(Node(v))
-    node   <- IO.Insert(Node(SuffixMap.empty :+ (sfx1, leaf.id) :+ (sfx2, px.id)))
-    parent <- IO.Update(Node(id, children.without(px.suffix.word) :+ (updated, node.id)))
+    node   <- IO.Insert(Node(SuffixMap.empty + (sfx1 -> leaf.id) + (sfx2 -> px.id)))
+    parent <- IO.Update(Node(id, children - px.suffix.word + (updated -> node.id)))
   } yield parent
 
   /**
@@ -113,7 +113,7 @@ sealed trait Trie {
    */
   private def doAppend(s: String, v: String): IO[Trie] = for {
     leaf   <- IO.Insert(Node(v))
-    parent <- IO.Update(Node(id, children :+ (s, leaf.id)))
+    parent <- IO.Update(Node(id, children + (s -> leaf.id)))
   } yield leaf
 }
 

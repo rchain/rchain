@@ -4,48 +4,64 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class SuffixMapSpec extends FlatSpec with Matchers {
   
-  behavior of "SuffixMap"
+  behavior of "SuffixMap with Vectors"
+  
+  val smv = SuffixMap(Vector("a"), Vector("a-key"))
+  
+  it should "append string tuples" in {
+    smv + ("b" -> "b-key") should equal(SuffixMap(Vector("a", "b"), Vector("a-key", "b-key")))
+  }
+  
+  it should "replace string tuples" in {
+    smv + ("a" -> "new-a-key") should equal(SuffixMap(Vector("a"), Vector("new-a-key")))
+  }
+  
+  it should "remove keys" in {
+    smv - "a" should equal(SuffixMap(Vector(), Vector()))
+  }
+  
+  behavior of "SuffixMap with Tuples"
 
-  val sm = SuffixMap(Vector("a"), Vector("a-key"))
+  val sm = SuffixMap("a" -> "a-key")
   
   it should "append pairs of strings" in {
-    sm :+ ("b", "b-key") should equal(SuffixMap(Vector("a", "b"), Vector("a-key", "b-key")))
+    sm + ("b" -> "b-key") should equal(SuffixMap("a" -> "a-key", "b" -> "b-key"))
   }
   
   it should "replace pairs of strings" in {
-    sm :+ ("a", "new-a-key") should equal(SuffixMap(Vector("a"), Vector("new-a-key")))
+    sm + ("a" -> "new-a-key") should equal(SuffixMap("a" -> "new-a-key"))
+  }
+  
+  it should "remove keys" in {
+    smv - "a" should equal(SuffixMap.empty)
   }
   
   it should "get keys when present" in {
-    assert(sm.keyAt("a") == Some("a-key"))
+    assert(SuffixMap("foo" -> "bar").get("foo") == Some("bar"))
   }
   
   it should "return None when key not present" in {
-    assert(sm.keyAt("c") == None)
-  }
-  
-  it should "remove a suffix pair" in {
-    sm.without("a") should equal(SuffixMap(Vector(), Vector()))
+    assert(SuffixMap("foo" -> "bar").get("c") == None)
   }
   
   behavior of "prefix matching"
   
-  val sm1 = SuffixMap(Vector("and", "raid"), Vector("and-key", "raid-key"))
+  val sm1 = SuffixMap("and" -> "and-key", "raid" -> "raid-key")
   
   it should "find partial keys" in {
-    assert(sm1.startsWith("an") == Some("and"))
+    assert(sm1.keyWithPrefix("an") == Some("and"))
   }
   
   it should "find whole keys" in {
-    assert(sm1.startsWith("and") == Some("and"))
+    assert(sm1.keyWithPrefix("and") == Some("and"))
   }
   
   it should "not find unmatched keys" in {
-    assert(sm1.startsWith("rnd") == None)
+    assert(sm1.keyWithPrefix("rnd") == None)
   }
   
   it should "match on shared prefixes (partial 1)" in {
-    val sm = SuffixMap(Vector("and"), Vector("and-key"))
+    val sm = SuffixMap("and" -> "and-key")
     val found = sm.findPrefix("ant")
     
     assert(found == Some(PrefixMatch(MatchResult("ant", "an"), MatchResult("and", "an"), "and-key"))) 
@@ -87,5 +103,4 @@ class SuffixMapSpec extends FlatSpec with Matchers {
     val sm = SuffixMap(Vector("and"), Vector("and-key"))
     assert(sm.findPrefix("foo") == None)
   }
-
 }
