@@ -23,6 +23,24 @@ case class MatchResult(word: String, head: String) {
   val tail: String = word.splitAt(head.length)._2
 }
 
+trait XMatchResult
+object XMatchResult {
+  def apply(query: String, suffix: String, m: String, id: String): XMatchResult = {
+    val tails = (query.splitAt(m.length)._2, suffix.splitAt(m.length)._2)
+    (tails._1.isEmpty, tails._2.isEmpty) match {
+      case (true,true)   => Hit(id)
+      case (true,false)  => PartialRight(id, m, tails._2)
+      case (false,true)  => PartialLeft(id, m, tails._1)
+      case (false,false) => Partial(id, (m, tails._1), tails._2)
+    }
+  }
+}
+case class Hit(id: String) extends XMatchResult
+case class Miss(key: String) extends XMatchResult
+case class Partial(id: String, h: (String, String), t: String) extends XMatchResult
+case class PartialRight(id: String, h: String, t: String) extends XMatchResult
+case class PartialLeft(id: String, h: String, t: String) extends XMatchResult
+
 case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String, String] with MapLike[String, String, SuffixMap] {
   
   def get(suffix: String): Option[String] = sx.find(_.eq(suffix)).flatMap(valueAt(_))
@@ -55,7 +73,19 @@ case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String,
     }
     loop(p)
   }
+  
+  def checkPrefix(query: String): XMatchResult = {
+    def loop(s: String): XMatchResult = {
+      if (s.isEmpty) Miss(query)
+      else keyWithPrefix(s) match {
+        case None      => loop(s.slice(0, s.size - 1)) 
+        case Some(hit) => XMatchResult(query, hit, s, get(hit).get) 
+      }
+    }
+    loop(query)
+  }
 
+  //TODO make this more efficient. Return the k and value to avoid get(sfx) above
   def keyWithPrefix(s: String): Option[String] = sx.filter(_.startsWith(s)).headOption
   
   private def valueAt(suffix: String): String = if (sx.contains(suffix)) kx(sx.indexOf(suffix)) else ""

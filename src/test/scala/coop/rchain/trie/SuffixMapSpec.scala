@@ -44,7 +44,7 @@ class SuffixMapSpec extends FlatSpec with Matchers {
     assert(SuffixMap("foo" -> "bar").get("c") == None)
   }
   
-  behavior of "prefix matching"
+  behavior of "keyWithPrefix"
   
   val sm1 = SuffixMap("and" -> "and-key", "raid" -> "raid-key")
   
@@ -56,51 +56,34 @@ class SuffixMapSpec extends FlatSpec with Matchers {
     assert(sm1.keyWithPrefix("and") == Some("and"))
   }
   
-  it should "not find unmatched keys" in {
+  it should "not find non-overlapping keys" in {
     assert(sm1.keyWithPrefix("rnd") == None)
   }
   
-  it should "match on shared prefixes (partial 1)" in {
+  behavior of "checkPrefix"
+  
+  it should "match on shared prefixes (Partial)" in {
     val sm = SuffixMap("and" -> "and-key")
-    val found = sm.findPrefix("ant")
-    
-    assert(found == Some(PrefixMatch(MatchResult("ant", "an"), MatchResult("and", "an"), "and-key"))) 
-    assert(found.get.exact == false)
-    assert(found.get.partial1 == true)
-    assert(found.get.partial2 == false)
+    assert(sm.checkPrefix("ant") == Partial("and-key", ("an", "t"), "d")) 
   }
   
-  it should "match on overhanging prefixes (partial 2)" in {
-    val sm = SuffixMap(Vector("an"), Vector("an-key"))
-    val found = sm.findPrefix("andover")
-    
-    assert(found == Some(PrefixMatch(MatchResult("andover", "an"), MatchResult("an", "an"), "an-key"))) 
-    assert(found.get.exact == false)
-    assert(found.get.partial2 == true)
-    assert(found.get.partial1 == false)
+  it should "match on overlapping prefixes (PartialLeft)" in {
+    val sm = SuffixMap("an" -> "an-key")    
+    assert(sm.checkPrefix("andover") == PartialLeft("an-key", "an", "dover")) 
   }
   
-  it should "match on sub prefixes" in {
-    val sm = SuffixMap(Vector("ralism"), Vector("ralism-key"))
-    val found = sm.findPrefix("r")
-    
-    assert(found == Some(PrefixMatch(MatchResult("r", "r"), MatchResult("ralism", "r"), "ralism-key"))) 
-    assert(found.get.exact == false)
-    assert(found.get.partial1 == false)
-    assert(found.get.partial2 == false)
-    assert(found.get.partial3 == true)
+  it should "match on sub-prefixes (PartialRight)" in {
+    val sm = SuffixMap("ralism" ->"ralism-key")    
+    assert(sm.checkPrefix("r") == PartialRight("ralism-key", "r", "alism")) 
   }
   
   it should "match on whole prefixes" in {
-    val sm = SuffixMap(Vector("foo"), Vector("foo-key"))
-    val found = sm.findPrefix("foo")
-    
-    assert(found == Some(PrefixMatch(MatchResult("foo", "foo"), MatchResult("foo", "foo"), "foo-key"))) 
-    assert(found.get.exact == true)
+    val sm = SuffixMap("foo" -> "foo-key")
+    (sm.findPrefix("foo") == Hit("foo-key")) 
   }
   
   it should "not match on non-overlapping prefixes" in {
-    val sm = SuffixMap(Vector("and"), Vector("and-key"))
-    assert(sm.findPrefix("foo") == None)
+    val sm = SuffixMap("and" -> "and-key")
+    assert(sm.checkPrefix("foo") == Miss("foo"))
   }
 }
