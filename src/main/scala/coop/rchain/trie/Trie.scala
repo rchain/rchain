@@ -25,62 +25,7 @@ sealed trait Trie {
   }
 
   /**
-   * Partial(id, (an, d) t) - remainders on both query and suffix
-   * 
-   * => Always Expand 
-   *
-   *  (and)   put(ant,789) =>   (an)         (px.h._1)         
-   *    |                       /  \          /      \
-   *   456                   (d)    (t)    (px.h._2)(px.t) 
-   *                          |      |        |       |
-   *                         456    789     px.id    789
-   *
-   * Partial(id, (an, d) t) - with existing TS
-   *
-   *     (and)   put(ant,123) =>  (an)               (px.h._1)         
-   *     /   \                    /  \               /      \
-   *   (TS) (over)              (d)  (t)        (px.h._2) (px.t) 
-   *    |     |                /   \    \           |        |     
-   *   456   789            (TS) (over) 123      (px.id)    123
-   *                          |     |             |    |
-   *                         456   789           456  789
-   * 
-   * PartialLeft(id, (an, d) TS) - remainder on existing suffix
-   * 
-   * => Always Expand 
-   *
-   *  (and)   put(an,789) =>   (an)           (px.h._1)
-   *    |                      /  \            /     \
-   *   456                  (d)   (TS)     (px.h._2) (px.t)     
-   *                         |      |          |       |
-   *                        456    789       px.id    789                        
-   *
-   * PartialLeft(id, (a, n) TS) - with existing TS
-   *
-   *     (an)    put(a, 345) =>  (a)             (px.h._1)
-   *     /  \                   /   \             /     \
-   *  (d)   (TS)              (n)   (TS)     (px.h._2)  (px.t)
-   *   |      |               / \      \        / \       \
-   *  456    789           (d)  (TS)   345    (px.id)     345
-   *                        |     |           |     |
-   *                       456   789         456   789
-   *
-   * PartialRight(id, (and, TS) over) - remainder on query
-   * 
-   *  (and)  put(andover,789) =>  (and)          (px.h._1)
-   *    |                         /  \             /    \
-   *   456                     (TS)  (over)   (px.h._2) (px.t)
-   *                             |     |          |       |
-   *                            456   789       px.id    789
-   *
-   * Miss - append a non-matching key
-   *
-   * When a new key does not match any existing suffixes we can simply append
-   * a new leaf onto this node
-   *
-   *       (and)      append(dig,789) =>     (and dig)
-   *         |                                /     \
-   *        456                             456     789
+   * TODO - Documentation for Trie
    *
    * @param s the suffix string
    * @param v the value to insert at the leaf
@@ -98,7 +43,7 @@ sealed trait Trie {
   
   private def expandRight(px: PartialMatch, v: String): Trie = {
     Trie.ioGet(px.id) match {
-      case None => println("RETRY -------"); expandRight(px, v) //retry if the next node is not yet in the database
+      case None => expandRight(px, v) //retry if the next node is not yet in the database
       case Some(node) =>
         node.children.checkPrefix(px.t) match {
           case Hit(_)            => node.put("", v)
