@@ -19,9 +19,9 @@ import scala.concurrent.duration._
 
 class MongoDB extends Store {
   //TODO move to config
-  lazy private val client: MongoClient = MongoClient()
-  lazy private val db: MongoDatabase = client.getDatabase("rchain")
-  lazy val trie: MongoCollection[Document] = db.getCollection("trie")
+  lazy val client: MongoClient = MongoClient()
+  lazy val database: MongoDatabase = client.getDatabase("rchain")
+  lazy val trie: MongoCollection[Document] = database.getCollection("trie")
 
   implicit val formats = Serialization.formats(NoTypeHints)
 
@@ -33,7 +33,7 @@ class MongoDB extends Store {
 
   implicit private def documentToTrie(doc: Document): Trie = {
     val json = parse(doc.toJson)
-    Node((json \ "_id").extract[String], SuffixMap((json \ "sx").extract[Vector[String]], 
+    Node((json \ "_id").extract[String], SuffixMap((json \ "sx").extract[Vector[String]],
         (json \ "kx").extract[Vector[String]]), (json \ "v").extract[Option[String]])
   }
 

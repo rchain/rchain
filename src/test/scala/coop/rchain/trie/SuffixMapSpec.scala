@@ -77,14 +77,14 @@ class SuffixMapSpec extends FlatSpec with Matchers {
     assert(found.suffix == "and") 
   }
   
-  it should "match on overlapping prefixes (PartialRight)" in {
+  it should "match on overlapping queries (PartialRight)" in {
     val sm = SuffixMap("an" -> "an-key")   
     val found = sm.checkPrefix("andover")
     assert(found == PartialRight("an-key", ("an", Trie.Terminator), "dover")) 
     assert(found.suffix == "an") 
   }
   
-  it should "match on sub-prefixes (PartialLeft)" in {
+  it should "match on subkey queries (PartialLeft)" in {
     val sm = SuffixMap("ralism" ->"ralism-key")    
     val found = sm.checkPrefix("r")
     assert(found == PartialLeft("ralism-key", ("r", "alism"), Trie.Terminator)) 

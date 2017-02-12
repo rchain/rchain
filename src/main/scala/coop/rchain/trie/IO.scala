@@ -10,7 +10,7 @@ sealed trait IO[A] { self =>
 
 object IO {
   def unit[A](a: => A): IO[A] = new IO[A] { def run = a }
-  def flatMap[A,B](fa: IO[A])(f: A => IO[B]) = fa flatMap f
+  def flatMap[A,B](fa: IO[A])(f: A => IO[B]):IO[B] = fa flatMap f
   def apply[A](a: => A): IO[A] = unit(a)
 
   def Update(n: Trie): IO[Trie] = IO { returning(n)(db.put) }

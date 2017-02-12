@@ -17,32 +17,45 @@ sealed trait Trie {
   val children: SuffixMap
   val v: Option[String]
 
-  def tKey: Option[String] = children.get(Trie.Terminator)
-
-  def get(k: String): Option[String] = {
-    if (v == None) println("Missing Value")
-    v
-  }
-
-  /**
-   * TODO - Documentation for Trie
+  /** Put a value at a given key
    *
-   * @param s the suffix string
-   * @param v the value to insert at the leaf
+   * @param key the key that should be updated
+   * @param value the value to be associated with `key`
+   * @return the leaf node (Trie) for the updated value
    */
-  def put(k: String, v: String): Trie = {
-    if (k.isEmpty) IO.Update(Node(id, children, v)).run
-    else children.checkPrefix(k) match {
-      case Hit(id)              => Trie.ioGet(id).get.put("", v)
-      case Miss(_)              => append(k, v).run
-      case p @ (_:Partial)      => expand(p, v).run
-      case p @ (_:PartialLeft)  => expand(p, v).run
-      case p @ (_:PartialRight) => expandRight(p, v)
+  def put(key: String, value: String): Trie = {
+    if (key.isEmpty) IO.Update(Node(id, children, value)).run
+    else children.checkPrefix(key) match {
+      case Hit(id)           => IO.Get(id).run.get.put("", value)
+      case Miss(_)           => append(key, value).run
+      case (px:Partial)      => expand(px, value).run
+      case (px:PartialLeft)  => expand(px, value).run
+      case (px:PartialRight) => expandRight(px, value)
     }
   }
   
+  /** Retrieve a value at a given key
+   *
+   * @param key the key for lookup
+   * @return Some(value) or None if not found
+   */
+  def get(key: String): Option[String] = {
+    def explore(t: Trie, s: String, depth: Int): Option[String] = {
+      if (depth == key.length) t.children.get(Trie.Terminator) match {
+        case None     => t.v
+        case Some(id) => IO.Get(id).run.flatMap(_.v)
+      }
+      else t.children.checkPrefix(s) match {
+        case Miss(_)            => None
+        case Hit(id)            => IO.Get(id).run.flatMap(explore(_, "", depth + s.length))
+        case (px: PartialMatch) => IO.Get(px.id).run.flatMap(explore(_, s substring px.depth, depth + px.depth))
+      }
+    }
+    explore(this, key, 0)
+  }
+
   private def expandRight(px: PartialMatch, v: String): Trie = {
-    Trie.ioGet(px.id) match {
+    IO.Get(px.id).run match {
       case None => expandRight(px, v) //retry if the next node is not yet in the database
       case Some(node) =>
         node.children.checkPrefix(px.t) match {
@@ -92,30 +105,15 @@ object Trie {
   def root(namespace: String): Trie = {
     def create: Trie = IO.Insert(Node(namespace, SuffixMap.empty)).run
     IO.Get(namespace).run match {
-      case None    => create
-      case Some(r) => r
+      case None       => create
+      case Some(root) => root
     }
   }
-
-  def ioGet(id: String): Option[Trie] = IO.Get(id).run
-
-  def put(ns: String, k: String, v: String): Trie = {
-    root(ns).put(k, v)
+  
+  def get(namespace: String, key: String): Option[String] = {
+    if (namespace.isEmpty || key.isEmpty) None
+    else root(namespace).get(key)
   }
 
-  def get(ns: String, k: String): Option[String] = {
-    def explore(t: Trie, s: String, depth: Int): Option[String] = {
-      if (depth == k.length) t.tKey match {
-        case None     => t.get(k)
-        case Some(id) => ioGet(id).flatMap(_.get(k))
-      }
-      else t.children.checkPrefix(s) match {
-        case Miss(_)            => None
-        case Hit(id)            => ioGet(id).flatMap(x => explore(x, "", depth + s.length))
-        case (px: PartialMatch) => ioGet(px.id).flatMap(x => explore(x, s substring px.h._1.length, depth + px.h._1.length))
-      }
-    }
-    if (ns.isEmpty || k.isEmpty) None
-    else explore(root(ns), k, 0)
-  }
+  def put(namespace: String, key: String, value: String): Trie = root(namespace).put(key, value)
 }
