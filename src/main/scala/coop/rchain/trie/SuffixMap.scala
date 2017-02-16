@@ -12,9 +12,11 @@ import scala.collection.immutable.Map
 
 case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String, String] with MapLike[String, String, SuffixMap] {
 
-  def get(suffix: String): Option[String] = sx.find(_.equals(suffix)).flatMap(valueAt(_))
+  def get(suffix: String): Option[String] = 
+    if (sx.contains(suffix)) kx(sx.indexOf(suffix))
+    else None
 
-  def iterator: Iterator[(String, String)] = sx.iterator.map(s => (s -> valueAt(s)))
+  def iterator: Iterator[(String, String)] = sx.iterator.map(s => (s -> kx(sx.indexOf(s))))
 
   def +[B >: String](kv: (String, B)): SuffixMap = {
     if (sx.contains(kv._1)) {
@@ -26,7 +28,7 @@ case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String,
 
   def - (suffix: String): SuffixMap = {
     if (!sx.contains(suffix)) this
-    else SuffixMap(sx.diff(Vector(suffix)), kx.diff(Vector(valueAt(suffix).get)))
+    else SuffixMap(sx.diff(Vector(suffix)), kx.diff(Vector(kx(sx.indexOf(suffix)))))
   }
 
   override def empty: SuffixMap = SuffixMap(Vector(), Vector())
@@ -35,17 +37,13 @@ case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String,
   def checkPrefix(query: String): PrefixMatch = {
     def loop(s: String): PrefixMatch = {
       if (s.isEmpty) Miss(query)
-      else keyWithPrefix(s) match {
+      else sx.filter(_.startsWith(s)).headOption match {
         case None      => loop(s.slice(0, s.size - 1))
         case Some(hit) => PrefixMatch(query, hit, s, get(hit).get)
       }
     }
     loop(query)
   }
-
-  def keyWithPrefix(s: String): Option[String] = sx.filter(_.startsWith(s)).headOption
-
-  private def valueAt(suffix: String): String = if (sx.contains(suffix)) kx(sx.indexOf(suffix)) else ""
 }
 
 object SuffixMap {

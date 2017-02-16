@@ -52,22 +52,6 @@ class SuffixMapSpec extends FlatSpec with Matchers {
     assert(SuffixMap("foo" -> "bar").get("c") == None)
   }
   
-  behavior of "keyWithPrefix"
-  
-  val sm1 = SuffixMap("and" -> "and-key", "raid" -> "raid-key")
-  
-  it should "find partial keys" in {
-    assert(sm1.keyWithPrefix("an") == Some("and"))
-  }
-  
-  it should "find whole keys" in {
-    assert(sm1.keyWithPrefix("and") == Some("and"))
-  }
-  
-  it should "not find non-overlapping keys" in {
-    assert(sm1.keyWithPrefix("rnd") == None)
-  }
-  
   behavior of "checkPrefix"
   
   it should "match on shared prefixes (Partial)" in {

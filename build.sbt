@@ -11,3 +11,5 @@ libraryDependencies ++= Seq(
   "org.json4s" %% "json4s-jackson" % "3.5.0",
   "io.jvm.uuid" %% "scala-uuid" % "0.2.2"
 )
+
+logBuffered in Test := false
