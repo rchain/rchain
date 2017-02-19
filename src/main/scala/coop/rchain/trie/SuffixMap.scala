@@ -42,7 +42,8 @@ case class SuffixMap(sx: Vector[String], kx: Vector[String]) extends Map[String,
         case Some(hit) => PrefixMatch(query, hit, s, get(hit).get)
       }
     }
-    loop(query)
+    val overlap: Int = if (kx.isEmpty) 0 else kx.max.length - 1
+    loop(query.slice(0, overlap))
   }
 }
 
