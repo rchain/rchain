@@ -45,13 +45,11 @@ class MongoDB extends Store {
 
   def get(id: String): Option[Trie] = getKey("_id", id)
 
-  def put(t: Trie): Unit = trie.replaceOne(Filters.eq("_id", t.id), t).toFuture
+  def put(t: Trie): Unit = Await.result(trie.replaceOne(Filters.eq("_id", t.id), t).toFuture, 1000.milliseconds)
 
-  def insert(t: Trie): Unit = trie.insertOne(t).toFuture
+  def insert(t: Trie): Unit = Await.result(trie.insertOne(t).toFuture, 1000.milliseconds)
 
-  def delete(id: String): Unit = trie.deleteOne(Document("_id" -> id)).toFuture
+  def delete(id: String): Unit = Await.result(trie.deleteOne(Document("_id" -> id)).toFuture, 1000.milliseconds)
 
-  def getKey(k: String, v: String): Option[Trie] = getAwait(Document(k -> v)).headOption
-
-  private def getAwait(query: Document) = Await.result(trie.find(query).toFuture, 1000.milliseconds)
+  def getKey(k: String, v: String): Option[Trie] = Await.result(trie.find(Document(k -> v)).toFuture, 1000.milliseconds).headOption
 }
