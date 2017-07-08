@@ -1,4 +1,2 @@
-djangorestframework==3.3.2
-django-cors-headers==1.1.0
-Django==1.10.dev20160209180733
+Django==1.11
 django-extensions==1.6.1
