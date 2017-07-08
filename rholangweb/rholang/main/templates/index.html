@@ -1,4 +1,5 @@
 ﻿{% load staticfiles %}
+{% load widget_tweaks %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,7 +18,8 @@
     <![endif]-->
 </head>
 <body>
-    <form method="post"> 
+    <form action="" method="POST">
+        {% csrf_token %}
         <input id="hdnView" type="hidden" name="view" />
         <div class="container">
             <div class="page-header">
@@ -30,7 +32,7 @@
                             <h3 class="panel-title">Rholang Source</h3>
                         </div>
                         <div class="panel-body">
-                            <textarea name="rho" class="form-control" rows="20" cols="100" style="font-family: monospace;"></textarea>
+                            {% render_field form.rho class="form-control" rows="20" cols="100" style="font-family: monospace;" placeholder="(print 5)" %}
                         </div>
                     </div>
                 </div>
@@ -51,13 +53,12 @@
                 </div><!-- /.col-sm-2 -->
             </div>
             <button type="submit" class="btn btn-default">Submit</button>
-
         </div>
     </form>
         <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
         <!-- Include all compiled plugins (below), or include individual files as needed -->
-        <script src="js/bootstrap.min.js"></script>
+        <script src="{% static 'js/bootstrap.min.js' %}"></script>
     <script>
         $(document).ready(function () {
             if ($('#hdnView').val() != "c") {
