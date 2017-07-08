@@ -13,7 +13,8 @@ def home(request):
     with open('test.rho', 'w') as f:
         f.write("%s\n" % str(input))
 
-    output = subprocess.check_output("bash sbt.sh", shell=True)
+    sbt_output = subprocess.check_output("bash sbt.sh", shell=True)
+    rbl_output = subprocess.check_output("bash rosette.sh", shell=True)
 
     #import ipdb; ipdb.set_trace()
     #base_url = "http://127.0.0.1:8047/api/text/"
@@ -26,4 +27,4 @@ def home(request):
     #else:
     #  return 0 # Neutral
     
-    return render(request, 'index.html', {"output": output})
+    return render(request, 'index.html', {"sbt_output": sbt_output, "rbl_output": rbl_output})

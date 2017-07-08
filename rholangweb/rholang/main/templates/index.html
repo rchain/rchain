@@ -22,7 +22,6 @@
         <div class="container">
             <div class="page-header">
                 <h1>Rholang</h1>
-                {{ output }}
             </div>
             <div class="row">
                 <div class="col-xs-6 col-md-4">
@@ -45,8 +44,8 @@
                                 <button id="btnCompiler" type="button" class="btn btn-primary btn-sm">Compiler Output</button>
                                 <button id="btnProgram" type="button" class="btn btn-primary btn-sm">Program Output</button>
                             </p>
-                            <p id="compiler_output"class="hidden" style="font-family: monospace;">Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error. Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.Compiler error.</p>
-                            <p id="program_output" class="show" style="font-family: monospace;">The program ran.</p>
+                            <p id="compiler_output"class="hidden" style="font-family: monospace;">{{ sbt_output }}</p>
+                            <p id="program_output" class="show" style="font-family: monospace;">{{ rbl_output }}</p>
                         </div>
                     </div>
                 </div><!-- /.col-sm-2 -->

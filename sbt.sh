@@ -6,3 +6,5 @@ cp ~/Documents/RholangREPL/output.txt ~/Documents/RholangREPL/original_output.tx
 sed -n '/\[0m\[\[32msuccess\[0m\]/!p' ~/Documents/RholangREPL/output.txt > ~/Documents/RholangREPL/output2.txt
 sed -n '/\[0m\[\[0minfo\[0m\]/!p' ~/Documents/RholangREPL/output2.txt > ~/Documents/RholangREPL/output3.txt
 cat ~/Documents/RholangREPL/output3.txt
+
+
