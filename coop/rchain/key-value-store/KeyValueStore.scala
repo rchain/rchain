@@ -13,9 +13,9 @@ import scala.io.Source
 // KeyValueStore maps Keys as Strings to ValueLists
 
 class KeyValueStore {
-  val keyValueStore = SortedMap[Key, ValueList]()
+  var keyValueStore = SortedMap[Key, ValueList]()
 
-  def add(key: Key, value: String): Unit = {
+  def add(key: Key, value: Value): Unit = {
     if (keyValueStore.contains(key))
       keyValueStore(key).add(value)
     else {
@@ -24,28 +24,38 @@ class KeyValueStore {
     }
   }
 
-  def remove(key: Key): Unit = {
-    if (keyValueStore.contains(key))
-      keyValueStore.remove(key)
-    else
-      throw new Exception("KeyValueStore.Remove(" + key.term + ") not found")
+  def add(key: Key, valueList: ValueList): Unit = {
+    for (value <- valueList.iterator)
+      add(key, value)
+  }
+
+  def add(key: Key, valueList: Array[Value]): Unit = {
+    for (value <- valueList)
+      this.add(key, value)
   }
 
   def get(key: Key): ValueList = {
     if (keyValueStore.contains(key))
       return keyValueStore(key)
-
-    throw new Exception("KeyValueStore.Get(" + key.term + ") not found")
+    null
   }
 
-  // This method is motivated by compile problems I am having
-  // that involve catching the exception thrown in get()
-  def getOrNull(key: Key): ValueList = {
-    if (keyValueStore.contains(key))
-      return keyValueStore(key)
-
-    return null
+  def remove(key: Key, value: Value = null): Boolean = {
+    if (keyValueStore.contains(key)) {
+      if (value == null) {
+        // assumes that Key.compare picks out key
+        // and that the new keyValueStore maintains
+        // order of elements in keyValueStore(key).list
+        keyValueStore = keyValueStore - key
+        return true
+      } else {
+        return keyValueStore(key).remove(value)
+      }
+    }
+    false
   }
+
+  def iterator: Iterator[Key] = { keyValueStore.keys.toIterator }
 
   def loadFile(filePath: String, display: Boolean = false): Unit = {
     if (display) {
@@ -61,8 +71,8 @@ class KeyValueStore {
 
       if (!line.isEmpty && line.slice(0, 2) != "//") {
         val (keyStr, value) = line.splitAt(line.lastIndexOf(' '))
-        val key = new Key(keyStr.trim)
-        add(key, value.trim)
+        val key = new Key(keyStr)
+        add(key, new Value(value))
       }
     }
   }
@@ -71,7 +81,7 @@ class KeyValueStore {
     var i = 1
     for ((k, v) <- keyValueStore) {
       print(i + ". " + k.term + " -> ")
-      v.display
+      v.display; println
       i += 1
     }
   }

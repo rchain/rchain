@@ -18,129 +18,132 @@ object Token extends Enumeration {
   val Comma = Value(",")
   val Key = Value("Key")
   val Variable = Value("Variable")
-  val Numeral = Value("Numeral")
+  val Constant = Value("Constant")
   val EndOfString = Value("EndOfString")
   val Error = Value("Error")
+}
+
+class LexToken(tokenIn: Token.Value, tokenStrIn: String) {
+  val token = tokenIn
+  val tokenStr = tokenStrIn
 }
 
 // Current assumption is that what is lexed must be on one line.
 // Relax assumption later.
 
-class KeyLexer(line: String) {
-  if (line.length == 0)
-    throw new Exception("KeyLexer: string is empty")
-  if (!Character.isLetter(line(0)))
-    throw new Exception(
-      "KeyLexer: '"
-        + line + "' must start with a key")
+class KeyLexer(lineIn: String) {
+  if (lineIn == null || lineIn.isEmpty)
+    throw new Exception("KeyLexer: string is null or empty")
+  if (!Character.isLetter(lineIn(0)))
+    throw new Exception("KeyLexer: '" + lineIn + "' must start with a key")
 
   // Check that parentheses nest correctly and all have partners.
   var depth = 0
-  for (i <- 0 until line.length) {
-    if (line(i) == '(') depth += 1
-    else if (line(i) == ')') depth -= 1
+  for (i <- 0 until lineIn.length) {
+    if (lineIn(i) == '(') depth += 1
+    else if (lineIn(i) == ')') depth -= 1
     if (depth < 0)
-      throw new Exception("KeyLexer: malformed (1): '" + line + "'")
+      throw new Exception("KeyLexer: malformed (1): '" + lineIn + "'")
   }
   if (depth != 0)
-    throw new Exception("KeyLexer: malformed (2): '" + line + "'")
+    throw new Exception("KeyLexer: malformed (2): '" + lineIn + "'")
 
-  val _line = line
-  var _i = 0 // index into _line
+  val line = lineIn
+  var i = 0 // index into line
 
-  def NextToken(): (Token.Value, String) = {
+  def NextToken(): LexToken = {
     val tokenStr = new StringBuilder
     var isLetters = false
     var isDigits = false
-    val iOriginal = _i
+    val iOriginal = i
 
-    if (_line.length <= _i)
-      return (Token.EndOfString, "")
+    if (line.length <= i)
+      return new LexToken(Token.EndOfString, "")
 
-    var c = _line(_i)
+    var c = line(i)
 
     if (c == '(') {
-      if (0 < _i) {
-        val prev = _line(_i - 1)
+      if (0 < i) {
+        val prev = line(i - 1)
         if (prev == ')')
           throw new Exception(
             "KeyLexer.NextToken(): malformed (1): '"
-              + _line + "', " + _i)
+              + line + "', " + i)
       }
 
-      _i += 1
-      return (Token.LeftParen, "(")
+      i += 1
+      return new LexToken(Token.LeftParen, "(")
     } else if (c == ')') {
-      if (0 < _i) {
-        val prev = _line(_i - 1)
+      if (0 < i) {
+        val prev = line(i - 1)
         if (prev == '(' || prev == ',')
           throw new Exception(
             "KeyLexer.NextToken(): malformed (2): '"
-              + _line + "', " + _i)
+              + line + "', " + i)
       }
 
-      _i += 1
-      return (Token.RightParen, ")")
+      i += 1
+      return new LexToken(Token.RightParen, ")")
     } else if (c == ',') {
-      if (0 < _i) {
-        val prev = _line(_i - 1)
+      if (0 < i) {
+        val prev = line(i - 1)
         if (prev == '(' || prev == ',')
           throw new Exception(
             "KeyLexer.NextToken(): malformed (3): '"
-              + _line + "', " + _i)
+              + line + "', " + i)
       }
 
-      _i += 1
-      return (Token.Comma, ",")
+      i += 1
+      return new LexToken(Token.Comma, ",")
     }
 
     var endOfString = false
 
-    while (_i < _line.length && c != '(' && c != ')' && c != ',') {
+    while (i < line.length && c != '(' && c != ')' && c != ',') {
       c match {
         case _ if Character.isLetter(c) => {
           if (isDigits)
             throw new Exception(
               "KeyLexer.NextToken(): malformed (4): '"
-                + _line + "', " + _i)
+                + line + "', " + i)
           isLetters = true
-          tokenStr ++= _line(_i).toString
+          tokenStr ++= line(i).toString
         }
 
         case _ if Character.isDigit(c) => {
           if (isLetters)
             throw new Exception(
               "KeyLexer.NextToken(): malformed (5): '"
-                + _line + "', " + _i)
+                + line + "', " + i)
           isDigits = true
-          tokenStr ++= _line(_i).toString
+          tokenStr ++= line(i).toString
         }
 
         case _ =>
           throw new Exception(
             "KeyLexer.NextToken(): malformed (6): '"
-              + _line + "', " + _i)
+              + line + "', " + i)
       }
 
-      _i += 1
-      c = _line(_i)
+      i += 1
+      c = line(i)
       assert(isLetters != isDigits)
     }
 
     if (isDigits)
-      return (Token.Numeral, tokenStr.toString)
+      return new LexToken(Token.Constant, tokenStr.toString)
 
     if (isLetters) {
-      if (iOriginal == 0 || (_line(_i) == '('
-          && (_line(iOriginal - 1) == '(' || _line(iOriginal - 1) == ',')))
-        return (Token.Key, tokenStr.toString)
+      if (iOriginal == 0 || (line(i) == '('
+          && (line(iOriginal - 1) == '(' || line(iOriginal - 1) == ',')))
+        return new LexToken(Token.Key, tokenStr.toString)
       else
-        return (Token.Variable, tokenStr.toString)
+        return new LexToken(Token.Variable, tokenStr.toString)
     }
 
     throw new Exception(
       "KeyLexer.NextToken(): malformed (7): '"
-        + _line + "', " + _i)
-    (Token.Error, "")
+        + line + "', " + i)
+    new LexToken(Token.Error, "")
   }
 }

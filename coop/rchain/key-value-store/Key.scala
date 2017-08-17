@@ -17,7 +17,8 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
   var term = keyIn.replaceAll("\\s+", "")
   val keyOriginal = keyIn
 
-  assert(term != "")
+  if (term == null || term.isEmpty)
+    throw new Exception("Key constructor got null or empty parameter")
 
   val (name, params) = createParseKey(term)
 
@@ -35,12 +36,12 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     var keyName = ""
     var paramsArray = new ArrayBuffer[TermTree]()
 
-    var (token, tokenStr) = lexer.NextToken
+    var lexToken = lexer.NextToken
 
-    while (token != Token.EndOfString && token != Token.Error) {
-      token match {
+    while (lexToken.token != Token.EndOfString && lexToken.token != Token.Error) {
+      lexToken.token match {
         case Token.Key => {
-          keyName = tokenStr
+          keyName = lexToken.tokenStr
         }
         case Token.LeftParen => {
           val keyParams = createParseTree(lexer)
@@ -50,24 +51,22 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
         case Token.RightParen => {
           return paramsArray
         }
-        case Token.Variable | Token.Numeral => {
-          paramsArray += TermTools.createTermTree(tokenStr)
+        case Token.Variable | Token.Constant => {
+          paramsArray += TermTools.createTermTree(lexToken.tokenStr)
         }
         case Token.Comma => {}
         case _ => {
           throw new Exception(
-            "createParseTree(): lexer error (1): '" + tokenStr + "'")
+            "createParseTree(): lexer error (1): '" + lexToken.tokenStr + "'")
         }
       }
 
-      val tokenResult = lexer.NextToken
-      token = tokenResult._1
-      tokenStr = tokenResult._2
+      lexToken = lexer.NextToken
     }
 
-    if (token == Token.Error) {
+    if (lexToken.token == Token.Error) {
       throw new Exception(
-        "createParseTree(): lexer error (2): '" + tokenStr + "'")
+        "createParseTree(): lexer error (2): '" + lexToken.tokenStr + "'")
     }
 
     throw new Exception("createParseTree: shouldn't get to end of method")
@@ -76,24 +75,25 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
   def createParseKey(key: String): (String, Params) = {
     var lexer = new KeyLexer(key)
 
-    val firstTokenResult = lexer.NextToken
-    val firstToken = firstTokenResult._1
-    if (firstToken != Token.Key)
+    val firstLexToken = lexer.NextToken
+    if (firstLexToken.token != Token.Key)
       throw new Exception("createParseTree: first token is not Key")
-    val keyName = firstTokenResult._2
+    val keyName = firstLexToken.tokenStr
 
-    val secondTokenResult = lexer.NextToken
-    val secondToken = secondTokenResult._1
-    if (secondToken != Token.LeftParen)
+    val secondLexToken = lexer.NextToken
+    if (secondLexToken.token != Token.LeftParen)
       throw new Exception("createParseTree: first token is not Key")
     val paramsArray = createParseTree(lexer)
     (keyName, new Params(paramsArray))
   }
 
+  // Return a list of lists where each inner list is a successful
+  // unification with a particular key in the store.
+
   def unifyQuery(keyValueStore: KeyValueStore): LinkedHashSet[Array[Binding]] = {
     var bindings = LinkedHashSet[Array[Binding]]()
 
-    for ((key, _) <- keyValueStore.keyValueStore) {
+    for (key <- keyValueStore.iterator) {
       val keyName = key.name
       val keyParams = key.params
       if (name == keyName && arity == key.arity) {
@@ -108,6 +108,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
   }
 
   // sort by: arity, character, digit, other
+
   def compare(key: Key): Int = {
     if (term == key.term) return 0
 
@@ -132,6 +133,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
       }
     }
 
+    assert(term.length != key.term.length)
     if (term.length > key.term.length) return 1
     else return -1
   }

@@ -5,17 +5,31 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-import KeyValueStore._
-import scala.io._
 import java.io.IOException
+import KeyValueStore._
+
+// Usage:
+// no arguments : interactive test harness with empty store
+// <store file path> : read file into store and launch interactive test harness
+// test <store file path> : read file into store and then run corresponding test
 
 object Main {
   def main(args: Array[String]): Unit = {
+    // For historical reasons, this code contains two representations of the
+    // unification of a query and a key.  When I first wrote the code I represented
+    // the unification in a non-standard way.  I wrote the tests in Tests.scala
+    // using the non-standard notation.  When I was introduced to the standard
+    // notation, I incorporated it into this code.  I wanted to test the new code
+    // against the existing tests written with the non-standard notation.
+    //
+    // Set uniRep to "Standard" to run the code with standard unification
+    // representation.  Use any non-empty string other than "Standard" to
+    // us the non-standard notation.
+    val uniRep = "Standard"
+
     var storeFilePath = ""
     if (args.length == 0) {
-      println("usage:")
-      println("run <store file path> or")
-      println("run test <store file path>")
+      TestTools.interactive()
       return
     } else if (args.length == 1) {
       storeFilePath = args(0)
@@ -24,14 +38,16 @@ object Main {
       storeFilePath = args(1)
       if (arg.slice(0, 4).toLowerCase == "test") {
         if (storeFilePath.contains("Flat")) {
-          val outcome = Tests.TestsFlat(storeFilePath)
+          val outcome = Tests.TestsFlat(storeFilePath, uniRep)
           println(outcome)
         } else if (storeFilePath.contains("Nested")) {
-          val outcome = Tests.TestsNested(storeFilePath)
+          val outcome = Tests.TestsNested(storeFilePath, uniRep)
           println(outcome)
         } else if (storeFilePath.contains("Recursive")) {
-          val outcome = Tests.TestsRecursive(storeFilePath)
+          val outcome = Tests.TestsRecursive(storeFilePath, uniRep)
           println(outcome)
+        } else {
+          println("File not found: " + storeFilePath)
         }
         return
       }
@@ -52,7 +68,7 @@ object Main {
 
     println("""Enter query, "q" to quit:"""); println
 
-    var queryStr = readQuery()
+    var queryStr = TestTools.readQuery()
     while (queryStr != "q") {
       val query = new Key(queryStr)
       println
@@ -60,24 +76,13 @@ object Main {
       val matches = query.unifyQuery(store)
 
       println(query.term + " returns:")
-      val (_, queryResults) =
+      val twoUnifications =
         QueryTools.queryResultsToArrayString(query, matches, store)
-      for (i <- 0 until queryResults.length)
-        println(queryResults(i))
       if (matches.size == 0)
         println("no matches")
-
       println
 
-      queryStr = readQuery()
+      queryStr = TestTools.readQuery()
     }
-  }
-
-  def readQuery(): String = {
-    var query = ""
-    do {
-      query = StdIn.readLine("Query: ")
-    } while (query.isEmpty)
-    query
   }
 }

@@ -10,16 +10,16 @@ package KeyValueStore
 import scala.collection.mutable.ArrayBuffer
 
 trait TermTree {
-  var term: String // entire term, including params for Keys
+  var term: String // entire term, including params for a key
 
   def isKey: Boolean = { this.isInstanceOf[Key] }
   def isVariable: Boolean = { this.isInstanceOf[Variable] }
-  def isNumeral: Boolean = { this.isInstanceOf[Numeral] }
+  def isConstant: Boolean = { this.isInstanceOf[Constant] }
 
   def typeIs: String = {
     if (this.isKey) return ("Key")
     if (this.isVariable) return ("Variable")
-    if (this.isNumeral) return ("Numeral")
+    if (this.isConstant) return ("Constant")
     "Unknown"
   }
 
@@ -41,62 +41,52 @@ class Params(paramsArray: ArrayBuffer[TermTree]) extends TermTree {
 
 trait Atom extends TermTree {}
 
-class Variable(paramIn: String) extends Atom {
-  val variable = paramIn.trim
-  if (!variable.forall(Character.isLetter)) {
-    throw new Exception(s"Variable(): malformed param: '$paramIn'")
-  }
+class Variable(param: String) extends Atom {
+  val variable = param.trim
+
+  if (!TermTools.isVariable(variable))
+    throw new Exception(s"Variable(): malformed param: '$param'")
 
   var term = variable
 
   def display: Unit = { print("'" + variable + "'") }
 }
 
-class Numeral(paramIn: String) extends Atom {
-  val numeral = paramIn.trim
-  if (!numeral.forall(Character.isDigit)) {
-    throw new Exception(s"Numeral(): malformed param: '$paramIn'")
-  }
+// constants are numerals or names
 
-  var term = numeral
+class Constant(param: String) extends Atom {
+  val constant = param.trim
 
-  def display: Unit = { print("'" + numeral + "'") }
+  if (!TermTools.isConstant(constant))
+    throw new Exception(s"Constant(): malformed param: '$param'")
+
+  var term = constant
+
+  def display: Unit = { print("'" + constant + "'") }
 }
 
 object TermTools {
   def createTermTree(term: String): TermTree = {
-    // This method is not intented to create Params
+    // This method is not intended to create Params
     if (isVariable(term)) return new Variable(term)
-    if (isNumeral(term)) return new Numeral(term)
+    if (isConstant(term)) return new Constant(term)
     // KeyLexer requires the first term be a key
+    assert(term.indexOf("(") < term.indexOf(")"))
     val lexer = new KeyLexer(term)
-    val (token, strToken) = lexer.NextToken
-    if (token == Token.Key)
+    val lexToken = lexer.NextToken
+    if (lexToken.token == Token.Key)
       return new Key(term)
-    throw new Exception("createTermTree: not recognized: " + strToken)
+    throw new Exception("createTermTree: not recognized: " + lexToken.tokenStr)
   }
-
-  /*
-  def createTermTree(term: String): TermTree =
-  {
-    // This method is not intented to create Params
-    val lexer = new KeyLexer(term)
-    val (token, strToken) = lexer.NextToken
-    token match
-    {
-      case Token.Key => { return new Key(strToken) }
-      case Token.Variable => { return new Variable(strToken) }
-      case Token.Numeral => { return new Numeral(strToken) }
-    }
-    throw new Exception("createTermTree: not recognized: '"+ strToken +"'")
-  }
-   */
 
   def isVariable(s: String): Boolean = {
-    s.forall(Character.isLetter)
+    if (s == null || s.isEmpty)
+      throw new Exception("isVariable argument is null or empty")
+    s(0).isUpper
   }
-  def isNumeral(s: String): Boolean = {
-    s.forall(Character.isDigit)
+  def isConstant(s: String): Boolean = {
+    if (s == null || s.isEmpty)
+      throw new Exception("isVariable argument is null or empty")
+    s(0).isLower || s(0).isDigit
   }
-
 }
