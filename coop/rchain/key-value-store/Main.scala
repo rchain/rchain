@@ -24,7 +24,7 @@ object Main {
     //
     // Set uniRep to "Standard" to run the code with standard unification
     // representation.  Use any non-empty string other than "Standard" to
-    // us the non-standard notation.
+    // use the non-standard notation.
     val uniRep = "Standard"
 
     var storeFilePath = ""
