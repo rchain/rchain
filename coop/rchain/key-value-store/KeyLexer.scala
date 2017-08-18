@@ -7,11 +7,6 @@
 
 package KeyValueStore
 
-// Can't get rid of Token with isInstanceOf[] because
-//   def NextToken(): (Token.Value, String) =
-//
-// ALso, there is no Comma or Left/Right Paren class
-
 object Token extends Enumeration {
   val LeftParen = Value("(")
   val RightParen = Value(")")
