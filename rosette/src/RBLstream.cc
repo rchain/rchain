@@ -44,6 +44,8 @@
 #include <memory.h>
 #include <errno.h>
 
+#include <ctime>
+
 BUILTIN_CLASS(Istream)
 {
     OB_FIELD("client", Istream, client);
@@ -361,6 +363,28 @@ DEF("prim-print",obPrint, 1, MaxArgs)
     }
 
     return NIV;
+}
+
+
+DEF("ostream-log-time",obLogTime, 1, 1)
+{
+    CHECK(0, Ostream, strm);
+    if (strm->stream) {
+        char buf[128];
+
+        time_t rawtime;
+        struct tm * timeinfo;
+        time (&rawtime);
+        timeinfo = localtime(&rawtime);
+        strftime(buf, sizeof(buf),"%Y-%m-%d %I:%M:%S\n",timeinfo);
+
+        if (errno = fprintf(strm->stream, "%s", buf))
+            return FIXNUM(-errno);
+        else
+            return NIV;
+    } else {
+        return PRIM_ERROR("cannot print on closed ostream");
+    }
 }
 
 

@@ -47,3 +47,10 @@
 	  (print result)
 	  (display #\\n)
 	  (monitor-dump monitor)))))
+
+(defProc (log-time x)
+    (seq
+        (ostream-log-time x)
+        (prim-flush x)
+    )
+)
