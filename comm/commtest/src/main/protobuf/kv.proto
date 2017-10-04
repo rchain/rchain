@@ -24,10 +24,14 @@ message Hello {
     Node node = 1;
 }
 
+// Are you still there?
 message Ping {
+    // Nothing special here, yet.
 }
 
+// Response to Ping
 message Pong {
+    // Nothing special here, yet.
 }
 
 message GetPeers {

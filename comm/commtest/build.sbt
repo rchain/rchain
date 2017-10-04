@@ -12,20 +12,25 @@ addCompilerPlugin(
 resolvers += "Sonatype (releases)" at "https://oss.sonatype.org/content/repositories/releases/"
 
 libraryDependencies ++= Seq(
+  // Command-line argument handling
   "org.rogach" %% "scallop" % "3.0.3"
 )
 
 val http4sVersion = "0.15.16a"
 libraryDependencies ++= Seq(
+  // http4s
   "org.http4s" %% "http4s-dsl" % http4sVersion,
   "org.http4s" %% "http4s-blaze-server" % http4sVersion,
   "org.http4s" %% "http4s-blaze-client" % http4sVersion,
   "org.http4s" %% "http4s-circe" % http4sVersion,
-  // Optional for auto-derivation of JSON codecs
-  // "io.circe" %% "circe-core" % "0.8.0",
+
+  // Auto-derivation of JSON codecs for use in http4s
   "io.circe" %% "circe-generic" % "0.8.0",
   "io.circe" %% "circe-parser" % "0.8.0",
-  "io.circe" %% "circe-literal" % "0.8.0",
-  "io.netty" % "netty-all" % "4.1.14.Final"
-  // "io.netty" %% "netty-all" % "3.7.0.Final"
+  "io.circe" %% "circe-literal" % "0.8.0"
+)
+
+libraryDependencies ++= Seq(
+  "org.scalactic" %% "scalactic" % "3.0.1",
+  "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 )

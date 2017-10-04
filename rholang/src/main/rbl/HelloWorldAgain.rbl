@@ -1,0 +1,19 @@
+;;; Rosette output of HelloWorldAgain.rho
+
+(run (compile
+
+(new LetExpr (TX (TX 'helloworld (Q 'rholang5d1cbbd6406e)))
+    (BX
+        (RX (PX (TX) (RX 'run (RX 'compile (new LetExpr (TX (TX (TX (TX 'rholang34c6280d4ac4) (TX 'rholang95a9832b22f9))
+                (RX 'consume 't (TX 'helloworld) (TX '**wildcard**) (TX (Q 'world)) '#t)))
+            (RX (PX (TX 'world) (new LetExpr (TX (TX (TX (TX 'rholang88d4b9e1f6d6) (TX 'rholang97692257ac8a))
+                    (RX 'consume 't (TX 'world) (TX '**wildcard**) (TX (Q 'msg)) '#f)))
+                (RX (PX (TX (TX 'msg)) (SqX (RX 'print 'msg) (RX 'display '#\\n))) (TX 'rholang97692257ac8a)))) 'rholang95a9832b22f9))))))
+        (new LetExpr (TX (TX 'world (Q 'rholange0c3f35c6f71)) (TX 'world2 (Q 'rholang8dabfef6c1a2)))
+            (BX (BX (BX
+                (RX 'produce 't 'helloworld '**wildcard** 'world)
+                (RX 'produce 't 'world '**wildcard** "Hello World"))
+                (RX 'produce 't 'helloworld '**wildcard** 'world2))
+                (RX 'produce 't 'world2 '**wildcard** "Hello World again")))))
+
+))

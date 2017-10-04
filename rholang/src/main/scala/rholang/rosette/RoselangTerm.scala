@@ -97,12 +97,6 @@ case class StrTermPtdCtxtBr(override val nameSpace: String,
         }
         case Nil => ""
       }
-    if (nameSpace.toString.contentEquals("list")) {
-      "[" + lblStr + "]"
-    } else if (nameSpace.toString.contentEquals("Q")) {
-      "'" + lblStr
-    } else {
-      "(" + nameSpace + " " + lblStr + ")"
-    }
+    "(" + nameSpace + " " + lblStr + ")"
   }
 }

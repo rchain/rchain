@@ -1,7 +1,13 @@
 // A simple Hello World contract
 
-contract HelloWorld( world1, world2 ) = {
-    for( msg <- world1 ) {
-        world2!(msg)
+new helloworld in {
+    contract helloworld( world ) = {
+        for( msg <- world ) {
+            print(msg)
+        }
+    } |
+    new world in {
+        helloworld!(world) |
+        world!("Hello World")
     }
 }

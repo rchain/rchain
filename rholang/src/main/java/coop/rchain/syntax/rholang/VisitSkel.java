@@ -13,9 +13,6 @@ public class VisitSkel
   {
     public R visit(coop.rchain.syntax.rholang.Absyn.DContr p, A arg)
     { /* Code For DContr Goes Here */
-      //p.name_;
-      for (CPattern x: p.listcpattern_)
-      { /* ... */ }
       p.proc_.accept(new ProcVisitor<R,A>(), arg);
       return null;
     }
@@ -78,11 +75,22 @@ public class VisitSkel
       { /* ... */ }
       p.proc_.accept(new ProcVisitor<R,A>(), arg);
       return null;
+    }    public R visit(coop.rchain.syntax.rholang.Absyn.PPrint p, A arg)
+    { /* Code For PPrint Goes Here */
+      p.proc_.accept(new ProcVisitor<R,A>(), arg);
+      return null;
     }    public R visit(coop.rchain.syntax.rholang.Absyn.PConstr p, A arg)
     { /* Code For PConstr Goes Here */
-      //p.name_;
+      //p.var_;
       for (Proc x: p.listproc_)
       { /* ... */ }
+      return null;
+    }    public R visit(coop.rchain.syntax.rholang.Absyn.PContr p, A arg)
+    { /* Code For PContr Goes Here */
+      //p.var_;
+      for (CPattern x: p.listcpattern_)
+      { /* ... */ }
+      p.proc_.accept(new ProcVisitor<R,A>(), arg);
       return null;
     }        public R visit(coop.rchain.syntax.rholang.Absyn.PPar p, A arg)
     { /* Code For PPar Goes Here */
@@ -168,6 +176,9 @@ public class VisitSkel
     }    public R visit(coop.rchain.syntax.rholang.Absyn.QVar p, A arg)
     { /* Code For QVar Goes Here */
       //p.var_;
+      return null;
+    }    public R visit(coop.rchain.syntax.rholang.Absyn.QMap p, A arg)
+    { /* Code For QMap Goes Here */
       return null;
     }        public R visit(coop.rchain.syntax.rholang.Absyn.QDot p, A arg)
     { /* Code For QDot Goes Here */
@@ -307,7 +318,7 @@ public class VisitSkel
       return null;
     }    public R visit(coop.rchain.syntax.rholang.Absyn.PPtConstr p, A arg)
     { /* Code For PPtConstr Goes Here */
-      //p.name_;
+      //p.var_;
       for (PPattern x: p.listppattern_)
       { /* ... */ }
       return null;

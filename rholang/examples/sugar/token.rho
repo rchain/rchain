@@ -1,102 +1,126 @@
-// TODO: Implement booleans in Tuples
-// TODO: Implement Map() call
+new token in {
+    contract token (message_sender, total_supply, return_channel) = {
 
-contract token(message_sender, total_supply) {
-    def transfer(message_sender, to, amount, rtn) = {
-        for (balances <- balances_channel) {
-            x!(balances.get(message_sender)) |
-            y!(balances.get(to)) |
-                // TODO: Discuss how to handle the #absent that is sent instead of 0 as mentioned by @jos.denmark
-            for (balance_of_sender <- x
-               ; balance_of_receiver <- y) {
-                match [
-                    balance_of_sender >= amount,
-                    amount > 0,
-                    balance_of_receiver + amount > balance_of_receiver] with
-                    <true, true, true> => {
-                        balances_channel!(
-                            (balances
-                                .insert(message_sender, balance_of_sender - amount))
-                                .insert(to, balance_of_receiver+amount)
-                        ) |
+        new allowed_channel, balances_channel, owner_channel in {
+
+            allowed_channel!(Map()) |
+            owner_channel!(message_sender) |
+            balances_channel!(Map()) |
+            for (balances <- balances_channel) {
+                balances_channel!( balances.insert(message_sender, total_supply) )
+            } |
+
+            new transfer, transfer_from, approve, balance_of, allowance, contract_owner in {
+
+                contract transfer(message_sender, to, amount, rtn) = {
+                    for (balances <- balances_channel) {
+                        new x, y in {
+                            x!(balances.getOrElse(message_sender, 0)) |
+                            y!(balances.getOrElse(to, 0)) |
+                            for (balance_of_sender <- x
+                               ; balance_of_receiver <- y) {
+                                match [
+                                    balance_of_sender >= amount,
+                                    amount > 0,
+                                    balance_of_receiver + amount > balance_of_receiver] with
+                                    <true, true, true> => {
+                                        balances_channel!(
+                                            (balances
+                                                .insert(message_sender, balance_of_sender - amount))
+                                                .insert(to, balance_of_receiver+amount)
+                                        ) |
+                                        rtn!(true)
+                                    }
+                                    _ => {
+                                        balances_channel!(balances) |
+                                        rtn!(false)
+                                    }
+                            }
+                        }
+                    }
+                } |
+
+                contract transfer_from(message_sender, from, to, amount, rtn) = {
+                    for (balances <- balances_channel
+                       ; allowed <- allowed_channel) {
+                        new x, y, z in {
+                            x!(balances.getOrElse(from, 0)) |
+                            y!(allowed.getOrElse(from, message_sender, 0)) |
+                            z!(balances.getOrElse(to, 0)) |
+                            for ( balance_of_sender <- x
+                                ; sender_allowed <- y
+                                ; balance_of_receiver <- z ) {
+                                match [
+                                    balance_of_sender >= amount,
+                                    sender_allowed >= amount,
+                                    amount > 0,
+                                    balance_of_receiver + amount > balance_of_receiver] with
+                                    <true, true, true, true> => {
+                                        balances_channel!(
+                                            (balances
+                                                .insert(from, balance_of_sender - amount))
+                                                .insert(to, balance_of_receiver + amount)
+                                        ) |
+                                        allowed_channel!(
+                                            allowed.insert(from, message_sender, sender_allowed - amount)
+                                        ) |
+                                        rtn!(true)
+                                    }
+                                    _ => {
+                                        balances_channel!(balances) |
+                                        allowed_channel!(allowed) |
+                                        rtn!(false)
+                                    }
+
+                            }
+                        }
+                    }
+                } |
+
+                contract approve(message_sender, spender, amount, rtn) = {
+                    for (allowed <- allowed_channel) {
+                        allowed_channel!(allowed.insert(message_sender,spender,amount)) |
                         rtn!(true)
                     }
-                    _ => {
-                        balances_channel!(balances) |
-                        rtn!(false)
-                    }
-            }
-        }
-    }
+                } |
 
-    def transfer_from(message_sender, from, to, amount, rtn) = {
-        for (balances <- balances_channel
-           ; allowed <- allowed_channel) {
-            x!(balances.get(from)) |
-            y!(allowed.get(from, message_sender)) |
-            z!(balances.get(to)) |
-            for ( balance_of_sender <- x
-                ; sender_allowed <- y
-                ; balance_of_receiver <- z ) {
-                match [
-                    balance_of_sender >= amount,
-                    sender_allowed >= amount,
-                    amount > 0,
-                    balance_of_receiver + amount > balance_of_receiver] with
-                    <true, true, true, true> => {
-                        balances_channel!(
-                            (balances
-                                .insert(from, balance_of_sender-amount))
-                                .insert(to, balance_of_receiver+amount)
-                        ) |
-                        allowed_channel!(
-                            allowed.insert(from, message_sender, sender_allowed -amount)
-                        ) |
-                        rtn!(true)
+                contract balance_of(owner, rtn) = {
+                    for (balances <- balances_channel) {
+                        rtn!(balances.getOrElse(owner, 0)) | balances_channel!(balances)
                     }
-                    _ => {
-                        balances_channel!(balances) |
+                } |
+
+                contract allowance(owner, spender, rtn) = {
+                    for (allowed <- allowed_channel) {
                         allowed_channel!(allowed) |
-                        rtn!(false)
+                        rtn!(allowed.getOrElse(owner,spender,0))
                     }
+                } |
 
+                contract contract_owner(rtn) = {
+                    for (owner <- owner_channel) {
+                        owner_channel!(owner) |
+                        rtn!(owner)
+                    }
+                } |
+
+                return_channel!(
+                    Map().insertMultiple("transfer", transfer, "transfer_from", transfer_from,
+                        "approve", approve, "balance_of", balance_of, "allowance", allowance,
+                        "contract_owner", contract_owner))
+                        // TODO: Eventually just insert with compiler
+            }
+        }
+    } |
+    new rtn, me, they in {
+        token!([me, 100, rtn]) | // TODO: String to symbol?
+        for (token_contract <- rtn) {
+            new balance_of_1_rtn, unused_rtn, balance_of_2_rtn in {
+                @token_contract.get("transfer")!([me, they, 50, unused_rtn]) |
+                @token_contract.get("balance_of")!([they, balance_of_2_rtn]) |
+                for (they_balance <- balance_of_2_rtn) { print(they_balance) }
             }
         }
     }
-
-    def approve(message_sender, spender, amount, rtn) {
-        for (allowed <- allowed_channel) {
-            allowed_channel!(allowed.insert(message_sender,spender,amount)) |
-            rtn!(true)
-        }
-    }
-
-    def balance_of(owner, rtn) = {
-        for (balances <- balances_channel) {
-            rtn!(balances.get(owner)) | balances_channel!(balances)
-        }
-    }
-
-    def allowance(owner, spender, rtn) = {
-        for (allowed <- allowed_channel) {
-            allowed_channel!(allowed) |
-            rtn!(allowed.get(owner,spender))
-        }
-    }
-
-    def contract_owner(rtn) = {
-        for (owner <- owner_channel) {
-            owner_channel!(owner) |
-            rtn!(owner)
-        }
-    }
-
-    new allowed_channel, balances_channel, owner_channel in {
-        allowed_channel!(Map()) |
-        owner_channel!(message_sender) |
-        balances_channel!(Map()) |
-        for (balances <- balances_channel) {
-            balances_channel!( balances.insert(message_sender, total_supply) )
-        }
-    }
+    // Once we have a registry, we can do registry_channel!(token) to save the contract there
 }
