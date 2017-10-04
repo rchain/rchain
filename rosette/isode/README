@@ -1,0 +1,13 @@
+The directories here contain Carnot specific modules that work with
+ISODE.
+
+The rblimisc and rbllookup directories contain the imisc and lookup
+programs that use the rosy/posy/pepy tools instead of the newer pepsy
+tools.
+
+The rbltsap directory contains modification to the ISODE tsap modules
+required by the Rosette virtual machine. These changes are defined by 
+
+	#ifdef RBL
+
+Where RBL stands for the Rosette Base Language.

@@ -1,0 +1,63 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defStructure GroupEntry
+  (ref0 char)		name
+  (ref0 char)		passwd
+  int			gid
+  (ref0 (ref0 char))	members)
+
+(defForeign (getgrent) (ref GroupEntry))
+
+(defForeign (getgrgid int) (ref GroupEntry))
+
+(defForeign (getgrnam String) (ref GroupEntry))
+
+(defForeign (setgrent) int)
+
+(defForeign (endgrent) int)
+
+
+(defForeign (getlogin) String)
+
+(defStructure PasswdEntry
+  (ref0 char)	pw_name				;
+  (ref0 char)	pw_passwd			;
+  int		pw_uid				;
+  int		pw_gid				;
+  int		pw_quota			;
+  (ref0 char)	pw_comment			;
+  (ref0 char)	pw_gecos			;
+  (ref0 char)	pw_dir				;
+  (ref0 char)	pw_shell			;
+  )
+
+(defForeign (getpwent) (ref PasswdEntry))
+
+(defForeign (getpwnam String) (ref PasswdEntry))
+
+(defForeign (getpwuid int) (ref PasswdEntry))
+
+(defForeign (setpwent) int)
+
+(defForeign (endpwent) int)

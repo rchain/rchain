@@ -1,0 +1,45 @@
+###############################################################################
+#
+# isoservices - ISODE Services Database
+#
+#	Mappings between services, selectors, and programs
+#
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/isode/config/services.local,v 1.1.1.1 1993/02/12 01:26:08 tomlic Exp $
+#
+#
+# $Log: services.local,v $
+# Revision 1.1.1.1  1993/02/12  01:26:08  tomlic
+# pub release of rosette
+#
+# Revision 1.2  1993/01/19  21:01:43  carnot
+# Touch up for release 2.0
+#
+# Revision 9.0  1992/06/16  12:11:35  isode
+# Release 8.0
+#
+# 
+###############################################################################
+
+
+###############################################################################
+#
+# Syntax:
+#
+#	<provider>/<entity> <selector> <arg0> <arg1> ... <argn>
+#
+#	Each token is separated by LWSP, though double-quotes may be
+#	used to prevent separation
+#
+###############################################################################
+
+
+###############################################################################
+# locally defined services
+#	(this section is usually empty...)
+###############################################################################
+
+rosette/session		#1025		rosette-bootstrap
+
+# local additions end here (do not remove this line)
+

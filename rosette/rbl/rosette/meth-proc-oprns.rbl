@@ -1,0 +1,146 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;; proc/meth-oprns
+ 
+;;; operations on method and proc exprs
+
+(defSync (show-code & wrt)
+  (if (null? wrt)
+      (show-code (pure [] (self)))
+      (let [[c (lookup (self) (head wrt))]]
+	(if (absent? c)
+	    (display (self) " not defined on " (head wrt) nl)
+	    (show-code c)))))
+
+(defSync show-code (sbo& Code-SBO) code-dump)
+
+(defSync (source@ & wrt)
+  (if (null? wrt)
+      '(pure [] (self))
+      (let [[s (lookup (self) (head wrt))]]
+	(if (absent? s)
+	    #absent
+	    (source@ s)))))
+
+(defSync (formals@ & wrt)
+  (if (null? wrt)
+      '[]
+      (let [[f (lookup (self) (head wrt))]]
+	(if (absent? f)
+	    #absent
+	    (formals@ f)))))
+
+(defSync (code@ & wrt)
+  (if (null? wrt)
+      (code@ (pure [] (self)))
+      (let [[c (lookup (self) (head wrt))]]
+	(if (absent? c)
+	    #absent
+	    (code@ c)))))
+
+(defSync body@)
+(defSync litvec@)
+(defSync codevec@)
+(defSync template@)
+(defSync pattern@)
+
+;; defaults on various objects
+
+(defSync (litvec@) pure& (sbo& (sbo #niv)) ['no\ source\ for\ \#niv])
+
+;; proc/methExpr methods
+
+(defSlots ProcExpr
+  (method (formals@) formals)
+  (method (body@)    body))
+
+(defSlots MethodExpr
+  (method (formals@) formals)
+  (method (body@)    body))
+
+;;; setup some operations on proc-like entities
+
+(defSlots Proc
+  (method (show-code) (code-dump code))
+  (method (source@)   source)
+  (method (code@)     code)
+  (method (litvec@)   (litvec@ code))
+  (method (codevec@)  (codevec@ code))
+  (method (template@) (nth (litvec@ code) formals-offset))
+  (method (pattern@)  (pattern@ (template@ (self))))
+  (method (formals@)  (formals@ (pattern@ (self)))) )
+
+(defSlots Method
+  (method (show-code) (code-dump code))
+  (method (source@)   source)
+  (method (code@)     code)
+  (method (litvec@)   (litvec@ code))
+  (method (codevec@)  (codevec@ code))
+  (method (template@) (nth (litvec@ code) formals-offset))
+  (method (pattern@)  (pattern@ (template@ (self))))
+  (method (formals@)  (formals@ (pattern@ (self)))) )
+
+(defSlots Prim
+  (method (show-code)
+    (display "primitive - code cannot be displayed\n"))
+  (method (source@)  'primitive\ source\ not\ available)
+  (method (code@)    'primitive\ code\ not\ available)
+  (method (formals@) 'primitive\ formals\ not\ available) )
+
+;;; operations on Code objects
+
+(defSlots Code
+  (method (litvec@)  litvec)
+  (method (codevec@) codevec) )
+
+;;; operations on Template objects
+
+(defSlots Template
+  (method (pattern@) pattern) )
+
+;;; initialize pattern prototypes
+
+(define IdVecPattern       (pattern@ (proc [x] x)))
+(define IdAmperRestPattern (pattern@ (proc [& r] r)))
+(define ComplexPattern     (pattern@ (proc [[a b] c] a)))
+(define IdPattern          (nth (lookup 'patvec ComplexPattern) 1))
+(define ConstPattern       (nth (lookup 'patvec
+					(pattern@ (proc [a 1] a)))
+				1))
+
+;;; operations on patterns
+
+;;; the following is the SAFE way to define formals@ in case someone
+;;; changes the relative position of the 'expr slot among the various
+;;; kinds of patterns:
+;;; 
+;;; (defSync (formals@) (sbo& CompoundPattern-SBO)
+;;;   (free [expr] expr))
+;;;
+;;; Of course one could always define formals@ separately for each kind
+;;; of pattern but that is inherently silly.
+;;;
+;;; But we will define as follows so that the reference to 'expr is lexed
+
+(defMethod IdVecPattern (sbo& CompoundPattern-SBO) (formals@) expr)

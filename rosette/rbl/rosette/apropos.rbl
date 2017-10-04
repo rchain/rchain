@@ -1,0 +1,95 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defOprn aproposName)
+(defOprn aproposKeys)
+(defOprn aproposSort)
+(defOprn apropos1)
+(defOprn apropos)
+(defOprn prettyApropos)
+(defOprn set-union)
+
+(defPure Top (aproposName) (->string (self)))
+(defPure (sbo kind) (aproposName) (->string ('id (self))))
+
+(defPure Top (aproposKeys)
+  (concat (keys (meta (self)) (self))
+	  (keys (meta (sbo (self))) (sbo (self)))))
+
+(defPure (sbo String) (apropos1 & env)
+  (let [[renv (if (null? env) Global (head env))]]
+    (iterate loop [[[keys-hd & keys-tail] (aproposKeys renv)]
+		   [ans []]]
+      (if (null? keys-hd)
+	  ans
+	  (if (null? keys-tail)
+	      (if (and (not (locked? (mbox keys-hd)))
+		       (regexpCompare (self) (aproposName keys-hd)))
+		  (rcons ans keys-hd)
+		  ans)
+	      (loop keys-tail
+		    (if (and (not (locked? (mbox keys-hd)))
+			     (regexpCompare (self) (aproposName keys-hd)))
+			(rcons ans keys-hd)
+			ans)))))))
+
+(defPure (sbo Tuple) (set-union t2)
+  (if (null? t2)
+      (self)
+      (iterate loop [[[hd & tl] t2] [ans (self)]]
+	(if (null? hd)
+	    ans
+	    (if (null? tl)
+		(if (not (mem? ans hd))
+		    (rcons ans hd)
+		    ans)
+		(loop tl (if (not (mem? ans hd))
+			     (rcons ans hd)
+			     ans)))))))
+
+(defPure (sbo String) (apropos & env)
+  (iterate loop [[[renv & envs]
+		  (parents (if (null? env) Global (head env)))]
+		 [ans []]]
+    (if (not (same? Top renv))
+	(loop envs (set-union ans (apropos1 (self) renv)))
+	ans)))
+
+(defSlot (sbo String) 'aproposName<
+  (proc [s1 s2] (string-ci< (aproposName s1) (aproposName s2))))
+
+(defSlot (sbo String) 'aproposName>=
+  (proc [s1 s2] (string-ci>= (aproposName s1) (aproposName s2))))
+
+(defPure String (aproposSort & env)
+  (free [aproposName< aproposName>=]
+    (sort (m! apropos & env) aproposName< aproposName>=)))
+
+(defSlot (sbo String) 'aproposInfo
+  (proc [x env] (seq (display x " ----> " (lookup x env) nl))))
+  
+(defPure (sbo String) (prettyApropos & env)
+  (free [aproposInfo]
+    (let [[val (m! aproposSort & env)]]
+      (seq (mapx val aproposInfo (if (null? env) Global (head env)))
+	   val))))

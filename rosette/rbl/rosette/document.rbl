@@ -1,0 +1,297 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defProc (doc2string-aux <words>)
+  (cond
+   ((or (null? <words>) (absent? <words>)) "")
+   ((type? Tuple <words>)
+    (iterate loop [[wrds <words>] [ans " "]]
+      (if (null? wrds)
+	  ans
+	  (loop (tail wrds)
+		(concat ans (concat (->string (head wrds)) " "))))))
+   (else (RuntimeError (self) "invalid documentation"))))
+
+;;; (docuSlot: <actor> <slot> (summary& <stuff> ...) (detail& <stuff> ...))
+
+(defExpander (docuSlot: e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [[<summary> rest] (find-keyword 'summary& [] rest)]
+	 [[<detail> rest] (find-keyword 'detail& [] rest)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'document!: id (Q <slot>) (Q <summary>) (Q <detail>))))))
+
+(defExpander (docuSlot e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (TX (RX 'summary! id (Q <slot>))
+		  (RX 'detail! id (Q <slot>)))))))
+
+(defExpander (slotSummary e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'summary! id (Q <slot>))))))
+
+(defExpander (slotDetail e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'detail! id (Q <slot>))))))
+
+(defExpander (docuSlot! e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  (RX 'summary! id (Q <slot>))
+		  (Q nl)
+		  (RX 'detail! id (Q <slot>))
+		  (Q nl))))))
+
+(defExpander (slotSummary! e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  (RX 'doc2string-aux (RX 'summary! id (Q <slot>)))
+		  (Q nl))))))
+
+(defExpander (slotDetail! e)
+  (let* [[[<actor> <slot> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where (Q <slot>) <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  (RX 'doc2string-aux (RX 'detail! id (Q <slot>)))
+		  (Q nl))))))
+
+;;; (docuMethod: <actor> <oprn>
+;;;   (summary& <stuff> ...)
+;;;   (detail& <stuff> ...)
+;;;   (usage& <stuff> ...))
+
+(defExpander (docuMethod: e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [[<summary> rest] (find-keyword 'summary& [] rest)]
+	 [[<detail> rest] (find-keyword 'detail& [] rest)]
+	 [[<usage> rest] (find-keyword 'usage& [] rest)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (new SeqExpr 
+		   [(RX 'slot-attr!: id <oprn> ''summary (Q <summary>))
+		    (RX 'slot-attr!: id <oprn> ''detail (Q <detail>))
+		    (RX 'slot-attr!: id <oprn> ''usage (Q <usage>))])))))
+
+(defExpander (docuMethod e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (TX (RX 'summary! id <oprn>)
+		  (RX 'detail! id <oprn>)
+		  (RX 'usage! id <oprn>))))))
+
+(defExpander (methodSummary e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'summary! id <oprn>)))))
+
+(defExpander (methodDetail e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'detail! id <oprn>)))))
+
+(defExpander (methodUsage e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'usage! id <oprn>)))))
+
+(defExpander (docuMethod! e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  "summary:" (Q nl)
+		  (RX 'doc2string-aux (RX 'summary! id <oprn>))
+		  (Q nl)
+		  "detail:" (Q nl)
+		  (RX 'doc2string-aux (RX 'detail! id <oprn>))
+		  (Q nl)
+		  "usage:" (Q nl)
+		  (RX 'doc2string-aux (RX 'usage! id <oprn>))
+		  (Q nl))))))
+
+(defExpander (methodSummary! e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  (RX 'doc2string-aux (RX 'summary! id <oprn>))
+		  (Q nl))))))
+
+(defExpander (methodDetail! e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  (RX 'doc2string-aux (RX 'detail! id <oprn>))
+		  (Q nl))))))
+
+(defExpander (methodUsage! e)
+  (let* [[[<actor> <oprn> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta (RX 'where <oprn> <actor>))))
+	 (new IfExpr (RX 'absent? id) id
+	      (RX 'display
+		  (RX 'doc2string-aux (RX 'usage! id <oprn>))
+		  (Q nl))))))
+
+(defExpander (docuPrim: e)
+  (let* [[[<prm> & rest] (->tuple msg)]
+	 [[<summary> rest] (find-keyword 'summary& [] rest)]
+	 [[<detail> rest] (find-keyword 'detail& [] rest)]
+	 [[<usage> rest] (find-keyword 'usage& [] rest)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta Global)))
+	 (new IfExpr
+	      (RX 'absent? id)
+	      (new LetExpr (TX (TX id (RX ' meta Top)))
+		   (new IfExpr
+			(RX 'absent? id) id
+			(new SeqExpr 
+			     [(RX 'slot-attr!: id (Q <prm>)
+				  ''summary (Q <summary>))
+			      (RX 'slot-attr!: id (Q <prm>)
+				  ''detail (Q <detail>))
+			      (RX 'slot-attr!: id (Q <prm>)
+				  ''usage (Q <usage>))])))
+	      (new SeqExpr 
+		   [(RX 'slot-attr!: id (Q <prm>) ''summary (Q <summary>))
+		    (RX 'slot-attr!: id (Q <prm>) ''detail (Q <detail>))
+		    (RX 'slot-attr!: id (Q <prm>) ''usage (Q <usage>))
+		    (Q <prm>)])))))
+
+(defExpander (docuPrim e)
+  (let* [[[<prm> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta Global)))
+	 (new IfExpr
+	      (RX 'absent? id)
+	      (new LetExpr (TX (TX id (RX ' meta Top)))
+		   (new IfExpr
+			(RX 'absent? id) id
+			(TX (RX 'summary! id (Q <prm>))
+			    (RX 'detail! id (Q <prm>))
+			    (RX 'usage! id (Q <prm>)))))
+	      (TX (RX 'summary! id (Q <prm>))
+		  (RX 'detail! id (Q <prm>))
+		  (RX 'usage! id (Q <prm>)))))))
+
+(defExpander (docuPrim! e)
+  (let* [[[<prm> & rest] (->tuple msg)]
+	 [id '__where__]]
+    (new LetExpr
+	 (TX (TX id (RX 'meta Global)))
+	 (new IfExpr
+	      (RX 'absent? id)
+	      (new LetExpr (TX (TX id (RX ' meta Top)))
+		   (new IfExpr
+			(RX 'absent? id) id
+			(RX 'display
+			    "summary:" (Q nl)
+			    (RX 'doc2string-aux (RX 'summary! id (Q <prm>)))
+			    (Q nl)
+			    "detail:" (Q nl)
+			    (RX 'doc2string-aux (RX 'detail! id (Q <prm>)))
+			    (Q nl)
+			    "usage:" (Q nl)
+			    (RX 'doc2string-aux (RX 'usage! id (Q <prm>)))
+			    (Q nl))))
+	      (RX 'display
+		  "summary:" (Q nl)
+		  (RX 'doc2string-aux (RX 'summary! id (Q <prm>)))
+		  (Q nl)
+		  "detail:" (Q nl)
+		  (RX 'doc2string-aux (RX 'detail! id (Q <prm>)))
+		  (Q nl)
+		  "usage:" (Q nl)
+		  (RX 'doc2string-aux (RX 'usage! id (Q <prm>)))
+		  (Q nl))))))
+
+(defExpander (primUsage! e)
+  (let* [[[<prm> & rest] (->tuple msg)]
+	 [id (meta Global)]]
+    (RX 'display
+	(RX 'doc2string-aux (RX 'usage! id (Q <prm>)))
+	(Q nl))))
+
+(defExpander (primSummary! e)
+  (let* [[[<prm> & rest] (->tuple msg)]
+	 [id (meta Global)]]
+    (RX 'display
+	(RX 'doc2string-aux (RX 'summary! id (Q <prm>)))
+	(Q nl))))
+
+(defExpander (primDetail! e)
+  (let* [[[<prm> & rest] (->tuple msg)]
+	 [id (meta Global)]]
+    (RX 'display
+	(RX 'doc2string-aux (RX 'detail! id (Q <prm>)))
+	(Q nl))))

@@ -1,0 +1,84 @@
+###############################################################################
+#
+# isotailor - ISODE tailoring file
+#
+#	This file is purposely not installed; it is an example only!
+#
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/isode/config/isotailor.osi,v 1.1.1.1 1993/02/12 01:26:06 tomlic Exp $
+#
+#
+# $Log: isotailor.osi,v $
+# Revision 1.1.1.1  1993/02/12  01:26:06  tomlic
+# pub release of rosette
+#
+# Revision 1.4  1993/01/21  19:47:51  carnot
+# re-enabled etcpath
+#
+# Revision 1.3  1993/01/21  00:41:40  carnot
+# comment out etcpath for release
+#
+# Revision 1.2  1993/01/19  21:01:33  carnot
+# Touch up for release 2.0
+#
+# Revision 8.0  91/07/17  13:03:56  isode
+# Release 7.0
+# 
+# 
+###############################################################################
+
+
+###############################################################################
+#
+# Syntax:
+#
+#	<variable> : <value>
+#
+#	Arbitrary whitespace separates the two items
+#
+#	For the xsaplevels, <value> consists of any of the following
+#	(seperated by whitespace):
+#
+#		none		- does nothing
+#
+#		fatal		- fatal errors
+#
+#		exceptions	- exceptional events
+#
+#		notice		- informational notices
+#
+#				  remaining levels available under -DDEBUG
+#
+#		pdus		- PDU printing
+#
+#		trace		- program tracing
+#
+#		debug		- full debugging
+#
+#		all		- all of the above
+#
+###############################################################################
+
+etcpath:	PREFIX/etc/
+
+ts_stacks:	tp4 tcp
+ts_communities:	realns internet
+
+compatlevel:	exceptions
+compatfile:	-
+addrlevel:	exceptions
+addrfile:	-
+tsaplevel:	exceptions
+tsapfile:	-
+ssaplevel:	exceptions
+ssapfile:	-
+psaplevel:	exceptions
+psapfile:	-
+psap2level:	exceptions
+psap2file:	-
+acsaplevel:	exceptions
+acsapfile:	-
+rtsaplevel:	exceptions
+rtsapfile:	-
+rosaplevel:	exceptions
+rosapfile:	-

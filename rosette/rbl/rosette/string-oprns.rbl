@@ -1,0 +1,68 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defOprn ->expr)
+
+(defMethod String (->expr)
+  (let [[p (parser-new Parser)]]
+    (seq (parser-parse p) (parser-resume p (self)))))
+
+(defOprn ->upper)
+
+(defOprn (sbo& (sbo String)) <  string<)
+(defOprn (sbo& (sbo String)) <= string<=)
+(defOprn (sbo& (sbo String)) =  string=)
+(defOprn (sbo& (sbo String)) != string!=)
+(defOprn (sbo& (sbo String)) >= string>=)
+(defOprn (sbo& (sbo String)) >  string>)
+
+(defMethod Character (->upper)
+  (if (and (ch<= #\a (self)) (ch<= (self) #\z))
+      (->char (fx+ (fx- (ch->fx (self)) 97) 65))
+      (self)))
+
+(defMethod String (->upper)
+  (let* [[n (prim-size (self))]
+	 [s (string-new n)]]
+    (label loop
+      (if (fx= 0 n)
+	  s
+	  (seq (set! n (fx- n 1))
+	       (prim-set-nth s n (->upper (prim-nth (self) n)))
+	       (goto loop))))))
+
+(defOprn token)
+(defSlot (sbo String) token string-get-token)
+
+(defOprn (split & r) (sbo& (sbo String)) pure&
+  (let [[x (string-split (self) & r)]]
+    (cond ((null? x) [])
+	  ((niv? (nth x (dec (size x))))
+	   (sub-obj x 0 (dec (size x))))
+	  (else x))))
+
+(let [[p (parser-new 1)]]
+  (defProc (string->fl str)
+    (seq (parser-reset p)
+ 	 (parser-parse p)
+ 	 (parser-resume p (concat str " ")))))

@@ -1,0 +1,441 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; SunOS 4.0 Error codes
+
+(seq
+ (define	EPERM		1);; Not owner
+ (define	ENOENT		2);; No such file or directory
+ (define	ESRCH		3);; No such process
+ (define	EINTR		4);; Interrupted system call
+ (define	EIO		5);; I/O error
+ (define	ENXIO		6);; No such device or address
+ (define	E2BIG		7);; Arg list too long
+ (define	ENOEXEC		8);; Exec format error
+ (define	EBADF		9);; Bad file number
+ (define	ECHILD		10);; No children
+ (define	EAGAIN		11);; No more processes
+ (define	ENOMEM		12);; Not enough core
+ (define	EACCES		13);; Permission denied
+ (define	EFAULT		14);; Bad address
+ (define	ENOTBLK		15);; Block device required
+ (define	EBUSY		16);; Mount device busy
+ (define	EEXIST		17);; File exists
+ (define	EXDEV		18);; Cross-device link
+ (define	ENODEV		19);; No such device
+ (define	ENOTDIR		20);; Not a directory
+ (define	EISDIR		21);; Is a directory
+ (define	EINVAL		22);; Invalid argument
+ (define	ENFILE		23);; File table overflow
+ (define	EMFILE		24);; Too many open files
+ (define	ENOTTY		25);; Not a typewriter
+ (define	ETXTBSY		26);; Text file busy
+ (define	EFBIG		27);; File too large
+ (define	ENOSPC		28);; No space left on device
+ (define	ESPIPE		29);; Illegal seek
+ (define	EROFS		30);; Read-only file system
+ (define	EMLINK		31);; Too many links
+ (define	EPIPE		32);; Broken pipe
+ 'BASIC\ ERROR\ CODES)
+
+;;;  MATH SOFTWARE
+
+(seq
+ (define	EDOM		33);; Argument too large
+ (define	ERANGE		34);; Result too large
+ 'MATH\ ERROR\ CODES)
+
+;;;  NON-BLOCKING AND INTERRUPT I/O
+
+(seq
+ (define	EWOULDBLOCK	35);; Operation would block
+ (define	EINPROGRESS	36);; Operation now in progress
+ (define	EALREADY	37);; Operation already in progress
+ 'ASYNC\ I\\O\ ERROR\ CODES)
+
+;;;  IPC/NETWORK SOFTWARE 
+
+(seq	;;;  argument errors 
+ (define	ENOTSOCK	38);; Socket operation on non-socket
+ (define	EDESTADDRREQ	39);; Destination address required
+ (define	EMSGSIZE	40);; Message too long
+ (define	EPROTOTYPE	41);; Protocol wrong type for socket
+ (define	ENOPROTOOPT	42);; Protocol not available
+ (define	EPROTONOSUPPORT	43);; Protocol not supported
+ (define	ESOCKTNOSUPPORT	44);; Socket type not supported
+ (define	EOPNOTSUPP	45);; Operation not supported on socket
+ (define	EPFNOSUPPORT	46);; Protocol family not supported
+ (define	EAFNOSUPPORT	47);; Address family not supported by protocol family
+ (define	EADDRINUSE	48);; Address already in use
+ (define	EADDRNOTAVAIL	49);; Can't assign requested address
+ 'IPC\ ARGUMENT\ ERROR\ CODES)
+
+(seq	;;;  operational errors 
+ (define	ENETDOWN	50);; Network is down
+ (define	ENETUNREACH	51);; Network is unreachable
+ (define	ENETRESET	52);; Network dropped connection on reset
+ (define	ECONNABORTED	53);; Software caused connection abort
+ (define	ECONNRESET	54);; Connection reset by peer
+ (define	ENOBUFS		55);; No buffer space available
+ (define	EISCONN		56);; Socket is already connected
+ (define	ENOTCONN	57);; Socket is not connected
+ (define	ESHUTDOWN	58);; Can't send after socket shutdown
+ (define	ETOOMANYREFS	59);; Too many references: can't splice
+ (define	ETIMEDOUT	60);; Connection timed out
+ (define	ECONNREFUSED	61);; Connection refused
+ 'IPC\ OP\ ERROR\ CODES)
+
+(seq	;;;  
+ (define	ELOOP		62);; Too many levels of symbolic links
+ (define	ENAMETOOLONG	63);; File name too long
+ 'PATHNAME\ ERROR\ CODES)
+
+;;;  should be rearranged
+
+(seq
+ (define	EHOSTDOWN	64);; Host is down
+ (define	EHOSTUNREACH	65);; No route to host
+ (define	ENOTEMPTY	66);; Directory not empty
+ 'ROUTING\ ERROR\ CODES)
+
+;;;  QUOTAS & MUSH
+
+(seq
+ (define	EPROCLIM	67);; Too many processes
+ (define	EUSERS		68);; Too many users
+ (define	EDQUOT		69);; Disc quota exceeded
+ 'RESOURCE\ ERROR\ CODES)
+
+;;;  NETWORK FILE SYSTEM
+
+(seq
+ (define	ESTALE		70);; Stale NFS file handle
+ (define	EREMOTE		71);; Too many levels of remote in path
+ 'NFS\ ERROR\ CODES)
+
+;;;  STREAMS
+
+(seq
+ (define	ENOSTR		72);; Device is not a stream
+ (define	ETIME		73);; Timer expired
+ (define	ENOSR		74);; Out of streams resources
+ (define	ENOMSG		75);; No message of desired type
+ (define	EBADMSG		76);; Trying to read unreadable message
+ 'STREAM\ ERROR\ CODES)
+
+;;;  SystemV IPC
+
+(seq
+ (define EIDRM		77);; Identifier removed
+
+;;;  SystemV RECORD LOCKING
+
+ (define EDEADLK		78);; Deadlock condition.
+ (define ENOLCK		79);; No record locks available.
+
+;;;  RFS
+
+ (define ENONET		80);; Machine is not on the network
+ (define ERREMOTE	81);; Object is remote
+ (define ENOLINK		82);; the link has been severed
+ (define EADV		83);; advertise error
+ (define ESRMNT		84);; srmount error
+ (define ECOMM		85);; Communication error on send
+ (define EPROTO		86);; Protocol error
+ (define EMULTIHOP	87);; multihop attempted
+ (define EDOTDOT		88);; Cross mount point (not an error)
+ (define EREMCHG		89);; Remote address changed
+ 'SYS\ V\ ERROR\ CODES)
+
+
+;;; Build SunOS 4.0 Error code Table
+(define SunOS-Errnum2Symb
+  (insert (new RblTable)
+       [
+	1	'EPERM		;; Not owner
+	2	'ENOENT		;; No such file or directory
+	3	'ESRCH		;; No such process
+	4	'EINTR		;; Interrupted system call
+	5	'EIO		;; I/O error
+	6	'ENXIO		;; No such device or address
+	7	'E2BIG		;; Arg list too long
+	8	'ENOEXEC	;; Exec format error
+	9	'EBADF		;; Bad file number
+	10	'ECHILD		;; No children
+	11	'EAGAIN		;; No more processes
+	12	'ENOMEM		;; Not enough core
+	13	'EACCES		;; Permission denied
+	14	'EFAULT		;; Bad address
+	15	'ENOTBLK	;; Block device required
+	16	'EBUSY		;; Mount device busy
+	17	'EEXIST		;; File exists
+	18	'EXDEV		;; Cross-device link
+	19	'ENODEV		;; No such device
+	20	'ENOTDIR	;; Not a directory
+	21	'EISDIR		;; Is a directory
+	22	'EINVAL		;; Invalid argument
+	23	'ENFILE		;; File table overflow
+	24	'EMFILE		;; Too many open files
+	25	'ENOTTY		;; Not a typewriter
+	26	'ETXTBSY	;; Text file busy
+	27	'EFBIG		;; File too large
+	28	'ENOSPC		;; No space left on device
+	29	'ESPIPE		;; Illegal seek
+	30	'EROFS		;; Read-only file system
+	31	'EMLINK		;; Too many links
+	32	'EPIPE		;; Broken pipe
+
+;;;  MATH SOFTWARE
+
+	33	'EDOM		;; Argument too large
+	34	'ERANGE		;; Result too large
+
+;;;  NON-BLOCKING AND INTERRUPT I/O
+
+	35	'EWOULDBLOCK	;; Operation would block
+	36	'EINPROGRESS	;; Operation now in progress
+	37	'EALREADY	;; Operation already in progress
+
+;;;  IPC/NETWORK SOFTWARE 
+
+	;;;  argument errors 
+	38	'ENOTSOCK	;; Socket operation on non-socket
+	39	'EDESTADDRREQ	;; Destination address required
+	40	'EMSGSIZE	;; Message too long
+	41	'EPROTOTYPE	;; Protocol wrong type for socket
+	42	'ENOPROTOOPT	;; Protocol not available
+	43	'EPROTONOSUPPORT;; Protocol not supported
+	44	'ESOCKTNOSUPPORT;; Socket type not supported
+	45	'EOPNOTSUPP	;; Operation not supported on socket
+	46	'EPFNOSUPPORT	;; Protocol family not supported
+	47	'EAFNOSUPPORT	;; Address family not supported by protocol family
+	48	'EADDRINUSE	;; Address already in use
+	49	'EADDRNOTAVAIL	;; Can't assign requested address
+
+	;;;  operational errors 
+	50	'ENETDOWN	;; Network is down
+	51	'ENETUNREACH	;; Network is unreachable
+	52	'ENETRESET	;; Network dropped connection on reset
+	53	'ECONNABORTED	;; Software caused connection abort
+	54	'ECONNRESET	;; Connection reset by peer
+	55	'ENOBUFS	;; No buffer space available
+	56	'EISCONN	;; Socket is already connected
+	57	'ENOTCONN	;; Socket is not connected
+	58	'ESHUTDOWN	;; Can't send after socket shutdown
+	59	'ETOOMANYREFS	;; Too many references: can't splice
+	60	'ETIMEDOUT	;; Connection timed out
+	61	'ECONNREFUSED	;; Connection refused
+
+	;;;  
+	62	'ELOOP		;; Too many levels of symbolic links
+	63	'ENAMETOOLONG	;; File name too long
+
+;;;  should be rearranged 
+	64	'EHOSTDOWN	;; Host is down
+	65	'EHOSTUNREACH	;; No route to host
+	66	'ENOTEMPTY	;; Directory not empty
+
+;;;  QUOTAS & MUSH
+
+	67	'EPROCLIM	;; Too many processes
+	68	'EUSERS		;; Too many users
+	69	'EDQUOT		;; Disc quota exceeded
+
+;;;  NETWORK FILE SYSTEM
+
+	70	'ESTALE		;; Stale NFS file handle
+	71	'EREMOTE	;; Too many levels of remote in path
+
+;;;  STREAMS
+
+	72	'ENOSTR		;; Device is not a stream
+	73	'ETIME		;; Timer expired
+	74	'ENOSR		;; Out of streams resources
+	75	'ENOMSG		;; No message of desired type
+	76	'EBADMSG	;; Trying to read unreadable message
+
+;;;  SystemV IPC
+
+	77	'EIDRM		;; Identifier removed
+
+;;;  SystemV RECORD LOCKING
+
+	78	'EDEADLK	;; Deadlock condition.
+	79	'ENOLCK		;; No record locks available.
+
+;;;  RFS
+
+	80	'ENONET		;; Machine is not on the network
+	81	'ERREMOTE	;; Object is remote
+	82	'ENOLINK	;; the link has been severed
+	83	'EADV		;; advertise error
+	84	'ESRMNT		;; srmount error
+	85	'ECOMM		;; Communication error on send
+	86	'EPROTO		;; Protocol error
+	87	'EMULTIHOP	;; multihop attempted
+	88	'EDOTDOT	;; Cross mount point (not an error)
+	89	'EREMCHG	;; Remote address changed
+	]
+	)
+  )
+
+
+;;; Build SunOS 4.0 Error symbols to strings table
+(define SunOS-ErrSymb2String
+  (insert (new RblTable)
+       [
+	'EPERM		"Not owner"
+	'ENOENT		"No such file or directory"
+	'ESRCH		"No such process"
+	'EINTR		"Interrupted system call"
+	'EIO		"I/O error"
+	'ENXIO		"No such device or address"
+	'E2BIG		"Arg list too long"
+	'ENOEXEC	"Exec format error"
+	'EBADF		"Bad file number"
+	'ECHILD		"No children"
+	'EAGAIN		"No more processes"
+	'ENOMEM		"Not enough core"
+	'EACCES		"Permission denied"
+	'EFAULT		"Bad address"
+	'ENOTBLK	"Block device required"
+	'EBUSY		"Mount device busy"
+	'EEXIST		"File exists"
+	'EXDEV		"Cross-device link"
+	'ENODEV		"No such device"
+	'ENOTDIR	"Not a directory"
+	'EISDIR		"Is a directory"
+	'EINVAL		"Invalid argument"
+	'ENFILE		"File table overflow"
+	'EMFILE		"Too many open files"
+	'ENOTTY		"Not a typewriter"
+	'ETXTBSY	"Text file busy"
+	'EFBIG		"File too large"
+	'ENOSPC		"No space left on device"
+	'ESPIPE		"Illegal seek"
+	'EROFS		"Read-only file system"
+	'EMLINK		"Too many links"
+	'EPIPE		"Broken pipe"
+
+;;;  MATH SOFTWARE
+
+	'EDOM		"Argument too large"
+	'ERANGE		"Result too large"
+
+;;;  NON-BLOCKING AND INTERRUPT I/O
+
+	'EWOULDBLOCK	"Operation would block"
+	'EINPROGRESS	"Operation now in progress"
+	'EALREADY	"Operation already in progress"
+
+;;;  IPC/NETWORK SOFTWARE 
+
+;;;  argument errors 
+	'ENOTSOCK	"Socket operation on non-socket"
+	'EDESTADDRREQ	"Destination address required"
+	'EMSGSIZE	"Message too long"
+	'EPROTOTYPE	"Protocol wrong type for socket"
+	'ENOPROTOOPT	"Protocol not available"
+	'EPROTONOSUPPORT	"Protocol not supported"
+	'ESOCKTNOSUPPORT	"Socket type not supported"
+	'EOPNOTSUPP	"Operation not supported on socket"
+	'EPFNOSUPPORT	"Protocol family not supported"
+	'EAFNOSUPPORT	"Address family not supported by protocol family"
+	'EADDRINUSE	"Address already in use"
+	'EADDRNOTAVAIL	"Can't assign requested address"
+
+;;;  operational errors 
+	'ENETDOWN	"Network is down"
+	'ENETUNREACH	"Network is unreachable"
+	'ENETRESET	"Network dropped connection on reset"
+	'ECONNABORTED	"Software caused connection abort"
+	'ECONNRESET	"Connection reset by peer"
+	'ENOBUFS	"No buffer space available"
+	'EISCONN	"Socket is already connected"
+	'ENOTCONN	"Socket is not connected"
+	'ESHUTDOWN	"Can't send after socket shutdown"
+	'ETOOMANYREFS	"Too many references: can't splice"
+	'ETIMEDOUT	"Connection timed out"
+	'ECONNREFUSED	"Connection refused"
+
+;;;  
+	'ELOOP		"Too many levels of symbolic links"
+	'ENAMETOOLONG	"File name too long"
+
+;;;  should be rearranged 
+	'EHOSTDOWN	"Host is down"
+	'EHOSTUNREACH	"No route to host"
+	'ENOTEMPTY	"Directory not empty"
+
+;;;  QUOTAS & MUSH
+
+	'EPROCLIM	"Too many processes"
+	'EUSERS		"Too many users"
+	'EDQUOT		"Disc quota exceeded"
+
+;;;  NETWORK FILE SYSTEM
+
+	'ESTALE		"Stale NFS file handle"
+	'EREMOTE	"Too many levels of remote in path"
+
+;;;  STREAMS
+
+	'ENOSTR		"Device is not a stream"
+	'ETIME		"Timer expired"
+	'ENOSR		"Out of streams resources"
+	'ENOMSG		"No message of desired type"
+	'EBADMSG	"Trying to read unreadable message"
+
+;;;  SystemV IPC
+
+	'EIDRM		"Identifier removed"
+
+;;;  SystemV RECORD LOCKING
+
+	'EDEADLK	"Deadlock condition."
+	'ENOLCK		"No record locks available."
+
+;;;  RFS
+
+	'ENONET		"Machine is not on the network"
+	'ERREMOTE	"Object is remote"
+	'ENOLINK	"the link has been severed"
+	'EADV		"advertise error"
+	'ESRMNT		"srmount error"
+	'ECOMM		"Communication error on send"
+	'EPROTO		"Protocol error"
+	'EMULTIHOP	"multihop attempted"
+	'EDOTDOT	"Cross mount point (not an error)"
+	'EREMCHG	"Remote address changed"
+	]
+	)
+  )
+
+(defProc (SunOSErrString err)
+  (tbl-get SunOS-ErrSymb2String (tbl-get SunOS-Errnum2Symb err)))
+
+(let [[ff_err_addr (unix-resolve '_FF_ERRNO)]]
+  (defProc (errno) (M-get ff_err_addr 4 #f)))
+
+(defProc (err_str)
+  (SunOSErrString (errno)))

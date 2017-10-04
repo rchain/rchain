@@ -1,0 +1,48 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defProc (trace expr)
+  (let [[monitor (monitor-new 'trace\ monitor)]
+	[code    (compile expr)]]
+    (seq
+     (add 'tracing #t monitor)
+     (async stdin #f)
+     (run code monitor)
+     (async stdin ASYNC?))))
+
+(define current-ctxt home)
+
+(defProc (current-monitor)
+  (lookup 'monitor (current-ctxt)))
+
+(defProc (debug)
+  (let* [[m (current-monitor)]
+	 [v (lookup 'tracing m)]]
+    (seq
+     (add 'tracing (not v) m)
+     ;; Since the underlying virtual machine only examines the
+     ;; tracing flag when a monitor is made current, we have to
+     ;; kick out the current monitor and force it to be reinstated,
+     ;; which we do by running a thread under a new monitor.
+     (run (compile 1) (monitor-new 'Kludge\ monitor))
+     #niv)))

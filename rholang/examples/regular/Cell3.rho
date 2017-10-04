@@ -1,0 +1,11 @@
+contract Cell( client, state ) = {
+  for( request <- client; v <- state ) {
+    match *request with
+      *@get{ #rtn } => {
+        rtn!( *v ) | state!( *v ) | Cell( *client, *state )
+      }
+      *@set{ newValue } => {
+        state!( *newValue ) | Cell( *client, *state )
+      }
+  }
+}

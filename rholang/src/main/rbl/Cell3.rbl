@@ -1,0 +1,19 @@
+;;; Current compiler output for Cell3.rho
+
+(defOprn Cell)
+(defActor CellContract 
+	(method (Cell client state) 
+		(flatMap client 
+			(proc [request] 
+				(let [[[[[_unification_ptrn _unification_binding] rholangbe4edf504860]] (consume t state **wildcard** **wildcard**)]] 
+					( (proc [v] 
+						(if (match? request (get rtn)) 
+							( (proc [(get rtn)] (block (block (produce t rtn **wildcard** v) (produce t state **wildcard** v)) (Cell t client state))) request) 
+						(if (match? request (set newValue)) ( (proc [(set newValue)] (block (produce t state **wildcard** newValue) (Cell t client state))) request) #niv)
+						)
+					) rholangbe4edf504860)
+				)
+			)
+		)
+	)
+)

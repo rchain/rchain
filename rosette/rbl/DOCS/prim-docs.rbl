@@ -1,0 +1,1858 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;Actor.cc:333:DEF("actor-new",actorNew, 3, 3)
+(docuPrim: actor-new
+	  (summary& construct a new actor)
+	  (detail& construct a new actor)
+	  (usage& (actor-new <super> <slots> <defaults>)))
+
+;Actor.cc:355:DEF("update!",actorUpdateBang, 0, MaxArgs)
+(docuPrim: update!
+	  (summary& update actor state and unlock mailbox)
+	  (detail& update actor state and unlock mailbox)
+	  (usage& (update! <key> <val>)))
+
+;Actor.cc:361:DEF("update!!",actorUpdateBangBang, 0, MaxArgs)
+(docuPrim: update!!
+	  (summary& update actor state and unlock mailbox)
+	  (detail& update actor state and unlock mailbox)
+	  (usage& (update!! <key> <val>)))
+
+;Actor.cc:367:DEF("next!",actorNextBang, 1, MaxArgs)
+(docuPrim: next!
+	  (summary& generalized update using enabled-set construct)
+	  (detail& generalized update using enabled-set construct)
+	  (usage& (next! <enabledset> <key> <val>)))
+
+;Actor.cc:373:DEF("next!!",actorNextBangBang, 1, MaxArgs)
+(docuPrim: next!!
+	  (summary& )
+	  (detail& )
+	  (usage& (next! <enabledset> <key> <val>)))
+
+;Atom.cc:310:DEF("fxFormat:",fxFormat, 1, 1)
+(docuPrim: fxFormat:
+	  (summary& controls the output format of fixnums)
+	  (detail& controls the output format of fixnums)
+	  (usage& (fxFormat: <formatstr>)))
+
+;Atom.cc:521:DEF("ch<",charLt, 2, 2)
+(docuPrim: ch<
+	  (summary& character less than)
+	  (detail& compares characters using standard lexicographical order)
+	  (usage& (ch< <char1> <char2>)))
+
+;Atom.cc:530:DEF("ch<=",charLe, 2, 2)
+(docuPrim: ch<=
+	  (summary& character less than or equal to)
+	  (detail& compares characters using standard lexicographical order)
+	  (usage& (ch<= <char1> <char2>)))
+
+;Atom.cc:539:DEF("ch->fx",charToFixnum, 1, 1)
+(docuPrim: ch->fx
+	  (summary& converts characters to fixnums)
+	  (detail& converts characters to fixnums)
+	  (usage& (ch->fx <char>)))
+
+;BaseSupp.cc:47:DEF_OPRN(Sync, "kind",oprnKind, obRuntimeError)
+
+;BaseSupp.cc:69:DEF("ch->printString",chToPrintString, 1, 1)
+(docuPrim: ch->printString
+	  (summary& converts character to string version of print representation)
+	  (detail& converts character to string version of print representation)
+	  (usage& (ch->printString <char>)))
+
+;BaseSupp.cc:124:DEF("prim-new-SBO",obNewSBO, 3, 3)
+(docuPrim: prim-new-SBO
+	  (summary& constructs new shared behavior object)
+	  (detail& constructs new shared behavior object)
+	  (usage& (prim-new-SBO <proto-sbo> <id> <parent>)))
+
+;BaseSupp.cc:148:DEF("prim-gen-actor",obGenActor, 3, 3)
+(docuPrim: prim-gen-actor
+	  (summary& constructs new actor and new shared behavior object)
+	  (detail& constructs new actor and new shared behavior object)
+	  (usage& (prim-gen-actor <proto-actor> <sbo>)))
+
+;BaseSupp.cc:263:DEF("type?",obTypep, 2, 2)
+(docuPrim: type?
+	  (summary& determines if args are of same type)
+	  (detail& determines if args share parent and meta)
+	  (usage& (type? <obj1> <obj2>)))
+
+;BaseSupp.cc:268:DEF("identity1",obIdentity1, 0, MaxArgs)
+(docuPrim: identity1
+	  (summary& ???)
+	  (detail& ???)
+	  (usage& (identity1 <obj1> ...)))
+
+;BaseSupp.cc:306:DEF("prim-init",obInitialize, 1, MaxArgs)
+(docuPrim: prim-init
+	  (summary& initializes actor)
+	  (detail& initializes actor)
+	  (usage& (prim-init <obj> <val> ...)))
+
+;BaseSupp.cc:313:DEF("M-get",addressGetField, 3, 3)
+(docuPrim: M-get
+	  (summary& fetches contents of memory location)
+	  (detail& fetches contents of memory location)
+	  (usage& (M-get <addr> <size> <sign>)))
+
+;BaseSupp.cc:333:DEF("M-set",addressSetField, 3, 3)
+(docuPrim: M-set
+	  (summary& installs contents of memory location)
+	  (detail& installs contents of memory location)
+	  (usage& (M-get <addr> <size> <val)))
+
+;BaseSupp.cc:353:DEF("char*->string",char_star_to_string, 1, 1)
+(docuPrim: char*->string
+	  (summary& converts a pointer to char to a rosette string)
+	  (detail& converts a fixnum representation of a pointer to char to a rosette string)
+	  (usage& (char*->string <addr>)))
+
+;BaseSupp.cc:363:DEF("ob@",ob_address, 1, 1)
+(docuPrim: ob@
+	  (summary& fetches the address in memory of object)
+	  (detail& fetches the address in memory of object)
+	  (usage& (ob@ <obj>)))
+
+;BaseSupp.cc:368:DEF("slot0",ob_slot_0, 1, 1)
+(docuPrim: slot0
+	  (summary& fetches the contents of 0th slot of the object)
+	  (detail& fetches the contents of 0th slot of the object which is usually the meta of the object)
+	  (usage& (slot0 <obj>)))
+
+;BaseSupp.cc:373:DEF("saddr",struct_address, 1, 1)
+(docuPrim: saddr
+	  (summary& fetches the addr of the pointer to char embedded in the rosette string)
+	  (detail& fetches the addr of the pointer to char embedded in the rosette string)
+	  (usage& (saddr <string>)))
+
+;BaseSupp.cc:378:DEF("basic-bytevec-new",basicByteVecNew, 2, 2)
+(docuPrim: basic-bytevec-new
+	  (summary& constructs new bytevec of size n)
+	  (detail& constructs new bytevec of size n)
+	  (usage& (basic-bytevec-new <???> n)))
+
+;BaseSupp.cc:384:DEF("tenured-bytevec-new",tenuredByteVecNew, 2, 2)
+(docuPrim: tenured-bytevec-new
+	  (summary& constructs a pre-tenured bytevec of size n)
+	  (detail& constructs a pre-tenured bytevec of size n)
+	  (usage& (tenured-bytevec-new <???> n)))
+
+;BaseSupp.cc:391:DEF("malloc",unix_malloc, 1, 1)
+(docuPrim: malloc
+	  (summary& allocates n bytes of memory from the heap)
+	  (detail& allocates n bytes of memory from the image heap as opposed to the rosette heap)
+	  (usage& (malloc n)))
+
+;BaseSupp.cc:398:DEF("u_free",unix_free, 1, 1)
+(docuPrim: u_free
+	  (summary& frees object at addr from heap memory)
+	  (detail& frees object at addr represented by the fixnum from the heap)
+	  (usage& (u_free n)))
+
+;BaseSupp.cc:408:DEF("memcpy",unix_memcpy, 3, 3)
+(docuPrim: memcpy
+	  (summary& bit-copies the first n bytes at addr1 to attr2)
+	  (detail& bit-copies the first n bytes at addr1 to attr2)
+	  (usage& (memcpy <addr1> <addr2> n)))
+
+;BaseSupp.cc:421:DEF("_c2bv",_c_struct_to_byte_vec, 3, 3)
+(docuPrim: _c2bv
+	  (summary& bit-copies the first n bytes of the cstruct to the bytevec)
+	  (detail& bit-copies the first n bytes of the cstruct to the bytevec)
+	  (usage& (_c2bv <bytevec> <addr> n)))
+
+;BaseSupp.cc:434:DEF("c2bv",c_struct_to_byte_vec, 2, 2)
+(docuPrim: c2bv
+	  (summary& bit-copies the first n bytes of the cstruct to the bytevec)
+	  (detail& bit-copies the first n bytes of the cstruct to the bytevec)
+	  (usage& (c2bv <bytevec> <addr> n)))
+
+;BaseSupp.cc:447:DEF("c2str",cpy_char_star_to_string, 2, 2)
+(docuPrim: c2str
+	  (summary& copies the contents of the pointer to char to a rosette string)
+	  (detail& copies the contents of the pointer to char to a rosette string)
+	  (usage& (c2str <str> <addr>)))
+
+;BaseSupp.cc:461:DEF("string->fx",string_to_fx, 1, 1)
+(docuPrim: string->fx
+	  (summary& converts a string denoting a fixnum to a fixnum)
+	  (detail& converts a string denoting a fixnum to a fixnum (string->fx "10") ==> 10)
+	  (usage& (string->fx <str>)))
+
+;BaseSupp.cc:468:DEF("fx->string",fx_to_string, 1, 1)
+(docuPrim: fx->string
+	  (summary& converts a fixnum to a string denoting that fixnum)
+	  (detail& converts a fixnum to a string denoting that fixnum, e.g. (string->fx 10) ==> "10")
+	  (usage& (fx->string <fixnum>)))
+
+;BaseSupp.cc:478:DEF("strlen",c_strlen, 1, 1)
+(docuPrim: strlen
+	  (summary& returns the length of the string at the address passed)
+	  (detail& returns the length of the string at the address passed)
+	  (usage& (strlen <addr>)))
+
+;BaseSupp.cc:488:DEF("prim-string->",cpy_string_char_star, 2, 2)
+(docuPrim: prim-string->
+	  (summary& copies the contents of the rosette string to the address supplied)
+	  (detail& copies the contents of the rosette string to the address supplied)
+	  (usage& (prim-string-> <addr> <str>)))
+
+;BaseSupp.cc:501:DEF("set-io-pool",set_io_pool, 1, 1)
+(docuPrim: set-io-pool
+	  (summary& installs the fd in the table of descriptors polled by the virtual machine)
+	  (detail& installs the fd in the table of descriptors polled by the virtual machine)
+	  (usage& (set-io-pool <fd>)))
+
+;BaseSupp.cc:510:DEF("delete-io-handler",delete_io_handler, 1, 1)
+(docuPrim: delete-io-handler
+	  (summary& removes the fd from the table of descriptors polled by the virtual machine)
+	  (detail& removes the fd from the table of descriptors polled by the virtual machine)
+	  (usage& (delete-io-handler <fd>)))
+
+;BaseSupp.cc:519:DEF("uOpen",unix_open, 3, 3)
+(docuPrim: uOpen
+	  (summary& returns the fixnum representing the file descriptor returned from invoking a unix open on the file passed with the flags and mode passed)
+	  (detail& returns the fixnum representing the file descriptor returned from invoking a unix open on the file passed with the flags and mode passed)
+	  (usage& (uOpen <str> <flags> <mode>)))
+
+;BaseSupp.cc:528:  DEF("uClose",unix_close, 1, 1)
+(docuPrim: uClose
+	  (summary& closes the unix file associated with the fd passed)
+	  (detail& closes the unix file associated with the fd passed)
+	  (usage& (uClose <fd>)))
+
+;BaseSupp.cc:534:DEF("uRead",unix_read, 3, 3)
+(docuPrim: uRead
+	  (summary& copies the results of a unix read from the file supplied into the string or bytevec supplied, returns the value of the unix invocation as a fixnum)
+	  (detail& copies the results of a unix read from the file supplied into the string or bytevec supplied, returns the value of the unix invocation as a fixnum)
+	  (usage& (uRead <fd> <str/bv> <len>)))
+
+;BaseSupp.cc:545:DEF("uWrite",unix_write, 3, 3)
+(docuPrim: uWrite
+	  (summary& unix writes the contents of the string or bytevec supplied to the file supplied, returns the value of the unix invocation as a fixnum)
+	  (detail& unix writes the contents of the string or bytevec supplied to the file supplied, returns the value of the unix invocation as a fixnum)
+	  (usage& (uWrite <fd> <str/bv> <len>)))
+
+;BaseSupp.cc:556:DEF("fd-open-ostream",fd_open_ostream, 2, 2)
+(docuPrim: fd-open-ostream
+	  (summary& opens a ostream with associated fd)
+	  (detail& opens a ostream with associated fd)
+	  (usage& (fd-open-ostream <fd> <str>)))
+
+;BaseSupp.cc:564:DEF("regexpCompare",regexpCompare, 2, 2)
+(docuPrim: regexpCompare
+	  (summary& compares the regular expression supplied as a string to the other string supplied)
+	  (detail& compares the regular expression supplied as a string to the other string supplied)
+	  (usage& (regexpCompare <regexp> <str>)))
+
+;BaseSupp.cc:588:DEF("socketpair",sysSocketpair, 0, 0)
+(docuPrim: socketpair
+	  (summary& ???) 
+	  (detail& ???)
+	  (usage& (socketpair)))
+
+;BaseSupp.cc:635:DEF("prim-execvp",sysExecv, 5, 6)
+(docuPrim: prim-execvp
+	  (summary& )
+	  (detail& )
+	  (usage& )) 
+
+;BaseSupp.cc:673:DEF("ostream-display-join",ostreamDisplayJoin, 2, MaxArgs)
+(docuPrim: ostream-display-join
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:696:DEF("prim-configuration-parameters",configParams, 0, 0)
+(docuPrim: prim-configuration-parameters
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:738:DEF("tuple-unzip",tupleUnZip, 1, 2)
+(docuPrim: tuple-unzip
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:782:DEF("tuple-zip",tupleZip, 1, MaxArgs)
+(docuPrim: tuple-zip
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:808:DEF("tuple-exclude",tupleExclude, 2, 2)
+(docuPrim: tuple-exclude
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:825:DEF("tuple-include",tupleInclude, 2, 2)
+(docuPrim: tuple-include
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:842:DEF("tuple-reverse",tupleReverse, 1, 1)
+(docuPrim: tuple-reverse
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BaseSupp.cc:857:DEF("prim->tuple",prim2Tuple, 1, 1)
+(docuPrim: prim->tuple
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BigBang.cc:664:DEF("async",asyncify, 1, 2)
+(docuPrim: async
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BinaryOb.cc:347:DEF("bytevec-new",byteVecNew, 1, 1)
+(docuPrim: bytevec-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BinaryOb.cc:354:DEF("word16vec-new",word16VecNew, 1, 1)
+(docuPrim: word16vec-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;BinaryOb.cc:361:DEF("word32vec-new",word32VecNew, 1, 1)
+(docuPrim: word32vec-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Code.cc:1062:DEF("code-dump",codeDump, 1, 1)
+(docuPrim: code-dump
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Code.cc:1070:DEF("opcode->string",opcodeString, 1, 1)
+(docuPrim: opcode->string
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Code.cc:1089:DEF("primNumber",prim_primNumber__Prim, 1, 1)
+(docuPrim: primNumber
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;CommandLine.cc:40:#define DEFAULT "/usr/local/lib/rosette/lib"
+;CommandLine.cc:44:char*	DefaultBootDirectory = DEFAULT;
+;CommandLine.cc:45:char	BootDirectory[MAXPATHLEN] = DEFAULT;
+;Cstruct.cc:87:DEF("select",obSelect, 3, 3)
+(docuPrim: select
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:94:DEF("S-get",obSGet, 3, 3)
+(docuPrim: S-get
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:101:DEF("S-desc",obSDesc, 3, 3)
+(docuPrim: S-desc
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:108:DEF("S-deref",obSDeref, 3, 3)
+(docuPrim: S-deref
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:115:DEF("S-set",obSSet, 3, 3)
+(docuPrim: S-set
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:124:DEF("S-tupleSet",obSTupleSet, 4, 4)
+(docuPrim: S-tupleSet
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:132:DEF("null",obNull, 1, 1)
+(docuPrim: null
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:137:DEF("prim-flatten",obFlatten, 2, 2)
+(docuPrim: prim-flatten
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:143:DEF("-A->",obConvertActualArg, 2, 2)
+(docuPrim: -A->
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:148:DEF(">-A-",obConvertActualRslt, 2, 2)
+(docuPrim: >-A-
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:154:DEF("csNth",obCSNth, 3, 3)
+(docuPrim: csNth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Cstruct.cc:163:DEF_OPRN(Std,"select",oprnSelect,obSelect);
+;Cstruct.cc:164:DEF_OPRN(Std,"S-get",oprnSGet,obSGet);
+;Cstruct.cc:165:DEF_OPRN(Std,"S-desc",oprnSDesc,obSDesc);
+;Cstruct.cc:166:DEF_OPRN(Std,"S-deref",oprnSDeref,obSDeref);
+;Cstruct.cc:167:DEF_OPRN(Std,"S-set",oprnSSet,obSSet);
+;Cstruct.cc:168:DEF_OPRN(Std,"S-tupleSet",oprnSTupleSet,obSTupleSet);
+;Cstruct.cc:169:DEF_OPRN(Std,"null",oprnNull,obNull);
+;Cstruct.cc:170:DEF_OPRN(Std,"flatten",oprnFlatten,obFlatten);
+;Cstruct.cc:171:DEF_OPRN(Std,"-A->",oprnConvertActualArg,obConvertActualArg);
+;Cstruct.cc:172:DEF_OPRN(Std,">-A-",oprnConvertActualRslt,obConvertActualRslt);
+;Cstruct.cc:173:DEF_OPRN(Std,"nth",oprnCSNth,obCSNth);
+;Ctxt.cc:354:DEF("ctxt-rtn",ctxtRtn, 2, 2)
+(docuPrim: ctxt-rtn
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ctxt.cc:361:DEF("ctxt-resume",ctxtResume, 1, 1)
+(docuPrim: ctxt-resume
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Dump-world.cc:33:DEF("image-dump",imageDump, 1, 1)
+(docuPrim: image-dump
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Dump-world.cc:47:DEF("image-restore",imageRestore, 1, MaxArgs)
+(docuPrim: image-restore
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:694:DEF("blockexpr-basic-new",blkexprBX, 1, MaxArgs)
+(docuPrim: blockexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:700:DEF("methodexpr-basic-new",mthdexprMX, 2, MaxArgs)
+(docuPrim: methodexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:708:DEF("procexpr-basic-new",procexprPX, 2, MaxArgs)
+(docuPrim: procexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:716:DEF("reflectivemethodexpr-basic-new",reflectivemthdexprRMX, 2, MaxArgs)
+(docuPrim: reflectivemethodexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:724:DEF("quoteexpr-basic-new",quoteexprQ, 1, 1)
+(docuPrim: quoteexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:730:DEF("requestexpr-basic-new",rqstexprRX, 1, MaxArgs)
+(docuPrim: requestexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:740:DEF("sendexpr-basic-new",sendexprSX, 1, MaxArgs)
+(docuPrim: sendexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:750:DEF("seqexpr-basic-new",seqexprSqX, 1, MaxArgs)
+(docuPrim: seqexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:761:DEF("tupleexpr-basic-new",tplexprTX, 0, MaxArgs)
+(docuPrim: tupleexpr-basic-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:773:DEF("requestexpr->tuple",rqstexprToTuple, 1, 1)
+(docuPrim: requestexpr->tuple
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:788:DEF("tupleexpr-new-n",tplexprNewN, 4, 4)
+(docuPrim: tupleexpr-new-n
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:815:DEF("tupleexpr-new",tplexprNew, 3, 3)
+(docuPrim: tupleexpr-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:844:DEF("tupleexpr->tuple",tplexprToTuple, 1, 1)
+(docuPrim: tupleexpr->tuple
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:858:DEF("tupleexpr-split",tplexprSplit, 2, 2)
+(docuPrim: tupleexpr-split
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:892:DEF("tupleexpr-head",tplexprHead, 1, 1)
+(docuPrim: tupleexpr-head
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:904:DEF("tupleexpr-tail",tplexprTail, 1, 1)
+(docuPrim: tupleexpr-tail
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Expr.cc:923:DEF("tupleexpr-concat",tplexprConcat, 2, 2)
+(docuPrim: tupleexpr-concat
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;ForeignFun.cc:1223:DEF("unix-load",unixLoad, 1, 3)
+(docuPrim: unix-load
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;ForeignFun.cc:1252:DEF("wizard-load",unixWizardLoad, 1, 1)
+(docuPrim: wizard-load
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;ForeignFun.cc:1280:DEF("unix-resolve",unixResolve, 1, 1)
+(docuPrim: unix-resolve
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;ForeignFun.cc:1295:DEF("ff-new",ffNew, 3, 3)
+(docuPrim: ff-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;ForeignFun.cc:1309:DEF("ff-create",ffCreate, 4, 4)
+(docuPrim: ff-create
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;InetSupp.cc:39:DEF("prim_inet_addr",prim_inet_addr, 1, 1)
+(docuPrim: prim_inet_addr
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;InetSupp.cc:46:DEF("prim_inet_network",prim_inet_network, 1, 1)
+(docuPrim: prim_inet_network
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;InetSupp.cc:55:DEF("prim_inet_makeaddr",prim_inet_makeaddr, 3, 3)
+(docuPrim: prim_inet_makeaddr
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;InetSupp.cc:70:DEF("prim_inet_lnaof",prim_inet_lnaof, 1, 1)
+(docuPrim: prim_inet_lnaof
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;InetSupp.cc:81:DEF("prim_inet_netof",prim_inet_netof, 1, 1)
+(docuPrim: prim_inet_netof
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;InetSupp.cc:92:DEF("prim_inet_ntoa",prim_inet_ntoa, 1, 1)
+(docuPrim: prim_inet_ntoa
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Interrupt.cc:103:DEF("sig-catch",sigCatch, 2, 2)
+(docuPrim: sig-catch
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Interrupt.cc:123:DEF("io-catch",ioCatch, 2, 2)
+(docuPrim: io-catch
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Interrupt.cc:138:DEF_OPRN(Std, "signal",oprnSignal, obRuntimeError);
+;Meta.cc:399:DEF("keys",metaKeys, 2, 2)
+(docuPrim: keys
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:406:DEF("loc-contour",metaLocContour, 2, 2)
+(docuPrim: loc-contour
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:413:DEF("contour",metaContour, 2, 2)
+(docuPrim: contour
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:420:DEF("lookup-obo",metaLookupOBO, 3, 3)
+(docuPrim: lookup-obo
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:427:DEF("get-obo",metaGetOBO, 3, 3)
+(docuPrim: get-obo
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:434:DEF("add-obo",metaAddOBO, 4, 4)
+(docuPrim: add-obo
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:441:DEF("set-obo",metaSetOBO, 4, 4)
+(docuPrim: set-obo
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:448:DEF("lexvar",locLexvar, 3, 3)
+(docuPrim: lexvar
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:457:DEF("bitfield",locBitfield, 5, 5)
+(docuPrim: bitfield
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Meta.cc:467:DEF("bitfield00",locBitField00, 3, 3)
+(docuPrim: bitfield00
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Method.cc:155:DEF("method-new",makeMethod, 1, 3)
+(docuPrim: method-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Method.cc:173:DEF("reflective-method-new",makeReflectiveMethod, 1, 3)
+(docuPrim: reflective-method-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Monitor.cc:142:DEF("monitor-new",monitorNew, 0, 1)
+(docuPrim: monitor-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Monitor.cc:153:DEF("monitor-start",monitorStart, 1, 1)
+(docuPrim: monitor-start
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Monitor.cc:161:DEF("monitor-stop",monitorStop, 1, 1)
+(docuPrim: monitor-stop
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Monitor.cc:169:DEF("monitor-convert",monitorConvert, 1, 1)
+(docuPrim: monitor-convert
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Monitor.cc:198:DEF("monitor-reset",monitorReset, 1, 1)
+(docuPrim: monitor-reset
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Monitor.cc:206:DEF("monitor-dump",monitorDump, 1, 2)
+(docuPrim: monitor-dump
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;MotifSupp.cc:65:  (void) XmStringCreate("A", XmSTRING_DEFAULT_CHARSET);
+;MotifSupp.cc:66:  (void) XmStringCreateLtoR("A", XmSTRING_DEFAULT_CHARSET);
+;Number.cc:50:DEF("fx+",fxPlus, 0, MaxArgs)
+(docuPrim: fx+
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:64:DEF("fx-",fxMinus, 1, 2)
+(docuPrim: fx-
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:86:DEF("fx*",fxTimes, 0, MaxArgs)
+(docuPrim: fx*
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:100:DEF("fx/",fxDiv, 2, 2)
+(docuPrim: fx/
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:107:DEF("fx%",fxMod, 2, 2)
+(docuPrim: fx%
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:114:DEF("fx<",fxLt, 2, 2)
+(docuPrim: fx<
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:121:DEF("fx<=",fxLe, 2, 2)
+(docuPrim: fx<=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:128:DEF("fx>",fxGt, 2, 2)
+(docuPrim: fx>
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:135:DEF("fx>=",fxGe, 2, 2)
+(docuPrim: fx>=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:142:DEF("fx=",fxEq, 2, 2)
+(docuPrim: fx=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:149:DEF("fx!=",fxNe, 2, 2)
+(docuPrim: fx!=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:156:DEF("fx-min",fxMin, 1, MaxArgs)
+(docuPrim: fx-min
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:167:DEF("fx-max",fxMax, 1, MaxArgs)
+(docuPrim: fx-max
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:178:DEF("fx-abs",fxAbs, 1, 1)
+(docuPrim: fx-abs
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:185:DEF("fx-expt",fxExpt, 2, 2)
+(docuPrim: fx-expt
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:192:DEF("fx-lg",fxLg, 1, 1)
+(docuPrim: fx-lg
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:201:DEF("fx-lgf",fxLgf, 1, 1)
+(docuPrim: fx-lgf
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:210:DEF("fx-logand",fxLogand, 0, MaxArgs)
+(docuPrim: fx-logand
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:221:DEF("fx-logor",fxLogor, 0, MaxArgs)
+(docuPrim: fx-logor
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:232:DEF("fx-logxor",fxLogxor, 0, MaxArgs)
+(docuPrim: fx-logxor
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:243:DEF("fx-lognot",fxLognot, 1, 1)
+(docuPrim: fx-lognot
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:250:DEF("fx-mdiv",fxMdiv, 0, MaxArgs)
+(docuPrim: fx-mdiv
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:261:DEF("fx-cdiv",fxCdiv, 2, 2)
+(docuPrim: fx-cdiv
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:274:DEF("fx->fl",fxToFl, 1, 1)
+(docuPrim: fx->fl
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:281:DEF("fx->ch",fxToChar, 1, 1)
+(docuPrim: fx->ch
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:288:DEF("fx-asl",fxAsl, 2, 2)
+(docuPrim: fx-asl
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:296:DEF("fx-asr",fxAsr, 2, 2)
+(docuPrim: fx-asr
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:304:DEF("fx-lsl",fxLsl, 2, 2)
+(docuPrim: fx-lsl
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:312:DEF("fx-lsr",fxLsr, 2, 2)
+(docuPrim: fx-lsr
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:367:DEF("fl+",flPlus, 0, MaxArgs)
+(docuPrim: fl+
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:381:DEF("fl-",flMinus, 1, 2)
+(docuPrim: fl-
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:403:DEF("fl*",flTimes, 0, MaxArgs)
+(docuPrim: fl*
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:417:DEF("fl/",flDiv, 2, 2)
+(docuPrim: fl/
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:424:DEF("fl<",flLt, 2, 2)
+(docuPrim: fl<
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:431:DEF("fl<=",flLe, 2, 2)
+(docuPrim: fl<=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:438:DEF("fl>",flGt, 2, 2)
+(docuPrim: fl>
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:445:DEF("fl>=",flGe, 2, 2)
+(docuPrim: fl>=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:452:DEF("fl=",flEq, 2, 2)
+(docuPrim: fl=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:459:DEF("fl!=",flNe, 2, 2)
+(docuPrim: fl!=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:466:DEF("fl-min",flMin, 1, MaxArgs)
+(docuPrim: fl-min
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:480:DEF("fl-max",flMax, 1, MaxArgs)
+(docuPrim: fl-max
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:494:DEF("fl-abs",flAbs, 1, 1)
+(docuPrim: fl-abs
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:501:DEF("fl-exp",flExp, 1, 1)
+(docuPrim: fl-exp
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:508:DEF("fl-expt",flExpt, 2, 2)
+(docuPrim: fl-expt
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:515:DEF("fl-log",flLog, 1, 1)
+(docuPrim: fl-log
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:522:DEF("fl-log10",flLog10, 1, 1)
+(docuPrim: fl-log10
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:529:DEF("fl-floor",flFloor, 1, 1)
+(docuPrim: fl-floor
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:536:DEF("fl-ceil",flCeil, 1, 1)
+(docuPrim: fl-ceil
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:543:DEF("fl->fx",flToFx, 1, 1)
+(docuPrim: fl->fx
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Number.cc:550:DEF("flFormat:",flFormat, 1, 1)
+(docuPrim: flFormat:
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:985:DEF("compile",obCompile, 1, 3)
+(docuPrim: compile
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1006:DEF("run",obRun, 1, 2)
+(docuPrim: run
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1025:DEF("suicide",obSuicide, 0, 0)
+(docuPrim: suicide
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1031:DEF("identity",obId, 1, 1)
+(docuPrim: identity
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1037:DEF("niv?",obNivQ, 1, 1)
+(docuPrim: niv?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1043:DEF("absent?",obAbsentQ, 1, MaxArgs)
+(docuPrim: absent?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1053:DEF("absent!?",obNotAbsentQ, 1, MaxArgs)
+(docuPrim: absent!?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1062:DEF("same?",obSameQ, 2, 2)
+(docuPrim: same?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1068:DEF("self",obSelf, 0, 0)
+(docuPrim: self
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1074:DEF("home",obHome, 0, 0)
+(docuPrim: home
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1080:DEF("clone",obClone, 1, 1)
+(docuPrim: clone
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1086:DEF("clone-to",obCloneTo, 2, 3)
+(docuPrim: clone-to
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1095:DEF("become!",obBecomeNew, 1, 1)
+(docuPrim: become!
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1101:DEF("add",objectAdd, 2, 3)
+(docuPrim: add
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1110:DEF("set",objectSet, 2, 3)
+(docuPrim: set
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1117:DEF("lookup",objectLookup, 1, 2)
+(docuPrim: lookup
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1124:DEF("meta",objectMeta, 1, 1)
+(docuPrim: meta
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1130:DEF("meta:",objectSetMeta, 2, 2)
+(docuPrim: meta:
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1137:DEF("parent",objectParent, 1, 1)
+(docuPrim: parent
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1143:DEF("parent:",objectSetParent, 2, 2)
+(docuPrim: parent:
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1150:DEF("mbox",objectMbox, 1, 1)
+(docuPrim: mbox
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1156:DEF("mbox:",objectSetMbox, 2, 2)
+(docuPrim: mbox:
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1162:DEF("prim-size",objectIndexedSize, 1, 1)
+(docuPrim: prim-size
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1168:DEF("prim-nth",objectNth, 2, 2)
+(docuPrim: prim-nth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1179:DEF("prim-set-nth",objectSetNth, 3, 3)
+(docuPrim: prim-set-nth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1190:DEF("prim-sub-object",objectSubObject, 3, 3)
+(docuPrim: prim-sub-object
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1202:DEF("object->string",objectToString, 1, MaxArgs)
+(docuPrim: object->string
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1219:DEF("object->symbol",objectToSymbol, 1, MaxArgs)
+(docuPrim: object->symbol
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1242:DEF("get-field",objectGetField, 5, 5)
+(docuPrim: get-field
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1256:DEF("set-field",objectSetField, 5, 5)
+(docuPrim: set-field
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1270:DEF("classname",obClassname, 1, 1)
+(docuPrim: classname
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1280:DEF("gc",sysGC, 0, 0)
+(docuPrim: gc
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1287:DEF("scavenge",sysScavenge, 0, 0)
+(docuPrim: scavenge
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1294:DEF("sleep",sysSleep, 0, 0)
+(docuPrim: sleep
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1300:DEF("sys-reset",sysReset, 0, 0)
+(docuPrim: sys-reset
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1306:DEF("version",sysVersion, 0, 0)
+(docuPrim: version
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1315:DEF("cwd",sysCwd, 0, 0)
+(docuPrim: cwd
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Ob.cc:1325:DEF_OPRN(Sync, "expand",oprnExpand, obId);
+;Operation.cc:110:DEF("oprn-new",oprnNew, 0, 1)
+(docuPrim: oprn-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Operation.cc:116:DEF("syncoprn-new",syncoprnNew, 0, 1)
+(docuPrim: syncoprn-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Parser.cc:1841:DEF("parser-new",makeParser, 1, 1)
+(docuPrim: parser-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Parser.cc:1846:DEF("parser-parse",parserParse, 1, 1)
+(docuPrim: parser-parse
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Parser.cc:1852:DEF("parser-resume",parserResume, 2, 2)
+(docuPrim: parser-resume
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Parser.cc:1859:DEF("parser-reset",parserReset, 1, 1)
+(docuPrim: parser-reset
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Prim.cc:164:DEF("runtime-error",obRuntimeError, 1, MaxArgs)
+(docuPrim: runtime-error
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Prim.cc:175:DEF_OPRN(Sync, "vm-error",oprnVmError,         obRuntimeError);
+;Prim.cc:176:DEF_OPRN(Sync, "runtime-error",oprnRuntimeError,    obRuntimeError);
+;Prim.cc:177:DEF_OPRN(Sync, "missing-method",oprnMissingMethod,   obRuntimeError);
+;Prim.cc:178:DEF_OPRN(Sync, "missing-binding",oprnMissingBinding,  obRuntimeError);
+;Prim.cc:179:DEF_OPRN(Sync, "formals-mismatch",oprnFormalsMismatch, obRuntimeError);
+;Proc.cc:82:DEF("proc-new",makeProc, 2, 4)
+(docuPrim: proc-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:293:DEF("queue-new",queueNew, 0, 0)
+(docuPrim: queue-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:299:DEF("queue-depth",queueDepth, 1, 1)
+(docuPrim: queue-depth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:306:DEF("queue-empty?",queueIsEmpty, 1, 1)
+(docuPrim: queue-empty?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:313:DEF("queue-enqueue",queueEnqueue, 2, 2)
+(docuPrim: queue-enqueue
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:322:DEF("queue-dequeue",queueDequeue, 1, 1)
+(docuPrim: queue-dequeue
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:330:DEF("queue-read",queueRead, 1, 1)
+(docuPrim: queue-read
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:338:DEF("queue-pat-dequeue",queuePDequeue, 2, 2)
+(docuPrim: queue-pat-dequeue
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:350:DEF("queue-pat-read",queuePRead, 2, 2)
+(docuPrim: queue-pat-read
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:362:DEF("queue-read-nth",queueReadNth, 2, 2)
+(docuPrim: queue-read-nth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:377:DEF("queue-dequeue-nth",queueDequeueNth, 2, 2)
+(docuPrim: queue-dequeue-nth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Queue.cc:385:DEF("queue-reset",queueReset, 1, 1)
+(docuPrim: queue-reset
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:134:DEF("istream-new",makeIstream, 1, 2)
+(docuPrim: istream-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:157:DEF("istream-read",istreamRead, 1, 1)
+(docuPrim: istream-read
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:164:DEF("istream-resume-io",istreamResumeIO, 1, 1)
+(docuPrim: istream-resume-io
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:171:DEF("istream-readch",istreamReadch, 1, 1)
+(docuPrim: istream-readch
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:178:DEF("istream-clear",istreamClear, 1, 2)
+(docuPrim: istream-clear
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:186:DEF("istream-rdstate",istreamRdState, 1, 1)
+(docuPrim: istream-rdstate
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:193:DEF("istream-close",istreamClose, 1, 1)
+(docuPrim: istream-close
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:208:DEF("ostream-new",makeOstream, 1, 2)
+(docuPrim: ostream-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:231:DEF("ostream-display",ostreamDisplay, 2, MaxArgs)
+(docuPrim: ostream-display
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:250:DEF("ostream-print",ostreamPrint, 2, MaxArgs)
+(docuPrim: ostream-print
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:272:DEF("ostream-close",ostreamClose, 1, 1)
+(docuPrim: ostream-close
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:283:DEF("stream-status",streamStat, 1, 1)
+(docuPrim: stream-status
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:302:DEF("prim-display",obDisplay, 1, MaxArgs)
+(docuPrim: prim-display
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:313:DEF("prim-print",obPrint, 1, MaxArgs)
+(docuPrim: prim-print
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:326:DEF("prim-flush",obFlush, 0, 1)
+(docuPrim: prim-flush
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstream.cc:343:DEF_OPRN(Sync, "print",oprnPrint, obPrint);
+;RBLstream.cc:344:DEF_OPRN(Sync, "display",oprnDisplay, obDisplay);
+;RBLstream.cc:345:DEF_OPRN(Std,  "read-expr",oprnReadExpr, istreamRead);
+;RBLstream.cc:346:DEF_OPRN(Std,  "resume-io",oprnResumeIO, istreamResumeIO);
+;RBLstring.cc:182:DEF("string=",stringEq, 2, 2)
+(docuPrim: string=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:189:DEF("string!=",stringNEq, 2, 2)
+(docuPrim: string!=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:196:DEF("string<",stringLess, 2, 2)
+(docuPrim: string<
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:203:DEF("string<=",stringLEQ, 2, 2)
+(docuPrim: string<=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:210:DEF("string>",stringGtr, 2, 2)
+(docuPrim: string>
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:217:DEF("string>=",stringGEQ, 2, 2)
+(docuPrim: string>=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:226:DEF("string-ci=",string_ciEq, 2, 2)
+(docuPrim: string-ci=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:233:DEF("string-ci!=",string_ciNEq, 2, 2)
+(docuPrim: string-ci!=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:240:DEF("string-ci<",string_ciLess, 2, 2)
+(docuPrim: string-ci<
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:247:DEF("string-ci<=",string_ciLEQ, 2, 2)
+(docuPrim: string-ci<=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:254:DEF("string-ci>",string_ciGtr, 2, 2)
+(docuPrim: string-ci>
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:261:DEF("string-ci>=",string_ciGEQ, 2, 2)
+(docuPrim: string-ci>=
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:269:DEF("string-concat",stringConcat, 0, MaxArgs)
+(docuPrim: string-concat
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:290:DEF("string-join",stringJoin, 3, 3)
+(docuPrim: string-join
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:329:DEF("string-size",stringSize, 1, 1)
+(docuPrim: string-size
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:336:DEF("string-set-nth",stringSetNth, 3, 3)
+(docuPrim: string-set-nth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:349:DEF("string-length",stringLength, 1, 1)
+(docuPrim: string-length
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:356:DEF("string-new",stringNew, 1, 2)
+(docuPrim: string-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:379:DEF("string-mem?",stringMemQ, 2, 2)
+(docuPrim: string-mem?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:390:DEF("string-get-token",stringGetToken, 3, 3)
+(docuPrim: string-get-token
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;RBLstring.cc:411:DEF("string-split",stringSplit, 2, 3)
+(docuPrim: string-split
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:380:DEF("setAsyncByteVec",make_async, 2, 2)
+(docuPrim: setAsyncByteVec
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:387:DEF("setAsyncString",make_tcp_reader, 2, 2)
+(docuPrim: setAsyncString
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:394:DEF("tcpListen",tcp_listen, 2, 2)
+(docuPrim: tcpListen
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:401:DEF("tcpAccept",tcp_accept, 2, 2)
+(docuPrim: tcpAccept
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:408:DEF("get-socket-port",get_socket_port, 1, 1)
+(docuPrim: get-socket-port
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:415:DEF("init-connects",init_connects, 1, 1)
+(docuPrim: init-connects
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:420:DEF("get-peer-addr",get_peer_addr, 1, 1)
+(docuPrim: get-peer-addr
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:427:DEF("get-peer-name",get_peer_name, 1, 1)
+(docuPrim: get-peer-name
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:434:DEF("tcp-connect-by-name",tcp_connect_by_name, 2, 2)
+(docuPrim: tcp-connect-by-name
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;SocketSupp.cc:442:DEF("tcp-connect-by-addr",tcp_connect_by_addr, 2, 2)
+(docuPrim: tcp-connect-by-addr
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:139:DEF("stack-new",stackNew, 0, 0)
+(docuPrim: stack-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:145:DEF("stack-depth",stackDepth, 1, 1)
+(docuPrim: stack-depth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:152:DEF("stack-empty?",stackIsEmpty, 1, 1)
+(docuPrim: stack-empty?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:159:DEF("stack-push",stackPush, 2, 2)
+(docuPrim: stack-push
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:167:DEF("stack-pop",stackPop, 1, 1)
+(docuPrim: stack-pop
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:174:DEF("stack-top",stackTop, 1, 1)
+(docuPrim: stack-top
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Stack.cc:181:DEF("stack-reset",stackReset, 1, 1)
+(docuPrim: stack-reset
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Table.cc:449:DEF("tbl-add",tblAdd, 3, 3)
+(docuPrim: tbl-add
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Table.cc:456:DEF("tbl-get",tblGet, 2, 2)
+(docuPrim: tbl-get
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Table.cc:463:DEF("tbl-del",tblDel, 2, 2)
+(docuPrim: tbl-del
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:396:DEF("null?",obNullQ, 1, 1)
+(docuPrim: null?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:402:DEF("tuple-cons",tplCons, 2, 2)
+(docuPrim: tuple-cons
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:409:DEF("tuple-cons*",tplConsStar, 1, MaxArgs)
+(docuPrim: tuple-cons*
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:417:DEF("tuple-rcons",tplRcons, 2, 2)
+(docuPrim: tuple-rcons
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:424:DEF("tuple-concat",tplConcat, 0, MaxArgs)
+(docuPrim: tuple-concat
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:465:DEF("tuple-safe-nth",tplSafeNth, 2, 2)
+(docuPrim: tuple-safe-nth
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:479:DEF("tuple-xchg",tplXchg, 3, 3)
+(docuPrim: tuple-xchg
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:493:DEF("tuple-head",tplHead, 1, 1)
+(docuPrim: tuple-head
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:500:DEF("tuple-tail",tplTail, 1, 1)
+(docuPrim: tuple-tail
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:508:DEF("tuple-new",tplNew, 1, MaxArgs)
+(docuPrim: tuple-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:530:DEF("tuple-new-n",tplNewN, 3, 3)
+(docuPrim: tuple-new-n
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:550:DEF("tuple-mem?",tplMemQ, 2, 2)
+(docuPrim: tuple-mem?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Tuple.cc:559:DEF("tuple-matches?",tplMatchesP, 2, 2)
+(docuPrim: tuple-matches?
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Unix.cc:433:DEF("unix-load",unixLoad, 1, 3)
+(docuPrim: unix-load
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Unix.cc:462:DEF("wizard-load",unixWizardLoad, 1, 1)
+(docuPrim: wizard-load
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Unix.cc:490:DEF("unix-resolve",unixResolve, 1, 1)
+(docuPrim: unix-resolve
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Unix.cc:505:DEF("ff-new",ffNew, 3, 3)
+(docuPrim: ff-new
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+
+;Unix.cc:519:DEF("ff-create",ffCreate, 4, 4)
+(docuPrim: ff-create
+	  (summary& )
+	  (detail& )
+	  (usage& ))
+

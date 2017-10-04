@@ -1,0 +1,37 @@
+;;; Expected output: "This is the state of the contract"
+
+(define t (new NameSpace))
+
+;;; TODO: double check if constructor call can take a CellContract
+(defOprn Cell)
+(defActor CellContract 
+    (method (Cell get set state) 
+        (block (let [[[[rholangcf8135ae4071 rholang3e6100b4f516] [rholang49a9826ad96e rholang67f309e1dfe8]] (consume t [get state] [**wildcard** **wildcard**] ['rtn 'v])]] 
+            ( (proc [[rtn v]] (block (block (produce t rtn **wildcard** v) (produce t state **wildcard** v)) (Cell CellContract get set state))) [rholang49a9826ad96e rholang67f309e1dfe8])) 
+            (let [[[[rholangffbcae64e992 rholang150d72736872] [rholangbf3b57e0d7d4 rholang77af774ca683]] (consume t [set state] [**wildcard** **wildcard**] ['newValue 'v])]] 
+            ( (proc [[newValue v]] (block (produce t state **wildcard** newValue) (Cell CellContract get set state))) [rholangbf3b57e0d7d4 rholang77af774ca683])))))
+
+(defOprn SimplePrinter)
+(defActor SimplePrinterContract
+	(method (SimplePrinter channel)
+		(let [[[_ [product]] (consume t [channel] [**wildcard**] ['somerandompattern])]]
+            (print product)
+		)
+	)
+)
+
+(define contract (new CellContract))
+(define simplePrinter (new SimplePrinterContract))
+
+;;; invoke contract
+(let [[_result (Cell contract 'get 'set 'state)]] #niv)
+(SimplePrinter simplePrinter 'returnChannel)
+
+;;; request state from Cell
+(let [[_result (produce t 'get **wildcard** 'returnChannel)]] #niv)
+
+;;; set Cell state
+(let [[_result (produce t 'state **wildcard** "This is the state of the contract")]] #niv)
+
+;;; TODO: Reversing 'get and 'state will require product stealing to be implemented as there is a capturing race on 'state
+

@@ -1,0 +1,13 @@
+/*
+ * A Cell contract that uses a parallel process
+ * expression to handle get and set.
+ */
+
+contract Cell( get, set, state ) = {
+  for( rtn <- get; v <- state ) {
+      rtn!( v ) | state!( v ) | Cell( get, set, state )
+  } |
+  for( newValue <- set; v <- state ) {
+      state!( newValue ) | Cell( get, set, state )
+  }
+}

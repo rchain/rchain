@@ -1,0 +1,110 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(define	IPPORT_RESERVED		1024)
+(define	IPPORT_USERRESERVED	5000)
+
+(defStructure in_addr
+  (union S_un
+	 (structure S_un_b u_char b1 u_char b2 u_char b3 u_char b4) S_un_b
+	 (structure S_un_w u_short w1 u_short w2) S_un_w
+	 u_long S_addr)
+  S_un)
+
+;| /*
+;|  * Definitions of bits in internet address integers.
+;|  * On subnets, the decomposition of addresses to host and net parts
+;|  * is done according to subnet mask, not the masks here.
+;|  */
+;| (define	IN_CLASSA(i)		(((long)(i) & 0x80000000) == 0)
+;| (define	IN_CLASSA_NET		0xff000000
+;| (define	IN_CLASSA_NSHIFT	24
+;| (define	IN_CLASSA_HOST		0x00ffffff
+;| (define	IN_CLASSA_MAX		128
+;| 
+;| (define	IN_CLASSB(i)		(((long)(i) & 0xc0000000) == 0x80000000)
+;| (define	IN_CLASSB_NET		0xffff0000
+;| (define	IN_CLASSB_NSHIFT	16
+;| (define	IN_CLASSB_HOST		0x0000ffff
+;| (define	IN_CLASSB_MAX		65536
+;| 
+;| (define	IN_CLASSC(i)		(((long)(i) & 0xe0000000) == 0xc0000000)
+;| (define	IN_CLASSC_NET		0xffffff00
+;| (define	IN_CLASSC_NSHIFT	8
+;| (define	IN_CLASSC_HOST		0x000000ff
+;| 
+;| (define	IN_CLASSD(i)		(((long)(i) & 0xf0000000) == 0xe0000000)
+;| (define	IN_MULTICAST(i)		IN_CLASSD(i)
+;| 
+;| (define	IN_EXPERIMENTAL(i)	(((long)(i) & 0xe0000000) == 0xe0000000)
+;| (define	IN_BADCLASS(i)		(((long)(i) & 0xf0000000) == 0xf0000000)
+;| 
+;| (define	INADDR_ANY		(u_long)0x00000000
+;| (define	INADDR_LOOPBACK		(u_long)0x7F000001
+;| (define	INADDR_BROADCAST	(u_long)0xffffffff	/* must be masked */
+;| 
+;| (define	IN_LOOPBACKNET		127			/* official! */
+
+;;; address families
+
+(define AF_INET 2)
+
+(defStructure sockaddr_in
+  short			family
+  u_short		port
+  in_addr		addr
+  (array char 8)	zero)
+
+;;; operations on in_addr
+(defOprn make)
+(defMethod in_addr (make net lna)
+  (let [[ia (new (self))]]
+    (seq (prim_inet_makeaddr (offset ia) net lna)
+	 (update!)
+	 ia)))
+
+(defPure in_addr (select base [sel & r])
+  (cond ((same? sel 'net)
+	 (prim_inet_netof (fx+ base (lookup 'offset! (self)))))
+	((same? sel 'lna)
+	 (prim_inet_lnaof (fx+ base (lookup 'offset! (self)))))
+	(else
+	 (RuntimeError (self) "unknown virtual slot " sel))))
+
+(defPure in_addr (->string)
+  (prim_inet_ntoa (lookup 'offset! (self))))
+
+(defPure in_addr (flatten base)
+  (prim_inet_ntoa (fx+ base (lookup 'offset! (self)))))
+
+(defPure (ref in_addr) (flatten base)
+  (let [[addr (M-get (fx+ base (lookup 'offset! (self)))
+		     (lookup 'size! (self))
+		     #f)]]
+    (if (fx= addr 0)
+	(null (self))
+	(flatten desc addr))))
+
+(defOprn ->in_addr)
+(defPure String (->in_addr)
+  (make in_addr (prim_inet_network (self)) (prim_inet_addr (self))))

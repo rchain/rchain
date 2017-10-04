@@ -1,0 +1,33 @@
+;;; Current compiler output for Cell2.rho
+;;; TODO: Quote new variables such as rholang09da553a6ec9?
+
+(defOprn Cell)
+(defActor CellContract
+    (method (Cell get set state)
+        (let (rholang14f855ee0ba1 rholang09da553a6ec9) (rholang1bfd4e35933e rholangb4dc4a0033f5) (block (block (flatMap get (proc [rtn] (let [[[[[_unification_ptrn _unification_binding] rholang9d6c168bfaf5]] (consume t state **wildcard** **wildcard**)]] ( (proc [v] (produce t rholang14f855ee0ba1 **wildcard** 1)) rholang9d6c168bfaf5)))) (flatMap rholang14f855ee0ba1 (proc [rholang589bada0b1c7] (let [[[[[_unification_ptrn _unification_binding] rholangfba4ddb11ced]] (consume t rholangdf4f6f2cc85d **wildcard** **wildcard**)]] ( (proc [rholang28176b7121a8] (if (match? rholang28176b7121a8 1) (block (block (block (produce t rtn **wildcard** v) (produce t state **wildcard** v)) (Cell t get set state)) (produce t rholangdf4f6f2cc85d **wildcard** 0)) (if (match? rholang28176b7121a8 0) (produce t rholangdf4f6f2cc85d **wildcard** 0) #niv))) rholangfba4ddb11ced))))) (block (flatMap set (proc [newValue] (let [[[[[_unification_ptrn _unification_binding] rholangfb15b5a59425]] (consume t state **wildcard** **wildcard**)]] ( (proc [v] (produce t rholang1bfd4e35933e **wildcard** 1)) rholangfb15b5a59425)))) (flatMap rholang1bfd4e35933e (proc [rholang98eefc91b651] (let [[[[[_unification_ptrn _unification_binding] rholang55d2399eeb01]] (consume t rholang84681330fd01 **wildcard** **wildcard**)]] ( (proc [rholang10da35d1856c] (if (match? rholang10da35d1856c 1) (block (block (produce t state **wildcard** newValue) (Cell t get set state)) (produce t rholang84681330fd01 **wildcard** 0)) (if (match? rholang10da35d1856c 0) (produce t rholang84681330fd01 **wildcard** 0) #niv))) rholang55d2399eeb01)))))))))
+
+(defActor CellContract
+    (method (Cell get set state)
+        (let [[rholang3b3a8ff2f318 rholanga02e09a818b9] [rholang061a1be891cd rholang848997bf8828]]
+            (block
+                (block
+                    (flatMap get
+                        (proc [rtn] (let [[[[[_unification_ptrn _unification_binding] rholangd0f909ebda6d]] (consume t state **wildcard** **wildcard**)]]
+                            ( (proc [v] (produce t rholang3b3a8ff2f318 **wildcard** 1)) rholangd0f909ebda6d))))
+                    (flatMap rholang3b3a8ff2f318
+                        (proc [rholang16b6d72ee57b] (let [[[[[_unification_ptrn _unification_binding] rholang3a6545a82c5a]] (consume t rholang9262893c35f7 **wildcard** **wildcard**)]]
+                            ( (proc [rholangb03974d73eed]
+                                (if (match? rholangb03974d73eed 1)
+                                    (block (block (block (produce t rtn **wildcard** v) (produce t state **wildcard** v)) (Cell t get set state)) (produce t rholang9262893c35f7 **wildcard** 0))
+                                (if (match? rholangb03974d73eed 0) (produce t rholang9262893c35f7 **wildcard** 0) #niv))) rholang3a6545a82c5a))))
+                )
+                (block
+                    (flatMap set
+                        (proc [newValue] (let [[[[[_unification_ptrn _unification_binding] rholang2efac4fe2526]] (consume t state **wildcard** **wildcard**)]]
+                            ( (proc [v] (produce t rholang061a1be891cd **wildcard** 1)) rholang2efac4fe2526))))
+                    (flatMap rholang061a1be891cd
+                        (proc [rholangacc259a75dae] (let [[[[[_unification_ptrn _unification_binding] rholanga3e20b1b2d8c]] (consume t rholangb1cc18dae0eb **wildcard** **wildcard**)]]
+                            ( (proc [rholang5bf123b9f9eb]
+                                (if (match? rholang5bf123b9f9eb 1)
+                                    (block (block (produce t state **wildcard** newValue) (Cell t get set state)) (produce t rholangb1cc18dae0eb **wildcard** 0))
+                                (if (match? rholang5bf123b9f9eb 0) (produce t rholangb1cc18dae0eb **wildcard** 0) #niv))) rholanga3e20b1b2d8c)))))))))

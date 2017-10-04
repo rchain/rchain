@@ -1,0 +1,10 @@
+contract Cell( get, set, state ) = {
+  select {
+    case rtn <- get; v <- state => {
+     rtn!( *v ) | state!( *v ) | Cell( *get, *set, *state )
+    }
+    case newValue <- set; v <- state => {
+      state!( *newValue ) | Cell( *get, *set, *state )
+    }
+  }
+}

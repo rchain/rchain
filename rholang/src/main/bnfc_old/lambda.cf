@@ -1,0 +1,27 @@
+ETyped.  TypedExpr  ::= Expr ":" Type ;
+
+EVar.    Expr  ::= Var ;
+EVal.    Expr  ::= Value ;
+EAbs.    Expr  ::= "\\" Var ":" Type "." TypedExpr ;
+EApp.    Expr  ::= TypedExpr TypedExpr ;
+ETuple.  Expr  ::= Tuple ;
+EFirst.  Expr  ::= "fst" TypedExpr ;
+ESecond. Expr  ::= "snd" TypedExpr ;
+EThird.  Expr  ::= "thd" TypedExpr ;
+
+Tuple2.  Tuple ::= "(" TypedExpr "," TypedExpr ")" ;
+Tuple3.  Tuple ::= "(" TypedExpr "," TypedExpr "," TypedExpr ")" ;
+
+VInt.    Value ::= Integer ;
+VString. Value ::= String ;
+
+TSimple. Type2 ::= SimpleType ;
+TTuple.  Type1 ::= TType ;
+TFun.    Type  ::= Type1 "->" Type ;
+coercions Type 2 ;
+
+TType2.  TType ::= "(" Type "," Type ")" ;
+TType3.  TType ::= "(" Type "," Type "," Type ")" ;
+
+token SimpleType (upper (letter | digit | '_' | '\'')*) ;
+token Var (lower (letter | digit | '_' | '\'')*) ;

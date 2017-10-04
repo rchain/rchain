@@ -1,0 +1,15 @@
+1. On the NCR 3400 with SVR4, the telnet.h include file is in the wrong place:
+   Copy or link /usr/include/netinet/telnet.h to /usr/include/arpa/telnet.h
+
+2. Expect A LOT of warnings of the type:
+
+	line nnnn: warning: initialization type mismatch
+
+   when building quipu.
+
+3. After the installation process has completed, you should copy the
+   config/isode shell script to /etc/init.d/isode and then link it
+   to /etc/rc2.d/S70isode and /etc/rc0.d/S30isode. This script will
+   start and stop the isode daemons as the system transitions between
+   run states.
+ 

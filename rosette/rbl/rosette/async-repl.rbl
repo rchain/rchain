@@ -1,0 +1,303 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(define F_DUPFD 0)
+(define F_GETFD 1)
+(define F_SETFD 2)
+(define F_GETFL 3)
+(define F_SETFL 4)
+
+;(defForeign (fcntl int int int) int)
+
+(defSync (sbo& Stream-SBO) (isOpen?)
+  (fx!= (fcntl (getFd (self)) F_GETFL 0) -1))
+
+(defProc (c-async s b)
+  (if (isOpen? s) (async s b)))
+
+(defOprn closedStream?)
+(defOprn read-line)
+
+(defActor Done)
+(defActor ClosedStream
+  (method (init) (mbox: (self) EmptyMbox))
+  (pure (isOpen?) #f)
+  (pure (closedStream?) #t)
+  (pure (read-line & r) eof)
+  (pure (read-expr & r) eof)
+  (pure (in & r) eof)
+  (pure (out & r) eof)
+  (pure (resume-io & r) eof)
+  (pure (close) eof)
+  )
+
+;;; async-repl.rbl
+;;; asynchronous operation is currently enabled in sockets.rbl.  There is
+;;; no point to doing so at earlier levels of functionality except for
+;;; GIE purposes
+
+(defProc (reset) (sys-reset))
+
+(define repl #niv)
+
+(define niv-doesn't-print? #t)
+
+(defProc (repl-print rslt strm)
+  (if (and niv-doesn't-print? (niv? rslt))
+      strm
+      (seq (print strm rslt) (display! strm nl) strm)))
+
+(defProc (no-repl) #niv)
+
+(defProc (read-error? expr) (same? expr read-error))
+(defProc (eof? expr)        (same? expr eof))
+(defProc (incomplete? expr) (same? expr incomplete-io))
+
+(defMethod Istream (init)
+  (seq (lock (self))
+       (next! [[read-expr] [read-line]])))
+
+(defRMethod Istream (read-expr ctxt-tuple)
+  (let [[[requesting-ctxt _code] ctxt-tuple]]
+  (let [[expr (istream-read (self))]]
+    (if (same? expr incomplete-io)
+	(next! [[resume-io]] 'client requesting-ctxt)
+	(block
+	  (send next! [[read-expr][read-line]])
+	  (ctxt-rtn requesting-ctxt expr))))))
+
+(defRMethod Istream (read-line ctxt-tuple)
+  (let [[[requesting-ctxt _code] ctxt-tuple]]
+  (let [[expr (istream-readline (self))]]
+    (if (same? expr incomplete-io)
+	(next! [[resume-io]] 'client requesting-ctxt)
+	(block
+	  (send next! [[read-expr][read-line]])
+	  (ctxt-rtn requesting-ctxt expr))))))
+
+(defMethod Istream (resume-io & args)
+  (let [[expr (istream-resume-io (self))]]
+    (if (same? expr incomplete-io)
+	(next! [[resume-io]])
+	(block
+	  (send next! [[read-expr][read-line]] 'client #niv)
+	  (ctxt-rtn client expr)))))
+
+(defProc (kernel)
+  (seq
+   (set repl no-repl)
+   (c-async stdin #f)
+   (io-catch 0 #niv)
+   (suicide)))
+
+(defProc (eval-and-print expr)
+  (let [[rslt (eval expr)]]
+    (seq
+     (sleep)
+     (repl-print rslt stdout))))
+
+(define *last-expr* #niv)
+
+(define **CurrentPrompt** "rosette> ")
+
+(defProc (prompt) **CurrentPrompt**)
+
+(defProc (prompt: s)
+  (let [[c **CurrentPrompt**]]
+    (seq (set **CurrentPrompt** s)
+	 c)))
+
+(defProc (rosette-repl)
+  (seq
+   (sleep)
+   (display **CurrentPrompt**)
+   (flush)
+   (let [[expr (read-expr stdin)]]
+     (cond ((read-error? expr)
+	    (rosette-repl))
+	   ((same? expr ':exit-repl)
+	    (kernel))
+	   ((eof? expr)
+	    (seq
+	     (c-async stdin #f)
+	     (io-catch 0 #niv)
+	     #niv))
+	   (else
+	    (let [[x (if (same? expr '!!) *last-expr* expr)]]
+	      (send eval-and-print x)
+	      (seq
+	       (define *last-expr* x)
+	       (sleep)
+	       (repl)) ))))))
+
+
+(defProc (initial-reset)
+  (seq
+   (define **SOURCE-FILE** "console")
+   (rosette-repl)
+   (suicide)
+   ))
+
+;; The following is the general paradigm for setting a FILE* to be asynchronous
+;; 
+;;   (io-catch 0 stdin)
+;;   (c-async stdin #t)
+;;
+
+;;; define access to the '_system and '_exit Unix system calls.
+
+;(if (not (same? (arch *config*) 'sgi))
+;    (defForeign (sh String) int (name& _system))
+;    (defProc (sh s) (RuntimeError s "shell not defined on this arch" (arch *config*)))
+;)
+
+(defProc (rsh host cmd)
+  (sh (concat "rsh " host " -n " cmd " &")))
+
+;(let* [[xnm (if (same? (o/s-type *config*) 'hpux) '__exit '_exit)]
+;       [_exit (ff-new xnm [int] #niv)]]
+;  (defProc (exit & r)
+;    (if (null? r) (_exit 0) (_exit & r))))
+
+(defProc (quit) (seq (c-async stdin #f) (exit 0)))
+
+;;; define the restart mechanism that permits units of work to be done
+;;; during a restart of a Rosette configuration.
+
+(define restart-agenda [])
+
+(defProc (add-restart-item x)
+  (set restart-agenda (rcons restart-agenda x)))
+
+(defExpander (on-restart e)
+  (new RequestExpr 'add-restart-item (TX (Q (head msg)))))
+
+;;; components to support documentation and presentation of execution
+;;; flags available in Rosette configurations
+
+(define execution-flags [])
+(define execution-flags-strings (new RblTable))
+(defProc (add-execution-flag x s)
+  (seq (set execution-flags (rcons execution-flags x))
+       (tbl-add execution-flags-strings
+		(->symbol (string-get-token x 0 " \n\t"))
+		s)
+       x))
+
+(add-execution-flag
+ "-help {<flag>}"
+ "gives a list of all flags or description of a specific one")
+
+(add-execution-flag
+ "-nodocs"
+ "causes documentation attributes to not be kept during loading so that \
+ \smaller images may be dumped")
+
+(defProc (restart-reset)
+  (seq
+   (if (arg-flag "-help")
+       (let [[v (arg-val "-help")]]
+	 (seq (if (niv!? v)
+		  (let [[s (tbl-get execution-flags-strings (->symbol v))]]
+		    (if (absent? s)
+			(display "unrecognized flag: " v nl)
+			(display v ":\n" s nl)))
+		  (seq (display "flags are:\n")
+		       (mapx execution-flags (proc [x] (display x "; ")))
+		       (display nl)))
+	      (exit))))
+   (display
+    "Rosette System, " (version) " - Copyright 1989, 90, 91, 92 MCC\n")
+   (let [[fn (arg-val "-load")]]
+     (if (not (niv? fn)) (load fn)))
+   (map restart-agenda (proc [i x] (eval x)))
+   (suicide)))
+
+(define repl rosette-repl)
+
+
+(defProc (repl-reset)
+  (seq
+   ;; TBR (set handling-an-error? #f)
+   (display stdout "resetting ...\n")
+   (void (send repl))
+   (suicide)))
+
+(defProc (rosette)
+  (seq
+   (set repl rosette-repl)
+   (reset)))
+
+
+(defActor signal-echo
+  (pure (signal sig)
+	(prim-display "got signal " sig "\n"))
+  )
+
+;(let [[dw	dump-world]
+;      [ulnk	(ff-new '_unlink [String] int)]]
+;  (defProc (dump-world s)
+;    (seq (ulnk (->string s))
+;	 (dw s))))
+
+(define monitoring-usage? #f)
+
+;(defForeign (sbrk int) int)
+
+(define *initial-program-break* 0)
+
+(defProc (display-resource-usage)
+  (if monitoring-usage?
+      (seq (display "Delta = " (fx- (sbrk 0) *initial-program-break*)
+		    ", Total = " (sbrk 0)
+		    nl)
+	   (sbrk 0))))
+
+(on-restart
+ (set *initial-program-break* (sbrk 0)))
+
+(add-execution-flag
+ "-load <filename>"
+ "the <filename> is loaded on restart as the first action of the \
+ \restart-agenda.  Useful to make simple patches without building \
+ \a new image")
+
+(add-execution-flag
+ "-prompt <string>"
+ "the <string> is installed as the new prompt, \
+ \usually used during build a new image")
+
+(on-restart
+ (let [[v (arg-val "-prompt")]]
+   (if (not (niv? v)) (prompt: v))))
+
+;;; the following is done so that later load steps will be able to access
+;;; the current configuration information
+
+(init-environs *config*)
+
+;;; the following is so that the *config* will be updated with the
+;;; environment variables in effect when the image is run
+
+(on-restart
+ (init-environs *config*))
