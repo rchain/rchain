@@ -6,10 +6,8 @@ import java.nio.channels.SelectableChannel;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import zmq.pipe.YPipe;
-import zmq.util.Errno;
-
-public final class Mailbox implements Closeable
+public class Mailbox
+        implements Closeable
 {
     //  The pipe to store actual commands.
     private final YPipe<Command> cpipe;
@@ -19,25 +17,22 @@ public final class Mailbox implements Closeable
 
     //  There's only one thread receiving from the mailbox, but there
     //  is arbitrary number of threads sending. Given that ypipe requires
-    //  synchronized access on both of its endpoints, we have to synchronize
+    //  synchronised access on both of its endpoints, we have to synchronise
     //  the sending side.
     private final Lock sync;
 
-    //  True if the underlying pipe is active, i.e. when we are allowed to
+    //  True if the underlying pipe is active, ie. when we are allowed to
     //  read commands from it.
     private boolean active;
 
     // mailbox name, for better debugging
     private final String name;
 
-    private final Errno errno;
-
-    public Mailbox(Ctx ctx, String name, int tid)
+    public Mailbox(String name)
     {
-        this.errno = ctx.errno();
         cpipe = new YPipe<Command>(Config.COMMAND_PIPE_GRANULARITY.getValue());
         sync = new ReentrantLock();
-        signaler = new Signaler(ctx, tid, errno);
+        signaler = new Signaler();
 
         //  Get the pipe into passive state. That way, if the users starts by
         //  polling on the associated file descriptor it will get woken up when
@@ -55,7 +50,7 @@ public final class Mailbox implements Closeable
         return signaler.getFd();
     }
 
-    void send(final Command cmd)
+    public void send(final Command cmd)
     {
         boolean ok = false;
         sync.lock();
@@ -84,19 +79,16 @@ public final class Mailbox implements Closeable
 
             //  If there are no more commands available, switch into passive state.
             active = false;
+            signaler.recv();
         }
 
         //  Wait for signal from the command sender.
         boolean rc = signaler.waitEvent(timeout);
         if (!rc) {
-            assert (errno.get() == ZError.EAGAIN || errno.get() == ZError.EINTR);
             return null;
         }
 
-        //  Receive the signal.
-        signaler.recv();
-
-        //  Switch into active state.
+        //  We've got the signal. Now we can switch into active state.
         active = true;
 
         //  Get a command.
