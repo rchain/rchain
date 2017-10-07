@@ -1,3 +1,6 @@
+*~
+*.swp
+
 # Eclipse Project Files
 #######################
 .settings
