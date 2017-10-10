@@ -175,7 +175,7 @@ case class PeerTable[A <: Peer](home: A,
     * Return the `k` nodes closest to `key` that this table knows
     * about, sorted ascending by distance to `key`.
     */
-  def lookup(key: Seq[Byte]): Vector[A] = {
+  def lookup(key: Seq[Byte]): Seq[A] = {
 
     def sorter(a: A, b: A) =
       (distance(key, a.key), distance(key, b.key)) match {
