@@ -1,0 +1,10 @@
+new r.(
+  for (y <- z) {
+    for (x <- y) {
+      x!x
+    }
+    | 0
+  }
+  | z!r
+  | r!s
+)
