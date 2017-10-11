@@ -12,7 +12,9 @@ lazy val root = (project in file("."))
     )),
     name := "Rosette",
     libraryDependencies ++= Seq(
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
       "com.chuusai" %% "shapeless" % "2.3.2",
+      "com.typesafe.scala-logging" %% "scala-logging" % "3.7.2",
       "org.typelevel" %% "cats" % "0.9.0",
       scalaTest % Test
     )

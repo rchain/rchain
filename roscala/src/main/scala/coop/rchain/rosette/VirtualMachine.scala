@@ -1,5 +1,7 @@
 package coop.rchain.rosette
 
+import com.typesafe.scalalogging.Logger
+
 sealed trait RblError
 case object DeadThread extends RblError
 
@@ -8,7 +10,9 @@ case object NoWorkLeft extends Work
 case object WaitForAsync extends Work
 case class StrandsScheduled(state: VMState) extends Work
 
-trait VirtualMachine {
+object VirtualMachine {
+
+  val logger = Logger("opcode")
 
   def unwindAndApplyPrim(prim: Prim): Either[RblError, Ob] = Right(null)
   def handleException(result: Ob, op: Op, loc: Location): Ob = null
@@ -132,10 +136,12 @@ trait VirtualMachine {
 
     while (pc < opCodes.size && !exit) {
       val op = opCodes(pc)
+      logger.info("PC: " + pc + " Opcode: " + op)
 
-      currentState = modifyFlags(executeDispatch(op, state))
-        .update(_ >> 'bytecodes)(m =>
-          m.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1))
+      currentState = modifyFlags(executeDispatch(op, currentState))
+        .update(_ >> 'bytecodes)(
+          _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1))
+        .update(_ >> 'pc >> 'relative)(_ + 1)
 
       pc = currentState.pc.relative
 
