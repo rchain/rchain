@@ -19,10 +19,10 @@ case class PeerNode(val key: Seq[Byte]) extends Peer {
 
 object b {
   val rand = new scala.util.Random(System.currentTimeMillis)
-  def apply(i: Int): Byte = i.asInstanceOf[Byte]
+  def apply(i: Int): Byte = i.toByte
   def apply(s: String): Byte = b(Integer.parseInt(s, 2))
   def rand(nbytes: Int): Seq[Byte] = {
-    val arr = new Array[Byte](nbytes)
+    val arr = Array.fill(nbytes)(b(0))
     rand.nextBytes(arr)
     arr
   }
@@ -41,8 +41,8 @@ class DistanceSpec extends FlatSpec with Matchers {
 
   // Make 8*width copies all of which differ in a single, distinct bit
   def oneOffs(key: Seq[Byte]): Seq[Array[Byte]] = {
-    for (i <- 0 to width - 1; j <- 7 to 0 by -1) yield {
-      val k1 = new Array[Byte](key.size)
+    for (i <- 0 until width; j <- 7 to 0 by -1) yield {
+      val k1 = Array.fill(key.size)(b(0))
       Array.copy(k1, 0, key.toArray, 0, key.size)
       k1(i) = b(k1(i)^b(1 << j))
       k1
@@ -51,7 +51,7 @@ class DistanceSpec extends FlatSpec with Matchers {
 
   def testKey(key: Array[Byte]): Boolean = {
     val table = PeerTable(PeerNode(key))
-    oneOffs(key).map(table.distance(_)) == ((0 to (8*width - 1)).map(Option[Int](_)))
+    oneOffs(key).map(table.distance(_)) == ((0 until 8*width).map(Option[Int](_)))
   }
 
   def keyString(key: Seq[Byte]): String = {
