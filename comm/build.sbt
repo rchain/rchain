@@ -7,6 +7,11 @@ PB.targets in Compile := Seq(
 
 libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
 
+libraryDependencies ++= Seq(
+  "org.scalactic" %% "scalactic" % "3.0.1",
+  "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+)
+
 addCompilerPlugin(
   "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
 )
@@ -28,8 +33,11 @@ lazy val commonOptions = Seq(
   "-unchecked")
 
 // scalacOptions ++= commonOptions
+scalacOptions += "-feature"
 
 scalacOptions in (Compile, console) ~= (_.filterNot(Set(
   "-Ywarn-unused:imports",
   "-Xfatal-warnings"
 )))
+
+logBuffered in Test := false
