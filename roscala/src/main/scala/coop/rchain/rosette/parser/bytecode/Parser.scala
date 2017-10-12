@@ -4,14 +4,13 @@ import cats.implicits._
 import coop.rchain.rosette._
 
 sealed trait ParseError
-case class UnknownOpCode(byte: Int) extends ParseError
 case object MissingArgument extends ParseError
 
 object Parser {
   def parse(bytes: Seq[Int]): Either[ParseError, Seq[Op]] = {
     lineUp(bytes) match {
       case Some(list) =>
-        val ops = list.map(seq =>
+        val ops: List[Either[ParseError, Op]] = list.map(seq =>
           seq.head match {
             case byte if byte.hasByteFormat("00000000") =>
               Right(OpHalt())
@@ -307,7 +306,7 @@ object Parser {
 
               Right(OpImmediateLitToReg(v, r))
 
-            case byte => Left(UnknownOpCode(byte))
+            case byte => Right(OpUnknown())
         })
 
         ops.sequenceU
