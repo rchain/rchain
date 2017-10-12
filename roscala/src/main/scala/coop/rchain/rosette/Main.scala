@@ -14,7 +14,17 @@ object Main extends App {
   Stream.continually(stdin.read()).takeWhile(_ != -1).foreach(bytes += _)
 
   Parser.parse(bytes) match {
-    case Right(result) => println(result.show)
+    case Right(opCodes) =>
+      val initState = VMState(Map(),
+                              Code(null, null, null, null),
+                              Ctxt.PLACEHOLDER,
+                              Location.PLACEHOLDER,
+                              PC(0))
+
+      val exitState = VirtualMachine.executeSeq(opCodes, initState)
+
+      System.exit(exitState.exitCode)
+
     case Left(error) => println(error.show)
   }
 }
