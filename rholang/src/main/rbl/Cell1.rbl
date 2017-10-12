@@ -1,0 +1,15 @@
+;;; Current compiler output for Cell1.rho
+
+(defOprn Cell)
+(defActor CellContract
+    (method (Cell get set state)
+        (block
+            (let [[[[rholang10b77a5e8674 rholang7702e53ea793] [rholanga05296deb41b rholang11abfd3a4908]]
+                    (consume t [get state] [**wildcard** **wildcard**] [**wildcard** **wildcard**])]]
+                ( (proc [[rtn v]] (block (block (produce t rtn **wildcard** v) (produce t state **wildcard** v)) (Cell t get set state))) [rholanga05296deb41b rholang11abfd3a4908]))
+            (let [[[[rholang9555ed1e2866 rholang1f8724fa4371] [rholang997c51dda20c rholang8737beb61979]]
+                    (consume t [set state] [**wildcard** **wildcard**] [**wildcard** **wildcard**])]]
+                ( (proc [[newValue v]] (block (produce t state **wildcard** newValue) (Cell t get set state))) [rholang997c51dda20c rholang8737beb61979]))
+        )
+    )
+)

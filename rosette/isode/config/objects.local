@@ -1,0 +1,59 @@
+###############################################################################
+#
+# isobjects - ISODE Objects Database
+#
+#	Mappings between object descriptors and object identifiers
+#
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/isode/config/objects.local,v 1.1.1.1 1993/02/12 01:26:08 tomlic Exp $
+#
+#
+# $Log: objects.local,v $
+# Revision 1.1.1.1  1993/02/12  01:26:08  tomlic
+# pub release of rosette
+#
+# Revision 1.2  1993/01/19  21:01:41  carnot
+# Touch up for release 2.0
+#
+# Revision 9.0  1992/06/16  12:11:35  isode
+# Release 8.0
+#
+# 
+###############################################################################
+
+
+###############################################################################
+#
+# Syntax:
+#
+#	<object descriptor> <object id>
+#
+#	Each token is separated by LWSP, though double-quotes may be
+#	used to prevent separation
+#
+###############################################################################
+
+
+###############################################################################
+# locally defined objects
+#	(this section is usually empty...)
+###############################################################################
+
+# SQL Access Group FAP Specification
+"sag rda calling"		1.3.9999.9579.1.5
+
+"sag rda called"		1.3.9999.9579.1.6
+
+"sag ncr calling"		1.3.9999.9579.1.5
+
+"sag ncr called"		1.3.9999.9579.1.6
+
+"sag rda context"		1.3.9999.9579.1.4
+
+"sag rda pci"			1.3.9999.9579.1.3
+
+# Rosette services
+
+"rosette miscellany"		1.17.4.1.0.1
+"rosette passwd"		1.17.4.1.0.2
+

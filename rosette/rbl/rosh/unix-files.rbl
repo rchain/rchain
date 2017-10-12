@@ -1,0 +1,84 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; FILE and FILE SYSTEM commands
+
+(defForeign (umask int) int)
+
+(defForeign (chmod String int) int)
+
+(if (not (same? (arch *config*) 'sgi))
+    (defForeign (rename String String) int)
+    (defProc (rename s) 
+      (RuntimeError s "rename not available on arch " (arch *config*)))
+    )
+
+(defForeign (symlink String String) int)
+
+(defForeign (link String String) int)
+
+(defForeign (unlink String) int)
+
+(defForeign (readlink String) int)
+
+(defForeign (chdir String) int)
+
+(if (not (same? (arch *config*) 'sgi))
+    (defForeign (mkdir String int) int))
+
+(defForeign (rmdir String) int)
+
+;; Bare Bones file stat buffer.
+(defStructure FileStatus
+  long st_atime	;
+  long st_ctime	;
+  long st_ntime	;
+)
+
+(defForeign (rosette_stat String (ref FileStatus)) int)
+(defProc (stat x y) (rosette_stat  x y))
+
+
+;(defForeign (lstat String (ref FileStatus)) int)
+
+;(defForeign (fstat int (ref FileStatus)) int)
+
+(defStructure Statfs
+  long			f_type	  ;; zero for now
+  long			f_bsize	  ;; file system block size
+  long			f_blocks  ;; total blocks in fs
+  long			f_bfree	  ;; free blocks
+  long			f_bavail  ;; free blocks for non-super-user
+  long			f_files	  ;; total file nodes in fs
+  long			f_ffree	  ;; free file nodes in fs
+  (array long 2)	f_fsid	  ;; file system id
+  (array long 7)	f_spare
+  )
+
+(defForeign (statfs String (ref Statfs)) int)
+
+;;; a utility function to test whether a file is present or not
+
+(let [[fs (new FileStatus)]]
+  (defProc (file-exists? s)
+    (fx= (stat (->string s) fs) 0)))

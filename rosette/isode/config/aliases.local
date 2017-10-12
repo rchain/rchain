@@ -1,0 +1,43 @@
+###############################################################################
+#
+# isoaliases - ISODE alias file
+#
+#	Mappings between user-friendly strings and distinguished names
+#
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/isode/config/aliases.local,v 1.1.1.1 1993/02/12 01:26:04 tomlic Exp $
+#
+#
+# $Log: aliases.local,v $
+# Revision 1.1.1.1  1993/02/12  01:26:04  tomlic
+# pub release of rosette
+#
+# Revision 1.2  1993/01/19  21:01:20  carnot
+# Touch up for release 2.0
+#
+# Revision 9.0  1992/06/16  12:11:35  isode
+# Release 8.0
+#
+# 
+###############################################################################
+
+
+###############################################################################
+#
+# Syntax:
+#
+#	<alias>  <name>
+#
+#	Each token is separated by LWSP, though double-quotes may be
+#	used to prevent separation
+#
+#	Maybe in the future we'll support a macro facility!
+#
+###############################################################################
+
+###############################################################################
+# locally defined aliases
+#	(this section is empty unless you're running an OSI Directory...)
+###############################################################################
+
+

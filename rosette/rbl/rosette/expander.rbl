@@ -1,0 +1,1313 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; add short synonyms for basic expression constructors
+
+(add 'Q   quoteexpr-basic-new)
+(add 'RX  requestexpr-basic-new)
+(add 'TX  tupleexpr-basic-new)
+(add 'MX  methodexpr-basic-new)
+(add 'BX  blockexpr-basic-new)
+(add 'SqX seqexpr-basic-new)
+(add 'SX  sendexpr-basic-new)
+(add 'PX  procexpr-basic-new)
+(add 'RMX reflectivemethodexpr-basic-new)
+
+(add 'Xw/id (named-proc Xw/id [f]
+	      (proc [id formals & exprs]
+		(let [[x (f formals & exprs)]]
+		  (seq
+		   (add 'id id x)
+		   x)))))
+
+(add 'MXw/id (Xw/id MX))
+(add 'RMXw/id (Xw/id RMX))
+(add 'PXw/id (Xw/id PX))
+
+(add 'COMPILE (proc [x & y] (RX 'run (RX 'compile (Q x) & y))))
+
+;;; the basic framework for supporting expansion passing
+(add-unique Oprn 'get)
+(add-unique Oprn 'default)
+
+(let* [[s (new SBO 'ExpanderOprn (parent Oprn))]
+       [p (parent: (new Oprn 'ExpanderOprn) s)]]
+  (seq (add 'expanderOprns RblTable p)
+       (add 'defaultOprn Oprn p)
+       (add init
+	    (run
+	     (compile
+	      '(method [id]
+		 (update! 'id id
+			  'expanderOprns (new expanderOprns)
+			  'defaultOprn (new Oprn (concat id 'Default))))
+	      p))
+	    s)
+       (add default
+	    (run (compile '(method [] (send update!) defaultOprn)
+			  p))
+	    s)
+       (add get
+	    (run (compile '(method [key]
+			     (let [[xo (tbl-get expanderOprns key)]]
+			       (if (absent? xo) defaultOprn xo)
+			       (send update!)))
+			  p))
+	    s)
+       (add addPD
+	    (run (compile '(method [key xpndr sum det usg]
+			     (let [[xo (new Oprn (concat key id))]]
+			       (seq (tbl-add expanderOprns key xo)
+				    (addPD xo xpndr (sbo RequestExpr)
+						    sum det usg)
+				    key)))
+			  p))
+	    s)
+       (add 'ExpanderOprn p)))
+
+;;; the standard top-level rosette expander
+(add-unique ExpanderOprn 'stdExpander)
+
+(add-unique Oprn 'expander)
+(add-unique Oprn 'expand)
+
+;; expander methods
+
+(add stdExpander
+     (method [] (get stdExpander (self)) (send update!))
+     Top)
+
+(add (default stdExpander)
+     (run
+      (compile
+       '(method [e] (new (self) (e trgt e) (e msg e)))
+       (ct-proto RequestExpr)))
+     RequestExpr-SBO)
+
+(add expander identity1 Top)
+
+(add expander
+     (run
+      (compile
+       '(method [& e]
+	  ((stdExpander trgt) (self) & e))
+       (ct-proto RequestExpr)))
+     RequestExpr-SBO)
+
+(add expander
+     (run
+      (compile
+       '(method [e]
+	  (let [[expr (clone (self))]
+		[n 0]
+		[N (size (self))]]
+	    (seq
+	     (label loop
+	       (if (fx= n N)
+		   (if (same? rest '[]) #niv (set 'rest (e rest e) expr))
+		   (seq
+		    (set-nth expr n (e (nth (self) n) e))
+		    (set! n (fx+ n 1))
+		    (goto loop))))
+	     expr)))
+       (ct-proto TupleExpr)))
+     TupleExpr-SBO)
+
+ (add expander
+      (method [e]
+	(let [[tpl (clone (self))]
+	      [n 0] [N (size (self))]]
+	  (label loop
+	    (if (fx= n N)
+		tpl
+		(seq (set-nth tpl n (e (nth (self) n) e))
+		     (set! n (fx+ n 1))
+		     (goto loop))))))
+      Tuple-SBO)
+
+ (add expander
+      (method [e]
+	(let [[expr (clone (self))]]
+	  (seq
+	   (walk expr (proc [n x] (set-nth (self) n (e x e))))
+	   expr)))
+      BlockExpr-SBO)
+
+ (add expander
+      (method [e]
+	(let [[expr (clone (self))]]
+	  (seq
+	   (walk expr (proc [n x] (set-nth (self) n (e x e))))
+	   expr)))
+      SeqExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e]
+	   (let [[x (e (new RequestExpr trgt msg) e)]]
+	     (if (type? RequestExpr x)
+		 (new (self) ('trgt x) ('msg x))
+		 (new (self) (e trgt e) (e msg e)))))
+	(ct-proto SendExpr)))
+      SendExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) (e trgt e) (e val e)))
+	(ct-proto SetExpr)))
+      SetExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) (e label e) (e body e)))
+	(ct-proto LabelExpr)))
+      LabelExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) (e label e)))
+	(ct-proto GotoExpr)))
+      GotoExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) id formals (e body e)))
+	(ct-proto MethodExpr)))
+      MethodExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) id formals (e body e)))
+	(ct-proto ProcExpr)))
+      ProcExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) (e bindings e) (e body e)))
+	(ct-proto LetExpr)))
+      LetExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) (e bindings e) (e body e)))
+	(ct-proto LetrecExpr)))
+      LetrecExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e] (new (self) id-list (e body e)))
+	(ct-proto FreeExpr)))
+      FreeExpr-SBO)
+
+ (add expander
+      (run
+       (compile
+	'(method [e]
+	   (new (self) (e condition e) (e true-branch e) (e false-branch e)))
+	(ct-proto IfExpr)))
+      IfExpr-SBO)
+
+;;; turn on the standard top-level expander
+
+(add expand (method [] (expander (self) expander)) Top-SBO)
+
+;;; the following procedures are used to look for optional arguments to
+;;; expanders such arguments are requestExprs with a trgt that is an id
+;;; ending in an #\& by convention.  The msg is expected to be of size
+;;; one and if it is a symbol it is returned quoted.
+
+(add-unique Oprn 'is-keyword?)
+(add is-keyword?
+     (method [<keywd>] #f (send update!)) Top)
+
+(add is-keyword?
+     (run
+      (compile
+       '(method  [<keywd>]
+	  (if (same? trgt <keywd>) (->tuple msg) #f))
+       (ct-proto RequestExpr)))
+     RequestExpr-SBO)
+
+(add 'find-keyword1
+     (proc [<keywd> <default> <forms>]
+       (letrec [[loop (proc [<item> accum [hd & tl]]
+			(if <item>
+			    [(head <item>) (concat accum tl)]
+			(if (null? tl)
+			    [<default> (rcons accum hd)]
+			    (loop (is-keyword? (head tl) <keywd>)
+				  (rcons accum hd) tl))))]]
+	 (if (null? <forms>)
+	     [<default> <forms>]
+	     (loop (is-keyword? (head <forms>) <keywd>) [] <forms>)))))
+
+(add 'find-keyword
+     (proc [<keywd> <default> <forms>]
+       (letrec [[loop (proc [<item> accum [hd & tl]]
+			(if <item>
+			    [<item> (concat accum tl)]
+			(if (null? tl)
+			    [<default> (rcons accum hd)]
+			    (loop (is-keyword? (head tl) <keywd>)
+				  (rcons accum hd) tl))))]]
+	 (if (null? <forms>)
+	     [<default> <forms>]
+	     (loop (is-keyword? (head <forms>) <keywd>) [] <forms>)))))
+
+(add 'find-flag
+     (proc [<flag> <forms>]
+       (letrec [[loop (proc [b accum [hd & tl]]
+			(if b
+			    [#t (concat accum tl)]
+			(if (null? tl)
+			    [#f (rcons accum hd)]
+			    (loop (same? <flag> (head tl))
+				  (rcons accum hd) tl))))]]
+	 (if (null? <forms>)
+	     [#f <forms>]
+	     (loop (same? <flag> (head <forms>)) [] <forms>)))))
+
+(add-unique Oprn 'is-keywordM?)
+(add is-keywordM?
+     (method [<keywd>] #f (send update!)) Top)
+
+(add is-keywordM?
+     (run
+      (compile
+       '(method  [<keywd>]
+	  (if (same? trgt <keywd>) msg #f))
+       (ct-proto RequestExpr)))
+     RequestExpr-SBO)
+
+(add 'find-keywordM
+     (proc [<keywd> <default> <forms>]
+       (letrec [[loop (proc [<item> accum [hd & tl]]
+			(if <item>
+			    [(Q <item>) (concat accum tl)]
+			(if (null? tl)
+			    [<default> (rcons accum hd)]
+			    (loop (is-keywordM? (head tl) <keywd>)
+				  (rcons accum hd) tl))))]]
+	 (if (null? <forms>)
+	     [<default> <forms>]
+	     (loop (is-keywordM? (head <forms>) <keywd>) [] <forms>)))))
+
+;;; (defSymbolExpander <xpndr-kind> (<id> & <x>) & <body>)
+;;; 
+;;; ==>
+;;; 
+;;; `(add <xpndr-kind> ',<id> 
+;;;       (run (compile `(method [,<x>] ,& <body>)
+;;;                     (ct-proto RequestExpr)))
+;;;       <summary> <details> <usage>)
+
+(addPD stdExpander 'defSymbolExpander
+     (run
+      (compile
+       '(method [e]
+	  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+		 [[<det> rest] (find-keywordM 'details& #absent rest)]
+		 [[<usg> rest] (find-keywordM 'usage&   #absent rest)]
+		 [[<xpndr-kind> call-form & <body>] rest]
+		 [[<id> <args>] (split call-form 0)]]
+	    (RX 'addPD <xpndr-kind> (Q <id>)
+		(COMPILE (MXw/id <id> <args> & (e <body> e))
+			 '(ct-proto RequestExpr))
+		<sum> <det> <usg>)))
+       (ct-proto RequestExpr)))
+     #absent #absent #absent)
+
+;;; the slot attributes associated with the expanders are placed on
+;;; (meta (sbo RequestExpr)) and keyed via (get <xpndr-kind> (Q <id>))
+;;;
+;;; (slot-attr! (meta (sbo RequestExpr)) (get stdExpander 'defXpnd) 'usage)
+
+(defSymbolExpander stdExpander (defExpander e)
+  (usage& (defExpander (<id> & <args>) & <body>)
+	  ==>
+	  (defSymbolExpander stdExpander (<id> <args>) & <body>))
+  (e (RX 'defSymbolExpander 'stdExpander & (->tuple msg)) e))
+
+;;; (defProc <obj> (<symb> & <args>) & <body>)
+;;; ==>
+;;; `(add ',<symb> (proc ,<args> ,& <body>))
+
+(defExpander (defProc e)
+  (let* [[[<obj> rest] (find-keyword1 'sbo& 'Global (->tuple msg))]
+	 [[<sum> rest] (find-keywordM 'summary& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[<det> [call-form & <body>]] (find-keywordM 'details& #absent rest)]
+	 [[<symb> <args>] (split call-form 0)]]
+    (RX 'addPD (Q <symb>)
+	(new LetrecExpr
+	     (TX (TX <symb>
+		     (new ProcExpr <symb> <args>
+			  (new BlockExpr (e <body> e)))))
+	     <symb>)
+	(e <obj> e) <sum> <det> <usg>)))
+
+(defProc (fixup-slots slots e)
+  (summary& helper for quoting the <id>s in slot lists)
+  (letrec [[loop (proc [accum [k v & r]]
+		   (if (null? r)
+		       (concat accum [(Q k) (e v e)])
+		       (loop (concat accum [(Q k) (e v e)]) r)))]]
+    (if (null? slots)
+	slots
+	(loop [] slots))))
+
+(add-unique Sync 'quoted?)
+(add quoted? #f Top)
+(add quoted? #t (sbo TupleExpr))
+(add quoted? #t (sbo RequestExpr))
+(add quoted? #t (sbo QuoteExpr))
+(add quoted? #t (sbo Symbol))
+
+(defProc (fixup-contour obj)
+  (summary& helper for quoting the symbols in contour tuples)
+  (letrec [[loop (proc [accum [k v & r]]
+		   (let [[xx (concat
+				accum
+				[(Q k)
+				 (if (quoted? v) (Q v) v)])]]
+		     (if (null? r) xx (loop xx r))))]
+	   [slots (contour (meta obj) obj)]]
+    (if (null? slots)
+	slots
+	(loop [] slots))))
+    
+(defProc (do-defoprn op-type msg e)
+  (summary& helper for expanding operation defining forms)
+  (if (= (size msg) 0)
+      (RuntimeError (self) "can't defOprn without at least an id")
+      (let* [[[<sbo> rest] (find-keyword1 'sbo& 'Top (->tuple msg))]
+	     [[pure? rest] (find-flag 'pure& rest)]
+	     [[<proto> rest]  (find-keyword1 'proto& 'TopEnv rest)]
+	     [[<sum> rest] (find-keywordM 'summary& #absent rest)]
+	     [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	     [[<det> [call-form & <body>]]
+	      (find-keywordM 'details& #absent rest)]
+	     [[<oprn-id> <args>] (if (type? Symbol call-form)
+				     [call-form []]
+				     (split call-form 0))]]
+	(new LetExpr
+	     (TX (TX <oprn-id> (RX 'add-unique op-type (Q <oprn-id>))))
+	     (if (type? RequestExpr call-form)
+		 (new LetExpr
+		      (TX (TX 'M_tmp
+			      (COMPILE
+			       (if pure?
+				   (MXw/id <oprn-id> <args> '(send update!)
+					   & (e <body> e))
+				   (MXw/id <oprn-id> <args> & (e <body> e)))
+			       (e <proto> e)))
+			  (TX 'SBO_tmp (e <sbo> e)))
+		      (SqX (RX 'add <oprn-id> 'M_tmp 'SBO_tmp)
+			   (RX 'pDocs!:
+			       '(meta SBO_tmp) <oprn-id> <sum> <det> <usg>)
+			   (Q <oprn-id>)))
+		 (if (null? <body>)
+		     (SqX (RX 'docs!: '(meta Global) (Q <oprn-id>)
+			      <sum> <det>)
+			  (Q <oprn-id>))
+		     (new LetExpr
+			  (TX (TX 'SBO_tmp (e <sbo> e))
+			      (TX 'val_tmp (e (head <body>) e)))
+			  (SqX (RX 'add <oprn-id> 'val_tmp 'SBO_tmp)
+			       (RX 'pDocs!: '(meta SBO_tmp) <oprn-id>
+				   <sum> <det> <usg>)
+			       (Q <oprn-id>)))))))))
+
+;;; (defOprn <oprn-id>)  ==>  `(add-unique Oprn `,<oprn-id>)
+
+(defExpander (defOprn e) (do-defoprn 'Oprn msg e))
+
+;;; (defSync <oprn-id>)  ==>  `(add-unique Sync `,<oprn-id>)
+
+(defExpander (defSync e) (do-defoprn 'Sync msg e))
+
+;;; (defXpnd <oprn-id>)  ==>  `(add-unique ExpanderOprn `,<oprn-id>)
+
+(defExpander (defXpnd e) (do-defoprn 'ExpanderOprn msg e))
+
+;;; (inc <expr>)  ==>  `(fx+ ,<expr> 1)
+
+(defExpander (inc e) (RX 'fx+ (e (head msg) e) 1))
+(defExpander (dec e) (RX 'fx- (e (head msg) e) 1))
+
+(defExpander (define e)
+  (usage& (define <symb> <expr>)  ==>  `(add ',<symb> ,<expr>))
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<symb> <expr>] rest]]
+    (RX 'addD (Q <symb>) (e <expr> e) Global <sum> <det>)))
+
+;;; (set <symb> <expr> & <obj>)
+;;; ==>
+;;; (set-obo (meta <obj>) <obj> ',<symb> <expr>)
+
+(defExpander (set e)
+  (let* [[[<symb> <expr> & r] (->tuple msg)]
+	 [<obj> (if (null? r) 'Global (e (head r) e))]]
+    (RX 'set-obo (RX 'meta <obj>) <obj> (Q <symb>) (e <expr> e))))
+
+;;; (not <expr>)  ==>  `(if (e ,<expr> e) #f #t)
+
+(defExpander (not e)
+  (let [[<expr> (head msg)]]
+    (new IfExpr (e <expr> e) '#f '#t)))
+
+;;; (and)  ==>  #t
+;;; (and <expr>)  ==> <expr>
+;;; (and <expr1> & <exprs>)  ==> `(if ,<expr1> (and ,& <exprs>) #f)
+
+(defExpander (and e)
+  (if (same? msg '[]) '#t
+  (if (fx= (size msg) 1) (e (head msg) e)
+      (e (new IfExpr (head msg) (new RequestExpr 'and (tail msg)) '#f) e))))
+
+;;; (or)  ==>  #f
+;;; (or <expr>)  ==> <expr>
+;;; (or <expr1> & <exprs>)  ==> `(if ,<expr1> #t (or ,& <exprs>))
+
+(defExpander (or e)
+  (if (same? msg '[]) '#f
+  (if (fx= (size msg) 1) (e (head msg) e)
+      (e (new IfExpr (head msg) #t (new RequestExpr 'or (tail msg))) e))))
+
+;;; (m! <oprn> & <msg>)  ==>  `((lookup ,<oprn> (self)) ,& <msg>)
+
+(defExpander (m! e)
+  (let [[[<oprn> <msg>] (split msg 1)]]
+    (new RequestExpr
+	 (RX 'lookup (e <oprn> e) '(self))
+	 (e <msg> e))))
+
+;;; (become <proto> & <msg>)  ==>  `(init (become! ,<proto>) ,& <msg>)
+
+(defExpander (become e)
+  (let [[[<proto> & <msg>] (->tuple msg)]]
+    (SX 'init (RX 'become! (e <proto> e)) & (e <msg> e))))
+
+;;; (update <id> <expr> ...)  ==>  (send update! ',<id> <expr> ...)
+
+(defExpander (update e)
+  (SX 'update! & (fixup-slots (->tuple msg) e)))
+
+;;; (next <es> <id> <expr> ...)  ==>  (send next! <es> ',<id> <expr> ...)
+
+(defExpander (next e)
+  (let [[[<es> <slots>] (split msg 1)]]
+    (SX 'next! (e <es> e) & (fixup-slots (->tuple <slots>) e))))
+
+;;; (void & <forms>)  ==>  (block #niv & <forms)
+
+(defExpander (void e)
+  (new BlockExpr [#niv & (e (->tuple msg) e)]))
+
+(defProc (do-defmeth msg mx q sx e)
+  (let* [[[s rest] (find-keyword1 'sbo& #f (->tuple msg))]
+	 [[<sum> rest] (find-keywordM 'summary& #absent rest)]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[p call-form & <body>] rest]
+	 [[[op <args>] <proto>] [(split call-form 0) (e p e)]]
+	 [[<oprn> <sbo>] [(e op e) (if s (e s e) (RX 'sbo <proto>))]]]
+    (RX 'addPD (q <oprn>)
+	(COMPILE (mx <oprn> <args> & (tuple-concat sx (e <body> e)))
+		 (RX 'ct-proto <proto>)
+		 (Q <oprn>))
+	<sbo> <sum> <det> <usg>)))
+  
+;;; (defMethod <proto> (<oprn> & <args>) & <body>)
+;;; ==>
+;;; `(add ,<oprn> (run (compile ',(method ,<args> ,& <body>)
+;;;                             (ct-proto ,<proto>)))
+;;;               (sbo ,<proto>))
+
+(defExpander (defMethod e)
+  (do-defmeth msg MXw/id identity [] e))
+
+;;; (defPure <proto> (<oprn> & <args>) & <body>)
+;;; ==>
+;;; `(add ,<oprn> (run (compile ',(method ,<args> (send update!) ,& <body>)
+;;;                             (ct-proto ,<proto>)))
+;;;               (sbo ,<proto>))
+
+(defExpander (defPure e)
+  (do-defmeth msg MXw/id identity [(SX 'update!)] e))
+
+;;; (defLocal <proto> (<symb> & <args>) & <body>)
+;;; ==>
+;;; `(add ',<symb> (run (compile ',(method ,<args> ,& <body>)
+;;;                             (ct-proto ,<proto>)))
+;;;               (sbo ,<proto>))
+
+(defExpander (defLocal e)
+  (do-defmeth msg MXw/id Q [] e))
+
+;;; (defRMethod <proto> (<oprn> & <args>) & <body>)
+;;; ==>
+;;; `(add ,<oprn> (run (compile ',(rmethod ,<args> ,& <body>)
+;;;                             (ct-proto ,<proto>)))
+;;;               (sbo ,<proto>))
+
+(defExpander (defRMethod e)
+  (do-defmeth msg RMXw/id identity [] e))
+
+;;; (defRPure <proto> (<oprn> & <args>) & <body>)
+;;; ==>
+;;; `(add ,<oprn> (run (compile ',(rmethod ,<args> (send update!) ,& <body>)
+;;;                             (ct-proto ,<proto>)))
+;;;               (sbo ,<proto>))
+
+(defExpander (defRPure e)
+  (do-defmeth msg RMXw/id identity [(SX 'update!)] e))
+
+;;; (defRLocal <proto> (<symb> & <args>) & <body>)
+;;; ==>
+;;; `(add ',<symb> (run (compile ',(rmethod ,<args> ,& <body>)
+;;;                             (ct-proto ,<proto>)))
+;;;               (sbo ,<proto>))
+
+(defExpander (defRLocal e)
+  (do-defmeth msg RMXw/id Q [] e))
+
+;;; (defValue <obj> <symb> <expr>)
+;;; ==>
+;;; `(add ',<symb> ,<expr> ,<obj>)
+
+(defExpander (defValue e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<obj> <symb> <expr>] rest]]
+    (RX 'add (Q <symb>) (e <expr> e) (e <obj> e))))
+
+;;; (defSlot <obj> <key> <expr>)
+;;; ==>
+;;; `(add ,<key> ,<expr> ,<obj>)
+
+(defExpander (defSlot e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<obj> <key> <expr>] rest]]
+    (RX 'add (e <key> e) (e <expr> e) (e <obj> e))))
+
+;;; (pure <args> & <forms>)
+;;; ==>
+;;; (method <args> (block (send update!) & <forms>))
+
+(defExpander (pure e)
+  (let [[[<args> & <forms>] (->tuple msg)]]
+    (MX <args> (SX update!) & (e <forms> e))))
+
+;;; GENERATOR EXPANSION
+
+;;; the following defines the expanders and helpers for generating clone
+;;; families
+
+(defXpnd (genExpander) pure& (get genExpander (self)))
+
+(defSlot Top (default genExpander)
+  (method [<proto> e]
+    (RuntimeError (self) "syntax error - improper generator form")))
+
+(defOprn (gen-expander <proto> xpndr)
+  (RuntimeError (self) "syntax error - improper generator form"))
+
+(defMethod RequestExpr (gen-expander <proto> e)
+  ((genExpander trgt) (self) <proto> e))
+
+(defMethod MethodExpr (gen-expander <proto> e)
+  (let* [[[op <args>] (split formals 0)]
+	 [<oprn> (e op e)]]
+    (if (type? BlockExpr body)
+	(let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple body))]
+	       [[<det> rest] (find-keywordM 'details& #absent rest)]
+	       [[<usg> rest] (find-keywordM 'usage&   #absent rest)]
+	       [<body> (init (clone body) rest)]]
+	  [<oprn>
+	   (COMPILE (new (self) <oprn> <args> (e <body> e))
+		    (RX 'ct-proto <proto>)
+		    (Q <oprn>))
+	   <sum> <det> <usg>])
+	[<oprn>
+	 (COMPILE (new (self) <oprn> <args> (e body e))
+		  (RX 'ct-proto <proto>)
+		  (Q <oprn>))
+	 #absent #absent #absent])))
+
+(defMethod ProcExpr (gen-expander <proto> e)
+  (let [[[<symb> <args>] (split formals 0)]]
+    (if (type? BlockExpr body)
+	(let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple body))]
+	       [[<det> rest] (find-keywordM 'details& #absent rest)]
+	       [[<usg> rest] (find-keywordM 'usage&   #absent rest)]
+	       [<body> (init (clone body) rest)]]
+	  [(Q <symb>)
+	   (new (self) <symb> <args> (e <body> e))
+	   <sum> <det> <usg>])
+	[(Q <symb>)
+	 (new (self) <symb> <args> (e body e))
+	 #absent #absent #absent])))
+
+(defProc (xpnd-forms <proto> e rslt & forms)
+  (if (null? forms)
+      rslt
+      (letrec [[loop (proc [accum <form> & <forms>]
+		       (if (null? <forms>)
+			   (concat accum (gen-expander <form> <proto> e))
+			   (loop (concat accum
+					 (gen-expander <form> <proto> e))
+				 & <forms>)))]]
+	(loop rslt & forms))))
+
+(defSymbolExpander stdExpander (defGenExpander e)
+  (summary& defGenExpander is used to define expanders for forms that
+	    occur within defActor and defSlots)
+  (usage& (defGenExpander (<id> <proto> e) & <body>))
+  (e (RX 'defSymbolExpander 'genExpander & (->tuple msg)) e))
+
+;;; (slot <key> <expr>) ==> [,<key> ,<expr>]
+
+(defGenExpander (slot <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<key> <expr>] rest]]
+    [(e <key> e) (e <expr> e) <sum> <det> #absent]))
+
+;;; (value <symb> <expr>)  ==>  [',<symb> ,<expr>]
+
+(defGenExpander (value <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<symb> <expr>] rest]]
+    [(Q <symb>) (e <expr> e) <sum> <det> #absent]))
+
+;;; (pure (<oprn> & <args>) & <body>)
+;;; ==>
+;;; [,<oprn>
+;;;  (COMPILE `(method ,<args> (send update!) ,& <body>) <proto>))]
+
+(defGenExpander (pure <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[call-form & <body>] rest]
+	 [[<oprn> <args>] (split call-form 0)]]
+    [(e <oprn> e)
+     (COMPILE (MXw/id <oprn> <args> (SX 'update!) & (e <body> e))
+	      (RX 'ct-proto <proto>)
+	      (Q <oprn>))
+     <sum> <det> <usg>]))
+
+;;; (local (<symb> & <args>) & <body>)
+;;; ==>
+;;; [',<symb> (run (compile `(method ,<args> ,& <body>) <proto>))]
+
+(defGenExpander (local <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[call-form & <body>] rest]
+	 [[<symb> <args>] (split call-form 0)]]
+    [(Q <symb>)
+     (COMPILE (MXw/id <symb> <args> & (e <body> e))
+	      (RX 'ct-proto <proto>)
+	      (Q <symb>))
+     <sum> <det> <usg>]))
+
+;;; (rmethod (<oprn> & <args>) & <body>)
+;;; ==>
+;;; [,<oprn>
+;;;  (COMPILE `(rmethod ,<args> ,& <body>) <proto>))]
+
+(defGenExpander (rmethod <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[call-form & <body>] rest]
+	 [[<oprn> <args>] (split call-form 0)]]
+    [(e <oprn> e)
+     (COMPILE (RMXw/id <oprn> <args> & (e <body> e))
+	      (RX 'ct-proto <proto>)
+	      (Q <oprn>))
+     <sum> <det> <usg>]))
+
+;;; (rpure (<oprn> & <args>) & <body>)
+;;; ==>
+;;; [,<oprn>
+;;;  (COMPILE `(rmethod ,<args> (send update!) ,& <body>) <proto>))]
+
+(defGenExpander (rpure <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[call-form & <body>] rest]
+	 [[<oprn> <args>] (split call-form 0)]]
+    [(e <oprn> e)
+     (COMPILE (RMXw/id <oprn> <args> (SX 'update!) & (e <body> e))
+	      (RX 'ct-proto <proto>)
+	      (Q <oprn>))
+     <sum> <det> <usg>]))
+
+;;; (rlocal (<symb> & <args>) & <body>)
+;;; ==>
+;;; [',<symb> (run (compile `(rmethod ,<args> ,& <body>) <proto>))]
+
+(defGenExpander (rlocal <proto> e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<usg> rest] (find-keywordM 'usage& #absent rest)]
+	 [[call-form & <body>] rest]
+	 [[<symb> <args>] (split call-form 0)]]
+    [(Q <symb>)
+     (COMPILE (RMXw/id <symb> <args> & (e <body> e))
+	      (RX 'ct-proto <proto>)
+	      (Q <symb>))
+     <sum> <det> <usg>]))
+
+;;; helper to generate a sequence of add*s to overcome the limit on the
+;;; number of arguments that can be passed.  This is a temporary limitation.
+;;; The following code is not robust if more than about 800 slots are
+;;; defined at once!
+
+(defSync (sbo& Top) (addPD* & k/v)
+  (if (null? k/v)
+      (self)
+      (letrec [[loop (proc [k v s d u & r]
+		       (seq (addPD k v (self) s d u)
+			    (if (null? r)
+				(self)
+				(loop & r))))]]
+	(loop & k/v))))
+
+(letrec [[add*-loop
+	  (proc [<sbo> <forms> accum]
+	    (if (null? <forms>)
+		accum
+	    (if (<= (size <forms>) 30)
+		(rcons accum
+		       (RX 'addPD* <sbo> & <forms>))
+		(add*-loop <sbo>
+			   (sub-obj <forms> 30 (- (size <forms>) 30))
+			   (rcons accum
+				  (RX 'addPD* <sbo>
+				      & (sub-obj <forms> 0 30)))))))]]
+  (defProc (build-add*s <sbo> <forms> & suffix)
+    (concat (add*-loop <sbo> <forms> []) suffix)))
+
+;;; (defSlots <proto> (sbo& <sbo>) & <forms>)
+;;; ==>
+;;; `(add* ,<sbo> ,& (gen-expander <forms> <proto> e))
+
+(defExpander (defSlots e)
+  (let* [[[<proto> & rest] (->tuple msg)]
+	 [[<sbo> <forms>]  (find-keyword1 'sbo& (RX 'sbo <proto>) rest)]]
+    (SqX & (build-add*s (e <sbo> e)
+			(xpnd-forms <proto> e [] & <forms>)
+			(Q <proto>)))))
+
+;;; (defMixin <mixinId> (extends& <parent>) (wrt& <proto>) & <forms>)
+;;; ==>
+;;; `(let [[new-sbo (new SBO ',<mixinId> (sbo ,<parent>))]]
+;;;    (seq (add ',<mixinId> new-sbo)
+;;;         (add* new-sbo ,& (gen-expander <forms> <proto>))))
+
+(defExpander (defMixin e)
+  (let* [[[<sum> rest]      (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest]      (find-keywordM 'details& #absent rest)]
+	 [[<id> & rest]     rest]
+	 [[<par> rest]      (find-keyword1 'extends& '(topProto Actor) rest)]
+	 [[<proto> <forms>] (find-keyword1 'wrt& '(topProto Actor) rest)]]
+    (new LetExpr
+	 (TX (TX 'new-sbo (RX 'new 'SBO (Q <id>) (RX 'sbo (e <par> e)))))
+	 (SqX (RX 'addD (Q <id>) 'new-sbo <sum> <det>)
+	      & (build-add*s 'new-sbo
+			     (xpnd-forms (e <proto> e) e [] & <forms>)
+			     (Q <id>))))))
+
+;;; helper for generator expanders
+
+(defProc (generator-expand msg e)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<symb> & rest]   rest]
+	 [[<c++-type> rest] (find-keyword1 'base& 'Actor rest)]
+	 [[par-proto rest] (find-keyword1 'extends&
+					  (RX ''topProto <c++-type>)
+					  rest)]
+	 [[<incls> rest]    (find-keyword 'includes& [] rest)]
+	 [[<slots> <forms>] (find-keyword 'slots& [] rest)]
+         [par-proto! (eval par-proto)]]
+    (new LetExpr
+	 (TX (TX (TX 'new-sbo 'new-proto)
+		 (RX 'gen <c++-type> (Q <symb>)
+		     (if (null? <incls>)
+			 (RX 'sbo par-proto)
+			 (RX 'new 'MIActor (RX 'rcons
+						(TX & (e <incls> e))
+						(RX 'sbo par-proto)))))))
+	 (SqX (RX 'addD (Q <symb>) 'new-proto Global <sum> <det>)
+	      (COMPILE
+	       (RX 'add* <symb>
+		   & (concat (fixup-contour par-proto!)
+			     (fixup-slots <slots> e))))
+	      & (build-add*s 'new-sbo (xpnd-forms 'new-proto e [] & <forms>)
+			     (Q <symb>))))))
+
+(defExpander (defActor e)  (generator-expand msg e))
+
+(defProc (anon-expand msg e & args)
+  (let* [[[<sum> rest] (find-keywordM 'summary& #absent (->tuple msg))]
+	 [[<det> rest] (find-keywordM 'details& #absent rest)]
+	 [[<symb> & rest]   rest]
+	 [[<c++-type> rest] (find-keyword1 'base& 'Actor rest)]
+	 [[par-proto rest] (find-keyword1 'extends&
+					  (RX ''topProto <c++-type>)
+					  rest)]
+	 [[<incls> rest]    (find-keyword 'includes& [] rest)]
+	 [[<slots> <forms>] (find-keyword 'slots& [] rest)]
+         [par-proto! (eval ((if (null? args) e (head args))
+			    par-proto e & (tail args)))]]
+    (new LetExpr
+	 (TX (TX (TX 'new-sbo 'new-proto)
+		 (RX 'gen <c++-type> (Q <symb>)
+		     (if (null? <incls>)
+			 (RX 'sbo ((if (null? args) e (head args))
+				   par-proto e & (tail args)))
+			 (RX 'new 'MIActor (RX 'rcons
+						(TX & (e <incls> e))
+						(RX 'sbo par-proto)))))))
+	 (SqX (RX 'add* 'new-proto
+		   & (concat (fixup-contour par-proto!)
+			     (fixup-slots <slots> e)))
+	      & (build-add*s 'new-sbo (xpnd-forms 'new-proto e [] & <forms>)
+			     'new-proto)))))
+
+(defExpander (actor e) (anon-expand msg e))
+
+;;; helpers for do constructs
+
+(defProc (split-forms triples e)
+  (if (null? triples)
+      ['[]'[][]]
+      (let* [[[<inits> <steps> <set!s>] [[] [] []]]
+	     [[triple & rest] (->tuple triples)]
+	     [[<id> <init> <step>] (->tuple triple)]]
+	(label loop1
+	  (seq (set! <inits>
+		     (rcons <inits> (TX <id> (e <init> e))))
+	       (set! <steps>
+		     (rcons <steps>
+			     (TX (concat '$$$new- <id>) (e <step> e))))
+	       (set! <set!s>
+		     (rcons <set!s>
+			     (new SetExpr <id> (concat '$$$new- <id>))))
+	       (if (null? rest)
+		   [(new TupleExpr '[] <inits>)
+		    (new TupleExpr '[] <steps>) <set!s>]
+		   (let [[[<id>' <init>' <step>'] (->tuple (head rest))]]
+		     (seq
+		      (set! <id> <id>')
+		      (set! <init> <init>')
+		      (set! <step> <step>')
+		      (set! rest (tail rest))
+		      (goto loop1)))))))))
+
+(defProc (split-*forms triples e)
+  (if (null? triples)
+      ['[]'[][]]
+      (let* [[[<inits> <set!s>] [[] []]]
+	     [[triple & rest] (->tuple triples)]
+	     [[<id> <init> <step>] (->tuple triple)]]
+	(label loop1
+	  (seq (set! <inits>
+		     (rcons <inits> (TX <id> (e <init> e))))
+	       (set! <set!s>
+		     (rcons <set!s> (new SetExpr <id> (e <step> e))))
+	       (if (null? rest)
+		   [(new TupleExpr '[] <inits>) <set!s>]
+		   (let [[[<id>' <init>' <step>'] (->tuple (head rest))]]
+		     (seq
+		      (set! <id> <id>')
+		      (set! <init> <init>')
+		      (set! <step> <step>')
+		      (set! rest (tail rest))
+		      (goto loop1)))))))))
+
+(defProc (build-ifs cond/rslts <else> e)
+  (if (null? cond/rslts)
+      <else>
+      (let [[[<cond> <rslt>] (split (head cond/rslts) 0)]
+	    [rest (tail cond/rslts)]]
+	(new IfExpr
+	     (e <cond> e)
+	     (new BlockExpr (e (->tuple <rslt>) e))
+	     (if (null? rest)
+		 <else>
+		 (build-ifs rest <else> e))))))
+
+;;; (cond [<expr1> <expr2>] ... (else <expr3>))
+;;; ==>
+;;; (if <expr1> <expr2> (if ... <expr3>)) and <expr3> defaults to #niv
+
+(defExpander (cond e)
+  (let [[[<else> cond/rslts] (find-keyword 'else [#niv] (->tuple msg))]]
+    (build-ifs cond/rslts (new BlockExpr (e <else> e)) e)))
+
+;;; (do [[<id1> <expr1> <expr2>] ...] [[<expr3> <expr4>] ...] & <forms>)
+;;; ==>
+;;; (let [[<id1> <expr1>] ...]
+;;;   (label $$$do-label$$$
+;;;     (if <expr3>
+;;;         <expr4>
+;;;     (if ...
+;;;         (seq (block & <forms>)
+;;;              (let [[$$$new$$$-<id1> <expr2>] ...]
+;;;                (seq (set! <id1> $$$new$$$-<id1>)
+;;;                     ...
+;;;                     (goto $$$do-label$$$)))) ...))))
+
+(defExpander (do e)
+  (let* [[[init-step cond/rslts & <forms>] (->tuple msg)]
+	 [[<inits> <steps> <set!s>] (split-forms init-step e)]]
+    (new LetExpr
+	 <inits>
+	 (new LabelExpr '$$$do-label$$$
+	      (build-ifs (->tuple cond/rslts)
+			 (let [[lxpr
+				(new LetExpr <steps>
+				     (new SeqExpr
+					  (rcons <set!s>
+						 (new GotoExpr
+						      '$$$do-label$$$))))]]
+			   (if (null? <forms>)
+			       lxpr
+			       (SqX (new BlockExpr (e <forms> e))
+				    lxpr)))
+			 e)))))
+
+;;; (do* [[<id1> <expr1> <expr2>] ...] [[<expr3> <expr4>] ...] & <forms>)
+;;; ==>
+;;; (let [[<id1> <expr1>] ...]
+;;;   (label $$$do-label$$$
+;;;     (if <expr3>
+;;;         <expr4>
+;;;     (if ...
+;;;         (seq (block & <forms>)
+;;;              (set! <id1> <expr2>)
+;;;              ...
+;;;              (goto $$$do-label$$$)) ...))))
+
+(defExpander (do* e)
+  (let* [[[init-step cond/rslts & <forms>] (->tuple msg)]
+	 [[<inits> <set!s>] (split-*forms init-step e)]]
+    (new LetExpr
+	 <inits>
+	 (new LabelExpr '$$$do-label$$$
+	      (build-ifs (->tuple cond/rslts)
+			 (new SeqExpr
+			      (concat
+			       (if (null? <forms>)
+				   []
+				   [(new BlockExpr (e <forms> e))])
+			       (rcons <set!s>
+				      (new GotoExpr '$$$do-label$$$))))
+			 e)))))
+
+(defExpander (break e) (new GotoExpr '$$$do-label$$$))
+
+;;; helper for iterate
+
+(defProc (split-inits init-forms)
+  (do* [[args  [] (rcons args (nth hd 0))]
+	[exprs [] (rcons exprs (nth hd 1))]
+	[hd (head init-forms) (head tl)]
+	[tl (tail init-forms) (tail tl)]]
+       [((null? hd) [args exprs])]))
+
+;;; (iterate <id> [[<var1> <expr1>] ...] & <forms>)
+;;; ==>
+;;; (letrec [[<id> (proc [<var1> ...] & <forms>)]]
+;;;   (<id> <expr1> ...))
+
+(defExpander (iterate e)
+  (let* [[[<id> <inits> & <forms>] (->tuple msg)]
+	 [[<args> <exprs>] (split-inits (->tuple <inits>))]]
+    (new LetrecExpr
+	 (TX (TX <id> (PX (TX & <args>) & (e <forms> e))))
+	 (RX <id> & (e <exprs> e)))))
+
+
+
+;;; definitions for where and super
+
+(defOprn (where-obo client <key>) (sbo& Meta-SBO) pure&
+  (if (absent? (get-obo (self) client <key>))
+      (where-obo (meta (parent client)) (parent client) <key>)
+      client))
+
+(defOprn (where-obo c <key>) (sbo& (meta TopEnv)) pure&
+   #absent)
+
+(defOprn (where-obo c <key>) (sbo& (meta MIActor)) pure&
+   (where-obo c <key>))
+
+(defPure MIActor (where-obo <key>)
+  (if (null? cpl)
+      #absent
+      (do* [[o (head cpl) (head r)]
+	    [r (tail cpl) (tail r)]]
+	   [((not (absent? (get-obo (meta o) o <key>)))
+	     o)
+	    ((null? r)
+	     (where-obo (meta (parent o)) (parent o) <key>))])))
+
+(defOprn (where! c <key>) (sbo& Meta-SBO) pure&
+  (where-obo (self) c <key>))
+
+(defOprn (where! client <key>) (sbo& (meta MIActor)) pure&
+  (if (absent? (get-obo (self) client <key>))
+      (where! (meta (parent client)) (parent client) <key>)
+      client))
+
+;;; (where <key> <obj>)
+
+(defSync (where <obj>)
+  (where! (meta <obj>) <obj> (self)))
+
+
+(defSync true-parent identity)
+
+(defSync (parent-wrt x)
+  (if (same? x (self))
+      (true-parent (parent x))
+      (parent-wrt (parent (self)) x)))
+
+(defMethod MIActor (true-parent) (head cpl))
+
+(defMethod MIActor (parent-wrt x)
+  (if (null? cpl)
+      (self)
+      (do* [[ob (head cpl) (head rest)]
+	    [rest (tail cpl) (tail rest)]]
+	   [((same? ob x)
+	     (if (null? rest) (true-parent (parent ob)) (head rest)))
+	    ((null? rest)
+	     (true-parent (parent ob)))])))
+
+(defExpander (s! e)
+  (let [[[<base> <oprn> <msg>] (split msg 2)]]
+    (new RequestExpr
+	 (RX 'lookup (e <oprn> e) (e <base> e))
+	 (e <msg> e))))
+
+(defGenExpander (shared <proto> e)
+  (let* [[[<symb> <expr>] (->tuple msg)]
+	 [m (RX 'run (RX 'compile (RX 'MX ''[x]
+	      (RX 'RX ''set-obo (RX 'meta (RX 'sbo <proto>)) (RX 'sbo <proto>)
+		  (Q (Q <symb>)) ''x))))]]
+	   [(Q <symb>) (e <expr> e)  (Q (concat <symb> ':)) m]))
+
+;;--------------------------------------------------------------------------
+;; (with-optional-args (((arg1 val1) ... (argn valn)) rest) body)
+;; =>
+;; (let* [[arg1 (if (> (size rest) 0) (head rest) val1)]
+;;        ...
+;;        [argn (if (> (size rest) (- n 1)) (nth rest (- n 1)) valn)]]
+;;   body)
+;;
+;; useful for parsing optional arguments coming in from (mumble & rest)
+;; patterns; e.g.
+;;
+;; (defProc foo (x & rest)
+;;   (with-optional-args (((width 5) (height 100) (visibility t)) rest)
+;;     (make-a-screen-widget
+;;       'width width
+;;       'height height
+;;       'visibility visibility)))
+;;
+;;---------------------------------------------------------------------------
+
+(defExpander (with-optional-args e)
+  (let* [[[<args&vals&acts> & body*] (->tuple msg)]
+	 [<args&vals> ('trgt <args&vals&acts>)]
+	 [args&vals [('trgt <args&vals>) & (->tuple ('msg <args&vals>))]]
+	 [rest (head (->tuple ('msg <args&vals&acts>)))]]
+    (iterate loop [[args/vals args&vals]
+		   [actuals rest]]
+      (if (null? args/vals)
+	  (new BlockExpr (mapx body* (proc [xpr] (e xpr e))))
+	  (new LetExpr
+	       (let* [[argval (head args/vals)]
+		      [var (e ('trgt argval) e)]]
+		 (TX (TX var (new IfExpr (RX 'null? actuals)
+				  (e (head (->tuple ('msg argval))) e)
+				  (RX 'head actuals)))))
+	       (loop (tail args/vals) (RX 'tail actuals)))))))
+
+;;(defProc (foo x y z & rest)
+;;  (with-keyed-args (((width 5) (height 100) (visibility #t)) rest) mumble))
+
+;; The code below makes it possible to pass in keyed arguments as in
+;; (foo 1 2 3 (keyarg 'height 4) (keyarg width 5) ...)
+
+(add 'keyarg RX)
+
+(defExpander (with-keyed-args e)
+  (let* [[[<args&vals&acts> & body*] (->tuple msg)]
+	 [<args&vals> ('trgt <args&vals&acts>)]
+	 [args&vals [('trgt <args&vals>) & (->tuple ('msg <args&vals>))]]
+	 [rest (head (->tuple ('msg <args&vals&acts>)))]]
+    (iterate loop [[args/vals args&vals]
+		   [actuals rest]]
+      (if (null? args/vals)
+	  (new BlockExpr (mapx body* (proc [xpr] (e xpr e))))
+	  (new LetExpr
+	       (let* [[argval (head args/vals)]
+		      [var (e ('trgt argval) e)]
+		      [varxpr (TX var)]]
+		 (seq
+		  (add 'rest '*rest* varxpr)		  
+		  (TX (TX varxpr
+			  (RX 'find-keyword1
+			      (Q var)
+			      (e (head (->tuple ('msg argval))) e)
+			      actuals)))))
+	       (loop (tail args/vals) (RX 'tail actuals)))))))
+
+;;; expander for comments
+
+(defExpander (comment e) #niv)
+
+;;; definitions for accessing documentation and cross-reference bindings
+
+(defOprn (sbo& Meta-SBO) (slot-attr! slot attr) pure&
+  (let [[loc (tbl-get (lookup 'map (self)) slot)]]
+    (if (absent? loc)
+	#absent
+	(let [[tbl (get-obo (meta (self)) (self) loc)]]
+	  (if (absent? tbl)
+	      #absent
+	      (if (type? RblTable tbl)
+		  (tbl-get tbl attr)
+		  tbl))))))
+
+(defOprn (sbo& Meta-SBO) (document!: slot sum doc & more)
+  (if DOCS-ON-LINE?
+      (seq (update!)
+	   (slot-attr!: (self) slot 'summary sum)
+	   (slot-attr!: (self) slot 'detail  doc))
+      (update!)))
+
+(defOprn (sbo& Meta-SBO) (summary! slot) pure&
+  (slot-attr! (self) slot 'summary))
+
+(defOprn (sbo& Meta-SBO) (detail! slot) pure&
+  (slot-attr! (self) slot 'detail))
+
+(defSync (slot-attr: slot & r)
+  (slot-attr!: (meta (where slot (self))) slot & r))
+
+(defSync (slot-attr slot & r)
+  (slot-attr! (meta (where slot (self))) slot & r))
+
+(defOprn (sbo& Operation-SBO) (proto& Oprn) (bindings)
+  pure& bindings)
+
+(defSync binding #absent)
+
+(defMethod Code (binding) (nth litvec 0))
+
+(defSync (sbo& Procedural-SBO) (binding) ('id (self)))
+
+(defSync (binding-pair) [#absent (self)])
+
+(defMethod Code (binding-pair) (binding-pair (binding (self))))
+
+(defSync (sbo& Procedural-SBO) (binding-pair) pure& ('id (self)))
+
+(defSync source-file 'unKnown)
+
+(defSync (sbo& Procedural-SBO) (source-file)
+  (let [[[k o] (binding-pair (self))]]
+    (slot-attr! (meta o) k 'defining-file)))
+
+(defSync (bindings-message)
+  (let [[[key obj] (binding-pair (self))]]
+    (if (absent? key)
+	["\n in " obj nl]
+	["\n in " key ", on " obj nl])))
+
+;;; the following returns its first argument if that argument is not the
+;;; distinguished actor #absent otherwise it returns its second argument
+
+(defSync (ifabs? x) (self))
+
+(defSync (sbo& (sbo #absent)) (ifabs? x) x)
+
+(defOprn (down) (self))
+(defMethod QuoteExpr (down) expr)
+
+;;; expanders that provide a kind of read-readable interpretation to all
+;;; printed results
+
+(defActor FauxObj (slots& info []))
+
+(defActor FauxOprn (slots& nm Symbol))
+
+(defExpander (FO e)
+  (RX 'new 'FauxObj (e msg e)))
+
+(defExpander (FOp e)
+  (let* [[nm (head msg)]
+	 [y  (lookup nm)]]
+    (if (or (type? y Oprn) (type? y Sync))
+	nm
+	(RX 'new 'FauxOprn nm))))
+
+(defExpander (OpOpOprn e)
+  (let [[[key trgt] (->tuple msg)]]
+    (RX 'add key
+	(RX 'new
+	    'Oprn
+	    (RX 'concat (RX ''id key) ''- (RX ''id trgt)))
+	trgt)))
+
+(defExpander (OpOpSync e)
+  (let [[[key trgt] (->tuple msg)]]
+    (RX 'add key
+	(RX 'new
+	    'Sync
+	    (RX 'concat (RX ''id key) ''- (RX ''id trgt)))
+	trgt)))

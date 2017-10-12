@@ -1,0 +1,84 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; Clock interface
+
+(defStructure Timeval
+  u_long	secs
+  u_long	usecs)
+
+(defPure Timeval (- tp0)
+  (if (fx>= (. (self) usecs) (. tp0 usecs))
+      [(fx- (. (self) secs) (. tp0 secs))
+       (fx- (. (self) usecs) (. tp0 usecs))]
+      [(fx- (fx- (. (self) secs) (. tp0 secs)) 1)
+       (fx- (fx+ 1000000 (. (self) usecs)) (. tp0 usecs))]))
+
+(defForeign (tod (ref Timeval) (ref Timeval)) int (name& _gettimeofday))
+
+(defProc (et x)
+  (let [[tp0 (new Timeval)]
+	[tpn (new Timeval)]
+	[cob (compile (expand x))]]
+    (seq (tod tp0 (null Timeval))
+	 (run cob)
+	 (tod tpn (null Timeval))
+	 (- tpn tp0))))
+
+(defForeign (alarm int) int)
+
+(let [[a (arch *config*)]]
+  (if (or (same? 'sun4 a) (same? 'sun3 a))
+      (defForeign (ualarm u_long u_long) u_long)))
+
+(defActor Clock
+  (method (init)
+    (seq (sig-catch SIGALRM (self))
+	 (update!)))
+  (pure (signal n)
+    (display "Alarm event\n")))
+
+
+(defStructure Unix_Time
+  int		tm_sec				;
+  int		tm_min				;
+  int		tm_hour				;
+  int		tm_mday				;
+  int		tm_mon				;
+  int		tm_year				;
+  int		tm_wday				;
+  int		tm_yday				;
+  int		tm_isdst			;
+  (ref0 char)	tm_zone				;
+  long		tm_gmtoff			;
+  )
+
+(defForeign (_time (ref long)) int (name& _time))
+
+(defForeign (localtime (ref long)) (ref Unix_Time))
+
+(defForeign (gmtime (ref long)) (ref Unix_Time))
+
+(defForeign (asctime (ref Unix_Time)) String)
+
+(defForeign (ctime (ref long)) String)

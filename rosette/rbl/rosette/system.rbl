@@ -1,0 +1,1111 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;; basic--temporaries, name changes, and basic operations
+
+(add 'Character-SBO Char-SBO)
+
+;;; setup global "print" to a method that calls prim-print initially.
+;;; This is done to ensure that later definitions that refer to print
+;;; will be able to refer to the new definition of print that occurs
+;;; later in io-system.rbl
+
+(add 'print (method [x] (prim-print x)))
+(add 'nl #\\n)
+
+;;; INIT SYNCOPRNs
+;;; the following operations and actors are pre-defined or defined earlier,
+;;; but not yet initialized and are hence locked.
+
+(init MIActor)
+(init #absent)
+(init eof)
+(init incomplete-io)
+(init read-error)
+
+;;; add prototypical entities to Global.  These are linked by the underlying
+;;; runtime system to the appropriate SBOs.  The "new" protocols are typically
+;;; used w.r.t. these prototypes.
+
+(let [[tp (init (clone-to Actor (init (clone (meta Actor))) Top))]]
+  (add 'topProto tp (parent Actor)))
+(add 'Meta        (new (meta Actor)))
+(add 'IndexedMeta (new (meta [1])))
+
+(parent: formals-mismatch Sync-SBO)
+(parent: missing-method   Sync-SBO)
+(parent: missing-binding  Sync-SBO)
+(parent: runtime-error    Sync-SBO)
+(parent: vm-error         Sync-SBO)
+
+;;; add Global bindings for prototypical objects representing classes
+;;; native to the virtual machine
+
+(add 'Bool        #f) (add 'Bool-SBO RblBool-SBO)
+(add 'Character   #\a)
+(add 'Fixnum      1)
+(add 'Float       1.0)
+
+;;; (add 'String      "a string") now in BigBang.cc
+;;; (add 'Tuple       [1]) now in BigBang.cc
+(add 'Nil         [])
+(add 'ByteVec	  (bytevec-new 0))
+(add 'Word16Vec	  (word16vec-new 0))
+(add 'Word32Vec	  (word32vec-new 0))
+
+(add 'Istream     stdin)
+(add 'Ostream     stdout)
+
+(add 'Monitor     (monitor-new))
+(add 'Timer       (lookup 'timer Monitor))
+
+(add 'BlockExpr   '(block <expr> <expr> ...))
+(add 'EmptyExpr   (lookup 'false-branch '(if a b)))
+(add 'FreeExpr    '(free [<id> ...] <form> ...))
+(add 'GotoExpr    '(goto <label>))
+(add 'IfExpr      '(if <expr> <form> <form>))
+(add 'LabelExpr   '(label <id> <form> ...))
+(add 'LetExpr     '(let [[<id> <expr>]] <forms> ...))
+(add 'LetrecExpr  '(letrec [[<id> <expr>]] <form> ...))
+(add 'MethodExpr  '(method [<id> ...] ...))
+(add 'NilExpr     '[])
+(add 'ProcExpr    '(proc [<id> ...] ...))
+(add 'QuoteExpr   ''a)
+(add 'RMethodExpr (reflectivemethodexpr-basic-new '[<id> ...] '...))
+(add 'RequestExpr '(<trgt> & <msg>))
+(add 'SendExpr    '(send <trgt> & <msg>))
+(add 'SeqExpr     '(seq <form> ...))
+(add 'SetExpr     '(set! <id> <expr>))
+(add 'TupleExpr   '[1 ...])
+
+(add 'Prim        identity)
+
+(add 'CodeVec     (lookup 'codevec Code))
+(add 'Template    (prim-nth (lookup 'litvec Code) formals-offset))
+
+(add 'EmptyMbox   (mbox (init (clone Actor))))
+(add 'LockedMbox  (mbox (clone Actor)))
+(add 'QueueMbox   (let [[obj (clone Actor)]]
+		    (seq (block #niv (send Oprn obj)) (mbox obj))))
+(add 'MboxQueue   (lookup 'queue QueueMbox))
+(add 'Ctxt        (tuple-head (lookup 'elems MboxQueue)))
+
+(add 'Queue       (queue-new))
+(add 'RblStack    (stack-new))
+
+(add 'Location    (lexvar 0 0 #f))
+;(add 'ForeignFunction (ff-new '_malloc [2] 15))
+(add 'Reader      (lookup 'reader stdin))
+(add 'Parser	  (parser-new #niv))
+
+;;; fixup Ctxt so that instead of the field self we have the field self!
+;;; so as to not confuse the compiler with whether we are accessing the
+;;; slot named self of a Ctxt (from within a method on Ctxt(s)) or the
+;;; Ctxt itself.
+
+(let [[mc (meta Ctxt)]]
+  (set-obo (meta mc) mc 'map
+	   (let* [[m (lookup 'map mc)]
+		  [l (tbl-get m 'self)]]
+	     (seq (tbl-del m 'self)
+		  (tbl-add m 'self! l)
+		  m))))
+
+;;; Generally, applying -> to an actor returns an operation that in turn
+;;; may be used on other actors to coerce them to the former actor:
+;;;
+;;;        ((-> String) 'abc) ==> "abc"
+;;;
+ 
+(add-unique Oprn '->)
+
+(add -> (new Oprn '->char)   Character-SBO)
+(add -> (new Oprn '->fixnum) Fixnum-SBO)
+(add -> (new Oprn '->fl)     Float-SBO)
+(add -> ->string 		  String-SBO)
+(add -> (new Oprn '->symbol) Symbol-SBO)
+(add -> (new Oprn '->tuple)  Tuple-SBO)
+
+(add '->char   (-> Character-SBO))
+(add '->fixnum (-> Fixnum-SBO))
+(add '->float  (-> Float-SBO))
+(add '->string (-> String-SBO))
+(add '->symbol (-> Symbol-SBO))
+(add '->tuple  (-> Tuple-SBO))
+
+(add ->string object->string Top-SBO)
+(add ->symbol object->symbol Top-SBO)
+
+(add ->fixnum ch->fx Character-SBO)
+(add ->fixnum string->fx String-SBO)
+(add ->char   fx->ch Fixnum-SBO)
+
+;; new-oprns
+
+(add-unique Oprn 'role)
+(add-unique Sync 'role-string)
+
+(add-unique Sync 'newN)
+(add-unique Sync 'new*)
+(add-unique Sync 'gen)  ;; used on Actor
+
+(add-unique Sync 'add*)
+
+(add-unique Sync 'ct-proto)
+(add-unique Sync 'ct-parent)
+
+(add-unique Oprn 'sbo?)
+(add-unique Oprn 'sbo-obo)
+
+;; new for Tuples
+(add new  tuple-new   Tuple-SBO)
+(add newN tuple-new-n Tuple-SBO)
+
+;; add* adds a whole mess of slots at once to an actor
+
+(add add*
+     (method [& k/v]
+       (if (null? k/v)
+	   (self)
+	   (letrec [[loop (proc [k v & r]
+			    (seq (add k v (self))
+				 (if (null? r)
+				     (self)
+				     (loop & r))))]]
+	     (loop & k/v))))
+     Top-SBO)
+
+;; index-oprns
+
+(add-unique Oprn 'concat)
+(add-unique Oprn 'cons*)
+(add-unique Oprn 'head)
+(add-unique Oprn 'map)
+(add-unique Oprn 'rcons)
+(add-unique Oprn 'set-nth)
+(add-unique Oprn 'size)
+(add-unique Oprn 'split)
+(add-unique Oprn 'sub-obj)
+(add-unique Oprn 'tail)
+(add-unique Oprn 'walk)
+(add-unique Oprn 'xchg)
+(add-unique Oprn 'mem?)
+(add-unique Oprn 'token)
+
+;; hand build Indexable-SBO so that we get a place to put some generic
+;; methods on indexable actors.  This is early in the boot because we
+;; want to put walk in the system so that it can be used during booting
+
+(add 'Indexable-SBO
+     (init (clone-to Actor (init (clone (meta Actor))) Top-SBO)))
+
+;; set parents of various indexable actor sbos to include Indexable-SBO
+
+(parent: Tuple-SBO     Indexable-SBO)
+(parent: String-SBO    Indexable-SBO)
+(parent: ByteVec-SBO   Indexable-SBO)
+(parent: Word16Vec-SBO Indexable-SBO)
+(parent: Word32Vec-SBO Indexable-SBO)
+
+(parent: TupleExpr-SBO
+	 (new MIActor [Indexable-SBO Expr-SBO]))
+(add-child Indexable-SBO TupleExpr-SBO)
+(add-child Expr-SBO      TupleExpr-SBO)
+
+(parent: BlockExpr-SBO
+	 (new MIActor [Indexable-SBO Expr-SBO]))
+(add-child Indexable-SBO BlockExpr-SBO)
+(add-child Expr-SBO      BlockExpr-SBO)
+
+(parent: SeqExpr-SBO
+	 (new MIActor [Indexable-SBO Expr-SBO]))
+(add-child Indexable-SBO SeqExpr-SBO)
+(add-child Expr-SBO      SeqExpr-SBO)
+ 
+;; initialize operations on indexable actors
+
+(add* Indexable-SBO
+      size    prim-size
+      nth     prim-nth
+      set-nth prim-set-nth
+      sub-obj prim-sub-object
+      ->tuple prim->tuple)
+
+;; initialize operations with primitive methods on Tuples
+
+(add* Tuple-SBO
+      concat  tuple-concat
+      rcons   tuple-rcons
+      head    tuple-head
+      tail    tuple-tail
+      xchg    tuple-xchg
+      cons*   tuple-cons*
+      mem?    tuple-mem?
+      )
+
+;; new for ByteVecs
+(add* ByteVec-SBO
+      new (method [& args]
+	    (let [[bv (bytevec-new (prim-size args))]
+		  [i (fx- (prim-size args) 1)]]
+	      (label loop
+		(if (fx< i 0)
+		    (parent: bv (parent (self)))
+		    (seq (prim-set-nth bv i (prim-nth args i))
+			 (set! i (fx- i 1))
+			 (goto loop))))))
+      newN (method [n] (parent: (bytevec-new n) (parent (self))))
+      )
+
+;; new for Word16Vecs
+(add* Word16Vec-SBO
+      new (method [& args]
+	    (let [[bv (word16vec-new (prim-size args))]
+		  [i (fx- (prim-size args) 1)]]
+	      (label loop
+		(if (fx< i 0)
+		    (parent: bv (parent (self)))
+		    (seq (prim-set-nth bv i (prim-nth args i))
+			 (set! i (fx- i 1))
+			 (goto loop))))))
+      newN (method [n] (parent: (word16vec-new n) (parent (self))))
+      )
+
+;; new for Word32Vecs
+(add* Word32Vec-SBO
+      new (method [& args]
+	    (let [[bv (word32vec-new (prim-size args))]
+		  [i (fx- (prim-size args) 1)]]
+	      (label loop
+		(if (fx< i 0)
+		    (parent: bv (parent (self)))
+		    (seq (prim-set-nth bv i (prim-nth args i))
+			 (set! i (fx- i 1))
+			 (goto loop))))))
+      newN (method [n] (parent: (word32vec-new n) (parent (self))))
+      )
+
+
+;; initialize operations with primitive methods on strings
+
+(add* String-SBO
+      new     (method [s] (parent: s (parent (self))))
+      newN    (method [n] (parent: (string-new n) (parent (self))))
+      concat  object->string
+      mem?    string-mem?
+      token   string-get-token
+      )
+
+(add* Symbol-SBO
+      concat  object->symbol)
+
+;; add operation to walk indexable structures
+
+(add walk
+     (method [f & args]
+       (let [[n 0]
+	     [N (prim-size (self))]]
+	 (label loop
+	   (if (fx= n N)
+	       (block (send update!) (self))
+	       (seq
+		(f n (prim-nth (self) n) & args)
+		(set! n (fx+ n 1))
+		(goto loop))))))
+     Indexable-SBO)
+
+;; add map method on indexable structures
+
+(add map
+     (method [f & args]
+       (let [[n 0]
+	     [N (prim-size (self))]
+	     [tpl (tuple-new-n [] (prim-size (self)) #niv)]]
+	 (label loop
+	   (if (fx= n N)
+	       (block (send update!) tpl)
+	       (seq
+		(prim-set-nth tpl n (f n (prim-nth (self) n) & args))
+		(set! n (fx+ n 1))
+		(goto loop))))))
+     Indexable-SBO)
+
+;; add mapx method on indexable structures
+;; differs from map in that the index is not passed to f
+
+(add-unique Oprn 'mapx)
+
+(add mapx
+     (method [f & args]
+       (let [[n 0]
+	     [N (prim-size (self))]
+	     [tpl (tuple-new-n [] (prim-size (self)) #niv)]]
+	 (label loop
+	   (if (fx= n N)
+	       (block (send update!) tpl)
+	       (seq
+		(prim-set-nth tpl n (f (prim-nth (self) n) & args))
+		(set! n (fx+ n 1))
+		(goto loop))))))
+     Indexable-SBO)
+
+(add 'apply2
+     (named-proc apply2 [a2 f a1 & args] (f a1 a2 & args)))
+
+;; kind
+
+;; the {kind} slot is bound to a symbol that represents the kind of thing
+;; being modeled by an entity.  It is typically placed in an SBO and thus
+;; represents what the methods and other values in the SBO model as well
+;; as what the entities that inherit from the SBO model
+ 
+(add kind 'Global             Global)
+
+(add kind '?                  Top-SBO)
+(add kind 'Atom               Atom-SBO)
+(add kind 'Expr               Expr-SBO)
+(add kind 'Indexable          Indexable-SBO)
+(add kind 'Mbox               Mbox-SBO)
+(add kind 'META               Meta-SBO)
+(add kind 'Operation          Operation-SBO)
+(add kind 'Number             Number-SBO)
+(add kind 'Procedural	      Procedural-SBO)
+(add kind 'Stream             Stream-SBO)
+(add kind 'Sysval	      Sysval-SBO)
+
+(add kind 'TopEnv             TopEnv-SBO)
+
+(add kind '\#absent           Absent-SBO)
+(add kind 'Actor              Actor-SBO)
+(add kind 'AttrNode           AttrNode-SBO)
+(add kind 'BlockExpr          BlockExpr-SBO)
+(add kind 'Bool               Bool-SBO)
+(add kind 'ByteVec            ByteVec-SBO)
+(add kind 'Character          Character-SBO)
+(add kind 'Code               Code-SBO)
+(add kind 'CodeBuf            CodeBuf-SBO)
+(add kind 'CodeVec            CodeVec-SBO)
+(add kind 'ComplexPattern     ComplexPattern-SBO)
+(add kind 'CompoundPattern    CompoundPattern-SBO)
+(add kind 'ConstPattern       ConstPattern-SBO)
+(add kind 'Ctxt               Ctxt-SBO)
+(add kind 'EmptyMbox          EmptyMbox-SBO)
+(add kind '\#eof              Eof-SBO)
+(add kind 'Fixnum             Fixnum-SBO)
+(add kind 'Float              Float-SBO)
+(add kind 'ForeignFunction    ForeignFunction-SBO)
+(add kind 'FreeExpr           FreeExpr-SBO)
+(add kind 'GotoExpr           GotoExpr-SBO)
+(add kind '\#incomplete-io    Incomplete-IO-SBO)
+(add kind 'IdPattern          IdPattern-SBO)
+(add kind 'IdAmperRestPattern IdAmperRestPattern-SBO)
+(add kind 'IdVecPattern       IdVecPattern-SBO)
+(add kind 'IfExpr             IfExpr-SBO)
+(add kind 'IndexedMeta        IndexedMeta-SBO)
+(add kind 'Istream            Istream-SBO)
+(add kind 'LabelExpr          LabelExpr-SBO)
+(add kind 'LabelTable         LabelTable-SBO)
+(add kind 'LetExpr            LetExpr-SBO)
+(add kind 'LetrecExpr         LetrecExpr-SBO)
+(add kind 'Location	      Location-SBO)
+(add kind 'LockedMbox         LockedMbox-SBO)
+(add kind 'Meta               StdMeta-SBO)
+(add kind 'Method             StdMthd-SBO)
+(add kind 'MethodExpr         MethodExpr-SBO)
+(add kind 'RMethodExpr	      RMethodExpr-SBO)
+(add kind 'MIActor            MIActor-SBO)
+(add kind 'Monitor            Monitor-SBO)
+(add kind '\#niv              Niv-SBO)
+(add kind 'Actor              Actor-SBO)
+(add kind 'Oprn               Oprn-SBO)
+(add kind 'Ostream            Ostream-SBO)
+(add kind 'Pattern            Pattern-SBO)
+(add kind 'Prim               Prim-SBO)
+(add kind 'Proc               Proc-SBO)
+(add kind 'ProcExpr           ProcExpr-SBO)
+(add kind 'Queue              Queue-SBO)
+(add kind 'MboxQueue	      MboxQueue-SBO)
+(add kind 'QueueMbox          QueueMbox-SBO)
+(add kind 'QuoteExpr          QuoteExpr-SBO)
+(add kind 'Reader	      Reader-SBO)
+(add kind 'Parser	      Parser-SBO)
+(add kind '\#read-error	      ReadError-SBO)
+(add kind 'RequestExpr        RequestExpr-SBO)
+(add kind 'RMethod	      RMethod-SBO)
+(add kind 'SendExpr           SendExpr-SBO)
+(add kind 'SeqExpr            SeqExpr-SBO)
+(add kind 'SetExpr            SetExpr-SBO)
+(add kind 'RblStack           RblStack-SBO)
+(add kind 'String             String-SBO)
+(add kind 'Symbol             Symbol-SBO)
+(add kind 'Sync           Sync-SBO)
+(add kind 'RblTable           RblTable-SBO)
+(add kind 'Template           Template-SBO)
+(add kind 'Timer              Timer-SBO)
+(add kind 'Tuple              Tuple-SBO)
+(add kind 'TupleExpr          TupleExpr-SBO)
+(add kind 'Word16Vec          Word16Vec-SBO)
+(add kind 'Word32Vec          Word32Vec-SBO)
+
+(seq (parent: Char (prim-new-SBO (parent Char) 'Char (parent Char)))
+	 (mapx ['GenericDescriptor
+		'NullDescriptor
+		'AtomicDescriptor
+		'CStructure
+		'CArray
+		'CharArray
+		'CRef
+		'CharRef
+		'CRef0
+		'CharRef0
+		'CUnion]
+	       (proc [x] (add kind x (parent (lookup x))))) )    
+
+
+;; sbo/proto-lists
+
+;; helper proc for generating sbo names
+(add 'sbo-id (proc [id]
+	       (->symbol (concat (->string id) "-SBO"))))
+
+;; build a list of the initial SBOs.  This will be used to perform
+;; various nefarious operations to set things up
+
+(add 'AbstractSBOs
+     [Atom-SBO   Expr-SBO      Indexable-SBO Mbox-SBO    Meta-SBO
+		 Number-SBO Operation-SBO Pattern-SBO   Stream-SBO  Top-SBO
+		 Procedural-SBO
+		 & (mapx ['GenericDescriptor 'NullDescriptor
+			      'AtomicDescriptor  'CStructure
+			      'CArray 'CharArray 'CRef 'CharRef
+			      'CRef0  'CharRef0 'CUnion]
+			     (proc [x] (parent (lookup x))))
+		 ])
+
+(add 'ConcreteSBOs
+     [TopEnv-SBO       Actor-SBO      AttrNode-SBO       BlockExpr-SBO
+      Bool-SBO         ByteVec-SBO    Character-SBO      Code-SBO
+      CodeBuf-SBO      CodeVec-SBO    ComplexPattern-SBO CompoundPattern-SBO
+      ConstPattern-SBO Ctxt-SBO       Eof-SBO            Fixnum-SBO
+      EmptyMbox-SBO    FreeExpr-SBO   Float-SBO          GotoExpr-SBO
+      IdPattern-SBO    IdAmperRestPattern-SBO            IdVecPattern-SBO
+      IfExpr-SBO       Incomplete-IO-SBO		 IndexedMeta-SBO
+      LabelExpr-SBO    Monitor-SBO
+      LabelTable-SBO   LetExpr-SBO    LetrecExpr-SBO     Location-SBO
+      LockedMbox-SBO   Method-SBO     MethodExpr-SBO     Niv-SBO
+      Oprn-SBO         Prim-SBO       Proc-SBO           ProcExpr-SBO
+      Queue-SBO        MboxQueue-SBO  QueueMbox-SBO      QuoteExpr-SBO
+      Reader-SBO       ReadError-SBO  RequestExpr-SBO    RMethod-SBO
+      RMethodExpr-SBO  Parser-SBO
+      SendExpr-SBO     SeqExpr-SBO    SetExpr-SBO        StdMeta-SBO
+      String-SBO       Symbol-SBO     Sync-SBO           RblTable-SBO
+      Template-SBO     Timer-SBO      Tuple-SBO          TupleExpr-SBO
+      Word16Vec-SBO    Word32Vec-SBO  Istream-SBO        Ostream-SBO
+      MIActor-SBO      RblStack-SBO   ForeignFunction-SBO Sysval-SBO]
+     )
+
+(add 'AtomProtos
+     [Bool Character Fixnum Float #niv String Symbol Location])
+
+(add 'Objs-w-Id-Protos
+     [Prim Method Oprn Proc RMethod Sync])
+
+(add 'ExprProtos
+     [BlockExpr  GotoExpr   FreeExpr   IfExpr   LabelExpr
+      LetExpr    LetrecExpr MethodExpr ProcExpr QuoteExpr
+      RequestExpr RMethodExpr SendExpr SeqExpr  SetExpr])
+
+;; build SBOMeta-SBO which contains the behavior shared by all SBO metas
+
+(add 'SBOMeta-SBO
+     (init (clone-to Actor (init (clone (meta Actor))) Meta-SBO)))
+(add kind 'SBOMeta SBOMeta-SBO)
+(parent: (meta SBOMeta-SBO) SBOMeta-SBO)
+
+(add 'SBO-SBO
+     (init (clone-to Actor (init (clone (meta Actor))) Top-SBO)))
+(add kind 'SBO SBO-SBO)
+(parent: (meta SBO-SBO) SBOMeta-SBO)
+
+;;; (add 'SBO
+;;;      (init (clone-to Actor (init (clone (meta Actor))) SBO-SBO)))
+(meta: SBO (init (clone (meta Actor))))
+(parent: SBO SBO-SBO)
+(parent: (meta SBO) SBOMeta-SBO)
+(mbox: SBO EmptyMbox)
+
+;; sbo-methods
+
+;; sbo? is an operation on metas that ask a meta if its client is an
+;; entity that is in the role of an sbo within the system.
+ 
+(add  sbo? (method [x] (send update!) #f) Meta-SBO)
+(add  sbo? (method [x] (send update!) #t) SBOMeta-SBO)
+
+;; sbo-obo is a meta operation that requests the meta for a client to
+;; locate the "nearest" entity that is functioning as an sbo for
+;; the client.
+
+(add  sbo-obo
+      (method [x]
+	(send update!)
+	(if (sbo? (self) x)
+	    x
+	    (sbo-obo (meta (parent x)) (parent x))))
+      Top-SBO)
+
+;; sbo is a procedure that encapsulates the use of sbo-obo
+
+(add 'sbo (proc [x] (sbo-obo (meta x) x)))
+
+;; add atom sbos to Atom-SBO as needed
+
+(parent: Bool-SBO     Atom-SBO)
+(parent: Character-SBO     Atom-SBO)
+(parent: Niv-SBO      Atom-SBO)
+(parent: Symbol-SBO   Atom-SBO)
+(parent: Sysval-SBO   Atom-SBO)
+(parent: Location-SBO Atom-SBO)
+
+;; build AtomMeta-SBO to contain behavior shared by metas of the
+;; various kinds of atoms
+   
+(add 'AtomMeta-SBO
+     (init (clone-to SBO (init (clone (meta SBO))) StdMeta-SBO)))
+(add kind 'AtomMeta AtomMeta-SBO)
+   
+;; build Objs-w-IdMeta-SBO to hold behavior common to built-in actors
+;; that have an 'id slot
+
+(add 'Objs-w-IdMeta-SBO
+     (init (clone-to SBO (init (clone (meta SBO))) StdMeta-SBO)))
+(add kind 'Objs-w-IdMeta Objs-w-IdMeta-SBO)
+
+;; build ExprMeta-SBO to hold behavior common to metas of various
+;; expression instances
+
+(add 'ExprMeta-SBO
+     (init (clone-to SBO (init (clone (meta SBO))) StdMeta-SBO)))
+(add kind 'ExprMeta ExprMeta-SBO)
+
+;; build GenericMeta-SBO to hold behavior common to metas of
+;; GenericDescriptor family
+
+(add 'create*Meta-SBO
+     (proc [x]
+       (let [[xmeta (concat (->string (kind (lookup x))) "Meta")]
+	     [nmeta
+	      (init (clone-to SBO (init (clone (meta SBO))) StdMeta-SBO))]]
+	 (seq (add (->symbol (concat xmeta "-SBO")) nmeta)
+	      (add kind (->symbol xmeta) nmeta)
+	      nmeta))))
+
+(create*Meta-SBO 'GenericDescriptor)
+
+(mapx
+ ['GenericDescriptor 'NullDescriptor 'AtomicDescriptor  'CStructure
+		     'CArray 'CharArray 'CRef 'CharRef
+		     'CRef0  'CharRef0 'CUnion]
+ (proc [x] (prim-parent: (meta (lookup x)) GenericDescriptorMeta-SBO)))
+
+;; set-meta-parents
+
+(walk AbstractSBOs
+      (proc [i s] (prim-parent: (meta s) SBOMeta-SBO)))
+(walk ConcreteSBOs
+      (proc [i s] (prim-parent: (meta s) SBOMeta-SBO)))
+(walk AtomProtos
+      (proc [i p] (prim-parent: (meta p) AtomMeta-SBO)))
+(walk Objs-w-Id-Protos
+      (proc [i p] (prim-parent: (meta p) Objs-w-IdMeta-SBO)))
+(walk ExprProtos
+      (proc [i p] (prim-parent: (meta p) ExprMeta-SBO)))
+
+(parent: (meta TupleExpr)
+	 (new MIActor [IndexedMeta-SBO ExprMeta-SBO]))
+
+(add 'ActorMeta-SBO
+     (init (clone-to SBO (init (clone (meta SBO))) (parent (meta Actor)))))
+(add kind 'ActorMeta ActorMeta-SBO)
+(parent: (meta Actor) ActorMeta-SBO)
+
+;; set each object below to be a child of its parent
+
+(walk AbstractSBOs
+      (proc [i s] (child: s)))
+(walk ConcreteSBOs
+      (proc [i s] (child: s)))
+(walk AtomProtos
+      (proc [i p] (child: p)))
+(walk Objs-w-Id-Protos
+      (proc [i p] (child: p)))
+(walk ExprProtos
+      (proc [i p] (child: p)))
+
+;; routines for initialization of builtin actors
+(add-unique Sync 'remob)
+(add remob
+     (method [& envArg]
+       (let [[env (if (null? envArg) Global)]]
+	 (seq (prim-add (self) #absent env)
+	      (tbl-del ('map (meta env)) (self)))))
+     (parent 'symbol))
+
+(add-unique Sync 'initBuiltinActor)
+(add initBuiltinActor
+     (method []
+       (seq
+	(if (same? (mbox (self)) LockedMbox) (update!) #niv)
+	(prim-parent: (meta (parent (self))) SBOMeta-SBO)
+	(child: (parent (self)))
+	(child: (self))
+	(self)))
+     Top-SBO)
+
+(add-unique Sync 'initializeBuiltinActor)
+(add initializeBuiltinActor
+     (method [kind_id]
+       (seq (initBuiltinActor (self))
+	    (add kind kind_id (parent (self)))
+	    (remob (object->symbol kind_id '-SBO))
+	    (self)))
+     Top-SBO)
+
+(initializeBuiltinActor ProductType 'ProductType)
+(initializeBuiltinActor SumType 'SumType)
+(initializeBuiltinActor MultiMethod 'MultiMethod)
+(add lookupAndInvoke multiMethod-lookup-and-invoke (parent MultiMethod))
+
+
+;; compiletime prototypes
+
+;; try a simple definition of ct-proto that just handles lex bindings for
+;; the proto only not in the SBO
+
+(add ct-proto (method [] (prim-clone-to (self) (parent Top))) Top)
+
+;; the following isn't completely safe but since cloning a QueueMbox gives
+;; an EmptyMbox we need to give back something that will actually work
+;; for compiling
+
+(add ct-proto (method [] (self)) QueueMbox-SBO)
+
+(add ct-proto (method [] (self)) Istream-SBO)
+(add ct-proto (method [] (self)) Ostream-SBO)
+
+;; roles that entities play
+
+(add role (method [client] (send update!) 'instance) Meta-SBO)
+
+(add role (method [client] (send update!) client) AtomMeta-SBO)
+(add role (method [client] (send update!) 'SBO)   SBOMeta-SBO)
+ 
+(add role
+     (method [client]
+       (send update!)
+       (let [[x (lookup-obo (meta client) client 'id)]]
+	 (if (niv? x) 'instance x)))
+     Objs-w-IdMeta-SBO)
+
+(add role-string
+     (method [& r] "")
+     Meta-SBO)
+
+(add role-string
+     (method [x & r] (object->string x))
+     AtomMeta-SBO)
+
+(add role-string
+     (method [& r] "SBO")
+     SBOMeta-SBO)
+ 
+;; setup an SBO for "the" meta-circular meta
+
+(letrec [[tm (proc [x] (if (same? x (meta x)) x (tm (meta x))))]]
+  (seq
+   (add 'TopMeta (tm 1))
+   (let [[tm-sbo (init (clone-to SBO
+				 (init (clone (meta SBO)))
+				 (parent (tm 1))))]]
+     (seq
+      (parent: (tm 1) tm-sbo)
+      (add kind 'TopMeta tm-sbo)))))
+
+;; more new methods
+
+(add new*
+     (method [<trgt> & <msg>]
+       (new (self) <trgt> (new TupleExpr '[] <msg>)))
+     RequestExpr-SBO)
+
+(add new*
+     (method [<trgt> & <msg>]
+       (new (self) <trgt> (new TupleExpr '[] <msg>)))
+     SendExpr-SBO)
+
+(add new tupleexpr-new TupleExpr-SBO)
+
+(add newN tupleexpr-new-n TupleExpr-SBO)
+
+(add new*
+     (run
+      (compile
+       '(method [& <exprs>] (tupleexpr-new (self) rest <exprs>))
+       TupleExpr))
+     TupleExpr-SBO)
+
+(add new*
+     (method [& <exprs>]
+       (if (fx= (prim-size <exprs>) 1)
+	   (head <exprs>)
+	   (init (clone (self)) <exprs>)))
+     BlockExpr-SBO)
+
+(add new (method [<exprs>] (new* (self) & <exprs>)) BlockExpr-SBO)
+
+(add new*
+     (method [& exprs]
+       (if (fx= (prim-size exprs) 1)
+	   (tuple-head exprs)
+	   (init (clone (self)) exprs)))
+     SeqExpr-SBO)
+
+(add new (method [<exprs>] (new* (self) & <exprs>)) SeqExpr-SBO)
+
+(add new*
+     (method [<formals> & <body>]
+       (new (self) #niv <formals> (new BlockExpr <body>)))
+     MethodExpr-SBO)
+
+(add new*
+     (method [<formals> & <body>]
+       (new (self) #niv <formals> (new BlockExpr <body>)))
+     ProcExpr-SBO)
+
+(add new*
+     (method [<bindings> & <body>]
+       (new (self) <bindings> (new BlockExpr <body>)))
+     LetExpr-SBO)
+
+(add new*
+     (method [<bindings> & <body>]
+       (new (self) <bindings> (new BlockExpr <body>)))
+     LetrecExpr-SBO)
+
+(add new*
+     (method [<id-list> & <body>]
+       (new (self) <id-list> (new BlockExpr <body>)))
+     FreeExpr-SBO)
+
+;;; %%% ;; add new operation for building sbos
+;;; %%% ;; protocol is:
+;;; %%% ;;    (new <kind-id> <parent-sbo>)
+;;; %%% ;; the definition uses mbox: to unlock rather than invoking init since
+;;; %%% ;; init will be confused with the init for the thing that the SBO is
+;;; %%% ;; for rather than an init specific to things as SBOs --- meta confusion
+;;; %%% ;; to be fixed
+;;; %%% 
+;;; %%% (add new
+;;; %%%      (run
+;;; %%%       (compile
+;;; %%%        '(method [id p]
+;;; %%% 	  (let [[new-sbo (clone-to SBO (init (clone (meta SBO))) p)]]
+;;; %%% 	    (seq
+;;; %%% 	     (add-obo (meta new-sbo) new-sbo kind id)
+;;; %%% 	     (mbox: new-sbo EmptyMbox)
+;;; %%% 	     new-sbo)))
+;;; %%%        (ct-proto SBO)))
+;;; %%%      SBO-SBO)
+
+;;; the above is now via prim-new-sbo in Basic-support.cc
+
+(add new prim-new-SBO SBO-SBO)
+
+;; method for generating new Actor clone families
+;; It is important to not send init to the new-proto since we want clones
+;; of the proto to be initially locked
+
+(add new
+     (method [id par & k/v-pairs]
+       (let [[new-sbo (new SBO id par)]]
+	 (let [[new-proto
+		(clone-to (self) (init (clone (meta (self)))) new-sbo)]]
+	   (seq
+	    (add (sbo-id id) new-sbo)
+	    (add id (mbox: new-proto EmptyMbox))
+	    (add* new-proto & k/v-pairs)))))
+     Actor-SBO)
+
+;;; %%% ;; the following creates an anonymous sbo and proto.  The proto is setup
+;;; %%% ;; so that it is not locked initially to allow arbitrary operations to
+;;; %%% ;; be performed.  Note that instances cloned from an object by default
+;;; %%% ;; have LockedMbox
+;;; %%% (add gen
+;;; %%%      (method [id par]
+;;; %%%        (let [[new-sbo (new SBO id par)]]
+;;; %%% 	 [new-sbo
+;;; %%% 	  (mbox: (clone-to (self) (init (clone (meta (self)))) new-sbo)
+;;; %%% 		 EmptyMbox)]))
+;;; %%%      Actor-SBO)
+
+;;; the above is now replaced by a prim in Basic-support.cc
+
+;;; (add gen prim-gen-actor Actor-SBO)
+
+;;; but now that we have this protocol of setting bindings up on oprns and
+;;; the protocol of recording the children of each class these have to be
+;;; done here.
+
+(add gen
+     (method [id par]
+       (let [[[s p] (prim-gen-actor (self) id par)]]
+	 (seq (bindings: kind s)
+	      (add-child s p)
+	      (add-child par s)
+	      [s p])))
+     Actor-SBO)
+
+;; expr-methods
+
+;; add sbos for [] and '[].  These are used to hold behaviors
+;; specific to these objects and thus remove tests from the
+;; corresponding methods in Tuple-SBO and TupleExpr-SBO
+
+(parent:  [] (new SBO 'Nil Tuple-SBO))
+(parent: '[] (new SBO 'NilExpr TupleExpr-SBO))
+
+;; add some operations to TupleExpr to match ones on Tuple
+
+(add* TupleExpr-SBO
+      head	tupleexpr-head
+      tail	tupleexpr-tail
+      ->tuple	tupleexpr->tuple
+      split	tupleexpr-split
+      concat	tupleexpr-concat
+      )
+
+;; we treat RequestExprs as indexable on their 'msg slot
+
+(add* RequestExpr-SBO
+      nth (run (compile
+		'(method [n] (send update!) (nth msg n))
+		(ct-proto RequestExpr)))
+      set-nth (run (compile
+		    '(method [n x] (send set-nth msg n x) (self))
+		    (ct-proto RequestExpr)))
+      size    (run (compile
+		    '(method [] (size msg))
+		    (ct-proto RequestExpr)))
+      sub-obj (run (compile
+		    '(method [i n] (sub-obj msg i n))
+		    (ct-proto RequestExpr)))
+      ->tuple requestexpr->tuple
+      split (run (compile
+		  '(method [n] [trgt & (split msg n)])
+		  (ct-proto RequestExpr)))
+      )
+
+(add* SendExpr-SBO
+      nth (run (compile
+		'(method [n] (send update!) (nth msg n))
+		(ct-proto SendExpr)))
+      set-nth (run (compile
+		    '(method [n x] (send set-nth msg n x) (self))
+		    (ct-proto SendExpr)))
+      size    (run (compile
+		    '(method [] (size msg))
+		    (ct-proto SendExpr)))
+      sub-obj (run (compile
+		    '(method [i n] (sub-obj msg i n))
+		    (ct-proto SendExpr)))
+      ->tuple (run (compile
+		    '(method [] [trgt & (->tuple msg)])
+		    (ct-proto SendExpr)))
+      split (run (compile
+		  '(method [n] [trgt & (split msg n)])
+		  (ct-proto SendExpr)))
+      )
+
+
+(add* BlockExpr-SBO
+      ->tuple (run (compile '(method [] sub-exprs) '(block 1 2 3)))
+      )
+
+(add* SeqExpr-SBO
+      ->tuple (run (compile '(method [] sub-exprs) '(seq 1 2 3)))
+      )
+
+;; atom-oprns
+
+(add-unique Oprn '+)
+(add-unique Oprn '-)
+(add-unique Oprn '*)
+(add-unique Oprn '/)
+(add-unique Oprn 'cdiv)
+(add-unique Oprn 'mdiv)
+(add-unique Oprn '%)
+
+(add-unique Oprn '<)
+(add-unique Oprn '=)
+(add-unique Oprn '>)
+(add-unique Oprn '<=)
+(add-unique Oprn '!=)
+(add-unique Oprn '>=)
+
+(add-unique Oprn 'abs)
+(add-unique Oprn 'floor)
+(add-unique Oprn 'ceil)
+
+(add-unique Oprn 'lognot)
+(add-unique Oprn 'logand)
+(add-unique Oprn 'logxor)
+(add-unique Oprn 'logor)
+
+(add-unique Oprn 'min)
+(add-unique Oprn 'max)
+
+(add-unique Oprn 'lgf)
+(add-unique Oprn 'lg)
+(add-unique Oprn 'expt)
+(add-unique Oprn 'log10)
+(add-unique Oprn 'log)
+(add-unique Oprn 'exp)
+
+(add-unique Oprn 'iota)
+
+
+;; Top methods
+
+(add-unique Oprn '<)
+(add-unique Oprn '=)
+(add-unique Oprn '>)
+(add-unique Oprn '<=)
+(add-unique Oprn '!=)
+(add-unique Oprn '>=)
+
+(add* Top
+
+      <  (method [y] (send update!) #f)
+      <= (method [y] (send update!) (same? (self) y))
+      =  same?
+      != same!?
+      >= (method [y] (send update!) (same? (self) y))
+      >  (method [y] (send update!) #f)
+      )
+
+;; atom methods
+
+(add* Fixnum-SBO
+
+      ->float fx->fl
+
+      + fx+
+      - fx-
+      * fx*
+      / fx/
+      % fx%
+      cdiv fx-cdiv
+      mdiv fx-mdiv
+
+      < fx<
+      = fx=
+      > fx>
+      <= fx<=
+      != fx!=
+      >= fx>=)
+
+(add* Fixnum-SBO
+
+      lognot fx-lognot
+      logand fx-logand
+      logxor fx-logxor
+      logor  fx-logor
+
+      min fx-min
+      max fx-max
+      abs fx-abs
+
+      lgf  fx-lgf
+      lg   fx-lg
+      expt fx-expt
+       
+      ;; iota generates a tuple [0...(- N 1)]
+
+      iota (method []
+	     (send update!)
+	     (let [[tpl (newN Tuple (self) Fixnum)]
+		   [n 0]]
+	       (label loop
+		 (if (fx= n (self))
+		     tpl
+		     (seq
+		      (set-nth tpl n n)
+		      (set! n (fx+ n 1))
+		      (goto loop))))))
+      )
+
+(add* Float-SBO
+
+      ->fixnum fl->fx
+       
+      + fl+
+      - fl-
+      * fl*
+      / fl/
+ 
+      <  fl<
+      =  fl=
+      >  fl>
+      <= fl<=
+      != fl!=
+      >= fl>=)
+
+(add* Float-SBO
+
+      min   fl-min
+      max   fl-max
+      abs   fl-abs
+      floor fl-floor
+      ceil  fl-ceil
+
+      expt  fl-expt
+      log10 fl-log10
+      log   fl-log
+      exp   fl-exp)
+
+(add* Character-SBO
+      <   ch<
+      <=  ch<=
+      =   ch=
+      >   ch>
+      >=  ch>=
+      !=  ch!=)
+
+
+(add-unique Oprn 'close)
+
+(add* Istream-SBO
+      close  (method [] (istream-close (self))))
+
+(add* Ostream-SBO
+      close  (method [] (ostream-close (self))))

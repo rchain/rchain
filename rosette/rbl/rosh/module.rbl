@@ -1,0 +1,733 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Description: The following code implements a "code module" facility
+; for auto-loading interdependent files of closely related rosette
+; functionality. The interface allows users to simply type
+; (Require <module-id>) to load the associated files and required
+; (sub)modules. Module definition is only slightly more complicated.
+; The user must create a module definition file containing a form that
+; evaluates to the module object. The expander defModule (see below)
+; has been developed to support this.
+;
+; Short-comings: The assumption is maintained that modifications to
+; modules that a given module is dependent upon generally do not
+; require the reloading of the whole module, only the modified one.
+; This could be better accomodated by maintaining two distinct kind of
+; dependencies.
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defOprn (sbo& Top) (ModuleFile?) pure& #f)
+(defOprn (sbo& Top) (ModuleFileChain?) pure& #f)
+(defOprn (sbo& Top) (Module?) pure& #f)
+(defOprn (sbo& Top) (ModuleDefinitionSystem?) pure& #f)
+(defOprn (sbo& Top) (LoadStamp?) pure& #f)
+(defOprn ModuleDefinitions)
+
+(defOprn (sbo& Top) (tuple?) pure& (type? Tuple (self)))
+(defOprn (sbo& Top) (symbol?) pure& (type? Symbol (self)))
+(defOprn (sbo& Top) (string?) pure& (type? String (self)))
+
+(defPure FileStatus (LoadStamp?) #t)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;                                                             ;;;
+;;;  ModuleFiles encapsulate functionality associated with      ;;;
+;;;  files in a code module, i.e. they keep track of the last   ;;;
+;;;  time they were loaded.                                     ;;;
+;;;                                                             ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defOprn FileName)
+(defOprn LoadStamp)
+(defOprn LoadStamp!)
+(defOprn Verbosity)
+(defOprn Verbosity!)
+
+(defActor ModuleFile
+  (slots& module #niv name #niv loadstamp #niv verbosity #t))
+
+(defPure ModuleFile (ModuleFile?) #t)
+
+(defOprn (sbo& (meta ModuleFile)) (describe! x strm) pure&
+  (display!
+   strm
+   (object->string #\# #\< 'ModuleFile #\  ('name x) #\ (ob@ x) #\>)))
+
+(defMethod ModuleFile (init nm)
+  (update! 'name nm))
+
+(defPure ModuleFile (FileName) name)
+(defPure ModuleFile (LoadStamp) loadstamp)
+(defMethod ModuleFile (LoadStamp! nv) (update! 'loadstamp nv))
+(defPure ModuleFile (Verbosity) verbosity)
+(defMethod ModuleFile (Verbosity!) (update! 'verbosity (not verbosity)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;                                                             ;;;
+;;;  ModuleFileChains encapsulate functionality associated with ;;;
+;;;  sequentially dependent lists of file in a code module,     ;;;
+;;;  i.e. they keep track of the last file in the chain         ;;;
+;;;  that was loaded.                                           ;;;
+;;;                                                             ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defOprn Files)
+(defOprn FPosition)
+
+(defActor ModuleFileChain (extends& ModuleFile) (slots& files []))
+(defOprn (sbo& (meta ModuleFileChain)) (describe! x strm) pure&
+  (display!
+   strm
+   (object->string #\# #\< 'ModuleFileChain #\  ('name x) #\ (ob@ x) #\>)))
+(defPure ModuleFileChain (ModuleFileChain?) #t)
+(defMethod ModuleFileChain (init & fs)
+  (if (not (null? fs))
+      (let [[flist
+	     (iterate loop [[fls fs]
+			    [ans []]]
+	       (if (null? fls)
+		   ans
+		   (loop (tail fls)
+			 (concat
+			  ans
+			  (let [[fls-hd (head fls)]]
+			    (cond
+			     ((type? fls-hd Symbol)
+			      [(new ModuleFile (->string fls-hd))])
+			     ((type? fls-hd String)
+			      [(new ModuleFile fls-hd)])
+			     ((type? RequestExpr fls-hd)
+			      (let* [[trgt ('trgt fls-hd)]
+				     [ans1 (new ModuleFile trgt)]]
+				[(Verbosity! ans1)]))
+			     ((type? fls-hd ModuleFile)
+			      [fls-hd])
+			     (else (RuntimeError
+				    (self)
+				    "invalid module file type"
+				    fls-hd))))))))]]
+	(update! 'files flist
+		 'name (if (> (size flist) 1)
+			   (concat ('name (head flist))
+				   "..."
+				   ('name (nth flist (- (size flist) 1))))
+			   ('name (head flist)))))
+      (self)))
+(defPure ModuleFileChain (Files) files)
+(defPure ModuleFileChain (FPosition mf)
+  (iterate loop [[[h & rfs] files] [ans 0]]
+    (if (same? h mf)
+	ans
+	(if (or (null? h) (null? rfs))
+	    (RuntimeError (self) "No such file " mf)
+	    (loop rfs (+ ans 1))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;                                                             ;;;
+;;;  Modules encapsulate functionality associated with code     ;;;
+;;;  modules, i.e. groups of files that comprise a collection   ;;;
+;;;  of related protocols and functionality.                    ;;;
+;;;                                                             ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defOprn ModuleName)
+(defOprn Suffix)
+(defOprn Dependencies)
+(defOprn Directory)
+(defOprn Directory!)
+(defOprn DefnDirectory)
+(defOprn DefnDirectory!)
+(defOprn LoadModuleFile)
+(defOprn LoadModule)
+(defOprn ModuleFileFullName)
+(defOprn ModuleFileStat)
+(defOprn FileStat)
+(defOprn FileTouched?)
+(defOprn SimpleFileTouched?)
+(defOprn ChainFileTouched?)
+(defOprn LoadModuleSimpleFile)
+(defOprn LoadModuleFileChain)
+(defOprn FstatStore)
+(defOprn FstatStore!)
+(defOprn UpdateLoadStamp!)
+(defOprn ChainFileUpdateLS!) ;; Perhaps these two should be locals
+(defOprn SimpleFileUpdateLS!)
+
+(defActor Module
+  (slots& name #niv directory #niv
+	  dependencies #niv files #niv
+	  suffix #niv defn-directory #niv
+	  defn-loadstamp #niv
+	  fstat-store #niv
+	  use-defn-dir #f))
+
+(defPure Module (Module?) #t)
+
+(defOprn (sbo& (meta Module)) (describe! x strm) pure&
+  (display!
+   strm
+   (object->string #\# #\< 'Module #\  ('name x) #\ (ob@ x) #\>)))
+
+(defMethod Module (init nm dir deps fs sfx udd)
+  (update!
+   'name (cond
+	  ((string? nm) (->symbol nm))
+	  ((symbol? nm) nm)
+	  (else (RuntimeError (self) "invalid module name " nm)))
+   'directory (cond
+	       ((type? String dir)
+		(new ModuleFile dir))
+	       ((type? ModuleFile dir)
+		dir)
+	       (else (RuntimeError (self) "invalid directory type " dir)))
+   'dependencies deps
+   'files fs
+   'suffix sfx
+   'defn-loadstamp (new FileStatus)
+   'fstat-store (new FileStatus)
+   'use-defn-dir udd))
+
+(defPure Module (ModuleName) name)
+(defPure Module (Files) files)
+(defPure Module (Suffix) suffix)
+(defPure Module (Dependencies) dependencies)
+(defPure Module (Directory) directory)
+(defMethod Module (Directory! nv) (update! 'directory nv))
+(defPure Module (DefnDirectory) defn-directory)
+(defMethod Module (DefnDirectory! nv) (update! 'defn-directory nv))
+(defPure Module (LoadStamp) defn-loadstamp)
+(defMethod Module (LoadStamp! nv) (update! 'defn-loadstamp nv))
+(defPure Module (FstatStore) fstat-store)
+(defMethod Module (FstatStore! nv) (update! 'fstat-store nv))
+
+(defProc (Require mdl & mds-force-forcedfn-args) #niv)
+
+(defPure Module (LoadModule & r)
+  (seq
+   (display ";Loading Module " name nl)
+   (if (not (null? dependencies))
+       (seq (display "; Loading Required Modules" nl)
+	    (iterate loop [[dps dependencies]]
+	      (if (null? dps)
+		  (display "; Required Modules loaded" nl)
+		  (seq (Require (head dps)) (loop (tail dps)))))))
+   (if (not (null? files))
+       (seq (display "; Loading Files" nl)
+	    (iterate loop [[fs files]]
+	      (if (null? fs)
+		  (display "; Files loaded" nl)
+		  (seq
+		   (LoadModuleFile (self) (head fs))
+		   (loop (tail fs))))))
+       (warn "Module has no files"))
+   (display ";Module loaded" nl)))
+
+(defPure Module (ModuleFileFullName mf)
+  (concat (if use-defn-dir (FileName defn-directory) "")
+	  (FileName directory) (FileName mf) suffix))
+
+;; The trick is that we don't want to cons up any more FileStatus
+;; objs, so we keep a spare on the module obj, and we store the new
+;; file status info in the spare, if nothing's changed we leave well
+;; enough alone; otherwise, we swap in the old modulefile obj's
+;; filestatus and require that the caller update with the results we
+;; return.
+
+
+
+(defPure Module (ModuleFileStat mf)
+  (let* [[mffn (ModuleFileFullName (self) mf)]
+	 [stats (stat mffn fstat-store)]]
+    (if (= stats -1)
+	(RuntimeError (self) "No such file" mffn)
+	fstat-store)))
+
+(defPure Module (ChainFileUpdateLS! mfc mf)
+  (let [[mffn (ModuleFileFullName (self) mf)]
+	[lsobj (LoadStamp mf)]
+	[clsobj (LoadStamp mfc)]]
+    (send
+     stat mffn
+     (if (not (niv? lsobj))
+	 lsobj
+	 (let [[fstatobj (new FileStatus)]]
+	   (seq (LoadStamp! mf fstatobj)
+		fstatobj))))
+    (send
+     stat mffn
+     (if (not (niv? clsobj))
+	 clsobj
+	 (let [[fstatobj (new FileStatus)]]
+	   (seq (LoadStamp! mfc fstatobj)
+		fstatobj))))
+    (self)))
+
+(defPure Module (SimpleFileUpdateLS! mf)
+  (let [[lsobj (LoadStamp mf)]]
+    (send
+     stat
+     (ModuleFileFullName (self) mf)
+     (if (not (niv? lsobj)) lsobj
+	 (let [[fstatobj (new FileStatus)]]
+	   (seq (LoadStamp! mf fstatobj)
+		fstatobj))))
+    (self)))
+
+(defPure Module (UpdateLoadStamp! mf1 & mf2)
+  (if (ModuleFileChain? mf1)
+      (ChainFileUpdateLS! (self) mf1 (head mf2))
+      (if (ModuleFile? mf1)
+	  (SimpleFileUpdateLS! (self) mf1)
+	  (RuntimeError (self) "Bad module file type " mf1))))
+
+(defOprn (sbo& (sbo Module)) (RawTime x) pure&
+  (if (ModuleFile? x)
+      (. (ModuleFileStat (self) x) st_ctime)
+      (RuntimeError (self) "Bad module file type " x)))
+
+(defOprn (sbo& Top) (RawTimeStamp) pure&
+  (RuntimeError (self) "Bad module file type "))
+
+(defPure ModuleFile (RawTimeStamp)
+  (if (not (niv? loadstamp))
+      (. loadstamp st_ctime)
+      #niv))
+
+(defPure Module (SimpleFileTouched? mf)
+  (let [[fstatobj (ModuleFileStat (self) mf)]
+	[mfstatobj (LoadStamp mf)]]
+    (if (LoadStamp? mfstatobj)
+	(if (fx<= (. fstatobj st_ctime) (. mfstatobj st_ctime))
+	    #f
+	    fstatobj)
+	fstatobj)))
+
+(defPure Module (ChainFileTouched? mfc mf)
+  (let [[mfcstatobj (LoadStamp mfc)]
+	[mfstatobj (LoadStamp mf)]
+	[fstatobj (ModuleFileStat (self) mf)]]
+    (cond
+     ((or (not (LoadStamp? mfcstatobj)) (not (LoadStamp? (LoadStamp mf)))
+	  (not (fx= (. mfstatobj st_ctime) (. fstatobj st_ctime)))
+	  (fx< (. mfcstatobj st_ctime) (. fstatobj st_ctime)))
+      fstatobj)
+     (else #f))))
+
+(defPure Module (FileTouched? mf1 & mf2)
+  (if (ModuleFileChain? mf1)
+      (ChainFileTouched? (self) mf1 (head mf2))
+      (if (ModuleFile? mf1)
+	  (SimpleFileTouched? (self) mf1)
+	  (RuntimeError (self) "Bad module file type " mf1))))
+
+(defPure Module (LoadModuleSimpleFile mf & force)
+  (let  [[fullFileName (ModuleFileFullName (self) mf)]
+	 [fLdStamp (FileTouched? (self) mf)]]
+    (if (or (not (null? force)) fLdStamp)
+	(seq
+	 (UpdateLoadStamp! (self) mf)
+	 ;(display ";         " fullFileName nl)
+	 (display "; ")
+	 (if (Verbosity mf)
+	     (load fullFileName)
+	     (load fullFileName 'silent))
+	 (display nl))
+	#niv)))
+
+(defPure Module (LoadModuleFileChain mf & force)
+  (iterate loop [[mfcFiles (Files mf)]
+		 [loadtest (not (null? force))]
+		 [fLdStamp #f]]
+    (if (not (null? mfcFiles))
+	(let [[mfcFiles-hd (head mfcFiles)]]
+	  (seq
+	   (set! fLdStamp (FileTouched? (self) mf mfcFiles-hd))
+	   (set! loadtest (or loadtest fLdStamp))
+	   (if loadtest
+	       (let [[fullName (ModuleFileFullName (self) mfcFiles-hd)]
+		     [mfcLdStamp (LoadStamp mf)]]
+		 (seq (if (and fLdStamp
+			       (or (niv? mfcLdStamp)
+				   (fx< (. mfcLdStamp st_ctime)
+					(. fLdStamp st_ctime))))
+			  (UpdateLoadStamp! (self) mf mfcFiles-hd))
+		      (if (niv? (LoadStamp mfcFiles-hd))
+			  (UpdateLoadStamp! (self) mfcFiles-hd))
+					;(display ";         " fullName nl)
+		      (display "; ")
+		      (if (and (Verbosity mf) (Verbosity mfcFiles-hd))
+			  (load fullName)
+			  (load fullName 'silent))
+		      (display nl))))	 
+	   (loop (tail mfcFiles) loadtest fLdStamp))))))
+
+(defPure Module (LoadModuleFile mf & r)
+  (if (ModuleFileChain? mf)
+      (LoadModuleFileChain (self) mf & r)
+      (if (ModuleFile? mf)
+	  (LoadModuleSimpleFile (self) mf & r)
+	  (RuntimeError (self) "Bad module file " mf))))
+
+;;------------------------------------------------------;;
+;;                                                      ;;
+;; (defModule <name>                                    ;;
+;;   (directory& <dirstring>)                           ;;
+;;   (dependencies& <depend> ...)                       ;;
+;;   (files& <file> ...)                                ;;
+;;   (suffix& <sfxstring>))                             ;;
+;;                                                      ;;
+;; ==>                                                  ;;
+;;                                                      ;;
+;; (add '<name> (new Module <name>                      ;;
+;;                   <dirstring>                        ;;
+;;                   [<depend> ... <depend>]            ;;
+;;                   [<file> ... <file>]                ;;
+;;                   <sfxstring>))                      ;;
+;;                                                      ;;
+;;------------------------------------------------------;;
+
+(defProc (->ModuleFile x)
+  (cond
+   ((string? x)
+    (new ModuleFile x))
+   ((symbol? x)
+    (new ModuleFile (->string x)))
+   (else x)))
+
+(defProc (ProcessFileSpec & files)
+  (iterate loop [[fs files] [ans []]]
+    (if (null? fs)
+	ans
+	(loop (tail fs)
+	      (concat
+	       ans
+	       [(let [[tmp1 (->ModuleFile (head fs))]]
+		  (if (and (same? tmp1 (head fs))
+			   (not (ModuleFile? tmp1)))
+		      (cond
+		       ((type? TupleExpr tmp1)
+			(new ModuleFileChain & (->tuple tmp1)))
+		       ((type? RequestExpr tmp1)
+			(let [[msg ('msg tmp1)]]
+			  (if (or (and (type? QuoteExpr (head msg))
+
+				       (same? ('expr (head msg)) 'silent))
+				  (same? (head msg) 'silent))
+			      (Verbosity!
+			       (new ModuleFileChain & (->tuple ('trgt tmp1))))
+			      (->tuple ('msg tmp1)))))
+		       ((tuple? tmp1)
+			(new ModuleFileChain & tmp1))
+		       (else (RuntimeError
+			      (self)
+			      "invalid module file specification "
+			      (head fs))))
+		      tmp1))])))))
+
+(defExpander (defModule e)
+  (let* [[[<name> & rest] (->tuple msg)]
+	 [[<dirstring> rest] (find-keyword1 'directory& '*RosetteHome* rest)]
+	 [[<depends> rest] (find-keyword 'dependencies& [] rest)]
+	 [[<files> rest] (find-keyword 'files& [] rest)]
+	 [[<suffix> rest] (find-keyword 'suffix& ".rbl" rest)]
+	 [[<use-defn-dir> rest] (find-keyword1 'use-defn-dir& #f rest)]]
+    (RX 'add (Q <name>)
+	(RX 'new Module
+	    (Q <name>) <dirstring> <depends>
+	    (ProcessFileSpec & <files>) <suffix> <use-defn-dir>))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;                                                             ;;;
+;;;  MultiVersionModules encapsulate a simple form of file      ;;;
+;;;  versioning.                                                ;;;
+;;;                                                             ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defActor MultiVersionModule (extends& Module)
+  (slots& alternate-directories []))
+
+(defMethod MultiVersionModule (init nm dir alts deps fs sfx)
+  (update!
+   'name (cond
+	  ((string? nm) (->symbol nm))
+	  ((symbol? nm) nm)
+	  (else (RuntimeError (self) "invalid module name " nm)))
+   'directory (cond
+	       ((type? String dir)
+		(new ModuleFile dir))
+	       ((type? ModuleFile dir)
+		dir)
+	       (else (RuntimeError (self) "invalid directory type " dir)))
+   'alternate-directories
+   (mapx alts (proc [alt]
+		(cond
+	       ((type? String dir)
+		(new ModuleFile dir))
+	       ((type? ModuleFile dir)
+		dir)
+	       (else (RuntimeError (self) "invalid directory type " dir)))))
+   'dependencies deps
+   'files fs
+   'suffix sfx
+   'defn-loadstamp (new FileStatus)
+   'fstat-store (new FileStatus)))
+
+(defOprn alternateDirectories)
+(defOprn alternateDirectories!)
+(defOprn addAlternateDirectory)
+(defPure MultiVersionModule (alternateDirectories) alternate-directories)
+(defMethod MultiVersionModule (alternateDirectories! nv)
+  (update! 'alternate-directories nv))
+(defMethod MultiVersionModule (addAlternateDirectory dir)
+  (update! 'alternate-directories
+	   (concat alternate-directories
+		   [(cond
+		     ((type? String dir)
+		      (new ModuleFile dir))
+		     ((type? ModuleFile dir)
+		      dir)
+		     (else (RuntimeError
+			    (self) "invalid directory type " dir)))])))
+
+(defOprn ModuleFileFullNames)
+
+(defPure MultiVersionModule (ModuleFileFullNames mf)
+  (let [[mfname (FileName mf)]]
+    (mapx [directory & alternate-directories]
+	  (proc [dir] (concat (FileName dir) mfname suffix)))))
+
+(defPure MultiVersionModule (ModuleFileStat mf)
+  (iterate loop [[mffns (ModuleFileFullNames (self) mf)]]
+    (cond
+     ((null? mffns)
+      (RuntimeError (self) "No such file" mf))
+     (else
+      (let [[stats (stat (head mffns) fstat-store)]]
+	(if (= stats -1)
+	    (loop (tail mffns))
+	    fstat-store))))))
+
+(defExpander (defMVModule e)
+  (let* [[[<name> & rest] (->tuple msg)]
+	 [[<dirstring> rest] (find-keyword1 'directory& '*RosetteHome* rest)]
+	 [[<altdirs> rest] (find-keyword1 'alternates& [] rest)]
+	 [[<depends> rest] (find-keyword 'dependencies& [] rest)]
+	 [[<files> rest] (find-keyword 'files& [] rest)]
+	 [[<suffix> rest] (find-keyword 'suffix& ".rbl" rest)]]
+    (RX 'add (Q <name>)
+	(RX 'new MultiVersionModule
+	    (Q <name>) <dirstring> <altdirs> <depends>
+	    (ProcessFileSpec & <files>) <suffix>))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;                                                             ;;;
+;;;  ModuleDefinitionSystems encapsulate functionality          ;;;
+;;;  associated with defining code modules in the file system.  ;;;
+;;;                                                             ;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defOprn Modules)
+(defOprn AddMDSFile!)
+(defOprn LoadModuleDefinition)
+(defOprn FindModule)
+(defOprn ModuleDefnFileName)
+(defOprn AddModule!)
+
+(defActor ModuleDefinitionSystem (extends& Module)
+  (slots& modules [] defn-file-table #niv))
+
+(defPure ModuleDefinitionSystem (ModuleDefinitionSystem?) #t)
+
+(defMethod ModuleDefinitionSystem (init nm fs sfx)
+  (update!
+   'name (cond
+	  ((string? nm) (->symbol nm))
+	  ((symbol? nm) nm)
+	  (else (RuntimeError (self) "invalid module name " nm)))
+   'files fs
+   'suffix (cond
+	    ((string? sfx) sfx)
+	    ((symbol? sfx) (->string sfx))
+	    (else (RuntimeError (self) "invalid module suffix " nm)))
+   'defn-loadstamp (new FileStatus)
+   'fstat-store (new FileStatus)))
+
+(defOprn (sbo& (meta ModuleDefinitionSystem)) (describe! x strm) pure&
+  (display!
+   strm
+   (object->string #\# #\< 'M-D-S #\  ('name x) #\ (ob@ x) #\>)))
+
+(defPure ModuleDefinitionSystem (Modules) modules)
+
+(defMethod ModuleDefinitionSystem (AddMDSFile! file)
+  (update!
+   'files
+   [(cond
+     ((ModuleFile? file) file)
+     ((string? file) (new ModuleFile file))
+     ((symbol? file) (new ModuleFile (->string file)))
+     (else (RuntimeError (self) "invalid file spec" file)))
+    & files]))
+
+(defMethod ModuleDefinitionSystem (AddModule! nf)
+  (update! 'modules [nf & modules]))
+
+(defPure ModuleDefinitionSystem (LoadModuleDefinition mdl)
+  (let [[mdlname
+	 (cond ((symbol? mdl) (->string mdl))
+	       ((Module? mdl) (->string (ModuleName mdl)))
+	       ((string? mdl) mdl))]
+	[ldstmp (new FileStatus)]]
+    (iterate loop [[flocs files]]
+      (if (not (null? flocs))
+	  (let* [[dfndir (head flocs)]
+		 [mdlFullName (concat (FileName dfndir) mdlname suffix)]
+		 [dfnstat (stat mdlFullName ldstmp)]]
+	    (if (not (= dfnstat -1))
+		(seq
+		 (display ";Loading Module Definition " mdlname nl)
+		 (display "; ")
+		 (load mdlFullName)
+		 (let [[themodule (lookup (->symbol mdlname))]]
+		   (seq
+		    (DefnDirectory! themodule dfndir)
+		    (LoadStamp! themodule ldstmp)
+		    (AddModule! (self) themodule)
+		    themodule)))
+		(loop (tail flocs))))))))
+
+(defPure ModuleDefinitionSystem (FindModule mdl)
+  (let [[rmdl (->symbol mdl)]]
+    (iterate loop [[mdls modules]]
+      (if (not (null? mdls))
+	  (let [[mname (ModuleName (head mdls))]]
+	    (if (same? mname rmdl)
+		(if (not (FileTouched? (self) (head mdls))) (head mdls))
+		(loop (tail mdls))))
+	  #niv))))
+
+(defPure ModuleDefinitionSystem (ModuleDefnFileName mdl)
+  (let [[dfndir (DefnDirectory mdl)]]
+    (if (and (not (niv? dfndir))
+	     (string? dfndir))
+	(concat (FileName dfndir)
+		(->string (ModuleName mdl))
+		suffix)
+	(RuntimeError (self) "No module definition directory " mdl))))
+
+(defPure ModuleDefinitionSystem (ModuleFileFullName mf)
+  (if (not (Module? mf))
+      (RuntimeError (self) "This is not a module: " mf)
+      (let [[dfndir (DefnDirectory mf)]]
+	(if (and (not (niv? dfndir))
+		 (ModuleFile? dfndir))
+	    (concat (FileName dfndir)
+		    (->string (ModuleName mf))
+		    suffix)
+	    (RuntimeError (self) "No module definition directory " mf)))))
+
+(defPure ModuleDefinitionSystem (ModuleFileStat mf)
+  (if (not (Module? mf))
+      (RuntimeError (self) "This is not a module: " mf)
+      (let* [[mffn (ModuleFileFullName (self) mf)]
+	     [stats (stat mffn fstat-store)]]
+	(if (= stats -1)
+	    (RuntimeError (self) "No such file" mffn)
+	    fstat-store))))
+
+(defPure ModuleDefinitionSystem (FileTouched? mf)
+  (if (not (Module? mf))
+      (RuntimeError (self) "This is not a module: " mf)
+      (let [[fstatobj (ModuleFileStat (self) mf)]
+	    [mfstatobj (LoadStamp mf)]]
+	(if (LoadStamp? mfstatobj)
+	    (if (fx<= (. fstatobj st_ctime) (. mfstatobj st_ctime))
+		#f
+		fstatobj)
+	    fstatobj))))
+
+(defProc (ModuleDefinitions)
+  (seq
+   (if (absent? (lookup '*mds*))
+      (add '*mds*
+	   (new ModuleDefinitionSystem
+		'builtin-module-defns
+		[(new ModuleFile
+		      (concat (lookup '*RosetteHome*) "/rbl/MODULES/"))]
+		".module")))
+  (lookup '*mds*)))
+
+;;; Note: this doesn't quite match the usual notion of provide!
+(defProc (Provide mdlfname & mds)
+  (AddMDSFile!
+   (if (null? mds) (ModuleDefinitions) (head mds))
+   mdlfname))
+
+(defProc (Require mdl & mds-force-forcedfn-args)
+  (let* [[rmds (if (null? mds-force-forcedfn-args)
+		   (ModuleDefinitions)
+		   (head mds-force-forcedfn-args))]
+	 [force (if (> (size mds-force-forcedfn-args) 1)
+		    (head (tail mds-force-forcedfn-args))
+		    #f)]
+	 [forcedfn (if (> (size mds-force-forcedfn-args) 2)
+		       (head (tail (tail mds-force-forcedfn-args)))
+		       #f)]
+	 [mdfn (FindModule rmds mdl)]]
+    (seq
+     (if (or (niv? mdfn) forcedfn)
+	 (set! mdfn (LoadModuleDefinition rmds mdl)))
+     (if (niv? mdfn)
+	 (RuntimeError (self) "Module Definition not found " mdl)
+	 (LoadModule mdfn force)))))
+
+(defOprn (proto& ModuleDefinitionSystem) (sbo& (sbo ModuleDefinitionSystem))
+  (ModuleFilePrintName mf) pure&
+  (concat (if (and use-defn-dir (not (niv? defn-directory)))
+	      (FileName defn-directory)
+	      "")
+	  (if (not (niv? directory)) (FileName directory) "")
+	  (FileName mf)))
+
+(defOprn (proto& ModuleDefinitionSystem) (sbo& (sbo ModuleDefinitionSystem))
+  (printModuleDefnLocations) pure&
+  (iterate loop [[fs files]]
+    (if (null? fs)
+	#niv
+	(seq (display (ModuleFilePrintName (self) (head fs)) nl)
+	     (loop (tail fs))))))
+
+(defProc (showModuleDefnLocations & rest)
+  (printModuleDefnLocations
+   (if (null? rest) (ModuleDefinitions) (head rest))))
+
+(define *RosetteHome* (->string (build-path *config*)))
+
+;;; Note: the following calls to Provide setup the default search path
+;;; for module defns, in reverse order.
+(Provide (concat (ess_syslib *config*) "/rbl/MODULES/"))
+(Provide "../MODULES/")
+(Provide "./")

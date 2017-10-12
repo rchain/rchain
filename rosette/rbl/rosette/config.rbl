@@ -1,0 +1,102 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defOprn insert)
+
+;; initialize configuration info for the current architecture
+
+(defOprn char-sz)
+(defOprn short-sz)
+(defOprn long-sz)
+
+(defOprn char-align)
+(defOprn short-align)
+(defOprn long-align)
+
+(defOprn page-sz)
+(defOprn d-tbl-sz)
+
+(defOprn arch)
+(defOprn arch-str)
+(defOprn machine)
+(defOprn build-path)
+(defOprn o/s-type)
+(defOprn compiler)
+
+(defOprn init-environs)
+(defOprn environ)
+(defOprn ess_sysdir)
+(defOprn archdir)
+(defOprn ess_syslib)
+(defOprn rosettelib)
+(defOprn getEnv)
+(defOprn defined?)
+
+(defOprn valid-addr?)
+
+(defActor System_Configuration
+  (slots& char_sz 0 short_sz 0 long_sz 0
+	  char_al 0 short_al 0 long_al 0
+	  page_sz 0 d_tbl_sz 0
+	  _arch #niv _machine #niv _build-path #niv
+	  _o/s #niv _compiler #niv
+	  _environ #niv)
+  
+  (pure (char-sz)  char_sz)
+  (pure (short-sz) short_sz)
+  (pure (long-sz)  long_sz)
+
+  (pure (char-align)  char_al)
+  (pure (short-align) short_al)
+  (pure (long-align)  long_al)
+
+  (pure (page-sz)  page_sz)
+  (pure (d-tbl-sz) d_tbl_sz)
+
+  (pure (arch) _arch)
+  (pure (arch-str) (->string _arch))
+  (pure (machine) _machine)
+  (pure (build-path) _build-path)
+  (pure (o/s-type) _o/s)
+  (pure (compiler) _compiler)
+
+  (pure (valid-addr? x) (fx>= x page_sz))
+
+  (method (init-environs) (update! '_environ envp))
+  (pure (environ) _environ)
+  (pure (getEnv symb)
+    (let [[x (tbl-get _environ symb)]]
+      (if (or (absent? x) (niv? x)) "" x)))
+  (pure (defined? symb)
+    (not (absent? (tbl-get _environ symb))))
+  (pure (ess_sysdir) (tbl-get _environ 'ESS_SYSDIR))
+  (pure (archdir) (concat (tbl-get _environ 'ESS_SYSDIR) "/" _arch))
+  (pure (ess_syslib) (concat (tbl-get _environ 'ESS_SYSDIR) "/lib"))
+  (pure (rosettelib) (concat (tbl-get _environ 'ESS_SYSDIR) "/lib/rosette"))
+  )
+
+(define *config*
+  (new System_Configuration & (prim-configuration-parameters)))
+
+(defPure Fixnum (valid-addr?)
+  (valid-addr? *config* (self)))

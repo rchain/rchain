@@ -1,0 +1,95 @@
+-- Top level contract declaration
+DContr. Contr ::= "contract" Name "(" [CPattern] ")" "=" "{" Proc "}" ;
+
+-- Processes
+PNil.    Proc4 ::= "Nil" ;
+PValue.  Proc4 ::= Value ;
+PVar.    Proc4 ::= Var ;
+PDrop.   Proc3 ::= "*" Chan ;
+PInject. Proc3 ::= "#" Chan ;
+PLift.   Proc2 ::= Chan "!" "(" [Proc] ")" ;
+PInput.  Proc1 ::= "for" "(" [Bind] ")" "{" Proc "}" ;
+PChoice. Proc1 ::= "select" "{" [CBranch] "}" ;
+PMatch.  Proc1 ::= "match" Proc "with" [PMBranch] ;
+PNew.    Proc1 ::= "new" [Var] "in" Proc1 ;
+PConstr. Proc1 ::= Name "(" [Proc] ")" ;
+PPar.    Proc  ::= Proc "|" Proc1 ;
+separator nonempty Proc "," ;
+coercions Proc 4 ;
+
+-- Channels
+CVar.    Chan ::= Var ;
+CQuote.  Chan ::= "@" Proc3 ;
+
+-- Variable binding
+InputBind. Bind ::= CPattern "<-" Chan ;
+separator nonempty Bind ";" ;
+
+-- Pattern match branches
+PatternMatch. PMBranch ::= PPattern "=>" "{" Proc "}" ;
+separator nonempty PMBranch "" ; 
+
+-- Choice branch
+Choice. CBranch ::= "case" [Bind] "=>" "{" Proc "}" ;
+separator nonempty CBranch "" ;
+
+-- Values
+VQuant.   Value    ::= Quantity ;
+VEnt.     Value    ::= Entity ;
+-- QBool.    Quantity ::= Boolean ;
+QInt.     Quantity ::= Integer ;
+QDouble.  Quantity ::= Double ;
+EChar.    Entity   ::= Char ;
+-- EDate.    Entity   ::= Datetime ;
+EStruct.  Entity   ::= Struct ;
+ECollect. Entity   ::= Collect ;
+StructConstr. Struct ::= Var "{" [Proc] "}" ;
+CString. Collect ::= String ;
+-- CArray.  Collect ::= Array ;
+-- CList.   Collect ::= List ;
+
+-- Variable patterns
+VarPtVar.  VarPattern ::= Var ;
+VarPtWild. VarPattern ::= "_" ;
+separator VarPattern "," ;
+
+-- Process patterns
+PPtVar.    PPattern4 ::= VarPattern ;
+PPtNil.    PPattern4 ::= "Nil" ;
+PPtVal.    PPattern4 ::= ValPattern ;
+PPtDrop.   PPattern3 ::= "*" CPattern ;
+PPtInject. PPattern3 ::= "#" CPattern ;
+PPtOutput. PPattern2 ::= CPattern "!" "(" [PPattern] ")" ;
+PPtInput.  PPattern1 ::= "for" "(" [PatternBind] ")" "{" PPattern "}" ;
+PPtMatch.  PPattern1 ::= "match" PPattern "with" [PatternPatternMatch] ;
+PPtNew.    PPattern1 ::= "new" [VarPattern] "in" PPattern1 ;
+PPtConstr. PPattern1 ::= Name "(" [PPattern] ")" ;
+PPtPar.    PPattern  ::= PPattern "|" PPattern1 ;
+separator PPattern "," ;
+coercions PPattern 4 ;
+
+-- Channel patterns
+CPtVar.    CPattern ::= VarPattern ;
+CPtQuote.  CPattern ::= "@" PPattern3 ;
+separator CPattern "," ;
+
+-- Bind pattern
+PtBind.   PatternBind ::= CPattern "<-" CPattern ;
+separator nonempty PatternBind ";" ;
+
+-- Pattern match branch pattern
+PtBranch. PatternPatternMatch ::= PPattern "=>" "{" PPattern "}" ;
+separator nonempty PatternPatternMatch "" ;
+
+-- Value patterns
+VPtStruct. ValPattern ::= Var "{" [PPattern] "}" ;
+--VPtString. ValPattern ::=  ;
+--VPtArray.  ValPattern ::=  ;
+--VPtList.   ValPattern ::=  ;
+
+-- Names and variables
+token Name (upper (letter | digit | '_' | '\'')*) ;
+token Var (lower (letter | digit | '_' | '\'')*) ;
+
+separator nonempty Var "," ;
+separator nonempty Name "," ;

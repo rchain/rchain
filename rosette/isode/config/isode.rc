@@ -1,0 +1,75 @@
+# /etc/init.d/isode - start/stop ISODE services
+#
+# /etc/init.d/isode is linked (ln) to the following files
+#
+# 	/etc/rc0.d/K30isode
+#	/etc/rc2.d/S70isode
+#
+# Revision History:
+# 11/30/90	G. Lavender, NetWorks One	Initial coding
+# 11/21/91	G. Lavender, MCC		broke quipu/snmp
+#						into separate scripts
+#
+
+USAGE="Usage: $0 {start | stop}"
+PATH=/bin:/usr/bin
+SBIN=/usr/local/sbin
+AWK=awk
+GREP=egrep
+TSAPD=tsapd
+#TSAPD=iaed
+
+case "$1" in
+start)
+	echo "Starting ISODE services:\c"
+
+	# start TSAP daemon if not already started
+
+	if [ -f $SBIN/$TSAPD -a -z "`ps -e | $GREP 'tsapd'`" ]
+	then
+		$SBIN/$TSAPD >/dev/null 2>&1
+		echo " $TSAPD \c"
+	fi
+
+	# start LPP Daemon if not already started
+
+	if [ -f $SBIN/lppd -a -z "`ps -e | $GREP 'lppd'`" ]
+	then
+		$SBIN/lppd >/dev/null 2>&1
+		echo " lppd\c"
+	fi
+
+	echo "."	# echo newline
+	;;
+
+stop)
+
+	# kill any ftp/ftam gateway processes
+
+	inetd=`ps -e | $GREP 'inetd' | $AWK '{print $1}'`
+	if [ ! -z "${inetd}" ]
+ 	then
+		pids=`ps -fg${inetd} | $GREP 'ftpd\-ftam' | $AWK '{print $2}'`
+		if [ ! -z "${pids}" ]
+		then
+			kill ${pids}
+		fi
+	fi
+
+	# kill services
+
+	pids=`ps -e | $GREP 'tsapd|lppd' | $AWK '{print $1}'`
+	if [ ! -z "${pids}" ]
+	then
+		kill ${pids}
+	fi
+
+	echo "ISODE services stopped."
+	;;
+*)
+	echo $USAGE
+	exit 1
+	;;
+esac
+
+

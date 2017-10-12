@@ -1,0 +1,21 @@
+syntax                        = "proto3";
+package coop.rchain;
+
+message Envelope {
+    uint64 version            = 1;
+    bytes  node_id            = 2;
+    bytes  method             = 3;
+    uint64 transaction_number = 4;
+    uint64 time_since_epoch   = 5;
+    bytes  payload            = 7;
+}
+
+enum Code {
+    NACK                      = 0;
+    ACK                       = 1;
+}
+
+message QuickResponse {
+    Code code                 = 1;
+}
+

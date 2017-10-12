@@ -1,0 +1,53 @@
+# Mode: -*- MAKEFILE -*-
+# @BC
+#		                Copyright (c) 1993
+#	    by Microelectronics and Computer Technology Corporation (MCC)
+#				All Rights Reserved
+#
+#	Permission to use, copy, modify, and distribute this software and its
+#	documentation for any purpose and without fee is hereby granted,
+#	provided that this notice be retained unaltered, and that the name of
+#	MCC and its shareholders and participants shall not be used in
+#	advertising or publicity pertaining to distribution of the software
+#	without specific written prior permission.
+#
+#	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+#	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+#	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+#
+
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/defs/sun4.defs,v 1.1.1.1 1993/02/12 01:26:02 tomlic Exp $
+#
+# $Log: sun4.defs,v $
+# Revision 1.1.1.1  1993/02/12  01:26:02  tomlic
+# pub release of rosette
+#
+# @EC
+
+
+# sun4.defs
+
+ARCH	= sun4
+MACH	= sparc
+OS	= os4
+
+C++		=	/usr/local/lang/CC
+LEX++		=	/usr/lang/lex++
+YACC++		=	/usr/lang/yacc++
+C++_LIBDIR	=	/usr/lang/SC1.0
+C++_INCDIR	=	/usr/lang/SC1.0/include/CC
+
+# Selectively uncomment the following depending
+# on your system.
+
+# Are any of the platforms of this type licensed for OSI transport?
+# If so, define the location of the OSI include files, 
+# libraries and the name of the archive(s) to link with
+# The OSI.present is used at runtime (of gmake) to determine whether it is
+# running on a system that is licensed.  It will typically be some directory
+# or file that is visible only if the license is held.
+
+OSI.present	= /usr/sunlink/osi
+
+include ess_sys.defs

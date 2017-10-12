@@ -1,0 +1,128 @@
+# Mode: -*- MAKEFILE -*-
+# @BC
+#		                Copyright (c) 1993
+#	    by Microelectronics and Computer Technology Corporation (MCC)
+#				All Rights Reserved
+#
+#	Permission to use, copy, modify, and distribute this software and its
+#	documentation for any purpose and without fee is hereby granted,
+#	provided that this notice be retained unaltered, and that the name of
+#	MCC and its shareholders and participants shall not be used in
+#	advertising or publicity pertaining to distribution of the software
+#	without specific written prior permission.
+#
+#	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+#	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+#	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+#
+
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/include/mk/default.defs,v 1.1.1.1 1993/02/12 01:25:54 tomlic Exp $
+#
+# $Log: default.defs,v $
+# Revision 1.1.1.1  1993/02/12  01:25:54  tomlic
+# pub release of rosette
+#
+# @EC
+
+
+# default.defs
+
+# ESS release version
+VERS		= 3.0
+
+# GLOBAL ESS make variables
+# NOTE: ESS_SYSDIR should be set in the ENVIRONMENT
+
+ifdef DEV
+Dev.dir		= $(DEVDIR)
+endif
+
+ifndef ESS_SYSDIR
+ESS_SYSDIR	= .
+endif
+
+
+# Basic Environment settings
+
+MAKE		= cpmake
+SHELL		= /bin/sh
+RWD		= $(INITIAL_WD)/
+AR		= ar
+ARFLAGS		= lru
+
+# Architecture independent installation pathnames
+
+Ess_sys.dir	= $(ESS_SYSDIR)
+Ess_sys.bin	= $(Ess_sys.dir)/bin
+Ess_sys.etc	= $(Ess_sys.dir)/etc
+Ess_sys.inc	= $(Ess_sys.dir)/include
+Ess_sys.lib	= $(Ess_sys.dir)/lib
+Ess_sys.dev.lib	= $(Ess_sys.dir)$(DEVDIR)/lib
+Ess_sys.man	= $(Ess_sys.dir)/man
+Rbl.lib		= $(Ess_sys.lib)/rbl
+Rbl.mods	= $(Rbl.lib)/MODULES
+
+
+# Architecture dependent installation pathnames
+Arch.dir	= $(Ess_sys.dir)/$(ARCH)
+Arch.bin	= $(Arch.dir)/bin
+Arch.etc	= $(Arch.dir)/etc
+Arch.inc	= $(Arch.dir)/include
+Arch.lib	= $(Arch.dir)/lib
+Arch.man	= $(Arch.dir)/man
+Arch.sbin	= $(Arch.dir)/sbin
+Arch.tmp	= $(Arch.dir)/tmp
+
+Arch.dev.dir	= $(Arch.dir)$(DEVDIR)
+Arch.dev.bin	= $(Arch.dev.dir)/bin
+Arch.dev.etc	= $(Arch.dev.dir)/etc
+Arch.dev.inc	= $(Arch.dev.dir)/include
+Arch.dev.lib	= $(Arch.dev.dir)/lib
+Arch.dev.man	= $(Arch.dev.dir)/man
+Arch.dev.sbin	= $(Arch.dev.dir)/sbin
+Arch.dev.tmp	= $(Arch.dev.dir)/tmp
+
+# Rosette pathnames:
+# the following are used as sources for subsystems like rda, dsqm, etc.
+# they may build from development or production libraries and includes.
+# Dev.dir should be set somewhere like on the command line to cmake
+# see SRC.mk for a method based on defining DEV on the command line to make
+Rose.dir	= $(Ess_sys.dir)$(Dev.dir)
+Rose.inc	= $(Rose.dir)/include/rosette
+Rose.arch.dir	= $(Ess_sys.dir)/$(ARCH)$(Dev.dir)
+Rose.lib	= $(Rose.arch.dir)/lib/ess
+Rose.libnms	= rbl
+Rose.lib.objs	= $(Rose.lib)/kernel
+Rose.lib.supps	= $(Rose.lib)/supps
+
+# the following are targets that are used in the install rules of
+# SRC.mk and SWITCH.mk to name the places to put stuff
+Rose.dev.inc	= $(Ess_sys.dir)$(DEVDIR)/include/rosette
+Rose.dev.rbl	= $(Ess_sys.dev.lib)/rbl
+Rose.dev.lib	= $(Arch.dev.lib)/ess
+Rose.dev.objs	= $(Rose.dev.lib)/kernel
+Rose.dev.supps	= $(Rose.dev.lib)/supps
+
+
+# ISODE pathnames
+Isode.incdir	= $(Arch.inc)/isode
+Isode.libdir	= $(Arch.lib)/isode
+Isode.libnms	= isode
+ifndef Isode.rbllibdir
+Isode.rbllibdir	= $(Arch.lib)/rblisode
+endif
+Isode.rbllibnms	= rblisode
+
+
+# Definitions for OSI lower layer protocol support
+# see $(ARCH)-src.defs for library and include directory paths as well
+# as lib name.  OSI.present is set in $ESS_SYSDIR/defs/$ARCH.defs
+
+ifdef OSI.present
+ifeq "$(shell ls -d $(OSI.present))" "$(OSI.present)"
+OSI		= yes
+else
+OSI		=
+endif
+endif

@@ -1,0 +1,184 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defSlot (sbo Proc) '*mmSignatureLocation*   0)
+(defSlot (sbo Proc) '*mmBackPointerLocation* 1)
+(defSlot (sbo Proc) '*mmIndexLocation*       2)
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (setSignature sign)
+  (free [*mmSignatureLocation*]
+    (update! 'id (set-nth id *mmSignatureLocation* sign))))
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (getSignature) pure&
+  (free [*mmSignatureLocation*]
+    (nth id *mmSignatureLocation*)))
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (setMethod m)
+  (free [*mmBackPointerLocation*]
+    (update! 'id (set-nth id *mmBackPointerLocation* m))))
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (getMethod) pure&
+  (free [*mmBackPointerLocation*]
+    (nth id *mmBackPointerLocation*)))
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (setNextIndex index)
+  (free [*mmIndexLocation*]
+    (update! 'id (set-nth id *mmIndexLocation* index))))
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (getNextIndex) pure&
+  (free [*mmIndexLocation*]
+    (nth id *mmIndexLocation*)))
+
+(defOprn (proto& Proc) (sbo& (sbo Proc))
+  (installMMId sign rest mm)
+  (let [[ans (new ProductType sign rest)]]
+    (seq (update! 'id [ans mm #niv])
+	 ans)))
+
+(defOprn (proto& MultiMethod) (sbo& (sbo MultiMethod))
+  (addProc sign proc)
+  ;;; Insert proc in sorted position.
+  (iterate loop [[plist procList]
+		 [ans []]]
+    (if (null? plist)
+	(seq ;(display "out of procs" nl)
+	     (setNextIndex proc (+ (size ans) 1))
+	     (update! 'procList (concat ans [proc])))
+	(let [[psign (getSignature (head plist))]]
+
+	  ;;; if there comparable and incoming is greater
+	  ;;; keep looping.
+	  (if (type> sign psign)
+	      (seq ;(display "incoming greater " nl)
+		   (loop (tail plist) (concat ans [(head plist)])))
+
+	      ;;; if incoming is less then plop it down.
+	      (if (type< sign psign)
+		  (seq ;(display "incoming less" nl)
+		       (setNextIndex proc (+ (size ans) 1))
+		       (mapx plist
+			     (proc [p]
+			       (setNextIndex p (+ (getNextIndex p) 1))))
+		       (update! 'procList (concat ans [proc & plist])))
+
+		  ;;; if incoming is = replace old body.
+		  (if (type= sign psign)
+		      (seq ;(display "incoming replacing" nl)
+			   (setNextIndex proc (+ (size ans) 1))
+			   (update! 'procList
+				    (concat ans [proc & (tail plist)])))
+
+		      ;;; if not comparable but exists a join
+		      ;;; then this creates ambiguity. Note that
+		      ;;; if we could guarantee meets and compute them
+		      ;;; then we wouldn't always have to warn.
+		      (if (not (type= (typeLub sign psign) Top))
+			  (seq
+			   (warn
+			    "installing method creates ambiguity in lookup"
+			    sign psign)
+			   (setNextIndex proc (+ (size ans) 1))
+			   (mapx plist
+				 (proc [p]
+				   (setNextIndex p
+						 (+ (getNextIndex p) 1))))
+			   (update!
+			    'procList (concat ans [proc & plist])))
+
+			  ;;; not comparable and no join, just plop it down
+			  (seq ;(display "incoming not comparable" nl)
+			       (setNextIndex proc (+ (size ans) 1))
+			       (mapx plist
+				     (proc [p]
+				       (setNextIndex p
+						     (+ (getNextIndex p) 1))))
+			       (update!
+				'procList (concat ans [proc & plist])))))))))))
+
+;;;-------------------------------------------------------------------;;;
+;;;                                                                   ;;;
+;;; (defMulti (<name> (<type1> <var1>) ... (<typen> <varn>)           ;;;
+;;;                 & (<restvar> <rest type>))                        ;;;
+;;;   body)                                                           ;;;
+;;;                                                                   ;;;
+;;;-------------------------------------------------------------------;;;
+
+(defSlot (sbo MultiMethod) '*unique-methods* (new RblTable))
+
+(defOprn (proto& (sbo MultiMethod)) (sbo& (sbo (sbo MultiMethod)))
+  (getMethodByName name)
+  (let [[m (tbl-get *unique-methods* name)]]
+    (if (absent? m)
+	(let [[nm (new MultiMethod)]]
+	  (seq (tbl-add *unique-methods* name nm)
+	       (update!)
+	       nm))
+	(seq (update!) m))))
+
+(defExpander (defMultiMthd e)
+  (let* [[[<call-form> & <body>] (->tuple msg)]
+	 [<name> ('trgt <call-form>)]
+	 [<var-decls> (->tuple ('msg <call-form>))]
+	 [<vars> (mapx <var-decls>
+		       (proc [vd]
+			 (if (type? RequestExpr vd)
+			     (head (->tuple ('msg vd)))
+			     vd)))]
+	 [<types> (mapx <var-decls>
+			(proc [vd]
+			  (if (type? RequestExpr vd)
+			      (eval (e ('trgt vd) e))
+			      Top)))]
+	 [<rest-decl> ('rest ('msg <call-form>))]
+	 [<rest-var> (if (type? RequestExpr <rest-decl>)
+			 (head (->tuple ('msg <rest-decl>)))
+			 <rest-decl>)]
+	 [<rest-type> (if (type? RequestExpr <rest-decl>)
+			  (eval (e ('trgt <rest-decl>) e))
+			  Top)]
+	 [<proc-let-var> (concat '* <name> 'proc '*)]
+	 [<meth-let-var> (concat '* <name> 'meth '*)]
+	 [<sign-let-var> (concat '* <name> 'signature '*)]]
+    (new LetExpr (TX (TX <proc-let-var>
+			 (new ProcExpr
+			      (Q <name>) (new TupleExpr <rest-var> <vars>)
+			      (new BlockExpr (e <body> e))))
+		     (TX <meth-let-var>
+			 (RX 'getMethodByName
+			     (RX 'sbo MultiMethod) (Q <name>))))
+	 (new LetExpr (TX (TX <sign-let-var>
+			      (RX 'installMMId
+				  <proc-let-var>
+				  <types>
+				  <rest-type>
+				  <meth-let-var>)))
+	      (new SeqExpr
+		   [(RX 'addProc <meth-let-var> <sign-let-var> <proc-let-var>)
+		    (RX 'add (Q <name>) <meth-let-var>)
+		    (Q <name>)])))))

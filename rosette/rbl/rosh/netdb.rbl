@@ -1,0 +1,146 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; NETWORK Databases
+
+;;; HOST Entries
+
+(defStructure HostEntry
+  (ref0 char)		name
+  (ref0 (ref0 char))	aliases
+  int			addrtype
+  int			length
+  (ref0 (ref in_addr))	addr_list)
+;;;  (ref (ref char))	addr_list) ; OLD DEFN
+
+(defForeign (gethostbyaddr (ref in_addr) int int) (ref HostEntry))
+
+(defForeign (gethostbyname String) (ref HostEntry))
+
+(defForeign (gethostent) (ref HostEntry))
+
+(defForeign (sethostent int) int)
+
+  (define STAYOPEN 1)			;; keep db open between calls
+
+(defForeign (endhostent) int)
+
+(defProc (hostaliases_heuristic nm)
+  (let* [[x (string-split nm ".")]
+ 	 [pieces (headN x (- (size x) 1))]]
+    (if (null? pieces)
+ 	[]
+ 	(iterate loop [[n1 (head pieces)] [r (tail pieces)] [ans []]]
+ 	  (let [[he (gethostbyname n1)]]
+ 	    (if (isNull? he)
+ 		(if (null? r)
+ 		    ans
+ 		    (loop (string-join 0 "." [n1 (head r)])
+			  (tail r)
+			  ans))
+ 		(if (null? r)
+ 		    [n1 & ans]
+ 		    (loop (string-join 0 "." [n1 (head r)])
+			  (tail r)
+			  [n1 & ans]))
+ 		))))))
+ 
+(defProc (hostaliases nm)
+  (let [[he (gethostbyname (->string nm))]]
+    (if (isNull? he)
+ 	[]
+ 	(let [[hh (mapx (hostaliases_heuristic (. he name)) ->symbol)]
+ 	      [xx (mapx (. he aliases) ->symbol)]]
+ 	  (set-union hh xx)))))
+ 
+
+;;; NETWORK Entries
+
+(defStructure NetworkEntry
+  (ref0 char)		name
+  (ref0 (ref0 char))	aliases
+  int			addrtype
+  ulong			net)
+
+(defForeign (getnetbyaddr long int) (ref NetworkEntry))
+
+(defForeign (getnetbyname String) (ref NetworkEntry))
+
+(defForeign (getnetent) (ref NetworkEntry))
+
+(defForeign (setnetent int) int)
+
+(defForeign (endnetent) int)
+
+;;; PROTOCOL Entries
+
+(defStructure ProtocolEntry
+  (ref0 char)		name
+  (ref0 (ref0 char))	aliases
+  int			proto)
+
+(defForeign (getprotobyname String) (ref ProtocolEntry))
+
+(defForeign (getprotobynumber int) (ref ProtocolEntry))
+
+(defForeign (getprotoent) (ref ProtocolEntry))
+
+(defForeign (setprotoent int) int)
+
+(defForeign (endprotoent) int)
+
+;;; RPC Entries
+
+(defStructure RpcEntry
+  (ref0 char)		name
+  (ref0 (ref0 char))	aliases
+  int			number)
+
+(defForeign (getrpcbyname String) (ref RpcEntry))
+
+(defForeign (getrpcbynumber int) (ref RpcEntry))
+
+(defForeign (getrpcent) (ref RpcEntry))
+
+(defForeign (setrpcent int) int)
+
+(defForeign (endrpcent) int)
+
+;;; SERVICE Entries
+
+(defStructure ServiceEntry
+  (ref0 char)		name
+  (ref0 (ref0 char))	aliases
+  int			port
+  (ref char)		proto)
+
+(defForeign (getservbyname String String) (ref ServiceEntry))
+
+(defForeign (getservbyport int String) (ref ServiceEntry))
+
+(defForeign (getservent) (ref ServiceEntry))
+
+(defForeign (setservent int) int)
+
+(defForeign (endservent) int)
+

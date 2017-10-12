@@ -1,0 +1,60 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; PROCESS, USER, and other identifiers
+
+;;; retrieve name of host on which the current instance is running
+
+(let [[buf (new (array char 64))]
+      [hnm (foreign-proc (_gethostname (ref char) int) int)]]
+  (defProc (hostname)
+    (seq (hnm buf 64)
+	 (char*->string (offset buf)))))
+
+(defForeign (hostid) int (name& _gethostid))
+
+;;; unique symbol generation
+
+(add 'counter 0 (sbo Symbol))
+
+(defOprn (sbo& (sbo Symbol)) (increment-counter)
+  (free [counter]
+    counter
+    (update counter (inc counter))))
+
+(defOprn (unique) (sbo& (sbo Symbol)) pure&
+  (concat (self)
+	  "_" (fx-abs (hostid))
+	  "_" (increment-counter (sbo (self)))))
+
+(defForeign (getuid) int)
+
+(defForeign (getgid) int)
+
+(defForeign (getpid) int)
+
+(defForeign (getppid) int)
+
+(defForeign (getpgrp int) int)
+
+(defForeign (setpgrp int int) int)

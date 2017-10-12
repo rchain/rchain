@@ -1,0 +1,72 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; dyn-load.rbl
+
+(defProc (LDR)
+  (let [[e_ldr (getEnv *config* 'DYNLDR)]]
+    (if (string= e_ldr "")
+	"/bin/ld"
+	e_ldr)))
+
+(define LDtmplt " -N -A %s -T %lx -o %s ")
+
+(define ESS_SYSDIR (getEnv *config* 'ESS_SYSDIR))
+
+(defProc (ESS_SYSLIBDIR)
+  (concat "-L"
+	  (string-join 0 "/" [ESS_SYSDIR (arch-str *config*) "lib"])))
+
+(defProc (XLIBDIR)
+  (getEnv *config* 'XLIBDIR))
+
+(defProc (XLIB)
+  (getEnv *config* 'XLIB))
+
+(defProc (OSILIBDIR)
+  (getEnv *config* 'OSILIBDIR))
+
+(defProc (OSILIB)
+  (getEnv *config* 'OSILIB))
+
+(defProc (ISOLIB)
+  (getEnv *config* 'ISOLIB))
+  
+(defProc (ISOLIBDIRS)
+  (string-join 3 " " [(ESS_SYSLIBDIR) (OSILIBDIR)]))
+
+
+(defProc (ldr-string & r)
+  (concat (LDR) LDtmplt (string-join 1 " " r)))
+
+(defProc (dyn-load dirs objs libs)
+  (wizard-load (ldr-string dirs objs libs)))
+
+(defProc (ess-load dirs objs libs)
+  (dyn-load (concat (string-join 1 " -L" dirs) (ISOLIBDIRS))
+	    (string-join 3 " " objs)
+	    (string-join 3 " "
+			 [(string-join 1 " -l" libs)
+			 (OSILIB)
+			 (ISOLIB)
+			 "-lc"])))
