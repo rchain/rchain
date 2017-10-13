@@ -1,6 +1,7 @@
 package coop.rchain.rosette
 
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rosette.Tuple.NIL
 
 sealed trait RblError
 case object DeadThread extends RblError
@@ -13,11 +14,6 @@ case class StrandsScheduled(state: VMState) extends Work
 object VirtualMachine {
 
   val logger = Logger("opcode")
-
-  def unwindAndApplyPrim(prim: Prim): Either[RblError, Ob] = Right(null)
-  def handleException(result: Ob, op: Op, loc: Location): Ob = null
-  def handleFormalsMismatch(formals: Template): Ob = null
-  def handleMissingBinding(key: Ob, argReg: Location): Ob = null
 
   val vmLiterals: Seq[Ob] = Seq(
     Fixnum(0),
@@ -33,6 +29,48 @@ object VirtualMachine {
     Tuple.NIL,
     Ob.NIV
   )
+
+  /**
+    *  This code protects the current argvec, temporarily replacing it
+    *  with the unwound argvec for use by the primitive, and then
+    *  restoring it after the primitive has finished.  This is necessary
+    *  because of the way that the compiler permits inlined primitives
+    *  (the subjects of opApplyPrim opcodes) to share a common argvec.
+    *  Unwinding cannot be permitted to clobber the argvec that the
+    *  compiler has set up, or bad things can happen (and they are *hard*
+    *  to track down).
+    */
+  def unwindAndApplyPrim(prim: Prim,
+                         state: VMState): (Either[RblError, Ob], VMState) =
+    state.ctxt.argvec.flattenRest() match {
+      case Right(newArgvec) =>
+        val tmpState = state
+          .set(_ >> 'ctxt >> 'argvec)(newArgvec)
+          .set(_ >> 'ctxt >> 'nargs)(newArgvec.elem.size)
+
+        val result = prim.dispatchHelper(tmpState.ctxt)
+
+        (result, state)
+
+      case Left(AbsentRest) =>
+        val tmpState = state
+          .set(_ >> 'ctxt >> 'argvec)(Tuple.NIL)
+          .set(_ >> 'ctxt >> 'nargs)(0)
+
+        val result = prim.dispatchHelper(tmpState.ctxt)
+
+        (result, state)
+
+      case Left(InvalidRest) =>
+        val (error, errorState) =
+          prim.runtimeError("&rest value is not a tuple", state)
+
+        (Left(error), errorState)
+    }
+
+  def handleException(result: Ob, op: Op, loc: Location): Ob = null
+  def handleFormalsMismatch(formals: Template): Ob = null
+  def handleMissingBinding(key: Ob, argReg: Location): Ob = null
 
   def getNextStrand(state: VMState): (Boolean, VMState) =
     if (state.strandPool.isEmpty) {
@@ -339,32 +377,35 @@ object VirtualMachine {
       .set(_ >> 'loc)(LocationAtom(state.code.lit(op.v)))
       .updateSelf(state => {
         val prim = Prim.nthPrim(op.k)
-        val result = if (op.u) { unwindAndApplyPrim(prim) } else {
-          prim.dispatchHelper(state.ctxt)
-        }
+
+        val (result, newState) =
+          if (op.u) { unwindAndApplyPrim(prim, state) } else {
+            (prim.dispatchHelper(state.ctxt), state)
+          }
+
         result match {
           case Right(ob) =>
             if (ob.is(Ob.OTsysval)) {
-              handleException(ob, op, state.loc)
-              state.set(_ >> 'doNextThreadFlag)(true)
+              handleException(ob, op, newState.loc)
+              newState.set(_ >> 'doNextThreadFlag)(true)
             } else {
               import Location._
 
               Location
-                .store(state.loc, state.ctxt, state.globalEnv, ob) match {
-                case StoreFail => state.set(_ >> 'vmErrorFlag)(true)
+                .store(newState.loc, newState.ctxt, newState.globalEnv, ob) match {
+                case StoreFail => newState.set(_ >> 'vmErrorFlag)(true)
 
                 case StoreCtxt(ctxt) =>
-                  state
+                  newState
                     .set(_ >> 'ctxt)(ctxt)
                     .update(_ >> 'doNextThreadFlag)(if (op.n) true else _)
 
-                case StoreGlobal(env) => state.set(_ >> 'globalEnv)(env)
+                case StoreGlobal(env) => newState.set(_ >> 'globalEnv)(env)
               }
             }
 
           case Left(DeadThread) =>
-            state.set(_ >> 'doNextThreadFlag)(true)
+            newState.set(_ >> 'doNextThreadFlag)(true)
         }
       })
 
@@ -374,25 +415,27 @@ object VirtualMachine {
       .updateSelf(state => {
         val prim = Prim.nthPrim(op.k)
         val argno = op.a
-        val result = if (op.u) { unwindAndApplyPrim(prim) } else {
-          prim.dispatchHelper(state.ctxt)
-        }
+
+        val (result, newState) =
+          if (op.u) { unwindAndApplyPrim(prim, state) } else {
+            (prim.dispatchHelper(state.ctxt), state)
+          }
 
         result match {
           case Right(ob) =>
             if (ob.is(Ob.OTsysval)) {
-              handleException(ob, op, state.loc)
-              state.set(_ >> 'doNextThreadFlag)(true)
-            } else if (argno >= state.ctxt.argvec.elem.length) {
-              state.set(_ >> 'vmErrorFlag)(true)
+              handleException(ob, op, newState.loc)
+              newState.set(_ >> 'doNextThreadFlag)(true)
+            } else if (argno >= newState.ctxt.argvec.elem.length) {
+              newState.set(_ >> 'vmErrorFlag)(true)
             } else {
-              state
+              newState
                 .update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(argno, ob))
                 .update(_ >> 'doNextThreadFlag)(if (op.n) true else _)
             }
 
           case Left(DeadThread) =>
-            state.set(_ >> 'doNextThreadFlag)(true)
+            newState.set(_ >> 'doNextThreadFlag)(true)
         }
 
       })
@@ -403,23 +446,25 @@ object VirtualMachine {
       .updateSelf(state => {
         val prim = Prim.nthPrim(op.k)
         val regno = op.r
-        val result = if (op.u) { unwindAndApplyPrim(prim) } else {
-          prim.dispatchHelper(state.ctxt)
-        }
+
+        val (result, newState) =
+          if (op.u) { unwindAndApplyPrim(prim, state) } else {
+            (prim.dispatchHelper(state.ctxt), state)
+          }
 
         result match {
           case Right(ob) =>
             if (ob.is(Ob.OTsysval)) {
               handleException(ob, op, Location.CtxtReg(regno))
-              state.set(_ >> 'doNextThreadFlag)(true)
+              newState.set(_ >> 'doNextThreadFlag)(true)
             } else {
-              state
+              newState
                 .update(_ >> 'ctxt >> 'reg)(_.updated(regno, ob))
                 .update(_ >> 'doNextThreadFlag)(if (op.n) true else _)
             }
 
           case Left(DeadThread) =>
-            state.set(_ >> 'doNextThreadFlag)(true)
+            newState.set(_ >> 'doNextThreadFlag)(true)
         }
 
       })
@@ -429,20 +474,22 @@ object VirtualMachine {
       .set(_ >> 'ctxt >> 'nargs)(op.m)
       .updateSelf(state => {
         val prim = Prim.nthPrim(op.k)
-        val result = if (op.u) { unwindAndApplyPrim(prim) } else {
-          prim.dispatchHelper(state.ctxt)
-        }
+
+        val (result, newState) =
+          if (op.u) { unwindAndApplyPrim(prim, state) } else {
+            (prim.dispatchHelper(state.ctxt), state)
+          }
 
         result match {
           case Right(ob) =>
             if (ob.is(Ob.OTsysval)) {
               handleException(ob, op, Location.LIMBO)
-              state.set(_ >> 'doNextThreadFlag)(true)
+              newState.set(_ >> 'doNextThreadFlag)(true)
             } else {
-              state.update(_ >> 'doNextThreadFlag)(if (op.n) true else _)
+              newState.update(_ >> 'doNextThreadFlag)(if (op.n) true else _)
             }
           case Left(DeadThread) =>
-            state.set(_ >> 'doNextThreadFlag)(true)
+            newState.set(_ >> 'doNextThreadFlag)(true)
         }
       })
 

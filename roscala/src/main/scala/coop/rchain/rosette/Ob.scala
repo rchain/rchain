@@ -31,6 +31,8 @@ trait Ob extends Base {
     Right(null)
   def matches(ctxt: Ctxt): Boolean = false
   def numberOfSlots(): Int = Math.max(0, slot.length - 2)
+  def runtimeError(msg: String, state: VMState): (RblError, VMState) =
+    (DeadThread, state)
   def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob = null
   def setField(ind: Int,
                level: Int,

@@ -7,11 +7,30 @@ package coop.rchain.rosette
   *  in messages, and as a primitive data structure in the definition
   *  of other actors
   */
+sealed trait TupleError
+case object AbsentRest extends TupleError
+case object InvalidRest extends TupleError
+
 case class Tuple(elem: Seq[Ob],
                  override val parent: Ob,
                  override val meta: Ob,
                  override val slot: Seq[Ob])
     extends Ob {
+
+  def accepts(msg: Ctxt): Boolean =
+    if (this == Tuple.NIL) {
+      true
+    } else {
+      this.elem.exists(_.matches(msg))
+    }
+
+  def flattenRest(): Either[TupleError, Tuple] =
+    this.elem.lastOption match {
+      case Some(t: Tuple) if t != Tuple.NIL =>
+        Right(Tuple(this.makeSlice(0, this.elem.size - 1), t))
+      case Some(ob) => Left(InvalidRest)
+      case None => Left(AbsentRest)
+    }
 
   def makeSlice(offset: Int, n: Int): Tuple =
     this match {
@@ -23,24 +42,6 @@ case class Tuple(elem: Seq[Ob],
     val size = this.elem.size - entriesToSkip
     Tuple(size, this, entriesToSkip, size)
   }
-
-  def nth(n: Int): Option[Ob] = this.elem.lift(n)
-
-  def setNth(n: Int, ob: Ob): Option[Tuple] =
-    try {
-      Some(Tuple(this.elem.updated(n, ob), this.parent, this.meta, this.slot))
-    } catch {
-      case _: IndexOutOfBoundsException => None
-    }
-
-  def subObject(i: Int, n: Int): Tuple = makeSlice(i, n)
-
-  def accepts(msg: Ctxt): Boolean =
-    if (this == Tuple.NIL) {
-      true
-    } else {
-      this.elem.exists(_.matches(msg))
-    }
 
   override def matches(msg: Ctxt): Boolean = {
     val n = this.elem.size
@@ -100,6 +101,17 @@ case class Tuple(elem: Seq[Ob],
 
       } else false
     }
+
+  def nth(n: Int): Option[Ob] = this.elem.lift(n)
+
+  def setNth(n: Int, ob: Ob): Option[Tuple] =
+    try {
+      Some(Tuple(this.elem.updated(n, ob), this.parent, this.meta, this.slot))
+    } catch {
+      case _: IndexOutOfBoundsException => None
+    }
+
+  def subObject(i: Int, n: Int): Tuple = makeSlice(i, n)
 
 }
 
