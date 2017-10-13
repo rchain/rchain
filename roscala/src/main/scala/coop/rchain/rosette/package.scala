@@ -1,6 +1,6 @@
 package coop.rchain
 
-import coop.rchain.rosette.parser.bytecode.{ParseError, UnknownOpCode}
+import coop.rchain.rosette.parser.bytecode.ParseError
 import reflect.runtime.universe._
 import reflect.runtime.currentMirror
 
@@ -25,7 +25,6 @@ package object rosette {
 
     implicit val parseErrorShow: Show[ParseError] =
       _ match {
-        case UnknownOpCode(op) => "Unknown Opcode: " + op.toBinaryString
         case e => e.toString
       }
 
