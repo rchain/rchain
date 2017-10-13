@@ -30,6 +30,16 @@ object VirtualMachine {
     Ob.NIV
   )
 
+  /**
+    *  This code protects the current argvec, temporarily replacing it
+    *  with the unwound argvec for use by the primitive, and then
+    *  restoring it after the primitive has finished.  This is necessary
+    *  because of the way that the compiler permits inlined primitives
+    *  (the subjects of opApplyPrim opcodes) to share a common argvec.
+    *  Unwinding cannot be permitted to clobber the argvec that the
+    *  compiler has set up, or bad things can happen (and they are *hard*
+    *  to track down).
+    */
   def unwindAndApplyPrim(prim: Prim,
                          state: VMState): (Either[RblError, Ob], VMState) =
     state.ctxt.argvec.flattenRest() match {

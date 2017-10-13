@@ -26,7 +26,8 @@ case class Tuple(elem: Seq[Ob],
 
   def flattenRest(): Either[TupleError, Tuple] =
     this.elem.lastOption match {
-      case Some(t: Tuple) if t != Tuple.NIL => Right(Tuple(this, t))
+      case Some(t: Tuple) if t != Tuple.NIL =>
+        Right(Tuple(this.makeSlice(0, this.elem.size - 1), t))
       case Some(ob) => Left(InvalidRest)
       case None => Left(AbsentRest)
     }
