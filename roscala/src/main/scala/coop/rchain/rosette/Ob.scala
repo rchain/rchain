@@ -16,6 +16,7 @@ trait Ob extends Base {
   val slot: Seq[Ob]
   val obTag: ObTag = null
 
+  def dispatch(ctxt: Ctxt): Ob = null
   def extendWith(keymeta: Ob): Ob = null
   def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
   def getAddr(ind: Int, level: Int, offset: Int): Ob = null

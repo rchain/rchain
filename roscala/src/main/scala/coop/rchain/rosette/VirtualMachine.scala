@@ -1,7 +1,6 @@
 package coop.rchain.rosette
 
 import com.typesafe.scalalogging.Logger
-import coop.rchain.rosette.Tuple.NIL
 
 sealed trait RblError
 case object DeadThread extends RblError
@@ -30,7 +29,14 @@ object VirtualMachine {
     Ob.NIV
   )
 
-  /**
+  def handleException(result: Ob, op: Op, loc: Location): Ob = null
+  def handleFormalsMismatch(formals: Template): Ob = null
+  def handleMissingBinding(key: Ob, argReg: Location): Ob = null
+
+  def handleVirtualMachineError(state: VMState): Ob =
+    state.ctxt.vmError(state)
+
+   /**
     *  This code protects the current argvec, temporarily replacing it
     *  with the unwound argvec for use by the primitive, and then
     *  restoring it after the primitive has finished.  This is necessary
@@ -67,10 +73,6 @@ object VirtualMachine {
 
         (Left(error), errorState)
     }
-
-  def handleException(result: Ob, op: Op, loc: Location): Ob = null
-  def handleFormalsMismatch(formals: Template): Ob = null
-  def handleMissingBinding(key: Ob, argReg: Location): Ob = null
 
   def getNextStrand(state: VMState): (Boolean, VMState) =
     if (state.strandPool.isEmpty) {
@@ -205,7 +207,7 @@ object VirtualMachine {
     }
 
     if (mState.vmErrorFlag) {
-      //handleVirtualMachineError()
+      handleVirtualMachineError(mState)
       mState = mState.set(_ >> 'doNextThreadFlag)(true)
     }
 
@@ -616,7 +618,7 @@ object VirtualMachine {
     val env = (1 to level).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
     val slot = if (op.i) {
-      val actor = Actor(env)
+      val actor = new Actor { override val extension: Ob = env }
       actor.extension.slot
     } else {
       env.slot
@@ -631,7 +633,7 @@ object VirtualMachine {
     val env = (1 to level).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
     val slot = if (op.i) {
-      val actor = Actor(env)
+      val actor = new Actor { override val extension: Ob = env }
       actor.extension.slot
     } else {
       env.slot
