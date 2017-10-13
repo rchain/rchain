@@ -1,15 +1,15 @@
 #!/usr/bin/python
 
-import sys, os, json, subprocess, pip, getpass
-import __builtin__
+import getpass
+import github
+import json
+import os
+import os.path
+import pip
+import subprocess
+import sys
 
-from github import Github
-from os.path import expanduser
-
-
-FileNotFoundError = getattr(__builtin__,"IOError","FileNotFoundError")
-
-home = expanduser("~")
+home = os.path.expanduser("~")
 configPath = home + '/.pr_script_config.json'
 scriptPath = os.path.realpath(__file__)
 
@@ -22,12 +22,12 @@ def requireBase():
     return raw_input("Please specify the base branch you want the changes pulled into: ")
 
 
-def requireTickedId():
-    return raw_input("Type JIRA ticked's id: ")
+def requireTicketId():
+    return raw_input("Type JIRA ticket's id: ")
 
 
-def requireTickedHeader():
-    return raw_input("Type JIRA ticked's description: \n")
+def requireTicketHeader():
+    return raw_input("Type JIRA ticket's description: \n")
 
 
 def requireBody():
@@ -51,36 +51,26 @@ def validateValues(items):
     (k,v) = items
     if v is None:
         print("Cannot infer the {0} value".format(k))
-        newV = raw_input("Please specify a value for the : {0}".format(k))
+        newV = raw_input("Please specify a value for the {0}: ".format(k))
         return (k,newV)
     else:  
         return (k,v)
-
-    
-def readFile(name):
-    f = open(name, 'a+')
-    content = f.read()
-    f.close()
-    return content
 
         
 def execStdout(cmd):
     try:
         return subprocess.check_output(cmd)
     except subprocess.CalledProcessError:
-        None
+        pass
 
 
 def mapOptional(x,f):
-    if not x is None:
-        return f(x)
-    else:
-        x
+    return None if x is None else f(x)
 
 
 def gitName():
     name = execStdout(["git", "config", "user.name"])
-    mapOptional(name, lambda x: x.stript())
+    return mapOptional(name, lambda x: x.strip())
 
 
 def gitCurrentBranch():
@@ -89,21 +79,15 @@ def gitCurrentBranch():
 
 def gitOrigin():
     origin =  execStdout(["git", "config", "remote.origin.url"])
-    mapOptional(origin, lambda x: x.strip())
+    return mapOptional(origin, lambda x: x.strip())
 
 
-def parseJson(content):
+def readJson(name):
     try:
-        return json.loads(content)
+        with open(name, 'a+') as f:
+            return json.load(f)
     except ValueError:
         return {}
-
-    
-def optionalGet(dict,k):
-    if dict is None:
-        None
-    else:
-        dict.get(k, None)
 
 
 def dictMerge(l,r):
@@ -113,18 +97,25 @@ def dictMerge(l,r):
 
 
 def writeJson(dict, name):
-    f = open(name, 'w')
-    content = json.dumps(dict)
-    f.write(content)
-    f.close()
+    with open(name, 'w') as f:
+        json.dump(dict, f)
 
     
 def execCmd(args):
     return subprocess.call(args)
-                       
+
+
+
+class bcolors:
+    WARNING = '\033[93m'
+    ENDC = '\033[0m'
+
 
     
 class Config:
+    nameField = 'githubName'
+    remoteField = 'remote'
+    
     def __init__(self):
         globalConfig = self.loadConfig()
         
@@ -140,23 +131,23 @@ class Config:
         
     def setupConfig(self):
         self.config = self.globalConfig[scriptPath]
-        for k,v in self.config.items():
-            setattr(self, k, v)
+        self.name = self.config[self.nameField]
+        self.remote = self.config[self.remoteField]
         
 
     def loadConfig(self):
         try:
-            content = readFile(configPath)
-            globalConfig = parseJson(content)
-            return globalConfig
+            return readJson(configPath)
         except TypeError:
-            {}
+            return {}
 
 
     def createConfig(self):
-        data = {'githubName': gitName()}
+        print "No configuration file found. Starting to create a new configuration file."
+        
+        data = {self.nameField: gitName()}
         checkedDict = mapDict(validateValues, data)
-        checkedDict['remote'] = requireRemote()
+        checkedDict[self.remoteField] = requireRemote()
         globalConfig = { scriptPath: checkedDict }
         
         return globalConfig
@@ -164,36 +155,42 @@ class Config:
     
     
 class Tasks:
+    prWarningMessage = bcolors.WARNING \
+        + "Something went wrong while trying to create PR. " \
+        + "Please make sure that current branch differs from the 'base' and no PR was created before." \
+        + bcolors.ENDC
+        
     def __init__(self, config):
-        self.config = config
+        self.name = config.name
+        self.remote = config.remote
 
         
     def createBranch(self):
-        branchName = "dev-{0}-{1}".format(self.config.name, requireFeatureName())
-        execCmd(["git", "checkout", "-b", branchName])
+        branchName = "dev-{0}-{1}".format(self.name, requireFeatureName())
+        return execCmd(["git", "checkout", "-b", branchName])
 
         
     def createPr(self):
-        print "Creating PR. Make sure that you push recent changes to the origin"
+        print "Creating PR. Make sure that you push recent changes to the origin."
 
-        repoName = self.config.remote
-        username = self.config.name
+        repoName = self.remote
+        username = self.name
         password = requirePass()
-        github = Github(username, password)
+        g = github.Github(username, password)
 
-        for repo in github.get_user().get_repos():
+        for repo in g.get_user().get_repos():
             if repo.full_name.lower() == repoName:
                 self.checkAndMakePr(repo)
 
 
     def requireTitle(self):
-        tickedId = requireTickedId()
-        tickedHeader = requireTickedHeader()
-        return "JIRA# {0}: {1}".format(tickedId, tickedHeader)
+        ticketId = requireTicketId()
+        ticketHeader = requireTicketHeader()
+        return "JIRA# {0}: {1}".format(ticketId, ticketHeader)
 
     
     def getHead(self):
-        return "{0}:{1}".format(self.config.name, gitCurrentBranch())
+        return "{0}:{1}".format(self.name, gitCurrentBranch())
     
                 
     def requirePrParams(self):
@@ -211,7 +208,11 @@ class Tasks:
 
         params = self.requirePrParams()
 
-        repo.create_pull(*params)
+        try:
+            repo.create_pull(*params)
+        except github.GithubException as e:
+            print self.prWarningMessage
+            raise ValueError(e)
         
         print "Success"
         
@@ -221,7 +222,7 @@ class Tasks:
 
         
     def buildSnapshot(self):
-        "Start building snapshot.."
+        print "Start building snapshot.."
         return execCmd(["sbt", "package"])
 
     
@@ -236,7 +237,7 @@ class Tasks:
         
     def help(self):
         print  """Commands:
-        pr       - create a pull request to the 'origin'"
+        pr       - create a pull request to the 'origin'
         test     - run sbt tests
         branch   - create a new feature branch
         snapshot - build jar snapshot"""
@@ -264,7 +265,8 @@ def main():
     gitPython = "PyGitHub"
     
     config = Config()
-    print"Config is", config.config
+    print "Config path is: ", configPath
+    print "Config content is:\n", config.config
     tasks = Tasks(config)
     tasks.executeTask(sys.argv[1:])
     
