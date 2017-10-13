@@ -1,0 +1,27 @@
+Script to make a pull request.
+
+To use this script you need to install PyGitHub:
+pip install PyGitHub
+
+There is four supported commands:
+
+snapshot - creates a jar snapshot
+
+test     - run sbt tests
+
+branch   - creates new feature branch;
+           it uses your Github name and typed feature name to name the branch
+           
+pr       - create a pull request to the specified "remote" repository.
+
+           The "remote" is the address of repository which should "pull" your changes.
+           Remote should be specified in the following format: :owner/:repo
+
+           Before start initiating PR procedure script runs "test" command to check that code is OK.
+
+           This command also uses:
+                - your Github credentials to authenticate in Github;
+                - current branch's name as "head" for the pull request;
+                - "base" branch's name - the branch you want the changes pulled into
+                - title which is a title for your PR
+                - body which is a body for your PR
