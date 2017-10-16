@@ -33,7 +33,7 @@ class KeyLexer(lineIn: String) {
     throw new Exception("KeyLexer: '" + lineIn + "' must start with a key")
 
   // Check that parentheses nest correctly and all have partners.
-  var depth = 0
+  protected[KeyValueStore] var depth = 0
   for (i <- 0 until lineIn.length) {
     if (lineIn(i) == '(') depth += 1
     else if (lineIn(i) == ')') depth -= 1
@@ -43,8 +43,8 @@ class KeyLexer(lineIn: String) {
   if (depth != 0)
     throw new Exception("KeyLexer: malformed (2): '" + lineIn + "'")
 
-  val line = lineIn
-  var i = 0 // index into line
+  protected[KeyValueStore] val line = lineIn
+  protected[KeyValueStore] var i = 0 // index into line
 
   def NextToken(): LexToken = {
     val tokenStr = new StringBuilder
@@ -95,30 +95,24 @@ class KeyLexer(lineIn: String) {
     var endOfString = false
 
     while (i < line.length && c != '(' && c != ')' && c != ',') {
-      c match {
-        case _ if Character.isLetter(c) => {
-          if (isDigits)
-            throw new Exception(
-              "KeyLexer.NextToken(): malformed (4): '"
-                + line + "', " + i)
-          isLetters = true
-          tokenStr ++= line(i).toString
-        }
-
-        case _ if Character.isDigit(c) => {
-          if (isLetters)
-            throw new Exception(
-              "KeyLexer.NextToken(): malformed (5): '"
-                + line + "', " + i)
-          isDigits = true
-          tokenStr ++= line(i).toString
-        }
-
-        case _ =>
+      if (Character.isLetter(c)) {
+        if (isDigits)
           throw new Exception(
-            "KeyLexer.NextToken(): malformed (6): '"
+            "KeyLexer.NextToken(): malformed (4): '"
               + line + "', " + i)
-      }
+        isLetters = true
+        tokenStr ++= line(i).toString
+      } else if (Character.isDigit(c)) {
+        if (isLetters)
+          throw new Exception(
+            "KeyLexer.NextToken(): malformed (5): '"
+              + line + "', " + i)
+        isDigits = true
+        tokenStr ++= line(i).toString
+      } else
+        throw new Exception(
+          "KeyLexer.NextToken(): malformed (6): '"
+            + line + "', " + i)
 
       i += 1
       c = line(i)

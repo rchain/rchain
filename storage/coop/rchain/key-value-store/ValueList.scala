@@ -7,21 +7,21 @@
 
 package KeyValueStore
 
-import scala.collection.mutable._
+import scala.collection.mutable.ArrayBuffer
 
 // ValueList is a list of Value objects meant to model a list of
 // blobs or data. The values are stored in the order of appending.
 
 class Value(str: String) {
   if (str == null) throw new Exception("Value constructor argument is null")
-  val value = str.trim
+  protected[KeyValueStore] val value = str.trim
   if (value.isEmpty) throw new Exception("Value constructor argument is empty")
   override def toString: String = { value }
   def display: Unit = { print(value) }
 }
 
 class ValueList {
-  val list = ArrayBuffer[Value]()
+  protected[KeyValueStore] val list = ArrayBuffer[Value]()
   def add(value: Value): Unit = { list += value }
   def remove(value: Value): Boolean = {
     for (i <- 0 until list.size)

@@ -7,7 +7,7 @@
 
 package KeyValueStore
 
-import scala.collection.mutable._
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
 
 // A query is a key that is unified against a key in the store.
 
@@ -15,8 +15,8 @@ class Binding(queryP: TermTree, keyP: TermTree) {
   if (queryP == null || keyP == null)
     throw new Exception("Binding constructor has bad parameter")
 
-  val queryParam = queryP
-  val keyParam = keyP
+  protected[KeyValueStore] val queryParam = queryP
+  protected[KeyValueStore] val keyParam = keyP
 
   override def toString: String = {
     "(" + queryParam.term + "," + keyParam.term + ")"
@@ -177,9 +177,8 @@ object QueryTools {
 
   def queryResultsToArrayString(query: Key,
                                 queryResult: LinkedHashSet[Array[Binding]],
-                                store: KeyValueStore): TwoUnifications = {
+                                store: KeyValueStore): Unification = {
     var standardRep = new ArrayBuffer[String]()
-    var myRep = new ArrayBuffer[String]()
 
     // Each element of queryResult is an array of bindings that
     // corresponds to a term in the store.
@@ -227,13 +226,11 @@ object QueryTools {
         standardBindingsStr += values.toString
         standardRep += standardBindingsStr
         myBindingsStr += values.toString
-        myRep += myBindingsStr
       }
     }
-    assert(myRep.size == queryResult.size)
     assert(standardRep.size == queryResult.size)
 
-    new TwoUnifications(standardRep.toArray, myRep.toArray)
+    standardRep.toArray
   }
 
   // This method supports the standard representation of unification
@@ -274,12 +271,6 @@ object QueryTools {
     val queryVars = queryVarsIn
     val keyVars = keyVarsIn
   }
-}
 
-// See the comments in Main.scala about the uniRep variable.
-
-class TwoUnifications(standardRepresentation: Array[String],
-                      nonRepresentation: Array[String]) {
-  val standard = standardRepresentation
-  val non = nonRepresentation // standard
+  type Unification = Array[String]
 }

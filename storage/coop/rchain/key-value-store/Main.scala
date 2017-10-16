@@ -6,7 +6,7 @@
 \*                                                                      */
 
 import java.io.IOException
-import KeyValueStore._
+import KeyValueStore.{Key, KeyValueStore, QueryTools, Tests, TestTools}
 
 // Usage:
 // no arguments : interactive test harness with empty store
@@ -15,17 +15,6 @@ import KeyValueStore._
 
 object Main {
   def main(args: Array[String]): Unit = {
-    // For historical reasons, this code contains two representations of the
-    // unification of a query and a key.  When I first wrote the code I represented
-    // the unification in a non-standard way.  I wrote the tests in Tests.scala
-    // using the non-standard notation.  When I was introduced to the standard
-    // notation, I incorporated it into this code.  I wanted to test the new code
-    // against the existing tests written with the non-standard notation.
-    //
-    // Set uniRep to "Standard" to run the code with standard unification
-    // representation.  Use any non-empty string other than "Standard" to
-    // use the non-standard notation.
-    val uniRep = "Standard"
 
     var storeFilePath = ""
     if (args.length == 0) {
@@ -38,13 +27,13 @@ object Main {
       storeFilePath = args(1)
       if (arg.slice(0, 4).toLowerCase == "test") {
         if (storeFilePath.contains("Flat")) {
-          val outcome = Tests.TestsFlat(storeFilePath, uniRep)
+          val outcome = Tests.TestsFlat(storeFilePath)
           println(outcome)
         } else if (storeFilePath.contains("Nested")) {
-          val outcome = Tests.TestsNested(storeFilePath, uniRep)
+          val outcome = Tests.TestsNested(storeFilePath)
           println(outcome)
         } else if (storeFilePath.contains("Recursive")) {
-          val outcome = Tests.TestsRecursive(storeFilePath, uniRep)
+          val outcome = Tests.TestsRecursive(storeFilePath)
           println(outcome)
         } else {
           println("File not found: " + storeFilePath)
