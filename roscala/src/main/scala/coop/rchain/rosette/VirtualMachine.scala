@@ -1,6 +1,7 @@
 package coop.rchain.rosette
 
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rosette.Ob._
 
 sealed trait RblError
 case object DeadThread extends RblError
@@ -29,14 +30,17 @@ object VirtualMachine {
     Ob.NIV
   )
 
-  def handleException(result: Ob, op: Op, loc: Location): Ob = null
+  def handleApplyPrimSuspend(op: Op): Unit = ()
+  def handleApplyPrimUpcall(op: Op, tag: Location): Unit = ()
   def handleFormalsMismatch(formals: Template): Ob = null
   def handleMissingBinding(key: Ob, argReg: Location): Ob = null
+  def handleSleep(): Unit = ()
+  def handleXmitUpcall(op: Op, tag: Location): Unit = ()
 
   def handleVirtualMachineError(state: VMState): Ob =
     state.ctxt.vmError(state)
 
-   /**
+  /**
     *  This code protects the current argvec, temporarily replacing it
     *  with the unwound argvec for use by the primitive, and then
     *  restoring it after the primitive has finished.  This is necessary
@@ -72,6 +76,35 @@ object VirtualMachine {
           prim.runtimeError("&rest value is not a tuple", state)
 
         (Left(error), errorState)
+    }
+
+  def handleException(v: Ob, op: Op, tag: Location): Unit =
+    v.sysval match {
+      case SyscodeUpcall =>
+        op match {
+          case _: OpApplyCmd | _: OpApplyPrimArg | _: OpApplyPrimReg |
+              _: OpApplyPrimTag =>
+            handleApplyPrimUpcall(op, tag)
+          case _ =>
+            handleXmitUpcall(op, tag)
+        }
+
+      case SyscodeSuspend =>
+        op match {
+          case _: OpApplyCmd | _: OpApplyPrimArg | _: OpApplyPrimReg |
+              _: OpApplyPrimTag =>
+            handleApplyPrimSuspend(op)
+
+          case _ => // Nothing happens; this is the usual case.
+        }
+
+      case SyscodeInterrupt => suicide("what to do with syscodeInterrupt?")
+
+      case SyscodeSleep => handleSleep()
+
+      case SyscodeInvalid | SyscodeDeadThread => // We don't do diddly
+
+      case _ => suicide(s"unknown SysCode value (${v.sysval})")
     }
 
   def getNextStrand(state: VMState): (Boolean, VMState) =
