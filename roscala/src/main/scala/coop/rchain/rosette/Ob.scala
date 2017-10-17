@@ -1,6 +1,6 @@
 package coop.rchain.rosette
 
-import coop.rchain.rosette.Ob.ObTag
+import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import shapeless._
 import shapeless.OpticDefns.RootLens
 
@@ -15,6 +15,7 @@ trait Ob extends Base {
   val meta: Ob
   val slot: Seq[Ob]
   val obTag: ObTag = null
+  val sysval: SysCode = null
 
   def dispatch(ctxt: Ctxt): Ob = null
   def extendWith(keymeta: Ob): Ob = null
@@ -54,6 +55,14 @@ object Ob {
   case object OTniv extends ObTag
   case object OTsysval extends ObTag
   case object OTlocation extends ObTag
+
+  sealed trait SysCode
+  case object SyscodeInvalid extends SysCode
+  case object SyscodeUpcall extends SysCode
+  case object SyscodeSuspend extends SysCode
+  case object SyscodeInterrupt extends SysCode
+  case object SyscodeSleep extends SysCode
+  case object SyscodeDeadThread extends SysCode
 
   case object ABSENT extends Ob {
     override val parent = null

@@ -20,10 +20,10 @@ case class Ctxt(argvec: Tuple,
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
 
   /** This is necessary because the compiler sometimes arranges to
-   *  provide an argvec that is acually longer than nargs indicates. If
-   *  we are about to expose the context to the outside world, we need
-   *  to clean it up so that it appears consistent.
-   */
+    *  provide an argvec that is acually longer than nargs indicates. If
+    *  we are about to expose the context to the outside world, we need
+    *  to clean it up so that it appears consistent.
+    */
   def prepare(): Ctxt = this.copy(argvec = argvec.makeSlice(0, nargs))
 
   def ret(rslt: Ob): Boolean = true
