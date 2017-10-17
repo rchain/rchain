@@ -207,4 +207,20 @@ case class PeerTable[A <: Peer](home: A,
       case None => Vector.empty
     }
   }
+
+  /**
+    * Return `Some[A]` if `key` names an entry in the table.
+    */
+  def find(key: Seq[Byte]): Option[A] =
+    for {
+      d <- distance(key)
+      e <- table(d) synchronized { table(d).find(_.entry.key == key) } 
+    } yield e.entry
+
+
+  /**
+    * Return a sequence of all the `A`s in the table.
+    */
+  def peers: Seq[A] =
+    table.flatMap(l => l synchronized { l.map(_.entry) })
 }
