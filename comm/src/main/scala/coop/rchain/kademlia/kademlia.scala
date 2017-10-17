@@ -110,9 +110,7 @@ case class PeerTable[A <: Peer](home: A,
   def distance(other: A): Option[Int] = distance(other.key)
 
   private val pool = Executors.newFixedThreadPool(alpha)
-  private def ping(ps: mutable.ListBuffer[Entry],
-                   older: Entry,
-                   newer: A): Unit =
+  private def ping(ps: mutable.ListBuffer[Entry], older: Entry, newer: A): Unit =
     pool.execute(new Runnable {
       def run = {
         val winner =
@@ -216,7 +214,6 @@ case class PeerTable[A <: Peer](home: A,
       d <- distance(key)
       e <- table(d) synchronized { table(d).find(_.entry.key == key) }
     } yield e.entry
-
 
   /**
     * Return a sequence of all the `A`s in the table.
