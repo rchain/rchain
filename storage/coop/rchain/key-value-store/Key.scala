@@ -7,20 +7,20 @@
 
 package KeyValueStore
 
-import scala.collection.mutable._
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
 
 // Represent key as a tree of TermTrees where each inner node
 // is a Key where the number of branches matches the arity of
 // the key and the leaves are atoms.
 
 class Key(keyIn: String) extends TermTree with Ordered[Key] {
-  var term = keyIn.replaceAll("\\s+", "")
-  val keyOriginal = keyIn
+  val term = keyIn.replaceAll("\\s+", "")
+  protected[KeyValueStore] val keyOriginal = keyIn
 
   if (term == null || term.isEmpty)
     throw new Exception("Key constructor got null or empty parameter")
 
-  val (name, params) = createParseKey(term)
+  protected[KeyValueStore] val (name, params) = createParseKey(term)
 
   val arity = params.length
 

@@ -7,13 +7,13 @@
 
 package KeyValueStore
 
-import scala.collection.mutable._
+import scala.collection.mutable.SortedMap
 import scala.io.Source
 
 // KeyValueStore maps Keys as Strings to ValueLists
 
 class KeyValueStore {
-  var keyValueStore = SortedMap[Key, ValueList]()
+  protected[KeyValueStore] var keyValueStore = SortedMap[Key, ValueList]()
 
   def add(key: Key, value: Value): Unit = {
     if (keyValueStore.contains(key))
@@ -43,9 +43,6 @@ class KeyValueStore {
   def remove(key: Key, value: Value = null): Boolean = {
     if (keyValueStore.contains(key)) {
       if (value == null) {
-        // assumes that Key.compare picks out key
-        // and that the new keyValueStore maintains
-        // order of elements in keyValueStore(key).list
         keyValueStore = keyValueStore - key
         return true
       } else {

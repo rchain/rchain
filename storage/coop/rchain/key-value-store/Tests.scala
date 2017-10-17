@@ -12,7 +12,7 @@ import java.lang._
 import scala.io.StdIn
 
 object Tests {
-  def TestsRecursive(storeFilePath: String, uniRep: String): String = {
+  def TestsRecursive(storeFilePath: String): String = {
     var store = new KeyValueStore
     try {
       store.loadFile(storeFilePath, true)
@@ -33,20 +33,18 @@ object Tests {
       query,
       query.unifyQuery(store),
       store)
-    var oracles = new TwoOracles(
-      Array("[queryVars:{Y:b(c(Y))},keyVars:{}] -> [X]"),
-      Array("{Y:b(c(Y))} -> [X]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    var oracle = new UniOracle(
+      Array("[queryVars:{Y:b(c(Y))},keyVars:{}] -> [X]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(X, Y)
     query = new Key("a(X, Y)")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
-      Array("[queryVars:{X:b(c(A),d(e(B))),Y:f(C)},keyVars:{}] -> [Y]"),
-      Array("{X:b(c(A),d(e(B))),Y:f(C)} -> [Y]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(
+      Array("[queryVars:{X:b(c(A),d(e(B))),Y:f(C)},keyVars:{}] -> [Y]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(b(c(X), Y), f(2))
     // more examples like this
@@ -54,10 +52,9 @@ object Tests {
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
-      Array("[queryVars:{X:A,Y:d(e(B))},keyVars:{A:X,C:2}] -> [Y]"),
-      Array("{X:A,Y:d(e(B)),2:C} -> [Y]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(
+      Array("[queryVars:{X:A,Y:d(e(B))},keyVars:{A:X,C:2}] -> [Y]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(b(c(X), 1), f(2))
     query = new Key("a(b(c(X), 1), f(2))")
@@ -66,13 +63,13 @@ object Tests {
                                                         store)
     // If you allow a constant to match a predicate:
     // Array("{X:A,1:d(e(B)),2:C} -> [Y]")
-    oracles = new TwoOracles(Array[String](), Array[String]())
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(Array[String]())
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     "Completed tests"
   }
 
-  def TestsNested(storeFilePath: String, uniRep: String): String = {
+  def TestsNested(storeFilePath: String): String = {
     var store = new KeyValueStore
     try {
       store.loadFile(storeFilePath, true)
@@ -92,34 +89,33 @@ object Tests {
       query,
       query.unifyQuery(store),
       store)
-    var oracles = new TwoOracles(
+    var oracle = new UniOracle(
       Array("[queryVars:{X:Y},keyVars:{Y:X}] -> [two]",
-            "[queryVars:{X:1},keyVars:{}] -> [one]"),
-      Array("{X:Y} -> [two]", "{X:1} -> [one]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+            "[queryVars:{X:1},keyVars:{}] -> [one]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(1)
     query = new Key("a", "1")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
-                                   "[queryVars:{},keyVars:{}] -> [twelve]"),
-                             Array("{1:X} -> [thirteen]", "{1} -> [twelve]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(
+      Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
+            "[queryVars:{},keyVars:{}] -> [twelve]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(1,2)
     query = new Key("a", "1", "2")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(Array(""), Array(""))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(Array(""))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     "Completed tests"
   }
 
-  def TestsFlat(storeFilePath: String, uniRep: String): String = {
+  def TestsFlat(storeFilePath: String): String = {
     var store = new KeyValueStore
     try {
       store.loadFile(storeFilePath, true)
@@ -139,93 +135,82 @@ object Tests {
       query,
       query.unifyQuery(store),
       store)
-    var oracles = new TwoOracles(Array("[queryVars:{},keyVars:{X:1}] -> [what]",
-                                       "[queryVars:{},keyVars:{}] -> [one]"),
-                                 Array("{1:X} -> [what]", "{1} -> [one]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    var oracle = new UniOracle(
+      Array("[queryVars:{},keyVars:{X:1}] -> [what]",
+            "[queryVars:{},keyVars:{}] -> [one]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // Z(1)
     query = new Key("Z", "1")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(Array(""), Array(""))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(Array(""))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(2)
     query = new Key("a", "2")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(Array("[queryVars:{},keyVars:{}] -> [two]",
-                                   "[queryVars:{},keyVars:{X:2}] -> [what]"),
-                             Array("{2} -> [two]", "{2:X} -> [what]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(
+      Array("[queryVars:{},keyVars:{}] -> [two]",
+            "[queryVars:{},keyVars:{X:2}] -> [what]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(3)
     query = new Key("a", "3")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(Array("[queryVars:{},keyVars:{X:3}] -> [what]"),
-                             Array("{3:X} -> [what]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:3}] -> [what]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(X)
     query = new Key("a", "X")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array("[queryVars:{X:2},keyVars:{}] -> [two]",
             "[queryVars:{},keyVars:{}] -> [what]",
-            "[queryVars:{X:1},keyVars:{}] -> [one]"),
-      Array("{X:2} -> [two]", "{X} -> [what]", "{X:1} -> [one]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+            "[queryVars:{X:1},keyVars:{}] -> [one]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // a(Y)
     query = new Key("a", "Y")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array("[queryVars:{Y:2},keyVars:{}] -> [two]",
             "[queryVars:{Y:X},keyVars:{X:Y}] -> [what]",
-            "[queryVars:{Y:1},keyVars:{}] -> [one]"),
-      Array("{Y:2} -> [two]", "{Y:X} -> [what]", "{Y:1} -> [one]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+            "[queryVars:{Y:1},keyVars:{}] -> [one]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(1,1)
     query = new Key("b", "1", "1")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array("[queryVars:{},keyVars:{X:1}] -> [where]",
-            "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"),
-      Array("{1,1:X} -> [where]", "{1:X,1:Y} -> [this]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+            "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(1,2)
     query = new Key("b", "1", "2")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array(
         "[queryVars:{},keyVars:{X:2}] -> [where]",
         "[queryVars:{},keyVars:{X:1}] -> [how]",
         "[queryVars:{},keyVars:{X:1,Y:2}] -> [this]",
         "[queryVars:{},keyVars:{}] -> [who]"
-      ),
-      Array("{1,2:X} -> [where]",
-            "{1:X,2} -> [how]",
-            "{1:X,2:Y} -> [this]",
-            "{1,2} -> [who]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+      ))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(1,X)
     // good test
@@ -233,59 +218,43 @@ object Tests {
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array(
         "[queryVars:{},keyVars:{}] -> [where]",
         "[queryVars:{X:2},keyVars:{X:1}] -> [how]",
         "[queryVars:{X:Y},keyVars:{X:1,Y:X}] -> [this]",
         "[queryVars:{X:2},keyVars:{}] -> [who]"
-      ),
-      Array("{1,X} -> [where]",
-            "{1:X,X:2} -> [how]",
-            "{1:X,X:Y} -> [this]",
-            "{1,X:2} -> [who]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+      ))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(1,Y)
     query = new Key("b", "1", "Y")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array(
         "[queryVars:{Y:X},keyVars:{X:Y}] -> [where]",
         "[queryVars:{Y:2},keyVars:{X:1}] -> [how]",
         "[queryVars:{},keyVars:{X:1}] -> [this]",
         "[queryVars:{Y:2},keyVars:{}] -> [who]"
-      ),
-      Array("{1,Y:X} -> [where]",
-            "{1:X,Y:2} -> [how]",
-            "{1:X,Y} -> [this]",
-            "{1,Y:2} -> [who]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+      ))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(A,B)
     query = new Key("b", "A", "B")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array(
         "[queryVars:{A:1,B:X},keyVars:{X:B}] -> [where]",
         "[queryVars:{A:10,B:11},keyVars:{}] -> [yeah]",
         "[queryVars:{A:X,B:2},keyVars:{X:A}] -> [how]",
         "[queryVars:{A:X,B:Y},keyVars:{X:A,Y:B}] -> [this]",
         "[queryVars:{A:1,B:2},keyVars:{}] -> [who]"
-      ),
-      Array("{A:1,B:X} -> [where]",
-            "{A:10,B:11} -> [yeah]",
-            "{A:X,B:2} -> [how]",
-            "{A:X,B:Y} -> [this]",
-            "{A:1,B:2} -> [who]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+      ))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(X,2)
     // very good test
@@ -293,42 +262,33 @@ object Tests {
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(
+    oracle = new UniOracle(
       Array(
         "[queryVars:{},keyVars:{Y:2}] -> [this]",
         "[queryVars:{X:1},keyVars:{}] -> [who]",
         "[queryVars:{X:1},keyVars:{X:2}] -> [where]",
         "[queryVars:{},keyVars:{}] -> [how]"
-      ),
-      Array("{X,2:Y} -> [this]",
-            "{X:1,2} -> [who]",
-            "{X:1,2:X} -> [where]",
-            "{X,2} -> [how]")
-    )
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+      ))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     // b(X,1)
     query = new Key("b", "X", "1")
     queryOutcome = QueryTools.queryResultsToArrayString(query,
                                                         query.unifyQuery(store),
                                                         store)
-    oracles = new TwoOracles(Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
-                                   "[queryVars:{},keyVars:{Y:1}] -> [this]"),
-                             Array("{X:1,1:X} -> [where]", "{X,1:Y} -> [this]"))
-    EvaluateTest(query.term, queryOutcome, oracles, uniRep)
+    oracle = new UniOracle(
+      Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
+            "[queryVars:{},keyVars:{Y:1}] -> [this]"))
+    EvaluateTest(query.term, queryOutcome, oracle)
 
     "Completed tests"
   }
 
   def EvaluateTest(queryName: String,
-                   twoUnifications: TwoUnifications,
-                   oracles: TwoOracles,
-                   uniRep: String,
+                   unification: QueryTools.Unification,
+                   oracle: UniOracle,
                    display: Boolean = true): Boolean = {
-    val queryResults =
-      if (uniRep == "Standard") twoUnifications.standard
-      else twoUnifications.non
-    val oracle = if (uniRep == "Standard") oracles.standard else oracles.non
+    val queryResults = unification.repr
 
     if (queryResults.length == 0) {
       if (display) {
@@ -339,7 +299,7 @@ object Tests {
 
     if (display) print(s"$queryName ")
 
-    if (TestTools.ArraysEqual(queryResults, oracle)) {
+    if (TestTools.ArraysEqual(queryResults, oracle.standard)) {
       if (display) {
         println("succeeded:")
         for (i <- 0 until queryResults.length)
@@ -351,8 +311,8 @@ object Tests {
         for (i <- 0 until queryResults.length)
           println(queryResults(i))
         println("should be:")
-        for (i <- 0 until oracle.length)
-          println(oracle(i))
+        for (i <- 0 until oracle.standard.length)
+          println(oracle.standard(i))
       }
       if (display) println
       return false
@@ -361,12 +321,9 @@ object Tests {
     true
   }
 
-  // See the comments in Main.scala about the uniRep variable
-
-  class TwoOracles(standardRepresentation: Array[String],
-                   nonRepresentation: Array[String]) {
+  // UniOracle is an oracle for a unification
+  class UniOracle(standardRepresentation: Array[String]) {
     val standard = standardRepresentation
-    val non = nonRepresentation // non-standard
   }
 }
 
@@ -387,13 +344,13 @@ object TestTools {
           case "exit" => {}
           case "query" => {
             val query = new Key(remainder)
-            val twoUnifications = QueryTools.queryResultsToArrayString(
+            val unification = QueryTools.queryResultsToArrayString(
               query,
               query.unifyQuery(kvs),
               kvs)
-            for (binding <- twoUnifications.standard)
+            for (binding <- unification.repr)
               println(binding)
-            if (twoUnifications.standard.isEmpty)
+            if (unification.repr.isEmpty)
               println("no match in store")
           }
           case "key-value" => {
