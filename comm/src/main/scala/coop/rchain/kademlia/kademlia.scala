@@ -214,7 +214,7 @@ case class PeerTable[A <: Peer](home: A,
   def find(key: Seq[Byte]): Option[A] =
     for {
       d <- distance(key)
-      e <- table(d) synchronized { table(d).find(_.entry.key == key) } 
+      e <- table(d) synchronized { table(d).find(_.entry.key == key) }
     } yield e.entry
 
 
