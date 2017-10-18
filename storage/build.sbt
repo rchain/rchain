@@ -1,5 +1,6 @@
 organization := "coop.rchain"
-scalaVersion := "2.11.8"
+// scalaVersion := "2.11.8"
+scalaVersion := "2.12.3"
 version      := "0.1.0-SNAPSHOT"
 name := "RChain"
 

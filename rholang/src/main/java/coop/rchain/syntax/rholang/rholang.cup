@@ -66,49 +66,51 @@ nonterminal coop.rchain.syntax.rholang.Absyn.ListValPattern ListValPattern;
 nonterminal coop.rchain.syntax.rholang.Absyn.ListVar ListVar;
 nonterminal coop.rchain.syntax.rholang.Absyn.ListName ListName;
 
-terminal _SYMB_0;    //   (
-terminal _SYMB_1;    //   )
-terminal _SYMB_2;    //   =
-terminal _SYMB_3;    //   {
-terminal _SYMB_4;    //   }
-terminal _SYMB_5;    //   *
-terminal _SYMB_6;    //   #
-terminal _SYMB_7;    //   !
-terminal _SYMB_8;    //   /:
-terminal _SYMB_9;    //   :\
+terminal _SYMB_0;    //   *
+terminal _SYMB_1;    //   #
+terminal _SYMB_2;    //   !
+terminal _SYMB_3;    //   (
+terminal _SYMB_4;    //   )
+terminal _SYMB_5;    //   /:
+terminal _SYMB_6;    //   {
+terminal _SYMB_7;    //   }
+terminal _SYMB_8;    //   :\
+terminal _SYMB_9;    //   =
 terminal _SYMB_10;    //   |
 terminal _SYMB_11;    //   ,
 terminal _SYMB_12;    //   @
 terminal _SYMB_13;    //   <-
 terminal _SYMB_14;    //   ;
 terminal _SYMB_15;    //   =>
-terminal _SYMB_16;    //   .
-terminal _SYMB_17;    //   -
-terminal _SYMB_18;    //   /
-terminal _SYMB_19;    //   +
-terminal _SYMB_20;    //   <
-terminal _SYMB_21;    //   <=
-terminal _SYMB_22;    //   >
-terminal _SYMB_23;    //   >=
-terminal _SYMB_24;    //   ==
-terminal _SYMB_25;    //   !=
-terminal _SYMB_26;    //   [
-terminal _SYMB_27;    //   ]
-terminal _SYMB_28;    //   _
-terminal _SYMB_29;    //   Nil
-terminal _SYMB_30;    //   case
-terminal _SYMB_31;    //   contract
-terminal _SYMB_32;    //   false
-terminal _SYMB_33;    //   for
-terminal _SYMB_34;    //   if
-terminal _SYMB_35;    //   in
-terminal _SYMB_36;    //   match
-terminal _SYMB_37;    //   new
-terminal _SYMB_38;    //   select
-terminal _SYMB_39;    //   sum
-terminal _SYMB_40;    //   total
-terminal _SYMB_41;    //   true
-terminal _SYMB_42;    //   with
+terminal _SYMB_16;    //   Map()
+terminal _SYMB_17;    //   .
+terminal _SYMB_18;    //   -
+terminal _SYMB_19;    //   /
+terminal _SYMB_20;    //   +
+terminal _SYMB_21;    //   <
+terminal _SYMB_22;    //   <=
+terminal _SYMB_23;    //   >
+terminal _SYMB_24;    //   >=
+terminal _SYMB_25;    //   ==
+terminal _SYMB_26;    //   !=
+terminal _SYMB_27;    //   [
+terminal _SYMB_28;    //   ]
+terminal _SYMB_29;    //   _
+terminal _SYMB_30;    //   Nil
+terminal _SYMB_31;    //   case
+terminal _SYMB_32;    //   contract
+terminal _SYMB_33;    //   false
+terminal _SYMB_34;    //   for
+terminal _SYMB_35;    //   if
+terminal _SYMB_36;    //   in
+terminal _SYMB_37;    //   match
+terminal _SYMB_38;    //   new
+terminal _SYMB_39;    //   print
+terminal _SYMB_40;    //   select
+terminal _SYMB_41;    //   sum
+terminal _SYMB_42;    //   total
+terminal _SYMB_43;    //   true
+terminal _SYMB_44;    //   with
 
 terminal String _STRING_;
 terminal Character _CHAR_;
@@ -123,26 +125,28 @@ terminal String Var;
 start with Contr;
 
 
-Contr ::= _SYMB_31 Name:p_2 _SYMB_0 ListCPattern:p_4 _SYMB_1 _SYMB_2 _SYMB_3 Proc:p_8 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.DContr(p_2,p_4,p_8); :} 
+Contr ::= Proc1:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.DContr(p_1); :} 
 ;
-Proc4 ::= _SYMB_29  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PNil(); :} 
+Proc4 ::= _SYMB_30  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PNil(); :} 
   | Value:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PValue(p_1); :}
-  | _SYMB_3 Proc:p_2 _SYMB_4  {: RESULT = p_2; :}
+  | _SYMB_6 Proc:p_2 _SYMB_7  {: RESULT = p_2; :}
 ;
-Proc3 ::= _SYMB_5 Chan:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PDrop(p_2); :} 
-  | _SYMB_6 Chan:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PInject(p_2); :}
+Proc3 ::= _SYMB_0 Chan:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PDrop(p_2); :} 
+  | _SYMB_1 Chan:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PInject(p_2); :}
   | Proc4:p_1  {: RESULT = p_1; :}
 ;
-Proc2 ::= Chan:p_1 _SYMB_7 _SYMB_0 ListProc:p_4 _SYMB_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PLift(p_1,p_4); :} 
+Proc2 ::= Chan:p_1 _SYMB_2 _SYMB_3 ListProc:p_4 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PLift(p_1,p_4); :} 
   | Proc3:p_1  {: RESULT = p_1; :}
 ;
-Proc1 ::= _SYMB_39 _SYMB_0 Bind:p_3 _SYMB_8 Bind:p_5 _SYMB_1 _SYMB_3 Proc:p_8 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PFoldL(p_3,p_5,p_8); :} 
-  | _SYMB_40 _SYMB_0 Bind:p_3 _SYMB_9 Bind:p_5 _SYMB_1 _SYMB_3 Proc:p_8 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PFoldR(p_3,p_5,p_8); :}
-  | _SYMB_33 _SYMB_0 ListBind:p_3 _SYMB_1 _SYMB_3 Proc:p_6 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PInput(p_3,p_6); :}
-  | _SYMB_38 _SYMB_3 ListCBranch:p_3 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PChoice(p_3); :}
-  | _SYMB_36 Proc:p_2 _SYMB_42 ListPMBranch:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PMatch(p_2,p_4); :}
-  | _SYMB_37 ListVar:p_2 _SYMB_35 Proc1:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PNew(p_2,p_4); :}
-  | Name:p_1 _SYMB_0 ListProc:p_3 _SYMB_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PConstr(p_1,p_3); :}
+Proc1 ::= _SYMB_41 _SYMB_3 Bind:p_3 _SYMB_5 Bind:p_5 _SYMB_4 _SYMB_6 Proc:p_8 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PFoldL(p_3,p_5,p_8); :} 
+  | _SYMB_42 _SYMB_3 Bind:p_3 _SYMB_8 Bind:p_5 _SYMB_4 _SYMB_6 Proc:p_8 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PFoldR(p_3,p_5,p_8); :}
+  | _SYMB_34 _SYMB_3 ListBind:p_3 _SYMB_4 _SYMB_6 Proc:p_6 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PInput(p_3,p_6); :}
+  | _SYMB_40 _SYMB_6 ListCBranch:p_3 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PChoice(p_3); :}
+  | _SYMB_37 Proc:p_2 _SYMB_44 ListPMBranch:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PMatch(p_2,p_4); :}
+  | _SYMB_38 ListVar:p_2 _SYMB_36 Proc1:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PNew(p_2,p_4); :}
+  | _SYMB_39 _SYMB_3 Proc:p_3 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPrint(p_3); :}
+  | Var:p_1 _SYMB_3 ListProc:p_3 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PConstr(p_1,p_3); :}
+  | _SYMB_32 Var:p_2 _SYMB_3 ListCPattern:p_4 _SYMB_4 _SYMB_9 _SYMB_6 Proc:p_8 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PContr(p_2,p_4,p_8); :}
   | Proc2:p_1  {: RESULT = p_1; :}
 ;
 Proc ::= Proc:p_1 _SYMB_10 Proc1:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPar(p_1,p_3); :} 
@@ -155,53 +159,54 @@ Chan ::= Var:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.CVar(p_1); :}
   | _SYMB_12 Proc3:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.CQuote(p_2); :}
 ;
 Bind ::= CPattern:p_1 _SYMB_13 Chan:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.InputBind(p_1,p_3); :} 
-  | CPattern:p_1 _SYMB_13 Chan:p_3 _SYMB_34 Proc:p_5  {: RESULT = new coop.rchain.syntax.rholang.Absyn.CondInputBind(p_1,p_3,p_5); :}
+  | CPattern:p_1 _SYMB_13 Chan:p_3 _SYMB_35 Proc:p_5  {: RESULT = new coop.rchain.syntax.rholang.Absyn.CondInputBind(p_1,p_3,p_5); :}
 ;
 ListBind ::= Bind:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListBind(); RESULT.addLast(p_1); :} 
   | Bind:p_1 _SYMB_14 ListBind:p_3  {: RESULT = p_3; p_3.addFirst(p_1); :}
 ;
-PMBranch ::= PPattern:p_1 _SYMB_15 _SYMB_3 Proc:p_4 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PatternMatch(p_1,p_4); :} 
+PMBranch ::= PPattern:p_1 _SYMB_15 _SYMB_6 Proc:p_4 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PatternMatch(p_1,p_4); :} 
 ;
 ListPMBranch ::= PMBranch:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListPMBranch(); RESULT.addLast(p_1); :} 
   | PMBranch:p_1 ListPMBranch:p_2  {: RESULT = p_2; p_2.addFirst(p_1); :}
 ;
-CBranch ::= _SYMB_30 ListBind:p_2 _SYMB_15 _SYMB_3 Proc:p_5 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.Choice(p_2,p_5); :} 
+CBranch ::= _SYMB_31 ListBind:p_2 _SYMB_15 _SYMB_6 Proc:p_5 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.Choice(p_2,p_5); :} 
 ;
 ListCBranch ::= CBranch:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListCBranch(); RESULT.addLast(p_1); :} 
   | CBranch:p_1 ListCBranch:p_2  {: RESULT = p_2; p_2.addFirst(p_1); :}
 ;
-RhoBool ::= _SYMB_41  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QTrue(); :} 
-  | _SYMB_32  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QFalse(); :}
+RhoBool ::= _SYMB_43  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QTrue(); :} 
+  | _SYMB_33  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QFalse(); :}
 ;
 Quantity7 ::= RhoBool:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QBool(p_1); :} 
   | _INTEGER_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QInt(p_1); :}
   | _DOUBLE_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QDouble(p_1); :}
   | _STRING_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QString(p_1); :}
   | Var:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QVar(p_1); :}
-  | _SYMB_0 Quantity:p_2 _SYMB_1  {: RESULT = p_2; :}
+  | _SYMB_16  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QMap(); :}
+  | _SYMB_3 Quantity:p_2 _SYMB_4  {: RESULT = p_2; :}
 ;
-Quantity6 ::= Quantity7:p_1 _SYMB_16 Var:p_3 _SYMB_0 ListQuantity:p_5 _SYMB_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QDot(p_1,p_3,p_5); :} 
+Quantity6 ::= Quantity7:p_1 _SYMB_17 Var:p_3 _SYMB_3 ListQuantity:p_5 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QDot(p_1,p_3,p_5); :} 
   | Quantity7:p_1  {: RESULT = p_1; :}
 ;
-Quantity5 ::= _SYMB_17 Quantity6:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QNeg(p_2); :} 
+Quantity5 ::= _SYMB_18 Quantity6:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QNeg(p_2); :} 
   | Quantity6:p_1  {: RESULT = p_1; :}
 ;
-Quantity4 ::= Quantity4:p_1 _SYMB_5 Quantity5:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QMult(p_1,p_3); :} 
-  | Quantity4:p_1 _SYMB_18 Quantity5:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QDiv(p_1,p_3); :}
+Quantity4 ::= Quantity4:p_1 _SYMB_0 Quantity5:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QMult(p_1,p_3); :} 
+  | Quantity4:p_1 _SYMB_19 Quantity5:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QDiv(p_1,p_3); :}
   | Quantity5:p_1  {: RESULT = p_1; :}
 ;
-Quantity3 ::= Quantity3:p_1 _SYMB_19 Quantity4:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QAdd(p_1,p_3); :} 
-  | Quantity3:p_1 _SYMB_17 Quantity4:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QMinus(p_1,p_3); :}
+Quantity3 ::= Quantity3:p_1 _SYMB_20 Quantity4:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QAdd(p_1,p_3); :} 
+  | Quantity3:p_1 _SYMB_18 Quantity4:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QMinus(p_1,p_3); :}
   | Quantity4:p_1  {: RESULT = p_1; :}
 ;
-Quantity2 ::= Quantity2:p_1 _SYMB_20 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QLt(p_1,p_3); :} 
-  | Quantity2:p_1 _SYMB_21 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QLte(p_1,p_3); :}
-  | Quantity2:p_1 _SYMB_22 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QGt(p_1,p_3); :}
-  | Quantity2:p_1 _SYMB_23 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QGte(p_1,p_3); :}
+Quantity2 ::= Quantity2:p_1 _SYMB_21 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QLt(p_1,p_3); :} 
+  | Quantity2:p_1 _SYMB_22 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QLte(p_1,p_3); :}
+  | Quantity2:p_1 _SYMB_23 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QGt(p_1,p_3); :}
+  | Quantity2:p_1 _SYMB_24 Quantity3:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QGte(p_1,p_3); :}
   | Quantity3:p_1  {: RESULT = p_1; :}
 ;
-Quantity1 ::= Quantity1:p_1 _SYMB_24 Quantity2:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QEq(p_1,p_3); :} 
-  | Quantity1:p_1 _SYMB_25 Quantity2:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QNeq(p_1,p_3); :}
+Quantity1 ::= Quantity1:p_1 _SYMB_25 Quantity2:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QEq(p_1,p_3); :} 
+  | Quantity1:p_1 _SYMB_26 Quantity2:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.QNeq(p_1,p_3); :}
   | Quantity2:p_1  {: RESULT = p_1; :}
 ;
 Quantity ::= Quantity1:p_1  {: RESULT = p_1; :} 
@@ -212,31 +217,31 @@ ListQuantity ::=  /* empty */  {: RESULT = new coop.rchain.syntax.rholang.Absyn.
 ;
 Value ::= Quantity:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VQuant(p_1); :} 
   | _CHAR_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.EChar(p_1); :}
-  | _SYMB_26 ListProc:p_2 _SYMB_27  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ETuple(p_2); :}
+  | _SYMB_27 ListProc:p_2 _SYMB_28  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ETuple(p_2); :}
 ;
 VarPattern ::= Var:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VarPtVar(p_1); :} 
-  | _SYMB_28  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VarPtWild(); :}
+  | _SYMB_29  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VarPtWild(); :}
 ;
 ListVarPattern ::=  /* empty */  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListVarPattern(); :} 
   | VarPattern:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListVarPattern(); RESULT.addLast(p_1); :}
   | VarPattern:p_1 _SYMB_11 ListVarPattern:p_3  {: RESULT = p_3; p_3.addFirst(p_1); :}
 ;
 PPattern4 ::= VarPattern:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtVar(p_1); :} 
-  | _SYMB_29  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtNil(); :}
+  | _SYMB_30  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtNil(); :}
   | ValPattern:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtVal(p_1); :}
-  | _SYMB_0 PPattern:p_2 _SYMB_1  {: RESULT = p_2; :}
+  | _SYMB_3 PPattern:p_2 _SYMB_4  {: RESULT = p_2; :}
 ;
-PPattern3 ::= _SYMB_5 CPattern:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtDrop(p_2); :} 
-  | _SYMB_6 CPattern:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtInject(p_2); :}
+PPattern3 ::= _SYMB_0 CPattern:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtDrop(p_2); :} 
+  | _SYMB_1 CPattern:p_2  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtInject(p_2); :}
   | PPattern4:p_1  {: RESULT = p_1; :}
 ;
-PPattern2 ::= CPattern:p_1 _SYMB_7 _SYMB_0 ListPPattern:p_4 _SYMB_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtOutput(p_1,p_4); :} 
+PPattern2 ::= CPattern:p_1 _SYMB_2 _SYMB_3 ListPPattern:p_4 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtOutput(p_1,p_4); :} 
   | PPattern3:p_1  {: RESULT = p_1; :}
 ;
-PPattern1 ::= _SYMB_33 _SYMB_0 ListPatternBind:p_3 _SYMB_1 _SYMB_3 PPattern:p_6 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtInput(p_3,p_6); :} 
-  | _SYMB_36 PPattern:p_2 _SYMB_42 ListPatternPatternMatch:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtMatch(p_2,p_4); :}
-  | _SYMB_37 ListVarPattern:p_2 _SYMB_35 PPattern1:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtNew(p_2,p_4); :}
-  | Name:p_1 _SYMB_0 ListPPattern:p_3 _SYMB_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtConstr(p_1,p_3); :}
+PPattern1 ::= _SYMB_34 _SYMB_3 ListPatternBind:p_3 _SYMB_4 _SYMB_6 PPattern:p_6 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtInput(p_3,p_6); :} 
+  | _SYMB_37 PPattern:p_2 _SYMB_44 ListPatternPatternMatch:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtMatch(p_2,p_4); :}
+  | _SYMB_38 ListVarPattern:p_2 _SYMB_36 PPattern1:p_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtNew(p_2,p_4); :}
+  | Var:p_1 _SYMB_3 ListPPattern:p_3 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtConstr(p_1,p_3); :}
   | PPattern2:p_1  {: RESULT = p_1; :}
 ;
 PPattern ::= PPattern:p_1 _SYMB_10 PPattern1:p_3  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PPtPar(p_1,p_3); :} 
@@ -259,15 +264,15 @@ PatternBind ::= CPattern:p_1 _SYMB_13 CPattern:p_3  {: RESULT = new coop.rchain.
 ListPatternBind ::= PatternBind:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListPatternBind(); RESULT.addLast(p_1); :} 
   | PatternBind:p_1 _SYMB_14 ListPatternBind:p_3  {: RESULT = p_3; p_3.addFirst(p_1); :}
 ;
-PatternPatternMatch ::= PPattern:p_1 _SYMB_15 _SYMB_3 PPattern:p_4 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PtBranch(p_1,p_4); :} 
+PatternPatternMatch ::= PPattern:p_1 _SYMB_15 _SYMB_6 PPattern:p_4 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.PtBranch(p_1,p_4); :} 
 ;
 ListPatternPatternMatch ::= PatternPatternMatch:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.ListPatternPatternMatch(); RESULT.addLast(p_1); :} 
   | PatternPatternMatch:p_1 ListPatternPatternMatch:p_2  {: RESULT = p_2; p_2.addFirst(p_1); :}
 ;
-ValPattern ::= Var:p_1 _SYMB_3 ListPPattern:p_3 _SYMB_4  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtStruct(p_1,p_3); :} 
-  | _SYMB_20 ListPPattern:p_2 _SYMB_22  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtTuple(p_2); :}
-  | _SYMB_41  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtTrue(); :}
-  | _SYMB_32  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtFalse(); :}
+ValPattern ::= Var:p_1 _SYMB_6 ListPPattern:p_3 _SYMB_7  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtStruct(p_1,p_3); :} 
+  | _SYMB_21 ListPPattern:p_2 _SYMB_23  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtTuple(p_2); :}
+  | _SYMB_43  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtTrue(); :}
+  | _SYMB_33  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtFalse(); :}
   | _INTEGER_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtInt(p_1); :}
   | _DOUBLE_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtDbl(p_1); :}
   | _STRING_:p_1  {: RESULT = new coop.rchain.syntax.rholang.Absyn.VPtStr(p_1); :}

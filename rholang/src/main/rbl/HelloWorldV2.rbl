@@ -1,0 +1,19 @@
+;;; HelloWorld Contract that doesn't require any extra Rosette code to execute
+
+(run (compile
+
+(new LetExpr (TX (TX 'helloworld (Q 'rholangd0644faf397e)))
+    (BX
+        (RX (PX (TX) (RX 'run (RX 'compile (new LetExpr (TX (TX (TX (TX 'rholangc16a55fc8060) (TX 'rholangba234a36a48d))
+                (RX 'consume 't (TX 'helloworld) (TX '**wildcard**) (TX (Q 'world)) '#t)))
+            (RX (PX (TX 'world) (new LetExpr (TX (TX (TX (TX 'rholang3152ec0ea6ee) (TX 'rholangea0140df2ecd))
+                    (RX 'consume 't (TX 'world) (TX '**wildcard**) (TX (Q 'msg)) '#f)))
+                (RX (PX (TX (TX 'msg)) (SqX (RX 'print 'msg) (RX 'display '#\\n))) (TX 'rholangea0140df2ecd)))) 'rholangba234a36a48d))))))
+        (new LetExpr (TX (TX 'world (Q 'rholang85f793b45738)))
+            (BX
+                (RX 'produce 't 'helloworld '**wildcard** 'world)
+                (RX 'produce 't 'world '**wildcard** "Hello World")
+            ))))
+
+))
+

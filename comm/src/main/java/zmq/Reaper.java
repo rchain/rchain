@@ -5,16 +5,13 @@ import java.io.IOException;
 import java.nio.channels.SelectableChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import zmq.poll.IPollEvents;
-import zmq.poll.Poller;
-
-final class Reaper extends ZObject implements IPollEvents, Closeable
+public class Reaper extends ZObject implements IPollEvents, Closeable
 {
     //  Reaper thread accesses incoming commands via this mailbox.
     private final Mailbox mailbox;
 
     //  Handle associated with mailbox' file descriptor.
-    private final Poller.Handle mailboxHandle;
+    private final SelectableChannel mailboxHandle;
 
     //  I/O multiplexing is performed using a poller object.
     private final Poller poller;
@@ -25,19 +22,19 @@ final class Reaper extends ZObject implements IPollEvents, Closeable
     //  If true, we were already asked to terminate.
     private final AtomicBoolean terminating = new AtomicBoolean();
 
-    private final String name;
+    private String name;
 
-    Reaper(Ctx ctx, int tid)
+    public Reaper(Ctx ctx, int tid)
     {
         super(ctx, tid);
         socketsReaping = 0;
         name = "reaper-" + tid;
-        poller = new Poller(ctx, name);
+        poller = new Poller(name);
 
-        mailbox = new Mailbox(ctx, name, tid);
+        mailbox = new Mailbox(name);
 
-        SelectableChannel fd = mailbox.getFd();
-        mailboxHandle = poller.addHandle(fd, this);
+        mailboxHandle = mailbox.getFd();
+        poller.addHandle(mailboxHandle, this);
         poller.setPollIn(mailboxHandle);
     }
 
@@ -48,17 +45,17 @@ final class Reaper extends ZObject implements IPollEvents, Closeable
         mailbox.close();
     }
 
-    Mailbox getMailbox()
+    public Mailbox getMailbox()
     {
         return mailbox;
     }
 
-    void start()
+    public void start()
     {
         poller.start();
     }
 
-    void stop()
+    public void stop()
     {
         if (!terminating.get()) {
             sendStop();
@@ -76,7 +73,7 @@ final class Reaper extends ZObject implements IPollEvents, Closeable
             }
 
             //  Process the command.
-            cmd.process();
+            cmd.destination().processCommand(cmd);
         }
     }
 

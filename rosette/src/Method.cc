@@ -146,9 +146,13 @@ ReflectiveMthd::invoke (Ctxt* ctxt)
 {
     PROTECT_THIS(ReflectiveMthd);
     PROTECT(ctxt);
+    Tuple* expansionTuple = Tuple::create (2, NIV);
+    expansionTuple->elem(0) = ctxt->code;
+    expansionTuple->elem(1) = ctxt->env;
+    PROTECT(expansionTuple);
     Tuple* ctxtTuple = Tuple::create (2, NIV);
     ctxtTuple->elem(0) = ctxt;
-    ctxtTuple->elem(1) = ctxt->code;
+    ctxtTuple->elem(1) = expansionTuple;
     PROTECT(ctxtTuple);
     Tuple* newArgvec = ctxt->argvec->makeSlice(0, ctxt->nargs);
     newArgvec->elem(0) = ctxtTuple;
