@@ -32,7 +32,7 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
-case class PeerTableEntry[A <: Keyed](val entry: A) extends Keyed {
+case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
   var pinging = false
   override def key = entry.key
   override def toString = s"#{PeerTableEntry $entry}"
@@ -167,6 +167,7 @@ case class PeerTable[A <: Peer](home: A,
                   }
                 }
             }
+            ()
           }
         }
       case None => ()

@@ -8,12 +8,6 @@ option (scalapb.options) = {
   flat_package: true
 };
 
-message Header {
-    bytes  id        = 1;
-    uint64 timestamp = 2;
-    uint64 seq       = 3;
-}
-
 message Node {
     bytes  id       = 1;
     bytes  host     = 2;
@@ -21,17 +15,28 @@ message Node {
     uint32 udp_port = 4;
 }
 
+message Header {
+    Node   sender         = 1;
+    uint64 timestamp      = 2;
+    uint64 seq            = 3;
+}
+
+message ReturnHeader {
+    uint64 timestamp      = 1;
+    uint64 seq            = 2;
+}
+
 message Disconnect {
 }
 
 message Hello {
-    Node node = 1;
 }
 
 message Ping {
 }
 
 message Pong {
+    ReturnHeader return_header = 1;
 }
 
 message Lookup {
@@ -43,7 +48,7 @@ message LookupResponse {
 }
 
 message Protocol {
-    Header header             =  1;
+    Header header                      = 1;
 
     oneof message {
         Hello          hello           = 2;

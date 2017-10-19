@@ -18,7 +18,7 @@ import scala.util.{Failure, Success, Try}
   * (`local`) be given; this supplies the source data for datagrams it
   * sends.
   */
-case class UnicastComm(val local: PeerNode) extends Comm {
+case class UnicastComm(local: PeerNode) extends Comm {
   lazy val receiver = new DatagramSocket(local.endpoint.udpPort)
   lazy val sender = new DatagramSocket()
 
