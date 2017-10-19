@@ -15,7 +15,7 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
   def key = keccak256(2)
 }
 
-case class Endpoint(val host: String, val tcpPort: Int, val udpPort: Int) {
+case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
   lazy val tcpSocketAddress = new java.net.InetSocketAddress(host, tcpPort)
   lazy val udpSocketAddress = new java.net.InetSocketAddress(host, udpPort)
 }
@@ -23,7 +23,7 @@ case class Endpoint(val host: String, val tcpPort: Int, val udpPort: Int) {
 /**
   * A PeerNode is (at least) an identifier and a network configuration.
   */
-case class PeerNode(val id: NodeIdentifier, val endpoint: Endpoint) {
+case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def key = id.key
 
