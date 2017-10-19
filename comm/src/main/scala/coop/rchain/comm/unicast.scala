@@ -92,7 +92,7 @@ case class UnicastComm(local: PeerNode) extends Comm {
         println(s"COMM Sending to ${peer.endpoint.udpSocketAddress}")
         val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
         sender.send(dgram)
-        return Success(true)
+        Success(true)
       }
       case Failure(ex) => Failure(ex)
     }
