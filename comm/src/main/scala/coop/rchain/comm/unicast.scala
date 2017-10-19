@@ -19,8 +19,8 @@ import scala.util.{Failure, Success, Try}
   * sends.
   */
 case class UnicastComm(local: PeerNode) extends Comm {
-  lazy val receiver = new DatagramSocket(local.endpoint.udpPort)
-  lazy val sender = new DatagramSocket()
+  val receiver = new DatagramSocket(local.endpoint.udpPort)
+  val sender = new DatagramSocket()
 
   /*
    * Timeout for recv() calls; might need to be adjusted lower. This

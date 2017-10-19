@@ -16,8 +16,8 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
 }
 
 case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
-  lazy val tcpSocketAddress = new java.net.InetSocketAddress(host, tcpPort)
-  lazy val udpSocketAddress = new java.net.InetSocketAddress(host, udpPort)
+  val tcpSocketAddress = new java.net.InetSocketAddress(host, tcpPort)
+  val udpSocketAddress = new java.net.InetSocketAddress(host, udpPort)
 }
 
 /**
