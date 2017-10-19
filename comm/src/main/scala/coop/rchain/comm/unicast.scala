@@ -86,13 +86,12 @@ case class UnicastComm(local: PeerNode) extends Comm {
     * the exception in a @scala.util.Try. See
     * @java.net.DatagramSocket.send for a list of possible exceptions.
     */
-  override def send(data: Seq[Byte], peer: PeerNode): Try[Boolean] =
+  override def send(data: Seq[Byte], peer: PeerNode): Try[Unit] =
     encode(data) match {
       case Success(payload) => {
         println(s"COMM Sending to ${peer.endpoint.udpSocketAddress}")
         val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
-        sender.send(dgram)
-        Success(true)
+        Try(sender.send(dgram))
       }
       case Failure(ex) => Failure(ex)
     }

@@ -27,7 +27,7 @@ trait ProtocolHandler {
   /**
     * Asynchronously broadcast a message to all known peers.
     */
-  def broadcast(msg: ProtocolMessage): Seq[Try[Boolean]]
+  def broadcast(msg: ProtocolMessage): Seq[Try[Unit]]
 }
 
 /**

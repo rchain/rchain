@@ -3,7 +3,7 @@ package coop.rchain.comm
 import scala.util.Try
 
 trait Comm {
-  def send(data: Seq[Byte], p: PeerNode): Try[Boolean]
+  def send(data: Seq[Byte], p: PeerNode): Try[Unit]
   def recv: Try[Seq[Byte]]
 }
 

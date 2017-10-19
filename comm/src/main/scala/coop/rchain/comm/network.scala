@@ -75,7 +75,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   /**
     * Broadcast a message to all peers in the Kademlia table.
     */
-  override def broadcast(msg: ProtocolMessage): Seq[Try[Boolean]] = {
+  override def broadcast(msg: ProtocolMessage): Seq[Try[Unit]] = {
     val bytes = ProtocolMessage.toBytes(msg)
     table.peers.par.map { p =>
       comm.send(bytes, p)
