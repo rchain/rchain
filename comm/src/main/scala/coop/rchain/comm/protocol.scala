@@ -10,6 +10,7 @@ import scala.concurrent.duration.{Duration, MILLISECONDS}
   * for higher level protocols.
   */
 trait ProtocolHandler {
+
   /**
     * The node that anchors this handler; `local` becomes the source
     * for outgoing communications.
@@ -87,21 +88,21 @@ object ProtocolMessage {
   implicit def toProtocolBytes(x: Seq[Byte]) =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
-  def toPeer(h: Option[Header]): Option[PeerNode] =
+  def toPeer(header: Option[Header]): Option[PeerNode] =
     for {
-      h <- h
+      h <- header
       node <- h.sender
     } yield
       PeerNode(NodeIdentifier(node.id.toByteArray),
                Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
 
   def sender(msg: ProtocolMessage): Option[PeerNode] =
-  for {
-    header <- msg.proto.header
-    node <- header.sender
-  } yield
+    for {
+      header <- msg.proto.header
+      node <- header.sender
+    } yield
       PeerNode(NodeIdentifier(node.id.toByteArray),
-        Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
+               Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
 
   def header(src: ProtocolNode) =
     Header()
