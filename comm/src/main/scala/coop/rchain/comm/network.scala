@@ -135,7 +135,8 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
         } catch {
           case ex: Throwable => Failure(ex)
         } finally {
-          val _ = pending.remove(pend)
+          pending.remove(pend)
+          ()
         }
       }
       case None => Failure(new Exception("malformed message"))
