@@ -48,7 +48,7 @@ message LookupResponse {
 
 message Protocol {
     Header header                      = 1;
-    ReturnHeader return_header =         2;
+    ReturnHeader return_header         = 2;
 
     oneof message {
         Hello          hello           = 3;
