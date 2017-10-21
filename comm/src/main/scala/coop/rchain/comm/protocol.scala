@@ -88,10 +88,9 @@ object ProtocolMessage {
   implicit def toProtocolBytes(x: Seq[Byte]) =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
-  def toPeer(header: Option[Header]): Option[PeerNode] =
+  def toPeer(header: Header): Option[PeerNode] =
     for {
-      h <- header
-      node <- h.sender
+      node <- header.sender
     } yield
       PeerNode(NodeIdentifier(node.id.toByteArray),
                Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
@@ -99,10 +98,8 @@ object ProtocolMessage {
   def sender(msg: ProtocolMessage): Option[PeerNode] =
     for {
       header <- msg.proto.header
-      node <- header.sender
-    } yield
-      PeerNode(NodeIdentifier(node.id.toByteArray),
-               Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
+      sender <- toPeer(header)
+    } yield sender
 
   def header(src: ProtocolNode) =
     Header()
