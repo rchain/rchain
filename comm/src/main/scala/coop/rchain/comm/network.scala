@@ -79,7 +79,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup(sender: PeerNode, lookup: LookupMessage) =
+  private def handleLookup(sender: PeerNode, lookup: LookupMessage): Unit =
     for {
       id <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
@@ -90,7 +90,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   /**
     * Validate and handle incoming LOOKUP_RESPONSE message.
     */
-  private def handleLookupResponse(sender: PeerNode, response: LookupResponseMessage) =
+  private def handleLookupResponse(sender: PeerNode, response: LookupResponseMessage): Unit =
     for {
       ret <- response.returnHeader
       promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
