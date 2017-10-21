@@ -72,12 +72,13 @@ trait ProtocolMessage {
 
   def header: Option[Header] = proto.header
 
-  def sender: Option[Node] = proto.header.flatMap(_.sender)
-
-  def peer: Option[PeerNode] =
-    sender.map(s =>
+  def sender: Option[PeerNode] =
+    for {
+      h <- header
+      s <- h.sender
+    } yield
       PeerNode(NodeIdentifier(s.id.toByteArray),
-               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort)))
+               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   def toByteSeq: Seq[Byte] = {
     val buf = new java.io.ByteArrayOutputStream
@@ -94,8 +95,7 @@ case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
       h <- header
-    } yield
-        PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
+    } yield PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
 }
 
 case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
@@ -110,8 +110,8 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
     for {
       h <- header
     } yield
-        LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
-                              System.currentTimeMillis)
+      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
+                            System.currentTimeMillis)
 
 }
 
@@ -168,14 +168,6 @@ object ProtocolMessage {
       .withReturnHeader(returnHeader(h))
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
-
-  def toBytes(proto: Protocol): Array[Byte] = {
-    val buf = new java.io.ByteArrayOutputStream
-    proto.writeTo(buf)
-    buf.toByteArray
-  }
-
-  def toBytes(msg: ProtocolMessage): Array[Byte] = toBytes(msg.proto)
 
   def parse(bytes: Seq[Byte]): Option[ProtocolMessage] =
     Protocol.parseFrom(bytes.toArray) match {

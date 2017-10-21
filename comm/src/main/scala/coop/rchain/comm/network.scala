@@ -37,7 +37,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
 
   private def dispatch(msg: ProtocolMessage): Unit =
     for {
-      sender <- msg.peer
+      sender <- msg.sender
     } {
       table.observe(new ProtocolNode(sender, this))
       msg match {
