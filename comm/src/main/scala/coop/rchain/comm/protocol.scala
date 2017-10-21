@@ -48,20 +48,18 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
     _seq
   }
 
-  override def ping: Try[Duration] =
-    ProtocolMessage.ping(handler.local) match {
-      case Some(ping) =>
-        handler.roundTrip(PingMessage(ping, System.currentTimeMillis), this) match {
-          case Success(pong) =>
-            ping.header match {
-              case Some(incoming) =>
-                Success(Duration(pong.timestamp - incoming.timestamp, MILLISECONDS))
-              case _ => Failure(new Exception("ping failed"))
-            }
-          case Failure(ex) => Failure(ex)
+  override def ping: Try[Duration] = {
+    val req = PingMessage(ProtocolMessage.ping(handler.local), System.currentTimeMillis)
+    handler.roundTrip(req, this) match {
+      case Success(resp) =>
+        req.header match {
+          case Some(incoming) =>
+            Success(Duration(resp.timestamp - incoming.timestamp, MILLISECONDS))
+          case _ => Failure(new Exception("ping failed"))
         }
-      case None => Failure(new Exception("ping failed"))
+      case Failure(ex) => Failure(ex)
     }
+  }
 }
 
 /**
@@ -71,12 +69,53 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
 trait ProtocolMessage {
   val proto: Protocol
   val timestamp: Long
+
+  def header: Option[Header] = proto.header
+
+  def sender: Option[Node] = proto.header.flatMap(_.sender)
+
+  def peer: Option[PeerNode] =
+    sender.map(s =>
+      PeerNode(NodeIdentifier(s.id.toByteArray),
+               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort)))
+
+  def toByteSeq: Seq[Byte] = {
+    val buf = new java.io.ByteArrayOutputStream
+    proto.writeTo(buf)
+    buf.toByteArray
+  }
 }
 
-case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+trait ProtocolResponse extends ProtocolMessage {
+  def returnHeader: Option[ReturnHeader] = proto.returnHeader
+}
+
+case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+  def response(src: ProtocolNode): Option[ProtocolMessage] =
+    for {
+      h <- header
+    } yield
+        PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
+}
+
+case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
+
+case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+  def lookupId: Option[Seq[Byte]] =
+    for {
+      lookup <- proto.message.lookup
+    } yield lookup.id.toByteArray
+
+  def response(src: ProtocolNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
+    for {
+      h <- header
+    } yield
+        LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
+                              System.currentTimeMillis)
+
+}
+
+case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**
   * Utility functions for working with protocol buffers.
@@ -90,44 +129,26 @@ object ProtocolMessage {
   implicit def toProtocolBytes(x: Seq[Byte]) =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
-  def toPeer(header: Header): Option[PeerNode] =
-    for {
-      node <- header.sender
-    } yield
-      PeerNode(NodeIdentifier(node.id.toByteArray),
-               Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
-
-  def sender(msg: ProtocolMessage): Option[PeerNode] =
-    for {
-      header <- msg.proto.header
-      sender <- toPeer(header)
-    } yield sender
-
-  def header(src: ProtocolNode) =
+  def header(src: ProtocolNode): Header =
     Header()
       .withSender(node(src))
       .withTimestamp(System.currentTimeMillis)
       .withSeq(src.seq)
 
-  def header(msg: ProtocolMessage): Option[Header] = msg.proto.header
-
-  def returnHeader(msg: ProtocolMessage): Option[ReturnHeader] =
-    msg.proto.returnHeader
-
-  def node(n: PeerNode) =
+  def node(n: PeerNode): Node =
     Node()
       .withId(n.key)
       .withHost(n.endpoint.host)
       .withUdpPort(n.endpoint.udpPort)
       .withTcpPort(n.endpoint.tcpPort)
 
-  def returnHeader(h: Header) =
+  def returnHeader(h: Header): ReturnHeader =
     ReturnHeader()
       .withTimestamp(h.timestamp)
       .withSeq(h.seq)
 
-  def ping(src: ProtocolNode): Option[Protocol] =
-    Some(Protocol().withHeader(header(src)).withPing(Ping()))
+  def ping(src: ProtocolNode): Protocol =
+    Protocol().withHeader(header(src)).withPing(Ping())
 
   def pong(src: ProtocolNode, h: Header): Protocol =
     Protocol()
@@ -135,22 +156,11 @@ object ProtocolMessage {
       .withReturnHeader(returnHeader(h))
       .withPong(Pong())
 
-  def pong(src: ProtocolNode, ping: PingMessage): Option[Protocol] =
-    for {
-      h <- ping.proto.header
-    } yield pong(src, h)
-
-  def lookupId(msg: ProtocolMessage): Option[Seq[Byte]] =
-    for {
-      proto <- msg.proto.message.lookup
-    } yield proto.id.toByteArray
-
-  def lookup(src: ProtocolNode, id: Seq[Byte]): Option[Protocol] =
-    Some(
-      Protocol()
-        .withHeader(header(src))
-        .withLookup(Lookup()
-          .withId(id.toArray)))
+  def lookup(src: ProtocolNode, id: Seq[Byte]): Protocol =
+    Protocol()
+      .withHeader(header(src))
+      .withLookup(Lookup()
+        .withId(id.toArray))
 
   def lookupResponse(src: ProtocolNode, h: Header, nodes: Seq[PeerNode]): Protocol =
     Protocol()
@@ -158,13 +168,6 @@ object ProtocolMessage {
       .withReturnHeader(returnHeader(h))
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
-
-  def lookupResponse(src: ProtocolNode,
-                     lookup: ProtocolMessage,
-                     nodes: Seq[PeerNode]): Option[Protocol] =
-    for {
-      h <- lookup.proto.header
-    } yield lookupResponse(src, h, nodes)
 
   def toBytes(proto: Protocol): Array[Byte] = {
     val buf = new java.io.ByteArrayOutputStream

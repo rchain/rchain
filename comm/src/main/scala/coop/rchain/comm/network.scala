@@ -37,7 +37,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
 
   private def dispatch(msg: ProtocolMessage): Unit =
     for {
-      sender <- ProtocolMessage.sender(msg)
+      sender <- msg.peer
     } {
       table.observe(new ProtocolNode(sender, this))
       msg match {
@@ -55,9 +55,9 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     */
   private def handlePing(sender: PeerNode, ping: PingMessage): Unit =
     for {
-      pong <- ProtocolMessage.pong(local, ping)
+      pong <- ping.response(local)
     } {
-      comm.send(ProtocolMessage.toBytes(pong), sender)
+      comm.send(pong.toByteSeq, sender)
     }
 
   /**
@@ -65,7 +65,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     */
   private def handlePong(sender: PeerNode, pong: PongMessage): Unit =
     for {
-      ret <- ProtocolMessage.returnHeader(pong)
+      ret <- pong.returnHeader
       promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
     } {
       try {
@@ -81,10 +81,10 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     */
   private def handleLookup(sender: PeerNode, lookup: LookupMessage) =
     for {
-      id <- ProtocolMessage.lookupId(lookup)
-      resp <- ProtocolMessage.lookupResponse(local, lookup, table.lookup(id))
+      id <- lookup.lookupId
+      resp <- lookup.response(local, table.lookup(id))
     } {
-      comm.send(ProtocolMessage.toBytes(resp), sender)
+      comm.send(resp.toByteSeq, sender)
     }
 
   /**
@@ -92,7 +92,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     */
   private def handleLookupResponse(sender: PeerNode, response: LookupResponseMessage) =
     for {
-      ret <- ProtocolMessage.returnHeader(response)
+      ret <- response.returnHeader
       promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
     } {
       try {
@@ -106,7 +106,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     * Broadcast a message to all peers in the Kademlia table.
     */
   override def broadcast(msg: ProtocolMessage): Seq[Try[Unit]] = {
-    val bytes = ProtocolMessage.toBytes(msg)
+    val bytes = msg.toByteSeq
     table.peers.par.map { p =>
       comm.send(bytes, p)
     }.toList
@@ -123,9 +123,9 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   override def roundTrip(msg: ProtocolMessage,
                          remote: ProtocolNode,
                          timeout: Duration = Duration(500, MILLISECONDS)): Try[ProtocolMessage] =
-    ProtocolMessage.header(msg) match {
+    msg.header match {
       case Some(header) => {
-        val bytes = ProtocolMessage.toBytes(msg)
+        val bytes = msg.toByteSeq
         val pend = PendingKey(remote.key, header.timestamp, header.seq)
         val promise = Promise[Try[ProtocolMessage]]
         pending.put(pend, promise)
