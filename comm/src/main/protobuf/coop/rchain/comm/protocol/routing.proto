@@ -36,7 +36,6 @@ message Ping {
 }
 
 message Pong {
-    ReturnHeader return_header = 1;
 }
 
 message Lookup {
@@ -49,13 +48,14 @@ message LookupResponse {
 
 message Protocol {
     Header header                      = 1;
+    ReturnHeader return_header =         2;
 
     oneof message {
-        Hello          hello           = 2;
-        Disconnect     disconnect      = 3;
-        Ping           ping            = 4;
-        Pong           pong            = 5;
-        Lookup         lookup          = 6;
-        LookupResponse lookup_response = 7;
+        Hello          hello           = 3;
+        Disconnect     disconnect      = 4;
+        Ping           ping            = 5;
+        Pong           pong            = 6;
+        Lookup         lookup          = 7;
+        LookupResponse lookup_response = 8;
     }
 }

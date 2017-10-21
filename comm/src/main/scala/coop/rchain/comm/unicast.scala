@@ -3,6 +3,11 @@ package coop.rchain.comm
 import java.net.{DatagramPacket, DatagramSocket}
 import scala.util.{Failure, Success, Try}
 
+sealed trait DatagramError extends Throwable
+case class DatagramOverflow(size: Int) extends DatagramError
+case class DatagramUnderflow(size: Int) extends DatagramError
+case class DatagramFramingError(size: Int) extends DatagramError
+
 /**
   * Implement the Comm protocol for unicast (point-to-point) datagram
   * (UDP) sockets.
@@ -39,28 +44,28 @@ case class UnicastComm(local: PeerNode) extends Comm {
    * bytes of the dgram payload.
    */
 
-  private def encode(data: Seq[Byte]): Try[Array[Byte]] = {
+  private def encode(data: Seq[Byte]): Either[DatagramError, Array[Byte]] = {
     val sz = data.size
     if (sz > 65506) {
-      Failure(new Exception(s"Datagram too large to encode (got $sz)."))
+      Left(DatagramOverflow(sz))
     } else {
       val payload = new Array[Byte](2 + sz)
       payload(0) = (sz >> 8).toByte
       payload(1) = sz.toByte
       Array.copy(data.toArray, 0, payload.toArray, 2, sz)
-      Success(payload)
+      Right(payload)
     }
   }
 
-  private def decode(data: Array[Byte]): Try[Seq[Byte]] =
+  private def decode(data: Array[Byte]): Either[DatagramError, Seq[Byte]] =
     if (data.size < 2) {
-      Failure(new Exception(s"Datagram too small (got ${data.size})."))
+      Left(DatagramUnderflow(data.size))
     } else {
       val sz = ((data(0) << 8) & 0xff00) | (data(1) & 0xff)
       if (0 < sz && sz <= 65506) {
-        Success(data.slice(2, sz + 2))
+        Right(data.slice(2, sz + 2))
       } else {
-        Failure(new Exception(s"Datagram size protocol error (got $sz)."))
+        Left(DatagramFramingError(sz))
       }
     }
 
@@ -74,7 +79,10 @@ case class UnicastComm(local: PeerNode) extends Comm {
   override def recv: Try[Seq[Byte]] =
     try {
       receiver.receive(recv_dgram)
-      decode(recv_dgram.getData)
+      decode(recv_dgram.getData) match {
+        case Right(bytes) => Success(bytes)
+        case Left(err)    => Failure(err)
+      }
     } catch {
       case ex: Throwable => Failure(ex)
     }
@@ -88,11 +96,11 @@ case class UnicastComm(local: PeerNode) extends Comm {
     */
   override def send(data: Seq[Byte], peer: PeerNode): Try[Unit] =
     encode(data) match {
-      case Success(payload) => {
+      case Right(payload) => {
         println(s"COMM Sending to ${peer.endpoint.udpSocketAddress}")
         val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
         Try(sender.send(dgram))
       }
-      case Failure(ex) => Failure(ex)
+      case Left(err) => Failure(err)
     }
 }

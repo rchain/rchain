@@ -41,8 +41,11 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     } {
       table.observe(new ProtocolNode(sender, this))
       msg match {
-        case ping@PingMessage(_, _) => handlePing(sender, ping)
-        case pong@PongMessage(_, _) => handlePong(sender, pong)
+        case ping @ PingMessage(_, _)     => handlePing(sender, ping)
+        case pong @ PongMessage(_, _)     => handlePong(sender, pong)
+        case lookup @ LookupMessage(_, _) => handleLookup(sender, lookup)
+        case lookupResponse @ LookupResponseMessage(_, _) =>
+          handleLookupResponse(sender, lookupResponse)
         case _ => ???
       }
     }
@@ -67,6 +70,33 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     } {
       try {
         promise.success(Success(pong))
+      } catch {
+        case ex: java.lang.IllegalStateException => () // Future already completed
+      }
+    }
+
+  /**
+    * Validate incoming LOOKUP message and return an answering
+    * LOOKUP_RESPONSE.
+    */
+  private def handleLookup(sender: PeerNode, lookup: LookupMessage) =
+    for {
+      id <- ProtocolMessage.lookupId(lookup)
+      resp <- ProtocolMessage.lookupResponse(local, lookup, table.lookup(id))
+    } {
+      comm.send(ProtocolMessage.toBytes(resp), sender)
+    }
+
+  /**
+    * Validate and handle incoming LOOKUP_RESPONSE message.
+    */
+  private def handleLookupResponse(sender: PeerNode, response: LookupResponseMessage) =
+    for {
+      ret <- ProtocolMessage.returnHeader(response)
+      promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
+    } {
+      try {
+        promise.success(Success(response))
       } catch {
         case ex: java.lang.IllegalStateException => () // Future already completed
       }
