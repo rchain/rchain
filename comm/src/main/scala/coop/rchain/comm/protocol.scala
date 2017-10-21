@@ -100,10 +100,8 @@ object ProtocolMessage {
   def sender(msg: ProtocolMessage): Option[PeerNode] =
     for {
       header <- msg.proto.header
-      node <- header.sender
-    } yield
-      PeerNode(NodeIdentifier(node.id.toByteArray),
-               Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
+      sender <- toPeer(header)
+    } yield sender
 
   def header(src: ProtocolNode) =
     Header()

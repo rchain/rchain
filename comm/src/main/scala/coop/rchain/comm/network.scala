@@ -35,7 +35,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       }
   }.start
 
-  private def dispatch(msg: ProtocolMessage) =
+  private def dispatch(msg: ProtocolMessage): Unit =
     for {
       sender <- ProtocolMessage.sender(msg)
     } {
@@ -53,7 +53,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   /**
     * Validate incoming PING and send responding PONG.
     */
-  private def handlePing(sender: PeerNode, ping: PingMessage) =
+  private def handlePing(sender: PeerNode, ping: PingMessage): Unit =
     for {
       pong <- ProtocolMessage.pong(local, ping)
     } {
@@ -63,7 +63,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   /**
     * Validate incoming PONG and complete its pending promise.
     */
-  private def handlePong(sender: PeerNode, pong: PongMessage) =
+  private def handlePong(sender: PeerNode, pong: PongMessage): Unit =
     for {
       ret <- ProtocolMessage.returnHeader(pong)
       promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
