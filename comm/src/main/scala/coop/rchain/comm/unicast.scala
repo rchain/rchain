@@ -18,9 +18,9 @@ import scala.util.{Failure, Success, Try}
   * (`local`) be given; this supplies the source data for datagrams it
   * sends.
   */
-case class UnicastComm(val local: PeerNode) extends Comm {
-  lazy val receiver = new DatagramSocket(local.endpoint.udpPort)
-  lazy val sender = new DatagramSocket()
+case class UnicastComm(local: PeerNode) extends Comm {
+  val receiver = new DatagramSocket(local.endpoint.udpPort)
+  val sender = new DatagramSocket()
 
   /*
    * Timeout for recv() calls; might need to be adjusted lower. This
@@ -86,13 +86,12 @@ case class UnicastComm(val local: PeerNode) extends Comm {
     * the exception in a @scala.util.Try. See
     * @java.net.DatagramSocket.send for a list of possible exceptions.
     */
-  override def send(data: Seq[Byte], peer: PeerNode): Try[Boolean] =
+  override def send(data: Seq[Byte], peer: PeerNode): Try[Unit] =
     encode(data) match {
       case Success(payload) => {
         println(s"COMM Sending to ${peer.endpoint.udpSocketAddress}")
         val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
-        sender.send(dgram)
-        return Success(true)
+        Try(sender.send(dgram))
       }
       case Failure(ex) => Failure(ex)
     }

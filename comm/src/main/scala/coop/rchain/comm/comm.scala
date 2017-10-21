@@ -3,7 +3,7 @@ package coop.rchain.comm
 import scala.util.Try
 
 trait Comm {
-  def send(data: Seq[Byte], p: PeerNode): Try[Boolean]
+  def send(data: Seq[Byte], p: PeerNode): Try[Unit]
   def recv: Try[Seq[Byte]]
 }
 
@@ -16,8 +16,8 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
 }
 
 case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
-  lazy val tcpSocketAddress = new java.net.InetSocketAddress(host, tcpPort)
-  lazy val udpSocketAddress = new java.net.InetSocketAddress(host, udpPort)
+  val tcpSocketAddress = new java.net.InetSocketAddress(host, tcpPort)
+  val udpSocketAddress = new java.net.InetSocketAddress(host, udpPort)
 }
 
 /**
