@@ -148,7 +148,9 @@ object ProtocolMessage {
       .withSeq(h.seq)
 
   def ping(src: ProtocolNode): Protocol =
-    Protocol().withHeader(header(src)).withPing(Ping())
+    Protocol()
+      .withHeader(header(src))
+      .withPing(Ping())
 
   def pong(src: ProtocolNode, h: Header): Protocol =
     Protocol()
