@@ -87,10 +87,17 @@ trait ProtocolMessage {
   }
 }
 
+/**
+  * Supports return headers, which hold information about the message
+  * being responded to.
+  */
 trait ProtocolResponse extends ProtocolMessage {
   def returnHeader: Option[ReturnHeader] = proto.returnHeader
 }
 
+/**
+  * A ping is a simple are-you-there? message.
+  */
 case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
@@ -98,8 +105,15 @@ case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
     } yield PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
 }
 
+/**
+  * A pong is the response to a ping.
+  */
 case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
+/**
+  * A lookup message asks for a list of peers from the local Kademlia
+  * table that are closest to a given key.
+  */
 case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
   def lookupId: Option[Seq[Byte]] =
     for {
@@ -115,6 +129,10 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
 
 }
 
+/**
+  * The response to a lookup message. It holds the list of peers
+  * closest to the queried key.
+  */
 case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**

@@ -33,7 +33,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
           case Failure(ex)                         => ex.printStackTrace
         }
       }
-  }.start
+  }
 
   private def dispatch(msg: ProtocolMessage): Unit =
     for {
@@ -141,6 +141,8 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       }
       case None => Failure(new Exception("malformed message"))
     }
+
+  receiver.start
 
   override def toString = s"#{Network $local ${local.endpoint.udpSocketAddress}}"
 }
