@@ -77,14 +77,12 @@ case class UnicastComm(local: PeerNode) extends Comm {
     * throws. See @java.net.DatagramSocket.receive.
     */
   override def recv: Try[Seq[Byte]] =
-    try {
+    Try {
       receiver.receive(recv_dgram)
       decode(recv_dgram.getData) match {
-        case Right(bytes) => Success(bytes)
-        case Left(err)    => Failure(err)
+        case Right(bytes) => bytes
+        case Left(err)    => throw(err)
       }
-    } catch {
-      case ex: Throwable => Failure(ex)
     }
 
   /**

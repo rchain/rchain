@@ -46,7 +46,6 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
         case lookup @ LookupMessage(_, _) => handleLookup(sender, lookup)
         case lookupResponse @ LookupResponseMessage(_, _) =>
           handleLookupResponse(sender, lookupResponse)
-        case _ => ???
       }
     }
 
