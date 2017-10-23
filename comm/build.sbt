@@ -19,25 +19,18 @@ addCompilerPlugin(
 lazy val commonOptions = Seq(
   "-language:existentials",
   "-language:higherKinds",
-//  "-Xfatal-warnings",
+  "-language:implicitConversions",
   "-Xfuture",
-  "-Xlint",
+  "-Xlint:_,-unused",
   "-Yno-adapted-args",
   "-Ywarn-dead-code",
   "-Ywarn-numeric-widen",
-  "-Ywarn-unused-import",
   "-Ywarn-value-discard",
   "-deprecation",
   "-encoding", "UTF-8",
   "-feature",
   "-unchecked")
 
-// scalacOptions ++= commonOptions
-scalacOptions += "-feature"
-
-scalacOptions in (Compile, console) ~= (_.filterNot(Set(
-  "-Ywarn-unused:imports",
-  "-Xfatal-warnings"
-)))
+scalacOptions ++= commonOptions
 
 logBuffered in Test := false

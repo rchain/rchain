@@ -32,7 +32,7 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
-case class PeerTableEntry[A <: Keyed](val entry: A) extends Keyed {
+case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
   var pinging = false
   override def key = entry.key
   override def toString = s"#{PeerTableEntry $entry}"
@@ -110,9 +110,7 @@ case class PeerTable[A <: Peer](home: A,
   def distance(other: A): Option[Int] = distance(other.key)
 
   private val pool = Executors.newFixedThreadPool(alpha)
-  private def ping(ps: mutable.ListBuffer[Entry],
-                   older: Entry,
-                   newer: A): Unit =
+  private def ping(ps: mutable.ListBuffer[Entry], older: Entry, newer: A): Unit =
     pool.execute(new Runnable {
       def run = {
         val winner =
@@ -169,6 +167,7 @@ case class PeerTable[A <: Peer](home: A,
                   }
                 }
             }
+            ()
           }
         }
       case None => ()
@@ -207,4 +206,19 @@ case class PeerTable[A <: Peer](home: A,
       case None => Vector.empty
     }
   }
+
+  /**
+    * Return `Some[A]` if `key` names an entry in the table.
+    */
+  def find(key: Seq[Byte]): Option[A] =
+    for {
+      d <- distance(key)
+      e <- table(d) synchronized { table(d).find(_.entry.key == key) }
+    } yield e.entry
+
+  /**
+    * Return a sequence of all the `A`s in the table.
+    */
+  def peers: Seq[A] =
+    table.flatMap(l => l synchronized { l.map(_.entry) })
 }
