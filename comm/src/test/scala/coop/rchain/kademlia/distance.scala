@@ -2,14 +2,13 @@ package coop.rchain.kademlia
 
 import org.scalatest._
 import scala.util.{Success, Try}
-import scala.concurrent.duration.{Duration,MILLISECONDS}
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 case class PeerNode(val key: Seq[Byte]) extends Peer {
   val rand = new scala.util.Random
 
-  override def ping: Try[Duration] = {
+  override def ping: Try[Duration] =
     Success(Duration(100, MILLISECONDS))
-  }
 
   override def toString = {
     val skey = key.map("%02x" format _).mkString
@@ -33,30 +32,31 @@ class DistanceSpec extends FlatSpec with Matchers {
     for (i <- 1 to 64) {
       val home = PeerNode(b.rand(i))
       val nt = PeerTable(home)
-      nt.distance(home) should be (Some(8*nt.width))
+      nt.distance(home) should be (Some(8 * nt.width))
     }
   }
 
   val width = 32
 
   // Make 8*width copies all of which differ in a single, distinct bit
-  def oneOffs(key: Seq[Byte]): Seq[Array[Byte]] = {
-    for (i <- 0 until width; j <- 7 to 0 by -1) yield {
+  def oneOffs(key: Seq[Byte]): Seq[Array[Byte]] =
+    for {
+      i <- 0 until width
+      j <- 7 to 0 by -1
+    } yield {
       val k1 = Array.fill(key.size)(b(0))
       Array.copy(k1, 0, key.toArray, 0, key.size)
-      k1(i) = b(k1(i)^b(1 << j))
+      k1(i) = b(k1(i) ^ b(1 << j))
       k1
     }
-  }
 
   def testKey(key: Array[Byte]): Boolean = {
     val table = PeerTable(PeerNode(key))
-    oneOffs(key).map(table.distance(_)) == ((0 until 8*width).map(Option[Int](_)))
+    oneOffs(key).map(table.distance(_)) == ((0 until 8 * width).map(Option[Int](_)))
   }
 
-  def keyString(key: Seq[Byte]): String = {
+  def keyString(key: Seq[Byte]): String =
     key.map("%02x".format(_)).mkString
-  }
 
   val k0 = Array.fill(width)(b(0))
   s"A node with key all zeroes (${keyString(k0)})" should "compute distance correctly" in {
@@ -119,7 +119,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     for (k <- oneOffs(kr.toArray)) {
       table.observe(PeerNode(k))
     }
-    val target = table.table(table.width*4)(0)
+    val target = table.table(table.width * 4)(0)
     val resp = table.lookup(target.key)
     assert(resp.forall(_.key != target.key))
   }
@@ -129,7 +129,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     for (k <- oneOffs(kr.toArray)) {
       table.observe(PeerNode(k))
     }
-    table.peers.size should be (8*width)
+    table.peers.size should be (8 * width)
   }
 
   it should "find each added peer" in {
