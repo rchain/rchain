@@ -83,11 +83,6 @@ def mapOptional(x,f):
     return None if x is None else f(x)
 
 
-def attrOptional(obj, name):
-    if (hasAttr(obj, name)):
-        return getattr(obj,name)
-
-
 def orElse(x, lazy):
     if x is None:
         return lazy()
@@ -248,14 +243,14 @@ class Tasks:
     def checkAndMakePr(self, repo, params):
         if not self.test() is 0:
             print "Some tests are failed, abort PR."
-            exit(0)
+            sys.exit(1)
 
         try:
             return repo.create_pull(*params)
         except github.GithubException as e:
             print e
             print self.prWarningMessage
-            exit(0)
+            sys.exit(1)
         
         print "Success"
         
@@ -306,7 +301,7 @@ class HierarchicParserBuilder:
                 parser.add_argument(name, **params)
 
             if func:
-                parser.set_defaults(func=lambda args: func(args))
+                parser.set_defaults(func=func)
 
             subparser = None
 
@@ -336,7 +331,7 @@ class Workflow:
         self.tasks = tasks
         self.commitMsg = {
             'comment': self.commentCommit,
-            'transite': self.transiteCommit
+            'transition': self.transitionCommit
         }
 
 
@@ -344,7 +339,7 @@ class Workflow:
         return "{0} {1} #comment PR created".format(msg, ticketId)
 
 
-    def transiteCommit(self, msg, ticketId):
+    def transitionCommit(self, msg, ticketId):
         return "{0} {1} #inreview PR created".format(msg, ticketId)
 
 
@@ -359,7 +354,7 @@ class Workflow:
 
     def init(self, args):
         self.storeArgs(args, phase='init')
-        featureName = args.title.strip().replace(" ", "-").lower()
+        featureName = '-'.join(args.title.lower().split())
         print "Feature name"
         print featureName
         self.tasks.createBranch(featureName)
@@ -372,7 +367,7 @@ class Workflow:
         if not (hasPhase(self.config) and isInitPhase(self.config)):
             print "The 'phase' parameter is does not setup in configuration file. " + \
                 "Probably you should use 'project init' command first."
-            exit(0)
+            sys.exit(1)
 
         ticketId = self.config.ticket
         message = self.commitMsg[args.type](args.message, ticketId)
@@ -385,7 +380,7 @@ class Workflow:
         ticketHeader = self.config.title
         title = "JIRA# {0}: {1}".format(ticketId, ticketHeader)
         head = self.tasks.getHead()
-        body = orElse(args.body, lambda: '')
+        body = orElse(args.body, str)
 
         return (title, body, args.base, head)
 
@@ -465,7 +460,7 @@ def main():
                     'comment' leaves a commentary at JIRA's ticket and
                     'transition' set ticket's status to 'In Review'""",
                         'required': True,
-                        'choices': ['comment', 'transite']
+                        'choices': ['comment', 'transition']
                     }
                 }
             },
