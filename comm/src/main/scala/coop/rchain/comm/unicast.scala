@@ -1,7 +1,6 @@
 package coop.rchain.comm
 
 import java.net.{DatagramPacket, DatagramSocket}
-// import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 sealed trait DatagramError extends CommError
