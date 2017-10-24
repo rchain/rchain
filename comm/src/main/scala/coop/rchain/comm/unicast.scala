@@ -10,6 +10,11 @@ case class DatagramUnderflow(size: Int) extends DatagramError
 case class DatagramFramingError(ex: Throwable) extends DatagramError
 case class DatagramException(ex: Throwable) extends DatagramError
 
+sealed trait DatagramError extends Throwable
+case class DatagramOverflow(size: Int) extends DatagramError
+case class DatagramUnderflow(size: Int) extends DatagramError
+case class DatagramFramingError(size: Int) extends DatagramError
+
 /**
   * Implement the Comm protocol for unicast (point-to-point) datagram
   * (UDP) sockets.
@@ -69,18 +74,6 @@ case class UnicastComm(local: PeerNode) extends Comm {
         case sz => Right(data.slice(2, sz + 2))
       }
     }
-
-/*
-      val sz = ((data(0) << 8) & 0xff00) | (data(1) & 0xff)
-      if (0 < sz) {
-        Left(DatagramUnderflow(sz))
-      } else if (sz > 65506) {
-        Left(DatagramOverflow(sz))
-      } else {
-        Right(data.slice(2, sz + 2))
-      }
-    }
-*/
 
   /**
     * Receive a datagram.

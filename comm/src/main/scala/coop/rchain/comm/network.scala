@@ -103,6 +103,33 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     }
 
   /**
+    * Validate incoming LOOKUP message and return an answering
+    * LOOKUP_RESPONSE.
+    */
+  private def handleLookup(sender: PeerNode, lookup: LookupMessage) =
+    for {
+      id <- ProtocolMessage.lookupId(lookup)
+      resp <- ProtocolMessage.lookupResponse(local, lookup, table.lookup(id))
+    } {
+      comm.send(ProtocolMessage.toBytes(resp), sender)
+    }
+
+  /**
+    * Validate and handle incoming LOOKUP_RESPONSE message.
+    */
+  private def handleLookupResponse(sender: PeerNode, response: LookupResponseMessage) =
+    for {
+      ret <- ProtocolMessage.returnHeader(response)
+      promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
+    } {
+      try {
+        promise.success(Success(response))
+      } catch {
+        case ex: java.lang.IllegalStateException => () // Future already completed
+      }
+    }
+
+  /**
     * Broadcast a message to all peers in the Kademlia table.
     */
   override def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
