@@ -6,8 +6,8 @@ import scala.util.control.NonFatal
 sealed trait DatagramError extends CommError
 case class DatagramOverflow(size: Int) extends DatagramError
 case class DatagramUnderflow(size: Int) extends DatagramError
-case class DatagramFramingError(ex: Throwable) extends DatagramError
-case class DatagramException(ex: Throwable) extends DatagramError
+case class DatagramFramingError(ex: Exception) extends DatagramError
+case class DatagramException(ex: Exception) extends DatagramError
 
 /**
   * Implement the Comm protocol for unicast (point-to-point) datagram
@@ -72,9 +72,8 @@ case class UnicastComm(local: PeerNode) extends Comm {
   /**
     * Receive a datagram.
     *
-    * This method returns a @scala.util.Try, which may contain an
-    * exception if the underlying socket receive
-    * throws. See @java.net.DatagramSocket.receive.
+    * Returns `Right` with the bytes read from the socket or Left with
+    * an error, if something went wrong.
     */
   override def recv: Either[CommError, Seq[Byte]] =
     try {
@@ -90,9 +89,8 @@ case class UnicastComm(local: PeerNode) extends Comm {
   /**
     * Send data to a peer.
     *
-    * Return Success(true) if no exception occurred, otherwise return
-    * the exception in a @scala.util.Try. See
-    * @java.net.DatagramSocket.send for a list of possible exceptions.
+    * Returns `Right` with `true`, if no error was detected.
+    * Otherwise, returns `Left` with the error.
     */
   override def send(data: Seq[Byte], peer: PeerNode): Either[CommError, Unit] =
     encode(data) match {

@@ -6,7 +6,7 @@ import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 sealed trait ProtocolError extends CommError
-case class ProtocolException(ex: Throwable) extends ProtocolError
+case class ProtocolException(ex: Exception) extends ProtocolError
 case class UnknownProtocolError(msg: String) extends ProtocolError
 
 /**
