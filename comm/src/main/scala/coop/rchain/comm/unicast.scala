@@ -10,11 +10,6 @@ case class DatagramUnderflow(size: Int) extends DatagramError
 case class DatagramFramingError(ex: Throwable) extends DatagramError
 case class DatagramException(ex: Throwable) extends DatagramError
 
-sealed trait DatagramError extends Throwable
-case class DatagramOverflow(size: Int) extends DatagramError
-case class DatagramUnderflow(size: Int) extends DatagramError
-case class DatagramFramingError(size: Int) extends DatagramError
-
 /**
   * Implement the Comm protocol for unicast (point-to-point) datagram
   * (UDP) sockets.

@@ -1,7 +1,6 @@
 package coop.rchain.comm
 
 import java.net.SocketTimeoutException
-// import scala.util.{Failure, Success, Try}
 import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
@@ -97,33 +96,6 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     } {
       try {
         promise.success(Right(response))
-      } catch {
-        case ex: java.lang.IllegalStateException => () // Future already completed
-      }
-    }
-
-  /**
-    * Validate incoming LOOKUP message and return an answering
-    * LOOKUP_RESPONSE.
-    */
-  private def handleLookup(sender: PeerNode, lookup: LookupMessage) =
-    for {
-      id <- ProtocolMessage.lookupId(lookup)
-      resp <- ProtocolMessage.lookupResponse(local, lookup, table.lookup(id))
-    } {
-      comm.send(ProtocolMessage.toBytes(resp), sender)
-    }
-
-  /**
-    * Validate and handle incoming LOOKUP_RESPONSE message.
-    */
-  private def handleLookupResponse(sender: PeerNode, response: LookupResponseMessage) =
-    for {
-      ret <- ProtocolMessage.returnHeader(response)
-      promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
-    } {
-      try {
-        promise.success(Success(response))
       } catch {
         case ex: java.lang.IllegalStateException => () // Future already completed
       }
