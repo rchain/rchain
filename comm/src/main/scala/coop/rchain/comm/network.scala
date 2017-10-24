@@ -1,7 +1,7 @@
 package coop.rchain.comm
 
 import java.net.SocketTimeoutException
-import scala.util.{Failure, Success, Try}
+// import scala.util.{Failure, Success, Try}
 import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
@@ -15,7 +15,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   case class PendingKey(remote: Seq[Byte], timestamp: Long, seq: Long)
 
   val pending =
-    new concurrent.TrieMap[PendingKey, Promise[Try[ProtocolMessage]]]
+    new concurrent.TrieMap[PendingKey, Promise[Either[ProtocolError, ProtocolMessage]]]
 
   val local = new ProtocolNode(id, endpoint, this)
   val comm = UnicastComm(local)
@@ -25,12 +25,16 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     override def run =
       while (true) {
         comm.recv match {
-          case Success(res) =>
+          case Right(res) =>
+          // case Success(res) =>
             for {
               msg <- ProtocolMessage.parse(res)
             } dispatch(msg)
-          case Failure(ex: SocketTimeoutException) => ()
-          case Failure(ex)                         => ex.printStackTrace
+          case Left(ex: SocketTimeoutException) => ()
+          case Left(ex: Throwable) => ex.printStackTrace
+          case Left(_) => ()
+          // case Failure(ex: SocketTimeoutException) => ()
+          // case Failure(ex)                         => ex.printStackTrace
         }
       }
   }
@@ -68,7 +72,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
     } {
       try {
-        promise.success(Success(pong))
+        promise.success(Right(pong))
       } catch {
         case ex: java.lang.IllegalStateException => () // Future already completed
       }
@@ -95,7 +99,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
     } {
       try {
-        promise.success(Success(response))
+        promise.success(Right(response))
       } catch {
         case ex: java.lang.IllegalStateException => () // Future already completed
       }
@@ -104,7 +108,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   /**
     * Broadcast a message to all peers in the Kademlia table.
     */
-  override def broadcast(msg: ProtocolMessage): Seq[Try[Unit]] = {
+  override def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
     val bytes = msg.toByteSeq
     table.peers.par.map { p =>
       comm.send(bytes, p)
@@ -121,24 +125,24 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     */
   override def roundTrip(msg: ProtocolMessage,
                          remote: ProtocolNode,
-                         timeout: Duration = Duration(500, MILLISECONDS)): Try[ProtocolMessage] =
+                         timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage] =
     msg.header match {
       case Some(header) => {
         val bytes = msg.toByteSeq
         val pend = PendingKey(remote.key, header.timestamp, header.seq)
-        val promise = Promise[Try[ProtocolMessage]]
+        val promise = Promise[Either[ProtocolError, ProtocolMessage]]
         pending.put(pend, promise)
         try {
           comm.send(bytes, remote)
           Await.result(promise.future, timeout)
         } catch {
-          case ex: Throwable => Failure(ex)
+          case ex: Throwable => Left(ProtocolException(ex))
         } finally {
           pending.remove(pend)
           ()
         }
       }
-      case None => Failure(new Exception("malformed message"))
+      case None => Left(UnknownProtocolError("malformed message"))
     }
 
   receiver.start

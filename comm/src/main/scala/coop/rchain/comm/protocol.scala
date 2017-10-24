@@ -5,6 +5,10 @@ import coop.rchain.comm.protocol.routing._
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
+sealed trait ProtocolError extends CommError
+case class ProtocolException(ex: Throwable) extends ProtocolError
+case class UnknownProtocolError(msg: String) extends ProtocolError
+
 /**
   * Implements broadcasting and round-trip (request-response) messaging
   * for higher level protocols.
@@ -23,12 +27,12 @@ trait ProtocolHandler {
     */
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
-                timeout: Duration = Duration(500, MILLISECONDS)): Try[ProtocolMessage]
+                timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
 
   /**
     * Asynchronously broadcast a message to all known peers.
     */
-  def broadcast(msg: ProtocolMessage): Seq[Try[Unit]]
+  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]]
 }
 
 /**
@@ -51,13 +55,16 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
   override def ping: Try[Duration] = {
     val req = PingMessage(ProtocolMessage.ping(handler.local), System.currentTimeMillis)
     handler.roundTrip(req, this) match {
-      case Success(resp) =>
+      case Right(resp) =>
         req.header match {
           case Some(incoming) =>
             Success(Duration(resp.timestamp - incoming.timestamp, MILLISECONDS))
           case _ => Failure(new Exception("ping failed"))
         }
-      case Failure(ex) => Failure(ex)
+      case Left(ex) => ex match {
+        case ProtocolException(exc) => Failure(exc)
+        case exc => Failure(new Exception(exc.toString))
+      }
     }
   }
 }
