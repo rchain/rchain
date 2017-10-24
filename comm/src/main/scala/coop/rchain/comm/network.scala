@@ -26,15 +26,12 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       while (true) {
         comm.recv match {
           case Right(res) =>
-          // case Success(res) =>
             for {
               msg <- ProtocolMessage.parse(res)
             } dispatch(msg)
           case Left(ex: SocketTimeoutException) => ()
           case Left(ex: Throwable) => ex.printStackTrace
           case Left(_) => ()
-          // case Failure(ex: SocketTimeoutException) => ()
-          // case Failure(ex)                         => ex.printStackTrace
         }
       }
   }
