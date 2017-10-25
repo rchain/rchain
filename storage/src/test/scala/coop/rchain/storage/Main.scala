@@ -5,16 +5,23 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package coop.rchain.trie
+import coop.rchain.Storage.{BbTests,LmdbTests,StorageTests,UniTests}
 
-trait Store {
-  def get(id: String): Option[Trie]
-  def put(t: Trie): Unit
-  def insert(t: Trie): Unit
-  def delete(id: String): Unit
-  def getKey(k: String, v: String): Option[Trie]
-}
 
-object Datastore {
-  implicit lazy val db = new MongoDB //TODO load from config
+object Main {
+
+  def main(args: Array[String]): Unit = {
+
+    try {
+      UniTests.tests()
+      StorageTests.tests()
+      LmdbTests.tests()
+      BbTests.tests()
+    }
+    catch {
+      case e:Throwable => {
+        println("main(): " + e)
+      }
+    }
+  }
 }
