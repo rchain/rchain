@@ -491,15 +491,7 @@ public class PrettyPrinter
     {
        coop.rchain.syntax.rholang.Absyn.DContr _dcontr = (coop.rchain.syntax.rholang.Absyn.DContr) foo;
        if (_i_ > 0) render(_L_PAREN);
-       render("contract");
-       pp(_dcontr.name_, 0);
-       render("(");
-       pp(_dcontr.listcpattern_, 0);
-       render(")");
-       render("=");
-       render("{");
-       pp(_dcontr.proc_, 0);
-       render("}");
+       pp(_dcontr.proc_, 1);
        if (_i_ > 0) render(_R_PAREN);
     }
   }
@@ -620,14 +612,39 @@ public class PrettyPrinter
        pp(_pnew.proc_, 1);
        if (_i_ > 1) render(_R_PAREN);
     }
+    else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.PPrint)
+    {
+       coop.rchain.syntax.rholang.Absyn.PPrint _pprint = (coop.rchain.syntax.rholang.Absyn.PPrint) foo;
+       if (_i_ > 1) render(_L_PAREN);
+       render("print");
+       render("(");
+       pp(_pprint.proc_, 0);
+       render(")");
+       if (_i_ > 1) render(_R_PAREN);
+    }
     else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.PConstr)
     {
        coop.rchain.syntax.rholang.Absyn.PConstr _pconstr = (coop.rchain.syntax.rholang.Absyn.PConstr) foo;
        if (_i_ > 1) render(_L_PAREN);
-       pp(_pconstr.name_, 0);
+       pp(_pconstr.var_, 0);
        render("(");
        pp(_pconstr.listproc_, 0);
        render(")");
+       if (_i_ > 1) render(_R_PAREN);
+    }
+    else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.PContr)
+    {
+       coop.rchain.syntax.rholang.Absyn.PContr _pcontr = (coop.rchain.syntax.rholang.Absyn.PContr) foo;
+       if (_i_ > 1) render(_L_PAREN);
+       render("contract");
+       pp(_pcontr.var_, 0);
+       render("(");
+       pp(_pcontr.listcpattern_, 0);
+       render(")");
+       render("=");
+       render("{");
+       pp(_pcontr.proc_, 0);
+       render("}");
        if (_i_ > 1) render(_R_PAREN);
     }
     else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.PPar)
@@ -808,7 +825,7 @@ public class PrettyPrinter
     {
        coop.rchain.syntax.rholang.Absyn.QString _qstring = (coop.rchain.syntax.rholang.Absyn.QString) foo;
        if (_i_ > 7) render(_L_PAREN);
-       printQuoted(_qstring.string_);
+       pp(_qstring.string_, 0);
        if (_i_ > 7) render(_R_PAREN);
     }
     else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.QVar)
@@ -816,6 +833,13 @@ public class PrettyPrinter
        coop.rchain.syntax.rholang.Absyn.QVar _qvar = (coop.rchain.syntax.rholang.Absyn.QVar) foo;
        if (_i_ > 7) render(_L_PAREN);
        pp(_qvar.var_, 0);
+       if (_i_ > 7) render(_R_PAREN);
+    }
+    else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.QMap)
+    {
+       coop.rchain.syntax.rholang.Absyn.QMap _qmap = (coop.rchain.syntax.rholang.Absyn.QMap) foo;
+       if (_i_ > 7) render(_L_PAREN);
+       render("Map()");
        if (_i_ > 7) render(_R_PAREN);
     }
     else     if (foo instanceof coop.rchain.syntax.rholang.Absyn.QDot)
@@ -1086,7 +1110,7 @@ public class PrettyPrinter
     {
        coop.rchain.syntax.rholang.Absyn.PPtConstr _pptconstr = (coop.rchain.syntax.rholang.Absyn.PPtConstr) foo;
        if (_i_ > 1) render(_L_PAREN);
-       pp(_pptconstr.name_, 0);
+       pp(_pptconstr.var_, 0);
        render("(");
        pp(_pptconstr.listppattern_, 0);
        render(")");
@@ -1258,7 +1282,7 @@ public class PrettyPrinter
     {
        coop.rchain.syntax.rholang.Absyn.VPtStr _vptstr = (coop.rchain.syntax.rholang.Absyn.VPtStr) foo;
        if (_i_ > 0) render(_L_PAREN);
-       printQuoted(_vptstr.string_);
+       pp(_vptstr.string_, 0);
        if (_i_ > 0) render(_R_PAREN);
     }
   }
@@ -1307,10 +1331,6 @@ public class PrettyPrinter
        coop.rchain.syntax.rholang.Absyn.DContr _dcontr = (coop.rchain.syntax.rholang.Absyn.DContr) foo;
        render("(");
        render("DContr");
-       sh(_dcontr.name_);
-       render("[");
-       sh(_dcontr.listcpattern_);
-       render("]");
        sh(_dcontr.proc_);
        render(")");
     }
@@ -1421,15 +1441,35 @@ public class PrettyPrinter
        sh(_pnew.proc_);
        render(")");
     }
+    if (foo instanceof coop.rchain.syntax.rholang.Absyn.PPrint)
+    {
+       coop.rchain.syntax.rholang.Absyn.PPrint _pprint = (coop.rchain.syntax.rholang.Absyn.PPrint) foo;
+       render("(");
+       render("PPrint");
+       sh(_pprint.proc_);
+       render(")");
+    }
     if (foo instanceof coop.rchain.syntax.rholang.Absyn.PConstr)
     {
        coop.rchain.syntax.rholang.Absyn.PConstr _pconstr = (coop.rchain.syntax.rholang.Absyn.PConstr) foo;
        render("(");
        render("PConstr");
-       sh(_pconstr.name_);
+       sh(_pconstr.var_);
        render("[");
        sh(_pconstr.listproc_);
        render("]");
+       render(")");
+    }
+    if (foo instanceof coop.rchain.syntax.rholang.Absyn.PContr)
+    {
+       coop.rchain.syntax.rholang.Absyn.PContr _pcontr = (coop.rchain.syntax.rholang.Absyn.PContr) foo;
+       render("(");
+       render("PContr");
+       sh(_pcontr.var_);
+       render("[");
+       sh(_pcontr.listcpattern_);
+       render("]");
+       sh(_pcontr.proc_);
        render(")");
     }
     if (foo instanceof coop.rchain.syntax.rholang.Absyn.PPar)
@@ -1609,6 +1649,11 @@ public class PrettyPrinter
        render("QVar");
        sh(_qvar.var_);
        render(")");
+    }
+    if (foo instanceof coop.rchain.syntax.rholang.Absyn.QMap)
+    {
+       coop.rchain.syntax.rholang.Absyn.QMap _qmap = (coop.rchain.syntax.rholang.Absyn.QMap) foo;
+       render("QMap");
     }
     if (foo instanceof coop.rchain.syntax.rholang.Absyn.QDot)
     {
@@ -1877,7 +1922,7 @@ public class PrettyPrinter
        coop.rchain.syntax.rholang.Absyn.PPtConstr _pptconstr = (coop.rchain.syntax.rholang.Absyn.PPtConstr) foo;
        render("(");
        render("PPtConstr");
-       sh(_pptconstr.name_);
+       sh(_pptconstr.var_);
        render("[");
        sh(_pptconstr.listppattern_);
        render("]");

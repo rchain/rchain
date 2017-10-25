@@ -23,14 +23,8 @@ public class ComposVisitor<A> implements
 /* Contr */
     public Contr visit(coop.rchain.syntax.rholang.Absyn.DContr p, A arg)
     {
-      String name_ = p.name_;
-      ListCPattern listcpattern_ = new ListCPattern();
-      for (CPattern x : p.listcpattern_)
-      {
-        listcpattern_.add(x.accept(this,arg));
-      }
       Proc proc_ = p.proc_.accept(this, arg);
-      return new coop.rchain.syntax.rholang.Absyn.DContr(name_, listcpattern_, proc_);
+      return new coop.rchain.syntax.rholang.Absyn.DContr(proc_);
     }
 /* Proc */
     public Proc visit(coop.rchain.syntax.rholang.Absyn.PNil p, A arg)
@@ -100,15 +94,29 @@ public class ComposVisitor<A> implements
       ListVar listvar_ = p.listvar_;
       Proc proc_ = p.proc_.accept(this, arg);
       return new coop.rchain.syntax.rholang.Absyn.PNew(listvar_, proc_);
+    }    public Proc visit(coop.rchain.syntax.rholang.Absyn.PPrint p, A arg)
+    {
+      Proc proc_ = p.proc_.accept(this, arg);
+      return new coop.rchain.syntax.rholang.Absyn.PPrint(proc_);
     }    public Proc visit(coop.rchain.syntax.rholang.Absyn.PConstr p, A arg)
     {
-      String name_ = p.name_;
+      String var_ = p.var_;
       ListProc listproc_ = new ListProc();
       for (Proc x : p.listproc_)
       {
         listproc_.add(x.accept(this,arg));
       }
-      return new coop.rchain.syntax.rholang.Absyn.PConstr(name_, listproc_);
+      return new coop.rchain.syntax.rholang.Absyn.PConstr(var_, listproc_);
+    }    public Proc visit(coop.rchain.syntax.rholang.Absyn.PContr p, A arg)
+    {
+      String var_ = p.var_;
+      ListCPattern listcpattern_ = new ListCPattern();
+      for (CPattern x : p.listcpattern_)
+      {
+        listcpattern_.add(x.accept(this,arg));
+      }
+      Proc proc_ = p.proc_.accept(this, arg);
+      return new coop.rchain.syntax.rholang.Absyn.PContr(var_, listcpattern_, proc_);
     }    public Proc visit(coop.rchain.syntax.rholang.Absyn.PPar p, A arg)
     {
       Proc proc_1 = p.proc_1.accept(this, arg);
@@ -185,6 +193,9 @@ public class ComposVisitor<A> implements
     {
       String var_ = p.var_;
       return new coop.rchain.syntax.rholang.Absyn.QVar(var_);
+    }    public Quantity visit(coop.rchain.syntax.rholang.Absyn.QMap p, A arg)
+    {
+      return new coop.rchain.syntax.rholang.Absyn.QMap();
     }    public Quantity visit(coop.rchain.syntax.rholang.Absyn.QDot p, A arg)
     {
       Quantity quantity_ = p.quantity_.accept(this, arg);
@@ -335,13 +346,13 @@ public class ComposVisitor<A> implements
       return new coop.rchain.syntax.rholang.Absyn.PPtNew(listvarpattern_, ppattern_);
     }    public PPattern visit(coop.rchain.syntax.rholang.Absyn.PPtConstr p, A arg)
     {
-      String name_ = p.name_;
+      String var_ = p.var_;
       ListPPattern listppattern_ = new ListPPattern();
       for (PPattern x : p.listppattern_)
       {
         listppattern_.add(x.accept(this,arg));
       }
-      return new coop.rchain.syntax.rholang.Absyn.PPtConstr(name_, listppattern_);
+      return new coop.rchain.syntax.rholang.Absyn.PPtConstr(var_, listppattern_);
     }    public PPattern visit(coop.rchain.syntax.rholang.Absyn.PPtPar p, A arg)
     {
       PPattern ppattern_1 = p.ppattern_1.accept(this, arg);

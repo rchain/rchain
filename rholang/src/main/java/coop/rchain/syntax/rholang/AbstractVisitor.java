@@ -22,7 +22,9 @@ public class AbstractVisitor<R,A> implements AllVisitor<R,A> {
     public R visit(coop.rchain.syntax.rholang.Absyn.PChoice p, A arg) { return visitDefault(p, arg); }
     public R visit(coop.rchain.syntax.rholang.Absyn.PMatch p, A arg) { return visitDefault(p, arg); }
     public R visit(coop.rchain.syntax.rholang.Absyn.PNew p, A arg) { return visitDefault(p, arg); }
+    public R visit(coop.rchain.syntax.rholang.Absyn.PPrint p, A arg) { return visitDefault(p, arg); }
     public R visit(coop.rchain.syntax.rholang.Absyn.PConstr p, A arg) { return visitDefault(p, arg); }
+    public R visit(coop.rchain.syntax.rholang.Absyn.PContr p, A arg) { return visitDefault(p, arg); }
 
     public R visit(coop.rchain.syntax.rholang.Absyn.PPar p, A arg) { return visitDefault(p, arg); }
 
@@ -63,6 +65,7 @@ public class AbstractVisitor<R,A> implements AllVisitor<R,A> {
     public R visit(coop.rchain.syntax.rholang.Absyn.QDouble p, A arg) { return visitDefault(p, arg); }
     public R visit(coop.rchain.syntax.rholang.Absyn.QString p, A arg) { return visitDefault(p, arg); }
     public R visit(coop.rchain.syntax.rholang.Absyn.QVar p, A arg) { return visitDefault(p, arg); }
+    public R visit(coop.rchain.syntax.rholang.Absyn.QMap p, A arg) { return visitDefault(p, arg); }
 
     public R visit(coop.rchain.syntax.rholang.Absyn.QDot p, A arg) { return visitDefault(p, arg); }
 

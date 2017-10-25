@@ -1,0 +1,61 @@
+syntax = "proto3";
+package coop.rchain.routing;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.comm.protocol.routing"
+  flat_package: true
+};
+
+message Node {
+    bytes  id       = 1;
+    bytes  host     = 2;
+    uint32 tcp_port = 3;
+    uint32 udp_port = 4;
+}
+
+message Header {
+    Node   sender         = 1;
+    uint64 timestamp      = 2;
+    uint64 seq            = 3;
+}
+
+message ReturnHeader {
+    uint64 timestamp      = 1;
+    uint64 seq            = 2;
+}
+
+message Disconnect {
+}
+
+message Hello {
+}
+
+message Ping {
+}
+
+message Pong {
+}
+
+message Lookup {
+    bytes id = 1;
+}
+        
+message LookupResponse {
+    repeated Node nodes = 1;
+}
+
+message Protocol {
+    Header header                      = 1;
+    ReturnHeader return_header         = 2;
+
+    oneof message {
+        Hello          hello           = 3;
+        Disconnect     disconnect      = 4;
+        Ping           ping            = 5;
+        Pong           pong            = 6;
+        Lookup         lookup          = 7;
+        LookupResponse lookup_response = 8;
+    }
+}
