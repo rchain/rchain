@@ -173,8 +173,6 @@ object QueryTools {
   // The first input parameter is a query.  The second parameter contains
   // an Array[Binding] for each key in the store that unifies with the query
   // against the third parameter.
-  //
-  // The output is two representations of the unification.
 
   def queryResultsToArrayString(query: Key,
                                 queryResult: LinkedHashSet[Array[Binding]],
@@ -228,6 +226,27 @@ object QueryTools {
         standardBindingsStr += values
         standardRep += standardBindingsStr
         myBindingsStr += values.toString
+      }
+    }
+    assert(standardRep.size == queryResult.size)
+
+    standardRep.toArray
+  }
+
+  def queryResultsToKeys(query: Key,
+                                queryResult: LinkedHashSet[Array[Binding]],
+                                store: Storage): Array[Key] = {
+    var standardRep = new ArrayBuffer[Key]()
+
+    // Each element of queryResult is an array of bindings that
+    // corresponds to a term in the store.
+    for (bindingsArray <- queryResult) {
+      val uniRep = DivideUnificationResults(bindingsArray)
+      val keySub = createKeySubstition(query, bindingsArray)
+      println("Griff key: " + keySub.term)
+      val valuesOption = store.getStrings(keySub)
+      if (valuesOption.isDefined) {
+        standardRep += keySub
       }
     }
     assert(standardRep.size == queryResult.size)
