@@ -14,7 +14,7 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
   case class PendingKey(remote: Seq[Byte], timestamp: Long, seq: Long)
 
   val pending =
-    new concurrent.TrieMap[PendingKey, Promise[Either[ProtocolError, ProtocolMessage]]]
+    new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
   val local = new ProtocolNode(id, endpoint, this)
   val comm = UnicastComm(local)
@@ -28,9 +28,16 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
             for {
               msg <- ProtocolMessage.parse(res)
             } dispatch(msg)
-          case Left(ex: SocketTimeoutException) => ()
-          case Left(ex: Throwable) => ex.printStackTrace
-          case Left(_) => ()
+          case Left(err: CommError) => err match {
+            case DatagramException(ex: SocketTimeoutException) => ()
+            // These next ones may ding a node's reputation; just
+            // printing for now.
+            case err @ DatagramSizeError(sz) => println(s"bad size $sz")
+            case err @ DatagramFramingError(ex) => ex.printStackTrace
+            case err @ DatagramException(ex) => ex.printStackTrace
+
+            case _ => ()
+          }
         }
       }
   }
@@ -126,13 +133,13 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       case Some(header) => {
         val bytes = msg.toByteSeq
         val pend = PendingKey(remote.key, header.timestamp, header.seq)
-        val promise = Promise[Either[ProtocolError, ProtocolMessage]]
+        val promise = Promise[Either[CommError, ProtocolMessage]]
         pending.put(pend, promise)
         try {
           comm.send(bytes, remote)
           Await.result(promise.future, timeout)
         } catch {
-          case ex: Throwable => Left(ProtocolException(ex))
+          case ex: Exception => Left(ProtocolException(ex))
         } finally {
           pending.remove(pend)
           ()

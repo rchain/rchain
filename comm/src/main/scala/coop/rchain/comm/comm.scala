@@ -1,8 +1,5 @@
 package coop.rchain.comm
 
-trait CommError
-case class UnknownCommError(msg: String) extends CommError
-
 trait Comm {
   def send(data: Seq[Byte], p: PeerNode): Either[CommError, Unit]
   def recv: Either[CommError, Seq[Byte]]
