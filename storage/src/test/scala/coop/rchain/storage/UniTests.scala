@@ -18,11 +18,15 @@ object UniTests {
     println("UniTests.tests() begin")
 
     val storeFlat =
-      "/home/griff/Documents/storage/2017-10-19_2_lmdbjava/stores/storeFlat.txt"
+      "<root>/src/test/scala/coop/rchain/storage/stores/storeFlat.txt"
     val storeNested =
-      "/home/griff/Documents/storage/2017-10-19_2_lmdbjava/stores/storeNested.txt"
+      "<root>/src/test/scala/coop/rchain/storage/stores/storeNested.txt"
     val storeRecursive =
-      "/home/griff/Documents/storage/2017-10-19_2_lmdbjava/stores/storeRecursive.txt"
+      "<root>/src/test/scala/coop/rchain/storage/stores/storeRecursive.txt"
+
+    TestsFlatKeys(storeFlat); println()
+    TestsNestedKeys(storeNested); println()
+    TestsRecursiveKeys(storeRecursive)
 
     TestsFlat(storeFlat)
     TestsNested(storeNested)
@@ -31,6 +35,363 @@ object UniTests {
     println("UniTests.tests() end")
 
   }
+
+  def TestsRecursiveKeys(storeFilePath: String): String = {
+
+    println("TestsRecursiveKeys() begin")
+
+    val storConf = new StorageConfig()
+    storConf.isKeyToValues = true
+    storConf.isWritable = true
+    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.dirName = Some("storageTestsRecursiveKeysDb")
+    storConf.name = Some("storageTestsRecursiveKeys")
+    assert(storConf.isValid())
+
+    var storage = new Storage(storConf)
+
+    try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayStrings
+    println()
+
+    try {
+
+      println("Starting tests"); println
+
+      // a(Y)
+      var query = new Key("a(Y)")
+      var keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(X, Y)
+      query = new Key("a(X, Y)")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(b(c(X), Y), f(2))
+      // more examples like this
+      query = new Key("a(b(c(X), Y), f(2))")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(b(c(X), 1), f(2))
+      query = new Key("a(b(c(X), 1), f(2))")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+    }
+    catch {
+      case e:Throwable => {
+        println("TestsRecursiveKeys(): " + e)
+      }
+    }
+    finally {
+      storage.close()
+      storage.deleteFiles()
+    }
+
+    println("TestsRecursiveKeys() end")
+
+    "Completed tests"
+  }
+
+  def TestsNestedKeys(storeFilePath: String): String = {
+
+    println("TestsNestedKeys() begin")
+
+    val storConf = new StorageConfig()
+    storConf.isKeyToValues = true
+    storConf.isWritable = true
+    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.dirName = Some("storageTestsNestedKeysDb")
+    storConf.name = Some("storageTestsNestedKeys")
+    assert(storConf.isValid())
+
+    var storage = new Storage(storConf)
+    try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayStrings
+    println()
+
+    println("Starting tests"); println
+
+    try {
+
+      // a(b(X))
+      var query = new Key("a(b(X))")
+      var keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(1)
+      query = new Key("a", "1")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(1,2)
+      query = new Key("a", "1", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      // println()
+    }
+    catch {
+      case e:Throwable => {
+        println("TestsNestedKeys(): " + e)
+      }
+    }
+    finally {
+      storage.close()
+      storage.deleteFiles()
+    }
+
+    println("TestsNestedKeys() end")
+
+    "Completed tests"
+  }
+
+  def TestsFlatKeys(storeFilePath: String): String = {
+
+    println("TestsFlat() begin")
+
+    val storConf = new StorageConfig()
+    storConf.isKeyToValues = true
+    storConf.isWritable = true
+    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.dirName = Some("storageTestsFlatDb")
+    storConf.name = Some("storageTestsFlat")
+    assert(storConf.isValid())
+
+    var storage = new Storage(storConf)
+    try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayStrings
+    println()
+
+    println("Starting tests"); println
+
+    try {
+
+      // a(1)
+      var query = new Key("a", "1")
+      var keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // Z(1)
+      query = new Key("Z", "1")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(2)
+      query = new Key("a", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(3)
+      query = new Key("a", "3")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(X)
+      query = new Key("a", "X")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(Y)
+      query = new Key("a", "Y")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,1)
+      query = new Key("b", "1", "1")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,2)
+      query = new Key("b", "1", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,X)
+      // good test
+      query = new Key("b", "1", "X")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,Y)
+      query = new Key("b", "1", "Y")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(A,B)
+      query = new Key("b", "A", "B")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(X,2)
+      // very good test
+      query = new Key("b", "X", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(X,1)
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+    }
+    catch {
+      case e: Throwable => {
+        println("TestsFlat(): " + e)
+      }
+    }
+    finally {
+      storage.close()
+      storage.deleteFiles()
+    }
+
+    println("TestsFlat() end")
+
+    "Completed tests"
+  }
+
+
+
 
   def TestsRecursive(storeFilePath: String): String = {
 
@@ -75,8 +436,8 @@ object UniTests {
       // a(X, Y)
       query = new Key("a(X, Y)")
       queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                          query.unifyQuery(storage),
-                                                          storage)
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:b(c(A),d(e(B))),Y:f(C)},keyVars:{}] -> [Y]"))
       EvaluateTest(query.term, queryOutcome, oracle)
@@ -85,8 +446,8 @@ object UniTests {
       // more examples like this
       query = new Key("a(b(c(X), Y), f(2))")
       queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                          query.unifyQuery(storage),
-                                                          storage)
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:A,Y:d(e(B))},keyVars:{A:X,C:2}] -> [Y]"))
       EvaluateTest(query.term, queryOutcome, oracle)
@@ -94,8 +455,8 @@ object UniTests {
       // a(b(c(X), 1), f(2))
       query = new Key("a(b(c(X), 1), f(2))")
       queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                          query.unifyQuery(storage),
-                                                          storage)
+        query.unifyQuery(storage),
+        storage)
       // If you allow a constant to match a predicate:
       // Array("{X:A,1:d(e(B)),2:C} -> [Y]")
       oracle = new UniOracle(Array[String]())
@@ -103,7 +464,7 @@ object UniTests {
     }
     catch {
       case e:Throwable => {
-        println("intStrs(): " + e)
+        println("TestsRecursive(): " + e)
       }
     }
     finally {
@@ -175,7 +536,7 @@ object UniTests {
     }
     catch {
       case e:Throwable => {
-        println("intStrs(): " + e)
+        println("TestsNested(): " + e)
       }
     }
     finally {
@@ -364,7 +725,7 @@ object UniTests {
     }
     catch {
       case e: Throwable => {
-        println("intStrs(): " + e)
+        println("TestsFlat(): " + e)
       }
     }
     finally {
