@@ -16,16 +16,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 object Bb {
 
   def toBb[T](value:T): Option[ByteBuffer] = {
-    if (value.isInstanceOf[Byte]) {
-      ???
-    }
-    else if (value.isInstanceOf[Boolean]) {
-      ???
-    }
-    else if (value.isInstanceOf[Char]) {
-      ???
-    }
-    else if (value.isInstanceOf[Short]) {
+    if (value.isInstanceOf[Short]) {
       return Some(shortToBb(value.asInstanceOf[Short]))
     }
     else if (value.isInstanceOf[Int]) {

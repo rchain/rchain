@@ -9,7 +9,11 @@ package coop.rchain.Storage
 
 import java.io.File
 import java.nio.ByteBuffer
+
+import coop.rchain.Storage.QueryTools.{DivideUnificationResults, createKeySubstition}
 import org.lmdbjava.Txn
+
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
 import scala.io.Source
 
 
@@ -26,6 +30,37 @@ class Storage(storConf:StorageConfig) {
   val termTreeKeysSorted = new java.util.TreeSet[Key]
   def termTreeKeys: java.util.Iterator[Key] = {
     termTreeKeysSorted.iterator
+  }
+
+
+  def unifyQuery(query: Key): Array[Key] = {
+    var bindings = LinkedHashSet[Array[Binding]]()
+
+    val keyIter = termTreeKeys
+    while (keyIter.hasNext()) {
+      val key = keyIter.next()
+      val keyName = key.name
+      val keyParams = key.params
+      if (query.name == keyName && query.arity == key.arity) {
+        val (success, bindingsToAdd) =
+          QueryTools.unifyParams(query.params.params, keyParams.params)
+        if (success) {
+          bindings += bindingsToAdd
+        }
+      }
+    }
+
+    var keys = new ArrayBuffer[Key]()
+    for (bindingsArray <- bindings) {
+      val keySub = createKeySubstition(query, bindingsArray)
+      val valuesOption = getStrings(keySub)
+      if (valuesOption.isDefined) {
+        keys += keySub
+      }
+    }
+    assert(keys.size == bindings.size)
+
+    keys.toArray
   }
 
 
