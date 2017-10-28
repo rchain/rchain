@@ -5,8 +5,7 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-import coop.rchain.Storage.{LmdbTests,StorageTests,UniTests}
-
+import coop.rchain.storage.{Lmdb, LmdbTests, StorageTests, UniTests}
 
 object Main {
 
@@ -16,9 +15,8 @@ object Main {
       UniTests.tests()
       StorageTests.tests()
       LmdbTests.tests()
-    }
-    catch {
-      case e:Throwable => {
+    } catch {
+      case e: Throwable => {
         println("main(): " + e)
       }
     }

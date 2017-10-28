@@ -5,10 +5,9 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package coop.rchain.Storage
+package coop.rchain.storage
 
 // TODO: add timings to tests (get and put)
-
 
 object StorageTests {
 
@@ -23,12 +22,12 @@ object StorageTests {
     println("StorageTests.tests() end")
   }
 
-  def putGetDupSort():Unit = {
+  def putGetDupSort(): Unit = {
 
     println("putGetDupSort() begin")
 
-    val dirName:Option[String] = Some("storageGetDupSortDb")
-    val name:Option[String] = Some("storageGetDupSort")
+    val dirName: Option[String] = Some("storageGetDupSortDb")
+    val name: Option[String] = Some("storageGetDupSort")
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
@@ -42,17 +41,17 @@ object StorageTests {
     storage.deleteFiles()
 
     try {
-      storage.put(1,2)
+      storage.put(1, 2)
       val getInt = storage.getInts(1)
       assert(getInt.get(0) == 2)
 
-      storage.put(3,4)
-      storage.put(3,5)
+      storage.put(3, 4)
+      storage.put(3, 5)
       val getInts = storage.getInts(3)
       assert(getInts.get(0) == 4)
       assert(getInts.get(1) == 5)
 
-      storage.put(10L,20L)
+      storage.put(10L, 20L)
       // val getInt = lmdb.getLongLongs(10L)
       // assert(getInt.get(0) == 2)
 
@@ -66,13 +65,11 @@ object StorageTests {
       val getStrs = storage.getStrings("c")
       assert(getStrs.get(0) == "d")
       assert(getStrs.get(1) == "e")
-    }
-    catch {
-      case e:Throwable => {
+    } catch {
+      case e: Throwable => {
         println("putGetDupSort(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
@@ -80,17 +77,16 @@ object StorageTests {
     println("putGetDupSort() end")
   }
 
-
-  def loadFiles():Unit = {
+  def loadFiles(): Unit = {
 
     println("loadFile() begin")
 
     val storeFlat =
-      "/home/griff/Documents/storage/2017-10-19_2_lmdbjava/stores/storeFlat.txt"
+      "<root>/src/test/scala/coop/rchain/storage/stores/storeFlat.txt"
     val storeNested =
-      "/home/griff/Documents/storage/2017-10-19_2_lmdbjava/stores/storeNested.txt"
+      "<root>/src/test/scala/coop/rchain/storage/stores/storeNested.txt"
     val storeRecursive =
-      "/home/griff/Documents/storage/2017-10-19_2_lmdbjava/stores/storeRecursive.txt"
+      "<root>/src/test/scala/coop/rchain/storage/stores/storeRecursive.txt"
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
@@ -108,7 +104,7 @@ object StorageTests {
       storage.loadFile(storeNested, true)
       storage.loadFile(storeRecursive, true)
 
-      val itr = storage.termTreeKeys
+      val itr = storage.uniKeys
       while (itr.hasNext) {
         val k = itr.next
         val strKey = k.term
@@ -117,18 +113,15 @@ object StorageTests {
           for (strValue <- valuesArray.get) {
             println(s"${k.term} -> $strValue")
           }
-        }
-        else {
+        } else {
           println(s"${k.term}: no value found")
         }
       }
-    }
-    catch {
-      case e:Throwable => {
+    } catch {
+      case e: Throwable => {
         println("simpleTest(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }

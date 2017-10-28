@@ -5,11 +5,10 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package coop.rchain.Storage
+package coop.rchain.storage
 
 import java.io.IOException
 import java.lang._
-
 
 object UniTests {
 
@@ -59,7 +58,7 @@ object UniTests {
     }
 
     println("Store contents:");
-    storage.displayStrings
+    storage.displayUniKeys
     println()
 
     try {
@@ -109,13 +108,11 @@ object UniTests {
       for (key <- keys) {
         println(key.term)
       }
-    }
-    catch {
-      case e:Throwable => {
+    } catch {
+      case e: Throwable => {
         println("TestsRecursiveKeys(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
@@ -147,7 +144,7 @@ object UniTests {
     }
 
     println("Store contents:");
-    storage.displayStrings
+    storage.displayUniKeys
     println()
 
     println("Starting tests"); println
@@ -186,13 +183,11 @@ object UniTests {
         println(key.term)
       }
       // println()
-    }
-    catch {
-      case e:Throwable => {
+    } catch {
+      case e: Throwable => {
         println("TestsNestedKeys(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
@@ -224,7 +219,7 @@ object UniTests {
     }
 
     println("Store contents:");
-    storage.displayStrings
+    storage.displayUniKeys
     println()
 
     println("Starting tests"); println
@@ -374,13 +369,11 @@ object UniTests {
         println(key.term)
       }
       println()
-    }
-    catch {
+    } catch {
       case e: Throwable => {
         println("TestsFlat(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
@@ -389,9 +382,6 @@ object UniTests {
 
     "Completed tests"
   }
-
-
-
 
   def TestsRecursive(storeFilePath: String): String = {
 
@@ -416,7 +406,7 @@ object UniTests {
     }
 
     println("Store contents:");
-    storage.displayStrings
+    storage.displayUniKeys
     println()
 
     try {
@@ -435,7 +425,8 @@ object UniTests {
 
       // a(X, Y)
       query = new Key("a(X, Y)")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
         query.unifyQuery(storage),
         storage)
       oracle = new UniOracle(
@@ -445,7 +436,8 @@ object UniTests {
       // a(b(c(X), Y), f(2))
       // more examples like this
       query = new Key("a(b(c(X), Y), f(2))")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
         query.unifyQuery(storage),
         storage)
       oracle = new UniOracle(
@@ -454,20 +446,19 @@ object UniTests {
 
       // a(b(c(X), 1), f(2))
       query = new Key("a(b(c(X), 1), f(2))")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
         query.unifyQuery(storage),
         storage)
       // If you allow a constant to match a predicate:
       // Array("{X:A,1:d(e(B)),2:C} -> [Y]")
       oracle = new UniOracle(Array[String]())
       EvaluateTest(query.term, queryOutcome, oracle)
-    }
-    catch {
-      case e:Throwable => {
+    } catch {
+      case e: Throwable => {
         println("TestsRecursive(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
@@ -499,7 +490,7 @@ object UniTests {
     }
 
     println("Store contents:");
-    storage.displayStrings
+    storage.displayUniKeys
     println()
 
     println("Starting tests"); println
@@ -519,27 +510,28 @@ object UniTests {
 
       // a(1)
       query = new Key("a", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                          query.unifyQuery(storage),
-                                                          storage)
-      oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
-                                     "[queryVars:{},keyVars:{}] -> [twelve]"))
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
+      oracle = new UniOracle(
+        Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
+              "[queryVars:{},keyVars:{}] -> [twelve]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // a(1,2)
       query = new Key("a", "1", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                          query.unifyQuery(storage),
-                                                          storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(Array(""))
-       EvaluateTest(query.term, queryOutcome, oracle)
-    }
-    catch {
-      case e:Throwable => {
+      EvaluateTest(query.term, queryOutcome, oracle)
+    } catch {
+      case e: Throwable => {
         println("TestsNested(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
@@ -571,7 +563,7 @@ object UniTests {
     }
 
     println("Store contents:");
-    storage.displayStrings
+    storage.displayUniKeys
     println()
 
     println("Starting tests"); println
@@ -581,154 +573,172 @@ object UniTests {
       // a(1)
       var query = new Key("a", "1")
       var queryOutcome = QueryTools.queryResultsToArrayString(
-                            query,
-                            query.unifyQuery(storage),
-                            storage)
+        query,
+        query.unifyQuery(storage),
+        storage)
 
-      var oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:1}] -> [what]",
-                                        "[queryVars:{},keyVars:{}] -> [one]"))
+      var oracle = new UniOracle(
+        Array("[queryVars:{},keyVars:{X:1}] -> [what]",
+              "[queryVars:{},keyVars:{}] -> [one]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // Z(1)
       query = new Key("Z", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(Array(""))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // a(2)
       query = new Key("a", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
-      oracle = new UniOracle(Array("[queryVars:{},keyVars:{}] -> [two]",
-                                    "[queryVars:{},keyVars:{X:2}] -> [what]"))
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
+      oracle = new UniOracle(
+        Array("[queryVars:{},keyVars:{}] -> [two]",
+              "[queryVars:{},keyVars:{X:2}] -> [what]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // a(3)
       query = new Key("a", "3")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:3}] -> [what]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // a(X)
       query = new Key("a", "X")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array("[queryVars:{X:2},keyVars:{}] -> [two]",
-             "[queryVars:{},keyVars:{}] -> [what]",
-             "[queryVars:{X:1},keyVars:{}] -> [one]"))
+        Array("[queryVars:{X:2},keyVars:{}] -> [two]",
+              "[queryVars:{},keyVars:{}] -> [what]",
+              "[queryVars:{X:1},keyVars:{}] -> [one]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // a(Y)
       query = new Key("a", "Y")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array("[queryVars:{Y:2},keyVars:{}] -> [two]",
-             "[queryVars:{Y:X},keyVars:{X:Y}] -> [what]",
-             "[queryVars:{Y:1},keyVars:{}] -> [one]"))
+        Array("[queryVars:{Y:2},keyVars:{}] -> [two]",
+              "[queryVars:{Y:X},keyVars:{X:Y}] -> [what]",
+              "[queryVars:{Y:1},keyVars:{}] -> [one]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,1)
       query = new Key("b", "1", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array("[queryVars:{},keyVars:{X:1}] -> [where]",
-             "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"))
+        Array("[queryVars:{},keyVars:{X:1}] -> [where]",
+              "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,2)
       query = new Key("b", "1", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array(
-         "[queryVars:{},keyVars:{X:2}] -> [where]",
-         "[queryVars:{},keyVars:{X:1}] -> [how]",
-         "[queryVars:{},keyVars:{X:1,Y:2}] -> [this]",
-         "[queryVars:{},keyVars:{}] -> [who]"))
+        Array(
+          "[queryVars:{},keyVars:{X:2}] -> [where]",
+          "[queryVars:{},keyVars:{X:1}] -> [how]",
+          "[queryVars:{},keyVars:{X:1,Y:2}] -> [this]",
+          "[queryVars:{},keyVars:{}] -> [who]"
+        ))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,X)
       // good test
       query = new Key("b", "1", "X")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array(
-         "[queryVars:{},keyVars:{}] -> [where]",
-         "[queryVars:{X:2},keyVars:{X:1}] -> [how]",
-         "[queryVars:{X:Y},keyVars:{X:1,Y:X}] -> [this]",
-         "[queryVars:{X:2},keyVars:{}] -> [who]"))
+        Array(
+          "[queryVars:{},keyVars:{}] -> [where]",
+          "[queryVars:{X:2},keyVars:{X:1}] -> [how]",
+          "[queryVars:{X:Y},keyVars:{X:1,Y:X}] -> [this]",
+          "[queryVars:{X:2},keyVars:{}] -> [who]"
+        ))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,Y)
       query = new Key("b", "1", "Y")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array(
-         "[queryVars:{Y:X},keyVars:{X:Y}] -> [where]",
-         "[queryVars:{Y:2},keyVars:{X:1}] -> [how]",
-         "[queryVars:{},keyVars:{X:1}] -> [this]",
-         "[queryVars:{Y:2},keyVars:{}] -> [who]"))
+        Array(
+          "[queryVars:{Y:X},keyVars:{X:Y}] -> [where]",
+          "[queryVars:{Y:2},keyVars:{X:1}] -> [how]",
+          "[queryVars:{},keyVars:{X:1}] -> [this]",
+          "[queryVars:{Y:2},keyVars:{}] -> [who]"
+        ))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(A,B)
       query = new Key("b", "A", "B")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array(
-         "[queryVars:{A:1,B:X},keyVars:{X:B}] -> [where]",
-         "[queryVars:{A:10,B:11},keyVars:{}] -> [yeah]",
-         "[queryVars:{A:X,B:2},keyVars:{X:A}] -> [how]",
-         "[queryVars:{A:X,B:Y},keyVars:{X:A,Y:B}] -> [this]",
-         "[queryVars:{A:1,B:2},keyVars:{}] -> [who]"))
+        Array(
+          "[queryVars:{A:1,B:X},keyVars:{X:B}] -> [where]",
+          "[queryVars:{A:10,B:11},keyVars:{}] -> [yeah]",
+          "[queryVars:{A:X,B:2},keyVars:{X:A}] -> [how]",
+          "[queryVars:{A:X,B:Y},keyVars:{X:A,Y:B}] -> [this]",
+          "[queryVars:{A:1,B:2},keyVars:{}] -> [who]"
+        ))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(X,2)
       // very good test
       query = new Key("b", "X", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
       oracle = new UniOracle(
-       Array(
-         "[queryVars:{},keyVars:{Y:2}] -> [this]",
-         "[queryVars:{X:1},keyVars:{}] -> [who]",
-         "[queryVars:{X:1},keyVars:{X:2}] -> [where]",
-         "[queryVars:{},keyVars:{}] -> [how]"))
+        Array(
+          "[queryVars:{},keyVars:{Y:2}] -> [this]",
+          "[queryVars:{X:1},keyVars:{}] -> [who]",
+          "[queryVars:{X:1},keyVars:{X:2}] -> [where]",
+          "[queryVars:{},keyVars:{}] -> [how]"
+        ))
       EvaluateTest(query.term, queryOutcome, oracle)
 
       // b(X,1)
       query = new Key("b", "X", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(query,
-                                                         query.unifyQuery(storage),
-                                                         storage)
-      oracle = new UniOracle(Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
-                                    "[queryVars:{},keyVars:{Y:1}] -> [this]"))
+      queryOutcome = QueryTools.queryResultsToArrayString(
+        query,
+        query.unifyQuery(storage),
+        storage)
+      oracle = new UniOracle(
+        Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
+              "[queryVars:{},keyVars:{Y:1}] -> [this]"))
       EvaluateTest(query.term, queryOutcome, oracle)
-    }
-    catch {
+    } catch {
       case e: Throwable => {
         println("TestsFlat(): " + e)
       }
-    }
-    finally {
+    } finally {
       storage.close()
       storage.deleteFiles()
     }
