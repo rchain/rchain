@@ -8,6 +8,12 @@ lazy val root = (project in file(".")).
       version      := "0.1.0-SNAPSHOT"
     )),
     name := "storage",
+
+    // set the main Scala source directory to be <base>/src
+    scalaSource in Compile := baseDirectory.value / "src",
+    // set the Scala test source directory to be <base>/test
+    scalaSource in Test := baseDirectory.value / "test",
+
     // http://assets.maven-repository.com/artifact/org.lmdbjava/lmdbjava/0.0.2
     // Last modified: 2016-07-29 02:24:11 UTC
     libraryDependencies += "org.lmdbjava" % "lmdbjava" % "0.0.2",
