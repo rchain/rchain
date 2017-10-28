@@ -5,23 +5,23 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package coop.rchain.Storage
-
-import scala.collection.mutable.{ArrayBuffer,LinkedHashSet}
-
-// Represent key as a tree of TermTrees where each inner node
-// is a Key where the number of branches matches the arity of
+// This class represents key as a tree of TermTrees where each inner
+// node is a Key where the number of branches matches the arity of
 // the key and the leaves are atoms.
+
+package coop.rchain.storage
+
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
 
 class Key(keyIn: String) extends TermTree with Ordered[Key] {
   val term = keyIn.replaceAll("\\s+", "")
-  protected[Storage] val keyOriginal = keyIn
+  protected[storage] val keyOriginal = keyIn
 
   if (term == null || term.isEmpty) {
-    throw new Exception("Key constructor got null or empty parameter")
+    throw new RChainException("Key constructor got null or empty parameter")
   }
 
-  protected[Storage] val (name, params) = createParseKey(term)
+  protected[storage] val (name, params) = createParseKey(term)
 
   val arity = params.length
 
@@ -57,7 +57,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
         }
         case Token.Comma => {}
         case _ => {
-          throw new Exception(
+          throw new RChainException(
             "createParseTree(): lexer error (1): '" + lexToken.tokenStr + "'")
         }
       }
@@ -66,11 +66,11 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     }
 
     if (lexToken.token == Token.Error) {
-      throw new Exception(
+      throw new RChainException(
         "createParseTree(): lexer error (2): '" + lexToken.tokenStr + "'")
     }
 
-    throw new Exception("createParseTree: shouldn't get to end of method")
+    throw new RChainException("createParseTree: shouldn't get to end of method")
   }
 
   def createParseKey(key: String): (String, Params) = {
@@ -78,12 +78,12 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
 
     val firstLexToken = lexer.NextToken
     if (firstLexToken.token != Token.Key)
-      throw new Exception("createParseTree: first token is not Key")
+      throw new RChainException("createParseTree: first token is not Key")
     val keyName = firstLexToken.tokenStr
 
     val secondLexToken = lexer.NextToken
     if (secondLexToken.token != Token.LeftParen)
-      throw new Exception("createParseTree: first token is not Key")
+      throw new RChainException("createParseTree: first token is not Key")
     val paramsArray = createParseTree(lexer)
     (keyName, new Params(paramsArray))
   }
@@ -94,7 +94,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
   def unifyQuery(storage: Storage): LinkedHashSet[Array[Binding]] = {
     var bindings = LinkedHashSet[Array[Binding]]()
 
-    val keyIter = storage.termTreeKeys
+    val keyIter = storage.uniKeys
     while (keyIter.hasNext()) {
       val key = keyIter.next()
       val keyName = key.name
@@ -111,12 +111,12 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
   }
 
   // sort by: arity, character, digit, other
-
   def compare(key: Key): Int = {
     if (term == key.term) { return 0 }
 
-    if (arity > key.arity) { return 1 }
-    else if (arity < key.arity) { return -1 }
+    if (arity > key.arity) { return 1 } else if (arity < key.arity) {
+      return -1
+    }
 
     val length = math.min(term.length, key.term.length)
     for (i <- 0 until length) {
@@ -130,8 +130,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
         } else {
           if (term(i) < key.term(i)) {
             return -1
-          }
-          else if (term(i) > key.term(i)) {
+          } else if (term(i) > key.term(i)) {
             return 1
           }
         }

@@ -5,10 +5,11 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package coop.rchain.Storage
+// The Term class is modeled after Prolog terms.
+
+package coop.rchain.storage
 
 import scala.collection.mutable.ArrayBuffer
-
 
 trait TermTree {
   val term: String // entire term, including params for a key
@@ -20,8 +21,8 @@ trait TermTree {
 }
 
 class Params(paramsArray: ArrayBuffer[TermTree]) extends TermTree {
-  protected[Storage] val params = paramsArray
-  protected[Storage] var _term = "("
+  protected[storage] val params = paramsArray
+  protected[storage] var _term = "("
   for (i <- 0 until params.length - 1) {
     _term += params(i).term + ","
   }
@@ -36,10 +37,10 @@ class Params(paramsArray: ArrayBuffer[TermTree]) extends TermTree {
 trait Atom extends TermTree {}
 
 class Variable(param: String) extends Atom {
-  protected[Storage] val variable = param.trim
+  protected[storage] val variable = param.trim
 
   if (!TermTools.isVariable(variable))
-    throw new Exception(s"Variable(): malformed param: '$param'")
+    throw new RChainException(s"Variable(): malformed param: '$param'")
 
   val term = variable
 
@@ -49,10 +50,10 @@ class Variable(param: String) extends Atom {
 // constants are numerals or names
 
 class Constant(param: String) extends Atom {
-  protected[Storage] val constant = param.trim
+  protected[storage] val constant = param.trim
 
   if (!TermTools.isConstant(constant))
-    throw new Exception(s"Constant(): malformed param: '$param'")
+    throw new RChainException(s"Constant(): malformed param: '$param'")
 
   val term = constant
 
@@ -70,17 +71,18 @@ object TermTools {
     val lexToken = lexer.NextToken
     if (lexToken.token == Token.Key)
       return new Key(term)
-    throw new Exception("createTermTree: not recognized: " + lexToken.tokenStr)
+    throw new RChainException(
+      "createTermTree: not recognized: " + lexToken.tokenStr)
   }
 
   def isVariable(s: String): Boolean = {
     if (s == null || s.isEmpty)
-      throw new Exception("isVariable argument is null or empty")
+      throw new RChainException("isVariable argument is null or empty")
     s(0).isUpper
   }
   def isConstant(s: String): Boolean = {
     if (s == null || s.isEmpty)
-      throw new Exception("isVariable argument is null or empty")
+      throw new RChainException("isConstant argument is null or empty")
     s(0).isLower || s(0).isDigit
   }
 }
