@@ -11,8 +11,8 @@ case object Upcall extends LookupError
 trait Base
 
 trait Ob extends Base {
-  val parent: Ob
   val meta: Ob
+  val parent: Ob
   val slot: Seq[Ob]
   val obTag: ObTag = null
   val sysval: SysCode = null
@@ -42,6 +42,15 @@ trait Ob extends Base {
                spanSize: Int,
                value: Int): Ob = null
   def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = null
+
+  def notImplemented(opName: String): Unit = {
+    val className = this.getClass.getSimpleName
+    System.err.println(s"$className#$opName is not implemented!")
+  }
+
+  def forwardingAddress: Ob = meta
+
+  def self: Ob = this
 }
 
 object Ob {
