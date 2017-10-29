@@ -81,12 +81,11 @@ object StorageTests {
 
     println("loadFile() begin")
 
-    val storeFlat =
-      "<root>/src/test/scala/coop/rchain/storage/stores/storeFlat.txt"
-    val storeNested =
-      "<root>/src/test/scala/coop/rchain/storage/stores/storeNested.txt"
-    val storeRecursive =
-      "<root>/src/test/scala/coop/rchain/storage/stores/storeRecursive.txt"
+    val basePath = System.getProperty("user.dir") +
+      "/src/test/scala/coop/rchain/storage/stores/"
+    val storeFlat = basePath + "storeFlat.txt"
+    val storeNested = basePath + "storeNested.txt"
+    val storeRecursive = basePath + "storeRecursive.txt"
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true

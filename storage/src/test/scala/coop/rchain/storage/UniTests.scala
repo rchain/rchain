@@ -16,12 +16,11 @@ object UniTests {
 
     println("UniTests.tests() begin")
 
-    val storeFlat =
-      "<root>/src/test/scala/coop/rchain/storage/stores/storeFlat.txt"
-    val storeNested =
-      "<root>/src/test/scala/coop/rchain/storage/stores/storeNested.txt"
-    val storeRecursive =
-      "<root>/src/test/scala/coop/rchain/storage/stores/storeRecursive.txt"
+    val basePath = System.getProperty("user.dir") +
+      "/src/test/scala/coop/rchain/storage/stores/"
+    val storeFlat = basePath + "storeFlat.txt"
+    val storeNested = basePath + "storeNested.txt"
+    val storeRecursive = basePath + "storeRecursive.txt"
 
     TestsFlatKeys(storeFlat); println()
     TestsNestedKeys(storeNested); println()
