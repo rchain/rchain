@@ -223,7 +223,7 @@ object QueryTools {
       standardBindingsStr += "}] -> "
 
       val keySub = createKeySubstition(query, bindingsArray)
-      val valuesOption = store.getStrings(keySub)
+      val valuesOption = store.getStrings(keySub.term)
       if (valuesOption.isDefined) {
         val values = stringArrayToValuesRepString(valuesOption.get)
         standardBindingsStr += values
@@ -246,7 +246,7 @@ object QueryTools {
     for (bindingsArray <- queryResult) {
       val uniRep = divideUnificationResults(bindingsArray)
       val keySub = createKeySubstition(query, bindingsArray)
-      val valuesOption = store.getStrings(keySub)
+      val valuesOption = store.getStrings(keySub.term)
       if (valuesOption.isDefined) {
         standardRep += keySub
       }
