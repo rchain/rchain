@@ -5,6 +5,9 @@ import coop.rchain.comm.protocol.routing._
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
+// TODO: In message construction, the system clock is used for nonce
+// generation. For reproducibility, this should be a passed-in value.
+
 /**
   * Implements broadcasting and round-trip (request-response) messaging
   * for higher level protocols.
@@ -105,7 +108,8 @@ case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
       h <- header
-    } yield PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
+    } yield
+        PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
 }
 
 /**
@@ -127,8 +131,8 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
     for {
       h <- header
     } yield
-      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
-                            System.currentTimeMillis)
+        LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
+                              System.currentTimeMillis)
 
 }
 
@@ -144,7 +148,7 @@ case class HandshakeMessage(proto: Protocol, timestamp: Long) extends ProtocolMe
       h <- header
     } yield
         HandshakeResponseMessage(ProtocolMessage.handshakeResponse(src, h),
-          System.currentTimeMillis)
+                                 System.currentTimeMillis)
 }
 case class HandshakeResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
