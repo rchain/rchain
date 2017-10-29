@@ -9,4 +9,6 @@ case class Prim(override val parent: Ob,
 
 object Prim {
   val nthPrim: Seq[Prim] = new Array[Prim](0)
+
+  case object INVALID extends Prim(null, null, null)
 }

@@ -1,8 +1,10 @@
 package coop.rchain
 
 import coop.rchain.rosette.parser.bytecode.ParseError
+
 import reflect.runtime.universe._
 import reflect.runtime.currentMirror
+import scala.annotation.tailrec
 
 package object rosette {
   def suicide(msg: String): Unit = {
@@ -44,5 +46,10 @@ package object rosette {
         }
         .mkString("\n")
     }
+  }
+
+  @tailrec
+  def recMap[A](count: Int, l: A)(f: A => A): A = {
+    if (count == 0) l else recMap(count-1, f(l))(f)
   }
 }
