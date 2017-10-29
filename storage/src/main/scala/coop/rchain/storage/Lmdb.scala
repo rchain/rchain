@@ -22,6 +22,7 @@ The Lmdb class can be configured:
 
 package coop.rchain.storage
 
+import coop.rchain.storage.Bb.Bbable
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.Paths
@@ -78,7 +79,9 @@ class Lmdb(dirNameIn: Option[String],
       if (new File(baseDirIn.get).isDirectory) { baseDirIn.get } else {
         throw new RChainException("Base Directory is invalid")
       }
-    } else System.getProperty("user.dir") // not our problem if throws
+    } else {
+      System.getProperty("user.dir")
+    }
   val mapSizeIn: Long =
     if (Lmdb.maxDbSize < maxSizeIn) {
       Lmdb.maxDbSize
@@ -115,9 +118,10 @@ class Lmdb(dirNameIn: Option[String],
     }
 
   // add a key-value row to the database
-  def put[K, V](key: K,
-                value: V,
-                txn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def put[K: Bbable, V: Bbable](
+      key: K,
+      value: V,
+      txn: Option[Txn[ByteBuffer]] = None): Boolean = {
     if (!isWritable) { return false }
 
     if (key.isInstanceOf[String]
@@ -146,13 +150,95 @@ class Lmdb(dirNameIn: Option[String],
     true
   }
 
+  /*
+  def getValues[K,T](key: K,
+                     cursor: Cursor[ByteBuffer],
+                     getValue:(Cursor[ByteBuffer]) => T)
+  : Option[Array[T]] = {
+
+    if (key.isInstanceOf[Key]) {
+      return getValues(key.asInstanceOf[Key]. cursor, getInt)
+    }
+
+    if (!Lmdb.isStringOrPrimitive(key))
+      throw new RChainException("getValues(): key is not primitive or string")
+
+    var bbKey: Option[ByteBuffer] = None
+    if (Lmdb.isPrimitive(key)) {
+      bbKey = create(key)
+    } else {
+      bbKey = Some(strToBb(key.asInstanceOf[String]))
+    }
+    if (!bbKey.isDefined) {
+      throw new RChainException("getValues(): key fails translation to Bb")
+    }
+
+    var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
+    if (!outcome) {
+      return None
+    }
+
+    if (isKeyToValues) {
+      val blobsBuf = new ArrayBuffer[T]()
+
+      outcome = cursor.seek(MDB_FIRST_DUP)
+      while (outcome) {
+        blobsBuf += getValue(cursor)
+        outcome = cursor.seek(MDB_NEXT_DUP)
+      }
+      if (blobsBuf.isEmpty) {
+        return None
+      }
+
+      return Some(blobsBuf.toArray)
+    } else {
+      outcome = cursor.seek(MDB_GET_CURRENT)
+      if (!outcome) {
+        throw new RChainException("getValues(): MDB_GET_CURRENT")
+      }
+
+      val valueArray = new Array[T](1)
+      valueArray(0) = getValue(cursor)
+      return Some(valueArray)
+    }
+    None
+  }
+   */
+  /*
+  def getInt(cursor: Cursor[ByteBuffer]): Int = {
+    cursor.`val`.getInt
+  }
+
+  def getInts[K](key: K,
+                 txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Int]] = {
+    val txn =
+      if (txnIn == None) { env.txnRead() } else { txnIn.get }
+    val cursor = db.openCursor(txn)
+
+    try {
+      return getValues(key, cursor, getInt)
+    } catch {
+      case e: RChainException =>
+        Log("getInts(): " + e)
+        return None
+      case e: Throwable =>
+        throw e
+    } finally {
+      cursor.close()
+      if (txnIn == None) { txn.close() }
+    }
+    None
+  }
+   */
+
   // The getXx[K](key:K) returns an array of Xs.
   // This set of methods resist being expressed as a
   // single generic method due to the lack of genericity
   // of ByteBuffer.
 
-  def getInts[K](key: K,
-                 txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Int]] = {
+  def getInts[K: Bbable](
+      key: K,
+      txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Int]] = {
 
     if (key.isInstanceOf[Key]) {
       return getInts(key.asInstanceOf[Key].term, txnIn)
@@ -165,7 +251,7 @@ class Lmdb(dirNameIn: Option[String],
     if (Lmdb.isPrimitive(key)) {
       bbKey = Bb.create(key)
     } else {
-      bbKey = Some(Bb.strToBb(key.asInstanceOf[String]))
+      bbKey = Bb.create(key.asInstanceOf[String])
     }
     if (!bbKey.isDefined) {
       throw new RChainException("getInts(): key fails translation to Bb")
@@ -218,7 +304,7 @@ class Lmdb(dirNameIn: Option[String],
   }
 
   // strings paired with a key are sorted
-  def getStrings[K](
+  def getStrings[K: Bbable](
       key: K,
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[String]] = {
 
@@ -234,7 +320,7 @@ class Lmdb(dirNameIn: Option[String],
     if (Lmdb.isPrimitive(key)) {
       bbKey = Bb.create(key)
     } else {
-      bbKey = Some(Bb.strToBb(key.asInstanceOf[String]))
+      bbKey = Bb.create(key.asInstanceOf[String])
     }
     if (!bbKey.isDefined) {
       throw new RChainException("getStrings(): key fails translation to Bb")
@@ -289,7 +375,7 @@ class Lmdb(dirNameIn: Option[String],
     None
   }
 
-  def getLongs[K](
+  def getLongs[K: Bbable](
       key: K,
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Long]] = {
 
@@ -305,7 +391,7 @@ class Lmdb(dirNameIn: Option[String],
     if (Lmdb.isPrimitive(key)) {
       bbKey = Bb.create(key)
     } else {
-      bbKey = Some(Bb.strToBb(key.asInstanceOf[String]))
+      bbKey = Bb.create(key.asInstanceOf[String])
     }
     if (!bbKey.isDefined) {
       throw new RChainException("getLongs(): key fails translation to Bb")
@@ -360,7 +446,7 @@ class Lmdb(dirNameIn: Option[String],
     None
   }
 
-  def getFloats[K](
+  def getFloats[K: Bbable](
       key: K,
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Float]] = {
 
@@ -376,7 +462,7 @@ class Lmdb(dirNameIn: Option[String],
     if (Lmdb.isPrimitive(key)) {
       bbKey = Bb.create(key)
     } else {
-      bbKey = Some(Bb.strToBb(key.asInstanceOf[String]))
+      bbKey = Bb.create(key.asInstanceOf[String])
     }
     if (!bbKey.isDefined) {
       throw new RChainException("getFloats(): key fails translation to Bb")
@@ -431,7 +517,7 @@ class Lmdb(dirNameIn: Option[String],
     None
   }
 
-  def getDoubles[K](
+  def getDoubles[K: Bbable](
       key: K,
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Double]] = {
 
@@ -447,7 +533,7 @@ class Lmdb(dirNameIn: Option[String],
     if (Lmdb.isPrimitive(key)) {
       bbKey = Bb.create(key)
     } else {
-      bbKey = Some(Bb.strToBb(key.asInstanceOf[String]))
+      bbKey = Bb.create(key.asInstanceOf[String])
     }
     if (!bbKey.isDefined) {
       throw new RChainException("getDoubles(): key fails translation to Bb")
@@ -503,7 +589,8 @@ class Lmdb(dirNameIn: Option[String],
   }
 
   // delete a key and the value associated with it
-  def deleteKey[K](key: K, txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def deleteKey[K: Bbable](key: K,
+                           txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
     if (!isWritable) { return false }
 
     if (key.isInstanceOf[Key]) {
@@ -554,9 +641,10 @@ class Lmdb(dirNameIn: Option[String],
   }
 
   // delete a value associated with a key
-  def delete[K, V](key: K,
-                   value: V,
-                   txn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def delete[K: Bbable, V: Bbable](
+      key: K,
+      value: V,
+      txn: Option[Txn[ByteBuffer]] = None): Boolean = {
 
     if (!isWritable) { return false }
 
@@ -847,10 +935,11 @@ class Lmdb(dirNameIn: Option[String],
   }
 
   // update a value associated with a key
-  def update[K, V](key: K,
-                   valueToBeReplaced: V,
-                   valueReplaceWith: V,
-                   txn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def update[K: Bbable, V: Bbable](
+      key: K,
+      valueToBeReplaced: V,
+      valueReplaceWith: V,
+      txn: Option[Txn[ByteBuffer]] = None): Boolean = {
     if (!isWritable) { return false }
 
     if (key.isInstanceOf[Key]) {

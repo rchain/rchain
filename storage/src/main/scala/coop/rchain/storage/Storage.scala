@@ -26,6 +26,7 @@ Just like the Lmdb class, the Storage class can be configured:
 
 package coop.rchain.storage
 
+import coop.rchain.storage.Bb.Bbable
 import java.io.File
 import java.nio.ByteBuffer
 
@@ -78,7 +79,7 @@ class Storage(storConf: StorageConfig) {
     var keys = new ArrayBuffer[Key]()
     for (bindingsArray <- bindings) {
       val keySub = createKeySubstition(query, bindingsArray)
-      val valuesOption = getStrings(keySub)
+      val valuesOption = getStrings(keySub.term)
       if (valuesOption.isDefined) {
         keys += keySub
       }
@@ -89,7 +90,9 @@ class Storage(storConf: StorageConfig) {
   }
 
   // add a key-value row to the database
-  def put[K, V](key: K, value: V, txn: Option[Txn[ByteBuffer]] = None): Unit = {
+  def put[K: Bbable, V: Bbable](key: K,
+                                value: V,
+                                txn: Option[Txn[ByteBuffer]] = None): Unit = {
 
     if (key.isInstanceOf[Key]) {
       termTreeKeysSorted.add(key.asInstanceOf[Key])
@@ -112,28 +115,30 @@ class Storage(storConf: StorageConfig) {
   // single generic method due to the lack of genericity
   // of ByteBuffer.
 
-  def getInts[K](key: K,
-                 txn: Option[Txn[ByteBuffer]] = None): Option[Array[Int]] = {
+  def getInts[K: Bbable](
+      key: K,
+      txn: Option[Txn[ByteBuffer]] = None): Option[Array[Int]] = {
     lmdb.getInts(key)
   }
-  def getStrings[K](
+  def getStrings[K: Bbable](
       key: K,
       txn: Option[Txn[ByteBuffer]] = None): Option[Array[String]] = {
     lmdb.getStrings(key)
   }
-  def getFloats[K](
+  def getFloats[K: Bbable](
       key: K,
       txn: Option[Txn[ByteBuffer]] = None): Option[Array[Float]] = {
     lmdb.getFloats(key, txn)
   }
-  def getDoubles[K](
+  def getDoubles[K: Bbable](
       key: K,
       txn: Option[Txn[ByteBuffer]] = None): Option[Array[Double]] = {
     lmdb.getDoubles(key, txn)
   }
 
   // delete a key and the value associated with it
-  def deleteKey[K](key: K, txn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def deleteKey[K: Bbable](key: K,
+                           txn: Option[Txn[ByteBuffer]] = None): Boolean = {
 
     if (key.isInstanceOf[Key]) {
       termTreeKeysSorted.remove(key.asInstanceOf[Key])
@@ -152,17 +157,19 @@ class Storage(storConf: StorageConfig) {
   }
 
   // delete a value associated with a key
-  def delete[K, V](key: K,
-                   value: V,
-                   txn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def delete[K: Bbable, V: Bbable](
+      key: K,
+      value: V,
+      txn: Option[Txn[ByteBuffer]] = None): Boolean = {
     lmdb.delete(key, value, txn)
   }
 
   // update a value associated with a key
-  def update[K, V](key: K,
-                   valueToBeReplaced: V,
-                   valueReplaceWith: V,
-                   txn: Option[Txn[ByteBuffer]] = None): Boolean = {
+  def update[K: Bbable, V: Bbable](
+      key: K,
+      valueToBeReplaced: V,
+      valueReplaceWith: V,
+      txn: Option[Txn[ByteBuffer]] = None): Boolean = {
     lmdb.update(key, valueToBeReplaced, valueReplaceWith, txn)
   }
 
