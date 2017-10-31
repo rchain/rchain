@@ -41,16 +41,10 @@ object Bb {
     Some(bb)
   }
 
-  def bbToStr(buffer: ByteBuffer): String = {
-    /* TODO
-    https://worldmodscode.wordpress.com/2012/12/14/the-java-bytebuffer-a-crash-course/
-    suggests that the use of position() introduces a race condition a bug.
-    Search for the third instance of "// NOT RECOMMENDED, don't do this"
-     */
-    val oldPosition = buffer.position
-    val str = UTF_8.decode(buffer).toString()
-    // reset buffer's position to its original so it is not altered:
-    buffer.position(oldPosition)
-    str
+  def bbToStr(bb: ByteBuffer): String = {
+    // https://worldmodscode.wordpress.com/2012/12/14/the-java-bytebuffer-a-crash-course/
+    val bytes: Array[Byte] = new Array[Byte](bb.remaining)
+    bb.duplicate.get(bytes)
+    return new String(bytes)
   }
 }

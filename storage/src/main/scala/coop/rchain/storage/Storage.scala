@@ -30,10 +30,7 @@ import coop.rchain.storage.Bb.Bbable
 import java.io.File
 import java.nio.ByteBuffer
 
-import coop.rchain.storage.QueryTools.{
-  createKeySubstition,
-  divideUnificationResults
-}
+import coop.rchain.storage.QueryTools.{createKeySubstition, divideUniResults}
 import org.lmdbjava.Txn
 
 import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
@@ -193,12 +190,21 @@ class Storage(storConf: StorageConfig) {
     lmdb.deleteFiles()
   }
 
-  protected[storage] def displayUniKeys: Unit = {
-
+  protected[storage] def dumpUniKeys: Array[Key] = {
+    val arrBuf = new ArrayBuffer[Key]
     val keyIter = uniKeys
     while (keyIter.hasNext()) {
       val key = keyIter.next()
-      val keyStr = key.term
+      arrBuf += key
+    }
+    arrBuf.toArray
+  }
+
+  protected[storage] def displayUniKeys: Unit = {
+
+    val uniKeys = dumpUniKeys
+    for (uniKey <- uniKeys) {
+      val keyStr = uniKey.term
       val valueStrs = lmdb.getStrings(keyStr)
       print(keyStr + ": ")
       for (value <- valueStrs.get) {
@@ -216,6 +222,7 @@ class Storage(storConf: StorageConfig) {
   def loadFile(filePath: String, display: Boolean = false): Unit = {
     if (display) {
       lmdb.Log(s"Load file: $filePath")
+      displayUniKeys
       lmdb.Log("")
     }
 
@@ -232,6 +239,10 @@ class Storage(storConf: StorageConfig) {
         put(keyNoWhites, valueNoWhites)
       }
     }
+    if (display) {
+      displayUniKeys
+      lmdb.Log("")
+    }
   }
 }
 
@@ -247,15 +258,9 @@ class StorageConfig {
   var maxSize: Long = Lmdb.minDbSize
 
   def isValid(): Boolean = {
-
-    if (baseDir.isDefined && !new File(baseDir.get).isDirectory)
-      return false
-    if (!name.isDefined || name.get.isEmpty)
-      return false
-    if (!dirName.isDefined || dirName.get.isEmpty)
-      return false
-    if (maxSize < Lmdb.minDbSize || Lmdb.maxDbSize < maxSize)
-      return false
-    true
+    baseDir.isDefined && new File(baseDir.get).isDirectory &&
+    name.isDefined && !name.get.isEmpty &&
+    dirName.isDefined && !dirName.get.isEmpty &&
+    Lmdb.minDbSize <= maxSize && maxSize <= Lmdb.maxDbSize
   }
 }
