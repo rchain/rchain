@@ -102,16 +102,16 @@ case class Tuple(elem: Seq[Ob],
       } else false
     }
 
-  def nth(n: Int): Option[Ob] = this.elem.lift(n)
+  override def nth(n: Int): Option[Ob] = this.elem.lift(n)
 
-  def setNth(n: Int, ob: Ob): Option[Tuple] =
+  override def setNth(n: Int, ob: Ob): Option[Tuple] =
     try {
       Some(Tuple(this.elem.updated(n, ob), this.parent, this.meta, this.slot))
     } catch {
       case _: IndexOutOfBoundsException => None
     }
 
-  def subObject(i: Int, n: Int): Tuple = makeSlice(i, n)
+  override def subObject(i: Int, n: Int): Tuple = makeSlice(i, n)
 
 }
 

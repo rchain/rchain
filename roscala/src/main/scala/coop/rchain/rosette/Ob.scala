@@ -25,16 +25,15 @@ trait Ob extends Base {
   def extendWith(keymeta: Ob): Ob = null
   def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
 
-  def getAddr(ind: Int, level: Int, offset: Int): Ob = getLex(ind, level, offset) //TODO FIXNUM(ADDR_TO_PRE_FIXNUM _)
+  def getAddr(ind: Int, level: Int, offset: Int): Ob =
+    getLex(ind, level, offset)
 
   def getField(ind: Int,
                level: Int,
                offset: Int,
                spanSize: Int,
-               sign: Int): Ob = {
-
+               sign: Int): Ob =
     ??? //TODO
-  }
 
   def getLex(ind: Int, level: Int, offset: Int): Ob = {
     val p: Ob = nthParent(level)
@@ -52,21 +51,21 @@ trait Ob extends Base {
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob = setLex(ind, level, offset, value) //TODO
+  def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob =
+    setLex(ind, level, offset, value)
 
   def setField(ind: Int,
                level: Int,
                offset: Int,
                spanSize: Int,
-               value: Int): Ob = {
+               value: Int): Ob =
     ??? //TODO
-  }
 
   def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = {
     val p: Ob = nthParent(level)
 
     actorExtensionFiltered(ind, p)
-      .filter { _ => offset < p.numberOfSlots() }
+      .filter(_ => offset < p.numberOfSlots())
       .map { ob =>
         ob.slot(offset) = value
         value
@@ -79,12 +78,14 @@ trait Ob extends Base {
   }
 
   def notImplemented(): Unit = {
-    val callingMethodName = Thread.currentThread.getStackTrace()(2).getMethodName
+    val callingMethodName =
+      Thread.currentThread.getStackTrace()(2).getMethodName
     notImplemented(callingMethodName)
   }
 
   def notImplementedOb(): Ob = {
-    val callingMethodName = Thread.currentThread.getStackTrace()(2).getMethodName
+    val callingMethodName =
+      Thread.currentThread.getStackTrace()(2).getMethodName
     notImplemented(callingMethodName)
     Ob.INVALID
   }
@@ -104,9 +105,9 @@ trait Ob extends Base {
   def setMailbox: Ob = self
 
   def rcons(ob: Ob): Ob =
-    copy(slot = slot :+ ob)
+    copyOb(slot = slot :+ ob)
 
-  def copy(parent: Ob = parent, meta: Ob = meta, slot: Seq[Ob] = slot): Ob = {
+  def copyOb(parent: Ob = parent, meta: Ob = meta, slot: Seq[Ob] = slot): Ob = {
     val values = (parent, meta, slot)
     new Ob {
       override val parent: Ob = values._1
@@ -124,27 +125,25 @@ trait Ob extends Base {
 
   def indexedSize: Ob = notImplementedOb()
 
-  def setNth(i: Int, v: Ob): Ob = notImplementedOb()
+  def setNth(i: Int, v: Ob): Option[Ob] = Some(notImplementedOb())
   def subObject(i1: Int, i2: Int): Ob = notImplementedOb()
   def asPathname: String = ""
-  def nth(i: Int): Ob = notImplementedOb()
+  def nth(i: Int): Option[Ob] = Some(notImplementedOb())
 
-  private def actorExtensionFiltered(ind: Int, p: Ob): Option[Ob] = {
+  private def actorExtensionFiltered(ind: Int, p: Ob): Option[Ob] =
     if (p.numberOfSlots() <= SLOT_NUM(Actor, extension)) { //TODO
       None
     } else {
       Some(actorExtension(ind, p))
     }
-  }
 
-  private def actorExtension(ind: Int, p: Ob): Ob = {
+  private def actorExtension(ind: Int, p: Ob): Ob =
     if (ind > 0) {
       p match {
         case a: Actor =>
           a.extension
       }
     } else p
-  }
 
   private def offsetOrInvalid(offset: Int, ob: Ob): Ob =
     if (offset < ob.numberOfSlots())
@@ -152,9 +151,7 @@ trait Ob extends Base {
     else
       Ob.INVALID
 
-  private def base(ob: Ob): Ob = ???
-
-  private def nthParent(level: Int): Ob = base(recMap(level, this)(_.parent))
+  private def nthParent(level: Int): Ob = recMap(level, this)(_.parent)
 }
 
 object Ob {
@@ -225,6 +222,7 @@ object Ob {
     }
   }
 
+  //TODO use logging framework
   def printOn[A <: Ob: Show](ob: A, file: File): Unit = {
     val str = Show[A].show(ob)
     printToFile(file)(_.print(str))
