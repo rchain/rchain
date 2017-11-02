@@ -48,7 +48,7 @@ outstanding		0000 10pp pppp pppp n:8 x:8	pc <- p; outstanding <- n
 fork			     11pp pppp pppp
 
 
-xmit/tag		0001 00nu mmmm vvvv		unwind if u;
+xmit/tag		0001 00un mmmm vvvv		unwind if u;
 							invoke trgt with m args and tag = litvec[v]
 							nxt if n;
 xmit/arg		     01un mmmm aaaa		same, but tag = arg[a]
@@ -103,13 +103,13 @@ xfer ind lit to arg	1011 1010 aaaa vvvv		arg[a] <- litvec[v]
 xfer ind lit to reg	     1011 rrrr vvvv		reg[r] <- litvec[v]
 xfer ind lit to rslt	     1100 vvvv vvvv		rslt <- litvec[v]
 
-xfer imm lit to arg	1100 0rrr aaaa aaaa		arg[a] <- fixnum(r)
+xfer imm lit to arg	1100 0vvv aaaa aaaa		arg[a] <- fixnum(v)
 			     1000 aaaa aaaa		arg[a] <- #t
 			     1001 aaaa aaaa		arg[a] <- #f
 			     1010 aaaa aaaa		arg[a] <- nil
 			     1011 aaaa aaaa		arg[a] <- #niv
 
-xfer imm lit to reg	1101 0rrr xxxx rrrr		reg[r] <- fixnum(r)
+xfer imm lit to reg	1101 0vvv xxxx rrrr		reg[r] <- fixnum(v)
 			     1000 xxxx rrrr		reg[r] <- #t
 			     1001 xxxx rrrr		reg[r] <- #f
 			     1010 xxxx rrrr		reg[r] <- nil

@@ -13,10 +13,6 @@ public abstract class FoldVisitor<R,A> implements AllVisitor<R,A> {
 /* Contr */
     public R visit(coop.rchain.syntax.rholang.Absyn.DContr p, A arg) {
       R r = leaf(arg);
-      for (CPattern x : p.listcpattern_)
-      {
-        r = combine(x.accept(this, arg), r, arg);
-      }
       r = combine(p.proc_.accept(this, arg), r, arg);
       return r;
     }
@@ -95,12 +91,26 @@ public abstract class FoldVisitor<R,A> implements AllVisitor<R,A> {
       r = combine(p.proc_.accept(this, arg), r, arg);
       return r;
     }
+    public R visit(coop.rchain.syntax.rholang.Absyn.PPrint p, A arg) {
+      R r = leaf(arg);
+      r = combine(p.proc_.accept(this, arg), r, arg);
+      return r;
+    }
     public R visit(coop.rchain.syntax.rholang.Absyn.PConstr p, A arg) {
       R r = leaf(arg);
       for (Proc x : p.listproc_)
       {
         r = combine(x.accept(this, arg), r, arg);
       }
+      return r;
+    }
+    public R visit(coop.rchain.syntax.rholang.Absyn.PContr p, A arg) {
+      R r = leaf(arg);
+      for (CPattern x : p.listcpattern_)
+      {
+        r = combine(x.accept(this, arg), r, arg);
+      }
+      r = combine(p.proc_.accept(this, arg), r, arg);
       return r;
     }
     public R visit(coop.rchain.syntax.rholang.Absyn.PPar p, A arg) {
@@ -184,6 +194,10 @@ public abstract class FoldVisitor<R,A> implements AllVisitor<R,A> {
       return r;
     }
     public R visit(coop.rchain.syntax.rholang.Absyn.QVar p, A arg) {
+      R r = leaf(arg);
+      return r;
+    }
+    public R visit(coop.rchain.syntax.rholang.Absyn.QMap p, A arg) {
       R r = leaf(arg);
       return r;
     }

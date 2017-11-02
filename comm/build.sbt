@@ -1,15 +1,36 @@
-import sbt.Keys._
+scalaVersion := "2.12.3"
 
-organization := "rchain"
-//scalaVersion := "2.11.8"
-version      := "0.0.1"
-name := "RChain Communication"
+PB.targets in Compile := Seq(
+  PB.gens.java -> (sourceManaged in Compile).value,
+  scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+)
+
+libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
 
 libraryDependencies ++= Seq(
-  "org.json4s" %% "json4s-native" % "3.5.0",
-  "org.json4s" %% "json4s-jackson" % "3.5.0",
-  "io.jvm.uuid" %% "scala-uuid" % "0.2.2",
-  "org.abstractj.kalium" % "kalium" % "0.6.0"
+  "org.scalactic" %% "scalactic" % "3.0.1",
+  "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 )
+
+addCompilerPlugin(
+  "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
+)
+
+lazy val commonOptions = Seq(
+  "-language:existentials",
+  "-language:higherKinds",
+  "-language:implicitConversions",
+  "-Xfuture",
+  "-Xlint:_,-unused",
+  "-Yno-adapted-args",
+  "-Ywarn-dead-code",
+  "-Ywarn-numeric-widen",
+  "-Ywarn-value-discard",
+  "-deprecation",
+  "-encoding", "UTF-8",
+  "-feature",
+  "-unchecked")
+
+scalacOptions ++= commonOptions
 
 logBuffered in Test := false

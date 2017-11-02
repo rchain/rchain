@@ -1,0 +1,35 @@
+Script to make a pull request.
+
+To use this script you need to install PyGitHub:
+pip install PyGitHub
+
+A typicall workflow with this script:
+
+1) Initiate repository with:
+
+        ./pr.py project init
+
+   This will create a new branch in format: dev-<username>-<featureName> and initiate script's config file with some variables.
+
+2) Once you made some changes you can commit them with:
+
+        ./pr.py project commit
+
+   This will commit your changes using git and add some service info to the commit message to trigger smart commits and change JIRA's ticket status to `InProgress`. 
+
+3) Do some additional changes and commit them using git.
+
+4) Push changes to the `origin` and create PR to `remote` (possibly it would be the original repo you forked from) using:
+
+        ./pr.py project pr create
+
+5) Review PR and push additional changes if necessary
+
+6) Merge PR using:
+
+       ./pr.py project pr merge
+
+   This will merge last created PR and also add some service information to the commit message to trigger smart commits and change JIRA's ticket status to `InProgress`. 
+
+7) Done!
+

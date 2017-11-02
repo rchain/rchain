@@ -1,0 +1,8 @@
+;;; Tests (defPure RblTable (insert & keys/value) in space.rbl
+
+;;; Output should be 
+;;; 'ho
+
+(define x (new RblTable))
+(insert x 'ha 'he 'hi 'ho)
+(get (get (get x 'ha) 'he) 'hi)

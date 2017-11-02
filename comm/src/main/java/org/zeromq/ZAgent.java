@@ -81,6 +81,13 @@ public interface ZAgent
     boolean sign();
 
     /**
+     * Forcely destroys the Star.
+     * @deprecated not sure it is useful or recommended
+     */
+    @Deprecated
+    void nova();
+
+    /**
      * Returns the socket used for communication.
      * For advanced usage.
      *
@@ -202,6 +209,12 @@ public interface ZAgent
         public Socket pipe()
         {
             return pipe;
+        }
+
+        @Override
+        public void nova()
+        {
+            pipe.close();
         }
     }
 

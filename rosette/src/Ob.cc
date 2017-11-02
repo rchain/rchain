@@ -1135,6 +1135,26 @@ DEF("run",obRun, 1, 2)
 }
 
 
+DEF("run-with-env",obRunWithEnv, 2, 3)
+{
+    Monitor* mon = __CTXT__->monitor;
+    PROTECT(mon);
+
+    CHECK(0, Code, code);
+    if (NARGS == 3) {
+    	CHECK(2, Monitor, m);
+    	mon = m;
+    }
+
+    Ctxt* newCtxt = Ctxt::create (code, NIL, __CTXT__, 0);
+    newCtxt->monitor = mon;
+    newCtxt->env = ARG(1);
+    newCtxt->scheduleStrand();
+
+    return vm->upcall(newCtxt);
+}
+
+
 DEF("suicide",obSuicide, 0, 0)
 {
     return INVALID;

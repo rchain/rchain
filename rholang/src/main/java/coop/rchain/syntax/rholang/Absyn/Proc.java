@@ -14,7 +14,9 @@ public abstract class Proc implements java.io.Serializable {
     public R visit(coop.rchain.syntax.rholang.Absyn.PChoice p, A arg);
     public R visit(coop.rchain.syntax.rholang.Absyn.PMatch p, A arg);
     public R visit(coop.rchain.syntax.rholang.Absyn.PNew p, A arg);
+    public R visit(coop.rchain.syntax.rholang.Absyn.PPrint p, A arg);
     public R visit(coop.rchain.syntax.rholang.Absyn.PConstr p, A arg);
+    public R visit(coop.rchain.syntax.rholang.Absyn.PContr p, A arg);
     public R visit(coop.rchain.syntax.rholang.Absyn.PPar p, A arg);
 
   }
