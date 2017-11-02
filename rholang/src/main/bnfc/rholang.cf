@@ -120,12 +120,17 @@ PtBranch. PatternPatternMatch ::= PPattern "=>" "{" PPattern "}" ;
 separator nonempty PatternPatternMatch "" ;
 
 -- Value patterns
+
+-- We only allow for constants in pattern matches
+-- unlike for Procs which can have arbitrary operations
 VPtStruct. ValPattern ::= Var "{" [PPattern] "}" ;
 VPtTuple. ValPattern ::= "<" [PPattern] ">" ;
 VPtTrue. ValPattern ::= "true" ;
 VPtFalse. ValPattern ::= "false" ;
 VPtInt. ValPattern ::= Integer ;
 VPtDbl. ValPattern ::= Double ;
+VPtNegInt. ValPattern ::= "-" Integer;
+VPtNegDbl. ValPattern ::= "-" Double;
 VPtStr. ValPattern ::= String ;
 --VPtString. ValPattern ::=  ;
 --VPtArray.  ValPattern ::=  ;

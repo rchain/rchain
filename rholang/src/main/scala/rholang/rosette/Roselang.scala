@@ -1265,6 +1265,9 @@ extends StrFoldCtxtVisitor {
       case vPtTrue : VPtTrue => visit( vPtTrue, arg )
       case vPtFalse : VPtFalse => visit( vPtFalse, arg )
       case vPtInt : VPtInt => visit( vPtInt, arg )
+      case vPtDbl : VPtDbl => visit( vPtDbl, arg )
+      case vPtNegInt : VPtNegInt => visit( vPtNegInt, arg )
+      case vPtNegDbl : VPtNegDbl => visit( vPtNegDbl, arg )
     }
   }
   override def visit(  p : VPtStruct, arg : A ) : R = {
@@ -1331,6 +1334,24 @@ extends StrFoldCtxtVisitor {
     combine(
       arg,
       L( G( s"""${p.integer_}"""), Top() )
+    )
+  }
+  override def visit(  p : VPtDbl, arg: A ): R = {
+    combine(
+      arg,
+      L( G( s"""${p.double_}"""), Top() )
+    )
+  }
+  override def visit(  p : VPtNegInt, arg: A ): R = {
+    combine(
+      arg,
+      L( G( s"""-${p.integer_}"""), Top() )
+    )
+  }
+  override def visit(  p : VPtNegDbl, arg: A ): R = {
+    combine(
+      arg,
+      L( G( s"""-${p.double_}"""), Top() )
     )
   }
 }
