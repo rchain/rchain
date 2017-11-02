@@ -5,6 +5,9 @@ import coop.rchain.comm.protocol.routing._
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
+// TODO: In message construction, the system clock is used for nonce
+// generation. For reproducibility, this should be a passed-in value.
+
 /**
   * Implements broadcasting and round-trip (request-response) messaging
   * for higher level protocols.
@@ -23,12 +26,12 @@ trait ProtocolHandler {
     */
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
-                timeout: Duration = Duration(500, MILLISECONDS)): Try[ProtocolMessage]
+                timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
 
   /**
     * Asynchronously broadcast a message to all known peers.
     */
-  def broadcast(msg: ProtocolMessage): Seq[Try[Unit]]
+  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]]
 }
 
 /**
@@ -48,20 +51,21 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
     _seq
   }
 
-  override def ping: Try[Duration] =
-    ProtocolMessage.ping(handler.local) match {
-      case Some(ping) =>
-        handler.roundTrip(PingMessage(ping, System.currentTimeMillis), this) match {
-          case Success(pong) =>
-            ping.header match {
-              case Some(incoming) =>
-                Success(Duration(pong.timestamp - incoming.timestamp, MILLISECONDS))
-              case _ => Failure(new Exception("ping failed"))
-            }
-          case Failure(ex) => Failure(ex)
+  override def ping: Try[Duration] = {
+    val req = PingMessage(ProtocolMessage.ping(handler.local), System.currentTimeMillis)
+    handler.roundTrip(req, this) match {
+      case Right(resp) =>
+        req.header match {
+          case Some(incoming) =>
+            Success(Duration(resp.timestamp - incoming.timestamp, MILLISECONDS))
+          case _ => Failure(new Exception("ping failed"))
         }
-      case None => Failure(new Exception("ping failed"))
+      case Left(ex) => ex match {
+        case ProtocolException(exc) => Failure(exc)
+        case exc => Failure(new Exception(exc.toString))
+      }
     }
+  }
 }
 
 /**
@@ -71,12 +75,82 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
 trait ProtocolMessage {
   val proto: Protocol
   val timestamp: Long
+
+  def header: Option[Header] = proto.header
+
+  def sender: Option[PeerNode] =
+    for {
+      h <- header
+      s <- h.sender
+    } yield
+      PeerNode(NodeIdentifier(s.id.toByteArray),
+               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
+
+  def toByteSeq: Seq[Byte] = {
+    val buf = new java.io.ByteArrayOutputStream
+    proto.writeTo(buf)
+    buf.toByteArray
+  }
 }
 
-case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+/**
+  * Supports return headers, which hold information about the message
+  * being responded to.
+  */
+trait ProtocolResponse extends ProtocolMessage {
+  def returnHeader: Option[ReturnHeader] = proto.returnHeader
+}
+
+/**
+  * A ping is a simple are-you-there? message.
+  */
+case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+  def response(src: ProtocolNode): Option[ProtocolMessage] =
+    for {
+      h <- header
+    } yield
+        PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
+}
+
+/**
+  * A pong is the response to a ping.
+  */
+case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
+
+/**
+  * A lookup message asks for a list of peers from the local Kademlia
+  * table that are closest to a given key.
+  */
+case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+  def lookupId: Option[Seq[Byte]] =
+    for {
+      lookup <- proto.message.lookup
+    } yield lookup.id.toByteArray
+
+  def response(src: ProtocolNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
+    for {
+      h <- header
+    } yield
+        LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
+                              System.currentTimeMillis)
+
+}
+
+/**
+  * The response to a lookup message. It holds the list of peers
+  * closest to the queried key.
+  */
+case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
+
+case class HandshakeMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+  def response(src: ProtocolNode): Option[ProtocolMessage] =
+    for {
+      h <- header
+    } yield
+        HandshakeResponseMessage(ProtocolMessage.handshakeResponse(src, h),
+                                 System.currentTimeMillis)
+}
+case class HandshakeResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**
   * Utility functions for working with protocol buffers.
@@ -90,44 +164,28 @@ object ProtocolMessage {
   implicit def toProtocolBytes(x: Seq[Byte]) =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
-  def toPeer(header: Header): Option[PeerNode] =
-    for {
-      node <- header.sender
-    } yield
-      PeerNode(NodeIdentifier(node.id.toByteArray),
-               Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort))
-
-  def sender(msg: ProtocolMessage): Option[PeerNode] =
-    for {
-      header <- msg.proto.header
-      sender <- toPeer(header)
-    } yield sender
-
-  def header(src: ProtocolNode) =
+  def header(src: ProtocolNode): Header =
     Header()
       .withSender(node(src))
       .withTimestamp(System.currentTimeMillis)
       .withSeq(src.seq)
 
-  def header(msg: ProtocolMessage): Option[Header] = msg.proto.header
-
-  def returnHeader(msg: ProtocolMessage): Option[ReturnHeader] =
-    msg.proto.returnHeader
-
-  def node(n: PeerNode) =
+  def node(n: PeerNode): Node =
     Node()
       .withId(n.key)
       .withHost(n.endpoint.host)
       .withUdpPort(n.endpoint.udpPort)
       .withTcpPort(n.endpoint.tcpPort)
 
-  def returnHeader(h: Header) =
+  def returnHeader(h: Header): ReturnHeader =
     ReturnHeader()
       .withTimestamp(h.timestamp)
       .withSeq(h.seq)
 
-  def ping(src: ProtocolNode): Option[Protocol] =
-    Some(Protocol().withHeader(header(src)).withPing(Ping()))
+  def ping(src: ProtocolNode): Protocol =
+    Protocol()
+      .withHeader(header(src))
+      .withPing(Ping())
 
   def pong(src: ProtocolNode, h: Header): Protocol =
     Protocol()
@@ -135,22 +193,11 @@ object ProtocolMessage {
       .withReturnHeader(returnHeader(h))
       .withPong(Pong())
 
-  def pong(src: ProtocolNode, ping: PingMessage): Option[Protocol] =
-    for {
-      h <- ping.proto.header
-    } yield pong(src, h)
-
-  def lookupId(msg: ProtocolMessage): Option[Seq[Byte]] =
-    for {
-      proto <- msg.proto.message.lookup
-    } yield proto.id.toByteArray
-
-  def lookup(src: ProtocolNode, id: Seq[Byte]): Option[Protocol] =
-    Some(
-      Protocol()
-        .withHeader(header(src))
-        .withLookup(Lookup()
-          .withId(id.toArray)))
+  def lookup(src: ProtocolNode, id: Seq[Byte]): Protocol =
+    Protocol()
+      .withHeader(header(src))
+      .withLookup(Lookup()
+        .withId(id.toArray))
 
   def lookupResponse(src: ProtocolNode, h: Header, nodes: Seq[PeerNode]): Protocol =
     Protocol()
@@ -159,20 +206,16 @@ object ProtocolMessage {
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
 
-  def lookupResponse(src: ProtocolNode,
-                     lookup: ProtocolMessage,
-                     nodes: Seq[PeerNode]): Option[Protocol] =
-    for {
-      h <- lookup.proto.header
-    } yield lookupResponse(src, h, nodes)
+  def handshake(src: ProtocolNode): Protocol =
+    Protocol()
+      .withHeader(header(src))
+      .withHandshake(Handshake())
 
-  def toBytes(proto: Protocol): Array[Byte] = {
-    val buf = new java.io.ByteArrayOutputStream
-    proto.writeTo(buf)
-    buf.toByteArray
-  }
-
-  def toBytes(msg: ProtocolMessage): Array[Byte] = toBytes(msg.proto)
+  def handshakeResponse(src: ProtocolNode, h: Header): Protocol =
+    Protocol()
+      .withHeader(header(src))
+      .withReturnHeader(returnHeader(h))
+      .withHandshakeResponse(HandshakeResponse())
 
   def parse(bytes: Seq[Byte]): Option[ProtocolMessage] =
     Protocol.parseFrom(bytes.toArray) match {

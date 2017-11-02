@@ -5,18 +5,22 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package KeyValueStore
+// This object provides tools used in unifying a query with a
+// storage.  A query is a key that is unified with the keys in
+// the store.
 
-import scala.collection.mutable._
+package coop.rchain.storage
 
-// A query is a key that is unified against a key in the store.
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
 
 class Binding(queryP: TermTree, keyP: TermTree) {
-  if (queryP == null || keyP == null)
-    throw new Exception("Binding constructor has bad parameter")
+  if (queryP == null || keyP == null) {
+    throw new RChainException("Binding constructor has bad parameter")
+  }
 
-  val queryParam = queryP
-  val keyParam = keyP
+  protected[storage] val queryParam = queryP
+  protected[storage] val keyParam = keyP
 
   override def toString: String = {
     "(" + queryParam.term + "," + keyParam.term + ")"
@@ -35,8 +39,9 @@ object QueryTools {
   def unifyParams(
       queryParams: ArrayBuffer[TermTree],
       keyParams: ArrayBuffer[TermTree]): (Boolean, Array[Binding]) = {
-    if (queryParams.length != keyParams.length)
+    if (queryParams.length != keyParams.length) {
       return (false, Array[Binding]())
+    }
 
     var bindings = new ArrayBuffer[Binding]()
 
@@ -52,10 +57,12 @@ object QueryTools {
           val (success, bindingsToAdd) =
             unifyParams(queryPred.params.params, keyPred.params.params)
           if (success) {
-            for (b <- bindingsToAdd)
+            for (b <- bindingsToAdd) {
               bindings += b
-          } else
+            }
+          } else {
             return (false, Array[Binding]())
+          }
         } else {
           return (false, Array[Binding]())
         }
@@ -115,28 +122,27 @@ object QueryTools {
 
   // Given the key, return a new key with all the bindings substituted
 
-  def createKeySubstition(key: Key, bindings: Array[Binding]): Key = {
+  protected[storage] def createKeySubstition(key: Key,
+                                             bindings: Array[Binding],
+                                             bindingIndex: Int = 0): Key = {
     val keyName = key.name
     val keyParams = key.params
 
-    val subs = createParamsSubstition(keyParams, bindings)
+    val subs = createParamsSubstition(keyParams, bindings, bindingIndex)
     new Key(keyName, subs)
   }
 
-  def createParamsSubstition(params: Params,
-                             bindingsIn: Array[Binding]): Params = {
-    if (bindingsIn.length == 0)
-      throw new Exception("createParamsSubstitution(): empty array parameter")
-
-    // create a copy of bindingsIn so it can be changed
-    // without changing the actual bindingsIn
-    var bindings = new Array[Binding](bindingsIn.length)
-    for (i <- 0 until bindingsIn.length)
-      bindings(i) = bindingsIn(i)
+  protected[storage] def createParamsSubstition(params: Params,
+                                                bindings: Array[Binding],
+                                                bindingIndexIn: Int): Params = {
+    if (bindings.length == 0) {
+      throw new RChainException(
+        "createParamsSubstitution(): empty array parameter")
+    }
 
     var returnParams = new ArrayBuffer[TermTree]
+    var bindingIndex = bindingIndexIn
 
-    var bindingsIndex = 0
     for (param <- params.params) {
       param match {
         case _: Key => {
@@ -144,20 +150,21 @@ object QueryTools {
           val keyName = key.name
           val keyParams = key.params
 
-          val subs = createParamsSubstition(keyParams, bindings)
+          val subs = createParamsSubstition(keyParams, bindings, bindingIndex)
+          bindingIndex += keyParams.length
 
           returnParams += new Key(keyName, subs)
-
-          bindings = bindings.slice(subs.length, bindings.length)
-          bindingsIndex = 0
         }
         case _: Variable | _: Constant => {
-          val binding = bindings(bindingsIndex)
-          bindingsIndex += 1
+          assert(bindingIndex < bindings.length)
+          val bindingOption = bindings(bindingIndex)
+          bindingIndex += 1
+          val binding = bindingOption
           val queryParam = binding.queryParam
           val keyParam = binding.keyParam
-          if (queryParam.term == param.term)
+          if (queryParam.term == param.term) {
             returnParams += TermTools.createTermTree(keyParam.term)
+          }
         }
         case _ => {
           throw new Exception(
@@ -172,37 +179,17 @@ object QueryTools {
   // The first input parameter is a query.  The second parameter contains
   // an Array[Binding] for each key in the store that unifies with the query
   // against the third parameter.
-  //
-  // The output is two representations of the unification.
 
   def queryResultsToArrayString(query: Key,
                                 queryResult: LinkedHashSet[Array[Binding]],
-                                store: KeyValueStore): TwoUnifications = {
+                                store: Storage): Unification = {
     var standardRep = new ArrayBuffer[String]()
-    var myRep = new ArrayBuffer[String]()
 
     // Each element of queryResult is an array of bindings that
     // corresponds to a term in the store.
     for (bindingsArray <- queryResult) {
-      var myBindingsStr = "{"
-      for (binding <- bindingsArray) {
-        if (binding.queryParam.isConstant
-            && binding.keyParam.isConstant) {
-          assert(binding.queryParam.term == binding.keyParam.term)
-          myBindingsStr += binding.queryParam.term + ","
-        } else if (binding.queryParam.isVariable
-                   && binding.keyParam.isVariable
-                   && binding.queryParam.term == binding.keyParam.term) {
-          myBindingsStr += binding.queryParam.term + ","
-        } else {
-          myBindingsStr += binding.queryParam.term + ":" + binding.keyParam.term + ","
-        }
-      }
-      myBindingsStr = myBindingsStr.slice(0, myBindingsStr.length - 1)
-      myBindingsStr += "} -> "
-
       var standardBindingsStr = "[queryVars:{"
-      val uniRep = DivideUnificationResults(bindingsArray)
+      val uniRep = divideUniResults(bindingsArray)
       if (0 < uniRep.queryVars.length) {
         for (binding <- uniRep.queryVars) {
           standardBindingsStr += binding.queryParam.term + ":" + binding.keyParam.term + ","
@@ -222,18 +209,36 @@ object QueryTools {
       standardBindingsStr += "}] -> "
 
       val keySub = createKeySubstition(query, bindingsArray)
-      val values = store.get(keySub)
-      if (values != null) {
-        standardBindingsStr += values.toString
+      val valuesOption = store.getStrings(keySub.term)
+      if (valuesOption.isDefined) {
+        val values = stringArrayToValuesRepString(valuesOption.get)
+        standardBindingsStr += values
         standardRep += standardBindingsStr
-        myBindingsStr += values.toString
-        myRep += myBindingsStr
       }
     }
-    assert(myRep.size == queryResult.size)
     assert(standardRep.size == queryResult.size)
 
-    new TwoUnifications(standardRep.toArray, myRep.toArray)
+    standardRep.toArray
+  }
+
+  def queryResultsToKeys(query: Key,
+                         queryResult: LinkedHashSet[Array[Binding]],
+                         store: Storage): Array[Key] = {
+    var standardRep = new ArrayBuffer[Key]()
+
+    // Each element of queryResult is an array of bindings that
+    // corresponds to a term in the store.
+    for (bindingsArray <- queryResult) {
+      val uniRep = divideUniResults(bindingsArray)
+      val keySub = createKeySubstition(query, bindingsArray)
+      val valuesOption = store.getStrings(keySub.term)
+      if (valuesOption.isDefined) {
+        standardRep += keySub
+      }
+    }
+    assert(standardRep.size == queryResult.size)
+
+    standardRep.toArray
   }
 
   // This method supports the standard representation of unification
@@ -242,7 +247,7 @@ object QueryTools {
   // the bindings where the variable is in the query and one
   // where the variable is in the key.
 
-  def DivideUnificationResults(uniResults: Array[Binding]): UniRep = {
+  def divideUniResults(uniResults: Array[Binding]): UniRep = {
     val varInQuery = new ArrayBuffer[Binding]()
     val varInKey = new ArrayBuffer[Binding]()
 
@@ -264,6 +269,17 @@ object QueryTools {
     new UniRep(varInQuery.toArray, varInKey.toArray)
   }
 
+  def stringArrayToValuesRepString(valuesArray: Array[String]): String = {
+    val valuesBuf = new mutable.StringBuilder()
+    valuesBuf ++= "["
+    for (i <- 0 until valuesArray.size - 1) {
+      val value = valuesArray(i) + ","
+      valuesBuf ++= value
+    }
+    valuesBuf ++= (valuesArray(valuesArray.size - 1) + "]")
+    valuesBuf.toString
+  }
+
   // UniRep is used to express the standard representation of a unification
   // of a key and a query.
   //
@@ -274,12 +290,6 @@ object QueryTools {
     val queryVars = queryVarsIn
     val keyVars = keyVarsIn
   }
-}
 
-// See the comments in Main.scala about the uniRep variable.
-
-class TwoUnifications(standardRepresentation: Array[String],
-                      nonRepresentation: Array[String]) {
-  val standard = standardRepresentation
-  val non = nonRepresentation // standard
+  type Unification = Array[String]
 }

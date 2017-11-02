@@ -5,34 +5,33 @@
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
 
-package KeyValueStore
+// The Term class is modeled after Prolog terms.
+
+package coop.rchain.storage
 
 import scala.collection.mutable.ArrayBuffer
 
 trait TermTree {
-  var term: String // entire term, including params for a key
+  val term: String // entire term, including params for a key
 
   def isKey: Boolean = { this.isInstanceOf[Key] }
   def isVariable: Boolean = { this.isInstanceOf[Variable] }
   def isConstant: Boolean = { this.isInstanceOf[Constant] }
-
-  def typeIs: String = {
-    if (this.isKey) return ("Key")
-    if (this.isVariable) return ("Variable")
-    if (this.isConstant) return ("Constant")
-    "Unknown"
-  }
-
   def display: Unit
 }
 
 class Params(paramsArray: ArrayBuffer[TermTree]) extends TermTree {
-  val params = paramsArray
-  var term = "("
-  for (i <- 0 until params.length - 1) {
-    term += params(i).term + ","
+  if (paramsArray.length == 0) {
+    throw new RChainException("Params: no params to constructor")
   }
-  term += params(params.length - 1).term + ")"
+
+  protected[storage] val params = paramsArray
+  protected[storage] var _term = "("
+  for (i <- 0 until params.length - 1) {
+    _term += params(i).term + ","
+  }
+  _term += params(params.length - 1).term + ")"
+  val term = _term
 
   val length = paramsArray.length
 
@@ -42,12 +41,12 @@ class Params(paramsArray: ArrayBuffer[TermTree]) extends TermTree {
 trait Atom extends TermTree {}
 
 class Variable(param: String) extends Atom {
-  val variable = param.trim
+  protected[storage] val variable = param.trim
 
   if (!TermTools.isVariable(variable))
-    throw new Exception(s"Variable(): malformed param: '$param'")
+    throw new RChainException(s"Variable(): malformed param: '$param'")
 
-  var term = variable
+  val term = variable
 
   def display: Unit = { print("'" + variable + "'") }
 }
@@ -55,12 +54,12 @@ class Variable(param: String) extends Atom {
 // constants are numerals or names
 
 class Constant(param: String) extends Atom {
-  val constant = param.trim
+  protected[storage] val constant = param.trim
 
   if (!TermTools.isConstant(constant))
-    throw new Exception(s"Constant(): malformed param: '$param'")
+    throw new RChainException(s"Constant(): malformed param: '$param'")
 
-  var term = constant
+  val term = constant
 
   def display: Unit = { print("'" + constant + "'") }
 }
@@ -76,17 +75,18 @@ object TermTools {
     val lexToken = lexer.NextToken
     if (lexToken.token == Token.Key)
       return new Key(term)
-    throw new Exception("createTermTree: not recognized: " + lexToken.tokenStr)
+    throw new RChainException(
+      "createTermTree: not recognized: " + lexToken.tokenStr)
   }
 
   def isVariable(s: String): Boolean = {
     if (s == null || s.isEmpty)
-      throw new Exception("isVariable argument is null or empty")
+      throw new RChainException("isVariable argument is null or empty")
     s(0).isUpper
   }
   def isConstant(s: String): Boolean = {
     if (s == null || s.isEmpty)
-      throw new Exception("isVariable argument is null or empty")
+      throw new RChainException("isConstant argument is null or empty")
     s(0).isLower || s(0).isDigit
   }
 }

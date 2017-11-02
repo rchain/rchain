@@ -1,10 +1,8 @@
 package coop.rchain.comm
 
-import scala.util.Try
-
 trait Comm {
-  def send(data: Seq[Byte], p: PeerNode): Try[Unit]
-  def recv: Try[Seq[Byte]]
+  def send(data: Seq[Byte], p: PeerNode): Either[CommError, Unit]
+  def recv: Either[CommError, Seq[Byte]]
 }
 
 case class NodeIdentifier(pKey: Seq[Byte]) {
