@@ -133,8 +133,8 @@ VPtStr. ValPattern ::= String ;
 separator nonempty ValPattern "," ;
 
 -- Names and variables
-token Name (upper (letter | digit | '_' | '\'')*) ;
-token Var (lower (letter | digit | '_' | '\'')*) ;
+token Name (upper (letter | digit | '_' | '\'' | '-' )*) ;
+token Var (lower (letter | digit | '_' | '\'' | '-')*) ;
 
 separator nonempty Var "," ;
 separator nonempty Name "," ;

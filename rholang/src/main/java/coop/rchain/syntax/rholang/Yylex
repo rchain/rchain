@@ -76,8 +76,8 @@ IDENT = ({LETTER}|{DIGIT}|['_])
 <COMMENT>[\n] { }
 
 
-<YYINITIAL>{CAPITAL}({LETTER}|{DIGIT}|_|')* { return new Symbol(sym.Name, yytext().intern()); }
-<YYINITIAL>{SMALL}({LETTER}|{DIGIT}|_|')* { return new Symbol(sym.Var, yytext().intern()); }
+<YYINITIAL>{CAPITAL}({LETTER}|{DIGIT}|_|'|-)* { return new Symbol(sym.Name, yytext().intern()); }
+<YYINITIAL>{SMALL}({LETTER}|{DIGIT}|_|'|-)* { return new Symbol(sym.Var, yytext().intern()); }
 
 <YYINITIAL>"\"" { yybegin(STRING); }
 <STRING>\\ { yybegin(ESCAPED); }

@@ -1,0 +1,10 @@
+;;; Compiler output of log_time.rho
+
+(let [[time_contract (generateFresh "time_contract")]]
+    (block (block
+        ( (proc [] (run (compile
+            (let [[[[Rholangde54a8d4e7d0] [Rholangd6931614701d]]
+                    (consume t [time_contract] [**wildcard**] ['stream] #t)]]
+                ( (proc [stream] (log-time stream)) Rholangd6931614701d))))))
+        (produce t time_contract **wildcard** (ostream-new "test.txt")))
+        (produce t time_contract **wildcard** (ostream-new "test2.txt"))))
