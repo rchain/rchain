@@ -1,3 +1,8 @@
+// A token contract that implements the ERC20 standard.
+// This contract demonstrates the creation of a token,
+// the transferring of tokens, the querying of a balance,
+// and the printing of the balance query result.
+
 new token in {
     contract token (message_sender, total_supply, return_channel) = {
 
@@ -19,6 +24,7 @@ new token in {
                             y!(balances.getOrElse(to, 0)) |
                             for (balance_of_sender <- x
                                ; balance_of_receiver <- y) {
+                                // Preconditions to check before the transfer goes through
                                 match [
                                     balance_of_sender >= amount,
                                     amount > 0,
@@ -40,6 +46,8 @@ new token in {
                     }
                 } |
 
+                // Same as the transfer contract but allows for the sender to be different from
+                // the person calling the transfer_from contract
                 contract transfer_from(message_sender, from, to, amount, rtn) = {
                     for (balances <- balances_channel
                        ; allowed <- allowed_channel) {
@@ -77,6 +85,10 @@ new token in {
                     }
                 } |
 
+                // This is the way an address can pre-approve (delegate) the transfer of
+                // a certain amount of tokens to some other address. This allows for
+                // that other address, through the use of the transfer_from function,
+                // to send up to that amount of tokens.
                 contract approve(message_sender, spender, amount, rtn) = {
                     for (allowed <- allowed_channel) {
                         allowed_channel!(allowed.insert(message_sender,spender,amount)) |
