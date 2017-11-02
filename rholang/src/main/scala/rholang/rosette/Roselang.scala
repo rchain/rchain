@@ -281,7 +281,7 @@ extends StrFoldCtxtVisitor {
   def H() = HV( theCtxtVar )
   def Here() = Some( HV( theCtxtVar ) )
 
-  // TODO: Swap with something crypotgraphically secure and ensure Fresh and FreshSymbol are of uniform length
+  // TODO: Review cryptographic secureness and ensure Fresh and FreshSymbol are of uniform length
   // A FreshSymbol contains a quote in Rosette while a Fresh doesn't
   def Fresh() = {
     val prefix = "Rholang"
