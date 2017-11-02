@@ -91,9 +91,9 @@ VarPtWild. VarPattern ::= "_" ;
 separator VarPattern "," ;
 
 -- Process patterns
+PPtVal.    PPattern4 ::= ValPattern ;
 PPtVar.    PPattern4 ::= VarPattern ;
 PPtNil.    PPattern4 ::= "Nil" ;
-PPtVal.    PPattern4 ::= ValPattern ;
 PPtDrop.   PPattern3 ::= "*" CPattern ;
 PPtInject. PPattern3 ::= "#" CPattern ;
 PPtOutput. PPattern2 ::= CPattern "!" "(" [PPattern] ")" ;
