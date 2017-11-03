@@ -1,0 +1,15 @@
+// true, false, true, false, false, true
+
+new comparison_test in {
+    contract comparison_test(rtn) = {
+        { 5 == 5 } |
+        { 5 != 10} |
+        { 60 >= 4} |
+        { -5 > 4 } |
+        { 20 <= 3 } |
+        { 3 < 5 }
+    } |
+    new rtn in {
+        comparison_test!(rtn)
+    }
+}
