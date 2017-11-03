@@ -1,10 +1,13 @@
 package coop.rchain.rosette
 
-import java.io.{File, PrintWriter}
+import java.io.File
 
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
-import shapeless._
+import coop.rchain.rosette.utils.{pSlice, printToFile}
 import shapeless.OpticDefns.RootLens
+import shapeless._
+
+import scala.collection.mutable
 
 sealed trait LookupError
 case object Absent extends LookupError
@@ -14,12 +17,15 @@ trait Base
 
 //TODO change type of `indirect` argument to bool
 trait Ob extends Base {
-  val meta: Ob
-  val parent: Ob
-  val slot: Seq[Ob]
+  val _slot: mutable.Seq[Ob]
+
   val obTag: ObTag = null
   val sysval: SysCode = null
   val constantP = true
+
+  def meta: Ob = _slot.head
+  def parent: Ob = _slot(1)
+  lazy val slot: mutable.Seq[Ob] = pSlice(_slot, 2, _slot.size)
 
   def dispatch(ctxt: Ctxt): Ob = null
   def extendWith(keymeta: Ob): Ob = null
@@ -38,7 +44,7 @@ trait Ob extends Base {
   def getLex(ind: Int, level: Int, offset: Int): Ob = {
     val p: Ob = nthParent(level)
 
-    actorExtensionFiltered(ind, p)
+    actorExtension(ind, p)
       .map(offsetOrInvalid(offset, _))
       .getOrElse(Ob.INVALID)
   }
@@ -47,7 +53,7 @@ trait Ob extends Base {
   def lookupOBO(meta: Ob, ob: Ob, key: Ob): Either[LookupError, Ob] =
     Right(null)
   def matches(ctxt: Ctxt): Boolean = false
-  def numberOfSlots(): Int = Math.max(0, slot.length - 2)
+  def numberOfSlots(): Int = slot.length
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
@@ -64,9 +70,10 @@ trait Ob extends Base {
   def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = {
     val p: Ob = nthParent(level)
 
-    actorExtensionFiltered(ind, p)
-      .filter(_ => offset < p.numberOfSlots())
+    actorExtension(ind, p)
+      .filter(_ => offset < p.numberOfSlots)
       .map { ob =>
+        //TODO remove side effect here
         ob.slot(offset) = value
         value
       } getOrElse Ob.INVALID
@@ -102,17 +109,17 @@ trait Ob extends Base {
 
   def mailbox: Ob = emptyMbox
 
-  def setMailbox: Ob = self
+  def setMailbox(ob: Ob): Ob = self
 
   def rcons(ob: Ob): Ob =
     copyOb(slot = slot :+ ob)
 
-  def copyOb(parent: Ob = parent, meta: Ob = meta, slot: Seq[Ob] = slot): Ob = {
-    val values = (parent, meta, slot)
+  def copyOb(parent: Ob = parent,
+             meta: Ob = meta,
+             slot: mutable.Seq[Ob] = slot): Ob = {
+    val (p, m, s) = (parent, meta, slot)
     new Ob {
-      override val parent: Ob = values._1
-      override val meta: Ob = values._2
-      override val slot: Seq[Ob] = values._3
+      override val _slot: mutable.Seq[Ob] = m +: p +: s
     }
   }
 
@@ -129,27 +136,25 @@ trait Ob extends Base {
   def subObject(i1: Int, i2: Int): Ob = notImplementedOb()
   def asPathname: String = ""
   def nth(i: Int): Option[Ob] = Some(notImplementedOb())
+  def slotNum() = 0 //TODO missing implementation
 
-  private def actorExtensionFiltered(ind: Int, p: Ob): Option[Ob] =
-    if (p.numberOfSlots() <= SLOT_NUM(Actor, extension)) { //TODO
-      None
-    } else {
-      Some(actorExtension(ind, p))
-    }
-
-  private def actorExtension(ind: Int, p: Ob): Ob =
+  private def actorExtension(ind: Int, p: Ob): Option[Ob] =
     if (ind > 0) {
       p match {
         case a: Actor =>
-          a.extension
+          Some(a.extension)
+        case _ => None
       }
-    } else p
+    } else {
+      Some(p)
+    }
 
   private def offsetOrInvalid(offset: Int, ob: Ob): Ob =
-    if (offset < ob.numberOfSlots())
+    if (offset < ob.numberOfSlots) {
       ob.slot(offset)
-    else
+    } else {
       Ob.INVALID
+    }
 
   private def nthParent(level: Int): Ob = recMap(level, this)(_.parent)
 }
@@ -175,33 +180,23 @@ object Ob {
   case object SyscodeDeadThread extends SysCode
 
   case object ABSENT extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   case object INVALID extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   case object NIV extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   object RBLTRUE extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   object RBLFALSE extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   object Lenses {
@@ -233,10 +228,4 @@ object Ob {
 
   def displayOn[A <: Ob: Show](ob: A, file: File): Unit =
     printOn(ob, file)
-
-  //TODO move to another class
-  private def printToFile(f: File)(op: PrintWriter => Unit) {
-    val p = new PrintWriter(f)
-    try { op(p) } finally { p.close() }
-  }
 }

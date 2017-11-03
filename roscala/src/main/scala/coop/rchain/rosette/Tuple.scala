@@ -1,5 +1,7 @@
 package coop.rchain.rosette
 
+import scala.collection.mutable
+
 /** Tuple
   *
   *  Tuples are used to represent messages that convey information
@@ -11,10 +13,7 @@ sealed trait TupleError
 case object AbsentRest extends TupleError
 case object InvalidRest extends TupleError
 
-case class Tuple(elem: Seq[Ob],
-                 override val parent: Ob,
-                 override val meta: Ob,
-                 override val slot: Seq[Ob])
+case class Tuple(elem: mutable.Seq[Ob], override val _slot: mutable.Seq[Ob])
     extends Ob {
 
   def accepts(msg: Ctxt): Boolean =
@@ -106,7 +105,7 @@ case class Tuple(elem: Seq[Ob],
 
   override def setNth(n: Int, ob: Ob): Option[Tuple] =
     try {
-      Some(Tuple(this.elem.updated(n, ob), this.parent, this.meta, this.slot))
+      Some(Tuple(this.elem.updated(n, ob), this._slot))
     } catch {
       case _: IndexOutOfBoundsException => None
     }
@@ -117,14 +116,14 @@ case class Tuple(elem: Seq[Ob],
 
 object Tuple {
 
-  object NIL extends Tuple(null, null, null, null)
+  object NIL extends Tuple(null, null)
 
-  val PLACEHOLDER = new Tuple(Seq(), null, null, null)
+  val PLACEHOLDER = new Tuple(mutable.Seq(), null)
 
-  def apply(init: Ob) = new Tuple(Seq(init), null, null, null)
+  def apply(init: Ob) = new Tuple(mutable.Seq(init), null)
 
   def apply(t1: Tuple, t2: Tuple): Tuple =
-    new Tuple(t1.elem ++ t2.elem, null, null, null)
+    new Tuple(t1.elem ++ t2.elem, null)
 
   def apply(size: Int,
             master: Tuple,
@@ -139,17 +138,17 @@ object Tuple {
       Seq.empty
     }
 
-    new Tuple(slice ++ filling, null, null, null)
+    new Tuple(slice ++ filling, null)
   }
 
   def apply(a: Int, b: Option[Ob]): Tuple =
-    new Tuple(null, null, null, null)
+    new Tuple(null, null)
 
   def cons(ob: Ob, t: Tuple): Tuple =
-    new Tuple(ob +: t.elem, null, null, null)
+    new Tuple(ob +: t.elem, null)
 
   def rcons(t: Tuple, ob: Ob): Tuple =
-    new Tuple(t.elem :+ ob, null, null, null)
+    new Tuple(t.elem :+ ob, null)
 
   def concat(t1: Tuple, t2: Tuple): Tuple = apply(t1, t2)
 }
