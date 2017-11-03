@@ -37,3 +37,5 @@ libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.2.4"
 // Kind projector
 resolvers += Resolver.sonatypeRepo("releases")
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
+
+mainClass in (Compile, packageBin) := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler")

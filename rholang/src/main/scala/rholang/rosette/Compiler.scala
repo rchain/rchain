@@ -78,7 +78,22 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   }
 
   def main(args: Array[String]): Unit = {
-    val result = compile(args(0))
-    println(serialize(result))
+    args.toList match {
+      case List(fileName) => {
+        compile(fileName) match {
+          case result@Some(_) => {
+            val rbl: String = serialize(result)
+            val rblFileName = fileName.replaceAll(".rho$", "") + ".rbl"
+            new java.io.PrintWriter(rblFileName) { write(rbl); close }
+            System.err.println(s"compiled $fileName to $rblFileName")
+          }
+          case None => System.exit(1)
+        }
+      }
+      case _ => {
+        System.err.println("no input file?")
+        System.exit(1)
+      }
+    }
   }
 }
