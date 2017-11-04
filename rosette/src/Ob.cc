@@ -49,6 +49,9 @@
 
 #include "ModuleInit.h"
 
+#include <cstdlib>
+#include <ctime>
+
 #ifdef MAP_BACK_ADDRESS
 extern Word32 nontrivial_pre_fixnum_to_addr(int);
 extern int nontrivial_addr_to_pre_fixnum(Ob *);
@@ -1460,6 +1463,18 @@ DEF("cwd",sysCwd, 0, 0)
 	return RBLstring::create (buf);
     else
 	return PRIM_ERROR(buf);
+}
+
+// TODO: Swap with something crypotgraphically secure and uniform in length
+DEF("random-number-init", randomNumberInit, 0, 0)
+{
+    srand(time(NULL));
+    return NIV;
+}
+DEF("random-number",randomNumber, 0,0)
+{
+    int random_number = std::rand();
+    return FIXNUM(random_number);
 }
 
 
