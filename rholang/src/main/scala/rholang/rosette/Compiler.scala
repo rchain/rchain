@@ -78,8 +78,8 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   }
 
   def main(args: Array[String]): Unit = {
-    args.toList match {
-      case List(fileName) => {
+    args match {
+      case Array(fileName) => {
         compile(fileName) match {
           case result@Some(_) => {
             val rbl: String = serialize(result)
