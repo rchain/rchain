@@ -16,6 +16,11 @@ The language is still in the early stages of development, but for those who are 
 
 ## Command-line usage
 
+    $ ./rho2rbl examples/token.rho
+    compiled examples/token.rho to examples/token.rbl
+
+which is short for:
+
     $ java -jar target/scala-2.11/rholang-assembly-0.1-SNAPSHOT.jar examples/token.rho 
     compiled examples/token.rho to examples/token.rbl
 
