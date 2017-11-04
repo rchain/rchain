@@ -37,5 +37,3 @@ lazy val commonOptions = Seq(
 scalacOptions ++= commonOptions
 
 logBuffered in Test := false
-
-mainClass in (Compile, run) := Some("coop.rchain.p2p.Main")
