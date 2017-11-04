@@ -47,7 +47,9 @@
 (defPure Tuple (flatten) (fold (self) (proc [e acc k] (k (tuple-concat e acc))) []))
 
 (defOprn twoZip)
-(defPure Tuple (twoZip) (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]))
+(defPure Tuple (twoZip)
+    (map (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]) (proc [i value] (reverse value)))
+)
 
 (defOprn length)
 (defPure Tuple (length) (count (self) (proc [x] #t)))
