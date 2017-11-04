@@ -38,8 +38,8 @@ int  addr_to_pre_fixnum(Ob *);
 #define ADDR_TO_PRE_FIXNUM(x)  nontrivial_addr_to_pre_fixnum(x)
 #define PRE_FIXNUM_TO_ADDR(x) nontrivial_pre_fixnum_to_addr(x)
 #else
-#define ADDR_TO_PRE_FIXNUM(x) ((Word32)(intptr_t)(x))
-#define PRE_FIXNUM_TO_ADDR(x) ((intptr_t)(Ob *)(x))
+#define ADDR_TO_PRE_FIXNUM(x) ((Word32)(int)(x))
+#define PRE_FIXNUM_TO_ADDR(x) ((int)(Ob *)(x))
 #endif
 #endif
 

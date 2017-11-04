@@ -528,7 +528,7 @@ DEF("M-set",addressSetField, 3, 3)
     else if ((span >= 1) && (span <= 4)) {
       Word32* rslt = mem_set_field(addr, offset * 8, span * 8, (Word32)val);
 
-      return ADDR_TO_FIXNUM( (intptr_t)addr );
+      return ADDR_TO_FIXNUM( (int)addr );
     }
     else
       return PRIM_ERROR("invalid span");
@@ -546,17 +546,17 @@ DEF("char*->string",char_star_to_string, 1, 1)
 
 DEF("ob@",ob_address, 1, 1)
 {
-  return ADDR_TO_FIXNUM((intptr_t)BASE(ARG(0)));
+  return ADDR_TO_FIXNUM((int)BASE(ARG(0)));
 }
 
 DEF("slot0",ob_slot_0, 1, 1)
 {
-  return ADDR_TO_FIXNUM((intptr_t)&BASE(ARG(0))->slot(0));
+  return ADDR_TO_FIXNUM((int)&BASE(ARG(0))->slot(0));
 }
 
 DEF("saddr",struct_address, 1, 1)
 {
-  return ADDR_TO_FIXNUM((intptr_t)&((ByteVec*)(BASE(ARG(0))))->byte(0));
+  return ADDR_TO_FIXNUM((int)&((ByteVec*)(BASE(ARG(0))))->byte(0));
 }
 
 DEF("basic-bytevec-new",basicByteVecNew, 2, 2)
@@ -647,7 +647,7 @@ DEF("sbrk",unix_sbrk, 1, 1)
 {
   CHECK_FIXNUM(0, addr);
 
-  int rslt = (intptr_t)sbrk(addr);
+  int rslt = (int)sbrk(addr);
 
   if (rslt < 0)
     return FIXNUM(-errno);
