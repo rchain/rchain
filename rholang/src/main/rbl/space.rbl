@@ -12,6 +12,12 @@
 
 (add 'p (method [x] (seq (prim-print x) (display #\\n))))
 
+
+(random-number-init)
+;;; The debugSymbol is inserted so that the output is easier to read
+(defOprn generateFresh)
+(defProc (generateFresh debugSymbol) (->symbol (string-concat "Rholang-" debugSymbol "-" (->string (random-number)))))
+
 (defOprn append)
 (defPure Tuple (append item) (reverse [item & (reverse (self))]))
 
