@@ -42,4 +42,6 @@
 (load 'async-repl	'silent)
 (load 'dyn-load		'silent)
 (load 'apropos		'silent)
+(load 'space 'silent)
+(load 'primitives 'silent)
 
