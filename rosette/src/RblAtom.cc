@@ -546,7 +546,7 @@ DEF("ch<",charLt, 2, 2)
     if (!IS(OTchar, ARG(0))) return PRIM_MISMATCH(0, "Char");
     if (!IS(OTchar, ARG(1))) return RBLFALSE;
 
-    return RBLBOOL( (intptr_t)ARG(0) < (intptr_t)ARG(1) );
+    return RBLBOOL( (int)ARG(0) < (int)ARG(1) );
 }
 
 
@@ -555,7 +555,7 @@ DEF("ch<=",charLe, 2, 2)
   if (!IS(OTchar, ARG(0))) return PRIM_MISMATCH(0, "Char");
   if (!IS(OTchar, ARG(1))) return RBLFALSE;
 
-  return RBLBOOL( (intptr_t)ARG(0) <= (intptr_t)ARG(1) );
+  return RBLBOOL( (int)ARG(0) <= (int)ARG(1) );
 }
 
 DEF("ch=",charEq, 2, 2)
@@ -563,7 +563,7 @@ DEF("ch=",charEq, 2, 2)
   if (!IS(OTchar, ARG(0))) return PRIM_MISMATCH(0, "Char");
   if (!IS(OTchar, ARG(1))) return RBLFALSE;
 
-  return RBLBOOL( (intptr_t)ARG(0) == (intptr_t)ARG(1) );
+  return RBLBOOL( (int)ARG(0) == (int)ARG(1) );
 }
 
 DEF("ch!=",charNe, 2, 2)
@@ -571,7 +571,7 @@ DEF("ch!=",charNe, 2, 2)
   if (!IS(OTchar, ARG(0))) return PRIM_MISMATCH(0, "Char");
   if (!IS(OTchar, ARG(1))) return RBLFALSE;
 
-  return RBLBOOL( (intptr_t)ARG(0) != (intptr_t)ARG(1) );
+  return RBLBOOL( (int)ARG(0) != (int)ARG(1) );
 }
 
 
@@ -580,7 +580,7 @@ DEF("ch>=",charGe, 2, 2)
   if (!IS(OTchar, ARG(0))) return PRIM_MISMATCH(0, "Char");
   if (!IS(OTchar, ARG(1))) return RBLFALSE;
 
-  return RBLBOOL( (intptr_t)ARG(0) >= (intptr_t)ARG(1) );
+  return RBLBOOL( (int)ARG(0) >= (int)ARG(1) );
 }
 
 
@@ -589,7 +589,7 @@ DEF("ch>",charGt, 2, 2)
   if (!IS(OTchar, ARG(0))) return PRIM_MISMATCH(0, "Char");
   if (!IS(OTchar, ARG(1))) return RBLFALSE;
 
-  return RBLBOOL( (intptr_t)ARG(0) > (intptr_t)ARG(1) );
+  return RBLBOOL( (int)ARG(0) > (int)ARG(1) );
 }
 
 
