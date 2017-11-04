@@ -9,7 +9,10 @@ import coop.rchain.kademlia.PeerTable
 /**
   * Implements the lower levels of the network protocol.
   */
-case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends ProtocolHandler {
+case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint, next: Option[ProtocolDispatcher] = None) extends ProtocolHandler with ProtocolDispatcher {
+
+  def this(peer: PeerNode, next: Option[ProtocolDispatcher]) =
+    this(peer.id, peer.endpoint, next)
 
   case class PendingKey(remote: Seq[Byte], timestamp: Long, seq: Long)
 
@@ -42,17 +45,21 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       }
   }
 
-  private def dispatch(msg: ProtocolMessage): Unit =
+  def dispatch(msg: ProtocolMessage): Unit = {
     for {
       sender <- msg.sender
     } {
-      table.observe(new ProtocolNode(sender, this))
+      table.observe(new ProtocolNode(sender, this), false)
       msg match {
         case ping @ PingMessage(_, _)     => handlePing(sender, ping)
         case lookup @ LookupMessage(_, _) => handleLookup(sender, lookup)
         case resp: ProtocolResponse => handleResponse(sender, resp)
+        case _ => next.foreach(_.dispatch(msg))
       }
     }
+  }
+
+  def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
 
   /**
     *
@@ -69,22 +76,16 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       }
     }
 
-  private def handleHandshake(sender: PeerNode, handshake: HandshakeMessage): Unit =
-    for {
-      resp <- handshake.response(local)
-    } {
-      comm.send(resp.toByteSeq, sender)
-    }
-
   /**
     * Validate incoming PING and send responding PONG.
     */
-  private def handlePing(sender: PeerNode, ping: PingMessage): Unit =
+  private def handlePing(sender: PeerNode, ping: PingMessage): Unit = {
     for {
       pong <- ping.response(local)
     } {
       comm.send(pong.toByteSeq, sender)
     }
+  }
 
   /**
     * Validate incoming LOOKUP message and return an answering

@@ -8,6 +8,15 @@ import scala.concurrent.duration.{Duration, MILLISECONDS}
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
 
+trait ProtocolDispatcher {
+  /**
+    * Handle an incoming message. This function is intended to thread
+    * levels of protocol together, such that inner protocols can
+    * bubble unhandled messages up to outer levels.
+    */
+  def dispatch(msg: ProtocolMessage): Unit
+}
+
 /**
   * Implements broadcasting and round-trip (request-response) messaging
   * for higher level protocols.
@@ -87,9 +96,7 @@ trait ProtocolMessage {
                Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   def toByteSeq: Seq[Byte] = {
-    val buf = new java.io.ByteArrayOutputStream
-    proto.writeTo(buf)
-    buf.toByteArray
+    proto.toByteArray
   }
 }
 
@@ -142,15 +149,8 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
   */
 case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
-case class HandshakeMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield
-        HandshakeResponseMessage(ProtocolMessage.handshakeResponse(src, h),
-                                 System.currentTimeMillis)
-}
-case class HandshakeResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
+case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**
   * Utility functions for working with protocol buffers.
@@ -206,16 +206,16 @@ object ProtocolMessage {
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
 
-  def handshake(src: ProtocolNode): Protocol =
+  def otherMessage[T](src: ProtocolNode, other: com.google.protobuf.any.Any): Protocol =
     Protocol()
       .withHeader(header(src))
-      .withHandshake(Handshake())
+      .withOther(other)
 
-  def handshakeResponse(src: ProtocolNode, h: Header): Protocol =
+  def otherResponse(src: ProtocolNode, h: Header, other: com.google.protobuf.any.Any): Protocol =
     Protocol()
       .withHeader(header(src))
       .withReturnHeader(returnHeader(h))
-      .withHandshakeResponse(HandshakeResponse())
+      .withOther(other)
 
   def parse(bytes: Seq[Byte]): Option[ProtocolMessage] =
     Protocol.parseFrom(bytes.toArray) match {
@@ -226,6 +226,12 @@ object ProtocolMessage {
           case Protocol.Message.Lookup(_) => Some(LookupMessage(msg, System.currentTimeMillis))
           case Protocol.Message.LookupResponse(_) =>
             Some(LookupResponseMessage(msg, System.currentTimeMillis))
+          case Protocol.Message.Other(_) =>
+            msg.returnHeader match {
+              case Some(_) => Some(UpstreamResponse(msg, System.currentTimeMillis))
+              case None    => Some(UpstreamMessage(msg, System.currentTimeMillis))
+            }
+
           case _ => None
         }
     }

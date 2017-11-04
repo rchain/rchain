@@ -1,7 +1,8 @@
 syntax = "proto3";
-package coop.rchain.routing;
+package coop.rchain.comm.protocol.routing;
 
 import "scalapb/scalapb.proto";
+import "google/protobuf/any.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.comm.protocol.routing"
@@ -46,24 +47,17 @@ message LookupResponse {
     repeated Node nodes = 1;
 }
 
-message Handshake {
-}
-
-message HandshakeResponse {
-}
-
 message Protocol {
     Header header                      = 1;
     ReturnHeader return_header         = 2;
 
     oneof message {
-        Hello             hello              = 3;
-        Disconnect        disconnect         = 4;
-        Ping              ping               = 5;
-        Pong              pong               = 6;
-        Lookup            lookup             = 7;
-        LookupResponse    lookup_response    = 8;
-        Handshake         handshake          = 9;
-        HandshakeResponse handshake_response = 10;
+        Hello               hello           = 3;
+        Disconnect          disconnect      = 4;
+        Ping                ping            = 5;
+        Pong                pong            = 6;
+        Lookup              lookup          = 7;
+        LookupResponse      lookup_response = 8;
+        google.protobuf.Any other           = 9;
     }
 }
