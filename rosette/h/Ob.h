@@ -160,17 +160,17 @@ enum ObTag  { OTptr	= 0,
  * strings for symbols) and the heap allocation routines obey this rule.
  */
 
-#define MAKETAGGED(t, p)	((pOb)((uintptr_t)(p) | (uintptr_t)(t)))
-#define MAKEESCTAGGED(t, p)	((pOb)(((uintptr_t)(p) << EscTagSize) | (uintptr_t)(t)))
+#define MAKETAGGED(t, p)	((pOb)((unsigned)(p) | (unsigned)(t)))
+#define MAKEESCTAGGED(t, p)	((pOb)(((unsigned)(p) << EscTagSize) | (unsigned)(t)))
 
 #define SYMBOL(p)	MAKETAGGED(OTsym, intern(p))
-#define FIXNUM(v)	((pOb)(((uintptr_t)(v) << TagSize) | (uintptr_t)OTfixnum))
+#define FIXNUM(v)	((pOb)(((unsigned)(v) << TagSize) | (unsigned)OTfixnum))
 
 #ifdef TWOS_COMPLEMENT
 
 // This sum macro probably only works on two's complement machines.
 
-#define FIXNUM_SUM(n, i)	((pOb)((intptr_t)n + (i<<TagSize)))
+#define FIXNUM_SUM(n, i)	((pOb)((int)n + (i<<TagSize)))
 #else
 #define FIXNUM_SUM(n, i)	FIXNUM(FIXVAL(n) + (i))
 #endif
@@ -390,7 +390,7 @@ ESCVAL (pOb x)
 
 #define PTR(ob)		((pOb)(ob))
 #define NPTR(ob)	((pOb)(ob))
-#define SYMPTR(ob)	((char*)((uintptr_t)PTR(ob) - OTsym))
+#define SYMPTR(ob)	((char*)((unsigned)PTR(ob) - OTsym))
 
 #define BOOLVAL(ob)	ESCVAL(ob)
 #define CHARVAL(ob)	ESCVAL(ob)
