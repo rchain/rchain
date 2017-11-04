@@ -93,7 +93,7 @@ class DistanceSpec extends FlatSpec with Matchers {
     val toAdd = oneOffs(kr).head
     val dist = table.distance(toAdd).get
     for (i <- 1 to 10) {
-      table.observe(PeerNode(toAdd))
+      table.observe(PeerNode(toAdd), true)
       table.table(dist).size should be (1)
     }
   }
@@ -101,7 +101,7 @@ class DistanceSpec extends FlatSpec with Matchers {
   "A table with peers at all distances" should "have no empty buckets" in {
     val table = PeerTable(PeerNode(kr))
     for (k <- oneOffs(kr.toArray)) {
-      table.observe(PeerNode(k))
+      table.observe(PeerNode(k), true)
     }
     assert(table.table.forall(_.size > 0))
   }
@@ -109,7 +109,7 @@ class DistanceSpec extends FlatSpec with Matchers {
   it should "return k peers on lookup" in {
     val table = PeerTable(PeerNode(kr))
     for (k <- oneOffs(kr.toArray)) {
-      table.observe(PeerNode(k))
+      table.observe(PeerNode(k), true)
     }
     table.lookup(b.rand(width)).size should be (table.k)
   }
@@ -117,7 +117,7 @@ class DistanceSpec extends FlatSpec with Matchers {
   it should "not return sought peer on lookup" in {
     val table = PeerTable(PeerNode(kr))
     for (k <- oneOffs(kr.toArray)) {
-      table.observe(PeerNode(k))
+      table.observe(PeerNode(k), true)
     }
     val target = table.table(table.width * 4)(0)
     val resp = table.lookup(target.key)
@@ -127,7 +127,7 @@ class DistanceSpec extends FlatSpec with Matchers {
   it should "return 8n peers when sequenced" in {
     val table = PeerTable(PeerNode(kr))
     for (k <- oneOffs(kr.toArray)) {
-      table.observe(PeerNode(k))
+      table.observe(PeerNode(k), true)
     }
     table.peers.size should be (8 * width)
   }
@@ -135,7 +135,7 @@ class DistanceSpec extends FlatSpec with Matchers {
   it should "find each added peer" in {
     val table = PeerTable(PeerNode(kr))
     for (k <- oneOffs(kr.toArray)) {
-      table.observe(PeerNode(k))
+      table.observe(PeerNode(k), true)
     }
     for (k <- oneOffs(kr.toArray)) {
       table.find(k) should be (Some(PeerNode(k)))
