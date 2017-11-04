@@ -536,7 +536,7 @@
                         (tbl-add subspace unification_ptrn [[product] []])
                         (let [[[data_struct continuation_struct] (tbl-get subspace unification_ptrn)]]
                             (tbl-add subspace unification_ptrn [(append data_struct product) continuation_struct])))
-                    (ctxt-rtn ctxt product)
+                    (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                     (update!)))
 
             ;;; If product was consumed, fill consume
@@ -558,7 +558,7 @@
                         (let [[updated_continuations_struct (delete-i continuations_struct n)]]
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
                         )
-                        (ctxt-rtn ctxt product)
+                        (ctxt-rtn ctxt [])  ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                         (if consume_persistent
                             (seq
                                 (p "About to re-post continuation")
@@ -572,7 +572,7 @@
                         (seq
                             (p "DEBUG: A consume was partially filled.")
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
-                            (ctxt-rtn ctxt product)
+                            (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                             (update!)
                         )
                     )
