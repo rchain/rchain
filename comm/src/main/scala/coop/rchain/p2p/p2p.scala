@@ -41,19 +41,18 @@ case object NetworkAddress {
 
 case class Network(homeAddress: String) extends ProtocolDispatcher {
   val local = NetworkAddress.parse(homeAddress) match {
-    case Right(node) => node
+    case Right(node)           => node
     case Left(ParseError(msg)) => throw new Exception(msg)
   }
 
   val net = new UnicastNetwork(local, Some(this))
 
-  def dial(remoteAddress: String): Unit = {
+  def dial(remoteAddress: String): Unit =
     for {
       peer <- NetworkAddress.parse(remoteAddress)
     } {
       println(peer)
     }
-  }
 
   private def handleHandshake(sender: PeerNode, handshake: HandshakeMessage): Unit =
     for {
@@ -71,12 +70,12 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
       msg match {
         case upstream @ UpstreamMessage(proto, _) =>
           for {
-            other <- proto.message.other
+            upstream <- proto.message.upstream
           } {
-            other.unpack(Protocol).message match {
+            upstream.unpack(Protocol).message match {
               case Protocol.Message.Handshake(hs) =>
                 handleHandshake(sender, HandshakeMessage(proto, System.currentTimeMillis))
-              case _ => println(s"Unrecognized msg ${other}")
+              case _ => println(s"Unrecognized msg ${upstream}")
             }
           }
         case _ => println(s"Unrecognized message $msg")
@@ -88,20 +87,20 @@ object NetworkProtocol {
   def handshake(src: ProtocolNode): routing.Protocol = {
     val hs = Protocol().withHandshake(Handshake())
     val packed = com.google.protobuf.any.Any.pack(hs)
-    ProtocolMessage.otherMessage(src, packed)
+    ProtocolMessage.upstreamMessage(src, packed)
   }
 
   def handshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
-    ProtocolMessage.otherResponse(src, h, com.google.protobuf.any.Any.pack(HandshakeResponse()))
+    ProtocolMessage.upstreamResponse(src, h, com.google.protobuf.any.Any.pack(HandshakeResponse()))
 }
-
 
 case class HandshakeMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
       h <- header
     } yield
-        HandshakeResponseMessage(NetworkProtocol.handshakeResponse(src, h),
-                                 System.currentTimeMillis)
+      HandshakeResponseMessage(NetworkProtocol.handshakeResponse(src, h),
+                               System.currentTimeMillis)
 }
-case class HandshakeResponseMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolResponse
+case class HandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
+    extends ProtocolResponse

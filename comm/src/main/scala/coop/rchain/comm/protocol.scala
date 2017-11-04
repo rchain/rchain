@@ -9,6 +9,7 @@ import scala.concurrent.duration.{Duration, MILLISECONDS}
 // generation. For reproducibility, this should be a passed-in value.
 
 trait ProtocolDispatcher {
+
   /**
     * Handle an incoming message. This function is intended to thread
     * levels of protocol together, such that inner protocols can
@@ -33,9 +34,10 @@ trait ProtocolHandler {
     * Send a message to a single, remote node, and wait up to the
     * specified duration for a response.
     */
-  def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
-                timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
+  def roundTrip(
+      msg: ProtocolMessage,
+      remote: ProtocolNode,
+      timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
 
   /**
     * Asynchronously broadcast a message to all known peers.
@@ -69,10 +71,11 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
             Success(Duration(resp.timestamp - incoming.timestamp, MILLISECONDS))
           case _ => Failure(new Exception("ping failed"))
         }
-      case Left(ex) => ex match {
-        case ProtocolException(exc) => Failure(exc)
-        case exc => Failure(new Exception(exc.toString))
-      }
+      case Left(ex) =>
+        ex match {
+          case ProtocolException(exc) => Failure(exc)
+          case exc                    => Failure(new Exception(exc.toString))
+        }
     }
   }
 }
@@ -95,9 +98,8 @@ trait ProtocolMessage {
       PeerNode(NodeIdentifier(s.id.toByteArray),
                Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
-  def toByteSeq: Seq[Byte] = {
+  def toByteSeq: Seq[Byte] =
     proto.toByteArray
-  }
 }
 
 /**
@@ -115,8 +117,7 @@ case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
       h <- header
-    } yield
-        PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
+    } yield PongMessage(ProtocolMessage.pong(src, h), System.currentTimeMillis)
 }
 
 /**
@@ -138,8 +139,8 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
     for {
       h <- header
     } yield
-        LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
-                              System.currentTimeMillis)
+      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
+                            System.currentTimeMillis)
 
 }
 
@@ -206,16 +207,16 @@ object ProtocolMessage {
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
 
-  def otherMessage[T](src: ProtocolNode, other: com.google.protobuf.any.Any): Protocol =
+  def upstreamMessage(src: ProtocolNode, upstream: com.google.protobuf.any.Any): Protocol =
     Protocol()
       .withHeader(header(src))
-      .withOther(other)
+      .withUpstream(upstream)
 
-  def otherResponse(src: ProtocolNode, h: Header, other: com.google.protobuf.any.Any): Protocol =
+  def upstreamResponse(src: ProtocolNode, h: Header, upstream: com.google.protobuf.any.Any): Protocol =
     Protocol()
       .withHeader(header(src))
       .withReturnHeader(returnHeader(h))
-      .withOther(other)
+      .withUpstream(upstream)
 
   def parse(bytes: Seq[Byte]): Option[ProtocolMessage] =
     Protocol.parseFrom(bytes.toArray) match {
@@ -226,7 +227,7 @@ object ProtocolMessage {
           case Protocol.Message.Lookup(_) => Some(LookupMessage(msg, System.currentTimeMillis))
           case Protocol.Message.LookupResponse(_) =>
             Some(LookupResponseMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Other(_) =>
+          case Protocol.Message.Upstream(_) =>
             msg.returnHeader match {
               case Some(_) => Some(UpstreamResponse(msg, System.currentTimeMillis))
               case None    => Some(UpstreamMessage(msg, System.currentTimeMillis))

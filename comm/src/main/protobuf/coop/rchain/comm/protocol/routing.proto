@@ -58,6 +58,6 @@ message Protocol {
         Pong                pong            = 6;
         Lookup              lookup          = 7;
         LookupResponse      lookup_response = 8;
-        google.protobuf.Any other           = 9;
+        google.protobuf.Any upstream        = 9;
     }
 }
