@@ -54,7 +54,9 @@ case class UnicastNetwork(id: NodeIdentifier,
     for {
       sender <- msg.sender
     } {
-      table.observe(new ProtocolNode(sender, this), false)
+      // Update sender's last-seen time, adding it if there are no
+      // higher-level protocols.
+      table.observe(new ProtocolNode(sender, this), next == None)
       msg match {
         case ping @ PingMessage(_, _)     => handlePing(sender, ping)
         case lookup @ LookupMessage(_, _) => handleLookup(sender, lookup)

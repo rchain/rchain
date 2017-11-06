@@ -9,6 +9,7 @@ option (scalapb.options) = {
 };
 
 message Handshake {
+    // Temporary field included to test serialization.
     uint64 number = 1;
 }
 

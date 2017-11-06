@@ -51,6 +51,7 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
     for {
       peer <- NetworkAddress.parse(remoteAddress)
     } {
+      // TODO: Initiate Handshake with peer.
       println(peer)
     }
 
