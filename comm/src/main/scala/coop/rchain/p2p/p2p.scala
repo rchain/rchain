@@ -4,6 +4,7 @@ import coop.rchain.comm._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
+import scala.util.control.NonFatal
 
 sealed trait NetworkError
 case class ParseError(msg: String) extends NetworkError
@@ -21,20 +22,24 @@ case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
 
 case object NetworkAddress {
   def parse(str: String): Either[ParseError, PeerNode] = {
-    val uri = Uri.parse(str)
+    try {
+      val uri = Uri.parse(str)
 
-    val addy =
-      for {
-        scheme <- uri.scheme
-        key <- uri.user
-        host <- uri.host
-        port <- uri.port
-      } yield NetworkAddress(scheme, key, host, port)
+      val addy =
+        for {
+          scheme <- uri.scheme
+          key <- uri.user
+          host <- uri.host
+          port <- uri.port
+        } yield NetworkAddress(scheme, key, host, port)
 
-    addy match {
-      case Some(NetworkAddress("rnode", key, host, port)) =>
-        Right(PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
-      case _ => Left(ParseError(s"bad address: $str"))
+      addy match {
+        case Some(NetworkAddress("rnode", key, host, port)) =>
+          Right(PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
+        case _ => Left(ParseError(s"bad address: $str"))
+      }
+    } catch {
+      case NonFatal(e) => Left(ParseError(s"bad address: $str"))
     }
   }
 }
