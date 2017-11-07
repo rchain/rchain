@@ -12,6 +12,12 @@
 
 (add 'p (method [x] (seq (prim-print x) (display #\\n))))
 
+
+(random-number-init)
+;;; The debugSymbol is inserted so that the output is easier to read
+(defOprn generateFresh)
+(defProc (generateFresh debugSymbol) (->symbol (string-concat "Rholang-" debugSymbol "-" (->string (random-number)))))
+
 (defOprn append)
 (defPure Tuple (append item) (reverse [item & (reverse (self))]))
 
@@ -47,7 +53,9 @@
 (defPure Tuple (flatten) (fold (self) (proc [e acc k] (k (tuple-concat e acc))) []))
 
 (defOprn twoZip)
-(defPure Tuple (twoZip) (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]))
+(defPure Tuple (twoZip)
+    (map (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]) (proc [i value] (reverse value)))
+)
 
 (defOprn length)
 (defPure Tuple (length) (count (self) (proc [x] #t)))
@@ -536,7 +544,7 @@
                         (tbl-add subspace unification_ptrn [[product] []])
                         (let [[[data_struct continuation_struct] (tbl-get subspace unification_ptrn)]]
                             (tbl-add subspace unification_ptrn [(append data_struct product) continuation_struct])))
-                    (ctxt-rtn ctxt product)
+                    (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                     (update!)))
 
             ;;; If product was consumed, fill consume
@@ -558,7 +566,7 @@
                         (let [[updated_continuations_struct (delete-i continuations_struct n)]]
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
                         )
-                        (ctxt-rtn ctxt product)
+                        (ctxt-rtn ctxt [])  ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                         (if consume_persistent
                             (seq
                                 (p "About to re-post continuation")
@@ -572,7 +580,7 @@
                         (seq
                             (p "DEBUG: A consume was partially filled.")
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
-                            (ctxt-rtn ctxt product)
+                            (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                             (update!)
                         )
                     )
