@@ -1,20 +1,20 @@
 package coop.rchain.rosette
 
+import scala.collection.mutable
+
 case class Ctxt(argvec: Tuple,
                 code: Code,
                 ctxt: Ctxt,
                 env: Ob,
-                override val meta: Ob,
                 monitor: Monitor,
                 nargs: Int,
                 outstanding: Int,
-                override val parent: Ob,
                 pc: PC,
                 reg: Seq[Ob],
                 rslt: Ob,
                 trgt: Ob,
                 selfEnv: Ob,
-                override val slot: Seq[Ob],
+                override val _slot: mutable.Seq[Ob],
                 tag: Location)
     extends Ob {
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
@@ -51,10 +51,8 @@ object Ctxt {
                    null,
                    null,
                    null,
-                   null,
                    0,
                    0,
-                   null,
                    null,
                    null,
                    null,
@@ -69,10 +67,8 @@ object Ctxt {
                    null,
                    null,
                    null,
-                   null,
                    0,
                    0,
-                   null,
                    null,
                    null,
                    null,

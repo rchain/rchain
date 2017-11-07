@@ -1,8 +1,13 @@
 package coop.rchain.rosette
 
+import java.io.File
+
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
-import shapeless._
+import coop.rchain.rosette.utils.{pSlice, printToFile}
 import shapeless.OpticDefns.RootLens
+import shapeless._
+
+import scala.collection.mutable
 
 sealed trait LookupError
 case object Absent extends LookupError
@@ -10,47 +15,148 @@ case object Upcall extends LookupError
 
 trait Base
 
+//TODO change type of `indirect` argument to bool
 trait Ob extends Base {
-  val meta: Ob
-  val parent: Ob
-  val slot: Seq[Ob]
+  val _slot: mutable.Seq[Ob]
+
   val obTag: ObTag = null
   val sysval: SysCode = null
+  val constantP = true
+
+  def meta: Ob = _slot.head
+  def parent: Ob = _slot(1)
+  lazy val slot: mutable.Seq[Ob] = pSlice(_slot, 2, _slot.size)
 
   def dispatch(ctxt: Ctxt): Ob = null
   def extendWith(keymeta: Ob): Ob = null
   def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
-  def getAddr(ind: Int, level: Int, offset: Int): Ob = null
+
+  def getAddr(ind: Int, level: Int, offset: Int): Ob =
+    getLex(ind, level, offset)
+
   def getField(ind: Int,
                level: Int,
                offset: Int,
                spanSize: Int,
                sign: Int): Ob =
-    null
-  def getLex(ind: Int, level: Int, offset: Int): Ob = null
+    ??? //TODO
+
+  def getLex(ind: Int, level: Int, offset: Int): Ob = {
+    val p: Ob = nthParent(level)
+
+    actorExtension(ind, p)
+      .map(offsetOrInvalid(offset, _))
+      .getOrElse(Ob.INVALID)
+  }
+
   def is(value: Ob.ObTag): Boolean = true
   def lookupOBO(meta: Ob, ob: Ob, key: Ob): Either[LookupError, Ob] =
     Right(null)
   def matches(ctxt: Ctxt): Boolean = false
-  def numberOfSlots(): Int = Math.max(0, slot.length - 2)
+  def numberOfSlots(): Int = slot.length
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
-  def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob = null
+
+  def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob =
+    setLex(ind, level, offset, value)
+
   def setField(ind: Int,
                level: Int,
                offset: Int,
                spanSize: Int,
-               value: Int): Ob = null
-  def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = null
+               value: Int): Ob =
+    ??? //TODO
+
+  def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = {
+    val p: Ob = nthParent(level)
+
+    actorExtension(ind, p)
+      .filter(_ => offset < p.numberOfSlots)
+      .map { ob =>
+        //TODO remove side effect here
+        ob.slot(offset) = value
+        value
+      } getOrElse Ob.INVALID
+  }
 
   def notImplemented(opName: String): Unit = {
     val className = this.getClass.getSimpleName
     System.err.println(s"$className#$opName is not implemented!")
   }
 
+  def notImplemented(): Unit = {
+    val callingMethodName =
+      Thread.currentThread.getStackTrace()(2).getMethodName
+    notImplemented(callingMethodName)
+  }
+
+  def notImplementedOb(): Ob = {
+    val callingMethodName =
+      Thread.currentThread.getStackTrace()(2).getMethodName
+    notImplemented(callingMethodName)
+    Ob.INVALID
+  }
+
   def forwardingAddress: Ob = meta
 
   def self: Ob = this
+
+  def inlineablePrimP: Prim = Prim.INVALID
+
+  def emptyMbox: Ob = Ob.INVALID
+
+  def container: Ob = this
+
+  def mailbox: Ob = emptyMbox
+
+  def setMailbox(ob: Ob): Ob = self
+
+  def rcons(ob: Ob): Ob =
+    copyOb(slot = slot :+ ob)
+
+  def copyOb(parent: Ob = parent,
+             meta: Ob = meta,
+             slot: mutable.Seq[Ob] = slot): Ob = {
+    val (p, m, s) = (parent, meta, slot)
+    new Ob {
+      override val _slot: mutable.Seq[Ob] = m +: p +: s
+    }
+  }
+
+  def addSlot(l: Ob, r: Ob): Int = {
+    notImplemented()
+    0
+  }
+
+  def dup: Ob = this
+
+  def indexedSize: Ob = notImplementedOb()
+
+  def setNth(i: Int, v: Ob): Option[Ob] = Some(notImplementedOb())
+  def subObject(i1: Int, i2: Int): Ob = notImplementedOb()
+  def asPathname: String = ""
+  def nth(i: Int): Option[Ob] = Some(notImplementedOb())
+  def slotNum() = 0 //TODO missing implementation
+
+  private def actorExtension(ind: Int, p: Ob): Option[Ob] =
+    if (ind > 0) {
+      p match {
+        case a: Actor =>
+          Some(a.extension)
+        case _ => None
+      }
+    } else {
+      Some(p)
+    }
+
+  private def offsetOrInvalid(offset: Int, ob: Ob): Ob =
+    if (offset < ob.numberOfSlots) {
+      ob.slot(offset)
+    } else {
+      Ob.INVALID
+    }
+
+  private def nthParent(level: Int): Ob = recMap(level, this)(_.parent)
 }
 
 object Ob {
@@ -74,33 +180,23 @@ object Ob {
   case object SyscodeDeadThread extends SysCode
 
   case object ABSENT extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   case object INVALID extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   case object NIV extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   object RBLTRUE extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   object RBLFALSE extends Ob {
-    override val parent = null
-    override val meta = null
-    override val slot = null
+    override val _slot: mutable.Seq[Ob] = null
   }
 
   object Lenses {
@@ -120,4 +216,16 @@ object Ob {
       def updateSelf[T](value: A => A): A = value(base)
     }
   }
+
+  //TODO use logging framework
+  def printOn[A <: Ob: Show](ob: A, file: File): Unit = {
+    val str = Show[A].show(ob)
+    printToFile(file)(_.print(str))
+  }
+
+  def printQuotedOn[A <: Ob: Show](ob: A, file: File): Unit =
+    printOn(ob, file)
+
+  def displayOn[A <: Ob: Show](ob: A, file: File): Unit =
+    printOn(ob, file)
 }
