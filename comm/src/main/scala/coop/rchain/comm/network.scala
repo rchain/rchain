@@ -9,7 +9,14 @@ import coop.rchain.kademlia.PeerTable
 /**
   * Implements the lower levels of the network protocol.
   */
-case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends ProtocolHandler {
+case class UnicastNetwork(id: NodeIdentifier,
+                          endpoint: Endpoint,
+                          next: Option[ProtocolDispatcher] = None)
+    extends ProtocolHandler
+    with ProtocolDispatcher {
+
+  def this(peer: PeerNode, next: Option[ProtocolDispatcher]) =
+    this(peer.id, peer.endpoint, next)
 
   case class PendingKey(remote: Seq[Byte], timestamp: Long, seq: Long)
 
@@ -28,31 +35,37 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
             for {
               msg <- ProtocolMessage.parse(res)
             } dispatch(msg)
-          case Left(err: CommError) => err match {
-            case DatagramException(ex: SocketTimeoutException) => ()
-            // These next ones may ding a node's reputation; just
-            // printing for now.
-            case err @ DatagramSizeError(sz) => println(s"bad size $sz")
-            case err @ DatagramFramingError(ex) => ex.printStackTrace
-            case err @ DatagramException(ex) => ex.printStackTrace
+          case Left(err: CommError) =>
+            err match {
+              case DatagramException(ex: SocketTimeoutException) => ()
+              // These next ones may ding a node's reputation; just
+              // printing for now.
+              case err @ DatagramSizeError(sz)    => println(s"bad size $sz")
+              case err @ DatagramFramingError(ex) => ex.printStackTrace
+              case err @ DatagramException(ex)    => ex.printStackTrace
 
-            case _ => ()
-          }
+              case _ => ()
+            }
         }
       }
   }
 
-  private def dispatch(msg: ProtocolMessage): Unit =
+  def dispatch(msg: ProtocolMessage): Unit =
     for {
       sender <- msg.sender
     } {
-      table.observe(new ProtocolNode(sender, this))
+      // Update sender's last-seen time, adding it if there are no
+      // higher-level protocols.
+      table.observe(new ProtocolNode(sender, this), next == None)
       msg match {
         case ping @ PingMessage(_, _)     => handlePing(sender, ping)
         case lookup @ LookupMessage(_, _) => handleLookup(sender, lookup)
-        case resp: ProtocolResponse => handleResponse(sender, resp)
+        case resp: ProtocolResponse       => handleResponse(sender, resp)
+        case _                            => next.foreach(_.dispatch(msg))
       }
     }
+
+  def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
 
   /**
     *
@@ -67,13 +80,6 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
       } catch {
         case ex: java.lang.IllegalStateException => () // Future already completed
       }
-    }
-
-  private def handleHandshake(sender: PeerNode, handshake: HandshakeMessage): Unit =
-    for {
-      resp <- handshake.response(local)
-    } {
-      comm.send(resp.toByteSeq, sender)
     }
 
   /**
@@ -116,9 +122,10 @@ case class UnicastNetwork(id: NodeIdentifier, endpoint: Endpoint) extends Protoc
     *
     * This method should be called in its own thread.
     */
-  override def roundTrip(msg: ProtocolMessage,
-                         remote: ProtocolNode,
-                         timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage] =
+  override def roundTrip(
+      msg: ProtocolMessage,
+      remote: ProtocolNode,
+      timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage] =
     msg.header match {
       case Some(header) => {
         val bytes = msg.toByteSeq

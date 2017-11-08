@@ -9,7 +9,10 @@ libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.truea
 
 libraryDependencies ++= Seq(
   "org.scalactic" %% "scalactic" % "3.0.1",
-  "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+  "org.scalatest" %% "scalatest" % "3.0.1" % "test",
+
+  // URI Parsing
+  "io.lemonlabs" %% "scala-uri" % "0.5.0"
 )
 
 addCompilerPlugin(

@@ -9,5 +9,3 @@ case class DatagramException(ex: Exception) extends CommError
 
 case class ProtocolException(ex: Exception) extends CommError
 case class UnknownProtocolError(msg: String) extends CommError
-
-

@@ -1,0 +1,24 @@
+syntax = "proto3";
+package coop.rchain.comm.protocol.rchain;
+
+import "scalapb/scalapb.proto";
+
+option (scalapb.options) = {
+  package_name: "coop.rchain.comm.protocol.rchain"
+  flat_package: true
+};
+
+message Handshake {
+    // Temporary field included to test serialization.
+    uint64 number = 1;
+}
+
+message HandshakeResponse {
+}
+
+message Protocol {
+    oneof message {
+        Handshake         handshake          = 9;
+        HandshakeResponse handshake_response = 10;
+    }
+}

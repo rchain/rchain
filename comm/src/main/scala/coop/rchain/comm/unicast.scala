@@ -58,7 +58,7 @@ case class UnicastComm(local: PeerNode) extends Comm {
     } else {
       (((data(0) << 8) & 0xff00) | (data(1) & 0xff)) match {
         case sz if (sz < 0 || 65506 < sz) => Left(DatagramSizeError(sz))
-        case sz => Right(data.slice(2, sz + 2))
+        case sz                           => Right(data.slice(2, sz + 2))
       }
     }
 

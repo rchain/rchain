@@ -127,20 +127,19 @@ case class PeerTable[A <: Peer](home: A,
       }
     })
 
-  /** Considers adding `peer` to the routing table.
+  /** Update the last-seen time of `peer`, possibly adding it to the
+    * routing table.
     *
-    * If the routing table is not full at the distance `peer` is from
-    * it, add `peer` as the most recenly seen peer at that
-    * distance. If the table is full at that distance, ping the least
-    * recently seen peer there. If that older peer responds, discard
-    * `peer` and use the older peer as the most recently
-    * seen. Otherwise, remove the older peer and use `peer` as the
-    * most recently seen.
+    * If `add` is true, and `peer` is not in the table, it is
+    * added. If the table was already full at that distance, test the
+    * least recently seen peer at that distance. If that peer
+    * responds, discard `peer`; otherwise, discard the older entry and
+    * insert `peer`.
     *
-    * No matter what, this causes a mutation of the peer list at
-    * `peer`'s distance.
+    * If `peer` is already in the table, it becomes the most recently
+    * seen entry at its distance.
     */
-  def observe(peer: A): Unit =
+  def observe(peer: A, add: Boolean): Unit =
     distance(home.key, peer.key) match {
       case Some(index) =>
         if (index < 8 * width) {
@@ -151,7 +150,7 @@ case class PeerTable[A <: Peer](home: A,
                 ps -= entry
                 ps += entry
               }
-              case None =>
+              case None if add =>
                 if (ps.size < k) {
                   ps += new Entry(peer)
                 } else {
@@ -166,6 +165,7 @@ case class PeerTable[A <: Peer](home: A,
                     }
                   }
                 }
+              case None => ()
             }
             ()
           }
