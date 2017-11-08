@@ -4,6 +4,7 @@ import coop.rchain.kademlia
 import coop.rchain.comm.protocol.routing._
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
+import com.google.protobuf.any.{Any => AnyProto}
 
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
@@ -207,12 +208,12 @@ object ProtocolMessage {
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
 
-  def upstreamMessage(src: ProtocolNode, upstream: com.google.protobuf.any.Any): Protocol =
+  def upstreamMessage(src: ProtocolNode, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))
       .withUpstream(upstream)
 
-  def upstreamResponse(src: ProtocolNode, h: Header, upstream: com.google.protobuf.any.Any): Protocol =
+  def upstreamResponse(src: ProtocolNode, h: Header, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))
       .withReturnHeader(returnHeader(h))

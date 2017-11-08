@@ -27,12 +27,6 @@ message ReturnHeader {
     uint64 seq            = 2;
 }
 
-message Disconnect {
-}
-
-message Hello {
-}
-
 message Ping {
 }
 
@@ -48,16 +42,15 @@ message LookupResponse {
 }
 
 message Protocol {
-    Header header                      = 1;
-    ReturnHeader return_header         = 2;
+    Header header                           = 1;
+    ReturnHeader return_header              = 2;
 
     oneof message {
-        Hello               hello           = 3;
-        Disconnect          disconnect      = 4;
-        Ping                ping            = 5;
-        Pong                pong            = 6;
-        Lookup              lookup          = 7;
-        LookupResponse      lookup_response = 8;
-        google.protobuf.Any upstream        = 9;
+        Ping                ping            = 3;
+        Pong                pong            = 4;
+        Lookup              lookup          = 5;
+        LookupResponse      lookup_response = 6;
+
+        google.protobuf.Any upstream        = 15;
     }
 }
