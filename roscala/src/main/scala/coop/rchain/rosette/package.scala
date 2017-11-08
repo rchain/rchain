@@ -1,7 +1,6 @@
 package coop.rchain
 
 import coop.rchain.rosette.parser.bytecode.ParseError
-
 import reflect.runtime.universe._
 import reflect.runtime.currentMirror
 import scala.annotation.tailrec
