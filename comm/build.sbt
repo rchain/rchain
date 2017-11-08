@@ -12,11 +12,7 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.1" % "test",
 
   // URI Parsing
-  "io.lemonlabs" %% "scala-uri" % "0.5.0",
-
-  // Cryptography
-  "org.bouncycastle" % "bcprov-jdk15on" % "1.58",
-  "org.bouncycastle" % "bcpkix-jdk15on" % "1.58"
+  "io.lemonlabs" %% "scala-uri" % "0.5.0"
 )
 
 addCompilerPlugin(
