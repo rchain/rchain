@@ -33,13 +33,13 @@ message ProtocolHandshakeResponse {
 
 message Protocol {
     oneof message {
-        Disconnect                  diconnect                     = 1;
-        Hello                       hello                         = 2;
-        EncryptionHandshake         encryption_handshake          = 3;
-        EncryptionHandshakeResponse encryption_handshake_response = 4;
-        ProtocolHandshake           protocol_handshake            = 5;
-        ProtocolHandshakeResponse   protocol_handshake_response   = 6;
+        google.protobuf.Any         upstream                      = 1;
 
-        google.protobuf.Any         upstream                      = 15;
+        Disconnect                  diconnect                     = 2;
+        Hello                       hello                         = 3;
+        EncryptionHandshake         encryption_handshake          = 4;
+        EncryptionHandshakeResponse encryption_handshake_response = 5;
+        ProtocolHandshake           protocol_handshake            = 6;
+        ProtocolHandshakeResponse   protocol_handshake_response   = 7;
     }
 }

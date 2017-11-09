@@ -46,11 +46,11 @@ message Protocol {
     ReturnHeader return_header              = 2;
 
     oneof message {
-        Ping                ping            = 3;
-        Pong                pong            = 4;
-        Lookup              lookup          = 5;
-        LookupResponse      lookup_response = 6;
+        google.protobuf.Any upstream        = 3;
 
-        google.protobuf.Any upstream        = 15;
+        Ping                ping            = 4;
+        Pong                pong            = 5;
+        Lookup              lookup          = 6;
+        LookupResponse      lookup_response = 7;
     }
 }
