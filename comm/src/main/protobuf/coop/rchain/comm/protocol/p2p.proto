@@ -2,23 +2,44 @@ syntax = "proto3";
 package coop.rchain.comm.protocol.rchain;
 
 import "scalapb/scalapb.proto";
+import "google/protobuf/any.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.comm.protocol.rchain"
   flat_package: true
 };
 
-message Handshake {
+message Disconnect {
+}
+
+message Hello {
+}
+
+message EncryptionHandshake {
     // Temporary field included to test serialization.
     uint64 number = 1;
 }
 
-message HandshakeResponse {
+message EncryptionHandshakeResponse {
+}
+
+message ProtocolHandshake {
+    // Temporary field included to test serialization.
+    uint64 number = 1;
+}
+
+message ProtocolHandshakeResponse {
 }
 
 message Protocol {
     oneof message {
-        Handshake         handshake          = 9;
-        HandshakeResponse handshake_response = 10;
+        google.protobuf.Any         upstream                      = 1;
+
+        Disconnect                  diconnect                     = 2;
+        Hello                       hello                         = 3;
+        EncryptionHandshake         encryption_handshake          = 4;
+        EncryptionHandshakeResponse encryption_handshake_response = 5;
+        ProtocolHandshake           protocol_handshake            = 6;
+        ProtocolHandshakeResponse   protocol_handshake_response   = 7;
     }
 }

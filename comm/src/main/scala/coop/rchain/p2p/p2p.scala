@@ -5,6 +5,7 @@ import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
 import scala.util.control.NonFatal
+import com.google.protobuf.any.{Any => AnyProto}
 
 sealed trait NetworkError
 case class ParseError(msg: String) extends NetworkError
@@ -60,11 +61,19 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
       println(peer)
     }
 
-  private def handleHandshake(sender: PeerNode, handshake: HandshakeMessage): Unit =
+  private def handleEncryptionHandshake(sender: PeerNode, handshake: EncryptionHandshakeMessage): Unit =
     for {
       resp <- handshake.response(net.local)
     } {
-      println(s"Sending handshake response: $resp")
+      println(s"Sending enc handshake response: $resp")
+      net.comm.send(resp.toByteSeq, sender)
+    }
+
+  private def handleProtocolHandshake(sender: PeerNode, handshake: ProtocolHandshakeMessage): Unit =
+    for {
+      resp <- handshake.response(net.local)
+    } {
+      println(s"Sending enc handshake response: $resp")
       net.comm.send(resp.toByteSeq, sender)
     }
 
@@ -79,8 +88,10 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
             upstream <- proto.message.upstream
           } {
             upstream.unpack(Protocol).message match {
-              case Protocol.Message.Handshake(hs) =>
-                handleHandshake(sender, HandshakeMessage(proto, System.currentTimeMillis))
+              case Protocol.Message.EncryptionHandshake(hs) =>
+                handleEncryptionHandshake(sender, EncryptionHandshakeMessage(proto, System.currentTimeMillis))
+              case Protocol.Message.ProtocolHandshake(hs) =>
+                handleProtocolHandshake(sender, ProtocolHandshakeMessage(proto, System.currentTimeMillis))
               case _ => println(s"Unrecognized msg ${upstream}")
             }
           }
@@ -90,23 +101,43 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
 }
 
 object NetworkProtocol {
-  def handshake(src: ProtocolNode): routing.Protocol = {
-    val hs = Protocol().withHandshake(Handshake())
-    val packed = com.google.protobuf.any.Any.pack(hs)
+  def encryptionHandshake(src: ProtocolNode): routing.Protocol = {
+    val hs = Protocol().withEncryptionHandshake(EncryptionHandshake())
+    val packed = AnyProto.pack(hs)
     ProtocolMessage.upstreamMessage(src, packed)
   }
 
-  def handshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
-    ProtocolMessage.upstreamResponse(src, h, com.google.protobuf.any.Any.pack(HandshakeResponse()))
+  def encryptionHandshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
+    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(EncryptionHandshakeResponse()))
+
+  def protocolHandshake(src: ProtocolNode): routing.Protocol = {
+    val hs = Protocol().withProtocolHandshake(ProtocolHandshake())
+    val packed = AnyProto.pack(hs)
+    ProtocolMessage.upstreamMessage(src, packed)
+  }
+
+  def protocolHandshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
+    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(ProtocolHandshakeResponse()))
 }
 
-case class HandshakeMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage {
+case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
       h <- header
     } yield
-      HandshakeResponseMessage(NetworkProtocol.handshakeResponse(src, h),
+      EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h),
                                System.currentTimeMillis)
 }
-case class HandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
+case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
+    extends ProtocolResponse
+
+case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage {
+  def response(src: ProtocolNode): Option[ProtocolMessage] =
+    for {
+      h <- header
+    } yield
+      ProtocolHandshakeResponseMessage(NetworkProtocol.protocolHandshakeResponse(src, h),
+                               System.currentTimeMillis)
+}
+case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
