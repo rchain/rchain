@@ -5,6 +5,8 @@ import shapeless._
 import record._
 import syntax.singleton._
 
+import cats.Eq
+
 import scala.collection.mutable
 
 object Instances {
@@ -25,5 +27,10 @@ object Instances {
       val newSlot = _slot(0) +: _slot(1) +: slot
       TblObject(_slot = newSlot, entry = entry)
     }
+  }
+
+  implicit val eqOb = new Eq[Ob] {
+    override def eqv(x: Ob, y: Ob) =
+      x equals y
   }
 }
