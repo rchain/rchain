@@ -77,13 +77,15 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     var lexer = new KeyLexer(key)
 
     val firstLexToken = lexer.NextToken
-    if (firstLexToken.token != Token.Key)
+    if (firstLexToken.token != Token.Key) {
       throw new RChainException("createParseTree: first token is not Key")
+    }
     val keyName = firstLexToken.tokenStr
 
     val secondLexToken = lexer.NextToken
-    if (secondLexToken.token != Token.LeftParen)
+    if (secondLexToken.token != Token.LeftParen) {
       throw new RChainException("createParseTree: first token is not Key")
+    }
     val paramsArray = createParseTree(lexer)
     (keyName, new Params(paramsArray))
   }
