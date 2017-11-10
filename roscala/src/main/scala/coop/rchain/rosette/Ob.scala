@@ -2,10 +2,12 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import coop.rchain.rosette.Ob.{ObTag, SysCode}
+import coop.rchain.rosette.Ob.{OTlocation, ObTag, SysCode}
 import coop.rchain.rosette.utils.{pSlice, printToFile}
+import coop.rchain.rosette.utils.Instances.eqOb
 import shapeless.OpticDefns.RootLens
 import shapeless._
+import cats.implicits._
 
 import scala.collection.mutable
 
@@ -27,7 +29,17 @@ trait Ob extends Base {
   def parent: Ob = _slot(1)
   lazy val slot: mutable.Seq[Ob] = pSlice(_slot, 2, _slot.size)
 
-  def dispatch(ctxt: Ctxt): Ob = null
+  def dispatch(ctxt: Ctxt): Ob = {
+    //PROTECT(ctxt)
+
+    val av = Tuple(2, Some(Ob.NIV))
+    av.elem(0) = ctxt.trgt
+    av.elem(1) = ctxt
+
+    val c = Ctxt(???, av).copy(nargs = 2)
+    c.trgt.dispatch(c)
+  }
+
   def extendWith(keymeta: Ob): Ob = null
   def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
 
@@ -136,7 +148,146 @@ trait Ob extends Base {
   def subObject(i1: Int, i2: Int): Ob = notImplementedOb()
   def asPathname: String = ""
   def nth(i: Int): Option[Ob] = Some(notImplementedOb())
-  def slotNum() = 0 //TODO missing implementation
+
+  def get(ob1: Ob, ob2: Ob, ctxt: Ctxt): Ob = notImplementedOb()
+
+  def setOb(ob1: Ob, ob2: Ob, ob3: Ob, ctxt: Ctxt): Ob = notImplementedOb()
+
+  def isSynchronousTrgt: Boolean = true
+
+  def updateNoArgs: Ob = self
+
+  def invoke(ctxt: Ctxt): Ob = {
+    if (ctxt.nargs === 1) {
+      val me = self
+      ctxt.ret(me)
+
+      if (!ctxt.trgt.isSynchronousTrgt) {
+        ctxt.arg(0) foreach (_.updateNoArgs)
+      }
+
+      me
+    } else {
+      ctxt.trgt.runtimeError("Bad method", ctxt)
+    }
+  }
+
+  def lookup(key: Ob, ctxt: Ctxt): Either[RblError,Ob] =
+    if (interruptPending) {
+      Ob.ABSENT
+    } else {
+      val me = self
+
+      val result = meta.get(me, key, ctxt)
+
+      if (result === Ob.ABSENT) {
+        parent.lookup(key, ctxt)
+      } else {
+        Right(result)
+      }
+    }
+
+  def lookupAndInvoke(state: VMState)(ctxt: Ctxt): Either[LookupError, Ob] = {
+    val fn = meta.lookupOBO(self, ctxt.trgt, ctxt)
+
+    fn map { f =>
+      if (interruptPending) {
+        Ob.ABSENT
+      } else if (f === Ob.ABSENT) {
+
+        val prepared = ctxt.prepare()
+        val newArgvec = Tuple(2, Some(Ob.INVALID))
+        newArgvec.elem(0) = prepared.trgt
+        newArgvec.elem(1) = prepared
+
+        val newCtxt = Ctxt(Prim.oprnMissingMethod, newArgvec)
+          .copy(monitor = state.systemMonitor)
+
+        Prim.oprnMissingMethod.dispatch(newCtxt)
+      } else {
+        f.invoke(ctxt)
+      }
+    }
+  }
+
+  def nextMsg(mboxOb: MboxOb, ob: Ob): Ob = notImplementedOb()
+
+  def updateOb(enabledSetProvided: Boolean, ctxt: Ctxt): Ob = {
+    val keyStart = if (enabledSetProvided) 1 else 0
+
+    val me = self
+    var rslt = me
+
+    if (ctxt.nargs > keyStart) {
+      for {
+        i <- keyStart.until(ctxt.nargs-1, 2)
+        if rslt === me
+        arg1 <- ctxt.arg(i)
+        arg2 <- ctxt.arg(i + 1)
+      } {
+        rslt = meta.setOb(me, arg1, arg2, ctxt)
+      }
+    }
+
+    rslt
+  }
+
+  def updateByLoc(enabledSetProvided: Boolean, ctxt: Ctxt): Ob = {
+    /*
+        for (int i = key_start; i < ctxt->nargs-1; i += 2) {
+        if (!IS(OTlocation, ctxt->arg(i)))
+      return actorUpdateBang->runtimeError(ctxt, "bad location descriptor");
+        Location loc;
+        loc.atom = ctxt->arg(i);
+        setValWrt(loc, this, ctxt->arg(i+1));
+    }
+     */
+    val keyStart = if (enabledSetProvided) 1 else 0
+
+    if (ctxt.nargs > keyStart) {
+      for {
+        i <- keyStart.until(ctxt.nargs, 2)
+        arg <- ctxt.arg(i)
+      } {
+        val atom = LocationAtom(arg)
+        //Location.setValWrt(atom, this, )
+        ???
+      }
+    }
+    ???
+  }
+
+  def primitiveInitialize(ctxt: Ctxt): Ob = {
+    val n = math.min(ctxt.nargs - 1, numberOfSlots())
+
+    for {
+      i <- 0 until n
+      arg <- ctxt.arg(i+1)
+    } {
+      self.slot(i) = arg
+    }
+
+    self
+  }
+
+  def receive(ctxt: Ctxt): Either[LookupError,Option[Ob]] = {
+    ctxt.arg(0).map(_.lookupAndInvoke(ctxt)).sequenceU
+  }
+
+  def receiveMsg(mboxOb: MboxOb, ctxt: Ctxt): Ob = notImplementedOb()
+
+  def becomeNew(state: VMState)(ob: Ob, ctxt: Ctxt): Either[RblError,Ob] = {
+    runtimeError("Cannot become a new object", state) match {
+      case (rblError,_) =>
+        Left(rblError)
+    }
+  }
+
+  def accepts(ctxt: Ctxt): Boolean = false
+
+  def matches(ctxt: Ctxt): Boolean = false
+
+  def isNullP: Ob = Ob.RBLFALSE
 
   private def actorExtension(ind: Int, p: Ob): Option[Ob] =
     if (ind > 0) {

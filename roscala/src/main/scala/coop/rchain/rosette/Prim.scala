@@ -10,4 +10,6 @@ object Prim {
   val nthPrim: Seq[Prim] = new Array[Prim](0)
 
   object INVALID extends Prim(null)
+
+  def oprnMissingMethod: Ob = ???
 }
