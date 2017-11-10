@@ -21,6 +21,10 @@ trait TermTree {
 }
 
 class Params(paramsArray: ArrayBuffer[TermTree]) extends TermTree {
+  if (paramsArray.length == 0) {
+    throw new RChainException("Params: no params to constructor")
+  }
+
   protected[storage] val params = paramsArray
   protected[storage] var _term = "("
   for (i <- 0 until params.length - 1) {
