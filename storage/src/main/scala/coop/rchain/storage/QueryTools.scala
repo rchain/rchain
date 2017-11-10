@@ -15,8 +15,9 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, LinkedHashSet}
 
 class Binding(queryP: TermTree, keyP: TermTree) {
-  if (queryP == null || keyP == null)
+  if (queryP == null || keyP == null) {
     throw new RChainException("Binding constructor has bad parameter")
+  }
 
   protected[storage] val queryParam = queryP
   protected[storage] val keyParam = keyP
@@ -126,17 +127,12 @@ object QueryTools {
     new Key(keyName, subs)
   }
 
-  def createParamsSubstition(params: Params,
-                             bindingsIn: Array[Binding]): Params = {
-    if (bindingsIn.length == 0)
+  protected[storage] def createParamsSubstition(params: Params,
+                                                bindings: Array[Binding],
+                                                bindingIndexIn: Int): Params = {
+    if (bindings.length == 0) {
       throw new RChainException(
         "createParamsSubstitution(): empty array parameter")
-
-    // create a copy of bindingsIn so it can be changed
-    // without changing the actual bindingsIn
-    var bindings = new Array[Binding](bindingsIn.length)
-    for (i <- 0 until bindingsIn.length) {
-      bindings(i) = bindingsIn(i)
     }
 
     var returnParams = new ArrayBuffer[TermTree]
