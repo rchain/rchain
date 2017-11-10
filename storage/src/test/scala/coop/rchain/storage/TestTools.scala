@@ -25,7 +25,7 @@ object TestTools {
       if (numKeys <= countUsedKeys)
         return None
       var r = randGen.nextInt(numKeys)
-      while (usedKeys(r)) r = randGen.nextInt(numKeys)
+      while (usedKeys(r)) { r = randGen.nextInt(numKeys) }
       countUsedKeys += 1
       usedKeys(r) = true
       Some(r)
