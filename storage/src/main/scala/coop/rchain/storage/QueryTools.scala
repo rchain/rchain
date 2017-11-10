@@ -135,8 +135,9 @@ object QueryTools {
     // create a copy of bindingsIn so it can be changed
     // without changing the actual bindingsIn
     var bindings = new Array[Binding](bindingsIn.length)
-    for (i <- 0 until bindingsIn.length)
+    for (i <- 0 until bindingsIn.length) {
       bindings(i) = bindingsIn(i)
+    }
 
     var returnParams = new ArrayBuffer[TermTree]
 
@@ -203,7 +204,7 @@ object QueryTools {
       myBindingsStr += "} -> "
 
       var standardBindingsStr = "[queryVars:{"
-      val uniRep = divideUnificationResults(bindingsArray)
+      val uniRep = divideUniResults(bindingsArray)
       if (0 < uniRep.queryVars.length) {
         for (binding <- uniRep.queryVars) {
           standardBindingsStr += binding.queryParam.term + ":" + binding.keyParam.term + ","
@@ -244,7 +245,7 @@ object QueryTools {
     // Each element of queryResult is an array of bindings that
     // corresponds to a term in the store.
     for (bindingsArray <- queryResult) {
-      val uniRep = divideUnificationResults(bindingsArray)
+      val uniRep = divideUniResults(bindingsArray)
       val keySub = createKeySubstition(query, bindingsArray)
       val valuesOption = store.getStrings(keySub.term)
       if (valuesOption.isDefined) {
@@ -262,7 +263,7 @@ object QueryTools {
   // the bindings where the variable is in the query and one
   // where the variable is in the key.
 
-  def divideUnificationResults(uniResults: Array[Binding]): UniRep = {
+  def divideUniResults(uniResults: Array[Binding]): UniRep = {
     val varInQuery = new ArrayBuffer[Binding]()
     val varInKey = new ArrayBuffer[Binding]()
 
@@ -296,15 +297,4 @@ object QueryTools {
   }
 
   type Unification = Array[String]
-
-  def stringArrayToValuesRepString(valuesArray: Array[String]): String = {
-    val valuesBuf = new mutable.StringBuilder()
-    valuesBuf ++= "["
-    for (i <- 0 until valuesArray.size - 1) {
-      val value = valuesArray(i) + ","
-      valuesBuf ++= value
-    }
-    valuesBuf ++= (valuesArray(valuesArray.size - 1) + "]")
-    valuesBuf.toString
-  }
 }
