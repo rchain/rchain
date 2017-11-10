@@ -167,7 +167,7 @@ object QueryTools {
           }
         }
         case _ => {
-          throw new Exception(
+          throw new RChainException(
             "createParamsSubstition: '" + param.term
               + "' not found in provided bindings")
         }
