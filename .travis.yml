@@ -13,4 +13,4 @@ install:
         - sudo cabal install --global
         - cd ../..
 script:
-        - cd rholang && bash test.sh && cd ../rosette && bash test.sh
+        ./build-each.sh
