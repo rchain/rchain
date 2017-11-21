@@ -1,5 +1,5 @@
-sbt bnfc:generate
-sbt assembly
+sbt -Dsbt.log.noformat=true bnfc:generate
+sbt -Dsbt.log.noformat=true assembly
 # Run compiler over all test rholang files
 for i in tests/*; do
 	./rho2rbl "$i"
