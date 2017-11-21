@@ -13,4 +13,4 @@ install:
         - sudo cabal install --global
         - cd ../..
 script:
-        build-each.sh
+        ./build-each.sh
