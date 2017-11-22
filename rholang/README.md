@@ -4,7 +4,7 @@ Rholang is a behaviorally typed, concurrent programming language, with a focus o
 
 The language is still in the early stages of development, but for those who are interested, more information can be found in the [RChain Platform Architecture](http://rchain-architecture.readthedocs.io/en/latest/).
 
-# Building from source
+## Building from source
 
 1. Clone the repository
 2. Configure/fetch dependencies
@@ -14,10 +14,10 @@ The language is still in the early stages of development, but for those who are 
     * BNFC
     * Scala
 4. Run `sbt bnfc:generate` to generate the parser
-5. Run sbt compile to compile classes
-6. Run sbt assembly to build a stand-alone .jar file
+5. Run `sbt compile` to compile classes
+6. Run `sbt assembly` to build a stand-alone `.jar` file
 
-# Command-line usage
+## Command-line usage
 
 ```
 $ ./rho2rbl examples/token.rho
@@ -29,11 +29,12 @@ $ java -jar target/scala-2.11/rholang-assembly-0.1-SNAPSHOT.jar examples/token.r
 compiled examples/token.rho to examples/token.rbl
 ```
 
-# SBT Console
+## SBT Console
 After generating the parser:
 1. Run `sbt console` to launch the sbt console
 2. In the sbt console import the compiler with `import coop.rchain.rho2rose._`
 3. And then compile any Rholang ".rho" file with `Rholang2RosetteCompiler.main(Array("<path_to_Rholang_file>.rho"))`
+
 Note if you make any changes you may need to run sbt clean or sbt bnfc:clean.
 
 # Structure of rholang/ directory
@@ -84,7 +85,7 @@ Note if you make any changes you may need to run sbt clean or sbt bnfc:clean.
 └── README.md
 ```
 
-# Adding a new construct to Rholang
+## Adding a new construct to Rholang
 1. Add the syntax of the new construct in `rholang/src/main/bnfc/rholang.fc`
 2. Run `sbt bnfc:generate` to get the new construct into the parser
 3. Add a new visit method in `src/main/scala/rholang/rosette/Roselang.scala` and specify what the new construct should translate to in RBL. For example, if we are adding the Map type to the compiler and it has type QMap in the AST and we want it to translate to a RblTable in Rosette, we would write as follows:
@@ -96,9 +97,9 @@ Note if you make any changes you may need to run sbt clean or sbt bnfc:clean.
     )
   }
 ```
-Run `sbt compile` and `sbt assembly` to have that translation included into the compiler
+4. Run `sbt compile` and `sbt assembly` to have that translation included into the compiler
 
-# Details of the Compiler Source
+## Details of the Compiler Source
 The file `src/main/scala/rholang/rosette/Roselang.scala` is responsible for the meat of the compiler: essentially it translates the parsed Rholang AST into RBL source. The translation follows a modified version of the FoldVisitor pattern that comes with the default BNFC generator. The main compilation action is documented in the source as follows:
 ```
   /* The signature of the basic compilation action is 
@@ -161,7 +162,7 @@ The file `src/main/scala/rholang/rosette/Roselang.scala` is responsible for the 
    *  testing on a parser for prolog revealed in production.
 ```
 
-# Intellij Debugger Steps
+## Intellij Debugger Steps
 1. Open the `rchain/rholang` project in Intellij
 2. Goto run -> debug -> edit configurations...
 3. Click on the `+` on the top left and create a new Scala Console configuration
