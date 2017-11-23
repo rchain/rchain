@@ -17,7 +17,7 @@ abstract class Prim extends Ob {
     * Rosette seems to potentially return INVALID, UPCALL or DEADTHREAD here
     * Therefore we return RblError for the error case
     */
-  def dispatchHelper(ctxt: Ctxt): Either[RblError, Ob] = {
+  def dispatchHelper(ctxt: Ctxt): Result = {
     val n = ctxt.nargs
 
     if (minArgs <= n && n <= maxArgs) {
@@ -27,7 +27,7 @@ abstract class Prim extends Ob {
     }
   }
 
-  override def dispatch(state: VMState): (Either[RblError, Ob], VMState) = {
+  override def dispatch(state: VMState): (Result, VMState) = {
     // TODO:
     //if (debugging_level)
     //    printf("\t%s\n", BASE(id)->asCstring());
@@ -42,7 +42,7 @@ abstract class Prim extends Ob {
     }
   }
 
-  def invoke(state: VMState): (Either[RblError, Ob], VMState) = {
+  def invoke(state: VMState): (Result, VMState) = {
     val result = dispatch(state)
 
     // TODO:

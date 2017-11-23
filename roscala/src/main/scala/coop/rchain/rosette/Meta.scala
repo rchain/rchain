@@ -6,11 +6,10 @@ object Meta {
   case class StdMeta(override val extension: Ob = null,
                      override val _slot: mutable.Seq[Ob] = null)
       extends Actor {
-    def get(client: Ob, key: Ob, ctxt: Ctxt): Either[RblError, Ob] =
+    def get(client: Ob, key: Ob, ctxt: Ctxt): Result =
       Left(Absent)
 
-    def lookupOBOStdMeta(client: Ob, key: Ob)(
-        state: VMState): Either[RblError, Ob] =
+    def lookupOBOStdMeta(client: Ob, key: Ob)(state: VMState): Result =
       if (state.interruptPending != 0) {
         Left(Absent)
       } else {

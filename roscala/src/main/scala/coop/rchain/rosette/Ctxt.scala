@@ -26,19 +26,8 @@ case class Ctxt(tag: Location,
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
 
   def getReg(r: Int): Option[Ob] =
-    r match {
-      case 0 => Some(rslt)
-      case 1 => Some(trgt)
-      case 2 => Some(argvec)
-      case 3 => Some(env)
-      case 4 => Some(code)
-      case 5 => Some(ctxt)
-      case 6 => Some(self2)
-      case 7 => Some(selfEnv)
-      case 8 => Some(rcvr)
-      case 9 => Some(monitor)
-      case _ => None
-    }
+    Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
+      .lift(r)
 
   /** This is necessary because the compiler sometimes arranges to
     *  provide an argvec that is acually longer than nargs indicates. If
@@ -91,7 +80,7 @@ case class Ctxt(tag: Location,
       case _ => None
     }
 
-  def vmError(state: VMState): (Either[RblError, Ob], VMState) = {
+  def vmError(state: VMState): (Result, VMState) = {
     val newArgvec = Tuple(this.prepare())
     val newState = state.set(_ >> 'ctxt)(
       Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor))

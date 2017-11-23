@@ -14,7 +14,7 @@ import scala.collection.mutable
 trait Base
 
 //TODO change type of `indirect` argument to bool
-trait Ob extends Base { self =>
+trait Ob extends Base {
   val _slot: mutable.Seq[Ob]
   val obTag: ObTag = null
   val sysval: SysCode = null
@@ -24,7 +24,7 @@ trait Ob extends Base { self =>
   def parent: Ob = _slot(1)
   lazy val slot: mutable.Seq[Ob] = pSlice(_slot, 2, _slot.size)
 
-  def dispatch(state: VMState): (Either[RblError, Ob], VMState) = null
+  def dispatch(state: VMState): (Result, VMState) = null
   def extendWith(keymeta: Ob): Ob = null
   def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
 
@@ -48,13 +48,13 @@ trait Ob extends Base { self =>
 
   def is(value: Ob.ObTag): Boolean = true
 
-  def lookup(key: Ob, ctxt: Ctxt): Either[RblError, Ob] =
+  def lookup(key: Ob, ctxt: Ctxt): Result =
     Right(null)
 
-  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Either[RblError, Ob] =
+  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
     Right(null)
 
-  def lookupAndInvoke(state: VMState): (Either[RblError, Ob], VMState) = {
+  def lookupAndInvoke(state: VMState): (Result, VMState) = {
     val fn = meta match {
       case stdMeta: StdMeta =>
         stdMeta.lookupOBOStdMeta(self, state.ctxt.trgt)(state)
@@ -130,8 +130,9 @@ trait Ob extends Base { self =>
 
   def forwardingAddress: Ob = meta
 
-  // TODO:
-  //def inlineablePrimP: Prim = Prim.INVALID
+  def self: Ob = this
+
+  def inlineablePrimP: Either[RblError, Prim] = Left(Invalid)
 
   def emptyMbox: Ob = Ob.INVALID
 

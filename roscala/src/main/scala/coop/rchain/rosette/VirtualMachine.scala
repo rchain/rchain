@@ -57,8 +57,7 @@ object VirtualMachine {
     *  compiler has set up, or bad things can happen (and they are *hard*
     *  to track down).
     */
-  def unwindAndApplyPrim(prim: Prim,
-                         state: VMState): (Either[RblError, Ob], VMState) =
+  def unwindAndApplyPrim(prim: Prim, state: VMState): (Result, VMState) =
     state.ctxt.argvec.flattenRest() match {
       case Right(newArgvec) =>
         val tmpState = state

@@ -5,7 +5,7 @@ import scala.collection.mutable
 case class StdOprn(override val extension: Ob,
                    override val _slot: mutable.Seq[Ob])
     extends Actor {
-  override def dispatch(state: VMState): (Either[RblError, Ob], VMState) =
+  override def dispatch(state: VMState): (Result, VMState) =
     // TODO:
     //if (debugging_level)
     //    printf("\toprn %s\n", BASE(extension->slot(STDOPRN_ID_SLOT))->asCstring());

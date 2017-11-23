@@ -6,6 +6,8 @@ import reflect.runtime.currentMirror
 import scala.annotation.tailrec
 
 package object rosette {
+  type Result = Either[RblError, Ob]
+
   def suicide(msg: String): Unit = {
     System.err.println(s"*** fatal error: $msg")
     System.exit(1)
