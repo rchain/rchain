@@ -6,6 +6,7 @@ env:
   - SUBPROJECT=rosette
   - SUBPROJECT=storage
 script: ./scripts/build-subproject.sh
+sudo: required
 install: ./scripts/install.sh
 cache:
   directories:
