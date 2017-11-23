@@ -2,6 +2,9 @@ language: scala
 scala:
   - 2.12.3
 sbt_args: -no-colors
+os:
+  - linux
+  - osx
 dist: trusty
 env:
   - SUBPROJECT=comm
