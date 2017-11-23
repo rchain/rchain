@@ -2,5 +2,5 @@
 
 if [ -f "$SUBPROJECT/install.sh" ]
 then
-    (cd $SUBDIR; ./install.sh)
+    (cd $SUBPROJECT; ./install.sh)
 fi
