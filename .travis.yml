@@ -1,19 +1,12 @@
 dist: trusty
-install:
-        - sudo apt update
-
-        # Packages for Rosette-VM building
-        - sudo apt install g++ g++-multilib
-
-        # BNFC
-        # Ubuntu 14.04 has an outdated BNFC package, so we build BNFC from source
-        - sudo apt install haskell-platform
-        - git clone https://github.com/BNFC/bnfc.git
-        - cd bnfc/source
-        - sudo cabal install --global
-        - cd ../..
-script:
-        ./build-each.sh
+env:
+  - SUBPROJECT=comm
+  - SUBPROJECT=rholang
+  - SUBPROJECT=roscala
+  - SUBPROJECT=rosette
+  - SUBPROJECT=storage
+script: ./scripts/build-subproject.sh
+install: ./scripts/install.sh
 cache:
   directories:
     - "$HOME/.ivy2/cache"
