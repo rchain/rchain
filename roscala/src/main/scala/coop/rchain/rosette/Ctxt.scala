@@ -20,14 +20,15 @@ case class Ctxt(tag: Location,
                 monitor: Monitor, // reg[9]
                 override val _slot: mutable.Seq[Ob])
     extends Ob {
+  private val regs = Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
+
   def applyK(result: Ob, tag: Location)(state: VMState): (Boolean, VMState) =
     ctxt.rcv(result, tag)(state)
 
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
 
-  def getReg(r: Int): Option[Ob] =
-    Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
-      .lift(r)
+
+  def getReg(r: Int): Option[Ob] = regs.lift(r)
 
   /** This is necessary because the compiler sometimes arranges to
     *  provide an argvec that is acually longer than nargs indicates. If
