@@ -27,7 +27,6 @@ case class Ctxt(tag: Location,
 
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
 
-
   def getReg(r: Int): Option[Ob] = regs.lift(r)
 
   /** This is necessary because the compiler sometimes arranges to
