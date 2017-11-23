@@ -14,3 +14,7 @@ install:
         - cd ../..
 script:
         ./build-each.sh
+cache:
+  directories:
+    - "$HOME/.ivy2/cache"
+    - "$HOME/.sbt"
