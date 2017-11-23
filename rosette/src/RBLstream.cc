@@ -405,7 +405,7 @@ DEF("prim-flush",obFlush, 0, 1)
   return NIV;
 }
 
-//#if !defined(LINUX)
+#if !defined(LINUX)
 DEF("getFd",obGetFd, 1, 1)
 {
   if (IS_A(ARG(0), Istream))
@@ -423,7 +423,7 @@ DEF("getFd",obGetFd, 1, 1)
   else
     return FIXNUM(-1);
 }
-//#endif /* ! LINUX */
+#endif /* ! LINUX */
 
 DEF_OPRN(Sync, "print",oprnPrint, obPrint);
 DEF_OPRN(Sync, "display",oprnDisplay, obDisplay);
