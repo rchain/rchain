@@ -10,24 +10,27 @@ package object opcodes {
   val someTuple: Tuple =
     Tuple(someObs, Ob.NIV +: Ob.NIV +: mutable.Seq.empty[Ob])
 
-  val ctxt = Ctxt(someTuple,
-                  null,
-                  null,
-                  null,
-                  null,
-                  0,
-                  0,
-                  PC.PLACEHOLDER,
-                  someObs,
-                  Ob.NIV,
-                  null,
-                  null,
-                  null +: Ob.NIV +: someObs,
-                  Location.LocTrgt)
+  val ctxt = Ctxt(
+    tag = Location.LocTrgt,
+    nargs = 0,
+    outstanding = 0,
+    pc = PC.PLACEHOLDER,
+    rslt = null,
+    trgt = null,
+    argvec = someTuple,
+    env = null,
+    code = null,
+    ctxt = null,
+    self2 = null,
+    selfEnv = null,
+    rcvr = null,
+    monitor = null,
+    _slot = null
+  )
 
   val testState = VMState(
     Map.empty,
-    Code(someTuple, Ob.NIV +: Ob.NIV +: someObs),
+    Code(someTuple, Seq(), Ob.NIV +: Ob.NIV +: someObs),
     ctxt,
     Location.LocTrgt,
     PLACEHOLDER,

@@ -15,14 +15,6 @@ class ObSpec extends WordSpec with Matchers {
     }
   }
 
-  "self" should {
-
-    "return \"this\"" in {
-      val ob = createOb()
-      ob.self shouldEqual ob
-    }
-  }
-
   "getLex" should {
 
     "return element by offset" in {
