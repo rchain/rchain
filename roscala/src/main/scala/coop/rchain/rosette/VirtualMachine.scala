@@ -251,6 +251,7 @@ object VirtualMachine {
     }
 
     if (mState.vmErrorFlag) {
+      // TODO: Revisit once OprnVmError works
       //handleVirtualMachineError(mState)
       mState = mState.set(_ >> 'doNextThreadFlag)(true)
     }
