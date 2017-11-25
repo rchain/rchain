@@ -1,6 +1,7 @@
 package coop.rchain.rosette
 
 import coop.rchain.rosette.Location.StoreCtxt
+import coop.rchain.rosette.VirtualMachine.loggerStrand
 import Location._
 import scala.collection.mutable
 
@@ -23,7 +24,7 @@ case class Ctxt(tag: Location,
   private val regs = Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
 
   def applyK(result: Ob, tag: Location)(state: VMState): (Boolean, VMState) =
-    ctxt.rcv(result, tag)(state)
+    this.ctxt.rcv(result, tag)(state)
 
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
 
@@ -62,8 +63,10 @@ case class Ctxt(tag: Location,
       (false, state)
     }
 
-  def scheduleStrand(state: VMState): VMState =
-    state.update(_ >> 'strandPool)(_ :+ this)
+  def scheduleStrand(state: VMState): VMState = {
+    loggerStrand.info(s"Schedule strand ${state.ctxt.ctxt.hashCode()}")
+    state.update(_ >> 'strandPool)(_ :+ state.ctxt.ctxt)
+  }
 
   def setReg(r: Int, ob: Ob): Option[Ctxt] =
     r match {

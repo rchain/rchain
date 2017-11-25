@@ -20,7 +20,8 @@ case class StrandsScheduled(state: VMState) extends Work
 
 object VirtualMachine {
 
-  val logger = Logger("opcode")
+  val loggerOpcode = Logger("opcode")
+  val loggerStrand = Logger("strand")
 
   val vmLiterals: Seq[Ob] = Seq(
     Fixnum(0),
@@ -113,7 +114,9 @@ object VirtualMachine {
       case _ => suicide(s"unknown SysCode value (${v.sysval})")
     }
 
-  def getNextStrand(state: VMState): (Boolean, VMState) =
+  def getNextStrand(state: VMState): (Boolean, VMState) = {
+    loggerStrand.info("Try to get next strand")
+
     if (state.strandPool.isEmpty) {
       tryAwakeSleepingStrand(state) match {
         case WaitForAsync =>
@@ -140,6 +143,7 @@ object VirtualMachine {
 
       (false, installStrand(strand, newState))
     }
+  }
 
   def tryAwakeSleepingStrand(state: VMState): Work =
     if (state.sleeperPool.isEmpty) {
@@ -171,6 +175,7 @@ object VirtualMachine {
         installMonitor(strand.monitor, state)
       else state
 
+    loggerStrand.info(s"Install strand ${strand.hashCode()}")
     installCtxt(strand, stateInstallMonitor)
   }
 
@@ -209,18 +214,20 @@ object VirtualMachine {
   }
 
   def executeSeq(opCodes: Seq[Op], state: VMState): VMState = {
-    var pc = 0
+    var pc = state.pc.relative
     var exit = false
     var currentState = state
 
     while (pc < opCodes.size && !exit) {
       val op = opCodes(pc)
-      logger.info("PC: " + pc + " Opcode: " + op)
+      loggerOpcode.info("PC: " + pc + " Opcode: " + op)
 
-      currentState = modifyFlags(executeDispatch(op, currentState))
+      currentState = currentState
+        .update(_ >> 'pc >> 'relative)(_ + 1)
         .update(_ >> 'bytecodes)(
           _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1))
-        .update(_ >> 'pc >> 'relative)(_ + 1)
+
+      currentState = runFlags(executeDispatch(op, currentState))
 
       pc = currentState.pc.relative
 
@@ -230,7 +237,7 @@ object VirtualMachine {
     currentState
   }
 
-  def modifyFlags(state: VMState): VMState = {
+  def runFlags(state: VMState): VMState = {
     var mState = state
 
     if (mState.doXmitFlag) {
@@ -239,25 +246,37 @@ object VirtualMachine {
     }
 
     if (mState.doRtnFlag) {
-      //if (mState.ctxt.ret(mState.ctxt.rslt)) {
-      //  mState = mState.set(_ >> 'vmErrorFlag)(true)
-      //} else if (mState.doRtnFlag) {
-      //  mState = mState.set(_ >> 'doNextThreadFlag)(true)
-      //}
+      // may set doNextThreadFlag
+      mState = doRtn(mState).set(_ >> 'doRtnFlag)(false)
     }
 
     if (mState.vmErrorFlag) {
-      handleVirtualMachineError(mState)
+      // TODO: Revisit once OprnVmError works
+      //handleVirtualMachineError(mState)
       mState = mState.set(_ >> 'doNextThreadFlag)(true)
     }
 
     if (mState.doNextThreadFlag) {
-      //if (getNextStrand()) {
-      //  tmpState = tmpState.set(_ >> 'nextOpFlag)(false)
-      //}
+      val (isEmpty, newState) = getNextStrand(mState)
+      mState = newState.set(_ >> 'doNextThreadFlag)(false)
+
+      if (isEmpty) {
+        mState = mState.set(_ >> 'exitFlag)(true)
+      }
     }
 
     mState
+  }
+
+  def doRtn(state: VMState): VMState = {
+    val (isError, newState) = state.ctxt.ret(state.ctxt.rslt)(state)
+
+    if (isError)
+      newState.set(_ >> 'vmErrorFlag)(true)
+    else if (newState.doRtnFlag)
+      newState.set(_ >> 'doNextThreadFlag)(true)
+    else
+      newState
   }
 
   def doXmit(state: VMState): VMState =
