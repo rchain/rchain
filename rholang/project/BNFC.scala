@@ -1,5 +1,6 @@
 import sbt._
 import Keys._
+import scala.sys.process._
 
 object BNFC {
 
@@ -50,8 +51,11 @@ object BNFC {
     bnfcOutputDir  := (javaSource in Compile).value,
     bnfcDocDir     := baseDirectory.value / "doc" / "bnfc",
     clean          := cleanDir(bnfcOutputDir.value / nsToPath(bnfcNamespace.value)),
-    generate       := bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
-      bnfcGenerateSources((fullClasspath in BNFCConfig).value, f, bnfcOutputDir.value, bnfcNamespace.value)
+    generate       := {
+      val fullCP = (fullClasspath in BNFCConfig).value
+      bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
+        bnfcGenerateSources(fullCP, f, bnfcOutputDir.value, bnfcNamespace.value)
+      }
     },
     cleanDocs      := cleanDir(bnfcDocDir.value),
     generateDocs   := bnfcFiles(bnfcGrammarDir.value).foreach { (f: File) =>
