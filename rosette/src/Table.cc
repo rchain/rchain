@@ -182,7 +182,7 @@ inline
 int
 RblTable::hash (pOb key)
 {
-    return( (intptr_t)PTR(key) >> TagSize );
+    return( (int)PTR(key) >> TagSize );
 }
 
 

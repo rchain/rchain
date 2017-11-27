@@ -24,7 +24,6 @@
 
 all:
 	$(MAKE) -C src
-	$(MAKE) -C rbl
 
 
 clean:

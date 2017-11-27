@@ -783,7 +783,7 @@ OldSpace::checkFreeLists (char* title)
 	for (p = fixedFreeLists[i]; p != NULL; p = p->forwardingAddress())
 	    if (SIZE(p) != i)
 		warning("%d-byte object (at 0x%x) on free list %s for %d-byte objects",
-			SIZE(p), (intptr_t)p, title, i);
+			SIZE(p), (int)p, title, i);
     }
 }
 

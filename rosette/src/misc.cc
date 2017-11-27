@@ -135,7 +135,7 @@ properPrep (char* s)
 #ifdef __GNUC__
 extern "C" {
 extern const char* const sys_errlist[];
-extern const int sys_nerr;
+extern int sys_nerr;
 };
 #endif
 

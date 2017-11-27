@@ -141,6 +141,8 @@ object Tuple {
     new Tuple(slice ++ filling, null)
   }
 
+  def apply(a: Int, b: Ob): Tuple = new Tuple(mutable.Seq.fill(a)(b), null)
+
   def apply(a: Int, b: Option[Ob]): Tuple =
     new Tuple(null, null)
 

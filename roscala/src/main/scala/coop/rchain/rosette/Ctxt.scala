@@ -1,23 +1,34 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.Location.StoreCtxt
+import coop.rchain.rosette.VirtualMachine.loggerStrand
+import Location._
 import scala.collection.mutable
 
-case class Ctxt(argvec: Tuple,
-                code: Code,
-                ctxt: Ctxt,
-                env: Ob,
-                monitor: Monitor,
+case class Ctxt(tag: Location,
                 nargs: Int,
                 outstanding: Int,
                 pc: PC,
-                reg: Seq[Ob],
-                rslt: Ob,
-                trgt: Ob,
-                selfEnv: Ob,
-                override val _slot: mutable.Seq[Ob],
-                tag: Location)
+                rslt: Ob, // reg[0]
+                trgt: Ob, // reg[1]
+                argvec: Tuple, // reg[2]
+                env: Ob, // reg[3]
+                code: Code, // reg[4]
+                ctxt: Ctxt, // reg[5]
+                self2: Ob, // reg[6]
+                selfEnv: Ob, // reg[7]
+                rcvr: Ob, // reg[8]
+                monitor: Monitor, // reg[9]
+                override val _slot: mutable.Seq[Ob])
     extends Ob {
+  private val regs = Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
+
+  def applyK(result: Ob, tag: Location)(state: VMState): (Boolean, VMState) =
+    this.ctxt.rcv(result, tag)(state)
+
   def arg(n: Int): Option[Ob] = argvec.elem.lift(n)
+
+  def getReg(r: Int): Option[Ob] = regs.lift(r)
 
   /** This is necessary because the compiler sometimes arranges to
     *  provide an argvec that is acually longer than nargs indicates. If
@@ -26,17 +37,58 @@ case class Ctxt(argvec: Tuple,
     */
   def prepare(): Ctxt = this.copy(argvec = argvec.makeSlice(0, nargs))
 
-  def ret(rslt: Ob): Boolean = true
+  def rcv(result: Ob, loc: Location)(state: VMState): (Boolean, VMState) = {
+    val storeResult = Location.store(loc, this, state.globalEnv, result)
 
-  def scheduleStrand(state: VMState): VMState =
-    state.update(_ >> 'strandPool)(_ :+ this)
+    storeResult match {
+      case StoreCtxt(newCtxt) =>
+        val newState = state
+          .set(_ >> 'ctxt >> 'ctxt)(newCtxt)
+          .update(_ >> 'ctxt >> 'ctxt >> 'outstanding)(_ - 1)
+          .updateSelf(st =>
+            if (st.ctxt.ctxt.outstanding == 0) scheduleStrand(st) else st)
 
-  def vmError(state: VMState): Ob = {
+        (false, newState)
+
+      // TODO: Add other store cases
+      case _ =>
+        (true, state)
+    }
+  }
+
+  def ret(result: Ob)(state: VMState): (Boolean, VMState) =
+    if (tag != LocLimbo) {
+      applyK(result, this.tag)(state)
+    } else {
+      (false, state)
+    }
+
+  def scheduleStrand(state: VMState): VMState = {
+    loggerStrand.info(s"Schedule strand ${state.ctxt.ctxt.hashCode()}")
+    state.update(_ >> 'strandPool)(_ :+ state.ctxt.ctxt)
+  }
+
+  def setReg(r: Int, ob: Ob): Option[Ctxt] =
+    r match {
+      case 0 => Some(copy(rslt = ob))
+      case 1 => Some(copy(trgt = ob))
+      case 2 => Some(copy(argvec = ob.asInstanceOf[Tuple]))
+      case 3 => Some(copy(env = ob))
+      case 4 => Some(copy(code = ob.asInstanceOf[Code]))
+      case 5 => Some(copy(ctxt = ob.asInstanceOf[Ctxt]))
+      case 6 => Some(copy(self2 = ob))
+      case 7 => Some(copy(selfEnv = ob))
+      case 8 => Some(copy(rcvr = ob))
+      case 9 => Some(copy(monitor = ob.asInstanceOf[Monitor]))
+      case _ => None
+    }
+
+  def vmError(state: VMState): (Result, VMState) = {
     val newArgvec = Tuple(this.prepare())
-    val newCtxt =
-      Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor)
+    val newState = state.set(_ >> 'ctxt)(
+      Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor))
 
-    OprnVmError.dispatch(newCtxt)
+    OprnVmError.dispatch(newState)
   }
 }
 
@@ -47,12 +99,13 @@ object Ctxt {
 
   object NIV
       extends Ctxt(null,
-                   null,
-                   null,
-                   null,
-                   null,
                    0,
                    0,
+                   null,
+                   null,
+                   null,
+                   null,
+                   null,
                    null,
                    null,
                    null,
@@ -63,12 +116,13 @@ object Ctxt {
 
   object PLACEHOLDER
       extends Ctxt(null,
-                   null,
-                   null,
-                   null,
-                   null,
                    0,
                    0,
+                   null,
+                   null,
+                   null,
+                   null,
+                   null,
                    null,
                    null,
                    null,

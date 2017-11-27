@@ -2,23 +2,20 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.utils.{pSlice, printToFile}
+import coop.rchain.rosette.Meta.StdMeta
+import coop.rchain.rosette.Ob.{ObTag, SysCode}
+import coop.rchain.rosette.prim.Prim
 import shapeless.OpticDefns.RootLens
 import shapeless._
 
 import scala.collection.mutable
-
-sealed trait LookupError
-case object Absent extends LookupError
-case object Upcall extends LookupError
 
 trait Base
 
 //TODO change type of `indirect` argument to bool
 trait Ob extends Base {
   val _slot: mutable.Seq[Ob]
-
   val obTag: ObTag = null
   val sysval: SysCode = null
   val constantP = true
@@ -27,7 +24,7 @@ trait Ob extends Base {
   def parent: Ob = _slot(1)
   lazy val slot: mutable.Seq[Ob] = pSlice(_slot, 2, _slot.size)
 
-  def dispatch(ctxt: Ctxt): Ob = null
+  def dispatch(state: VMState): (Result, VMState) = null
   def extendWith(keymeta: Ob): Ob = null
   def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
 
@@ -50,8 +47,42 @@ trait Ob extends Base {
   }
 
   def is(value: Ob.ObTag): Boolean = true
-  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Either[LookupError, Ob] =
+
+  def lookup(key: Ob, ctxt: Ctxt): Result =
     Right(null)
+
+  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
+    Right(null)
+
+  def lookupAndInvoke(state: VMState): (Result, VMState) = {
+    val fn = meta match {
+      case stdMeta: StdMeta =>
+        stdMeta.lookupOBOStdMeta(self, state.ctxt.trgt)(state)
+      case _ => Left(Absent)
+    }
+
+    if (state.interruptPending != 0) {
+      (Left(Absent), state)
+    } else {
+      // TODO:
+      //if (fn == ABSENT) {
+      //  PROTECT_THIS(Ob); PROTECT(ctxt);
+      //  ctxt->prepare();
+      //  Tuple* new_argvec = Tuple::create (2, INVALID);
+      //  new_argvec->elem(0) = ctxt->trgt;
+      //  new_argvec->elem(1) = ctxt;
+      //  Ctxt* new_ctxt = Ctxt::create (oprnMissingMethod, new_argvec);
+      //  new_ctxt->monitor = vm->systemMonitor;
+      //  return oprnMissingMethod->dispatch(new_ctxt);
+      //}
+
+      fn match {
+        case Right(prim: Prim) => prim.invoke(state)
+        case _ => (Left(Absent), state)
+      }
+    }
+  }
+
   def matches(ctxt: Ctxt): Boolean = false
   def numberOfSlots(): Int = slot.length
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
@@ -101,7 +132,7 @@ trait Ob extends Base {
 
   def self: Ob = this
 
-  def inlineablePrimP: Prim = Prim.INVALID
+  def inlineablePrimP: Either[RblError, Prim] = Left(Invalid)
 
   def emptyMbox: Ob = Ob.INVALID
 
