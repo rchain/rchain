@@ -34,3 +34,15 @@ target/
 lib_managed/
 src_managed/
 boot/
+
+# Scaladocs
+###############
+*.html
+*.js
+*.svg
+*.png
+*.ttf
+*.woff
+*.gif
+*.eot
+*.css
