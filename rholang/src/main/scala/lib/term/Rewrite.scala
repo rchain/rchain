@@ -9,7 +9,7 @@
 package coop.rchain.lib.term
 
 import coop.rchain.lib.zipper._
-import coop.rchain.lib.navigation.{ Right => R, Left => L,_ }
+import coop.rchain.lib.navigation.{ Right => _, Left => _, _ }
 
 trait TermNavigation[L,V,T] extends ZipperNavigation[Either[T,V]] {
   override def left [A1 >: Either[T,V]] ( location : Location[A1] ) : Location[A1] = {
@@ -149,7 +149,7 @@ trait TermMutation[L,V,T] extends ZipperMutation[Either[T,V]] {
       }
       case Location(
 	TermCtxtBranch(lbl: L @unchecked, progeny),
-	ctxt : LabeledTreeContext[L,Either[T,V]]
+	ctxt : LabeledTreeContext[L,Either[T,V]] @unchecked
       ) => {
 	Location(
 	  tree,
