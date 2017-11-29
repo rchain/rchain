@@ -11,7 +11,7 @@ object Number {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Fixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
       Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
@@ -27,7 +27,7 @@ object Number {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Fixnum] =
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] =
       ctxt.nargs match {
         case 1 =>
           val fixval = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
@@ -47,7 +47,7 @@ object Number {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Fixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
       Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(1)) {
@@ -63,7 +63,7 @@ object Number {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Fixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum].value
 
@@ -71,7 +71,7 @@ object Number {
         Right(Fixnum(m / n))
       } catch {
         case e: ArithmeticException =>
-          Left(PrimErrorWrapper(ArithmeticError))
+          Left(ArithmeticError)
       }
     }
   }
@@ -83,7 +83,7 @@ object Number {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Fixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum].value
 
@@ -91,7 +91,7 @@ object Number {
         Right(Fixnum(m % n))
       } catch {
         case e: ArithmeticException =>
-          Left(PrimErrorWrapper(ArithmeticError))
+          Left(ArithmeticError)
       }
     }
   }

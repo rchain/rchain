@@ -23,7 +23,7 @@ object ArgumentMismatchMacro {
         case q"$mods def fn(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
           q"""$mods def fn(ctxt: Ctxt): $returnType =  {
               if(ctxt.nargs < minArgs || ctxt.nargs > maxArgs)
-                Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
+                Left(mismatchArgs(ctxt, minArgs, maxArgs))
               else
                 {..$body}
           }"""
@@ -59,7 +59,7 @@ object TypeMismatchMacro {
 
           q"""$mods def fn(ctxt: Ctxt): $returnType =  {
               mismatchType[${param.toTypeName}](ctxt) match {
-                case Some(typeMismatch) => Left(PrimErrorWrapper(typeMismatch))
+                case Some(typeMismatch) => Left(typeMismatch)
                 case None => {..$body}
               }
           }"""

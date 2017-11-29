@@ -17,7 +17,7 @@ abstract class Prim extends Ob {
   val minArgs: Int
   val maxArgs: Int
 
-  def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Ob]
+  def fn(ctxt: Ctxt): Either[PrimError, Ob]
 
   /** Dispatch primitive
     *
@@ -28,7 +28,7 @@ abstract class Prim extends Ob {
     val n = ctxt.nargs
 
     if (minArgs <= n && n <= maxArgs) {
-      fn(ctxt)
+      fn(ctxt).left.map(PrimErrorWrapper)
     } else {
       Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
     }
