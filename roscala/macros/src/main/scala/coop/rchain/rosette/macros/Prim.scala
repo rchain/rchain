@@ -42,23 +42,16 @@ object TypeMismatchMacro {
   def impl[A](c: whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
 
-    object findTypeParam extends Traverser {
-      var idents = List[NameApi]()
-
-      override def traverse(tree: c.universe.Tree): Unit = tree match {
-        case Ident(tpe) => idents = idents :+ tpe
-        case _ => super.traverse(tree)
-      }
-    }
+    val typeParam = c.macroApplication.filter {
+      case Ident(_) => true
+      case _ => false
+    }(1)
 
     val result =
       annottees.map(_.tree).toList match {
         case q"$mods def fn(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
-          findTypeParam.traverse(c.macroApplication)
-          val param = findTypeParam.idents(1)
-
           q"""$mods def fn(ctxt: Ctxt): $returnType =  {
-              mismatchType[${param.toTypeName}](ctxt) match {
+              mismatchType[$typeParam](ctxt) match {
                 case Some(typeMismatch) => Left(typeMismatch)
                 case None => {..$body}
               }
