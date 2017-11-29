@@ -1,16 +1,23 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette._
+import coop.rchain.rosette.prim.Prim.mismatchArgs
 
 import scala.collection.mutable
+import scala.reflect.{classTag, ClassTag}
+
+sealed trait PrimError
+case class ArgumentMismatch(msg: String) extends PrimError
+case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
+case object ArithmeticError extends PrimError
 
 abstract class Prim extends Ob {
   override val _slot: mutable.Seq[Ob] = null
-  val externalName: String
+  val name: String
   val minArgs: Int
   val maxArgs: Int
 
-  def fn(ctxt: Ctxt): Either[PrimMismatch, Ob]
+  def fn(ctxt: Ctxt): Either[PrimErrorWrapper, Ob]
 
   /** Dispatch primitive
     *
@@ -23,7 +30,7 @@ abstract class Prim extends Ob {
     if (minArgs <= n && n <= maxArgs) {
       fn(ctxt)
     } else {
-      Left(mismatch(ctxt, minArgs, maxArgs))
+      Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
     }
   }
 
@@ -52,24 +59,39 @@ abstract class Prim extends Ob {
     result
   }
 
-  def mismatch(ctxt: Ctxt, minArgs: Int, maxArgs: Int): PrimMismatch =
-    if (maxArgs == Prim.MaxArgs) {
-      PrimMismatch(s"expected $minArgs or more arguments")
-    } else if (minArgs == maxArgs) {
-      if (minArgs == 1) {
-        PrimMismatch("expected 1 argument")
-      } else {
-        PrimMismatch(s"expected $minArgs arguments")
-      }
-    } else {
-      PrimMismatch(s"expected between $minArgs and $maxArgs arguments")
-    }
-
 }
 
 object Prim {
   val MaxArgs = 255
   val MaxPrims = 1024
 
-  def nthPrim(n: Int): Option[Prim] = Prims.lift(n)
+  def mismatchType[T <: Ob: ClassTag](ctxt: Ctxt): Option[TypeMismatch] = {
+    val n = ctxt.nargs
+    val typeName = classTag[T].runtimeClass.getName
+
+    val nonT = ctxt.argvec.elem.take(n).find {
+      case e: T => false
+      case _ => true
+    }
+
+    nonT.map(ob => TypeMismatch(ctxt.argvec.elem.indexOf(ob), typeName))
+  }
+
+  def mismatchArgs(ctxt: Ctxt, minArgs: Int, maxArgs: Int): ArgumentMismatch = {
+    val msg = if (maxArgs == Prim.MaxArgs) {
+      s"expected $minArgs or more arguments"
+    } else if (minArgs == maxArgs) {
+      if (minArgs == 1) {
+        "expected 1 argument"
+      } else {
+        s"expected $minArgs arguments"
+      }
+    } else {
+      s"expected between $minArgs and $maxArgs arguments"
+    }
+
+    ArgumentMismatch(msg)
+  }
+
+  def nthPrim(n: Int): Option[Prim] = Prims.get(n)
 }

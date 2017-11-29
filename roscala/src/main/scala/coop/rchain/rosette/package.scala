@@ -1,11 +1,22 @@
 package coop.rchain
 
 import coop.rchain.rosette.parser.bytecode.ParseError
+import coop.rchain.rosette.prim.PrimError
+
 import reflect.runtime.universe._
 import reflect.runtime.currentMirror
 import scala.annotation.tailrec
 
 package object rosette {
+  sealed trait RblError
+  case object DeadThread extends RblError
+  case object Invalid extends RblError
+  case object Suspend extends RblError
+  case object Absent extends RblError
+  case object Upcall extends RblError
+  case class PrimErrorWrapper(value: PrimError) extends RblError
+  case class RuntimeError(msg: String) extends RblError
+
   type Result = Either[RblError, Ob]
 
   def suicide(msg: String): Unit = {

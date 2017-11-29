@@ -4,15 +4,6 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.rosette.Ob._
 import coop.rchain.rosette.prim.Prim
 
-sealed trait RblError
-case object DeadThread extends RblError
-case object Invalid extends RblError
-case object Suspend extends RblError
-case object Absent extends RblError
-case object Upcall extends RblError
-case class PrimMismatch(msg: String) extends RblError
-case class RuntimeError(msg: String) extends RblError
-
 sealed trait Work
 case object NoWorkLeft extends Work
 case object WaitForAsync extends Work
