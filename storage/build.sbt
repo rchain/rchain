@@ -14,6 +14,8 @@ lazy val root = (project in file(".")).
     // set the Scala test source directory to be <base>/test
     scalaSource in Test := baseDirectory.value / "test",
 
+    excludeFilter in unmanagedSources := "*perf*",
+
     // http://assets.maven-repository.com/artifact/org.lmdbjava/lmdbjava/0.0.2
     // Last modified: 2016-07-29 02:24:11 UTC
     libraryDependencies += "org.lmdbjava" % "lmdbjava" % "0.0.2",
