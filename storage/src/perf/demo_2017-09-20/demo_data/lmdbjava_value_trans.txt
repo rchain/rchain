@@ -1,0 +1,36 @@
+number of keys: 10000
+values/key: 1
+map size: 480000
+duration: 15743
+put: 15731
+put/ms: 0
+get: 12
+gets/ms: 833
+
+number of keys: 40000
+values/key: 1
+map size: 1920000
+duration: 62974
+put: 62922
+put/ms: 0
+get: 52
+gets/ms: 769
+
+number of keys: 30000
+values/key: 1
+map size: 1440000
+duration: 49718
+put: 49686
+put/ms: 0
+get: 32
+gets/ms: 937
+
+number of keys: 20000
+values/key: 1
+map size: 960000
+duration: 34884
+put: 34850
+put/ms: 0
+get: 34
+gets/ms: 588
+

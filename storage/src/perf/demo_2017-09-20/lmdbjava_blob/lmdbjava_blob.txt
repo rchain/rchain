@@ -1,0 +1,45 @@
+number of keys: 1300
+values/key: 1
+blob length: 1000000
+map size: 1950031200
+duration: 4737
+put: 2065
+put/ms: 0
+get: 2672
+gets/ms: 0
+
+number of keys: 1300
+values/key: 1
+blob length: 1000000
+map size: 1950031200
+duration: 5538
+put: 2507
+put/ms: 0
+get: 3031
+gets/ms: 0
+
+number of keys: 1000
+values/key: 1
+blob length: 1048576
+map size: 1572888000
+duration: 3727
+put: 1400
+put/ms: 0
+get: 2327
+gets/ms: 0
+
+number of keys: 1300
+values/key: 1
+blob length: 1048576
+map size: 2044754400
+duration: 4717
+put: 1900
+put/ms: 0
+get: 2817
+gets/ms: 0
+
+number of keys: 1400
+values/key: 1
+blob length: 1048576
+org.lmdbjava.LmdbNativeException$ConstantDerviedException: Platform constant error code: EINVAL (22)
+

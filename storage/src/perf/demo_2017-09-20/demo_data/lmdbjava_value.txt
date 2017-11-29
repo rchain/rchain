@@ -1,0 +1,62 @@
+number of keys	10000		number of keys	values/key	map size	duration	put	put/ms	get	gets/ms
+values/key	1		10000	1	1626079232	50	41	243	9	1111
+map size	1626079232		20000	1	640000	112	45	444	67	298
+duration	50		30000	1	960000	108	86	348	22	1363
+put	41		40000	1	1280000	154	105	380	49	816
+put/ms	243		50000	1	1600000	104	70	714	34	1470
+get	9		75000	1	2400000	147	68	1102	79	949
+gets/ms	1111		100000	1	3200000	208	116	862	92	1086
+										
+number of keys	20000									
+values/key	1									
+map size	640000									
+duration	112									
+put	45									
+put/ms	444									
+get	67									
+gets/ms	298									
+										
+number of keys	30000									
+values/key	1									
+map size	960000									
+duration	108									
+put	86									
+put/ms	348									
+get	22									
+gets/ms	1363									
+										
+number of keys	40000									
+values/key	1									
+map size	1280000									
+duration	154									
+put	105									
+put/ms	380									
+get	49									
+gets/ms	816									
+										
+number of keys	50000									
+values/key	1									
+map size	1600000									
+duration	104									
+put	70									
+put/ms	714									
+get	34									
+gets/ms	1470									
+										
+number of keys	75000									
+values/key	1									
+map size	2400000									
+duration	147									
+put	68									
+put/ms	1102									
+get	79									
+gets/ms	949									
+										
+number of keys	100000									
+values/key	1									
+map size	3200000									
+duration	208									
+put	116									
+put/ms	862									
+get	92									
+gets/ms	1086									
