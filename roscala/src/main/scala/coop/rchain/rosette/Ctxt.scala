@@ -21,7 +21,8 @@ case class Ctxt(tag: Location,
                 monitor: Monitor, // reg[9]
                 override val _slot: mutable.Seq[Ob])
     extends Ob {
-  private val regs = Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
+  private val regs =
+    Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
 
   def applyK(result: Ob, tag: Location)(state: VMState): (Boolean, VMState) =
     this.ctxt.rcv(result, tag)(state)
