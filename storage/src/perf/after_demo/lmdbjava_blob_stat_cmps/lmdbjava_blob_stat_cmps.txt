@@ -1,0 +1,228 @@
+number of keys: 1000
+values/key: 1
+blob length: 1048576
+map size: 17592186040320
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 2011136
+
+after put: 99: tree size: 107302912: time: 189
+after put: 199: tree size: 212570112: time: 188
+after put: 299: tree size: 317837312: time: 133
+after put: 399: tree size: 423104512: time: 131
+after put: 499: tree size: 528371712: time: 190
+after put: 599: tree size: 633638912: time: 159
+after put: 699: tree size: 738906112: time: 124
+after put: 799: tree size: 844173312: time: 129
+after put: 899: tree size: 949440512: time: 134
+after put: 999: tree size: 1054707712: time: 132
+
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 1054707712
+
+duration: 3780
+put: 1510
+put/ms: 0
+get: 2270
+gets/ms: 0
+
+number of keys: 1000
+values/key: 1
+blob length: 10485760
+map size: 17592186040320
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 2011136
+
+after put: 99: tree size: 1051017216: time: 1676
+after put: 199: tree size: 2100006912: time: 1464
+after put: 299: tree size: 3148992512: time: 1411
+after put: 399: tree size: 4197978112: time: 3257
+after put: 499: tree size: 5246963712: time: 24471
+after put: 599: tree size: 6295949312: time: 35324
+after put: 699: tree size: 7344934912: time: 28388
+after put: 799: tree size: 8393920512: time: 16865
+after put: 899: tree size: 9442906112: time: 3616
+after put: 999: tree size: 10491891712: time: 5096
+
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 10491891712
+
+duration: 144262
+put: 121568
+put/ms: 0
+get: 22694
+gets/ms: 0
+
+number of keys: 10000
+values/key: 1
+blob length: 1048576
+map size: 17592186040320
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 2011136
+
+after put: 999: tree size: 1054871552: time: 1509
+after put: 1999: tree size: 2107543552: time: 1441
+after put: 2999: tree size: 3160215552: time: 1399
+after put: 3999: tree size: 4212887552: time: 2224
+after put: 4999: tree size: 5265559552: time: 29716
+after put: 5999: tree size: 6318231552: time: 32792
+after put: 6999: tree size: 7370903552: time: 22880
+after put: 7999: tree size: 8423575552: time: 3934
+after put: 8999: tree size: 9476247552: time: 5386
+after put: 9999: tree size: 10528919552: time: 24792
+
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 10528919552
+
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 10528919552
+
+duration: 147609
+put: 126073
+put/ms: 0
+get: 21536
+gets/ms: 0
+
+number of keys: 10000
+values/key: 1
+blob length: 10485760
+map size: 17592186040320
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 2011136
+
+after put: 999: tree size: 10492055552: time: 192757
+after put: 1999: tree size: 20981911552: time: 287872
+after put: 2999: tree size: 31471767552: time: 263372
+after put: 3999: tree size: 41961623552: time: 316680
+after put: 4999: tree size: 52451479552: time: 288060
+after put: 5999: tree size: 62941335552: time: 260420
+after put: 6999: tree size: 73431191552: time: 273034
+after put: 7999: tree size: 83921047552: time: 232050
+after put: 8999: tree size: 94410903552: time: 255396
+after put: 9999: tree size: 104900759552: time: 273808
+
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 104900759552
+
+envinfo.me_mapsize: 17592186040320
+envinfo.me_last_pgno: 2
+envinfo.me_last_txnid: 1
+envinfo.me_maxreaders: 1
+envinfo.me_numreaders: 0
+stat.ms_psize: 4096
+stat.ms_depth: 1
+stat.ms_branch_pages: 0
+stat.ms_leaf_pages: 1
+stat.ms_overflow_pages: 0
+stat.ms_entries: 1
+tree size env: 4096
+tree size db: 104900759552
+
+duration: 3619353
+put: 2643449
+put/ms: 0
+get: 975904
+gets/ms: 0
+
+$ du -hs /home/griff/Documents/lmdb_interop/2017-10-04_1_lmdbjava_blob_stat_cmps/lmdbtest/data.mdb
+12K
+
+

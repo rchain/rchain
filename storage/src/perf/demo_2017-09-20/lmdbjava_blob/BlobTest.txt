@@ -1,0 +1,9 @@
+number of keys: 5000000
+values per key: 1
+blob size: 1
+map size: 240000000
+duration: 20074 ms
+put: 11177 ms, 447 puts/ms
+get: 8897 ms, 561 gets/ms
+
+

@@ -1,0 +1,155 @@
+number of keys: 10000
+number of values/key: 4
+map size: 2560000
+duration: 15
+put: 12
+puts/ms: 833
+get: 3
+gets/ms: 3333
+
+number of keys: 13000
+number of values/key: 4
+map size: 3328000
+duration: 23
+put: 19
+puts/ms: 684
+get: 4
+gets/ms: 3250
+
+number of keys: 500000
+values/key: 4
+map size: 64000000
+duration: 1132
+put: 757
+puts/ms: 660
+get: 375
+gets/ms: 1333
+
+number of keys: 1000000
+values/key: 4
+map size: 128000000
+duration: 2428
+put: 1648
+puts/ms: 606
+get: 780
+gets/ms: 1282
+
+number of keys: 2000000
+values/key: 4
+map size: 256000000
+duration: 5508
+put: 3543
+puts/ms: 564
+get: 1965
+gets/ms: 1017
+
+number of keys: 3000000
+values/key: 4
+map size: 384000000
+duration: 8729
+put: 5592
+puts/ms: 536
+get: 3137
+gets/ms: 956
+
+number of keys: 4000000
+values/key: 4
+map size: 512000000
+duration: 13129
+put: 8666
+puts/ms: 461
+get: 4463
+gets/ms: 896
+
+number of keys: 5000000
+values/key: 4
+map size: 640000000
+duration: 16294
+put: 10425
+puts/ms: 479
+get: 5869
+gets/ms: 851
+
+number of keys: 6000000
+values/key: 4
+map size: 768000000
+duration: 20898
+put: 13740
+puts/ms: 436
+get: 7158
+gets/ms: 838
+
+number of keys: 7000000
+values/key: 4
+map size: 896000000
+duration: 23615
+put: 15268
+puts/ms: 458
+get: 8347
+gets/ms: 838
+
+number of keys: 8000000
+values/key: 4
+map size: 1024000000
+duration: 28125
+put: 18186
+puts/ms: 439
+get: 9939
+gets/ms: 804
+
+number of keys: 9000000
+values/key: 4
+map size: 1152000000
+duration: 32150
+put: 20466
+puts/ms: 439
+get: 11684
+gets/ms: 770
+
+number of keys: 10000000
+values/key: 4
+map size: 1280000000
+duration: 37679
+put: 23939
+puts/ms: 417
+get: 13740
+gets/ms: 727
+
+number of keys: 15000000
+values/key: 4
+map size: 1920000000
+duration: 58282
+put: 37068
+puts/ms: 404
+get: 21214
+gets/ms: 707
+
+number of keys: 16000000
+values/key: 4
+map size: 2048000000
+duration: 68956
+put: 45607
+puts/ms: 350
+get: 23349
+gets/ms: 685
+
+<what is the error?>
+
+number of keys: 1000
+number of values/key: 4
+map size: 128000
+duration: 2
+put: 1
+puts/ms: 1000
+get: 1
+gets/ms: 1000
+
+number of keys: 1300
+number of values/key: 4
+map size: 166400
+duration: 2
+put: 1
+puts/ms: 1300
+get: 1
+gets/ms: 1300
+

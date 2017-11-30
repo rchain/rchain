@@ -1,0 +1,11 @@
+number of keys: 10000
+values/key: 4
+map size: 1920000
+duration: 373309
+put: 373293
+put/ms: 0
+get: 16
+gets/ms: 625
+
+<taking too long>
+

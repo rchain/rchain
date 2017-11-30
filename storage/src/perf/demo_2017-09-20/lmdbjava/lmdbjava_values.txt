@@ -1,0 +1,126 @@
+number of keys: 10000
+values/key: 4
+map size: 2560000
+duration: 64
+put: 51
+put/ms: 196
+get: 13
+gets/ms: 769
+
+number of keys: 500000
+values/key: 4
+map size: 64000000
+duration: 2946
+put: 2285
+put/ms: 218
+get: 661
+gets/ms: 756
+
+number of keys: 1000000
+values/key: 4
+map size: 128000000
+duration: 6051
+put: 4677
+put/ms: 213
+get: 1374
+gets/ms: 727
+
+number of keys: 2000000
+values/key: 4
+map size: 256000000
+duration: 12529
+put: 9695
+put/ms: 206
+get: 2834
+gets/ms: 705
+
+number of keys: 3000000
+values/key: 4
+map size: 384000000
+duration: 19109
+put: 14618
+put/ms: 205
+get: 4491
+gets/ms: 668
+
+number of keys: 4000000
+values/key: 4
+map size: 512000000
+duration: 26700
+put: 20076
+put/ms: 199
+get: 6624
+gets/ms: 603
+
+number of keys: 5000000
+values/key: 4
+map size: 640000000
+duration: 32538
+put: 24520
+put/ms: 203
+get: 8018
+gets/ms: 623
+
+number of keys: 6000000
+values/key: 4
+map size: 768000000
+duration: 41384
+put: 31240
+put/ms: 192
+get: 10144
+gets/ms: 591
+
+number of keys: 7000000
+values/key: 4
+map size: 896000000
+duration: 51181
+put: 39306
+put/ms: 178
+get: 11875
+gets/ms: 589
+
+number of keys: 8000000
+values/key: 4
+map size: 1024000000
+duration: 58307
+put: 43734
+put/ms: 182
+get: 14573
+gets/ms: 548
+
+number of keys: 9000000
+values/key: 4
+map size: 1152000000
+duration: 68540
+put: 52122
+put/ms: 172
+get: 16418
+gets/ms: 548
+
+number of keys: 10000000
+values/key: 4
+map size: 1280000000
+duration: 87633
+put: 67865
+put/ms: 147
+get: 19768
+gets/ms: 505
+
+number of keys: 15000000
+values/key: 4
+map size: 1920000000
+duration: 138274
+put: 108171
+put/ms: 138
+get: 30103
+gets/ms: 498
+
+number of keys: 16000000
+values/key: 4
+map size: 2048000000
+duration: 169101
+put: 135601
+put/ms: 117
+get: 33500
+gets/ms: 477
+

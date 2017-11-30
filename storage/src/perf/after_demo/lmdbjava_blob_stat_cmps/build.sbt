@@ -4,18 +4,10 @@ lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
       organization := "coop.rchain",
-      scalaVersion := "2.12.4",
+      scalaVersion := "2.12.1",
       version      := "0.1.0-SNAPSHOT"
     )),
-    name := "storage",
-
-    // set the main Scala source directory to be <base>/src
-    scalaSource in Compile := baseDirectory.value / "src",
-    // set the Scala test source directory to be <base>/test
-    scalaSource in Test := baseDirectory.value / "test",
-
-    excludeFilter in unmanagedSources := "*perf*",
-
+    name := "LmdbJavaTest",
     // http://assets.maven-repository.com/artifact/org.lmdbjava/lmdbjava/0.0.2
     // Last modified: 2016-07-29 02:24:11 UTC
     libraryDependencies += "org.lmdbjava" % "lmdbjava" % "0.0.2",
@@ -34,16 +26,4 @@ lazy val root = (project in file(".")).
     // https://mvnrepository.com/artifact/com.google.guava/guava
     // Date: Aug 04, 2017
     libraryDependencies += "com.google.guava" % "guava" % "23.0"
-    // http://www.scalatest.org/install
-    // Date: Oct 10, 2017
-    // libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.1"
-    // libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
-
-    // http://www.scalatest.org/install
-    // http://www.scalatest.org/supersafe
-    // Date: 0ct 10, 2017
-    // addSbtPlugin("com.artima.supersafe" % "sbtplugin" % "1.1.2")
   )
-
-connectInput in run := true
-
