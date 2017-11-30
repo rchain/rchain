@@ -1,0 +1,103 @@
+// Rholang equivalent of the Simple Open Auction http://solidity.readthedocs.io/en/develop/solidity-by-example.html#simple-open-auction
+// The auction contract has three main actions: bid, withdraw, and auction_end (which ends the auction).
+// This contract demonstrates the use of the primitive inject-now,
+// which injects the current system time into the channel.
+// The current time is then used to keep track of when
+// the auction started, when the bid has come in, and when
+// the call to end the auction has been made.
+
+new auction in {
+    contract auction (beneficiary, bidding_time, return_channel) = {
+        new auction_start_channel, highest_bidder_channel, highest_bid_channel, pending_returns_channel, ended_channel, now_channel in {
+            ended_channel!(false) |
+            highest_bidder_channel!("no one") |
+            highest_bid_channel!(-1) |
+            inject-now(auction_start_channel) |
+
+            new bid, withdraw, auction_end in {
+
+                contract bid(message_sender, amount, rtn) = {
+                    inject-now(now_channel) |
+                    for (now <- now_channel; highest_bidder <- highest_bidder_channel; highest_bid <- highest_bid_channel; auction_start <- auction_start_channel) {
+                        match [now <= auction_start + bidding_time, amount > highest_bid] with
+                            <true, true> => {
+                                match [highest_bidder != 0] with
+                                    <true> => {
+                                        for (pending_returns <- pending_returns_channel) {
+                                            pending_returns_channel!(
+                                                pending_returns.insert(highest_bidder,
+                                                    pending_returns.get(highest_bidder) + highest_bid)
+                                            )
+                                        }
+                                    }
+                                    _ => {
+                                        Nil
+                                    } |
+                                highest_bidder_channel!(message_sender) |
+                                highest_bid_channel!(amount) |
+                                auction_start_channel!(auction_start) |
+                                rtn!(true)
+                                // TODO: Send event equivalent
+                            }
+                            _ => {
+                                highest_bidder_channel!(highest_bidder) |
+                                highest_bid_channel!(highest_bid) |
+                                auction_start_channel!(auction_start) |
+                                rtn!(false)
+                            }
+                    }
+                } |
+
+                contract withdraw(message_sender, rtn) = {
+                    for (pending_returns <- pending_returns_channel) {
+                        match pending_returns.get(message_sender) > 0 with
+                            true => {
+                                // TODO: Implement polymorphic ! to actually transfer the amount of the native token
+                                message_sender!(pending_returns.get(message_sender)) |
+                                pending_returns_channel!(pending_returns.insert(message_sender, 0)) |
+                                rtn!(true)
+                            }
+                            _ => {
+                                pending_returns_channel!(pending_returns) |
+                                rtn!(false)
+                            }
+                    }
+                } |
+
+                contract auction_end(message_sender, rtn) = {
+                    inject-now(now_channel) |
+                    for (now <- now_channel;  auction_start <- auction_start_channel; ended <- ended_channel; highest_bid <- highest_bid_channel) {
+                        match [now >= auction_start + bidding_time, ended != true] with
+                            <true, true> => {
+                                ended_channel!(true) |
+                                auction_start_channel!(auction_start) |
+                                highest_bid_channel!(highest_bid) |
+                                // TODO: Implement polymorphic ! to actually transfer the amount of the native token
+                                beneficiary!(highest_bid) |
+                                rtn!(true)
+                            }
+                            _ => {
+                                ended_channel!(false) |
+                                auction_start_channel!(auction_start) |
+                                highest_bid_channel!(highest_bid) |
+                                rtn!(false)
+                            }
+                    }
+                } |
+                return_channel!(
+                    Map().insertMany("bid", bid, "withdraw", withdraw,
+                        "auction_end", auction_end)
+                )
+            }
+        }
+    } |
+
+    // Code to instantiate the auction contract and send in a bid
+    new rtn, me, bidder_one, bidder_two, unused_rtn in {
+        auction!([me, 5, rtn]) |
+        for (auction_contract <- rtn) {
+            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            rtn!(auction_contract)
+        }
+    }
+}
