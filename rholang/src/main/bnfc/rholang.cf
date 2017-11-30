@@ -146,3 +146,24 @@ separator nonempty Name "," ;
 
 comment "//" ;
 comment "/*" "*/" ;
+
+-- Type patterns
+-- TODO: should some of th Chan's be CPatterns?
+TPVerity. TPattern5 ::= "true" ;
+TPNullity. TPattern5 ::= "0" ;
+TPNegation. TPattern4 ::= "~" TPattern ;
+TPConjuction. TPattern3 ::= TPattern "&" TPattern ;
+TPDisjunction. TPattern2 ::= TPattern "\/" TPattern ;
+TPDescent. TPattern1 ::= "*" Chan ;
+TPElevation. TPattern1 ::= TPIndicator "!" TPattern ;
+TPActivity. TPattern1 ::= "for" "(" [TPatternBind] ")" "{" TPattern "}" ;
+TPMixture. TPattern ::= TPattern "|" TPattern ;
+separator nonempty TPattern "," ;
+coercions TPattern 5 ;
+
+TPIQuotFormula. TPIndicator ::= "@" TPattern ;
+TPIName. TPIndicator ::= Chan ;
+separator nonempty TPIndicator "," ;
+
+TPBind. TPatternBind ::= Chan "<-" TPIndicator ;
+separator nonempty TPatternBind ";" ;
