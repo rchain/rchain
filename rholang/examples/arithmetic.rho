@@ -1,0 +1,16 @@
+// A spatially typed arithmetic contract
+new arithmetic in {
+    contract arithmetic(left, right, out) = {
+        for(l <- left; r <- right){
+            out!(l + r) | arithmetic(left, right, out)
+        }
+    } |
+    new left, right, ret in {
+        arithmetic!(left,right,ret) |
+        left!(1) |
+        right!(2) |
+        for ( three <- ret ) {
+            print(three)
+        }
+    }
+}
