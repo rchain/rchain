@@ -235,7 +235,7 @@ trait TermZipperComposition[L,V,T] {
       case LabeledTreeContext(lbl: L @unchecked, left: List[TermCtxt[L, V, T] with Factual] @unchecked, ctxt: LabeledTreeContext[L, Either[T, V]] @unchecked, right: List[TermCtxt[L, V, T] with Factual] @unchecked) => {
 	new TermCtxtBranch[L,V,T](
 	  lbl, 
-	  left ++ ( compose( ctxt, tree ) :: right )
+	  left.reverse ++ ( compose( ctxt, tree ) :: right )
 	)
       }
     }
