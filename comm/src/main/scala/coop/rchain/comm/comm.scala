@@ -11,6 +11,8 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
     Vector[Byte](pKey: _*)
 
   def key = keccak256(2)
+
+  override def toString = key.map("%02x" format _).mkString
 }
 
 case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
@@ -29,4 +31,9 @@ case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
     val sKey = key.map("%02x" format _).mkString
     s"#{PeerNode $sKey}"
   }
+}
+
+trait Notary {
+  def sign(data: Seq[Byte]): Seq[Byte]
+  def checkSignature(sig: Seq[Byte]): Boolean
 }

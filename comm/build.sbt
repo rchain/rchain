@@ -1,9 +1,12 @@
-scalaVersion := "2.12.3"
+scalaVersion := "2.12.4"
 
 PB.targets in Compile := Seq(
   PB.gens.java -> (sourceManaged in Compile).value,
   scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
 )
+
+mainClass in (Compile, run) := Some("coop.rchain.comm.Main")
+mainClass in (Compile, packageBin) := Some("coop.rchain.comm.Main")
 
 libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
 
@@ -12,8 +15,13 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.0.1" % "test",
 
   // URI Parsing
-  "io.lemonlabs" %% "scala-uri" % "0.5.0"
+  "io.lemonlabs" %% "scala-uri" % "0.5.0",
+
+  // Command-line parsing
+  "org.rogach" %% "scallop" % "3.0.3"
 )
+
+
 
 addCompilerPlugin(
   "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full

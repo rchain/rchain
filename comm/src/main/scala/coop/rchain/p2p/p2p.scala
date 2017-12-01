@@ -98,6 +98,8 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
         case _ => println(s"Unrecognized message $msg")
       }
     }
+
+  override def toString = s"#{Network $homeAddress}"
 }
 
 object NetworkProtocol {
