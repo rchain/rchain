@@ -131,7 +131,6 @@ class TermCtxtLeaf[Namespace,Var,Tag]( val tag : Either[Tag,Var] )
 extends TreeItem[Either[Tag,Var]]( tag )
 with TermCtxt[Namespace,Var,Tag]
 with Factual {
-  def this() = { this( null.asInstanceOf[Either[Tag,Var]] ) }
   override def self = List( this )
   override def toString = {
     tag match {
@@ -201,7 +200,6 @@ class TermCtxtBranch[Namespace,Var,Tag](
 ) extends TreeSection[Either[Tag,Var]]( factuals )
 with AbstractTermCtxtBranch[Namespace,Var,Tag]
 with Factual {
-  def this() = { this( null.asInstanceOf[Namespace], Nil ) }
   override def labels : List[TermCtxt[Namespace,Var,Tag]] = {
     factuals
   }
