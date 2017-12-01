@@ -37,6 +37,7 @@ boot/
 
 # BNFC
 ###################
+rholang/bnfc/
 rholang/src/main/java/coop/**
 
 # Rosette

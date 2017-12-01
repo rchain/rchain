@@ -4,7 +4,7 @@ lazy val root = (project in file(".")).
   settings(
     inThisBuild(List(
       organization := "coop.rchain",
-      scalaVersion := "2.12.3",
+      scalaVersion := "2.12.4",
       version      := "0.1.0-SNAPSHOT"
     )),
     name := "storage",
@@ -13,6 +13,8 @@ lazy val root = (project in file(".")).
     scalaSource in Compile := baseDirectory.value / "src",
     // set the Scala test source directory to be <base>/test
     scalaSource in Test := baseDirectory.value / "test",
+
+    excludeFilter in unmanagedSources := "*perf*",
 
     // http://assets.maven-repository.com/artifact/org.lmdbjava/lmdbjava/0.0.2
     // Last modified: 2016-07-29 02:24:11 UTC

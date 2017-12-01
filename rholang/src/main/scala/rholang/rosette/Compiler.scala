@@ -9,12 +9,10 @@
 
 package coop.rchain.rho2rose
 
-import coop.rchain.lib.term._
 import coop.rchain.lib.zipper._
 import coop.rchain.syntax.rholang._
 import coop.rchain.syntax.rholang.Absyn._
 
-import java_cup.runtime._
 import java.io._
 
 trait Rholang2RosetteCompilerT {
@@ -51,7 +49,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
     ast match {
-      case Some(Location(term: StrTermCtorAbbrevs.StrTermCtxt, _)) =>
+      case Some(Location(term: StrTermCtorAbbrevs.StrTermCtxt @unchecked, _)) =>
         term.rosetteSerializeOperation + term.rosetteSerialize
       case _ => "Not a StrTermCtxt"
     }

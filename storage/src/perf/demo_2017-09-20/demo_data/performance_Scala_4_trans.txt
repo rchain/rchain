@@ -1,0 +1,232 @@
+Four values per key
+One transaction for all operations
+
+
+
+number of keys: 20000000
+database is too big, runtime error
+
+
+number of keys: 15000000
+values per key: 4
+map size: 1920000000
+duration: 67803 micro
+put: 31484 micro, 476 puts per microsecond
+get: 26312 micro, 570 gets per microsecond
+RAM: 202
+
+
+number of keys: 10000000
+values per key: 4
+map size: 1280000000
+duration: 47007 micro
+put: 21378 micro, 467 puts per microsecond
+get: 15624 micro, 640 gets per microsecond
+RAM: 198
+
+number of keys: 10000000
+values per key: 4
+map size: 1280000000
+duration: 46704 micro
+put: 20747 micro, 481 puts per microsecond
+get: 15952 micro, 626 gets per microsecond
+RAM: 199
+
+
+number of keys: 9000000
+values per key: 4
+map size: 1152000000
+duration: 42011 micro
+put: 18083 micro, 497 puts per microsecond
+get: 13921 micro, 646 gets per microsecond
+RAM: 196
+
+number of keys: 9000000
+values per key: 4
+map size: 1152000000
+duration: 42222 micro
+put: 18145 micro, 496 puts per microsecond
+get: 14070 micro, 639 gets per microsecond
+RAM: 197
+
+
+number of keys: 8388607
+values per key: 4
+map size: 1073741696
+duration: 39752 micro
+put: 16335 micro, 513 puts per microsecond
+get: 13414 micro, 625 gets per microsecond
+RAM: 197
+
+number of keys: 8388607
+values per key: 4
+map size: 1073741696
+duration: 39087 micro
+put: 16314 micro, 514 puts per microsecond
+get: 12769 micro, 656 gets per microsecond
+RAM: 198
+
+
+number of keys: 8000000
+values per key: 4
+map size: 1024000000
+duration: 38019 micro
+put: 15828 micro, 505 puts per microsecond
+get: 12188 micro, 656 gets per microsecond
+RAM: 195
+
+number of keys: 8000000
+values per key: 4
+map size: 1024000000
+duration: 37806 micro
+put: 15623 micro, 512 puts per microsecond
+get: 12179 micro, 656 gets per microsecond
+RAM: 194
+
+
+number of keys: 7000000
+values per key: 4
+map size: 896000000
+duration: 33473 micro
+put: 13280 micro, 527 puts per microsecond
+get: 10190 micro, 686 gets per microsecond
+RAM: 194
+
+number of keys: 7000000
+values per key: 4
+map size: 896000000
+duration: 33893 micro
+put: 13725 micro, 510 puts per microsecond
+get: 10165 micro, 688 gets per microsecond
+RAM: 194
+
+
+number of keys: 6000000
+values per key: 4
+map size: 768000000
+duration: 29808 micro
+put: 11442 micro, 524 puts per microsecond
+get: 8363 micro, 717 gets per microsecond
+RAM: 193
+
+number of keys: 6000000
+values per key: 4
+map size: 768000000
+duration: 29329 micro
+put: 11069 micro, 542 puts per microsecond
+get: 8257 micro, 726 gets per microsecond
+RAM: 193
+
+
+number of keys: 5000000
+values per key: 4
+map size: 640000000
+duration: 25671 micro
+put: 8805 micro, 567 puts per microsecond
+get: 6863 micro, 728 gets per microsecond
+RAM: 201
+
+number of keys: 5000000
+values per key: 4
+map size: 640000000
+duration: 25692 micro
+put: 8838 micro, 565 puts per microsecond
+get: 6851 micro, 729 gets per microsecond
+RAM: 191
+
+
+number of keys: 4000000
+values per key: 4
+map size: 512000000
+duration: 22551 micro
+put: 7061 micro, 566 puts per microsecond
+get: 5488 micro, 728 gets per microsecond
+RAM: 198
+
+number of keys: 4000000
+values per key: 4
+map size: 512000000
+duration: 22305 micro
+put: 6920 micro, 578 puts per microsecond
+get: 5383 micro, 743 gets per microsecond
+RAM: 195
+
+
+number of keys: 3000000
+values per key: 4
+map size: 384000000
+duration: 18812 micro
+put: 5104 micro, 587 puts per microsecond
+get: 3707 micro, 809 gets per microsecond
+RAM: 195
+
+number of keys: 3000000
+values per key: 4
+map size: 384000000
+duration: 18881 micro
+put: 4997 micro, 600 puts per microsecond
+get: 3882 micro, 772 gets per microsecond
+RAM: 194
+
+
+number of keys: 2000000
+values per key: 4
+map size: 256000000
+duration: 15759 micro
+put: 3251 micro, 615 puts per microsecond
+get: 2507 micro, 797 gets per microsecond
+RAM: 194
+
+number of keys: 2000000
+values per key: 4
+map size: 256000000
+duration: 15696 micro
+put: 3352 micro, 596 puts per microsecond
+get: 2342 micro, 853 gets per microsecond
+RAM: 196
+
+
+number of keys: 2000000
+values per key: 4
+map size: 256000000
+Sleep 10 seconds
+Woke up
+duration: 15793 micro
+put: 3302 micro, 605 puts per microsecond
+get: 2490 micro, 803 gets per microsecond
+RAM: 195
+
+
+number of keys: 1000000
+values per key: 4
+map size: 128000000
+duration: 12801 micro
+put: 1582 micro, 632 puts per microsecond
+get: 1218 micro, 821 gets per microsecond
+RAM: 196
+
+number of keys: 1000000
+values per key: 4
+map size: 128000000
+duration: 12709 micro
+put: 1561 micro, 640 puts per microsecond
+get: 1147 micro, 871 gets per microsecond
+RAM: 197
+
+
+number of keys: 500000
+values per key: 4
+map size: 64000000
+duration: 11366 micro
+put: 731 micro, 683 puts per microsecond
+get: 634 micro, 788 gets per microsecond
+RAM: 173
+
+number of keys: 500000
+values per key: 4
+map size: 64000000
+duration: 11250 micro
+put: 712 micro, 702 puts per microsecond
+get: 538 micro, 929 gets per microsecond
+RAM: 172
+
