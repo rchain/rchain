@@ -18,7 +18,11 @@ libraryDependencies ++= Seq(
   "io.lemonlabs" %% "scala-uri" % "0.5.0",
 
   // Command-line parsing
-  "org.rogach" %% "scallop" % "3.0.3"
+  "org.rogach" %% "scallop" % "3.0.3",
+
+  // Logging
+  "com.typesafe.scala-logging" %% "scala-logging" % "3.7.2",
+  "ch.qos.logback" % "logback-classic" % "1.2.3"
 )
 
 
