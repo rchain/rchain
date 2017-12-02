@@ -5,8 +5,7 @@ PB.targets in Compile := Seq(
   scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
 )
 
-mainClass in (Compile, run) := Some("coop.rchain.comm.Main")
-mainClass in (Compile, packageBin) := Some("coop.rchain.comm.Main")
+mainClass in assembly := Some("coop.rchain.comm.Main")
 
 libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
 
