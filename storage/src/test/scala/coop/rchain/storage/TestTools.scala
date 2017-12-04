@@ -23,13 +23,17 @@ object TestTools {
 
     def nextKey(): Option[Int] = {
       if (numKeys <= countUsedKeys) {
-        return None
+        None
       }
-      var r = randGen.nextInt(numKeys)
-      while (usedKeys(r)) { r = randGen.nextInt(numKeys) }
-      countUsedKeys += 1
-      usedKeys(r) = true
-      Some(r)
+      else {
+        var r = randGen.nextInt(numKeys)
+        while (usedKeys(r)) {
+          r = randGen.nextInt(numKeys)
+        }
+        countUsedKeys += 1
+        usedKeys(r) = true
+        Some(r)
+      }
     }
   }
 
@@ -46,19 +50,27 @@ object TestTools {
     blobs
   }
 
-  def ArraysEqual(a1: Array[String], a2: Array[String]): Boolean = {
-    if (a1.length != a2.length) return false
-    for (i <- 0 until a1.length) {
-      var contains = false
-      for (j <- 0 until a2.length) {
-        if (a1(i) == a2(j)) {
-          contains = true
+  def arraysEqual(a1: Array[String], a2: Array[String]): Boolean = {
+    if (a1.length != a2.length) {
+      false
+    } else {
+      var equal = true
+      var i = 0
+      while (i < a1.length && equal) {
+        var contains = false
+        var j = 0
+        while (j < a2.length && !contains) {
+          if (a1(i) == a2(j)) {
+            contains = true
+          }
+          j += 1
         }
+        if (!contains) {
+          equal = false
+        }
+        i += 1
       }
-      if (!contains) {
-        return false
-      }
+      equal
     }
-    true
   }
 }

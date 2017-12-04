@@ -36,10 +36,12 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
   def createParseTree(lexer: KeyLexer): ArrayBuffer[TermTree] = {
     var keyName = ""
     var paramsArray = new ArrayBuffer[TermTree]()
+    var rightParenSeen = false
 
-    var lexToken = lexer.NextToken
+    var lexToken = lexer.nextToken
 
-    while (lexToken.token != Token.EndOfString && lexToken.token != Token.Error) {
+    while (lexToken.token != Token.EndOfString && lexToken.token != Token.Error
+            && !rightParenSeen) {
       lexToken.token match {
         case Token.Key => {
           keyName = lexToken.tokenStr
@@ -50,7 +52,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
           paramsArray += new Key(keyName, new Params(keyParams))
         }
         case Token.RightParen => {
-          return paramsArray
+          rightParenSeen = true
         }
         case Token.Variable | Token.Constant => {
           paramsArray += TermTools.createTermTree(lexToken.tokenStr)
@@ -62,27 +64,32 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
         }
       }
 
-      lexToken = lexer.NextToken
+      if (!rightParenSeen) {
+        lexToken = lexer.nextToken
+      }
     }
 
-    if (lexToken.token == Token.Error) {
-      throw new RChainException(
-        "createParseTree(): lexer error (2): '" + lexToken.tokenStr + "'")
+    if (rightParenSeen || lexToken.token == Token.EndOfString) {
+      paramsArray
+    } else {
+      if (lexToken.token == Token.Error) {
+        throw new RChainException(
+          "createParseTree(): lexer error (2): '" + lexToken.tokenStr + "'")
+      }
+      throw new RChainException("createParseTree: shouldn't get to end of method")
     }
-
-    throw new RChainException("createParseTree: shouldn't get to end of method")
   }
 
   def createParseKey(key: String): (String, Params) = {
     var lexer = new KeyLexer(key)
 
-    val firstLexToken = lexer.NextToken
+    val firstLexToken = lexer.nextToken
     if (firstLexToken.token != Token.Key) {
       throw new RChainException("createParseTree: first token is not Key")
     }
     val keyName = firstLexToken.tokenStr
 
-    val secondLexToken = lexer.NextToken
+    val secondLexToken = lexer.nextToken
     if (secondLexToken.token != Token.LeftParen) {
       throw new RChainException("createParseTree: first token is not Key")
     }
@@ -112,7 +119,6 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     bindings
   }
 
-  // sort by: arity, character, digit, other
   def compare(key: Key): Int = {
     if (term == key.term) { return 0 }
 
@@ -143,6 +149,58 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     if (term.length > key.term.length) { return 1 }
     -1
   }
+
+  // sort by: arity, character, digit, other
+/*
+  def compare(key: Key): Int = {
+    var returnVal = 0
+    var returnValSet = false
+
+    if (term == key.term) {
+      0
+    } else if (arity > key.arity) {
+      1
+    } else if (arity < key.arity) {
+      -1
+    } else {
+      val length = math.min(term.length, key.term.length)
+      var i = 0
+      while (i < length && !returnValSet) {
+        if (term(i) != key.term(i)) {
+          if (Character.isLetter(term(i))
+            && Character.isDigit(key.term(i))) {
+            returnVal = -1
+            returnValSet = true
+          } else if (Character.isDigit(term(i))
+            && Character.isLetter(key.term(i))) {
+            returnVal = 1
+            returnValSet = true
+          } else {
+            if (term(i) < key.term(i)) {
+              returnVal = -1
+              returnValSet = true
+            } else if (term(i) > key.term(i)) {
+              returnVal = 1
+              returnValSet = true
+            }
+          }
+        }
+        i += 1
+      }
+    }
+
+    if (returnValSet) {
+      returnVal
+    } else {
+      assert(term.length != key.term.length)
+      if (term.length > key.term.length) {
+        1
+      } else {
+        -1
+      }
+    }
+  }
+*/
 
   def display: Unit = { print(term) }
 }

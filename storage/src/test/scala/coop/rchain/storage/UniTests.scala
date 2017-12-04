@@ -7,38 +7,429 @@
 
 package coop.rchain.storage
 
-import java.io.File
 import java.io.IOException
 import java.lang._
+
 import org.scalatest._
+
 import scala.io.StdIn
 
-class UniTests extends FlatSpec with Matchers {
+object UniTests {
+
+  def tests(): Unit = {
+
+    println("UniTests.tests() begin")
+
     val basePath = System.getProperty("user.dir") +
       "/src/test/scala/coop/rchain/storage/stores/"
-    val storeFlatPath = basePath + "storeFlat.txt"
-    val storeNestedPath = basePath + "storeNested.txt"
-    val storeRecursivePath = basePath + "storeRecursive.txt"
+    val storeFlat = basePath + "storeFlat.txt"
+    val storeNested = basePath + "storeNested.txt"
+    val storeRecursive = basePath + "storeRecursive.txt"
 
-  "Storage Unifier" should "unify nested keys" in {
+    TestsFlatKeys(storeFlat); println()
+    TestsNestedKeys(storeNested); println()
+    TestsRecursiveKeys(storeRecursive)
+
+    TestsFlat(storeFlat)
+    TestsNested(storeNested)
+    TestsRecursive(storeRecursive)
+
+    println("UniTests.tests() end")
+
+  }
+
+  def TestsRecursiveKeys(storeFilePath: String): String = {
+
+    println("TestsRecursiveKeys() begin")
+
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
     storConf.isWritable = true
-    storConf.baseDir = Some(basePath)
+    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.dirName = Some("storageTestsRecursiveKeysDb")
+    storConf.name = Some("storageTestsRecursiveKeys")
+    assert(storConf.isValid())
+
+    var storage = new Storage(storConf)
+
+    try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayUniKeys
+    println()
+
+    try {
+
+      println("Starting tests"); println
+
+      // a(Y)
+      var query = new Key("a(Y)")
+      var keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(X, Y)
+      query = new Key("a(X, Y)")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(b(c(X), Y), f(2))
+      // more examples like this
+      query = new Key("a(b(c(X), Y), f(2))")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(b(c(X), 1), f(2))
+      query = new Key("a(b(c(X), 1), f(2))")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // bt(X,bt(1,Y,3),bt(4,5,Z))
+      query = new Key("bt(X,bt(1,Y,3),bt(4,5,Z))")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      } else {
+        println("query: " + query.term + " does not resolves")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+    } catch {
+      case e: Throwable => {
+        println("TestsRecursiveKeys(): " + e)
+      }
+    } finally {
+      storage.close()
+      storage.deleteFiles()
+    }
+
+    println("TestsRecursiveKeys() end")
+
+    "Completed tests"
+  }
+
+  def TestsNestedKeys(storeFilePath: String): String = {
+
+    println("TestsNestedKeys() begin")
+
+    val storConf = new StorageConfig()
+    storConf.isKeyToValues = true
+    storConf.isWritable = true
+    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.dirName = Some("storageTestsNestedKeysDb")
+    storConf.name = Some("storageTestsNestedKeys")
+    assert(storConf.isValid())
+
+    var storage = new Storage(storConf)
+    try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayUniKeys
+    println()
+
+    println("Starting tests"); println
+
+    try {
+
+      // a(b(X))
+      var query = new Key("a(b(X))")
+      var keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(1)
+      query = new Key("a", "1")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(1,2)
+      query = new Key("a", "1", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      // println()
+    } catch {
+      case e: Throwable => {
+        println("TestsNestedKeys(): " + e)
+      }
+    } finally {
+      storage.close()
+      storage.deleteFiles()
+    }
+
+    println("TestsNestedKeys() end")
+
+    "Completed tests"
+  }
+
+  def TestsFlatKeys(storeFilePath: String): String = {
+
+    println("TestsFlat() begin")
+
+    val storConf = new StorageConfig()
+    storConf.isKeyToValues = true
+    storConf.isWritable = true
+    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.dirName = Some("storageTestsFlatDb")
+    storConf.name = Some("storageTestsFlat")
+    assert(storConf.isValid())
+
+    var storage = new Storage(storConf)
+    try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayUniKeys
+    println()
+
+    println("Starting tests"); println
+
+    try {
+
+      // a(1)
+      var query = new Key("a", "1")
+      var keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // Z(1)
+      query = new Key("Z", "1")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(2)
+      query = new Key("a", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(3)
+      query = new Key("a", "3")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(X)
+      query = new Key("a", "X")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // a(Y)
+      query = new Key("a", "Y")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,1)
+      query = new Key("b", "1", "1")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,2)
+      query = new Key("b", "1", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,X)
+      // good test
+      query = new Key("b", "1", "X")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(1,Y)
+      query = new Key("b", "1", "Y")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(A,B)
+      query = new Key("b", "A", "B")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(X,2)
+      // very good test
+      query = new Key("b", "X", "2")
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+
+      // b(X,1)
+      keys = storage.unifyQuery(query)
+      if (0 < keys.length) {
+        println("query: " + query.term + " resolves:")
+      }
+      for (key <- keys) {
+        println(key.term)
+      }
+      println()
+    } catch {
+      case e: Throwable => {
+        println("TestsFlat(): " + e)
+      }
+    } finally {
+      storage.close()
+      storage.deleteFiles()
+    }
+
+    println("TestsFlat() end")
+
+    "Completed tests"
+  }
+
+  def TestsRecursive(storeFilePath: String): String = {
+
+    println("TestsRecursive() begin")
+
+    val storConf = new StorageConfig()
+    storConf.isKeyToValues = true
+    storConf.isWritable = true
+    storConf.baseDir = Some(System.getProperty("user.dir"))
     storConf.dirName = Some("storageTestsRecursiveDb")
     storConf.name = Some("storageTestsRecursive")
     assert(storConf.isValid())
 
     var storage = new Storage(storConf)
-    try {
-      storage.loadFile(storeRecursivePath)
-    } catch {
-      case _: IOException => {
-        fail("Error opening file: " + storeRecursivePath)
-      }
-    }
 
     try {
+      storage.loadFile(storeFilePath, true)
+    } catch {
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
+    }
+
+    println("Store contents:");
+    storage.displayUniKeys
+    println()
+
+    try {
+
+      println("Starting tests"); println
+
       // a(Y)
       var query = new Key("a(Y)")
       var queryOutcome = QueryTools.queryResultsToArrayString(
@@ -47,7 +438,7 @@ class UniTests extends FlatSpec with Matchers {
         storage)
       var oracle = new UniOracle(
         Array("[queryVars:{Y:b(c(Y))},keyVars:{}] -> [X]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(X, Y)
       query = new Key("a(X, Y)")
@@ -57,9 +448,10 @@ class UniTests extends FlatSpec with Matchers {
         storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:b(c(A),d(e(B))),Y:f(C)},keyVars:{}] -> [Y]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(b(c(X), Y), f(2))
+      // more examples like this
       query = new Key("a(b(c(X), Y), f(2))")
       queryOutcome = QueryTools.queryResultsToArrayString(
         query,
@@ -67,7 +459,7 @@ class UniTests extends FlatSpec with Matchers {
         storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:A,Y:d(e(B))},keyVars:{A:X,C:2}] -> [Y]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(b(c(X), 1), f(2))
       query = new Key("a(b(c(X), 1), f(2))")
@@ -75,10 +467,10 @@ class UniTests extends FlatSpec with Matchers {
         query,
         query.unifyQuery(storage),
         storage)
-      // If constants were allowed to match a predicate:
+      // If you allow a constant to match a predicate:
       // Array("{X:A,1:d(e(B)),2:C} -> [Y]")
       oracle = new UniOracle(Array[String]())
-      assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // bt(X,bt(1,Y,3),bt(4,5,Z))
       query = new Key("bt(X,bt(1,Y,3),bt(4,5,Z))")
@@ -88,21 +480,24 @@ class UniTests extends FlatSpec with Matchers {
         storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:0,Y:2,Z:6},keyVars:{}] -> [Z]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
     } catch {
       case e: Throwable => {
-        fail("TestsRecursive(): " + e)
+        println("TestsRecursive(): " + e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(basePath + storConf.dirName.get).delete()
     }
+
+    println("TestsRecursive() end")
+
+    "Completed tests"
   }
 
+  def TestsNested(storeFilePath: String): String = {
 
-  "Storage Unifier" should "unify nested keys 2" in {
-  // def TestsNested(storeFilePath: String): String = {
+    println("TestsNested() begin")
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
@@ -114,12 +509,18 @@ class UniTests extends FlatSpec with Matchers {
 
     var storage = new Storage(storConf)
     try {
-      storage.loadFile(storeNestedPath)
+      storage.loadFile(storeFilePath, true)
     } catch {
-      case _: IOException => {
-        fail("Error opening file: " + storeNestedPath)
-      }
+      case _: IOException =>
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
     }
+
+    println("Store contents:");
+    storage.displayUniKeys
+    println()
+
+    println("Starting tests"); println
 
     try {
 
@@ -132,7 +533,7 @@ class UniTests extends FlatSpec with Matchers {
       var oracle = new UniOracle(
         Array("[queryVars:{X:Y},keyVars:{Y:X}] -> [two]",
               "[queryVars:{X:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(1)
       query = new Key("a", "1")
@@ -143,7 +544,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
               "[queryVars:{},keyVars:{}] -> [twelve]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(1,2)
       query = new Key("a", "1", "2")
@@ -152,20 +553,24 @@ class UniTests extends FlatSpec with Matchers {
         query.unifyQuery(storage),
         storage)
       oracle = new UniOracle(Array(""))
-      assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
     } catch {
       case e: Throwable => {
-        fail("TestsNested(): " + e)
+        println("TestsNested(): " + e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(basePath + storConf.dirName.get).delete()
     }
+
+    println("TestsNested() end")
+
+    "Completed tests"
   }
 
-  "Storage Unifier" should "unify flat keys" in {
-  // def TestsFlat(storeFilePath: String): String = {
+  def TestsFlat(storeFilePath: String): String = {
+
+    println("TestsFlat() begin")
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
@@ -177,11 +582,18 @@ class UniTests extends FlatSpec with Matchers {
 
     var storage = new Storage(storConf)
     try {
-      storage.loadFile(storeFlatPath)
+      storage.loadFile(storeFilePath, true)
     } catch {
       case _: IOException =>
-        fail("Error opening file: " + storeFlatPath)
+        println("Error opening file: " + storeFilePath)
+        return "Error opening store file: " + storeFilePath
     }
+
+    println("Store contents:");
+    storage.displayUniKeys
+    println()
+
+    println("Starting tests"); println
 
     try {
       // a(1)
@@ -194,7 +606,7 @@ class UniTests extends FlatSpec with Matchers {
       var oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [what]",
               "[queryVars:{},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // Z(1)
       query = new Key("Z", "1")
@@ -203,7 +615,7 @@ class UniTests extends FlatSpec with Matchers {
         query.unifyQuery(storage),
         storage)
       oracle = new UniOracle(Array(""))
-      assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(2)
       query = new Key("a", "2")
@@ -214,7 +626,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{}] -> [two]",
               "[queryVars:{},keyVars:{X:2}] -> [what]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(3)
       query = new Key("a", "3")
@@ -223,7 +635,7 @@ class UniTests extends FlatSpec with Matchers {
         query.unifyQuery(storage),
         storage)
       oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:3}] -> [what]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(X)
       query = new Key("a", "X")
@@ -235,7 +647,7 @@ class UniTests extends FlatSpec with Matchers {
         Array("[queryVars:{X:2},keyVars:{}] -> [two]",
               "[queryVars:{},keyVars:{}] -> [what]",
               "[queryVars:{X:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // a(Y)
       query = new Key("a", "Y")
@@ -247,7 +659,7 @@ class UniTests extends FlatSpec with Matchers {
         Array("[queryVars:{Y:2},keyVars:{}] -> [two]",
               "[queryVars:{Y:X},keyVars:{X:Y}] -> [what]",
               "[queryVars:{Y:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,1)
       query = new Key("b", "1", "1")
@@ -258,7 +670,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [where]",
               "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,2)
       query = new Key("b", "1", "2")
@@ -273,7 +685,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{},keyVars:{X:1,Y:2}] -> [this]",
           "[queryVars:{},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,X)
       // good test
@@ -289,7 +701,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{X:Y},keyVars:{X:1,Y:X}] -> [this]",
           "[queryVars:{X:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(1,Y)
       query = new Key("b", "1", "Y")
@@ -304,7 +716,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{},keyVars:{X:1}] -> [this]",
           "[queryVars:{Y:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(A,B)
       query = new Key("b", "A", "B")
@@ -320,7 +732,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{A:X,B:Y},keyVars:{X:A,Y:B}] -> [this]",
           "[queryVars:{A:1,B:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(X,2)
       // very good test
@@ -336,7 +748,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{X:1},keyVars:{X:2}] -> [where]",
           "[queryVars:{},keyVars:{}] -> [how]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
 
       // b(X,1)
       query = new Key("b", "X", "1")
@@ -347,56 +759,73 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
               "[queryVars:{},keyVars:{Y:1}] -> [this]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      evaluateTest(query.term, queryOutcome, oracle)
     } catch {
       case e: Throwable => {
-        fail("TestsFlat(): " + e)
+        println("TestsFlat(): " + e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(basePath + storConf.dirName.get).delete()
     }
+
+    println("TestsFlat() end")
+
+    "Completed tests"
   }
 
-  def EvaluateTest(queryName: String,
+  // evaluateTest
+  def evaluateTest(queryName: String,
                    unification: QueryTools.Unification,
                    oracle: UniOracle,
-                   display: Boolean = false): Boolean = {
+                   display: Boolean = true): Boolean = {
     val queryResults = unification.repr
 
     if (queryResults.length == 0) {
       if (display) {
-        println(s"$queryName failed, not in the store"); println
+        println(s"$queryName failed, not in the store");
+        println
       }
-      return false
-    }
-
-    if (display) { print(s"$queryName ") }
-
-    if (TestTools.ArraysEqual(queryResults, oracle.standard)) {
-      if (display) {
-        println("succeeded:")
-        for (i <- 0 until queryResults.length) {
-          println(queryResults(i))
-        }
-      }
+      false
     } else {
       if (display) {
-        println("failed result:")
-        for (i <- 0 until queryResults.length) {
-          println(queryResults(i))
-        }
-        println("should be:")
-        for (i <- 0 until oracle.standard.length) {
-          println(oracle.standard(i))
-        }
+        print(s"$queryName ")
       }
-      if (display) { println }
-      return false
+
+      var returnVal = false
+      var returnValSet = false
+
+      if (TestTools.arraysEqual(queryResults, oracle.standard)) {
+        if (display) {
+          println("succeeded:")
+          for (i <- 0 until queryResults.length) {
+            println(queryResults(i))
+          }
+        }
+      } else {
+        if (display) {
+          println("failed result:")
+          for (i <- 0 until queryResults.length) {
+            println(queryResults(i))
+          }
+          println("should be:")
+          for (i <- 0 until oracle.standard.length) {
+            println(oracle.standard(i))
+          }
+          println
+        }
+        returnVal = false
+        returnValSet = true
+      }
+      if (display) {
+        println
+      }
+      if (returnValSet) {
+        returnVal
+      } else {
+        false
+      }
     }
-    if (display) { println }
-    true
   }
 
   // UniOracle is an oracle for a unification
@@ -435,15 +864,13 @@ class UniTests extends FlatSpec with Matchers {
             val unified = query.unifyQuery(storage)
             val bindings =
               QueryTools.queryResultsToArrayString(query, unified, storage)
-            for (binding <- bindings) {
+            for (binding <- bindings)
               println(binding)
-            }
             for (key <- storage.unifyQuery(query)) {
               println(key.term)
             }
-            if (bindings.isEmpty) {
+            if (bindings.isEmpty)
               println("no match in store")
-            }
           }
           case "key-value" => {
             var (keyStr, valuesStr) = remainder.splitAt(remainder.indexOf("->"))
@@ -475,6 +902,8 @@ class UniTests extends FlatSpec with Matchers {
   }
 
   def readLine(): (String, String) = {
+    var returnVal = ("", "")
+    var returnValSet = false
     var line = ""
     do {
       line = StdIn.readLine("a, d, q, e> ")
@@ -486,40 +915,35 @@ class UniTests extends FlatSpec with Matchers {
         val outcome = line.splitAt(line.indexOf(' '))
         command = outcome._1
         remainder = outcome._2
-      } else {
+      } else
         command = line
-      }
 
       command match {
-        case "e" => return ("exit", "")
-        case "q" => return ("query", remainder)
-        case "a" => return ("key-value", remainder)
-        case "d" => return ("display", remainder)
+        case "e" => {
+          returnVal = ("exit", "")
+          returnValSet = true
+        }
+        case "q" => {
+          returnVal = ("query", remainder)
+          returnValSet = true
+        }
+        case "a" => {
+          returnVal = ("key-value", remainder)
+          returnValSet = true
+        }
+        case "d" => {
+          returnVal = ("display", remainder)
+          returnValSet = true
+        }
         case _ => {
-          if (!line.isEmpty) {
-            println(s"unknown command: $command")
-          }
+          if (!line.isEmpty)
+            println(s"unknown command: $command");
           line = ""
         }
       }
-    } while (line.isEmpty)
-    throw new Exception("readLine(): shouldn't get here")
-  }
-
-  def ArraysEqual(a1: Array[String], a2: Array[String]): Boolean = {
-    if (a1.length != a2.length) { return false }
-    for (i <- 0 until a1.length) {
-      var contains = false
-      for (j <- 0 until a2.length) {
-        if (a1(i) == a2(j)) {
-          contains = true
-        }
-      }
-      if (!contains) {
-        return false
-      }
-    }
-    true
+    } while (line.isEmpty && !returnValSet)
+    assert(returnValSet)
+    returnVal
   }
 
   def readQuery(): String = {
