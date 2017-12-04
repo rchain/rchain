@@ -38,9 +38,7 @@ class DistanceSpec extends FlatSpec with Matchers {
 
   for (exp <- 1 to 8) {
 
-    // toDouble gets rid of a compiler warning about numeric widening
     val width = 1 << exp
-    // val width = scala.math.pow(2, exp.toDouble).toInt
 
     // Make 8*width copies all of which differ in a single, distinct bit
     def oneOffs(key: Seq[Byte]): Seq[Array[Byte]] =
