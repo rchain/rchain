@@ -30,26 +30,24 @@ class LmdbTests extends FlatSpec with Matchers {
       lmdb.put(3, 4)
       lmdb.put(3, 5)
       val getInts = lmdb.getInts(3)
-      assert(getInts.get(0) == 4)
-      assert(getInts.get(1) == 5)
+      assert(getInts.get.contains(4))
+      assert(getInts.get.contains(5))
 
       lmdb.put("a", "b")
       val getStr = lmdb.getStrings("a")
-      val str = getStr.get(0)
-      assert(str == "b")
+      assert(getStr.get.contains("b"))
 
       lmdb.put("c", "d")
       lmdb.put("c", "e")
       val getStrings = lmdb.getStrings("c")
-      assert(getStrings.get(0) == "d")
-      assert(getStrings.get(1) == "e")
+      assert(getStrings.get.contains("d"))
+      assert(getStrings.get.contains("e"))
     } catch {
       case e: Throwable =>
-        fail("intInt(): " + e)
+        fail(e)
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
 
   }
@@ -65,28 +63,27 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         lmdb.put(key.get, key.get + 1)
         key = randGen.nextKey()
       }
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val valueArray = lmdb.getInts(key.get)
-        assert(valueArray != None)
-        assert(valueArray.get.size == 1)
+        assert(valueArray.isDefined)
+        assert(valueArray.get.length == 1)
         val value = valueArray.get(0)
         assert(value == key.get + 1)
         key = randGen.nextKey()
       }
     } catch {
       case e: Throwable =>
-        fail("intInt(): " + e)
+        fail(e)
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -103,7 +100,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         for (valueCount <- 0 until valuesCount) {
           lmdb.put(key.get, key.get + 1 + valueCount)
         }
@@ -112,11 +109,11 @@ class LmdbTests extends FlatSpec with Matchers {
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val values = lmdb.getInts(key.get)
-        assert(values != None)
-        assert(values.get.size == valuesCount)
-        for (i <- 0 until values.get.size) {
+        assert(values.isDefined)
+        assert(values.get.length == valuesCount)
+        for (i <- values.get.indices) {
           val value = values.get(i)
           assert(value == key.get + 1 + i)
         }
@@ -124,11 +121,10 @@ class LmdbTests extends FlatSpec with Matchers {
       }
     } catch {
       case e: Throwable =>
-        fail("intInts(): " + e)
+        fail(e)
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -146,17 +142,17 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         lmdb.put(key.get, blobs(key.get))
         key = randGen.nextKey()
       }
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val valueArray = lmdb.getStrings(key.get)
-        assert(valueArray != None)
-        assert(valueArray.get.size == 1)
+        assert(valueArray.isDefined)
+        assert(valueArray.get.length == 1)
         val valueString: String = valueArray.get(0)
         val valueCharString: String = valueString.substring(0, 1)
         val value = valueCharString.toInt
@@ -165,11 +161,10 @@ class LmdbTests extends FlatSpec with Matchers {
       }
     } catch {
       case e: Throwable =>
-        fail("intStr(): " + e)
+        fail(e)
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -191,7 +186,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         for (valueCount <- 0 until valuesCount) {
           val blob = blobs((key.get + valueCount + 1) % 10)
           lmdb.put(key.get, blob)
@@ -201,35 +196,32 @@ class LmdbTests extends FlatSpec with Matchers {
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
-        val valuesSeen = scala.collection.mutable.Map[Int, Boolean]()
+      while (key.isDefined) {
+        val valuesSeen = scala.collection.mutable.Set[Int]()
+        val valuesExpected  = scala.collection.mutable.Set[Int]()
         for (i <- 0 until valuesCount) {
-          valuesSeen += (((key.get + 1 + i) % 10) -> false)
+          valuesExpected += ((key.get + 1 + i) % 10)
         }
 
         val values = lmdb.getStrings(key.get)
-        assert(values != None)
-        assert(values.get.size == valuesCount)
-        for (i <- 0 until values.get.size) {
+        assert(values.isDefined)
+        assert(values.get.length == valuesCount)
+        for (i <- values.get.indices) {
           val value = values.get(i)
-          // fails because strings are sorted
-          // assert(value.substring(0,1).toInt == (key.get + 1 + i) % 10)
-          valuesSeen -= ((key.get + 1 + i) % 10)
-          valuesSeen += (((key.get + 1 + i) % 10) -> true)
+          valuesSeen += ((key.get + 1 + i) % 10)
         }
-        for ((k, v) <- valuesSeen) {
-          assert(v, s"$k was not returned for key ${key.get}")
+        if (valuesSeen != valuesExpected){
+          fail("Expected values not seen: " + (valuesExpected diff valuesSeen).toString)
         }
         key = randGen.nextKey()
       }
     } catch {
       case e: Throwable => {
-        fail("intStrs(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -252,32 +244,31 @@ class LmdbTests extends FlatSpec with Matchers {
       }
 
       for (i <- 0 until numKeys) {
-        val valuesSeen = scala.collection.mutable.Map[String, Boolean]()
+        val valuesSeen = scala.collection.mutable.Set[String]()
+        val valuesExpected  = scala.collection.mutable.Set[String]()
         for (v <- 0 until valuesCount) {
-          valuesSeen += (((i + 1 + v) % 10).toString -> false)
+          valuesExpected += ((i + 1 + v) % 10).toString
         }
 
         val key = i.toString
         val values = lmdb.getStrings(key)
-        assert(values != None)
-        assert(values.get.size == valuesCount)
-        for (i <- 0 until values.get.size) {
-          valuesSeen -= ((key.toInt + 1 + i) % 10).toString
-          valuesSeen += (((key.toInt + 1 + i) % 10).toString -> true)
+        assert(values.isDefined)
+        assert(values.get.length == valuesCount)
+        for (i <- values.get.indices) {
+          valuesSeen += ((key.toInt + 1 + i) % 10).toString
         }
 
-        for ((k, v) <- valuesSeen) {
-          assert(v, s"$k was not returned for key $key")
+        if (valuesSeen != valuesExpected){
+          fail("Expected values not seen: " + (valuesExpected diff valuesSeen).toString)
         }
       }
     } catch {
       case e: Throwable => {
-        fail("iterateStrStrs(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -295,8 +286,8 @@ class LmdbTests extends FlatSpec with Matchers {
       }
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getInts(i)
-        assert(valueArray != None)
-        assert(valueArray.get.size == 1)
+        assert(valueArray.isDefined)
+        assert(valueArray.get.length == 1)
         val value = valueArray.get(0)
         assert(value == i + 1)
       }
@@ -306,9 +297,9 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 1) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
+          assert(valueArray.isDefined)
           assert(valueArray.get.size == 1)
           val value = valueArray.get(0)
           assert(value == i + 1)
@@ -320,10 +311,10 @@ class LmdbTests extends FlatSpec with Matchers {
         // val valueArray:Option[Array[Int]] = lmdb.getBbInts(Bb.intToBb(i))
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 0 || i == 1) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == 1)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == 1)
           val value = valueArray.get(0)
           assert(value == i + 1)
         }
@@ -333,10 +324,10 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 0 || i == 1 || i == 3) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == 1)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == 1)
           val value = valueArray.get(0)
           assert(value == i + 1)
         }
@@ -345,16 +336,15 @@ class LmdbTests extends FlatSpec with Matchers {
       outcome = lmdb.deleteKey(2); assert(outcome)
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
-        assert(valueArray == None)
+        assert(valueArray.isEmpty)
       }
     } catch {
       case e: Throwable => {
-        fail("intIntDelete(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -375,8 +365,8 @@ class LmdbTests extends FlatSpec with Matchers {
       }
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getInts(i)
-        assert(valueArray != None)
-        assert(valueArray.get.size == valuesCount)
+        assert(valueArray.isDefined)
+        assert(valueArray.get.length == valuesCount)
         for (v <- 0 until valuesCount) {
           val value = valueArray.get(v)
           assert(value == i + 1 + v)
@@ -389,10 +379,10 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
           for (v <- 0 until valuesCount) {
             val value = valueArray.get(v)
             assert(value == i + 1 + v)
@@ -405,11 +395,11 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(i != 3 || valueArray.get.size == valuesCount - 1)
-          assert(i == 3 || valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(i != 3 || valueArray.get.length == valuesCount - 1)
+          assert(i == 3 || valueArray.get.length == valuesCount)
           for (v <- 0 until valueArray.size) {
             val value = valueArray.get(v)
             if (i != 3 && value != 5) {
@@ -424,12 +414,12 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(i != 3 || valueArray.get.size == valuesCount - 2)
-          assert(i == 3 || valueArray.get.size == valuesCount)
-          for (v <- 0 until valueArray.get.size) {
+          assert(valueArray.isDefined)
+          assert(i != 3 || valueArray.get.length == valuesCount - 2)
+          assert(i == 3 || valueArray.get.length == valuesCount)
+          for (v <- valueArray.get.indices) {
             val value = valueArray.get(v)
             if (i != 3 && (value != 5 && value != 4)) {
               assert(value == i + 1 + v)
@@ -443,10 +433,10 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray: Option[Array[Int]] = lmdb.getInts(i)
         if (i == 2 || i == 3) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          for (v <- 0 until valueArray.get.size) {
+          assert(valueArray.isDefined)
+          for (v <- valueArray.get.indices) {
             val value = valueArray.get(v)
             assert(value == i + 1 + v)
           }
@@ -454,12 +444,11 @@ class LmdbTests extends FlatSpec with Matchers {
       }
     } catch {
       case e: Throwable => {
-        fail("intIntsDelete(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -482,74 +471,73 @@ class LmdbTests extends FlatSpec with Matchers {
       }
 
       // deleteKey(str2)
-      var outcome = lmdb.deleteKey("str2");
+      var outcome = lmdb.deleteKey("str2")
       assert(outcome)
       for (i <- 0 until numKeys) {
         val key = "str" + i
         val valueArray = lmdb.getLongs(key)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(str3,5)
-      outcome = lmdb.delete("str3", 5.toLong);
+      outcome = lmdb.delete("str3", 5.toLong)
       assert(outcome)
       for (i <- 0 until numKeys) {
         val key = "str" + i
         val valueArray = lmdb.getLongs(key)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else if (i == 3) {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount - 1)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount - 1)
           assert(!(valueArray.get contains 5.toLong)) 
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
 
       // delete(str3,4)
-      outcome = lmdb.delete("str3", 4.toLong);
+      outcome = lmdb.delete("str3", 4.toLong)
       assert(outcome)
       for (i <- 0 until numKeys) {
         val key = "str" + i
         val valueArray = lmdb.getLongs(key)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else if (i == 3) {
-          assert(valueArray != None)
+          assert(valueArray.isDefined)
           assert(valueArray.get.size == valuesCount - 2)
           assert(!(valueArray.get contains 4.toLong)) 
         } else {
-          assert(valueArray != None)
+          assert(valueArray.isDefined)
           assert(valueArray.get.size == valuesCount)
         }
       }
 
       // delete(str3,6)
-      outcome = lmdb.delete("str3", 6.toLong);
+      outcome = lmdb.delete("str3", 6.toLong)
       assert(outcome)
       for (i <- 0 until numKeys) {
         val key = "str" + i
         val valueArray = lmdb.getLongs(key)
         if (i == 2 || i == 3) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
+          assert(valueArray.isDefined)
         }
       }
     } catch {
       case e: Throwable => {
-        fail("stringLongsDelete(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -576,10 +564,10 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getFloats(i.toLong)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(3,0.5)
@@ -588,14 +576,14 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getFloats(i.toLong)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else if (i == 3) {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount - 1)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount - 1)
           assert(!(valueArray.get contains 0.5.toFloat))
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(3,0.25)
@@ -604,14 +592,14 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getFloats(i.toLong)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else if (i == 3) {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount - 2)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount - 2)
           assert(!(valueArray.get contains 0.25.toFloat))
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(3,0.75)
@@ -620,19 +608,18 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getFloats(i.toLong)
         if (i == 2 || i == 3) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
+          assert(valueArray.isDefined)
         }
       }
     } catch {
       case e: Throwable => {
-        fail("longFloatsDelete(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -654,8 +641,8 @@ class LmdbTests extends FlatSpec with Matchers {
       }
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getDoubles(i.toFloat)
-        assert(valueArray != None)
-        assert(valueArray.get.size == valuesCount)
+        assert(valueArray.isDefined)
+        assert(valueArray.get.length == valuesCount)
       }
 
       // deleteKey(2)
@@ -664,10 +651,10 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getDoubles(i.toFloat)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(3,0.5)
@@ -676,13 +663,13 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getDoubles(i.toFloat)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else if (i == 3) {
-          assert(valueArray.get.size == valuesCount - 1)
+          assert(valueArray.get.length == valuesCount - 1)
           assert(!(valueArray.get contains 0.5.toDouble))
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(3,0.25)
@@ -691,13 +678,13 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getFloats(i.toFloat)
         if (i == 2) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else if (i == 3) {
-          assert(valueArray.get.size == valuesCount - 2)
+          assert(valueArray.get.length == valuesCount - 2)
           assert(!(valueArray.get contains 0.25.toDouble))
         } else {
-          assert(valueArray != None)
-          assert(valueArray.get.size == valuesCount)
+          assert(valueArray.isDefined)
+          assert(valueArray.get.length == valuesCount)
         }
       }
       // delete(3,0.75)
@@ -706,19 +693,18 @@ class LmdbTests extends FlatSpec with Matchers {
       for (i <- 0 until numKeys) {
         val valueArray = lmdb.getFloats(i.toFloat)
         if (i == 2 || i == 3) {
-          assert(valueArray == None)
+          assert(valueArray.isEmpty)
         } else {
-          assert(valueArray != None)
+          assert(valueArray.isDefined)
         }
       }
     } catch {
       case e: Throwable => {
-        fail("floatDoublesDelete(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -735,7 +721,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val keyStr = "str" + key.get.toString
         for (valueCount <- 0 until valuesCount) {
           val valueLong = (key.get + 1 + valueCount).toLong
@@ -746,12 +732,12 @@ class LmdbTests extends FlatSpec with Matchers {
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val keyStr = "str" + key.get.toString
         val values = lmdb.getLongs(keyStr)
-        assert(values != None)
-        assert(values.get.size == valuesCount)
-        for (i <- 0 until values.get.size) {
+        assert(values.isDefined)
+        assert(values.get.length == valuesCount)
+        for (i <- values.get.indices) {
           val value = values.get(i)
           val valueLongExpected = (key.get + 1 + i).toLong
           assert(value == valueLongExpected)
@@ -760,12 +746,11 @@ class LmdbTests extends FlatSpec with Matchers {
       }
     } catch {
       case e: Throwable => {
-        fail("strLongs(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -782,7 +767,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         for (i <- 0 until valuesCount) {
           val valueFloat = key.get / (i + 1).toFloat
           lmdb.put(key.get, valueFloat)
@@ -792,17 +777,17 @@ class LmdbTests extends FlatSpec with Matchers {
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val values = lmdb.getFloats(key.get)
-        assert(values != None)
+        assert(values.isDefined)
         assert(
-          (key.get == 0 && values.get.size == 1) || values.get.size == valuesCount)
+          (key.get == 0 && values.get.length == 1) || values.get.length == valuesCount)
         val valuesSeen = new Array[Float](values.get.size)
-        for (i <- 0 until values.get.size) {
+        for (i <- values.get.indices) {
           val value = values.get(i)
           valuesSeen(i) = value
         }
-        for (i <- 0 until values.get.size) {
+        for (i <- values.get.indices) {
           val valueFloatExpected = key.get / (i + 1).toFloat
           assert(valuesSeen contains valueFloatExpected)
         }
@@ -810,12 +795,11 @@ class LmdbTests extends FlatSpec with Matchers {
       }
     } catch {
       case e: Throwable => {
-        fail("intFloats(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -832,7 +816,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val keyFloat = key.get.toFloat
         for (i <- 0 until valuesCount) {
           val valueDouble = key.get / (i + 1).toDouble
@@ -843,18 +827,18 @@ class LmdbTests extends FlatSpec with Matchers {
 
       randGen = new TestTools.RandKeyGen(numKeys)
       key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         val keyFloat = key.get.toFloat
         val values = lmdb.getDoubles(keyFloat)
-        assert(values != None)
+        assert(values.isDefined)
         assert(
-          (keyFloat == 0 && values.get.size == 1) || values.get.size == valuesCount)
+          (keyFloat == 0 && values.get.length == 1) || values.get.length == valuesCount)
         val valuesSeen = new Array[Double](values.get.size)
-        for (i <- 0 until values.get.size) {
+        for (i <- values.get.indices) {
           val value = values.get(i)
           valuesSeen(i) = value
         }
-        for (i <- 0 until values.get.size) {
+        for (i <- values.get.indices) {
           val valueDoubleExpected = key.get / (i + 1).toDouble
           assert(valuesSeen contains valueDoubleExpected)
         }
@@ -862,12 +846,11 @@ class LmdbTests extends FlatSpec with Matchers {
       }
     } catch {
       case e: Throwable => {
-        fail("floatDoubles(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -882,15 +865,15 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         lmdb.put(key.get, key.get + 1)
         key = randGen.nextKey()
       }
 
       for (key <- 0 until numKeys) {
         val valueArray = lmdb.getInts(key)
-        assert(valueArray != None)
-        assert(valueArray.get.size == 1)
+        assert(valueArray.isDefined)
+        assert(valueArray.get.length == 1)
         val value = valueArray.get(0)
         assert(value == key + 1)
       }
@@ -904,12 +887,11 @@ class LmdbTests extends FlatSpec with Matchers {
       assert(!outcome)
     } catch {
       case e: Throwable => {
-        fail("updateIntInt(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 
@@ -926,7 +908,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
     try {
       var key = randGen.nextKey()
-      while (key != None) {
+      while (key.isDefined) {
         for (valueCount <- 0 until valuesCount) {
           lmdb.put(key.get, key.get + 1 + valueCount)
         }
@@ -935,9 +917,9 @@ class LmdbTests extends FlatSpec with Matchers {
 
       for (key <- 0 until numKeys) {
         val values = lmdb.getInts(key)
-        assert(values != None)
-        assert(values.get.size == valuesCount)
-        for (i <- 0 until values.get.size) {
+        assert(values.isDefined)
+        assert(values.get.length == valuesCount)
+        for (i <- values.get.indices) {
           val value = values.get(i)
           assert(value == key + 1 + i)
         }
@@ -951,12 +933,11 @@ class LmdbTests extends FlatSpec with Matchers {
       assert(!outcome)
     } catch {
       case e: Throwable => {
-        fail("intInts(): " + e)
+        fail(e)
       }
     } finally {
       lmdb.close()
       lmdb.deleteFiles()
-      // new File(basePath + dirName.get).delete()
     }
   }
 }

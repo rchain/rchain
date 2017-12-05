@@ -91,18 +91,16 @@ class UniTests extends FlatSpec with Matchers {
       assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
     } catch {
       case e: Throwable => {
-        fail("TestsRecursive(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(basePath + storConf.dirName.get).delete()
     }
   }
 
 
   "Storage Unifier" should "unify nested keys 2" in {
-  // def TestsNested(storeFilePath: String): String = {
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
@@ -155,17 +153,15 @@ class UniTests extends FlatSpec with Matchers {
       assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
     } catch {
       case e: Throwable => {
-        fail("TestsNested(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(basePath + storConf.dirName.get).delete()
     }
   }
 
   "Storage Unifier" should "unify flat keys" in {
-  // def TestsFlat(storeFilePath: String): String = {
 
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
@@ -350,12 +346,11 @@ class UniTests extends FlatSpec with Matchers {
       assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
     } catch {
       case e: Throwable => {
-        fail("TestsFlat(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(basePath + storConf.dirName.get).delete()
     }
   }
 
@@ -377,18 +372,18 @@ class UniTests extends FlatSpec with Matchers {
     if (TestTools.ArraysEqual(queryResults, oracle.standard)) {
       if (display) {
         println("succeeded:")
-        for (i <- 0 until queryResults.length) {
+        for (i <- queryResults.indices) {
           println(queryResults(i))
         }
       }
     } else {
       if (display) {
         println("failed result:")
-        for (i <- 0 until queryResults.length) {
+        for (i <- queryResults.indices) {
           println(queryResults(i))
         }
         println("should be:")
-        for (i <- 0 until oracle.standard.length) {
+        for (i <- oracle.standard.indices) {
           println(oracle.standard(i))
         }
       }
@@ -504,22 +499,6 @@ class UniTests extends FlatSpec with Matchers {
       }
     } while (line.isEmpty)
     throw new Exception("readLine(): shouldn't get here")
-  }
-
-  def ArraysEqual(a1: Array[String], a2: Array[String]): Boolean = {
-    if (a1.length != a2.length) { return false }
-    for (i <- 0 until a1.length) {
-      var contains = false
-      for (j <- 0 until a2.length) {
-        if (a1(i) == a2(j)) {
-          contains = true
-        }
-      }
-      if (!contains) {
-        return false
-      }
-    }
-    true
   }
 
   def readQuery(): String = {
