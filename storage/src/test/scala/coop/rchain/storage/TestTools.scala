@@ -55,17 +55,11 @@ object TestTools {
       false
     } else {
       var equal = true
+      val a1sorted = a1.sorted
+      val a2sorted = a2.sorted
       var i = 0
-      while (i < a1.length && equal) {
-        var contains = false
-        var j = 0
-        while (j < a2.length && !contains) {
-          if (a1(i) == a2(j)) {
-            contains = true
-          }
-          j += 1
-        }
-        if (!contains) {
+      while (i < a1sorted.length && equal) {
+        if (a1sorted(i) != a2sorted(i)) {
           equal = false
         }
         i += 1
