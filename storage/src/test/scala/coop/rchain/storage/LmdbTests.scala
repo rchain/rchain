@@ -14,7 +14,7 @@ import org.scalatest._
 // TODO: add timings to tests (get and put)
 
 class LmdbTests extends FlatSpec with Matchers {
-    val basePath = System.getProperty("user.dir") + "/"
+  val basePath = System.getProperty("user.dir") + "/"
 
   "Lmdb with keys that are ints and strings are associated with multiple values" should "retrieve the expected values" in {
     val dirName: Option[String] = Some("lmdbPutGetDupSortDb")
@@ -198,7 +198,7 @@ class LmdbTests extends FlatSpec with Matchers {
       key = randGen.nextKey()
       while (key.isDefined) {
         val valuesSeen = scala.collection.mutable.Set[Int]()
-        val valuesExpected  = scala.collection.mutable.Set[Int]()
+        val valuesExpected = scala.collection.mutable.Set[Int]()
         for (i <- 0 until valuesCount) {
           valuesExpected += ((key.get + 1 + i) % 10)
         }
@@ -210,8 +210,9 @@ class LmdbTests extends FlatSpec with Matchers {
           val value = values.get(i)
           valuesSeen += ((key.get + 1 + i) % 10)
         }
-        if (valuesSeen != valuesExpected){
-          fail("Expected values not seen: " + (valuesExpected diff valuesSeen).toString)
+        if (valuesSeen != valuesExpected) {
+          fail(
+            "Expected values not seen: " + (valuesExpected diff valuesSeen).toString)
         }
         key = randGen.nextKey()
       }
@@ -245,7 +246,7 @@ class LmdbTests extends FlatSpec with Matchers {
 
       for (i <- 0 until numKeys) {
         val valuesSeen = scala.collection.mutable.Set[String]()
-        val valuesExpected  = scala.collection.mutable.Set[String]()
+        val valuesExpected = scala.collection.mutable.Set[String]()
         for (v <- 0 until valuesCount) {
           valuesExpected += ((i + 1 + v) % 10).toString
         }
@@ -258,8 +259,9 @@ class LmdbTests extends FlatSpec with Matchers {
           valuesSeen += ((key.toInt + 1 + i) % 10).toString
         }
 
-        if (valuesSeen != valuesExpected){
-          fail("Expected values not seen: " + (valuesExpected diff valuesSeen).toString)
+        if (valuesSeen != valuesExpected) {
+          fail(
+            "Expected values not seen: " + (valuesExpected diff valuesSeen).toString)
         }
       }
     } catch {
@@ -494,7 +496,7 @@ class LmdbTests extends FlatSpec with Matchers {
         } else if (i == 3) {
           assert(valueArray.isDefined)
           assert(valueArray.get.length == valuesCount - 1)
-          assert(!(valueArray.get contains 5.toLong)) 
+          assert(!(valueArray.get contains 5.toLong))
         } else {
           assert(valueArray.isDefined)
           assert(valueArray.get.length == valuesCount)
@@ -512,7 +514,7 @@ class LmdbTests extends FlatSpec with Matchers {
         } else if (i == 3) {
           assert(valueArray.isDefined)
           assert(valueArray.get.size == valuesCount - 2)
-          assert(!(valueArray.get contains 4.toLong)) 
+          assert(!(valueArray.get contains 4.toLong))
         } else {
           assert(valueArray.isDefined)
           assert(valueArray.get.size == valuesCount)

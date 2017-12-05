@@ -14,11 +14,11 @@ import org.scalatest._
 import scala.io.StdIn
 
 class UniTests extends FlatSpec with Matchers {
-    val basePath = System.getProperty("user.dir") +
-      "/src/test/scala/coop/rchain/storage/stores/"
-    val storeFlatPath = basePath + "storeFlat.txt"
-    val storeNestedPath = basePath + "storeNested.txt"
-    val storeRecursivePath = basePath + "storeRecursive.txt"
+  val basePath = System.getProperty("user.dir") +
+    "/src/test/scala/coop/rchain/storage/stores/"
+  val storeFlatPath = basePath + "storeFlat.txt"
+  val storeNestedPath = basePath + "storeNested.txt"
+  val storeRecursivePath = basePath + "storeRecursive.txt"
 
   "Storage Unifier" should "unify nested keys" in {
     val storConf = new StorageConfig()
@@ -41,54 +41,59 @@ class UniTests extends FlatSpec with Matchers {
     try {
       // a(Y)
       var query = new Key("a(Y)")
-      var queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
-      var oracle = new UniOracle(
-        Array("[queryVars:{Y:b(c(Y))},keyVars:{}] -> [X]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      var queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
+      var oracle =
+        new UniOracle(Array("[queryVars:{Y:b(c(Y))},keyVars:{}] -> [X]"))
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(X, Y)
       query = new Key("a(X, Y)")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:b(c(A),d(e(B))),Y:f(C)},keyVars:{}] -> [Y]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(b(c(X), Y), f(2))
       query = new Key("a(b(c(X), Y), f(2))")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:A,Y:d(e(B))},keyVars:{A:X,C:2}] -> [Y]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(b(c(X), 1), f(2))
       query = new Key("a(b(c(X), 1), f(2))")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       // If constants were allowed to match a predicate:
       // Array("{X:A,1:d(e(B)),2:C} -> [Y]")
       oracle = new UniOracle(Array[String]())
-      assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(!EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // bt(X,bt(1,Y,3),bt(4,5,Z))
       query = new Key("bt(X,bt(1,Y,3),bt(4,5,Z))")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
-      oracle = new UniOracle(
-        Array("[queryVars:{X:0,Y:2,Z:6},keyVars:{}] -> [Z]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
+      oracle =
+        new UniOracle(Array("[queryVars:{X:0,Y:2,Z:6},keyVars:{}] -> [Z]"))
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
     } catch {
       case e: Throwable => {
         fail(e)
@@ -98,7 +103,6 @@ class UniTests extends FlatSpec with Matchers {
       storage.deleteFiles()
     }
   }
-
 
   "Storage Unifier" should "unify nested keys 2" in {
 
@@ -123,34 +127,37 @@ class UniTests extends FlatSpec with Matchers {
 
       // a(b(X))
       var query = new Key("a(b(X))")
-      var queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      var queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       var oracle = new UniOracle(
         Array("[queryVars:{X:Y},keyVars:{Y:X}] -> [two]",
               "[queryVars:{X:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(1)
       query = new Key("a", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
               "[queryVars:{},keyVars:{}] -> [twelve]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(1,2)
       query = new Key("a", "1", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(Array(""))
-      assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(!EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
     } catch {
       case e: Throwable => {
         fail(e)
@@ -182,86 +189,93 @@ class UniTests extends FlatSpec with Matchers {
     try {
       // a(1)
       var query = new Key("a", "1")
-      var queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      var queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
 
       var oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [what]",
               "[queryVars:{},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // Z(1)
       query = new Key("Z", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(Array(""))
-      assert(!EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(!EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(2)
       query = new Key("a", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{}] -> [two]",
               "[queryVars:{},keyVars:{X:2}] -> [what]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(3)
       query = new Key("a", "3")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:3}] -> [what]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(X)
       query = new Key("a", "X")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:2},keyVars:{}] -> [two]",
               "[queryVars:{},keyVars:{}] -> [what]",
               "[queryVars:{X:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // a(Y)
       query = new Key("a", "Y")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{Y:2},keyVars:{}] -> [two]",
               "[queryVars:{Y:X},keyVars:{X:Y}] -> [what]",
               "[queryVars:{Y:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(1,1)
       query = new Key("b", "1", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [where]",
               "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(1,2)
       query = new Key("b", "1", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array(
           "[queryVars:{},keyVars:{X:2}] -> [where]",
@@ -269,15 +283,16 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{},keyVars:{X:1,Y:2}] -> [this]",
           "[queryVars:{},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(1,X)
       // good test
       query = new Key("b", "1", "X")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array(
           "[queryVars:{},keyVars:{}] -> [where]",
@@ -285,14 +300,15 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{X:Y},keyVars:{X:1,Y:X}] -> [this]",
           "[queryVars:{X:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(1,Y)
       query = new Key("b", "1", "Y")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array(
           "[queryVars:{Y:X},keyVars:{X:Y}] -> [where]",
@@ -300,14 +316,15 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{},keyVars:{X:1}] -> [this]",
           "[queryVars:{Y:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(A,B)
       query = new Key("b", "A", "B")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array(
           "[queryVars:{A:1,B:X},keyVars:{X:B}] -> [where]",
@@ -316,15 +333,16 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{A:X,B:Y},keyVars:{X:A,Y:B}] -> [this]",
           "[queryVars:{A:1,B:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(X,2)
       // very good test
       query = new Key("b", "X", "2")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array(
           "[queryVars:{},keyVars:{Y:2}] -> [this]",
@@ -332,18 +350,20 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{X:1},keyVars:{X:2}] -> [where]",
           "[queryVars:{},keyVars:{}] -> [how]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
 
       // b(X,1)
       query = new Key("b", "X", "1")
-      queryOutcome = QueryTools.queryResultsToArrayString(
-        query,
-        query.unifyQuery(storage),
-        storage)
+      queryOutcome =
+        QueryTools.queryResultsToArrayString(query,
+                                             query.unifyQuery(storage),
+                                             storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
               "[queryVars:{},keyVars:{Y:1}] -> [this]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle), "query: " + query.term)
+      assert(EvaluateTest(query.term, queryOutcome, oracle),
+             "query: " + query.term)
     } catch {
       case e: Throwable => {
         fail(e)
