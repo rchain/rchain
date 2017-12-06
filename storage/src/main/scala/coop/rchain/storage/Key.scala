@@ -41,7 +41,7 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     var lexToken = lexer.nextToken
 
     while (lexToken.token != Token.EndOfString && lexToken.token != Token.Error
-            && !rightParenSeen) {
+           && !rightParenSeen) {
       lexToken.token match {
         case Token.Key => {
           keyName = lexToken.tokenStr
@@ -76,7 +76,8 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
         throw new RChainException(
           "createParseTree(): lexer error (2): '" + lexToken.tokenStr + "'")
       }
-      throw new RChainException("createParseTree: shouldn't get to end of method")
+      throw new RChainException(
+        "createParseTree: shouldn't get to end of method")
     }
   }
 
@@ -119,39 +120,17 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     bindings
   }
 
-  def compare(key: Key): Int = {
-    if (term == key.term) { return 0 }
+  // Compare two keys in a manner analagous to strcmp(key.term, this.term)
+  // with these modifications:
+  //   sort by: arity, letter, digit
+  //
+  // Arity is sorted such that f(1) will be ahead of f(1,1).
+  // In unification, only keys of the same arity will be compared.
+  // Predicates will smaller arity are sorted first for reasons
+  // of readability in listing.
+  //
+  // Letters are sorted ahead of digits by fiat.
 
-    if (arity > key.arity) { return 1 } else if (arity < key.arity) {
-      return -1
-    }
-
-    val length = math.min(term.length, key.term.length)
-    for (i <- 0 until length) {
-      if (term(i) != key.term(i)) {
-        if (Character.isLetter(term(i))
-            && Character.isDigit(key.term(i))) {
-          return -1
-        } else if (Character.isDigit(term(i))
-                   && Character.isLetter(key.term(i))) {
-          return 1
-        } else {
-          if (term(i) < key.term(i)) {
-            return -1
-          } else if (term(i) > key.term(i)) {
-            return 1
-          }
-        }
-      }
-    }
-
-    assert(term.length != key.term.length)
-    if (term.length > key.term.length) { return 1 }
-    -1
-  }
-
-  // sort by: arity, character, digit, other
-/*
   def compare(key: Key): Int = {
     var returnVal = 0
     var returnValSet = false
@@ -167,12 +146,13 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
       var i = 0
       while (i < length && !returnValSet) {
         if (term(i) != key.term(i)) {
+          // check if term(i) is letter and key.term(i) is digit or vice-versa
           if (Character.isLetter(term(i))
-            && Character.isDigit(key.term(i))) {
+              && Character.isDigit(key.term(i))) {
             returnVal = -1
             returnValSet = true
           } else if (Character.isDigit(term(i))
-            && Character.isLetter(key.term(i))) {
+                     && Character.isLetter(key.term(i))) {
             returnVal = 1
             returnValSet = true
           } else {
@@ -187,20 +167,19 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
         }
         i += 1
       }
-    }
 
-    if (returnValSet) {
-      returnVal
-    } else {
-      assert(term.length != key.term.length)
-      if (term.length > key.term.length) {
-        1
+      if (returnValSet) {
+        returnVal
       } else {
-        -1
+        assert(term.length != key.term.length)
+        if (term.length > key.term.length) {
+          1
+        } else {
+          -1
+        }
       }
     }
   }
-*/
 
   def display: Unit = { print(term) }
 }

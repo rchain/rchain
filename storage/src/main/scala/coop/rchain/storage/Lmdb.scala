@@ -127,7 +127,7 @@ class Lmdb(dirNameIn: Option[String],
       false
     } else {
       if (key.isInstanceOf[String]
-        && getMaxKeySize < key.asInstanceOf[String].length) {
+          && getMaxKeySize < key.asInstanceOf[String].length) {
         throw new RChainException("put(): key string is too long")
       }
       val bbKey: Option[ByteBuffer] = Bb.create(key)
@@ -176,7 +176,7 @@ class Lmdb(dirNameIn: Option[String],
     } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getInts(): key is not primitive or string")
     } else {
-      var returnVal:Option[Array[Int]] = None
+      var returnVal: Option[Array[Int]] = None
 
       var bbKey = Lmdb.makeBbKey(key)
 
@@ -202,12 +202,11 @@ class Lmdb(dirNameIn: Option[String],
               outcome = cursor.seek(MDB_NEXT_DUP)
             }
 
-            returnVal =
-              if (blobsBuf.isEmpty) {
-                None
-              } else {
-                Some(blobsBuf.toArray)
-              }
+            returnVal = if (blobsBuf.isEmpty) {
+              None
+            } else {
+              Some(blobsBuf.toArray)
+            }
           } else {
             outcome = cursor.seek(MDB_GET_CURRENT)
             if (!outcome) {
@@ -245,7 +244,7 @@ class Lmdb(dirNameIn: Option[String],
     } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getStrings(): key is not primitive or string")
     } else {
-      var returnVal:Option[Array[String]] = None
+      var returnVal: Option[Array[String]] = None
 
       var bbKey = Lmdb.makeBbKey(key)
 
@@ -274,12 +273,11 @@ class Lmdb(dirNameIn: Option[String],
               outcome = cursor.seek(MDB_NEXT_DUP)
             }
 
-            returnVal =
-              if (blobsBuf.isEmpty) {
-                None
-              } else {
-                Some(blobsBuf.toArray)
-              }
+            returnVal = if (blobsBuf.isEmpty) {
+              None
+            } else {
+              Some(blobsBuf.toArray)
+            }
           } else {
             outcome = cursor.seek(MDB_GET_CURRENT)
             if (!outcome) {
@@ -316,7 +314,7 @@ class Lmdb(dirNameIn: Option[String],
     } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getLongs(): key is not primitive or string")
     } else {
-      var returnVal:Option[Array[Long]] = None
+      var returnVal: Option[Array[Long]] = None
 
       var bbKey = Lmdb.makeBbKey(key)
 
@@ -344,8 +342,7 @@ class Lmdb(dirNameIn: Option[String],
             outcome = cursor.seek(MDB_NEXT_DUP)
           }
 
-          returnVal =
-          if (blobsBuf.isEmpty) {
+          returnVal = if (blobsBuf.isEmpty) {
             None
           } else {
             Some(blobsBuf.toArray)
@@ -378,14 +375,14 @@ class Lmdb(dirNameIn: Option[String],
 
   def getFloats[K: Bbable](
       key: K,
-      txnIn: Option[Txn[ByteBuffer]] = None):Option[Array[Float]] = {
+      txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Float]] = {
 
     if (key.isInstanceOf[Key]) {
       getFloats(key.asInstanceOf[Key].term, txnIn)
     } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getFloats(): key is not primitive or string")
     } else {
-      var returnVal:Option[Array[Float]] = None
+      var returnVal: Option[Array[Float]] = None
 
       var bbKey = Lmdb.makeBbKey(key)
 
@@ -414,8 +411,7 @@ class Lmdb(dirNameIn: Option[String],
               outcome = cursor.seek(MDB_NEXT_DUP)
             }
 
-            returnVal =
-            if (blobsBuf.isEmpty) {
+            returnVal = if (blobsBuf.isEmpty) {
               None
             } else {
               Some(blobsBuf.toArray)
@@ -449,14 +445,14 @@ class Lmdb(dirNameIn: Option[String],
 
   def getDoubles[K: Bbable](
       key: K,
-      txnIn: Option[Txn[ByteBuffer]] = None):Option[Array[Double]] = {
+      txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Double]] = {
 
     if (key.isInstanceOf[Key]) {
       getDoubles(key.asInstanceOf[Key].term, txnIn)
     } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getDoubles(): key is not primitive or string")
     } else {
-      var returnVal:Option[Array[Double]] = None
+      var returnVal: Option[Array[Double]] = None
 
       var bbKey = Lmdb.makeBbKey(key)
 
@@ -485,8 +481,7 @@ class Lmdb(dirNameIn: Option[String],
               outcome = cursor.seek(MDB_NEXT_DUP)
             }
 
-            returnVal =
-            if (blobsBuf.isEmpty) {
+            returnVal = if (blobsBuf.isEmpty) {
               None
             } else {
               Some(blobsBuf.toArray)
@@ -594,7 +589,8 @@ class Lmdb(dirNameIn: Option[String],
         throw new RChainException("delete(): key is not a string or primitive")
       }
       if (!Lmdb.isStringOrPrimitive(value)) {
-        throw new RChainException("delete(): value is not a string or primitive")
+        throw new RChainException(
+          "delete(): value is not a string or primitive")
       }
 
       val bbKey = Bb.create(key)
@@ -631,11 +627,9 @@ class Lmdb(dirNameIn: Option[String],
                        txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
     if (!isWritable) {
       false
-    } else if (!isKeyToValues)
-    {
+    } else if (!isKeyToValues) {
       false // use deleteKey()
-    }
-    else if (!optionValue.isDefined) {
+    } else if (!optionValue.isDefined) {
       throw new RChainException("deleteBbValueInt(): value is invalid")
     } else {
       val txn =
@@ -944,15 +938,15 @@ class Lmdb(dirNameIn: Option[String],
       false
     } else if (key.isInstanceOf[Key]) {
       update(key.asInstanceOf[Key].term,
-                    valueToBeReplaced,
-                    valueReplaceWith,
-                    txn)
+             valueToBeReplaced,
+             valueReplaceWith,
+             txn)
     } else if (valueToBeReplaced.isInstanceOf[Key] && valueReplaceWith
-          .isInstanceOf[Key]) {
+                 .isInstanceOf[Key]) {
       update(key,
-                    valueToBeReplaced.asInstanceOf[Key].term,
-                    valueReplaceWith.asInstanceOf[Key].term,
-                    txn)
+             valueToBeReplaced.asInstanceOf[Key].term,
+             valueReplaceWith.asInstanceOf[Key].term,
+             txn)
     } else {
       if (!Lmdb.isStringOrPrimitive(key)) {
         throw new RChainException("update(): key is not a string or primitive")
@@ -973,33 +967,33 @@ class Lmdb(dirNameIn: Option[String],
       valueToBeReplaced match {
         case _: Int => {
           updateBbValueInt(bbKey.get,
-            valueToBeReplaced.asInstanceOf[Int],
-            valueReplaceWith.asInstanceOf[Int],
-            txn)
+                           valueToBeReplaced.asInstanceOf[Int],
+                           valueReplaceWith.asInstanceOf[Int],
+                           txn)
         }
         case _: Long => {
           updateBbValueLong(bbKey.get,
-            valueToBeReplaced.asInstanceOf[Long],
-            valueReplaceWith.asInstanceOf[Long],
-            txn)
+                            valueToBeReplaced.asInstanceOf[Long],
+                            valueReplaceWith.asInstanceOf[Long],
+                            txn)
         }
         case _: Float => {
           updateBbValueFloat(bbKey.get,
-            valueToBeReplaced.asInstanceOf[Float],
-            valueReplaceWith.asInstanceOf[Float],
-            txn)
+                             valueToBeReplaced.asInstanceOf[Float],
+                             valueReplaceWith.asInstanceOf[Float],
+                             txn)
         }
         case _: Double => {
           updateBbValueDouble(bbKey.get,
-            valueToBeReplaced.asInstanceOf[Double],
-            valueReplaceWith.asInstanceOf[Double],
-            txn)
+                              valueToBeReplaced.asInstanceOf[Double],
+                              valueReplaceWith.asInstanceOf[Double],
+                              txn)
         }
         case _: String => {
           updateBbValueString(bbKey.get,
-            valueToBeReplaced.asInstanceOf[String],
-            valueReplaceWith.asInstanceOf[String],
-            txn)
+                              valueToBeReplaced.asInstanceOf[String],
+                              valueReplaceWith.asInstanceOf[String],
+                              txn)
         }
         case _ => {
           throw new RChainException(
@@ -1205,8 +1199,7 @@ class Lmdb(dirNameIn: Option[String],
 
     if (returnValIsNone) {
       None
-    }
-    else {
+    } else {
       Some(array.toArray)
     }
   }
@@ -1250,7 +1243,7 @@ class Lmdb(dirNameIn: Option[String],
     } catch {
       case e: RChainException =>
         Log("rowsStrStr(): " + e)
-        returnValIsNone =  true
+        returnValIsNone = true
       case e: Throwable =>
         throw e
     } finally {
@@ -1262,8 +1255,7 @@ class Lmdb(dirNameIn: Option[String],
 
     if (returnValIsNone) {
       None
-    }
-    else {
+    } else {
       Some(array.toArray)
     }
   }
@@ -1395,14 +1387,18 @@ object Lmdb {
 
   def isPrimitive[T](t: T): Boolean = {
     var is = false
-    if (t.isInstanceOf[Byte]) { is = true }
-    else if (t.isInstanceOf[Boolean]) { is = true }
-    else if (t.isInstanceOf[Char]) { is = true }
-    else if (t.isInstanceOf[Short]) { is = true }
-    else if (t.isInstanceOf[Int]) { is = true }
-    else if (t.isInstanceOf[Long]) { is = true }
-    else if (t.isInstanceOf[Float]) { is = true }
-    else if (t.isInstanceOf[Double]) { is = true }
+    if (t.isInstanceOf[Byte]) { is = true } else if (t.isInstanceOf[Boolean]) {
+      is = true
+    } else if (t.isInstanceOf[Char]) { is = true } else if (t.isInstanceOf[
+                                                              Short]) {
+      is = true
+    } else if (t.isInstanceOf[Int]) { is = true } else if (t.isInstanceOf[
+                                                               Long]) {
+      is = true
+    } else if (t.isInstanceOf[Float]) { is = true } else if (t.isInstanceOf[
+                                                               Double]) {
+      is = true
+    }
     is
   }
 

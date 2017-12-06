@@ -24,8 +24,7 @@ object TestTools {
     def nextKey(): Option[Int] = {
       if (numKeys <= countUsedKeys) {
         None
-      }
-      else {
+      } else {
         var r = randGen.nextInt(numKeys)
         while (usedKeys(r)) {
           r = randGen.nextInt(numKeys)

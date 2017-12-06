@@ -131,7 +131,7 @@ class KeyLexer(lineIn: String) {
         } else {
           if (isLetters) {
             if (iOriginal == 0 || (line(i) == '('
-              && (line(iOriginal - 1) == '(' || line(iOriginal - 1) == ',')))
+                && (line(iOriginal - 1) == '(' || line(iOriginal - 1) == ',')))
               returnVal = Some(new LexToken(Token.Key, tokenStr.toString))
             else
               returnVal = Some(new LexToken(Token.Variable, tokenStr.toString))

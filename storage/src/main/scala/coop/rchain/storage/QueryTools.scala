@@ -55,7 +55,7 @@ object QueryTools {
           val queryPred = queryParam.asInstanceOf[Key]
           val keyPred = keyParam.asInstanceOf[Key]
           if (queryPred.name == keyPred.name
-            && queryPred.arity == keyPred.arity) {
+              && queryPred.arity == keyPred.arity) {
             val (success, bindingsToAdd) =
               unifyParams(queryPred.params.params, keyPred.params.params)
             if (success) {
@@ -96,7 +96,7 @@ object QueryTools {
                // set variable to constant
                val binding = new Binding(queryConst, keyPred)
                bindings += binding
-           */
+             */
             returnVal = false
           } else if (keyParam.isVariable) {
             val queryConst = queryParam.asInstanceOf[Constant]
@@ -105,7 +105,7 @@ object QueryTools {
             val binding = new Binding(queryConst, keyVar)
             bindings += binding
           } else if (keyParam.isConstant
-            && queryParam.term == keyParam.term) {
+                     && queryParam.term == keyParam.term) {
             val queryConst = queryParam.asInstanceOf[Constant]
             val keyConst = keyParam.asInstanceOf[Constant]
             val binding = new Binding(queryConst, keyConst)

@@ -14,7 +14,7 @@ import org.scalatest._
 // TODO: add timings to tests (get and put)
 
 class LmdbTests extends FlatSpec with Matchers {
-    val basePath = System.getProperty("user.dir") + "/"
+  val basePath = System.getProperty("user.dir") + "/"
 
   "Lmdb with keys that are ints and strings are associated with multiple values" should "retrieve the expected values" in {
     val dirName: Option[String] = Some("lmdbPutGetDupSortDb")
@@ -505,7 +505,7 @@ class LmdbTests extends FlatSpec with Matchers {
         } else if (i == 3) {
           assert(valueArray != None)
           assert(valueArray.get.size == valuesCount - 1)
-          assert(!(valueArray.get contains 5.toLong)) 
+          assert(!(valueArray.get contains 5.toLong))
         } else {
           assert(valueArray != None)
           assert(valueArray.get.size == valuesCount)
@@ -523,7 +523,7 @@ class LmdbTests extends FlatSpec with Matchers {
         } else if (i == 3) {
           assert(valueArray != None)
           assert(valueArray.get.size == valuesCount - 2)
-          assert(!(valueArray.get contains 4.toLong)) 
+          assert(!(valueArray.get contains 4.toLong))
         } else {
           assert(valueArray != None)
           assert(valueArray.get.size == valuesCount)

@@ -71,8 +71,7 @@ object TermTools {
       new Variable(term)
     } else if (isConstant(term)) {
       new Constant(term)
-    }
-    else {
+    } else {
       // KeyLexer requires the first term be a key
       assert(term.indexOf("(") < term.indexOf(")"))
       val lexer = new KeyLexer(term)
