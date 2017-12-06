@@ -221,4 +221,6 @@ case class PeerTable[A <: Peer](home: A,
     */
   def peers: Seq[A] =
     table.flatMap(l => l synchronized { l.map(_.entry) })
+
+  def refresh(at: Int): Unit = ()
 }

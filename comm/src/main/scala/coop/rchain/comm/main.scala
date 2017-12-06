@@ -4,7 +4,7 @@ import org.rogach.scallop._
 import java.util.UUID
 import java.nio.ByteBuffer
 import coop.rchain.p2p
-import com.typesafe.scalalogging
+import com.typesafe.scalalogging.Logger
 
 case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("0.0.1 RChain communications library")
@@ -19,7 +19,7 @@ case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
 object Main {
   def main(args: Array[String]): Unit = {
-    val logger = scalalogging.Logger("main")
+    val logger = Logger("main")
     val conf = Conf(args)
     val name = UUID.randomUUID.toString.replaceAll("-", "")
     val addy = s"rnode://$name@localhost:${conf.port()}"
@@ -30,7 +30,8 @@ object Main {
       p2p.NetworkAddress.parse(address) match {
         case Right(remote @ PeerNode(_, _)) =>
           new ProtocolNode(remote, net.net).ping
-        case Left(error) => logger.error(s"Unable to bootstrap network: ${error.msg}") 
+          ()
+        case Left(error) => logger.error(s"Unable to bootstrap network: ${error.msg}")
       }
     }
   }
