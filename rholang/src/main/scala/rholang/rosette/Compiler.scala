@@ -21,7 +21,7 @@ trait Rholang2RosetteCompilerT {
   def lexer( fileReader : FileReader ) : Yylex
   def parser( lexer : Yylex ) : parser
   def serialize( ast : VisitorTypes.R ) : String
-
+  def typecheck( contract : Contr) : Unit
   def compile( fileName : String ) : VisitorTypes.R
 }
 
@@ -54,13 +54,18 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
       case _ => "Not a StrTermCtxt"
     }
   }
-
+  override def typecheck( contract: Contr ) : Unit = {
+    val typechecker = new TypeCheckVisitor()
+    contract.accept(typechecker, None)
+    ()
+  }
   override def compile( fileName : String ) : VisitorTypes.R = {
     try {
       val rdr = reader( fileName )
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
+      typecheck(ast)
       visit( ast, Here() )
     }
     catch {
