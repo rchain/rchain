@@ -150,7 +150,7 @@ comment "/*" "*/" ;
 -- Type patterns
 -- TODO: should some of th Chan's be CPatterns?
 TPVerity. TPattern5 ::= "true" ;
-TPNullity. TPattern5 ::= "0" ;
+TPNullity. TPattern5 ::= "Nil" ;
 TPNegation. TPattern4 ::= "~" TPattern ;
 TPConjuction. TPattern3 ::= TPattern "&" TPattern ;
 TPDisjunction. TPattern2 ::= TPattern "\\/" TPattern ;
