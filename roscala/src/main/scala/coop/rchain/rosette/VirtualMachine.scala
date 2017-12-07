@@ -385,15 +385,10 @@ object VirtualMachine {
           case Some(tuple) =>
             state.ctxt.env.as[StdExtension] match {
               case Some(env) =>
-                env.extendWith(template.keyMeta, tuple) match {
-                  case Some(newEnv) =>
-                    state
-                      .set(_ >> 'ctxt >> 'env)(newEnv)
-                      .set(_ >> 'ctxt >> 'nargs)(0)
-
-                  case None =>
-                    die("OpExtend: could not extend state.ctxt.env")(state)
-                }
+                val newEnv = env.extendWith(template.keyMeta, tuple)
+                state
+                  .set(_ >> 'ctxt >> 'env)(newEnv)
+                  .set(_ >> 'ctxt >> 'nargs)(0)
 
               case None =>
                 die("OpExtend: state.ctxt.env needs to be a StdExtension")(

@@ -4,45 +4,23 @@ import java.io.File
 
 import coop.rchain.rosette.utils.printToFile
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.Ob.{NilMeta, ObTag, SysCode}
+import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import shapeless.OpticDefns.RootLens
 import shapeless._
 
 trait Base
 
-final case class Slot(meta: Ob, parent: Ob, tail: Seq[Ob]) {
-  def apply(n: Int): Ob = slot(n)
-
-  def size: Int = 2 + tail.size
-
-  def slot(index: Int): Ob = index match {
-    case 0 => meta
-    case 1 => parent
-    case i => tail(i - 2)
-  }
-
-  def updated(index: Int, value: Ob): Slot = index match {
-    case 0 => copy(meta = value)
-    case 1 => copy(parent = value)
-    case i => copy(tail = tail.updated(index - 2, value))
-  }
-}
-
-object Slot {
-  val Placeholder = Slot(null, null, null)
-}
-
 //TODO change type of `indirect` argument to bool
 trait Ob extends Base {
-  val slot: Slot = Slot.Placeholder
+  val slot: Seq[Ob] = Nil
 
   val obTag: ObTag = null
   val sysval: SysCode = null
   val constantP = true
 
-  def meta: Ob = slot.meta
-  def parent: Ob = slot.parent
+  def meta: Ob = slot.head
+  def parent: Ob = slot(1)
 
   def dispatch(state: VMState): (Result, VMState) = null
   def extendWith(keyMeta: Ob): Ob = null

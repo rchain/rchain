@@ -1,10 +1,7 @@
 package coop.rchain.rosette.expr
 
-import coop.rchain.rosette.{Ob, Slot}
+import coop.rchain.rosette.Ob
 
-case class TupleExpr(elem: Seq[Ob],
-                     rest: Option[Ob] = None,
-                     override val slot: Slot = Slot.Placeholder)
-    extends Ob {
+case class TupleExpr(elem: Seq[Ob], rest: Option[Ob] = None) extends Ob {
   def numberOfElements(): Int = elem.size
 }

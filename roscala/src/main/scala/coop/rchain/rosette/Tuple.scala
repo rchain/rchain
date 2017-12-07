@@ -19,16 +19,9 @@ case class Tuple(elem: Seq[Ob]) extends Ob {
       this.elem.exists(_.matches(msg))
     }
 
-  /** It seems that Tuple.elem just becomes StdExtension.slot */
-  def becomeExtension(newMeta: Ob, newParent: Ob): Option[StdExtension] =
-    try {
-      Some(
-        StdExtension(newMeta,
-                     newParent,
-                     Slot(elem.head, elem(1), elem.drop(2))))
-    } catch {
-      case _: IndexOutOfBoundsException => None
-    }
+  /** Transforms a Tuple into a StdExtension */
+  def becomeExtension(newMeta: Ob, newParent: Ob): StdExtension =
+    StdExtension(newMeta, newParent, elem)
 
   def flattenRest(): Either[TupleError, Tuple] =
     this.elem.lastOption match {

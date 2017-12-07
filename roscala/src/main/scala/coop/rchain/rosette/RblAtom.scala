@@ -4,8 +4,7 @@ import coop.rchain.rosette.Meta.StdMeta
 
 trait RblAtom extends Ob
 
-case class Fixnum(value: Int,
-                  override val slot: Slot = Slot(StdMeta(), null, null))
+case class Fixnum(value: Int, override val slot: Seq[Ob] = Seq(StdMeta()))
     extends RblAtom {
   override def toString = s"Fixnum($value)"
 

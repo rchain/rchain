@@ -34,6 +34,6 @@ package object opcodes {
     null,
     systemMonitor = null,
     currentMonitor = null,
-    globalEnv = TblObject(someObs, Slot.Placeholder)
+    globalEnv = TblObject(someObs)
   )
 }

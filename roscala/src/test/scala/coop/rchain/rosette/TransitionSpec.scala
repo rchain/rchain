@@ -112,7 +112,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       */
     val start =
       testState
-        .set(_ >> 'globalEnv)(TblObject(globalEnv, Slot.Placeholder))
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
 
     val codevec = Seq(OpAlloc(2),

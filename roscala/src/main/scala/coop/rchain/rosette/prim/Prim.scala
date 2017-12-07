@@ -11,7 +11,6 @@ case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
 case object ArithmeticError extends PrimError
 
 abstract class Prim extends Ob {
-  override val slot: Slot = Slot.Placeholder
   val name: String
   val minArgs: Int
   val maxArgs: Int
