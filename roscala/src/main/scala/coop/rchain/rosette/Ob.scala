@@ -4,7 +4,7 @@ import java.io.File
 
 import coop.rchain.rosette.utils.printToFile
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.Ob.{ObTag, SysCode}
+import coop.rchain.rosette.Ob.{NilMeta, ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import shapeless.OpticDefns.RootLens
 import shapeless._
@@ -45,8 +45,7 @@ trait Ob extends Base {
   def parent: Ob = slot.parent
 
   def dispatch(state: VMState): (Result, VMState) = null
-  def extendWith(keymeta: Ob): Ob = null
-  def extendWith(keymeta: Ob, argvec: Tuple): Ob = null
+  def extendWith(keyMeta: Ob): Ob = null
 
   def getAddr(ind: Int, level: Int, offset: Int): Ob =
     getLex(ind, level, offset)
@@ -256,6 +255,10 @@ object Ob {
   }
 
   object RBLFALSE extends Ob {
+    override val slot: Slot = Slot.Placeholder
+  }
+
+  object NilMeta extends Ob {
     override val slot: Slot = Slot.Placeholder
   }
 

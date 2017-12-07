@@ -1,6 +1,6 @@
 package coop.rchain.rosette
 
-case class StdOprn(override val extension: Ob) extends Actor {
+case class StdOprn(override val extension: StdExtension) extends Actor {
   override def dispatch(state: VMState): (Result, VMState) =
     // TODO:
     //if (debugging_level)

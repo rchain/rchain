@@ -6,6 +6,7 @@ import coop.rchain.rosette.prim.PrimError
 import reflect.runtime.universe._
 import reflect.runtime.currentMirror
 import scala.annotation.tailrec
+import scala.reflect.ClassTag
 
 package object rosette {
   sealed trait RblError
@@ -18,6 +19,15 @@ package object rosette {
   case class RuntimeError(msg: String) extends RblError
 
   type Result = Either[RblError, Ob]
+
+  implicit class RichOb(ob: Ob) {
+    def as[T <: Ob : ClassTag]: Option[T] = {
+      ob match {
+        case t: T => Some(t)
+        case _ => None
+      }
+    }
+  }
 
   def suicide(msg: String): Unit = {
     System.err.println(s"*** fatal error: $msg")

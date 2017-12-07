@@ -1,7 +1,7 @@
 package coop.rchain.rosette
 
 object Meta {
-  case class StdMeta(override val extension: Ob = null,
+  case class StdMeta(override val extension: StdExtension = null,
                      override val slot: Slot = Slot.Placeholder)
       extends Actor {
     def get(client: Ob, key: Ob, ctxt: Ctxt): Result =
