@@ -101,6 +101,10 @@ PPtInput.  PPattern1 ::= "for" "(" [PatternBind] ")" "{" PPattern "}" ;
 PPtMatch.  PPattern1 ::= "match" PPattern "with" [PatternPatternMatch] ;
 PPtNew.    PPattern1 ::= "new" [VarPattern] "in" PPattern1 ;
 PPtConstr. PPattern1 ::= Var "(" [PPattern] ")" ;
+PPtSet.    PPattern1 ::= "Set" "(" [PPattern] ")" ;
+PPtTuple.  PPattern1 ::= "Tuple" "(" [PPattern] ")" ;
+PPtStruct. PPattern1 ::= Var "(" [PPattern] ")" ;
+PPtMap.    PPattern1 ::= "Map" "(" [ ValPairPattern ] ")" ;
 PPtPar.    PPattern  ::= PPattern "|" PPattern1 ;
 separator PPattern "," ;
 coercions PPattern 4 ;
@@ -124,7 +128,10 @@ separator nonempty PatternPatternMatch "" ;
 -- We only allow for constants in pattern matches
 -- unlike for Procs which can have arbitrary operations
 VPtStruct. ValPattern ::= Var "{" [PPattern] "}" ;
-VPtTuple. ValPattern ::= "<" [PPattern] ">" ;
+VPtTuple. ValPattern ::= "Tuple" "{" [PPattern] "}" ;
+VPtSet. ValPattern ::= "Set" "{" [PPattern] "}" ;
+VPtPair. ValPairPattern ::= PPattern "=>" PPattern ;
+VPtMap. ValPattern ::= "Map" "{" [ ValPairPattern ] "}" ;
 VPtTrue. ValPattern ::= "true" ;
 VPtFalse. ValPattern ::= "false" ;
 VPtInt. ValPattern ::= Integer ;
@@ -136,6 +143,7 @@ VPtStr. ValPattern ::= String ;
 --VPtArray.  ValPattern ::=  ;
 --VPtList.   ValPattern ::=  ;
 separator nonempty ValPattern "," ;
+separator nonempty ValPairPattern "," ;
 
 -- Names and variables
 token Name (upper (letter | digit | '_' | '\'' | '-' )*) ;
