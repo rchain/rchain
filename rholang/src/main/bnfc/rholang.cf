@@ -15,7 +15,7 @@ PMatch.   Proc1 ::= "match" Proc "with" [PMBranch] ;
 PNew.     Proc1 ::= "new" [Var] "in" Proc1 ;
 PPrint.   Proc1 ::= "print" "(" Proc ")" ;
 PConstr.  Proc1 ::= Var "(" [Proc] ")" ;
-PContr.   Proc1 ::= "contract" Var "(" [CPattern] ")" "=" "{" Proc "}" ;
+PContr.   Proc1 ::= "contract" Var "(" [CPattern] ")" TAnnotation "=" "{" Proc "}" ;
 PPar.     Proc  ::= Proc "|" Proc1 ;
 separator nonempty Proc "," ;
 _. Proc  ::= Proc1 ;
@@ -148,22 +148,24 @@ comment "//" ;
 comment "/*" "*/" ;
 
 -- Type patterns
--- TODO: should some of th Chan's be CPatterns?
 TPVerity. TPattern5 ::= "true" ;
 TPNullity. TPattern5 ::= "Nil" ;
-TPNegation. TPattern4 ::= "~" TPattern ;
-TPConjuction. TPattern3 ::= TPattern "&" TPattern ;
-TPDisjunction. TPattern2 ::= TPattern "\\/" TPattern ;
-TPDescent. TPattern1 ::= "*" Chan ;
-TPElevation. TPattern1 ::= TPIndicator "!" TPattern ;
+TPNegation. TPattern4 ::= "~" TPattern4 ;
+TPConjuction. TPattern3 ::= TPattern3 "&" TPattern4 ;
+TPDisjunction. TPattern2 ::= TPattern2 "\\/" TPattern3 ;
+TPDescent. TPattern1 ::= "*" TPNomination ;
+TPElevation. TPattern1 ::= TPIndicator "!" "(" TPattern ")";
 TPActivity. TPattern1 ::= "for" "(" [TPatternBind] ")" "{" TPattern "}" ;
-TPMixture. TPattern ::= TPattern "|" TPattern ;
-separator nonempty TPattern "," ;
+TPMixture. TPattern ::= TPattern "|" TPattern1 ;
 coercions TPattern 5 ;
 
 TPIQuotFormula. TPIndicator ::= "@" TPattern ;
-TPIName. TPIndicator ::= Chan ;
-separator nonempty TPIndicator "," ;
+TPIName. TPIndicator ::= TPNomination ;
 
-TPBind. TPatternBind ::= Chan "<-" TPIndicator ;
+TPBind. TPatternBind ::= TPNomination "<-" TPIndicator ;
 separator nonempty TPatternBind ";" ;
+
+TAEmpty. TAnnotation ::= ;
+TAPattern. TAnnotation ::= ":" TPattern ;
+
+TNVar. TPNomination ::= Var ;
