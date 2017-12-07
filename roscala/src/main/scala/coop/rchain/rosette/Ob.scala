@@ -238,29 +238,12 @@ object Ob {
   case object SyscodeSleep extends SysCode
   case object SyscodeDeadThread extends SysCode
 
-  case object ABSENT extends Ob {
-    override val slot: Slot = Slot.Placeholder
-  }
-
-  case object INVALID extends Ob {
-    override val slot: Slot = Slot.Placeholder
-  }
-
-  case object NIV extends Ob {
-    override val slot: Slot = Slot.Placeholder
-  }
-
-  object RBLTRUE extends Ob {
-    override val slot: Slot = Slot.Placeholder
-  }
-
-  object RBLFALSE extends Ob {
-    override val slot: Slot = Slot.Placeholder
-  }
-
-  object NilMeta extends Ob {
-    override val slot: Slot = Slot.Placeholder
-  }
+  object ABSENT extends Ob
+  object INVALID extends Ob
+  object NIV extends Ob
+  object RBLTRUE extends Ob
+  object RBLFALSE extends Ob
+  object NilMeta extends Ob
 
   object Lenses {
     def setA[T, A](a: A)(f: RootLens[A] ⇒ Lens[A, T])(value: T): A =
