@@ -1,10 +1,7 @@
 package coop.rchain.rosette
 
-import scala.collection.mutable
-
-case class TblObject(entry: Seq[Ob], override val _slot: mutable.Seq[Ob])
-    extends Ob
+case class TblObject(entry: Seq[Ob], override val slot: Slot) extends Ob
 
 object TblObject {
-  object PLACEHOLDER extends TblObject(null, null)
+  object PLACEHOLDER extends TblObject(Nil, Slot.Placeholder)
 }

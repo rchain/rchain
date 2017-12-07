@@ -2,27 +2,47 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import coop.rchain.rosette.utils.{pSlice, printToFile}
+import coop.rchain.rosette.utils.printToFile
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import shapeless.OpticDefns.RootLens
 import shapeless._
 
-import scala.collection.mutable
-
 trait Base
+
+final case class Slot(meta: Ob, parent: Ob, tail: Seq[Ob]) {
+  def apply(n: Int): Ob = slot(n)
+
+  def size: Int = 2 + tail.size
+
+  def slot(index: Int): Ob = index match {
+    case 0 => meta
+    case 1 => parent
+    case i => tail(i - 2)
+  }
+
+  def updated(index: Int, value: Ob): Slot = index match {
+    case 0 => copy(meta = value)
+    case 1 => copy(parent = value)
+    case i => copy(tail = tail.updated(index - 2, value))
+  }
+}
+
+object Slot {
+  val Placeholder = Slot(null, null, null)
+}
 
 //TODO change type of `indirect` argument to bool
 trait Ob extends Base {
-  val _slot: mutable.Seq[Ob]
+  val slot: Slot = Slot.Placeholder
+
   val obTag: ObTag = null
   val sysval: SysCode = null
   val constantP = true
 
-  def meta: Ob = _slot.head
-  def parent: Ob = _slot(1)
-  lazy val slot: mutable.Seq[Ob] = pSlice(_slot, 2, _slot.size)
+  def meta: Ob = slot.meta
+  def parent: Ob = slot.parent
 
   def dispatch(state: VMState): (Result, VMState) = null
   def extendWith(keymeta: Ob): Ob = null
@@ -84,7 +104,7 @@ trait Ob extends Base {
   }
 
   def matches(ctxt: Ctxt): Boolean = false
-  def numberOfSlots(): Int = slot.length
+  def numberOfSlots(): Int = slot.size
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
@@ -98,6 +118,8 @@ trait Ob extends Base {
                value: Int): Ob =
     ??? //TODO
 
+  // TODO: Revisit
+  /*
   def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = {
     val p: Ob = nthParent(level)
 
@@ -109,6 +131,9 @@ trait Ob extends Base {
         value
       } getOrElse Ob.INVALID
   }
+   */
+
+  def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = Ob.INVALID
 
   def notImplemented(opName: String): Unit = {
     val className = this.getClass.getSimpleName
@@ -142,9 +167,12 @@ trait Ob extends Base {
 
   def setMailbox(ob: Ob): Ob = self
 
+  /*
   def rcons(ob: Ob): Ob =
     copyOb(slot = slot :+ ob)
+   */
 
+  /*
   def copyOb(parent: Ob = parent,
              meta: Ob = meta,
              slot: mutable.Seq[Ob] = slot): Ob = {
@@ -153,6 +181,7 @@ trait Ob extends Base {
       override val _slot: mutable.Seq[Ob] = m +: p +: s
     }
   }
+   */
 
   def addSlot(l: Ob, r: Ob): Int = {
     notImplemented()
@@ -211,23 +240,23 @@ object Ob {
   case object SyscodeDeadThread extends SysCode
 
   case object ABSENT extends Ob {
-    override val _slot: mutable.Seq[Ob] = null
+    override val slot: Slot = Slot.Placeholder
   }
 
   case object INVALID extends Ob {
-    override val _slot: mutable.Seq[Ob] = null
+    override val slot: Slot = Slot.Placeholder
   }
 
   case object NIV extends Ob {
-    override val _slot: mutable.Seq[Ob] = null
+    override val slot: Slot = Slot.Placeholder
   }
 
   object RBLTRUE extends Ob {
-    override val _slot: mutable.Seq[Ob] = null
+    override val slot: Slot = Slot.Placeholder
   }
 
   object RBLFALSE extends Ob {
-    override val _slot: mutable.Seq[Ob] = null
+    override val slot: Slot = Slot.Placeholder
   }
 
   object Lenses {

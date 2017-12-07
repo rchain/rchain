@@ -85,12 +85,12 @@ class TransitionSpec extends FlatSpec with Matchers {
       *  3:   xfer global[+],trgt
       *  5:   xmit/nxt 2
       */
-    val stdOprnPlus = StdOprn(null, null)
+    val stdOprnPlus = StdOprn(null)
     val stdMeta = StdMeta()
     val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, stdOprnPlus)
     val start =
       testState
-        .set(_ >> 'globalEnv)(TblObject(globalEnv, null))
+        .set(_ >> 'globalEnv)(TblObject(globalEnv, Slot.Placeholder))
         .set(_ >> 'ctxt >> 'tag)(LocationGT(Location.LTCtxtRegister(0)))
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
 

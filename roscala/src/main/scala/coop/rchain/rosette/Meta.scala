@@ -1,10 +1,8 @@
 package coop.rchain.rosette
 
-import scala.collection.mutable
-
 object Meta {
   case class StdMeta(override val extension: Ob = null,
-                     override val _slot: mutable.Seq[Ob] = null)
+                     override val slot: Slot = Slot.Placeholder)
       extends Actor {
     def get(client: Ob, key: Ob, ctxt: Ctxt): Result =
       Left(Absent)
