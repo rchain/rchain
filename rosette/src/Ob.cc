@@ -58,11 +58,7 @@ extern int nontrivial_addr_to_pre_fixnum(Ob *);
 #endif
 
 extern "C" {
-#ifdef __GNUC__
     char* getcwd (char*);
-#else
-    char* getwd (char*);
-#endif
 }
 
 #include <assert.h>
