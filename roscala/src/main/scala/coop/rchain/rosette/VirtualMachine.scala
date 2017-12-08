@@ -371,17 +371,22 @@ object VirtualMachine {
     state.update(_ >> 'ctxt)(Ctxt(Some(Tuple(op.n, None)), _))
 
   def execute(op: OpExtend, state: VMState): VMState = {
-    val newState = for {
-      template <- state.code.lit(op.v).as[Template] or
-        die(s"OpExtend: No template in state.code.litvec(${op.v})")(state)
+    def getTemplate = state.code.lit(op.v).as[Template]
+    def matchActuals(template: Template) =
+      template.`match`(state.ctxt.argvec, state.ctxt.nargs)
+    def getStdExtension = state.ctxt.env.as[StdExtension]
 
-      tuple <- template.`match`(state.ctxt.argvec, state.ctxt.nargs) or
+    val newState = for {
+      template <- getTemplate or die(
+        s"OpExtend: No template in state.code.litvec(${op.v})")(state)
+
+      tuple <- matchActuals(template) or
         // TODO: Revisit
         //handleFormalsMismatch(formals)
         state.set(_ >> 'doNextThreadFlag)(true)
 
-      env <- state.ctxt.env.as[StdExtension] or
-        die("OpExtend: state.ctxt.env needs to be a StdExtension")(state)
+      env <- getStdExtension or die(
+        "OpExtend: state.ctxt.env needs to be a StdExtension")(state)
 
     } yield {
       val newEnv = env.extendWith(template.keyMeta, tuple)
