@@ -134,13 +134,12 @@ properPrep (char* s)
 }
 #ifdef __GNUC__
 extern "C" {
-extern const char* const sys_errlist[];
-extern int sys_nerr;
+#include <string.h>
 };
 #endif
 
 const char*
 sys_errmsg ()
 {
-    return (errno < sys_nerr) ? sys_errlist[errno] : "unknown system error";
+   return strerror(errno);
 }
