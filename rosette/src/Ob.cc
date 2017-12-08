@@ -1459,11 +1459,7 @@ DEF("version",sysVersion, 0, 0)
 DEF("cwd",sysCwd, 0, 0)
 {
     char buf[MAXPATHLEN];
-#ifdef __GNUC__
     if (getcwd(buf))
-#else
-    if (getwd(buf))
-#endif
 	return RBLstring::create (buf);
     else
 	return PRIM_ERROR(buf);
