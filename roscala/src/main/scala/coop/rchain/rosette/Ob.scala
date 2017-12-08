@@ -95,21 +95,6 @@ trait Ob extends Base {
                value: Int): Ob =
     ??? //TODO
 
-  // TODO: Revisit
-  /*
-  def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = {
-    val p: Ob = nthParent(level)
-
-    actorExtension(ind, p)
-      .filter(_ => offset < p.numberOfSlots)
-      .map { ob =>
-        //TODO remove side effect here
-        ob.slot(offset) = value
-        value
-      } getOrElse Ob.INVALID
-  }
-   */
-
   def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = Ob.INVALID
 
   def notImplemented(opName: String): Unit = {
@@ -143,22 +128,6 @@ trait Ob extends Base {
   def mailbox: Ob = emptyMbox
 
   def setMailbox(ob: Ob): Ob = self
-
-  /*
-  def rcons(ob: Ob): Ob =
-    copyOb(slot = slot :+ ob)
-   */
-
-  /*
-  def copyOb(parent: Ob = parent,
-             meta: Ob = meta,
-             slot: mutable.Seq[Ob] = slot): Ob = {
-    val (p, m, s) = (parent, meta, slot)
-    new Ob {
-      override val _slot: mutable.Seq[Ob] = m +: p +: s
-    }
-  }
-   */
 
   def addSlot(l: Ob, r: Ob): Int = {
     notImplemented()
