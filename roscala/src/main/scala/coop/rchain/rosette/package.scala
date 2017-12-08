@@ -29,6 +29,10 @@ package object rosette {
     }
   }
 
+  implicit class OptionOps[R](opt: Option[R]) {
+    def or[L](alt: L): Either[L, R] = opt.toRight(alt)
+  }
+
   def suicide(msg: String): Unit = {
     System.err.println(s"*** fatal error: $msg")
     System.exit(1)
