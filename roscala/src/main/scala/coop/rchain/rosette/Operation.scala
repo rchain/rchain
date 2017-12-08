@@ -1,10 +1,6 @@
 package coop.rchain.rosette
 
-import scala.collection.mutable
-
-case class StdOprn(override val extension: Ob,
-                   override val _slot: mutable.Seq[Ob])
-    extends Actor {
+case class StdOprn(override val extension: StdExtension) extends Actor {
   override def dispatch(state: VMState): (Result, VMState) =
     // TODO:
     //if (debugging_level)
@@ -19,4 +15,4 @@ case class StdOprn(override val extension: Ob,
     }
 }
 
-object OprnVmError extends StdOprn(null, null)
+object OprnVmError extends StdOprn(null)

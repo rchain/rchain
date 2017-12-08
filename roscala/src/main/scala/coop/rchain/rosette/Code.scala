@@ -1,10 +1,5 @@
 package coop.rchain.rosette
 
-import scala.collection.mutable
-
-case class Code(litvec: Tuple,
-                codevec: Seq[Op],
-                override val _slot: mutable.Seq[Ob])
-    extends Ob {
+case class Code(litvec: Tuple, codevec: Seq[Op]) extends Ob {
   def lit(l: Int): Ob = litvec.elem(l)
 }

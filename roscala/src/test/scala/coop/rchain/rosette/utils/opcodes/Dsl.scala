@@ -1,6 +1,6 @@
 package coop.rchain.rosette.utils.opcodes
 
-import coop.rchain.rosette._
+import coop.rchain.rosette.{Op, VMState, VirtualMachine}
 import org.scalatest.WordSpec
 import shapeless.{::, ops, HList, HNil, Witness}
 
@@ -31,7 +31,7 @@ object Dsl {
       }
     }
 
-    def >>[S <: Symbol](acc: Witness.Lt[S])(
+    def >>[S <: scala.Symbol](acc: Witness.Lt[S])(
         implicit append: ops.hlist.Prepend[Path, S :: HNil]) =
       new theState[append.Out]
   }

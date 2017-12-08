@@ -1,9 +1,9 @@
 package coop.rchain.rosette
 
-import org.scalatest.{FlatSpec, Matchers, WordSpec}
+import org.scalatest.{Matchers, WordSpec}
 
-import scala.collection.mutable
-
+// TODO for Alex: Please adapt this to immutable Ob
+/*
 class ObSpec extends WordSpec with Matchers {
 
   "forwardingAddress" should {
@@ -67,7 +67,6 @@ class ObSpec extends WordSpec with Matchers {
   def createActor(ext: Ob, slots: mutable.Seq[Ob]): Actor =
     new Actor {
       override val extension = ext
-      override val _slot = null +: null +: slots
     }
 
   def createOb(meta: Ob = null,
@@ -75,7 +74,8 @@ class ObSpec extends WordSpec with Matchers {
                slot: mutable.Seq[Ob] = mutable.Seq.empty): Ob = {
     val (m, p, s) = (meta, parent, slot)
     new Ob {
-      override val _slot = m +: p +: s
+      override val slot = Slot.Placeholder
     }
   }
 }
+ */
