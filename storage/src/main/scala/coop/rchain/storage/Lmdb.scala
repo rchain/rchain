@@ -516,9 +516,9 @@ class Lmdb(dirNameIn: Option[String],
   // delete a key and the value associated with it
   def deleteKey[K: Bbable](key: K,
                            txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-
-    if (key.isInstanceOf[Key]) {
+    if (!isWritable) {
+      false
+    } else if (key.isInstanceOf[Key]) {
       deleteKey(key.asInstanceOf[Key].term, txnIn)
     } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException(
