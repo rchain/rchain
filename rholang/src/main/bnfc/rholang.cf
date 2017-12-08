@@ -159,13 +159,14 @@ TPActivity. TPattern1 ::= "for" "(" [TPatternBind] ")" "{" TPattern "}" ;
 TPMixture. TPattern ::= TPattern "|" TPattern1 ;
 coercions TPattern 5 ;
 
-TPIQuotFormula. TPIndicator ::= "@" TPattern ;
-TPIName. TPIndicator ::= TPNomination ;
+TPIQuotFormula. TPIndicator ::= "@@" TPattern ;
+TPIChan. TPIndicator ::= TPNomination ;
 
 TPBind. TPatternBind ::= TPNomination "<-" TPIndicator ;
 separator nonempty TPatternBind ";" ;
 
+TNVar. TPNomination ::= Var ;
+TNQuote. TPNomination ::= "@" Proc3 ;
+
 TAEmpty. TAnnotation ::= ;
 TAPattern. TAnnotation ::= ":" TPattern ;
-
-TNVar. TPNomination ::= Var ;
