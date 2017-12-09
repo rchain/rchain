@@ -85,23 +85,6 @@ trait TermCtxt[Namespace,Var,/*+*/Tag]
 extends Term[Either[Namespace,Var],Either[Tag,Var]] {
   type U/*[Tag1]*/ =
     Term[Either[Namespace,Var],Either[Tag,Var]]
-  override def up /*[Tag1 >: Tag]*/ ( term : U/*[Tag1]*/ )
-   : List[Either[Tag,Var]] = {
-    term match {
-      case TermLeaf( t ) => List( t )
-      case TermCtxtLeaf( tOrV ) => List( tOrV )
-      case TermCtxtBranch( ns, lbls ) => {
-	val selves : List[U/*[Tag1]*/] = lbls.flatMap( _.self )
-	( List[Either[Tag,Var]]() /: selves )(
-	  {
-	    ( acc, e ) => {
-	      acc ++ up/*[Tag1]*/( e )
-	    }
-	  }
-	)
-      }
-    }
-  }  
 
   def names : Seq[Either[Tag,Var]] = {
     atoms filter(
@@ -131,7 +114,6 @@ class TermCtxtLeaf[Namespace,Var,Tag]( val tag : Either[Tag,Var] )
 extends TreeItem[Either[Tag,Var]]( tag )
 with TermCtxt[Namespace,Var,Tag]
 with Factual {
-  override def self = List( this )
   override def toString = {
     tag match {
       case Left( t ) => "" + t + ""
@@ -157,7 +139,6 @@ object TermCtxtLeaf extends Serializable {
 
 trait AbstractTermCtxtBranch[Namespace,Var,Tag]
 extends TermCtxt[Namespace,Var,Tag] {  
-  override def self = labels
   def nameSpace : Namespace
   def labels : List[TermCtxt[Namespace,Var,Tag]]
   override def toString = {
@@ -257,30 +238,6 @@ trait TermCtxtInjector[Namespace,Var,Tag] {
       cLabel.factuals.map( injectLabel( _ ) )
     )
   }
-}
-
-trait TwoCell[Src,+Label,Trgt] {
-  def src   : Src
-  def label : Label
-  def trgt  : Trgt
-}
-class CTwoCell[Src,+Label,Trgt](
-  override val src : Src,
-  override val label : Label,
-  override val trgt : Trgt
-) extends TwoCell[Src,Label,Trgt]
-
-object CTwoCell extends Serializable {
-  def apply[Src,Label,Trgt](
-    src : Src, lbl : Label, trgt : Trgt 
-  ) : CTwoCell[Src,Label,Trgt] = {
-    new CTwoCell[Src,Label,Trgt]( src, lbl, trgt )
-  }
-  def unapply[Src,Label,Trgt](
-    cnxn : CTwoCell[Src,Label,Trgt]
-  ) : Option[(Src,Label,Trgt)] = {
-    Some( ( cnxn.src, cnxn.label, cnxn.trgt ) )
-  }  
 }
 
 case class StrTermLf( override val tag : String )

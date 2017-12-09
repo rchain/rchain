@@ -22,7 +22,6 @@ import scala.language.postfixOps
 trait StrTermNavigation extends TermNavigation[String,Either[String,String],String]
 trait StrTermMutation extends TermMutation [String,Either[String,String],String]
 trait StrTermZipperComposition extends TermZipperComposition[String,Either[String,String],String]
-trait StrTermSubstitution extends TermSubstitution[String,Either[String,String],String]
 
 // V for language variable
 // K for "context" variable
