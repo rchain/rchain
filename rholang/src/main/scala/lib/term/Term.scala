@@ -14,7 +14,8 @@ import scala.collection.SeqProxy
 trait Term[Namespace, /*+*/Tag]
 extends Tree[Tag] with SeqProxy[Term[Namespace,Tag]]
   with Serializable {
-  def up /* [Tag1 >: Tag] */ ( term : Term[Namespace,Tag] )
+  // Collects a list of all the tags in the tree.
+  def collectTags /* [Tag1 >: Tag] */ ( term : Term[Namespace,Tag] )
    : List[Tag] = {
     term match {
       case TermLeaf( t ) => List( t )
@@ -22,7 +23,7 @@ extends Tree[Tag] with SeqProxy[Term[Namespace,Tag]]
 	( List[Tag]() /: lbls.flatMap( _.self ) )(
 	  {
 	    ( acc, e ) => {
-	      acc ++ up/*[Tag1]*/( e )
+	      acc ++ collectTags/*[Tag1]*/( e )
 	    }
 	  }
 	)
@@ -30,7 +31,7 @@ extends Tree[Tag] with SeqProxy[Term[Namespace,Tag]]
     }
   }
 
-  def atoms : Seq[Tag] = { this flatMap( up ) }
+  def atoms : Seq[Tag] = { this flatMap( collectTags ) }
   def self : List[Term[Namespace,Tag]]
 }
 
@@ -114,6 +115,7 @@ class TermCtxtLeaf[Namespace,Var,Tag]( val tag : Either[Tag,Var] )
 extends TreeItem[Either[Tag,Var]]( tag )
 with TermCtxt[Namespace,Var,Tag]
 with Factual {
+  override def self = List( this )
   override def toString = {
     tag match {
       case Left( t ) => "" + t + ""
@@ -141,6 +143,7 @@ trait AbstractTermCtxtBranch[Namespace,Var,Tag]
 extends TermCtxt[Namespace,Var,Tag] {  
   def nameSpace : Namespace
   def labels : List[TermCtxt[Namespace,Var,Tag]]
+  override def self = labels
   override def toString = {
     val lblStr =
       labels match {
