@@ -226,6 +226,7 @@ object VirtualMachine {
       if (currentState.exitFlag) exit = true
     }
 
+    loggerOpcode.info("Exiting")
     currentState
   }
 
@@ -234,7 +235,7 @@ object VirtualMachine {
 
     if (mState.doXmitFlag) {
       // may set doNextThreadFlag
-      mState = doXmit(mState)
+      mState = doXmit(mState).set(_ >> 'doXmitFlag)(false)
     }
 
     if (mState.doRtnFlag) {
@@ -249,8 +250,9 @@ object VirtualMachine {
     }
 
     if (mState.doNextThreadFlag) {
-      val (isEmpty, newState) = getNextStrand(mState)
-      mState = newState.set(_ >> 'doNextThreadFlag)(false)
+      val (isEmpty, tmpState) = getNextStrand(mState)
+      // TODO: Probably should move that into getNextStrand
+      mState = tmpState.set(_ >> 'doNextThreadFlag)(false)
 
       if (isEmpty) {
         mState = mState.set(_ >> 'exitFlag)(true)
@@ -290,13 +292,17 @@ object VirtualMachine {
       newState
   }
 
-  def doXmit(state: VMState): VMState =
-    state.ctxt.trgt match {
+  def doXmit(state: VMState): VMState = {
+    val newState = state.ctxt.trgt match {
       case ob: StdOprn => ob.dispatch(state)._2
 
       // TODO: Add other cases
       case _ => state
     }
+
+    // TODO: Add logic
+    newState.set(_ >> 'doNextThreadFlag)(true)
+  }
 
   def executeDispatch(op: Op, state: VMState): VMState =
     op match {
@@ -403,9 +409,10 @@ object VirtualMachine {
       .set(_ >> 'ctxt >> 'pc)(PC.fromInt(op.p))
       .set(_ >> 'ctxt >> 'outstanding)(op.n)
 
-  def execute(op: OpFork, state: VMState): VMState =
-    state.set(_ >> 'strandPool)(
-      state.ctxt.copy(pc = PC.fromInt(op.p)) +: state.strandPool)
+  def execute(op: OpFork, state: VMState): VMState = {
+    val newCtxt = state.ctxt.copy(pc = PC(op.p))
+    state.update(_ >> 'strandPool)(newCtxt +: _)
+  }
 
   def execute(op: OpXmitTag, state: VMState): VMState =
     state

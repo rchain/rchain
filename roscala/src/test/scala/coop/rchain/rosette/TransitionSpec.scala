@@ -172,4 +172,45 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.ctxt.rslt shouldBe Fixnum(3)
   }
 
+  "Executing bytecode from expression \"(block (+ 1 2) (+ 3 4))\"" should "be Fixnum(3) or Fixnum(7)" in {
+
+    /**
+      * litvec:
+      *  0:   {BlockExpr}
+      * codevec:
+      *  0:   fork 7
+      *  1:   alloc 2
+      *  2:   lit 1,arg[0]
+      *  3:   lit 2,arg[1]
+      *  4:   xfer global[+],trgt
+      *  6:   xmit/nxt 2
+      *  7:   alloc 2
+      *  8:   lit 3,arg[0]
+      *  9:   lit 4,arg[1]
+      *  10:  xfer global[+],trgt
+      *  12:  xmit/nxt 2
+      */
+    // b src/Vm.cc if code->codevec->instr(0)->word == 3079
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+
+    val codevec = Seq(
+      OpFork(6),
+      OpAlloc(2),
+      OpImmediateLitToArg(v = 1, a = 0),
+      OpImmediateLitToArg(v = 2, a = 1),
+      OpXferGlobalToReg(r = 1, g = 668),
+      OpXmit(u = false, n = true, 2),
+      OpAlloc(2),
+      OpImmediateLitToArg(v = 3, a = 0),
+      OpImmediateLitToArg(v = 4, a = 1),
+      OpXferGlobalToReg(r = 1, g = 668),
+      OpXmit(u = false, n = true, 2)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt should (be(Fixnum(3)) or be(Fixnum(7)))
+  }
 }
