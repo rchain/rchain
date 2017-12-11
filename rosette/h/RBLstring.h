@@ -51,7 +51,7 @@ class RBLstring : public ByteVec
 
     void	printOn (FILE*);
     void	displayOn (FILE*);
-    char*	asCstring ();
+    const char*	asCstring ();
     char*	asPathname ();
     Ob*		indexedSize ();
     Ob*		nth (int);

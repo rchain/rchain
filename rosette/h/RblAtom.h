@@ -108,7 +108,7 @@ class Char : public RblAtom
     static Char*	create ();
     void		printOn (FILE*);
     void		displayOn (FILE*);
-    char*		asCstring ();
+    const char*		asCstring ();
 };
 
 
@@ -128,7 +128,7 @@ class Fixnum : public RblAtom
   public:
 
     static Fixnum*	create ();
-    char* 		asCstring ();
+    const char* 		asCstring ();
 
     virtual convertArgReturnPair  convertActualArg(Ctxt*, Ob*);
     virtual Ob* convertActualRslt(Ctxt*, Word32);
@@ -146,7 +146,7 @@ class Niv : public RblAtom
   public:
 
     static Niv*	create ();
-    char*	asCstring ();
+    const char*	asCstring ();
     Ob*		invoke (Ctxt*);
 };
 
@@ -162,7 +162,7 @@ class Sysval : public RblAtom
   public:
 
     static Sysval*	create ();
-    char*		asCstring ();
+    const char*		asCstring ();
 };
 
 
@@ -177,7 +177,7 @@ class ExpandedLocation : public RblAtom
   public:
 
     static ExpandedLocation*	create ();
-    char*			asCstring ();
+    const char*			asCstring ();
 };
 
 #endif

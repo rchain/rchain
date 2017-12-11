@@ -359,7 +359,7 @@ Float::create (Rfloat v)
 }
 
 
-char*
+const char*
 Float::asCstring ()
 {
     sprintf(Ob::stringbuf, Float::format, val);

@@ -272,7 +272,7 @@ Char::displayOn (FILE* f)
 }
 int			Base::nClasses= 0;
 char Ob::stringbuf[256] = {0};
-char*
+const char*
 Char::asCstring ()
 {
     Ob::stringbuf[0] = CHARVAL(atom);
@@ -300,7 +300,7 @@ Fixnum::create ()
 char Fixnum::format [FixnumFormatSize] = "%d";
 
 
-char*
+const char*
 Fixnum::asCstring ()
 {
     sprintf(Ob::stringbuf, Fixnum::format, FIXVAL(atom));
@@ -354,7 +354,7 @@ Niv::create ()
     return NEW(loc) Niv ();
 }
 
-char*
+const char*
 Niv::asCstring ()
 {
     return "#niv";
@@ -384,7 +384,7 @@ Sysval::create ()
     return NEW(loc) Sysval ();
 }
 
-char*
+const char*
 Sysval::asCstring ()
 {
     switch (ESCVAL(atom)) {
@@ -425,7 +425,7 @@ ExpandedLocation::create ()
     return NEW(loc) ExpandedLocation ();
 }
 
-char*
+const char*
 ExpandedLocation::asCstring ()
 {
     Location loc;

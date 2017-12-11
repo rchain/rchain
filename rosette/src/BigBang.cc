@@ -334,7 +334,7 @@ class RBLtopenv : public Ob
     static RBLtopenv*	create ();
 
     char*	typestring ()		{ return "TopEnv"; }
-    char*	asCstring ()		{ return "#top"; }
+    const char*	asCstring ()		{ return "#top"; }
     Ob*		invoke (Ctxt*)		{ return NIV; }
     Ob*		lookup (Ob*, Ctxt*)	{ return ABSENT; }
     Location	lex (Ob*, int)		{ return LocLimbo; }
