@@ -27,11 +27,26 @@ object Main {
     logger.info(s"Listening for traffic on $net.")
 
     conf.home.foreach { address =>
-      p2p.NetworkAddress.parse(address) match {
-        case Right(remote @ PeerNode(_, _)) =>
-          new ProtocolNode(remote, net.net).ping
-          ()
-        case Left(error) => logger.error(s"Unable to bootstrap network: ${error.msg}")
+      logger.info(s"Bootstrapping from $address.")
+      net.connect(address)
+    }
+
+    sys.addShutdownHook {
+      net.disconnect
+      logger.info("Goodbye.")
+    }
+
+    var lastCount = 0
+    while (true) {
+      Thread.sleep(5000)
+      for (peer <- net.net.findMorePeers(10)) {
+        logger.info(s"Possibly new peer: $peer.")
+        net.connect(peer)
+      }
+      val thisCount = net.net.table.peers.size
+      if (thisCount != lastCount) {
+        lastCount = thisCount
+        logger.info(s"Peers: $thisCount.")
       }
     }
   }

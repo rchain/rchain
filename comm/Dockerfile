@@ -10,7 +10,10 @@ run rm ensime.sbt
 
 env JAVA_TOOL_OPTIONS -Dfile.encoding=UTF8
 
-run sbt sbtVersion
-run sbt compile
+run sbt assembly
 
-entrypoint [ "sbt", "console" ]
+COPY main.sh /bin
+run mv /src/target/scala-2.12/comm-assembly-0.1-SNAPSHOT.jar /
+run rm -rf /src
+
+entrypoint [ "/bin/main.sh" ]

@@ -79,6 +79,23 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
         }
     }
   }
+
+  def lookup(key: Seq[Byte]): Try[Seq[PeerNode]] = {
+    val req = LookupMessage(ProtocolMessage.lookup(handler.local, key), System.currentTimeMillis)
+    handler.roundTrip(req, this) match {
+      case Right(LookupResponseMessage(proto, _)) =>
+        proto.message.lookupResponse match {
+          case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))
+          case _ => Success(Seq())
+        }
+      case Right(other) => Failure(new Exception("unaexpected response"))
+      case Left(ex) =>
+        ex match {
+          case ProtocolException(exc) => Failure(exc)
+          case exc                    => Failure(new Exception(exc.toString))
+        }
+    }
+  }
 }
 
 /**
@@ -146,6 +163,11 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
 }
 
 /**
+  * A disconnect causes the receiver to forget about this peer.
+  */
+case class DisconnectMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+
+/**
   * The response to a lookup message. It holds the list of peers
   * closest to the queried key.
   */
@@ -179,6 +201,10 @@ object ProtocolMessage {
       .withUdpPort(n.endpoint.udpPort)
       .withTcpPort(n.endpoint.tcpPort)
 
+  def toPeerNode(n: Node): PeerNode =
+    PeerNode(NodeIdentifier(n.id.toByteArray),
+             Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
+
   def returnHeader(h: Header): ReturnHeader =
     ReturnHeader()
       .withTimestamp(h.timestamp)
@@ -208,6 +234,11 @@ object ProtocolMessage {
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node(_))))
 
+  def disconnect(src: ProtocolNode): Protocol =
+    Protocol()
+      .withHeader(header(src))
+      .withDisconnect(Disconnect())
+
   def upstreamMessage(src: ProtocolNode, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))
@@ -223,11 +254,12 @@ object ProtocolMessage {
     Protocol.parseFrom(bytes.toArray) match {
       case msg: Protocol =>
         msg.message match {
-          case Protocol.Message.Ping(p)   => Some(PingMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Pong(p)   => Some(PongMessage(msg, System.currentTimeMillis))
+          case Protocol.Message.Ping(_)   => Some(PingMessage(msg, System.currentTimeMillis))
+          case Protocol.Message.Pong(_)   => Some(PongMessage(msg, System.currentTimeMillis))
           case Protocol.Message.Lookup(_) => Some(LookupMessage(msg, System.currentTimeMillis))
           case Protocol.Message.LookupResponse(_) =>
             Some(LookupResponseMessage(msg, System.currentTimeMillis))
+          case Protocol.Message.Disconnect(_) => Some(DisconnectMessage(msg, System.currentTimeMillis))
           case Protocol.Message.Upstream(_) =>
             msg.returnHeader match {
               case Some(_) => Some(UpstreamResponse(msg, System.currentTimeMillis))

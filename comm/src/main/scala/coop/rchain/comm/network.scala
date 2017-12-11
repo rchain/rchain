@@ -5,6 +5,9 @@ import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.kademlia.PeerTable
+import com.typesafe.scalalogging.Logger
+import scala.collection.mutable
+import scala.util.{Success, Failure}
 
 /**
   * Implements the lower levels of the network protocol.
@@ -14,6 +17,8 @@ case class UnicastNetwork(id: NodeIdentifier,
                           next: Option[ProtocolDispatcher] = None)
     extends ProtocolHandler
     with ProtocolDispatcher {
+
+  val logger = Logger("network-overlay")
 
   def this(peer: PeerNode, next: Option[ProtocolDispatcher]) =
     this(peer.id, peer.endpoint, next)
@@ -40,7 +45,7 @@ case class UnicastNetwork(id: NodeIdentifier,
               case DatagramException(ex: SocketTimeoutException) => ()
               // These next ones may ding a node's reputation; just
               // printing for now.
-              case err @ DatagramSizeError(sz)    => println(s"bad size $sz")
+              case err @ DatagramSizeError(sz)    => logger.warn(s"bad datagram size $sz")
               case err @ DatagramFramingError(ex) => ex.printStackTrace
               case err @ DatagramException(ex)    => ex.printStackTrace
 
@@ -48,6 +53,30 @@ case class UnicastNetwork(id: NodeIdentifier,
             }
         }
       }
+  }
+
+  def findMorePeers(limit: Int): Seq[PeerNode] = {
+    var currentSet = table.peers.toSet
+    val potentials = mutable.Set[PeerNode]()
+    if (currentSet.size > 0) {
+      val dists = table.sparseness()
+      var i = 0
+      while (currentSet.size > 0 && potentials.size < limit && i < dists.size) {
+        val dist = dists(i)
+        val target = id.key.to[mutable.ArrayBuffer]
+        val bno = dist/8
+        val mask = 1 << (dist%8)
+        target(bno) = (target(bno)^mask).toByte
+        currentSet.head.lookup(target) match {
+          case Success(results) =>
+            potentials ++= results.filter(r => !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key) == None)
+          case _ => ()
+        }
+        currentSet -= currentSet.head
+        i += 1
+      }
+    }
+    potentials.toSeq
   }
 
   def dispatch(msg: ProtocolMessage): Unit =
@@ -58,10 +87,11 @@ case class UnicastNetwork(id: NodeIdentifier,
       // higher-level protocols.
       table.observe(new ProtocolNode(sender, this), next == None)
       msg match {
-        case ping @ PingMessage(_, _)     => handlePing(sender, ping)
-        case lookup @ LookupMessage(_, _) => handleLookup(sender, lookup)
-        case resp: ProtocolResponse       => handleResponse(sender, resp)
-        case _                            => next.foreach(_.dispatch(msg))
+        case ping @ PingMessage(_, _)             => handlePing(sender, ping)
+        case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
+        case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
+        case resp: ProtocolResponse               => handleResponse(sender, resp)
+        case _                                    => next.foreach(_.dispatch(msg))
       }
     }
 
@@ -73,12 +103,10 @@ case class UnicastNetwork(id: NodeIdentifier,
   private def handleResponse(sender: PeerNode, msg: ProtocolResponse): Unit =
     for {
       ret <- msg.returnHeader
-      promise <- pending.get(PendingKey(sender.key, ret.timestamp, ret.seq))
     } {
-      try {
-        promise.success(Right(msg))
-      } catch {
-        case ex: java.lang.IllegalStateException => () // Future already completed
+      pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)) match {
+        case Some(promise) => promise.success(Right(msg))
+        case None => next.foreach(_.dispatch(msg))
       }
     }
 
@@ -103,6 +131,14 @@ case class UnicastNetwork(id: NodeIdentifier,
     } {
       comm.send(resp.toByteSeq, sender)
     }
+
+  /**
+    * Remove sending peer from table.
+    */
+  private def handleDisconnect(sender: PeerNode, disconnect: DisconnectMessage): Unit = {
+    logger.info(s"Forgetting about $sender.")
+    table.remove(sender.key)
+  }
 
   /**
     * Broadcast a message to all peers in the Kademlia table.
