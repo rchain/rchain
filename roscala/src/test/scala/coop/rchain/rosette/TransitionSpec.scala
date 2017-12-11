@@ -190,7 +190,6 @@ class TransitionSpec extends FlatSpec with Matchers {
       *  10:  xfer global[+],trgt
       *  12:  xmit/nxt 2
       */
-    // b src/Vm.cc if code->codevec->instr(0)->word == 3079
     val start =
       testState
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
