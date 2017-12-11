@@ -34,36 +34,33 @@
 
 #include "Ob.h"
 
-class RblStack : public Ob
-{
+class RblStack : public Ob {
     STD_DECLS(RblStack);
 
-  protected:
+   protected:
+    RblStack(Tuple*);
 
-    RblStack (Tuple*);
+   public:
+    Ob* nElems;
+    Tuple* elems;
 
-  public:
+    static RblStack* create();
 
-    Ob*		nElems;
-    Tuple*	elems;
-
-    static RblStack*	create ();
-
-    Ob*		cloneTo (Ob*, Ob*);
-    int		depth ();
-    bool	isEmpty ();
-    void	push (Ob*);
-    Ob*		pop ();
-    Ob*		top ();
-    void	reset ();
-    Ob*		indexedSize ();
-    Ob*		nth (int);
-    Ob*		setNth (int, Ob*);
-    Ob*		subObject (int, int);
+    Ob* cloneTo(Ob*, Ob*);
+    int depth();
+    bool isEmpty();
+    void push(Ob*);
+    Ob* pop();
+    Ob* top();
+    void reset();
+    Ob* indexedSize();
+    Ob* nth(int);
+    Ob* setNth(int, Ob*);
+    Ob* subObject(int, int);
 };
 
 
-inline int	RblStack::depth ()		{ return FIXVAL(nElems); }
-inline bool	RblStack::isEmpty ()	{ return nElems == FIXNUM(0); }
+inline int RblStack::depth() { return FIXVAL(nElems); }
+inline bool RblStack::isEmpty() { return nElems == FIXNUM(0); }
 
 #endif

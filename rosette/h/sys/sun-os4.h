@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sun-os4.h,v 1.1.1.1 1993/02/12 01:25:04 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sun-os4.h,v 1.1.1.1
+ 1993/02/12 01:25:04 tomlic Exp $
  *
  * $Log: sun-os4.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:04  tomlic
@@ -33,15 +34,17 @@
 /* You must supply something to cause the current process
    to receive the io signal when input is available on fd.
    return is < 0 on failure.
-*/   
-#define SET_SIGNAL_IO_DESIRED(result)     result= (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
+*/
+#define SET_SIGNAL_IO_DESIRED(result) \
+    result = (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
 
-#define OS      "os4"
+#define OS "os4"
 
 #ifndef __GNUG__
-extern "C" {int setpgrp();
-	    int getpid();
-	    int execve(const char*, const char**, char**);
-	    int setsid();
-	  }
+extern "C" {
+int setpgrp();
+int getpid();
+int execve(const char*, const char**, char**);
+int setsid();
+}
 #endif

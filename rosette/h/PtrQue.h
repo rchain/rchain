@@ -34,59 +34,40 @@
 
 #include "ResizeablePtrArray.h"
 
-class PtrQue : public ResizeablePtrArray
-{
-  protected:
+class PtrQue : public ResizeablePtrArray {
+   protected:
+    void** head;
+    void** limit;
 
-    void**	head;
-    void**	limit;
+   public:
+    PtrQue();
+    PtrQue(int);
 
-  public:
-
-    PtrQue ();
-    PtrQue (int);
-
-    void	init ();
-    void	resize ();
-    void	resize (int);
-    int		empty ();
-    void	add (void*);
-    void	del (int = 1);
-    void	compact ();
+    void init();
+    void resize();
+    void resize(int);
+    int empty();
+    void add(void*);
+    void del(int = 1);
+    void compact();
 };
 
 
-inline
-void
-PtrQue::init ()
-{
+inline void PtrQue::init() {
     head = array;
-    limit = array+size;
+    limit = array + size;
 }
 
-inline
-int
-PtrQue::empty ()
-{
-    return head == array;
-}
+inline int PtrQue::empty() { return head == array; }
 
 
-inline
-void
-PtrQue::add (void* p)
-{
+inline void PtrQue::add(void* p) {
     if (head >= limit)
-	resize();
+        resize();
     *head++ = p;
 }
 
 
-inline
-void
-PtrQue::del (int n)
-{
-    head -= n;
-}
+inline void PtrQue::del(int n) { head -= n; }
 
 #endif

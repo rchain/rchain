@@ -34,109 +34,73 @@
 
 #include "ResizeAry.h"
 
-class PtrCollection : public ResizeablePtrArray
-{
-  protected:
-
-    void**	next;
-    void**	limit;
+class PtrCollection : public ResizeablePtrArray {
+   protected:
+    void** next;
+    void** limit;
 
     friend class PtrCollectionTrav;
 
-  public:
+   public:
+    PtrCollection();
+    PtrCollection(int);
 
-    PtrCollection ();
-    PtrCollection (int);
-
-    void	init ();
-    void	resize ();
-    void	resize (int);
-    int		empty ();
-    void	add (void*);
-    void	del (int = 1);
-    void	compact ();
+    void init();
+    void resize();
+    void resize(int);
+    int empty();
+    void add(void*);
+    void del(int = 1);
+    void compact();
 };
 
 
-inline
-void
-PtrCollection::init ()
-{
+inline void PtrCollection::init() {
     next = array;
-    limit = array+size;
+    limit = array + size;
 }
 
-inline
-int
-PtrCollection::empty ()
-{
-    return next == array;
-}
+inline int PtrCollection::empty() { return next == array; }
 
 
-inline
-void
-PtrCollection::add (void* p)
-{
+inline void PtrCollection::add(void* p) {
     if (next >= limit)
-	resize();
+        resize();
     *next++ = p;
 }
 
 
-inline
-void
-PtrCollection::del (int n)
-{
-    next -= n;
-}
+inline void PtrCollection::del(int n) { next -= n; }
 
 
-
-
-class PtrCollectionTrav
-{
-  protected:
-
+class PtrCollectionTrav {
+   protected:
     /*
      * We use array indexing here, rather than pointer chasing, to
      * protect ourselves in case the PtrCollection grows and moves while
      * this PtrCollectionTrav still exists.
      */
 
-    int			current;
-    PtrCollection*	pc;
+    int current;
+    PtrCollection* pc;
 
-  public:
-    PtrCollectionTrav (PtrCollection*);
+   public:
+    PtrCollectionTrav(PtrCollection*);
 
-    int		valid ();
-    void	advance ();
-    void*&	get ();
+    int valid();
+    void advance();
+    void*& get();
 
-    operator void* ();
+    operator void*();
 };
 
 
-inline
-int
-PtrCollectionTrav::valid ()
-{
-    return &pc->array[current] < pc->next;
-}
+inline int PtrCollectionTrav::valid() { return &pc->array[current] < pc->next; }
 
 
-inline
-PtrCollectionTrav::operator void* ()
-{
-    return valid() ? this : 0;
-}
+inline PtrCollectionTrav::operator void*() { return valid() ? this : 0; }
 
 
-inline void*&
-PtrCollectionTrav::get ()
-{
-    return pc->array[current];
-}
+inline void*& PtrCollectionTrav::get() { return pc->array[current]; }
 
 #endif

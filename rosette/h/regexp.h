@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/regexp.h,v 1.1.1.1 1993/02/12 01:25:02 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/regexp.h,v 1.1.1.1
+ 1993/02/12 01:25:02 tomlic Exp $
  *
  * $Log: regexp.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:02  tomlic
@@ -36,19 +37,18 @@
 #ifndef _regexp_h
 #define _regexp_h 1
 
-#define NSUBEXP  10
+#define NSUBEXP 10
 typedef struct regexp {
-	char *startp[NSUBEXP];
-	char *endp[NSUBEXP];
-	char regstart;		/* Internal use only. */
-	char reganch;		/* Internal use only. */
-	char *regmust;		/* Internal use only. */
-	int regmlen;		/* Internal use only. */
-	char program[1];	/* Unwarranted chumminess with compiler. */
+    char *startp[NSUBEXP];
+    char *endp[NSUBEXP];
+    char regstart;   /* Internal use only. */
+    char reganch;    /* Internal use only. */
+    char *regmust;   /* Internal use only. */
+    int regmlen;     /* Internal use only. */
+    char program[1]; /* Unwarranted chumminess with compiler. */
 } regexp;
 
 regexp *GS_regcomp(char *);
-int GS_regexec(register regexp*, register char*);
+int GS_regexec(register regexp *, register char *);
 
 #endif
-

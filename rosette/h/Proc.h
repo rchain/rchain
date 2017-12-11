@@ -34,24 +34,21 @@
 
 #include "Ob.h"
 
-class Proc : public Ob
-{
+class Proc : public Ob {
     STD_DECLS(Proc);
 
-  protected:
+   protected:
+    Proc(Ob*, Code*, Ob*, Ob*);
 
-    Proc (Ob*, Code*, Ob*, Ob*);
+   public:
+    Ob* env;
+    Code* code;
+    Ob* id;
+    Ob* source;
 
-  public:
-
-    Ob*		env;
-    Code*	code;
-    Ob*		id;
-    Ob*		source;
-
-    static Proc*	create (Ob*, Code*, Ob* = Qanon, Ob* = NIV);
-    virtual Ob*		dispatch (Ctxt*);
-    virtual Ob*		invoke (Ctxt*);
+    static Proc* create(Ob*, Code*, Ob* = Qanon, Ob* = NIV);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
 #endif

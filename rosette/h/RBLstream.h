@@ -36,40 +36,34 @@
 
 class Reader;
 
-class Istream : public Actor
-{
+class Istream : public Actor {
     STD_DECLS(Istream);
 
-  protected:
+   protected:
+    Istream(Ob*, pExt, Reader*);
 
-    Istream (Ob*, pExt, Reader*);
+   public:
+    Ob* client;
+    Reader* reader;
 
-  public:
-
-    Ob*		client;
-    Reader*	reader;
-
-    static Istream*	create (Reader*);
-    virtual Ob*		cloneTo (Ob*, Ob*);
+    static Istream* create(Reader*);
+    virtual Ob* cloneTo(Ob*, Ob*);
 };
 
 
-class Ostream : public BinaryOb
-{
+class Ostream : public BinaryOb {
     STD_DECLS(Ostream);
 
-  protected:
+   protected:
+    Ostream(FILE*);
 
-    Ostream (FILE*);
+   public:
+    FILE* stream;
 
-  public:
+    virtual ~Ostream();
 
-    FILE*	stream;
-
-    virtual ~Ostream ();
-
-    static Ostream*	create (FILE*);
-    virtual Ob*		cloneTo (Ob*, Ob*);
+    static Ostream* create(FILE*);
+    virtual Ob* cloneTo(Ob*, Ob*);
 };
 
 

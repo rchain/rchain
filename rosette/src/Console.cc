@@ -47,114 +47,104 @@
 #ifdef MIPS_SGI_SYSV
 #include <sys/param.h>
 #include <sys/types.h>
-#endif     
-     
+#endif
+
 #include <sys/socket.h>
 
 #ifdef MIPS_SGI_SYSV
 #include <unistd.h>
-extern "C"{
-#include <netinet/in.h>  
+extern "C" {
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
 int setpgrp();
 int setsid();
 }
-#endif               
+#endif
 
 extern int errno;
 extern int sys_nerr;
 extern char* sys_errlist[];
 
-#define OK	0
-#define NOTOK 	(-1)
+#define OK 0
+#define NOTOK (-1)
 
 static int image;
 
-//
+//
 
-static void finish ()
-{
-    exit (0);
+static void finish() { exit(0); }
+
+static void passthru(int sig) { (void)kill(image, sig); }
+
+static void terminate() {
+    (void)kill(image, SIGTERM);
+    exit(0);
 }
 
-static void passthru (int sig)
-{
-    (void) kill (image, sig);
-}
+//
 
-static void terminate ()
-{
-    (void) kill (image, SIGTERM);
-    exit (0);
-}
-
-//
-
-main (int, char** argv)
-{
+main(int, char** argv) {
     char buffer[BUFSIZ];
     register char* bp = buffer;
     int fds[2];
 
     // Basic signal handling
 
-    (void) signal (SIGCHLD, (SIG_PF)finish);	// exit on death of child
-    (void) signal (SIGPIPE, (SIG_PF)terminate);	// kill image on losing pipe
-    (void) signal (SIGTERM, (SIG_PF)terminate);	// kill image on terminate
-    (void) signal (SIGINT, (SIG_PF)passthru);	// pass thru to child
+    (void)signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
+    (void)signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
+    (void)signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
+    (void)signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
 
     // Create pipe used to feed our syncrhonous stdin to rosette image
     // which handles its end of the pipe as an asynchronous stdin.
 
-    if (socketpair(AF_UNIX,SOCK_STREAM,0,fds) == NOTOK) {
-	perror ("Unable to create pipe");
-	exit (1);
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == NOTOK) {
+        perror("Unable to create pipe");
+        exit(1);
     }
 
     switch (image = fork()) {
+    case NOTOK:  // Only if no memory or max processes exceeded
 
-    case NOTOK:	// Only if no memory or max processes exceeded
+        perror("Unable to fork rosette image");
+        exit(1);
 
-	perror ("Unable to fork rosette image");
-	exit (1);
+    case OK:  // Ready to exec the image
 
-    case OK:	// Ready to exec the image
+        // Bind image's stdin to the pipe
 
-	// Bind image's stdin to the pipe
+        if (dup2(fds[0], 0) == NOTOK) {
+            perror("Unable to dup image stdin to pipe");
+            _exit(1);
+        }
 
-	if (dup2 (fds[0], 0) == NOTOK) {
-	    perror ("Unable to dup image stdin to pipe");
-	    _exit(1);
-	  }
+        (void)setsid();  // here ye here ye do not mess with this without
+        // seeing Christine or Greg Lavender!!!
 
-	(void) setsid(); //here ye here ye do not mess with this without
-			  //seeing Christine or Greg Lavender!!!
+        sprintf(bp, "%s.image", *argv);
+        *argv = bp;
 
-	sprintf (bp, "%s.image", *argv);
-	*argv = bp;
-	
-	// Note: execve resets caught signals to their defaults
+        // Note: execve resets caught signals to their defaults
 
-	execvp (bp, argv);	
+        execvp(bp, argv);
 
-	perror ("Unable to exec rosette image");
-	_exit (1);
+        perror("Unable to exec rosette image");
+        _exit(1);
 
-    default:	// Stuff input into pipe until EOF
+    default:  // Stuff input into pipe until EOF
 
-	// Only the image will do the writing to stdout/stderr
+        // Only the image will do the writing to stdout/stderr
 
-	(void) fclose (stdout);
-	(void) fclose (stderr);	
+        (void)fclose(stdout);
+        (void)fclose(stderr);
 
-	for (;;) {
-	    if (fgets (bp, sizeof (buffer), stdin))
-		write (fds[1], bp, strlen (bp));
-	    else
-		terminate ();
-	}
+        for (;;) {
+            if (fgets(bp, sizeof(buffer), stdin))
+                write(fds[1], bp, strlen(bp));
+            else
+                terminate();
+        }
     }
 }
-

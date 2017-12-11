@@ -43,25 +43,22 @@ typedef double Rfloat;
 
 static const int FloatFormatSize = 16;
 
-class Float : public BinaryOb
-{
+class Float : public BinaryOb {
     STD_DECLS(Float);
 
-  protected:
-
-    static char format [FloatFormatSize];
+   protected:
+    static char format[FloatFormatSize];
     friend BUILTIN_PRIM(flFormat);
 
-    Float (Rfloat);
+    Float(Rfloat);
 
-    Ob*	checkResult (Prim*, Ctxt*, Rfloat);
+    Ob* checkResult(Prim*, Ctxt*, Rfloat);
 
-  public:
+   public:
+    Rfloat val;
 
-    Rfloat  val;
-
-    static Float*	create (Rfloat);
-    const char*		asCstring ();
+    static Float* create(Rfloat);
+    const char* asCstring();
 };
 
 #endif
