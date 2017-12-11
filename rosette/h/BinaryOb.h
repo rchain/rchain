@@ -108,6 +108,7 @@ inline
 Byte&
 ByteVec::byte (int n)
 {
+    // WTH????
     Byte* p = (Byte*) (((char*)&byteCount)+sizeof(byteCount));
     return p[n];
 }
