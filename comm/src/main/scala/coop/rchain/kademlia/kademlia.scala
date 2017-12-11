@@ -190,6 +190,7 @@ case class PeerTable[A <: Peer](home: A,
             }
           }
         }
+      case None => ()
     }
 
   /**
