@@ -37,30 +37,28 @@
 /* #include <new.h> */
 
 #ifndef NEW
-#define NEW(loc) new(loc)
+#define NEW(loc) new (loc)
 #endif
 
 
-class RootSet
-{
+class RootSet {
 #ifdef __GNUG__
-    int	dummy;	// To suppress compiler warning about no data members.
+    int dummy;  // To suppress compiler warning about no data members.
 #endif
 
-  public:
+   public:
+    virtual void preScavenge(EMPTY);
+    virtual void scavenge(EMPTY);
+    virtual void postScavenge(EMPTY);
 
-    virtual void	preScavenge (EMPTY);
-    virtual void	scavenge (EMPTY);
-    virtual void	postScavenge (EMPTY);
+    virtual void preGC(EMPTY);
+    virtual void mark(EMPTY);
+    virtual void postGC(EMPTY);
 
-    virtual void	preGC (EMPTY);
-    virtual void	mark (EMPTY);
-    virtual void	postGC (EMPTY);
-
-    virtual void	check (EMPTY);
+    virtual void check(EMPTY);
 };
 
-typedef void (RootSet::*RootSet_Fn) ();
+typedef void (RootSet::*RootSet_Fn)();
 
 
 class NewSpace;
@@ -71,14 +69,13 @@ class ObStk;
 class PtrCollection;
 
 
-class Heap
-{
-    NewSpace* const		newSpace;
-    OldSpace* const		oldSpace;
-    ForeignObTbl* const		foreignObs;
-    GCAgenda* const		gcAgenda;
-    ObStk* const		tenuredObs;
-    PtrCollection* const	rootSets;
+class Heap {
+    NewSpace* const newSpace;
+    OldSpace* const oldSpace;
+    ForeignObTbl* const foreignObs;
+    GCAgenda* const gcAgenda;
+    ObStk* const tenuredObs;
+    PtrCollection* const rootSets;
 
     /*
      * It is important that the declarations of newSpaceBase and
@@ -88,49 +85,47 @@ class Heap
      * newSpace in the constructor.
      */
 
-    void* const	newSpaceBase;
-    void* const	newSpaceLimit;
+    void* const newSpaceBase;
+    void* const newSpaceLimit;
 
-    int		scavengeCount;
-    int		gcCount;
-    int		totalScavenges;
-    int		totalGCs;
-    
-    Ob*		copyAndForward (Ob*);
-    void	traverseRootSets (RootSet_Fn);
-    
-    friend Ob*	Ob::relocate (EMPTY);
-    
-  public:
-    
-    Heap (unsigned, unsigned, unsigned);
-    ~Heap (EMPTY);
+    int scavengeCount;
+    int gcCount;
+    int totalScavenges;
+    int totalGCs;
 
-    void	addRootSet (RootSet*);
-    void	deleteRootSet (RootSet*);
-    
-    int		size  (EMPTY);
-    void*	alloc (unsigned);
-    void*	scavengeAndAlloc (unsigned);
-    void	remember (Ob*);
-    void	scavenge (EMPTY);
-    void	gc (EMPTY);
-    Ob*		tenure (Ob*);
-    void	tenureEverything (EMPTY);
+    Ob* copyAndForward(Ob*);
+    void traverseRootSets(RootSet_Fn);
 
-    bool	is_new (Ob*);
+    friend Ob* Ob::relocate(EMPTY);
 
-    bool	validPtrAfterScavenge (Ob*);
-    void	registerForeignOb (Ob*);
-    void	registerGCAgenda (Ob*);
-    
-    void	resetCounts (EMPTY);
-    void	printCounts (FILE*);
+   public:
+    Heap(unsigned, unsigned, unsigned);
+    ~Heap(EMPTY);
+
+    void addRootSet(RootSet*);
+    void deleteRootSet(RootSet*);
+
+    int size(EMPTY);
+    void* alloc(unsigned);
+    void* scavengeAndAlloc(unsigned);
+    void remember(Ob*);
+    void scavenge(EMPTY);
+    void gc(EMPTY);
+    Ob* tenure(Ob*);
+    void tenureEverything(EMPTY);
+
+    bool is_new(Ob*);
+
+    bool validPtrAfterScavenge(Ob*);
+    void registerForeignOb(Ob*);
+    void registerGCAgenda(Ob*);
+
+    void resetCounts(EMPTY);
+    void printCounts(FILE*);
 };
 
 extern Heap* heap;
 
-
 
 /*
  * ********************** IMPORTANT!!!!!! *****************************
@@ -188,41 +183,35 @@ extern Heap* heap;
  * rich sources for intermittent problems.
  */
 
-class ProtectedItem
-{
-  protected:
+class ProtectedItem {
+   protected:
+    static ProtectedItem* root;
+    ProtectedItem* next;
+    void* item;
 
-    static ProtectedItem*	root;
-    ProtectedItem*		next;
-    void*			item;
+    static void scavenge(EMPTY);
+    static void mark(EMPTY);
+    static void check(EMPTY);
 
-    static void	scavenge (EMPTY);
-    static void	mark (EMPTY);
-    static void	check (EMPTY);
+    friend class Heap;
+    friend void Init_Heap(EMPTY);
 
-    friend class	Heap;
-    friend void	Init_Heap (EMPTY);
-
-  public:
-
-    ProtectedItem (void*);
-    ~ProtectedItem (EMPTY);
+   public:
+    ProtectedItem(void*);
+    ~ProtectedItem(EMPTY);
 };
 
-inline ProtectedItem::ProtectedItem (void* v)
-    : next(root), item(v)
-{
+inline ProtectedItem::ProtectedItem(void* v) : next(root), item(v) {
     root = this;
 }
 
-inline ProtectedItem::~ProtectedItem (EMPTY)
-{
-    root = next;
-}
+inline ProtectedItem::~ProtectedItem(EMPTY) { root = next; }
 
 
-#define PROTECT(v) ProtectedItem name2(_,v)(&v)
-#define PROTECT_THIS(type) type* __this__ = this; PROTECT(__this__)
+#define PROTECT(v) ProtectedItem name2(_, v)(&v)
+#define PROTECT_THIS(type) \
+    type* __this__ = this; \
+    PROTECT(__this__)
 #define SELF __this__
 
 
@@ -234,31 +223,25 @@ inline ProtectedItem::~ProtectedItem (EMPTY)
  * various create() routines.
  */
 
-#define PALLOC(n) \
-palloc(n)
-#define PALLOC1(n, o0) \
-palloc1((n), &(o0))
-#define PALLOC2(n, o0, o1) \
-palloc2((n), &(o0), &(o1))
-#define PALLOC3(n, o0, o1, o2) \
-palloc3((n), &(o0), &(o1), &(o2))
-#define PALLOC4(n, o0, o1, o2, o3) \
-palloc4((n), &(o0), &(o1), &(o2), &(o3))
+#define PALLOC(n) palloc(n)
+#define PALLOC1(n, o0) palloc1((n), &(o0))
+#define PALLOC2(n, o0, o1) palloc2((n), &(o0), &(o1))
+#define PALLOC3(n, o0, o1, o2) palloc3((n), &(o0), &(o1), &(o2))
+#define PALLOC4(n, o0, o1, o2, o3) palloc4((n), &(o0), &(o1), &(o2), &(o3))
 #define PALLOC5(n, o0, o1, o2, o3, o4) \
-palloc5((n), &(o0), &(o1), &(o2), &(o3), &(o4))
+    palloc5((n), &(o0), &(o1), &(o2), &(o3), &(o4))
 #define PALLOC6(n, o0, o1, o2, o3, o4, o5) \
-palloc6((n), &(o0), &(o1), &(o2), &(o3), &(o4), &(o5))
+    palloc6((n), &(o0), &(o1), &(o2), &(o3), &(o4), &(o5))
 
 
-extern void* palloc  (unsigned);
-extern void* palloc1 (unsigned, void*);
-extern void* palloc2 (unsigned, void*, void*);
-extern void* palloc3 (unsigned, void*, void*, void*);
-extern void* palloc4 (unsigned, void*, void*, void*, void*);
-extern void* palloc5 (unsigned, void*, void*, void*, void*, void*);
-extern void* palloc6 (unsigned, void*, void*, void*, void*, void*, void*);
+extern void* palloc(unsigned);
+extern void* palloc1(unsigned, void*);
+extern void* palloc2(unsigned, void*, void*);
+extern void* palloc3(unsigned, void*, void*, void*);
+extern void* palloc4(unsigned, void*, void*, void*, void*);
+extern void* palloc5(unsigned, void*, void*, void*, void*, void*);
+extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
 
-
 
 /*
  * Align pads a size request to the next longword boundary, which is
@@ -268,19 +251,14 @@ extern void* palloc6 (unsigned, void*, void*, void*, void*, void*, void*);
 
 static const int alignmentmask = 3;
 
-inline int align (int size)
-{
-  return ((size+alignmentmask) & ~alignmentmask);
-}
+inline int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
-inline bool
-Heap::is_new (Ob* p)
-{
+inline bool Heap::is_new(Ob* p) {
     return ((void*)p >= newSpaceBase && (void*)p < newSpaceLimit);
 }
 
 
-#define IS_OLD(p)	(!heap->is_new(p))
-#define IS_NEW(p)	(heap->is_new(p))
+#define IS_OLD(p) (!heap->is_new(p))
+#define IS_NEW(p) (heap->is_new(p))
 
 #endif

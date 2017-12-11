@@ -28,63 +28,41 @@
 
 #include "ObStk.h"
 
-void
-ObStk::reset ()
-{
-    next = array;
-}
+void ObStk::reset() { next = array; }
 
 
-int
-ObStk::traversePtrs (PSOb__PSOb f)
-{
+int ObStk::traversePtrs(PSOb__PSOb f) {
     int sum = 0;
-    pOb* KONST n = (pOb*) next;
-    for (pOb* p = (pOb*) array; p < n; p++) {
-	sum += useIfPtr(p, f);
+    pOb* KONST n = (pOb*)next;
+    for (pOb* p = (pOb*)array; p < n; p++) {
+        sum += useIfPtr(p, f);
     }
     return sum;
 }
 
 
-int
-ObStk::traversePtrs (SI__PSOb f)
-{
+int ObStk::traversePtrs(SI__PSOb f) {
     int sum = 0;
-    pOb* KONST n = (pOb*) next;
-    for (pOb* p = (pOb*) array; p < n; p++) {
-	sum += useIfPtr(*p, f);
+    pOb* KONST n = (pOb*)next;
+    for (pOb* p = (pOb*)array; p < n; p++) {
+        sum += useIfPtr(*p, f);
     }
     return sum;
 }
 
 
-void
-ObStk::traversePtrs (V__PSOb f)
-{
-    pOb* KONST n = (pOb*) next;
-    for (pOb* p = (pOb*) array; p < n; p++) {
-	useIfPtr(*p, f);
+void ObStk::traversePtrs(V__PSOb f) {
+    pOb* KONST n = (pOb*)next;
+    for (pOb* p = (pOb*)array; p < n; p++) {
+        useIfPtr(*p, f);
     }
 }
 
 
-void
-ObStk::scavenge ()
-{
-    traversePtrs(MF_ADDR(Ob::relocate));
-}
+void ObStk::scavenge() { traversePtrs(MF_ADDR(Ob::relocate)); }
 
 
-void
-ObStk::mark ()
-{
-    traversePtrs(MF_ADDR(Ob::mark));
-}
+void ObStk::mark() { traversePtrs(MF_ADDR(Ob::mark)); }
 
 
-void
-ObStk::check ()
-{
-    traversePtrs(MF_ADDR(Ob::checkOb));
-}
+void ObStk::check() { traversePtrs(MF_ADDR(Ob::checkOb)); }

@@ -38,83 +38,73 @@ typedef Actor* pSBO;
 typedef StdMeta* pMeta;
 
 class BuiltinClass;
-typedef void (*FIELD_FN) (BuiltinClass*);
+typedef void (*FIELD_FN)(BuiltinClass*);
 
 static const int INDIRECT = 1;
 
 
-class BuiltinClass
-{
-    static int			nClasses;
-    static BuiltinClass*	root;
-    static Word32*	counts;
-    static char**		names;
+class BuiltinClass {
+    static int nClasses;
+    static BuiltinClass* root;
+    static Word32* counts;
+    static char** names;
 
-    
-    int const		index;
-    char* const		name;
-    pMeta* const	clientMeta;
-    pSBO* const		clientSBO;
-    BuiltinClass* const	link;
-    FIELD_FN const	fieldfn;
-    
-    void	alloc ();
-    void	init ();
-    void	enter ();
 
-  public:
-    
-    BuiltinClass (char*, pMeta*, pSBO*, FIELD_FN);
-    
-    static void	allocBuiltinClasses ();
-    static void	initBuiltinClasses ();
-    static void enterBuiltinClasses ();
+    int const index;
+    char* const name;
+    pMeta* const clientMeta;
+    pSBO* const clientSBO;
+    BuiltinClass* const link;
+    FIELD_FN const fieldfn;
 
-    void obfield (const char*, int, int);
-    void addrfield (const char*, int, int);
-    void bitfield (const char*, int, int, int);
+    void alloc();
+    void init();
+    void enter();
+
+   public:
+    BuiltinClass(char*, pMeta*, pSBO*, FIELD_FN);
+
+    static void allocBuiltinClasses();
+    static void initBuiltinClasses();
+    static void enterBuiltinClasses();
+
+    void obfield(const char*, int, int);
+    void addrfield(const char*, int, int);
+    void bitfield(const char*, int, int, int);
 };
 
 
-#define STARTUP_NAME(classname) name2(_bcf_bc_,classname)
+#define STARTUP_NAME(classname) name2(_bcf_bc_, classname)
 
-#define BUILTIN_CLASS(classname)					      \
-void classname::updateCnt () { }					      \
-char* classname::typestring () { return _STRING(classname); }		      \
-pMeta CLASS_META(classname) = (pMeta) INVALID;				      \
-pSBO CLASS_SBO(classname) = (pSBO) INVALID;				      \
-static void STARTUP_NAME(classname)(BuiltinClass*);			      \
-static BuiltinClass name2(_bc_,classname) (_STRING(classname),   	      \
-					   &CLASS_META(classname),	      \
-					   &CLASS_SBO(classname),	      \
-					   &STARTUP_NAME(classname));	      \
-static void STARTUP_NAME(classname)(BuiltinClass* __BUILTIN_CLASS__)
+#define BUILTIN_CLASS(classname)                                           \
+    void classname::updateCnt() {}                                         \
+    char* classname::typestring() { return _STRING(classname); }           \
+    pMeta CLASS_META(classname) = (pMeta)INVALID;                          \
+    pSBO CLASS_SBO(classname) = (pSBO)INVALID;                             \
+    static void STARTUP_NAME(classname)(BuiltinClass*);                    \
+    static BuiltinClass name2(_bc_, classname)(                            \
+        _STRING(classname), &CLASS_META(classname), &CLASS_SBO(classname), \
+        &STARTUP_NAME(classname));                                         \
+    static void STARTUP_NAME(classname)(BuiltinClass * __BUILTIN_CLASS__)
 
-#define OB_FIELD(ext_fieldname, classname, fieldname)			      \
-__BUILTIN_CLASS__->obfield(ext_fieldname,				      \
-			   SLOT_NUM(classname, fieldname),		      \
-			   !INDIRECT)
+#define OB_FIELD(ext_fieldname, classname, fieldname)                         \
+    __BUILTIN_CLASS__->obfield(ext_fieldname, SLOT_NUM(classname, fieldname), \
+                               !INDIRECT)
 
-#define OB_FIELD_INDIRECT(ext_fieldname, offset)			      \
-__BUILTIN_CLASS__->obfield(ext_fieldname,				      \
-			   offset,					      \
-			   INDIRECT)
+#define OB_FIELD_INDIRECT(ext_fieldname, offset) \
+    __BUILTIN_CLASS__->obfield(ext_fieldname, offset, INDIRECT)
 
-#define ADDR_FIELD(ext_fieldname, classname, fieldname)			      \
-__BUILTIN_CLASS__->addrfield(ext_fieldname,				      \
-			     SLOT_NUM(classname, fieldname),		      \
-			     !INDIRECT)
+#define ADDR_FIELD(ext_fieldname, classname, fieldname) \
+    __BUILTIN_CLASS__->addrfield(ext_fieldname,         \
+                                 SLOT_NUM(classname, fieldname), !INDIRECT)
 
-#define ADDR_FIELD_INDIRECT(ext_fieldname, offset)			      \
-__BUILTIN_CLASS__->addrfield(ext_fieldname,				      \
-			     offset,					      \
-			     INDIRECT)
+#define ADDR_FIELD_INDIRECT(ext_fieldname, offset) \
+    __BUILTIN_CLASS__->addrfield(ext_fieldname, offset, INDIRECT)
 
-#define BIT_FIELD(ext_fieldname, classname, fieldname, sz)		      \
-__BUILTIN_CLASS__->bitfield(ext_fieldname,				      \
-			    offsetof(classname, fieldname)*BITS(char),	      \
-			    sz,						      \
-			    !INDIRECT)
+#define BIT_FIELD(ext_fieldname, classname, fieldname, sz)                   \
+    __BUILTIN_CLASS__->bitfield(ext_fieldname,                               \
+                                offsetof(classname, fieldname) * BITS(char), \
+                                sz, !INDIRECT)
 
 
 #endif

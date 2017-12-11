@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sun3.h,v 1.1.1.1 1993/02/12 01:25:04 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sun3.h,v 1.1.1.1
+ 1993/02/12 01:25:04 tomlic Exp $
  *
  * $Log: sun3.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:04  tomlic
@@ -27,5 +28,5 @@
 
 #include "sun-os4.h"
 
-#define ARCH    "sun3"
+#define ARCH "sun3"
 #define MACHINE "mc68020"

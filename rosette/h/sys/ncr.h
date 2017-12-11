@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/ncr.h,v 1.1.1.1 1993/02/12 01:25:03 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/ncr.h,v 1.1.1.1
+ 1993/02/12 01:25:03 tomlic Exp $
  *
  * $Log: ncr.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:03  tomlic
@@ -45,53 +46,53 @@ extern char *core_end;
 /* You must supply something to cause the current process
    to receive the io signal when input is available on fd
 */
-#define       SET_SIGNAL_IO_DESIRED(x)  \
-  x= ioctl(fd,I_SETSIG,(desiredState ? S_INPUT : S_HIPRI))
-  
+#define SET_SIGNAL_IO_DESIRED(x) \
+    x = ioctl(fd, I_SETSIG, (desiredState ? S_INPUT : S_HIPRI))
+
 
 /* #include <stdlib.h> */
-#define valloc(n) memalign(getpagesize(),n)
+#define valloc(n) memalign(getpagesize(), n)
 
-#ifdef __cplusplus 
+#ifdef __cplusplus
 extern "C" {
-  int mysigmask(int);
-  int setbuffer(FILE *,char *,int);
-  void * memalign(size_t, size_t);
-  int getpagesize(void);
-  int sigblock(int);
-  int sigsetmask(int);
-  int select(int,void *,void *,void *,void *);
+int mysigmask(int);
+int setbuffer(FILE *, char *, int);
+void *memalign(size_t, size_t);
+int getpagesize(void);
+int sigblock(int);
+int sigsetmask(int);
+int select(int, void *, void *, void *, void *);
 
-  int accept (int, void *, int *) ;
-  int bind (int, void *, int) ;
-  int ioctl(int, int, ...);
-  int connect (int, const void *, int) ;
-  int getpeername (int, void *, int *) ;
-  int getsockname (int, void *, int *) ;
-  int getsockopt (int, int, int, char *, int *) ;
-  int listen (int, int) ;
-  int recv (int, char *, int, int) ;
-  int recvfrom (int, char *, int, int, void *, int *) ;
-  int send (int, const char *, int, int) ;
-  int sendto (int, const char *, int, int, const void *, int) ;
-  int setsockopt (int, int, int, const char *, int) ;
-  int socket (int, int, int) ;
-  int recvmsg (int, void *, int) ;
-  int sendmsg (int, void *, int) ;
-  int socketpair (int, int, int, int *) ;
+int accept(int, void *, int *);
+int bind(int, void *, int);
+int ioctl(int, int, ...);
+int connect(int, const void *, int);
+int getpeername(int, void *, int *);
+int getsockname(int, void *, int *);
+int getsockopt(int, int, int, char *, int *);
+int listen(int, int);
+int recv(int, char *, int, int);
+int recvfrom(int, char *, int, int, void *, int *);
+int send(int, const char *, int, int);
+int sendto(int, const char *, int, int, const void *, int);
+int setsockopt(int, int, int, const char *, int);
+int socket(int, int, int);
+int recvmsg(int, void *, int);
+int sendmsg(int, void *, int);
+int socketpair(int, int, int, int *);
 
-  void bcopy(void *, void*,int);
-  void bzero(void *,int);
-  int vfork(void);
-  int getdtablesize(void);
-  int execve(const char*, const char*[], const char*[]);
-  int strcasecmp (unsigned char *,unsigned char *);
+void bcopy(void *, void *, int);
+void bzero(void *, int);
+int vfork(void);
+int getdtablesize(void);
+int execve(const char *, const char *[], const char *[]);
+int strcasecmp(unsigned char *, unsigned char *);
 
 /*  int execve(const char*, const char**, char**); */
-  int setpgrp();
-  int setsid();
+int setpgrp();
+int setsid();
 }
-#define STRCASECMP(x,y) strcasecmp((unsigned char *) x,(unsigned char *) y)
+#define STRCASECMP(x, y) strcasecmp((unsigned char *)x, (unsigned char *)y)
 
 
 #endif
@@ -99,7 +100,7 @@ typedef struct exhdmap exec;
 
 /* from unistd.h :  that file conflicts with sysent.h */
 /* Symbolic constants for the "access" routine: */
-#define	R_OK	4	/* Test for Read permission */
+#define R_OK 4 /* Test for Read permission */
 
 
 typedef unsigned long LONG_ARG;
@@ -108,12 +109,13 @@ typedef unsigned long SHORT_ARG;
 typedef unsigned long CHAR_ARG;
 typedef float FLOAT_ARG;
 typedef double DOUBLE_ARG;
-typedef void* PTR_ARG;
+typedef void *PTR_ARG;
 
 /* from
-   /usr/ucbinclude/sys/signal.h:#define	sigmask(n)		((unsigned long)1 << ((n) - 1))
+   /usr/ucbinclude/sys/signal.h:#define	sigmask(n)		((unsigned
+   long)1 << ((n) - 1))
 */
-#define	sigmask(n)		((unsigned long)1 << ((n) - 1))
+#define sigmask(n) ((unsigned long)1 << ((n)-1))
 
 #ifdef cplusplus
 #include "<sys/byteorder.h>"
@@ -126,6 +128,3 @@ typedef void* PTR_ARG;
 #define ARCH "ncr-3400"
 #define MACHINE "486"
 #define OS "sysv4"
-
-
-

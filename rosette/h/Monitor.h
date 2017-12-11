@@ -34,28 +34,25 @@
 
 #include "Ob.h"
 
-class Monitor : public Ob
-{
+class Monitor : public Ob {
     STD_DECLS(Monitor);
 
-  protected:
+   protected:
+    Monitor(Ob*, Timer*, Word32Vec*, Word32Vec*);
 
-    Monitor (Ob*, Timer*, Word32Vec*, Word32Vec*);
+   public:
+    Ob* id;
+    Timer* timer;
+    Word32Vec* opcodeCounts;
+    Word32Vec* obCounts;
+    Ob* tracing;
 
-  public:
+    static Monitor* create(Ob*);
 
-    Ob*		id;
-    Timer*	timer;
-    Word32Vec*	opcodeCounts;
-    Word32Vec*	obCounts;
-    Ob*		tracing;
-
-    static Monitor*	create (Ob*);
-
-    void	reset ();
-    void	start ();
-    void	stop ();
-    void	printStats (FILE*);
+    void reset();
+    void start();
+    void stop();
+    void printStats(FILE*);
 };
 
 #endif

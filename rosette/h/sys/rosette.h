@@ -31,7 +31,9 @@
 #include ARCH_INC
 
 #if !defined(DO_UNGETC)
-#define DO_UNGETC  int c = getc(&_iob[fd]); ungetc(c, &_iob[fd]);
+#define DO_UNGETC            \
+    int c = getc(&_iob[fd]); \
+    ungetc(c, &_iob[fd]);
 #endif
 
 #define HAS_BOOL
@@ -40,33 +42,33 @@
 #include <stdio.h>
 
 #ifndef name2
-#define name2(x,y) x ## y
+#define name2(x, y) x##y
 #endif
 
 #ifndef name3
-#define name3(x,y,z) x ## y ## z
+#define name3(x, y, z) x##y##z
 #endif
 
 #ifdef __GNUG__
 /* #define NEW(loc) new{loc} */
 #ifndef MIPS_SGI_SYSV
-typedef void (*SIG_PF) (int);
+typedef void (*SIG_PF)(int);
 #endif
 
 #else
-#define NEW(loc) new(loc)
+#define NEW(loc) new (loc)
 #endif
 
 #ifdef LITTLE_END
-#define ORDER2(a,b) b a
-#define ORDER3(a,b,c) c b a
-#define ORDER4(a,b,c,d) d c b a
-#define ORDER5(a,b,c,d,e) e d c b a
+#define ORDER2(a, b) b a
+#define ORDER3(a, b, c) c b a
+#define ORDER4(a, b, c, d) d c b a
+#define ORDER5(a, b, c, d, e) e d c b a
 #else
-#define ORDER2(a,b) a b
-#define ORDER3(a,b,c) a b c
-#define ORDER4(a,b,c,d) a b c d
-#define ORDER5(a,b,c,d,e) a b c d e
+#define ORDER2(a, b) a b
+#define ORDER3(a, b, c) a b c
+#define ORDER4(a, b, c, d) a b c d
+#define ORDER5(a, b, c, d, e) a b c d e
 #endif
 
 #endif
@@ -78,4 +80,3 @@ typedef void (*SIG_PF) (int);
 #ifndef EMPTY
 #define EMPTY
 #endif
-  

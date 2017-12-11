@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/bsd.h,v 1.1.1.1 1993/02/12 01:25:03 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/bsd.h,v 1.1.1.1
+ 1993/02/12 01:25:03 tomlic Exp $
  *
  * $Log: bsd.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:03  tomlic
@@ -29,31 +30,30 @@
 
 #define HAVE_AOUT <a.out.h>
 
-#define MEM_SAVE_LOCALS	\
-  struct exec header;\
-  int stsize
+#define MEM_SAVE_LOCALS \
+    struct exec header; \
+    int stsize
 
-#define READ_HEADER 	fread(&header, sizeof(header), 1, original); \
-	data_begin=DATA_BEGIN; \
-	data_end = core_end; \
-	original_data = header.a_data; \
-	header.a_data = data_end - data_begin; \
-	header.a_bss = 0; \
-	fwrite(&header, sizeof(header), 1, save);
+#define READ_HEADER                              \
+    fread(&header, sizeof(header), 1, original); \
+    data_begin = DATA_BEGIN;                     \
+    data_end = core_end;                         \
+    original_data = header.a_data;               \
+    header.a_data = data_end - data_begin;       \
+    header.a_bss = 0;                            \
+    fwrite(&header, sizeof(header), 1, save);
 
-#define FILECPY_HEADER \
-	filecpy(save, original, header.a_text - sizeof(header));
+#define FILECPY_HEADER filecpy(save, original, header.a_text - sizeof(header));
 
-#define  COPY_TO_SAVE \
-  filecpy(save, original, header.a_syms+header.a_trsize+header.a_drsize); \
-  fread(&stsize, sizeof(stsize), 1, original); \
-  fwrite(&stsize, sizeof(stsize), 1, save); \
-filecpy(save, original, stsize - sizeof(stsize))
+#define COPY_TO_SAVE                                            \
+    filecpy(save, original,                                     \
+            header.a_syms + header.a_trsize + header.a_drsize); \
+    fread(&stsize, sizeof(stsize), 1, original);                \
+    fwrite(&stsize, sizeof(stsize), 1, save);                   \
+    filecpy(save, original, stsize - sizeof(stsize))
 
-#define NUMBER_OPEN_FILES getdtablesize() 
+#define NUMBER_OPEN_FILES getdtablesize()
 
-#define LD_COMMAND(command,main,start,input,ldarg,output) \
-  sprintf(command, "ld -d -N -x -A %s -T %x %s %s -o %s", \
-            main,start,input,ldarg,output)
-     
-
+#define LD_COMMAND(command, main, start, input, ldarg, output)           \
+    sprintf(command, "ld -d -N -x -A %s -T %x %s %s -o %s", main, start, \
+            input, ldarg, output)

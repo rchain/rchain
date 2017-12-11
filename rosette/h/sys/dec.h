@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/dec.h,v 1.1.1.1 1993/02/12 01:25:03 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/dec.h,v 1.1.1.1
+ 1993/02/12 01:25:03 tomlic Exp $
  *
  * $Log: dec.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:03  tomlic
@@ -26,13 +27,13 @@
  @EC */
 
 #ifndef CONFIG_INCLUDED
-#define CONFIG_INCLUDED  
+#define CONFIG_INCLUDED
 
-#define ARCH    "dec"
+#define ARCH "dec"
 #define MACHINE "dec-mips"
 #define OS "ultrix"
 
-typedef void (*SIG_PF) (int);
+typedef void (*SIG_PF)(int);
 
 /* flag to use with fcntl to give non blocking io
    the ~ of it should give blocking io
@@ -42,25 +43,27 @@ typedef void (*SIG_PF) (int);
 /* You must supply something to cause the current process
    to receive the io signal when input is available on fd.
    return is < 0 on failure.
-*/   
-#define SET_SIGNAL_IO_DESIRED(result)     result= (desiredState ? fcntl(fd, F_SETOWN, -getpid()) : 0)
+*/
+#define SET_SIGNAL_IO_DESIRED(result) \
+    result = (desiredState ? fcntl(fd, F_SETOWN, -getpid()) : 0)
 
 /* continue with no error (but print message) when async fails,
    eg if on a file descriptor
-*/   
+*/
 #define ALLOW_ASYNC_ERRORS
 
 #ifdef __cplusplus
 #ifndef __GNUG__
-extern "C" {int setpgrp();
-	    int getpid();
-	    int execve(const char*, const char**, char**);
-	    int getpagesize();
-	    int strcasecmp();
-	    int getdtablesize();
-	    void *sbrk();
-	    int setsid();
-	  }
+extern "C" {
+int setpgrp();
+int getpid();
+int execve(const char *, const char **, char **);
+int getpagesize();
+int strcasecmp();
+int getdtablesize();
+void *sbrk();
+int setsid();
+}
 #endif
 #endif
 
@@ -91,38 +94,36 @@ char *core_end;
 /* #define NEED_ALARM */
 
 #ifdef __cplusplus
-extern "C" {int unlink();
-	  };
+extern "C" {
+int unlink();
+};
 #endif
 
-#define LD_COMMAND(buf,main,start,input,ldarg,extra,output) \
-  sprintf(buf,"ld -s -A %s -N -T %x %s %s %s -o %s", \
-	  main,start,input,ldarg,extra,output)
+#define LD_COMMAND(buf, main, start, input, ldarg, extra, output)           \
+    sprintf(buf, "ld -s -A %s -N -T %x %s %s %s -o %s", main, start, input, \
+            ldarg, extra, output)
 
 
-#define FASL_HEADERS \
-	struct filehdr faslheader; \
-	struct aouthdr aouthdr; \
-	struct scnhdr sectionheader; \
-	HDRR symhdr
+#define FASL_HEADERS             \
+    struct filehdr faslheader;   \
+    struct aouthdr aouthdr;      \
+    struct scnhdr sectionheader; \
+    HDRR symhdr
 
-#define READ_HEADERS \
-	fseek(fp, FILHSZ, SEEK_CUR); \
-	fread(&aouthdr, AOUTHSZ, 1, fp); \
-  	fread(&sectionheader, sizeof sectionheader, 1, fp)
+#define READ_HEADERS                 \
+    fseek(fp, FILHSZ, SEEK_CUR);     \
+    fread(&aouthdr, AOUTHSZ, 1, fp); \
+    fread(&sectionheader, sizeof sectionheader, 1, fp)
 #define COMPUTE_LOAD_SIZE \
-        bytesToExtend = aouthdr.tsize + aouthdr.dsize + aouthdr.bsize
+    bytesToExtend = aouthdr.tsize + aouthdr.dsize + aouthdr.bsize
 
 
-
-#define  COPY_IN_INSTRS \
-     	fseek(fp, sectionheader.s_scnptr, 0) ; \
- 	fread((char *) sectionheader.s_vaddr, bytesToExtend, 1, fp);
+#define COPY_IN_INSTRS                    \
+    fseek(fp, sectionheader.s_scnptr, 0); \
+    fread((char *)sectionheader.s_vaddr, bytesToExtend, 1, fp);
 
 
 #define PAGESIZE (1 << 12)
 
 #define SYS_EXEC <aouthdr.h>
 #define DYN_MEMBERS
-
-
