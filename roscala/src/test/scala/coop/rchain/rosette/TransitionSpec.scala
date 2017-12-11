@@ -1,10 +1,12 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr.{LetExpr, TupleExpr}
 import org.scalatest._
 
 class TransitionSpec extends FlatSpec with Matchers {
+  val t = Tuple.apply(Ob.NIV)
   val testCtxt = Ctxt(
     tag = LocationGT(Location.LTCtxtRegister(0)),
     nargs = 1,
@@ -116,13 +118,54 @@ class TransitionSpec extends FlatSpec with Matchers {
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
 
     val codevec = Seq(OpAlloc(2),
-                      OpImmediateLitToArg(v = 1, a = 0),
-                      OpImmediateLitToArg(v = 2, a = 1),
+                      OpImmediateLitToArg(value = 1, arg = 0),
+                      OpImmediateLitToArg(value = 2, arg = 1),
                       OpXferGlobalToReg(r = 1, g = 668),
                       OpXmit(u = false, n = true, 2))
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Fixnum(3)
+  }
+
+  "Executing bytecode from expression \"(+ 1 (+ 2 3))\"" should "result in Fixnum(6)" in {
+
+    /**
+      *
+      * litvec:
+      *  0:   {RequestExpr}
+      * codevec:
+      *  0:   alloc 2
+      *  1:   lit 1,arg[0]
+      *  2:   xfer global[+],trgt
+      *  4:   outstanding 12,1
+      *  6:   push/alloc 2
+      *  7:   lit 2,arg[0]
+      *  8:   lit 3,arg[1]
+      *  9:   xfer global[+],trgt
+      *  11:  xmit/nxt 2,arg[1]
+      *  12:  xmit/nxt 2
+      */
+    val start =
+      testState
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'ctxt >> 'ctxt >> 'ctxt)(testState.ctxt)
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpXferGlobalToReg(r = 1, g = 668),
+      OpOutstanding(pc = 12, n = 1),
+      OpPushAlloc(n = 2),
+      OpImmediateLitToArg(value = 2, arg = 0),
+      OpImmediateLitToArg(value = 3, arg = 1),
+      OpXferGlobalToReg(r = 1, g = 668),
+      OpXmitArg(u = false, n = true, m = 2, arg = 1),
+      OpXmit(u = false, n = true, m = 2)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(6)
   }
 
   "Executing bytecode from expression \"(let [[x 1] [y 2]] (+ x y))\"" should "result in Fixnum(3)" in {
@@ -157,8 +200,8 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     val codevec = Seq(
       OpAlloc(2),
-      OpImmediateLitToArg(v = 1, a = 0),
-      OpImmediateLitToArg(v = 2, a = 1),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpImmediateLitToArg(value = 2, arg = 1),
       OpNargs(2),
       OpExtend(1),
       OpAlloc(2),
@@ -198,13 +241,13 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(
       OpFork(6),
       OpAlloc(2),
-      OpImmediateLitToArg(v = 1, a = 0),
-      OpImmediateLitToArg(v = 2, a = 1),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpImmediateLitToArg(value = 2, arg = 1),
       OpXferGlobalToReg(r = 1, g = 668),
       OpXmit(u = false, n = true, 2),
       OpAlloc(2),
-      OpImmediateLitToArg(v = 3, a = 0),
-      OpImmediateLitToArg(v = 4, a = 1),
+      OpImmediateLitToArg(value = 3, arg = 0),
+      OpImmediateLitToArg(value = 4, arg = 1),
       OpXferGlobalToReg(r = 1, g = 668),
       OpXmit(u = false, n = true, 2)
     )

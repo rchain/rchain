@@ -47,8 +47,8 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpImmediateLitToArg(
-      v = m,
-      a = someObsInd)) {
+      value = m,
+      arg = someObsInd)) {
       val updatedElem =
         testState.ctxt.argvec.elem
           .updated(someObsInd, VirtualMachine.vmLiterals(m))
@@ -80,7 +80,7 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'pc on OpOutstanding(m, n)) {
-      _ shouldBe PC.fromInt(m)
+      _ shouldBe PC(m)
     }
 
     (theState >> 'ctxt >> 'outstanding on OpOutstanding(m, n)) {

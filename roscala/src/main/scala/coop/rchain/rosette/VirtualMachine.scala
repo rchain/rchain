@@ -410,7 +410,7 @@ object VirtualMachine {
 
   def execute(op: OpOutstanding, state: VMState): VMState =
     state
-      .set(_ >> 'ctxt >> 'pc)(PC.fromInt(op.p))
+      .set(_ >> 'ctxt >> 'pc)(PC(op.pc))
       .set(_ >> 'ctxt >> 'outstanding)(op.n)
 
   def execute(op: OpFork, state: VMState): VMState = {
@@ -428,7 +428,7 @@ object VirtualMachine {
   def execute(op: OpXmitArg, state: VMState): VMState =
     state
       .set(_ >> 'ctxt >> 'nargs)(op.m)
-      .set(_ >> 'ctxt >> 'tag)(Location.ArgReg(op.a))
+      .set(_ >> 'ctxt >> 'tag)(Location.ArgReg(op.arg))
       .set(_ >> 'xmitData)((op.u, op.n))
       .set(_ >> 'doXmitFlag)(true)
 
@@ -814,7 +814,7 @@ object VirtualMachine {
 
   def execute(op: OpImmediateLitToArg, state: VMState): VMState =
     state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.a, vmLiterals(op.v)))
+      _.updated(op.arg, vmLiterals(op.value)))
 
   def execute(op: OpImmediateLitToReg, state: VMState): VMState =
     setCtxtReg(op.r, vmLiterals(op.v))(state)

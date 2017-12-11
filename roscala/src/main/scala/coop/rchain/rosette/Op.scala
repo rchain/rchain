@@ -8,10 +8,10 @@ case class OpNargs(n: Int) extends Op
 case class OpAlloc(n: Int) extends Op
 case class OpPushAlloc(n: Int) extends Op
 case class OpExtend(v: Int) extends Op
-case class OpOutstanding(p: Int, n: Int) extends Op
+case class OpOutstanding(pc: Int, n: Int) extends Op
 case class OpFork(p: Int) extends Op
 case class OpXmitTag(u: Boolean, n: Boolean, m: Int, v: Int) extends Op
-case class OpXmitArg(u: Boolean, n: Boolean, m: Int, a: Int) extends Op
+case class OpXmitArg(u: Boolean, n: Boolean, m: Int, arg: Int) extends Op
 case class OpXmitReg(u: Boolean, n: Boolean, m: Int, r: Int) extends Op
 case class OpXmit(u: Boolean, n: Boolean, m: Int) extends Op
 case class OpXmitTagXtnd(u: Boolean, n: Boolean, m: Int, v: Int) extends Op
@@ -51,6 +51,6 @@ case class OpXferSrcToRslt(v: Int) extends Op
 case class OpIndLitToArg(a: Int, v: Int) extends Op
 case class OpIndLitToReg(r: Int, v: Int) extends Op
 case class OpIndLitToRslt(v: Int) extends Op
-case class OpImmediateLitToArg(v: Int, a: Int) extends Op
+case class OpImmediateLitToArg(value: Int, arg: Int) extends Op
 case class OpImmediateLitToReg(v: Int, r: Int) extends Op
 case class OpUnknown() extends Op
