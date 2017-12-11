@@ -47,7 +47,7 @@ class BuiltinClass
 {
     static int			nClasses;
     static BuiltinClass*	root;
-    static unsigned long*	counts;
+    static Word32*	counts;
     static char**		names;
 
     

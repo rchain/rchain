@@ -110,7 +110,7 @@ CUnion*            obCUnion =            (CUnion*) INVALID;
 
 int BuiltinClass::nClasses = 0;
 BuiltinClass* BuiltinClass::root = 0;
-unsigned long* BuiltinClass::counts = 0;
+Word32* BuiltinClass::counts = 0;
 char** BuiltinClass::names = 0;
 
 
@@ -125,12 +125,12 @@ BuiltinClass::BuiltinClass (char* nm, pMeta* cmeta, pSBO* csbo, FIELD_FN ffn)
     root = this;
 }
 
-unsigned long*	Base::obCounts = 0;
+Word32*	Base::obCounts = 0;
 char**		Base::classNames={0};
 void
 BuiltinClass::allocBuiltinClasses ()
 {
-    counts = new unsigned long [nClasses];
+    counts = new Word32 [nClasses];
     names = new char* [nClasses];
     for (int i = 0; i < nClasses; i++) {
 	counts[i] = 0;
@@ -334,7 +334,7 @@ class RBLtopenv : public Ob
     static RBLtopenv*	create ();
 
     char*	typestring ()		{ return "TopEnv"; }
-    char*	asCstring ()		{ return "#top"; }
+    const char*	asCstring ()		{ return "#top"; }
     Ob*		invoke (Ctxt*)		{ return NIV; }
     Ob*		lookup (Ob*, Ctxt*)	{ return ABSENT; }
     Location	lex (Ob*, int)		{ return LocLimbo; }

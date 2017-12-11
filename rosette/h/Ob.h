@@ -52,9 +52,16 @@
 #endif
 #endif
 
+#ifdef __GNUG__
+#include <stdint.h>
+typedef uint8_t Byte;
+typedef uint16_t  Word16;
+typedef uint32_t Word32;
+#else
 typedef unsigned char	Byte;
 typedef unsigned short	Word16;
 typedef unsigned long	Word32;
+#endif
 
 #if !defined(HAS_BOOL)
 typedef int bool;
@@ -551,7 +558,7 @@ class Base
   public:
 
     static char**		classNames;
-    static unsigned long*	obCounts;
+    static Word32*	obCounts;
     static int			nClasses;
 
     Base (EMPTY);

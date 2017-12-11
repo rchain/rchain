@@ -61,7 +61,7 @@ class Float : public BinaryOb
     Rfloat  val;
 
     static Float*	create (Rfloat);
-    char*		asCstring ();
+    const char*		asCstring ();
 };
 
 #endif

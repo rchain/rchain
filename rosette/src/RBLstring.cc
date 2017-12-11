@@ -169,7 +169,7 @@ RBLstring::setNth (int n, Ob* v)
 }
 
 
-char*
+const char*
 RBLstring::asCstring ()
 {
     /*

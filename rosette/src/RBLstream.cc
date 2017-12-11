@@ -146,7 +146,7 @@ MODULE_INIT(RBLstream)
 DEF("istream-new",makeIstream, 1, 2)
 {
     char* path = BASE(ARG(0))->asPathname();
-    char* mode = "r";
+    const char* mode = "r";
 
     if (!path)
 	return PRIM_MISMATCH(0, "String or Symbol");
@@ -252,7 +252,7 @@ DEF("ostream-new",makeOstream, 1, 2)
 {
     char* path = BASE(ARG(0))->asPathname();
     char* reason = "problem opening ostream";
-    char* mode = "a";
+    const char* mode = "a";
 
     if (!path)
 	return PRIM_MISMATCH(0, "String or Symbol");
