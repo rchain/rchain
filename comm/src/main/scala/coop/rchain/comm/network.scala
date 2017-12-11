@@ -7,7 +7,7 @@ import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.kademlia.PeerTable
 import com.typesafe.scalalogging.Logger
 import scala.collection.mutable
-import scala.util.{Success, Failure}
+import scala.util.{Failure, Success}
 
 /**
   * Implements the lower levels of the network protocol.
@@ -64,12 +64,13 @@ case class UnicastNetwork(id: NodeIdentifier,
       while (currentSet.size > 0 && potentials.size < limit && i < dists.size) {
         val dist = dists(i)
         val target = id.key.to[mutable.ArrayBuffer]
-        val bno = dist/8
-        val mask = 1 << (dist%8)
-        target(bno) = (target(bno)^mask).toByte
+        val bno = dist / 8
+        val mask = 1 << (dist % 8)
+        target(bno) = (target(bno) ^ mask).toByte
         currentSet.head.lookup(target) match {
           case Success(results) =>
-            potentials ++= results.filter(r => !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key) == None)
+            potentials ++= results.filter(r =>
+              !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key) == None)
           case _ => ()
         }
         currentSet -= currentSet.head
@@ -106,7 +107,7 @@ case class UnicastNetwork(id: NodeIdentifier,
     } {
       pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)) match {
         case Some(promise) => promise.success(Right(msg))
-        case None => next.foreach(_.dispatch(msg))
+        case None          => next.foreach(_.dispatch(msg))
       }
     }
 

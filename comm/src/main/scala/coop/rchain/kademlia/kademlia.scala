@@ -247,5 +247,10 @@ case class PeerTable[A <: Peer](home: A,
     * Optionally, ignore any distance closer than [[limit]].
     */
   def sparseness(limit: Int = 255): Seq[Int] =
-    table.take(limit + 1).zipWithIndex.map{ case (l, i) => (l.size, i) }.sortWith(_._1 < _._1).map(_._2)
+    table
+      .take(limit + 1)
+      .zipWithIndex
+      .map { case (l, i) => (l.size, i) }
+      .sortWith(_._1 < _._1)
+      .map(_._2)
 }

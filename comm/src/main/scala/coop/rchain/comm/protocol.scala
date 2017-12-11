@@ -86,7 +86,7 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
       case Right(LookupResponseMessage(proto, _)) =>
         proto.message.lookupResponse match {
           case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))
-          case _ => Success(Seq())
+          case _          => Success(Seq())
         }
       case Right(other) => Failure(new Exception("unaexpected response"))
       case Left(ex) =>
@@ -259,7 +259,8 @@ object ProtocolMessage {
           case Protocol.Message.Lookup(_) => Some(LookupMessage(msg, System.currentTimeMillis))
           case Protocol.Message.LookupResponse(_) =>
             Some(LookupResponseMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Disconnect(_) => Some(DisconnectMessage(msg, System.currentTimeMillis))
+          case Protocol.Message.Disconnect(_) =>
+            Some(DisconnectMessage(msg, System.currentTimeMillis))
           case Protocol.Message.Upstream(_) =>
             msg.returnHeader match {
               case Some(_) => Some(UpstreamResponse(msg, System.currentTimeMillis))

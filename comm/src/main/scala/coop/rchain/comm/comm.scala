@@ -28,9 +28,8 @@ case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
   def key = id.key
   val sKey = key.map(_.toChar).mkString
 
-  override def toString = {
+  override def toString =
     s"#{PeerNode $sKey}"
-  }
 
   def toAddress: String =
     s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
