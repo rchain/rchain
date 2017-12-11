@@ -58,7 +58,7 @@ extern int nontrivial_addr_to_pre_fixnum(Ob *);
 #endif
 
 extern "C" {
-    char* getwd (char*);
+    char* getcwd (char*);
 }
 
 #include <assert.h>
@@ -1459,7 +1459,7 @@ DEF("version",sysVersion, 0, 0)
 DEF("cwd",sysCwd, 0, 0)
 {
     char buf[MAXPATHLEN];
-    if (getwd(buf))
+    if (getcwd(buf))
 	return RBLstring::create (buf);
     else
 	return PRIM_ERROR(buf);
