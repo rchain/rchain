@@ -251,7 +251,6 @@ object VirtualMachine {
 
     if (mState.doNextThreadFlag) {
       val (isEmpty, tmpState) = getNextStrand(mState)
-      // TODO: Probably should move that into getNextStrand
       mState = tmpState.set(_ >> 'doNextThreadFlag)(false)
 
       if (isEmpty) {
@@ -293,15 +292,20 @@ object VirtualMachine {
   }
 
   def doXmit(state: VMState): VMState = {
-    val newState = state.ctxt.trgt match {
-      case ob: StdOprn => ob.dispatch(state)._2
-
+    val (result, newState) = state.ctxt.trgt match {
+      case ob: StdOprn => ob.dispatch(state)
       // TODO: Add other cases
-      case _ => state
+      case _ => (Right(Ob.NIV), state)
     }
 
-    // TODO: Add logic
-    newState.set(_ >> 'doNextThreadFlag)(true)
+    result match {
+      case Right(ob) if ob.is(OTsysval) =>
+        // handleException(ob, instr, state.ctxt.tag)
+        newState.set(_ >> 'doNextThreadFlag)(true)
+      case Left(DeadThread) => newState.set(_ >> 'doNextThreadFlag)(true)
+      case _ if state.xmitData._2 => newState.set(_ >> 'doNextThreadFlag)(true)
+      case _ => newState
+    }
   }
 
   def executeDispatch(op: Op, state: VMState): VMState =
