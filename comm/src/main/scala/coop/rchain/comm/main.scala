@@ -33,13 +33,13 @@ object Main {
       .map(_.getAddress)
       .toList
       .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
-    if (addresses(false).size > 0) {
+    if (addresses.contains(false)) {
       Some(addresses(false).head)
     } else {
       val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-      if (addresses(false).size > 0) {
+      if (addresses.contains(false)) {
         Some(addresses(false).head)
-      } else if (addresses(true).size > 0) {
+      } else if (addresses.contains(true)) {
         Some(addresses(true).head)
       } else {
         None

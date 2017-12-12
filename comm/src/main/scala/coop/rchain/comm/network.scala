@@ -55,6 +55,16 @@ case class UnicastNetwork(id: NodeIdentifier,
       }
   }
 
+  /**
+    * Return up to `limit` candidate peers.
+    *
+    * Curently, this function determines the distances in the table that are
+    * least populated and searches for more peers to fill those. It asks one
+    * node for peers at one distance, then moves on to the next node and
+    * distance. The queried nodes are not in any particular order. For now, this
+    * function should be called with a relatively small `limit` parameter like
+    * 10 to avoid making too many unproductive networking calls.
+    */
   def findMorePeers(limit: Int): Seq[PeerNode] = {
     var currentSet = table.peers.toSet
     val potentials = mutable.Set[PeerNode]()
@@ -66,7 +76,7 @@ case class UnicastNetwork(id: NodeIdentifier,
         val target = id.key.to[mutable.ArrayBuffer]
         val bno = dist / 8
         val mask = 1 << (dist % 8)
-        target(bno) = (target(bno) ^ mask).toByte
+        target(bno) = (target(bno) ^ mask).toByte // A key at a distance dist from me
         currentSet.head.lookup(target) match {
           case Success(results) =>
             potentials ++= results.filter(r =>
@@ -98,9 +108,10 @@ case class UnicastNetwork(id: NodeIdentifier,
 
   def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
 
-  /**
-    *
-    */
+  /*
+   * Handle a response to a message. If this message isn't one we were
+   * expecting, propagate it to the next dispatcher.
+   */
   private def handleResponse(sender: PeerNode, msg: ProtocolResponse): Unit =
     for {
       ret <- msg.returnHeader
