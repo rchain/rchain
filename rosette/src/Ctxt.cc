@@ -45,47 +45,45 @@ extern Ob* emptyMbox;
 extern Ob* lockedMbox;
 
 
-BUILTIN_CLASS(Ctxt)
-{
-    OB_FIELD("mbox",		Ctxt, mbox);
-    OB_FIELD("tag",		Ctxt, tag);
-    BIT_FIELD("nargs",		Ctxt, nargs, BITS(Byte));
-    BIT_FIELD("outstanding",	Ctxt, outstanding, BITS(Byte));
-    BIT_FIELD("pc",		Ctxt, pc, BITS(Word16));
-    OB_FIELD("rslt",		Ctxt, rslt);
-    OB_FIELD("trgt",		Ctxt, trgt);
-    OB_FIELD("argvec",		Ctxt, argvec);
-    OB_FIELD("env",		Ctxt, env);
-    OB_FIELD("code",		Ctxt, code);
-    OB_FIELD("ctxt",		Ctxt, ctxt);
-    OB_FIELD("self",		Ctxt, self2);
-    OB_FIELD("self-env",	Ctxt, selfEnv);
-    OB_FIELD("rcvr",		Ctxt, rcvr);
-    OB_FIELD("monitor",		Ctxt, monitor);
+BUILTIN_CLASS(Ctxt) {
+    OB_FIELD("mbox", Ctxt, mbox);
+    OB_FIELD("tag", Ctxt, tag);
+    BIT_FIELD("nargs", Ctxt, nargs, BITS(Byte));
+    BIT_FIELD("outstanding", Ctxt, outstanding, BITS(Byte));
+    BIT_FIELD("pc", Ctxt, pc, BITS(Word16));
+    OB_FIELD("rslt", Ctxt, rslt);
+    OB_FIELD("trgt", Ctxt, trgt);
+    OB_FIELD("argvec", Ctxt, argvec);
+    OB_FIELD("env", Ctxt, env);
+    OB_FIELD("code", Ctxt, code);
+    OB_FIELD("ctxt", Ctxt, ctxt);
+    OB_FIELD("self", Ctxt, self2);
+    OB_FIELD("self-env", Ctxt, selfEnv);
+    OB_FIELD("rcvr", Ctxt, rcvr);
+    OB_FIELD("monitor", Ctxt, monitor);
 }
 
-BUILTIN_CLASS(UpcallCtxt)
-{
-    OB_FIELD("mbox",		Ctxt, mbox);
-    OB_FIELD("tag",		Ctxt, tag);
-    BIT_FIELD("nargs",		Ctxt, nargs, BITS(Byte));
-    BIT_FIELD("outstanding",	Ctxt, outstanding, BITS(Byte));
-    BIT_FIELD("pc",		Ctxt, pc, BITS(Word16));
-    OB_FIELD("rslt",		Ctxt, rslt);
-    OB_FIELD("trgt",		Ctxt, trgt);
-    OB_FIELD("argvec",		Ctxt, argvec);
-    OB_FIELD("env",		Ctxt, env);
-    OB_FIELD("code",		Ctxt, code);
-    OB_FIELD("ctxt",		Ctxt, ctxt);
-    OB_FIELD("self",		Ctxt, self2);
-    OB_FIELD("self-env",	Ctxt, selfEnv);
-    OB_FIELD("rcvr",		Ctxt, rcvr);
-    OB_FIELD("monitor",		Ctxt, monitor);
+BUILTIN_CLASS(UpcallCtxt) {
+    OB_FIELD("mbox", Ctxt, mbox);
+    OB_FIELD("tag", Ctxt, tag);
+    BIT_FIELD("nargs", Ctxt, nargs, BITS(Byte));
+    BIT_FIELD("outstanding", Ctxt, outstanding, BITS(Byte));
+    BIT_FIELD("pc", Ctxt, pc, BITS(Word16));
+    OB_FIELD("rslt", Ctxt, rslt);
+    OB_FIELD("trgt", Ctxt, trgt);
+    OB_FIELD("argvec", Ctxt, argvec);
+    OB_FIELD("env", Ctxt, env);
+    OB_FIELD("code", Ctxt, code);
+    OB_FIELD("ctxt", Ctxt, ctxt);
+    OB_FIELD("self", Ctxt, self2);
+    OB_FIELD("self-env", Ctxt, selfEnv);
+    OB_FIELD("rcvr", Ctxt, rcvr);
+    OB_FIELD("monitor", Ctxt, monitor);
 }
 
 
-inline
-Ctxt::Ctxt (int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code, Tuple* argvec, Ctxt* ctxt, Location loc)
+inline Ctxt::Ctxt(int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code,
+                  Tuple* argvec, Ctxt* ctxt, Location loc)
     : MboxOb(sz, meta, parent, mbox),
       tag(loc),
       nargs(argvec->numberOfElements()),
@@ -99,12 +97,10 @@ Ctxt::Ctxt (int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code, Tuple* argvec, C
       code(code),
       self2(ctxt->self2),
       selfEnv(ctxt->selfEnv),
-      rcvr(ctxt->rcvr)
-{ }
+      rcvr(ctxt->rcvr) {}
 
-
 
-Ctxt::Ctxt (Tuple* t, Ctxt* p)
+Ctxt::Ctxt(Tuple* t, Ctxt* p)
     : MboxOb(sizeof(Ctxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox),
       tag(LocRslt),
       nargs(t->numberOfElements()),
@@ -119,13 +115,12 @@ Ctxt::Ctxt (Tuple* t, Ctxt* p)
       self2(p->self2),
       selfEnv(p->selfEnv),
       rcvr(p->rcvr),
-      monitor(p->monitor)
-{
+      monitor(p->monitor) {
     Ctxt::updateCnt();
 }
 
 
-Ctxt::Ctxt (Code* c, Tuple* t, Ctxt* p, int o)
+Ctxt::Ctxt(Code* c, Tuple* t, Ctxt* p, int o)
     : MboxOb(sizeof(Ctxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox),
       tag(LocRslt),
       nargs(t->numberOfElements()),
@@ -135,27 +130,26 @@ Ctxt::Ctxt (Code* c, Tuple* t, Ctxt* p, int o)
       trgt(NIV),
       argvec(t),
       code(c),
-      ctxt(p)
-{
+      ctxt(p) {
     if (p != NIV) {
-	this->env = p->env;
-	this->self2 = p->self2;
-	this->selfEnv = p->selfEnv;
-	this->rcvr = p->rcvr;
-	this->monitor = p->monitor;
+        this->env = p->env;
+        this->self2 = p->self2;
+        this->selfEnv = p->selfEnv;
+        this->rcvr = p->rcvr;
+        this->monitor = p->monitor;
     }
     else {
-	this->env = GlobalEnv;
-	this->self2 = NIV;
-	this->selfEnv = TopEnv;
-	this->rcvr = NIV;
-	this->monitor = vm->currentMonitor;
+        this->env = GlobalEnv;
+        this->self2 = NIV;
+        this->selfEnv = TopEnv;
+        this->rcvr = NIV;
+        this->monitor = vm->currentMonitor;
     }
     Ctxt::updateCnt();
 }
 
 
-Ctxt::Ctxt (Ob* trgt, Tuple* argvec)
+Ctxt::Ctxt(Ob* trgt, Tuple* argvec)
     : MboxOb(sizeof(Ctxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox),
       tag(LocLimbo),
       nargs(argvec->numberOfElements()),
@@ -164,46 +158,36 @@ Ctxt::Ctxt (Ob* trgt, Tuple* argvec)
       rslt(NIV),
       trgt(trgt),
       argvec(argvec),
-      code((Code*) NIV),
-      ctxt((Ctxt*) NIV),
+      code((Code*)NIV),
+      ctxt((Ctxt*)NIV),
       env(GlobalEnv),
       self2(NIV),
       selfEnv(NIV),
       rcvr(NIV),
-      monitor(vm->currentMonitor)
-{
+      monitor(vm->currentMonitor) {
     Ctxt::updateCnt();
 }
 
 
-Ctxt*
-Ctxt::create (Tuple* t, Ctxt* p)
-{
+Ctxt* Ctxt::create(Tuple* t, Ctxt* p) {
     void* loc = PALLOC2(sizeof(Ctxt), t, p);
-    return NEW(loc) Ctxt (t, p);
+    return NEW(loc) Ctxt(t, p);
 }
 
 
-Ctxt*
-Ctxt::create (Code* code, Tuple* t, Ctxt* p, int o)
-{
+Ctxt* Ctxt::create(Code* code, Tuple* t, Ctxt* p, int o) {
     void* loc = PALLOC3(sizeof(Ctxt), code, t, p);
-    return NEW(loc) Ctxt (code, t, p, o);
+    return NEW(loc) Ctxt(code, t, p, o);
 }
 
 
-Ctxt*
-Ctxt::create (Ob* trgt, Tuple* argvec)
-{
+Ctxt* Ctxt::create(Ob* trgt, Tuple* argvec) {
     void* loc = PALLOC2(sizeof(Ctxt), trgt, argvec);
-    return NEW(loc) Ctxt (trgt, argvec);
+    return NEW(loc) Ctxt(trgt, argvec);
 }
 
 
-
-int
-Ctxt::traversePtrs (PSOb__PSOb f)
-{
+int Ctxt::traversePtrs(PSOb__PSOb f) {
     int sum = 0;
 
     sum += useIfPtr(&meta(), f);
@@ -211,15 +195,13 @@ Ctxt::traversePtrs (PSOb__PSOb f)
     sum += useIfPtr(&mbox, f);
 
     for (short int i = NumberOfCtxtRegs; i--;)
-	sum += useIfPtr(&reg(i), f);
+        sum += useIfPtr(&reg(i), f);
 
     return sum;
 }
 
 
-int
-Ctxt::traversePtrs (SI__PSOb f)
-{
+int Ctxt::traversePtrs(SI__PSOb f) {
     int sum = 0;
 
     sum += useIfPtr(meta(), f);
@@ -227,57 +209,43 @@ Ctxt::traversePtrs (SI__PSOb f)
     sum += useIfPtr(mbox, f);
 
     for (short int i = NumberOfCtxtRegs; i--;)
-	sum += useIfPtr(reg(i), f);
+        sum += useIfPtr(reg(i), f);
 
     return sum;
 }
 
 
-void
-Ctxt::traversePtrs (V__PSOb f)
-{
+void Ctxt::traversePtrs(V__PSOb f) {
     useIfPtr(meta(), f);
     useIfPtr(parent(), f);
     useIfPtr(mbox, f);
 
     for (short int i = NumberOfCtxtRegs; i--;)
-	useIfPtr(reg(i), f);
+        useIfPtr(reg(i), f);
 }
 
 
 extern Code* rtnNxtCode;
 
 
-bool
-Ctxt::rcv (Ob* result, Location loc)
-{
+bool Ctxt::rcv(Ob* result, Location loc) {
     if (store(loc, this, result))
-	return TRUE;
+        return TRUE;
     else {
-	if (--outstanding == 0)
-	    scheduleStrand();
-	return FALSE;
+        if (--outstanding == 0)
+            scheduleStrand();
+        return FALSE;
     }
 }
 
 
-bool
-Ctxt::applyK (Ob* result, Location tag)
-{
-    return ctxt->rcv(result, tag);
-}
+bool Ctxt::applyK(Ob* result, Location tag) { return ctxt->rcv(result, tag); }
 
 
-void
-Ctxt::scheduleStrand ()
-{
-    vm->scheduleStrand(this);
-}
+void Ctxt::scheduleStrand() { vm->scheduleStrand(this); }
 
 
-void
-Ctxt::prepare ()
-{
+void Ctxt::prepare() {
     /*
      * This is necessary because the compile sometimes arranges to
      * provide an argvec that is acually longer than nargs indicates.  If
@@ -291,88 +259,72 @@ Ctxt::prepare ()
 }
 
 
-Ob*
-Ctxt::missingBindingError (Ob* symbol)
-{
+Ob* Ctxt::missingBindingError(Ob* symbol) {
     PROTECT_THIS(Ctxt);
 
     SELF->prepare();
 
-    Tuple* new_argvec = Tuple::create (2, NIV);
+    Tuple* new_argvec = Tuple::create(2, NIV);
     new_argvec->elem(0) = SELF;
     new_argvec->elem(1) = symbol;
 
-    Ctxt* new_ctxt = Ctxt::create (oprnMissingBinding, new_argvec);
+    Ctxt* new_ctxt = Ctxt::create(oprnMissingBinding, new_argvec);
     new_ctxt->monitor = vm->systemMonitor;
 
     return BASE(oprnMissingBinding)->dispatch(new_ctxt);
 }
 
 
-Ob*
-Ctxt::vmError ()
-{
+Ob* Ctxt::vmError() {
     PROTECT_THIS(Ctxt);
 
     SELF->prepare();
-    Tuple* new_argvec = Tuple::create (1, SELF);
-    Ctxt* new_ctxt = Ctxt::create (oprnVmError, new_argvec);
+    Tuple* new_argvec = Tuple::create(1, SELF);
+    Ctxt* new_ctxt = Ctxt::create(oprnVmError, new_argvec);
     new_ctxt->monitor = vm->systemMonitor;
 
     return BASE(oprnVmError)->dispatch(new_ctxt);
 }
 
-
 
-UpcallCtxt::UpcallCtxt (Code* code, Tuple* argvec, Ctxt* ctxt, Location loc)
-    : Ctxt(sizeof(UpcallCtxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt),
-	   emptyMbox,
-	   code,
-	   argvec,
-	   ctxt,
-	   loc)
-{
+UpcallCtxt::UpcallCtxt(Code* code, Tuple* argvec, Ctxt* ctxt, Location loc)
+    : Ctxt(sizeof(UpcallCtxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox,
+           code, argvec, ctxt, loc) {
     UpcallCtxt::updateCnt();
 }
 
 
-UpcallCtxt*
-UpcallCtxt::create (Code* code, Tuple* argvec, Ctxt* ctxt, Location tag)
-{
+UpcallCtxt* UpcallCtxt::create(Code* code, Tuple* argvec, Ctxt* ctxt,
+                               Location tag) {
     void* loc = PALLOC3(sizeof(UpcallCtxt), code, argvec, ctxt);
-    return NEW(loc) UpcallCtxt (code, argvec, ctxt, tag);
+    return NEW(loc) UpcallCtxt(code, argvec, ctxt, tag);
 }
 
 
-bool
-UpcallCtxt::applyK (Ob* val, Location loc)
-{
+bool UpcallCtxt::applyK(Ob* val, Location loc) {
 #ifdef DEBUG
     assert(loc == tag);
 #endif
 
     if (store(loc, ctxt, val))
-	return TRUE;
+        return TRUE;
     else {
-	ctxt->scheduleStrand();
-	return FALSE;
+        ctxt->scheduleStrand();
+        return FALSE;
     }
 }
 
-
 
-DEF("ctxt-rtn",ctxtRtn, 2, 2)
-{
+DEF("ctxt-rtn", ctxtRtn, 2, 2) {
     CHECK(0, Ctxt, k);
     return k->ret(ARG(1)) ? INVALID : NIV;
 }
 
 
-DEF("ctxt-resume",ctxtResume, 1, 1)
-{
+DEF("ctxt-resume", ctxtResume, 1, 1) {
     CHECK(0, Ctxt, k);
     if (k->argvec->numberOfElements() > 0)
-	return BASE(k->argvec->elem(0))->receive(k);
+        return BASE(k->argvec->elem(0))->receive(k);
     else
-	return INVALID;
+        return INVALID;
 }

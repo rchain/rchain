@@ -28,16 +28,13 @@
 
 #include "ModuleInit.h"
 
- Module::Module (const char* modname, void (*fn) ())
-    : name(modname), initFn(fn), link(Module::root)
-{
+Module::Module(const char* modname, void (*fn)())
+    : name(modname), initFn(fn), link(Module::root) {
     Module::root = this;
 }
 Module* Module::root = 0;
 
-void
-Module::initModules ()
-{
+void Module::initModules() {
     for (Module* mp = Module::root; mp; mp = mp->link)
-	(*(mp->initFn))();
+        (*(mp->initFn))();
 }

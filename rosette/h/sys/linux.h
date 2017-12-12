@@ -23,9 +23,9 @@
  *
  @EC */
 
-#define ARCH    "x86"
+#define ARCH "x86"
 #define MACHINE "x86"
-#define OS      "linux"
+#define OS "linux"
 #define LINUX
 
 #define GCC27X
@@ -44,5 +44,6 @@
 /* You must supply something to cause the current process
    to receive the io signal when input is available on fd.
    return is < 0 on failure.
-*/   
-#define SET_SIGNAL_IO_DESIRED(result)     result= (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
+*/
+#define SET_SIGNAL_IO_DESIRED(result) \
+    result = (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)

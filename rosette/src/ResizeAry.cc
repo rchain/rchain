@@ -32,22 +32,17 @@ extern "C" {
 #include <stdlib.h>
 };
 
-ResizeablePtrArray::~ResizeablePtrArray()
-{
-    delete array;
-}
+ResizeablePtrArray::~ResizeablePtrArray() { delete array; }
 
 
-void
-ResizeablePtrArray::resize (int newsize)
-{
+void ResizeablePtrArray::resize(int newsize) {
     if (newsize == 0) {
-	delete array;
-	array = 0;
-	size = 0;
-	return;
+        delete array;
+        array = 0;
+        size = 0;
+        return;
     }
 
-    array = (void**) realloc((char*)array, newsize*sizeof(void*));
+    array = (void**)realloc((char*)array, newsize * sizeof(void*));
     size = newsize;
 }

@@ -29,4 +29,4 @@
 #include "rosette.h"
 
 char timestamp[] = "Jan 20, 1993 02:00:32 PM";
-char version [] = "3.0";
+char version[] = "3.0";

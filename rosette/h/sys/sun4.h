@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sun4.h,v 1.1.1.1 1993/02/12 01:25:04 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sun4.h,v 1.1.1.1
+ 1993/02/12 01:25:04 tomlic Exp $
  *
  * $Log: sun4.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:04  tomlic
@@ -27,7 +28,7 @@
 
 #include "sun-os4.h"
 
-#define ARCH    "sun4"
+#define ARCH "sun4"
 #define MACHINE "sparc"
 
 /* because of need for alignment on 8 byte boundary of doubles */

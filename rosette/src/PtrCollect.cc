@@ -30,64 +30,47 @@
 
 static const int DefaultPtrCollectionSize = 32;
 
-PtrCollection::PtrCollection ()
-    : ResizeablePtrArray(DefaultPtrCollectionSize)
-{
+PtrCollection::PtrCollection() : ResizeablePtrArray(DefaultPtrCollectionSize) {
     init();
 }
 
 
-PtrCollection::PtrCollection (int sz)
-    : ResizeablePtrArray(sz)
-{
-    init();
-}
+PtrCollection::PtrCollection(int sz) : ResizeablePtrArray(sz) { init(); }
 
 
-void
-PtrCollection::resize ()
-{
-    resize(2*size);
-}
+void PtrCollection::resize() { resize(2 * size); }
 
 
-void
-PtrCollection::resize (int newsize)
-{
-    int offset = next-array;
+void PtrCollection::resize(int newsize) {
+    int offset = next - array;
     ResizeablePtrArray::resize(newsize);
-    next = array+offset;
-    limit = array+size;
+    next = array + offset;
+    limit = array + size;
 }
 
 
-void
-PtrCollection::compact ()
-{
+void PtrCollection::compact() {
     void** end = next;
     void** ptr = array;
 
     for (void** current = array; current < end; current++)
-	if (*current != 0)
-	    *ptr++ = *current;
+        if (*current != 0)
+            *ptr++ = *current;
 
     next = ptr;
 }
 
 
-PtrCollectionTrav::PtrCollectionTrav (PtrCollection* collection)
-{
+PtrCollectionTrav::PtrCollectionTrav(PtrCollection* collection) {
     pc = collection;
     current = -1;
     advance();
 }
 
 
-void
-PtrCollectionTrav::advance ()
-{
+void PtrCollectionTrav::advance() {
     int end = pc->next - pc->array;
     void** p = &pc->array[current];
     while (++current < end && *++p == 0)
-	;
+        ;
 }

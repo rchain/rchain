@@ -34,71 +34,62 @@
 
 #include "Ob.h"
 
-class Tuple : public Ob
-{
+class Tuple : public Ob {
     STD_DECLS(Tuple);
 
-  protected:
+   protected:
+    Tuple(int, Ob*);
+    Tuple(Ob**, int);
+    Tuple(int, Tuple*, int, int, Ob* = INVALID);
+    Tuple(int, int, Tuple*);
+    Tuple(Tuple*, Tuple*);
+    Tuple(Tuple*, int, Tuple*);
+    Tuple(Tuple*);
 
-    Tuple (int, Ob*);
-    Tuple (Ob**, int);
-    Tuple (int, Tuple*, int, int, Ob* = INVALID);
-    Tuple (int, int, Tuple*);
-    Tuple (Tuple*, Tuple*);
-    Tuple (Tuple*, int, Tuple*);
-    Tuple (Tuple*);
+   public:
+    static Tuple* create();
+    static Tuple* create(int, Ob*);
+    static Tuple* create(Ob**, int);
+    static Tuple* create(int, Tuple*, int, int, Ob* = INVALID);
+    static Tuple* create(int, int, Tuple*);
+    static Tuple* create(Tuple*, Tuple*);
+    static Tuple* create(Tuple*, int);
+    static Tuple* create(Tuple*);
 
-  public:
+    Ob*& elem(int);
 
-    static Tuple*	create ();
-    static Tuple*	create (int, Ob*);
-    static Tuple*	create (Ob**, int);
-    static Tuple*	create (int, Tuple*, int, int, Ob* = INVALID);
-    static Tuple*	create (int, int, Tuple*);
-    static Tuple*	create (Tuple*, Tuple*);
-    static Tuple*	create (Tuple*, int);
-    static Tuple*	create (Tuple*);
+    StdExtension* becomeExtension(Ob*, Ob*);
 
-    Ob*&		elem (int);
+    int numberOfElements();
+    Tuple* makeSlice(int, int);
+    Tuple* makeTail(int);
+    Ob* cloneTo(Ob*, Ob*);
+    Ob* indexedSize();
+    Ob* nth(int);
+    Ob* setNth(int, Ob*);
+    Ob* subObject(int, int);
+    bool accepts(Ctxt*);
+    bool matches(Ctxt*);
+    bool matches(Tuple*);
 
-    StdExtension*	becomeExtension (Ob*, Ob*);
-
-    int		numberOfElements ();
-    Tuple*	makeSlice (int, int);
-    Tuple*	makeTail (int);
-    Ob*		cloneTo (Ob*, Ob*);
-    Ob*		indexedSize ();
-    Ob*		nth (int);
-    Ob*		setNth (int, Ob*);
-    Ob*		subObject (int, int);
-    bool	accepts (Ctxt*);
-    bool	matches (Ctxt*);
-    bool	matches (Tuple*);
-    
-    bool        typeMatcher (Tuple*, pOb);
-    bool        elemsCoveredByp (pOb, int = 0);
+    bool typeMatcher(Tuple*, pOb);
+    bool elemsCoveredByp(pOb, int = 0);
 };
 
 
-inline
-Ob*&
-Tuple::elem (int n)
-{
-    return _slot[n+2];	// Skip the meta and parent fields.
+inline Ob*& Tuple::elem(int n) {
+    return _slot[n + 2];  // Skip the meta and parent fields.
 }
 
 
-inline
-int
-Tuple::numberOfElements ()
-{
-    return( (SIZE(this)-sizeof(Tuple)) / sizeof(Ob*) );
+inline int Tuple::numberOfElements() {
+    return ((SIZE(this) - sizeof(Tuple)) / sizeof(Ob*));
 }
 
 
-extern Tuple* cons (Ob*, Tuple*);
-extern Tuple* consstar (Tuple*, int, Tuple*);
-extern Tuple* rcons (Tuple*, Ob*);
-extern Tuple* concat (Tuple*, Tuple*);
+extern Tuple* cons(Ob*, Tuple*);
+extern Tuple* consstar(Tuple*, int, Tuple*);
+extern Tuple* rcons(Tuple*, Ob*);
+extern Tuple* concat(Tuple*, Tuple*);
 
 #endif

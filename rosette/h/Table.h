@@ -36,81 +36,78 @@
 
 static const int DefaultTableSize = 4;
 
-typedef int (*RblTableHitFn)(pOb,pOb);
-int RblTableDefaultHitFn( pOb key1, pOb key2 );
+typedef int (*RblTableHitFn)(pOb, pOb);
+int RblTableDefaultHitFn(pOb key1, pOb key2);
 
-class RblTable : public BinaryOb
-{
+class RblTable : public BinaryOb {
     STD_DECLS(RblTable);
 
-  protected:
-
+   protected:
     /*
      * These entries will be overlaid on the elements of a tuple.
      */
 
     struct Entry {
-      pOb key;
-      pOb val;
+        pOb key;
+        pOb val;
     };
 
-    void (RblTable::*addFn) (pOb, pOb);
-    Entry* (RblTable::*lookupFn) (pOb);
-    void (RblTable::*checkSizeFn) ();
+    void (RblTable::*addFn)(pOb, pOb);
+    Entry* (RblTable::*lookupFn)(pOb);
+    void (RblTable::*checkSizeFn)();
 
-    static int  maxMaxTableSize;
+    static int maxMaxTableSize;
 
-    int		maxEntries;
-    int		numberOfEntries;
-    bool	gcSensitiveKeys;
-    bool	registered;
+    int maxEntries;
+    int numberOfEntries;
+    bool gcSensitiveKeys;
+    bool registered;
 
-    RblTable (int, Tuple*);
-    RblTable (int, Tuple*, RblTableHitFn);
+    RblTable(int, Tuple*);
+    RblTable(int, Tuple*, RblTableHitFn);
 
-    Entry&	entry (int);
+    Entry& entry(int);
 
-    int		hash (pOb);
-    void	hashify ();
-    void	rehashAfterScavenge ();
-    void	rehashAfterScavengeFrom (int);
-    void	rehashCompletely ();
-    void	rehashCompletelyFrom (int);
+    int hash(pOb);
+    void hashify();
+    void rehashAfterScavenge();
+    void rehashAfterScavengeFrom(int);
+    void rehashCompletely();
+    void rehashCompletelyFrom(int);
 
-    void	hashResize ();
-    void	hashAdd (pOb, pOb);
-    Entry*	hashLookup (pOb);
-    void	hashCheckSize ();
+    void hashResize();
+    void hashAdd(pOb, pOb);
+    Entry* hashLookup(pOb);
+    void hashCheckSize();
 
-    void	linearResize ();
-    void	linearAdd (pOb, pOb);
-    Entry*	linearLookup (pOb);
-    void	linearCheckSize ();
+    void linearResize();
+    void linearAdd(pOb, pOb);
+    Entry* linearLookup(pOb);
+    void linearCheckSize();
 
-    void	addEntry (pOb, pOb);
+    void addEntry(pOb, pOb);
 
-    friend class	TblExtension;
+    friend class TblExtension;
 
-  public:
-
-    Tuple*	  tbl;
+   public:
+    Tuple* tbl;
     RblTableHitFn hitFn;
 
-    static RblTable*	create (RblTableHitFn, int = DefaultTableSize);
-    static RblTable*	create (int = DefaultTableSize);
-    
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
-    virtual bool	gcFixup ();
-    virtual bool	scavengeFixup ();
+    static RblTable* create(RblTableHitFn, int = DefaultTableSize);
+    static RblTable* create(int = DefaultTableSize);
 
-    virtual pOb		cloneTo (pOb, pOb);
-    virtual Tuple*	dumpKeys ();
-    virtual Tuple*	dumpPairs ();
-    virtual int		nPairs ();
-    virtual pOb		getKey (pOb key);
-    virtual pOb		addKey (pOb key, pOb val);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
+    virtual bool gcFixup();
+    virtual bool scavengeFixup();
+
+    virtual pOb cloneTo(pOb, pOb);
+    virtual Tuple* dumpKeys();
+    virtual Tuple* dumpPairs();
+    virtual int nPairs();
+    virtual pOb getKey(pOb key);
+    virtual pOb addKey(pOb key, pOb val);
 };
 
 #endif
