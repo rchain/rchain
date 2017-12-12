@@ -48,9 +48,9 @@ extern Ob* lockedMbox;
 BUILTIN_CLASS(Ctxt) {
     OB_FIELD("mbox", Ctxt, mbox);
     OB_FIELD("tag", Ctxt, tag);
-    BIT_FIELD("nargs", Ctxt, nargs, BITS(Byte));
-    BIT_FIELD("outstanding", Ctxt, outstanding, BITS(Byte));
-    BIT_FIELD("pc", Ctxt, pc, BITS(Word16));
+    BIT_FIELD("nargs", Ctxt, nargs, BITS(uint8_t));
+    BIT_FIELD("outstanding", Ctxt, outstanding, BITS(uint8_t));
+    BIT_FIELD("pc", Ctxt, pc, BITS(uint16_t));
     OB_FIELD("rslt", Ctxt, rslt);
     OB_FIELD("trgt", Ctxt, trgt);
     OB_FIELD("argvec", Ctxt, argvec);
@@ -66,9 +66,9 @@ BUILTIN_CLASS(Ctxt) {
 BUILTIN_CLASS(UpcallCtxt) {
     OB_FIELD("mbox", Ctxt, mbox);
     OB_FIELD("tag", Ctxt, tag);
-    BIT_FIELD("nargs", Ctxt, nargs, BITS(Byte));
-    BIT_FIELD("outstanding", Ctxt, outstanding, BITS(Byte));
-    BIT_FIELD("pc", Ctxt, pc, BITS(Word16));
+    BIT_FIELD("nargs", Ctxt, nargs, BITS(uint8_t));
+    BIT_FIELD("outstanding", Ctxt, outstanding, BITS(uint8_t));
+    BIT_FIELD("pc", Ctxt, pc, BITS(uint16_t));
     OB_FIELD("rslt", Ctxt, rslt);
     OB_FIELD("trgt", Ctxt, trgt);
     OB_FIELD("argvec", Ctxt, argvec);

@@ -53,7 +53,7 @@
 #include <ctime>
 
 #ifdef MAP_BACK_ADDRESS
-extern Word32 nontrivial_pre_fixnum_to_addr(int);
+extern uint32_t nontrivial_pre_fixnum_to_addr(int);
 extern int nontrivial_addr_to_pre_fixnum(Ob*);
 #endif
 
@@ -460,7 +460,7 @@ pOb Ob::getAddr(int indirect, int level, int offset) {
 
 
 pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
-    Word32 addr;
+    uint32_t addr;
     if (!IS_FIXNUM(val))
         return INVALID;
     addr = PRE_FIXNUM_TO_ADDR(FIXVAL(val));
@@ -482,7 +482,7 @@ pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
 
 
 pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
-    static const int WordSize = BITS(Word32);
+    static const int WordSize = BITS(uint32_t);
 
     long ans;
     pOb p = this;
@@ -520,8 +520,8 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
 
         warning("%s suspect span in getField", span);
         if (bitOffset + span > WordSize) {
-            Word32 loBucket = *((Word32*)p + wordOffset);
-            Word32 hiBucket = *((Word32*)p + wordOffset + 1);
+            uint32_t loBucket = *((uint32_t*)p + wordOffset);
+            uint32_t hiBucket = *((uint32_t*)p + wordOffset + 1);
             int loSpan = WordSize - bitOffset;
             int hiSpan = span - loSpan;
 
@@ -533,9 +533,9 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
             ans = ((loBucket << hiSpan) | (hiBucket >> (WordSize - hiSpan)));
         }
         else {
-            Word32 bucket = *((Word32*)p + wordOffset);
-            Word32 mask = (span == 32) ? -1 : (1L << span) - 1;
-            Word32 bits = (bucket >> (WordSize - (bitOffset + span))) & mask;
+            uint32_t bucket = *((uint32_t*)p + wordOffset);
+            uint32_t mask = (span == 32) ? -1 : (1L << span) - 1;
+            uint32_t bits = (bucket >> (WordSize - (bitOffset + span))) & mask;
             if (sign && (bits & (1L << (span - 1))))
                 bits |= (span == 32) ? 0 : (~0L) << span;
 
@@ -546,8 +546,8 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
     return FIXNUM(ans);
 }
 
-pOb Ob::setField(int indirect, int level, int offset, int span, Word32 bits) {
-    static const int WordSize = BITS(Word32);
+pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
+    static const int WordSize = BITS(uint32_t);
 
     pOb p = this;
     while (level--)
@@ -578,21 +578,21 @@ pOb Ob::setField(int indirect, int level, int offset, int span, Word32 bits) {
 
         warning("%s suspect span in setField", span);
         if (bitOffset + span > WordSize) {
-            Word32* loBucketAddr = (Word32*)p + wordOffset;
-            Word32* hiBucketAddr = loBucketAddr + 1;
+            uint32_t* loBucketAddr = (uint32_t*)p + wordOffset;
+            uint32_t* hiBucketAddr = loBucketAddr + 1;
             int loSpan = WordSize - bitOffset;
             int hiSpan = span - loSpan;
-            Word32 loMask = (1L << loSpan) - 1;
-            Word32 hiMask = ~((1L << (WordSize - hiSpan)) - 1);
+            uint32_t loMask = (1L << loSpan) - 1;
+            uint32_t hiMask = ~((1L << (WordSize - hiSpan)) - 1);
             *loBucketAddr =
                 (*loBucketAddr & ~loMask) | ((bits >> hiSpan) & loMask);
             *hiBucketAddr =
                 (*hiBucketAddr & ~hiMask) | (bits << (WordSize - hiSpan));
         }
         else {
-            Word32* bucketAddr = (Word32*)p + wordOffset;
+            uint32_t* bucketAddr = (uint32_t*)p + wordOffset;
             int shift = WordSize - (bitOffset + span);
-            Word32 mask = ((span == 32) ? -1 : (1L << span) - 1) << shift;
+            uint32_t mask = ((span == 32) ? -1 : (1L << span) - 1) << shift;
             *bucketAddr = (*bucketAddr & ~mask) | ((bits << shift) & mask);
         }
     }
@@ -759,12 +759,12 @@ pOb Ob::becomeNew(pOb, Ctxt* ctxt) {
 }
 
 convertArgReturnPair Ob::convertActualArg(Ctxt*, Ob* actual) {
-    cnvArgRetPair.val = (Word32)actual;
+    cnvArgRetPair.val = (uint32_t)actual;
     cnvArgRetPair.failp = 0;
     return cnvArgRetPair;
 }
 
-Ob* Ob::convertActualRslt(Ctxt*, Word32 rslt) { return ((Ob*)rslt); }
+Ob* Ob::convertActualRslt(Ctxt*, uint32_t rslt) { return ((Ob*)rslt); }
 
 pOb Ob::isNullP() { return RBLFALSE; }
 
@@ -1187,7 +1187,7 @@ DEF("set-field", objectSetField, 5, 5) {
     CHECK(3, RblBool, indirect);
     CHECK_FIXNUM(4, bits);
     pOb rslt =
-        BASE(ARG(0))->setField(BOOLVAL(indirect), 0, start, span, (Word32)bits);
+        BASE(ARG(0))->setField(BOOLVAL(indirect), 0, start, span, (uint32_t)bits);
 
     return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
 }

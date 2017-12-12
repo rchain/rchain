@@ -83,7 +83,7 @@ class RblBool : public RblAtom {
     const char* asCstring();
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    // virtual Ob*         convertActualRslt(Ctxt*, Word32);
+    // virtual Ob*         convertActualRslt(Ctxt*, uint32_t);
 };
 
 class Char : public RblAtom {
@@ -116,7 +116,7 @@ class Fixnum : public RblAtom {
     const char* asCstring();
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 };
 
 

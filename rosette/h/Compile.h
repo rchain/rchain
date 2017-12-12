@@ -112,7 +112,7 @@ enum NodeFlag {
    * graph.  It is useful for suppressing certain warnings that are a
    * nuisance for top-level expressions.
    */
-    f_topLevel = BITS(Ob*) - (2 * BITS(Byte) + 6) + 1,
+    f_topLevel = BITS(Ob*) - (2 * BITS(uint8_t) + 6) + 1,
     /*
      * valueContext is true if the expression represented by this node is
      * in a position where it is expected to produce a value.
@@ -153,14 +153,14 @@ class AttrNode : public BinaryOb {
      * subexpressions.
      */
 
-    Byte av_size;
+    uint8_t av_size;
 
     /*
      * outstanding is a count of the number suspending (not inlineable)
      * sub-expressions contained by this expression.
      */
 
-    Byte outstanding;
+    uint8_t outstanding;
 
     unsigned short word;
 
@@ -196,9 +196,9 @@ class AttrNode : public BinaryOb {
     void emitLit(Ob*);
     void emitLookup(Ob*);
     void emitOpAndLabel(Opcode, Label);
-    void emitOpAndLabel(Opcode, Byte, Label);
+    void emitOpAndLabel(Opcode, uint8_t, Label);
     void emitOpAndLabel(Opcode, Ob*);
-    void emitOpAndLabel(Opcode, Byte, Ob*);
+    void emitOpAndLabel(Opcode, uint8_t, Ob*);
     void emitOutstanding();
     void emitPush(int);
     void emitStore(Label);
@@ -591,7 +591,7 @@ class GotoNode : public AttrNode {
     STD_DECLS(GotoNode);
 
    protected:
-    enum CompilerFakery { MaximumCut = (1 << BITS(Byte)) - 1 };
+    enum CompilerFakery { MaximumCut = (1 << BITS(uint8_t)) - 1 };
 
     Ob* labelName;
     LabelNode* labelNode;

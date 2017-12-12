@@ -46,7 +46,7 @@ static const int INDIRECT = 1;
 class BuiltinClass {
     static int nClasses;
     static BuiltinClass* root;
-    static Word32* counts;
+    static uint32_t* counts;
     static char** names;
 
 

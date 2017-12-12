@@ -87,14 +87,14 @@ void Monitor::start() { timer->start(); }
 void Monitor::stop() { timer->stop(); }
 
 
-static void prettyPrint(Word32 n, char* name, FILE* f) {
+static void prettyPrint(uint32_t n, char* name, FILE* f) {
     if (n != 0)
         fprintf(f, "%8ul %s%s\n", n, name, plural((int)n));
 }
 
 
 void Monitor::printStats(FILE* f) {
-    Word32 total = 0;
+    uint32_t total = 0;
 
     fprintf(f, "%s:\n", BASE(id)->asCstring());
 
@@ -102,7 +102,7 @@ void Monitor::printStats(FILE* f) {
     int n = obCounts->numberOfWords();
     int i = 0;
     for (i = 0; i < n; i++) {
-        Word32 count = (int)obCounts->word(i);
+        uint32_t count = (int)obCounts->word(i);
         prettyPrint(count, Base::classNames[i], f);
         total += count;
     }
@@ -111,7 +111,7 @@ void Monitor::printStats(FILE* f) {
     fprintf(f, "bytecodes:\n");
     total = 0;
     for (i = 0; i < 256; i++) {
-        Word32 n = opcodeCounts->word(i);
+        uint32_t n = opcodeCounts->word(i);
         if (n > 0) {
             total += n;
             char* str = opcodeStrings[i];

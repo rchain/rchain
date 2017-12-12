@@ -78,7 +78,7 @@ class ByteVec : public BinaryOb {
     static ByteVec* create(int);
     static ByteVec* create(ByteVec*, int);
 
-    Byte& byte(int);
+    uint8_t& byte(int);
     int numberOfBytes(EMPTY);
     void reset(EMPTY);
     unsigned long sum(EMPTY);
@@ -94,9 +94,9 @@ inline ByteVec::ByteVec(int sz, pOb meta, pOb parent, int numberOfBytes)
     byteCount = numberOfBytes;
 }
 
-inline Byte& ByteVec::byte(int n) {
+inline uint8_t& ByteVec::byte(int n) {
     // WTH????
-    Byte* p = (Byte*)(((char*)&byteCount) + sizeof(byteCount));
+    uint8_t* p = (uint8_t*)(((char*)&byteCount) + sizeof(byteCount));
     return p[n];
 }
 
@@ -125,7 +125,7 @@ class Word16Vec : public BinaryOb {
     static Word16Vec* create(pOb, pOb, int);
     static Word16Vec* create(Word16Vec*, int);
 
-    Word16& word(int);
+    uint16_t& word(int);
     int numberOfWords(EMPTY);
     void reset(EMPTY);
     unsigned long sum(EMPTY);
@@ -141,8 +141,8 @@ inline Word16Vec::Word16Vec(int sz, pOb meta, pOb parent, int cnt)
     wordCount = cnt;
 }
 
-inline Word16& Word16Vec::word(int n) {
-    Word16* p = (Word16*)(((char*)&wordCount) + sizeof(wordCount));
+inline uint16_t& Word16Vec::word(int n) {
+    uint16_t* p = (uint16_t*)(((char*)&wordCount) + sizeof(wordCount));
     return p[n];
 }
 
@@ -161,7 +161,7 @@ class Word32Vec : public BinaryOb {
     static Word32Vec* create(int);
     static Word32Vec* create(Word32Vec*, int);
 
-    Word32& word(int);
+    uint32_t& word(int);
     int numberOfWords(EMPTY);
     void reset(EMPTY);
     unsigned long sum(EMPTY);
@@ -175,13 +175,13 @@ class Word32Vec : public BinaryOb {
 inline Word32Vec::Word32Vec(int sz, pOb meta, pOb parent)
     : BinaryOb(sz, meta, parent) {}
 
-inline Word32& Word32Vec::word(int n) {
-    Word32* p = (Word32*)&slot(0);
+inline uint32_t& Word32Vec::word(int n) {
+    uint32_t* p = (uint32_t*)&slot(0);
     return p[n];
 }
 
 inline int Word32Vec::numberOfWords(EMPTY) {
-    return (SIZE(this) - sizeof(Word32Vec)) / sizeof(Word32);
+    return (SIZE(this) - sizeof(Word32Vec)) / sizeof(uint32_t);
 }
 
 #endif

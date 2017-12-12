@@ -478,7 +478,7 @@ DEF("M-set", addressSetField, 3, 3) {
     if (base < local_page_size)
         PRIM_ERROR("invalid address");
     else {
-        pOb rslt = BASE((pOb)addr)->setField(0, 0, offset, span, (Word32)val);
+        pOb rslt = BASE((pOb)addr)->setField(0, 0, offset, span, (uint32_t)val);
 
         return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
     }

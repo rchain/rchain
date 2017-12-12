@@ -80,7 +80,7 @@ extern "C" {
 #endif
 
 #ifdef MAP_BACK_ADDRESS
-extern Word32 nontrivial_pre_fixnum_to_addr(int);
+extern uint32_t nontrivial_pre_fixnum_to_addr(int);
 extern int nontrivial_addr_to_pre_fixnum(Ob*);
 #endif
 
@@ -269,8 +269,8 @@ DEF("prim-gen-actor", obGenActor, 3, 3) {
     return rslt;
 }
 
-Word32 mem_get_field(Word32* addr, int offset, int span, int sign) {
-    static const int WordSize = BITS(Word32);
+uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
+    static const int WordSize = BITS(uint32_t);
 
     long ans;
 
@@ -302,8 +302,8 @@ Word32 mem_get_field(Word32* addr, int offset, int span, int sign) {
         int bitOffset = offset % WordSize;
 
         if (bitOffset + span > WordSize) {
-            Word32 loBucket = *(addr + wordOffset);
-            Word32 hiBucket = *(addr + wordOffset + 1);
+            uint32_t loBucket = *(addr + wordOffset);
+            uint32_t hiBucket = *(addr + wordOffset + 1);
             int loSpan = WordSize - bitOffset;
             int hiSpan = span - loSpan;
 
@@ -315,9 +315,9 @@ Word32 mem_get_field(Word32* addr, int offset, int span, int sign) {
             ans = ((loBucket << hiSpan) | (hiBucket >> (WordSize - hiSpan)));
         }
         else {
-            Word32 bucket = *(addr + wordOffset);
-            Word32 mask = (span == 32) ? -1 : (1L << span) - 1;
-            Word32 bits = (bucket >> (WordSize - (bitOffset + span))) & mask;
+            uint32_t bucket = *(addr + wordOffset);
+            uint32_t mask = (span == 32) ? -1 : (1L << span) - 1;
+            uint32_t bits = (bucket >> (WordSize - (bitOffset + span))) & mask;
             if (sign && (bits & (1L << (span - 1))))
                 bits |= (span == 32) ? 0 : (~0L) << span;
 
@@ -328,8 +328,8 @@ Word32 mem_get_field(Word32* addr, int offset, int span, int sign) {
     return ans;
 }
 
-Word32* mem_set_field(Word32* addr, int offset, int span, Word32 bits) {
-    static const int WordSize = BITS(Word32);
+uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
+    static const int WordSize = BITS(uint32_t);
 
     switch (span) {
     case 8:
@@ -353,21 +353,21 @@ Word32* mem_set_field(Word32* addr, int offset, int span, Word32 bits) {
         int bitOffset = offset % WordSize;
 
         if (bitOffset + span > WordSize) {
-            Word32* loBucketAddr = addr + wordOffset;
-            Word32* hiBucketAddr = loBucketAddr + 1;
+            uint32_t* loBucketAddr = addr + wordOffset;
+            uint32_t* hiBucketAddr = loBucketAddr + 1;
             int loSpan = WordSize - bitOffset;
             int hiSpan = span - loSpan;
-            Word32 loMask = (1L << loSpan) - 1;
-            Word32 hiMask = ~((1L << (WordSize - hiSpan)) - 1);
+            uint32_t loMask = (1L << loSpan) - 1;
+            uint32_t hiMask = ~((1L << (WordSize - hiSpan)) - 1);
             *loBucketAddr =
                 (*loBucketAddr & ~loMask) | ((bits >> hiSpan) & loMask);
             *hiBucketAddr =
                 (*hiBucketAddr & ~hiMask) | (bits << (WordSize - hiSpan));
         }
         else {
-            Word32* bucketAddr = addr + wordOffset;
+            uint32_t* bucketAddr = addr + wordOffset;
             int shift = WordSize - (bitOffset + span);
-            Word32 mask = ((span == 32) ? -1 : (1L << span) - 1) << shift;
+            uint32_t mask = ((span == 32) ? -1 : (1L << span) - 1) << shift;
             *bucketAddr = (*bucketAddr & ~mask) | ((bits << shift) & mask);
         }
     }
@@ -481,12 +481,12 @@ DEF("M-get", addressGetField, 3, 3) {
     CHECK(2, RblBool, sign);
 
     int offset = (int)base % 4;
-    Word32* addr = (Word32*)(base - offset);
+    uint32_t* addr = (uint32_t*)(base - offset);
 
     if (base < local_page_size)
         return PRIM_ERROR("invalid address");
     else if ((span >= 1) && (span <= 4)) {
-        Word32 rslt = mem_get_field(addr, offset * 8, span * 8, BOOLVAL(sign));
+        uint32_t rslt = mem_get_field(addr, offset * 8, span * 8, BOOLVAL(sign));
 
         return FIXNUM((int)rslt);
     }
@@ -501,12 +501,12 @@ DEF("M-set", addressSetField, 3, 3) {
     CHECK_FIXNUM(2, val);
 
     int offset = (int)base % 4;
-    Word32* addr = (Word32*)(base - offset);
+    uint32_t* addr = (uint32_t*)(base - offset);
 
     if (base < local_page_size)
         return PRIM_ERROR("invalid address");
     else if ((span >= 1) && (span <= 4)) {
-        Word32* rslt = mem_set_field(addr, offset * 8, span * 8, (Word32)val);
+        uint32_t* rslt = mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
 
         return ADDR_TO_FIXNUM((int)addr);
     }

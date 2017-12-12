@@ -174,11 +174,11 @@ const char* RblBool::asCstring() { return BOOLVAL(atom) ? "#t" : "#f"; }
 
 convertArgReturnPair RblBool::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
-        cnvArgRetPair.val = (Word32)BOOLVAL(obj);
+        cnvArgRetPair.val = (uint32_t)BOOLVAL(obj);
         cnvArgRetPair.failp = 0;
     }
     else {
-        cnvArgRetPair.val = (Word32)-1;
+        cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
     return cnvArgRetPair;
@@ -238,13 +238,13 @@ convertArgReturnPair Fixnum::convertActualArg(Ctxt* ctxt, Ob* obj) {
         cnvArgRetPair.failp = 0;
     }
     else {
-        cnvArgRetPair.val = (Word32)-1;
+        cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 0;
     }
     return cnvArgRetPair;
 }
 
-Ob* Fixnum::convertActualRslt(Ctxt*, Word32 obj) { return FIXNUM(obj); }
+Ob* Fixnum::convertActualRslt(Ctxt*, uint32_t obj) { return FIXNUM(obj); }
 
 
 DEF("fxFormat:", fxFormat, 1, 1) {

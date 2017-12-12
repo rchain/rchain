@@ -58,7 +58,7 @@ class GenericDescriptor : public Actor {
      *
      */
 
-    Word32 _offset, _align_to, _size; /* memory map */
+    uint32_t _offset, _align_to, _size; /* memory map */
     Ob* mnemonic;                     /* was consed up from rosette heap */
     Ob* imported;
     /* was returned by a foreign function or is a */
@@ -70,32 +70,32 @@ class GenericDescriptor : public Actor {
 
     virtual ~GenericDescriptor();
 
-    virtual Ob* sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sDesc(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sDeref(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sDesc(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sDeref(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
-    virtual Ob* sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val, Tuple* path,
+    virtual Ob* sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
                           int pindex = 0);
-    virtual Ob* nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path,
+    virtual Ob* nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path,
                         int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 
     Ob* nullDescriptor(Ctxt*);
 
-    virtual Ob* oprnSwitch(Ctxt* ctxt, Word32 base, Tuple* path,
+    virtual Ob* oprnSwitch(Ctxt* ctxt, uint32_t base, Tuple* path,
                            int pindex = 0);
-    Ob* sBox(Word32);
+    Ob* sBox(uint32_t);
 
-    virtual Word32 absoluteAddress(Word32 base);
-    void setAddrContents(Word32 base, Word32 val);
+    virtual uint32_t absoluteAddress(uint32_t base);
+    void setAddrContents(uint32_t base, uint32_t val);
 };
 
-inline Ob* GenericDescriptor::sBox(Word32 off) {
+inline Ob* GenericDescriptor::sBox(uint32_t off) {
     GenericDescriptor* rslt = (GenericDescriptor*)cloneTo(meta(), parent());
     rslt->mbox = emptyMbox;
     rslt->_offset = off;
@@ -115,19 +115,19 @@ class NullDescriptor : public GenericDescriptor {
    public:
     static NullDescriptor* create();
 
-    virtual Ob* sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sDesc(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sDeref(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sDesc(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sDeref(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
-    virtual Ob* nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path,
+    virtual Ob* nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path,
                         int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 
     virtual Ob* isNullP();
 
-    virtual Word32 absoluteAddress(Word32 base);
+    virtual uint32_t absoluteAddress(uint32_t base);
 };
 
 class AtomicDescriptor : public GenericDescriptor {
@@ -147,14 +147,14 @@ class AtomicDescriptor : public GenericDescriptor {
     static AtomicDescriptor* create(RblBool*);
     static AtomicDescriptor* create();
 
-    virtual Ob* sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
-    virtual Word32 absoluteAddress(Word32 base);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
+    virtual uint32_t absoluteAddress(uint32_t base);
 };
 
 class CStructure : public GenericDescriptor {
@@ -174,65 +174,65 @@ class CStructure : public GenericDescriptor {
     static CStructure* create(RblTable*, Tuple*);
     static CStructure* create();
 
-    virtual Ob* select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val, Tuple* path,
+    virtual Ob* select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
                           int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
 class CArray : public GenericDescriptor {
     STD_DECLS(CArray);
 
    protected:
-    CArray(Word16, GenericDescriptor*, pExt);
-    CArray(int s, pOb m, pOb p, pOb mbx, pExt, Word16, GenericDescriptor*);
+    CArray(uint16_t, GenericDescriptor*, pExt);
+    CArray(int s, pOb m, pOb p, pOb mbx, pExt, uint16_t, GenericDescriptor*);
 
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
    public:
-    Word16 _numElems;
-    Word16 filler_up_please;
+    uint16_t _numElems;
+    uint16_t filler_up_please;
     GenericDescriptor* _elemDesc;
 
-    static CArray* create(Word16, GenericDescriptor*);
+    static CArray* create(uint16_t, GenericDescriptor*);
     static CArray* create();
 
-    virtual Ob* sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val, Tuple* path,
+    virtual Ob* sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
                           int pindex = 0);
-    virtual Ob* nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path,
+    virtual Ob* nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path,
                         int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
 class CharArray : public CArray {
     STD_DECLS(CharArray);
 
    protected:
-    CharArray(Word16, GenericDescriptor*, pExt);
-    CharArray(int s, pOb m, pOb p, pOb mbx, pExt, Word16, GenericDescriptor*);
+    CharArray(uint16_t, GenericDescriptor*, pExt);
+    CharArray(int s, pOb m, pOb p, pOb mbx, pExt, uint16_t, GenericDescriptor*);
 
    public:
-    static CharArray* create(Word16, GenericDescriptor*);
+    static CharArray* create(uint16_t, GenericDescriptor*);
     static CharArray* create();
 
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
 class CharArray0 : public CharArray {
     STD_DECLS(CharArray0);
 
    protected:
-    CharArray0(Word16, GenericDescriptor*, pExt);
+    CharArray0(uint16_t, GenericDescriptor*, pExt);
 
    public:
-    static CharArray0* create(Word16, GenericDescriptor*);
+    static CharArray0* create(uint16_t, GenericDescriptor*);
     static CharArray0* create();
 
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
 class CRef : public GenericDescriptor {
@@ -252,15 +252,15 @@ class CRef : public GenericDescriptor {
     static CRef* create(GenericDescriptor*);
     static CRef* create();
 
-    virtual Ob* sDeref(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* sDeref(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
-    virtual Ob* nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path,
+    virtual Ob* nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path,
                         int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 };
 
 class CharRef : public CRef {
@@ -274,7 +274,7 @@ class CharRef : public CRef {
     static CharRef* create(GenericDescriptor*);
     static CharRef* create();
 
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
@@ -291,8 +291,8 @@ class CRef0 : public CRef {
     static CRef0* create();
     static CRef0* create(GenericDescriptor*);
 
-    virtual Ob* sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
 
@@ -305,8 +305,8 @@ class CharRef0 : public CRef0 {
    public:
     static CharRef0* create();
 
-    virtual Ob* flatten(Ctxt*, Word32, RblTable*);
-    virtual Ob* sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+    virtual Ob* flatten(Ctxt*, uint32_t, RblTable*);
+    virtual Ob* sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                      int pindex = 0);
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
 };
@@ -328,8 +328,8 @@ class CUnion : public GenericDescriptor {
     static CUnion* create(RblTable*, Tuple*);
     static CUnion* create();
 
-    virtual Ob* select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex = 0);
-    virtual Ob* flatten(Ctxt* ctxt, Word32 base, RblTable*);
+    virtual Ob* select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
+    virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
 #endif

@@ -83,7 +83,7 @@ extern "C" {
 #include "Vm.h"
 
 #ifdef MAP_BACK_ADDRESS
-extern Word32 nontrivial_pre_fixnum_to_addr(int);
+extern uint32_t nontrivial_pre_fixnum_to_addr(int);
 extern int nontrivial_addr_to_pre_fixnum(Ob*);
 #endif
 /*  */

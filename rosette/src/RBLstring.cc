@@ -157,7 +157,7 @@ const char* RBLstring::asCstring() {
 Ob* RBLstring::subObject(int start, int n) {
     PROTECT_THIS(RBLstring);
     RBLstring* result = RBLstring::create(n + 1);
-    memcpy(&result->byte(0), &SELF->byte(start), n * sizeof(Byte));
+    memcpy(&result->byte(0), &SELF->byte(start), n * sizeof(uint8_t));
     result->byte(n) = 0;
     return result;
 }
@@ -487,16 +487,16 @@ DEF("string-split", stringSplit, 2, 3) {
 
 convertArgReturnPair RBLstring::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj) == RBLTRUE) {
-        cnvArgRetPair.val = (Word32)(&((RBLstring*)obj)->byte(0));
+        cnvArgRetPair.val = (uint32_t)(&((RBLstring*)obj)->byte(0));
         cnvArgRetPair.failp = 0;
     }
     else {
-        cnvArgRetPair.val = (Word32)-1;
+        cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
     return cnvArgRetPair;
 }
 
-Ob* RBLstring::convertActualRslt(Ctxt*, Word32 obj) {
+Ob* RBLstring::convertActualRslt(Ctxt*, uint32_t obj) {
     return (RBLstring::create((char*)obj));
 }
