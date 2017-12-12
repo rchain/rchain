@@ -122,7 +122,6 @@ case class PeerTable[A <: Peer](home: A,
           ps -= older
           ps += winner
           winner.pinging = false
-          println(s"    ${older.entry} -> ${winner.entry}")
         }
       }
     })
@@ -168,6 +167,27 @@ case class PeerTable[A <: Peer](home: A,
               case None => ()
             }
             ()
+          }
+        }
+      case None => ()
+    }
+
+  /**
+    * Remove a peer with the given key.
+    */
+  def remove(key: Seq[Byte]): Unit =
+    distance(home.key, key) match {
+      case Some(index) =>
+        if (index < 8 * width) {
+          val ps = table(index)
+          ps synchronized {
+            ps.find(_.key == key) match {
+              case Some(entry) => {
+                ps -= entry
+                ()
+              }
+              case _ => ()
+            }
           }
         }
       case None => ()
@@ -221,4 +241,17 @@ case class PeerTable[A <: Peer](home: A,
     */
   def peers: Seq[A] =
     table.flatMap(l => l synchronized { l.map(_.entry) })
+
+  /**
+    * Return all distances in order from least to most filled.
+    *
+    * Optionally, ignore any distance closer than [[limit]].
+    */
+  def sparseness(limit: Int = 255): Seq[Int] =
+    table
+      .take(limit + 1)
+      .zipWithIndex
+      .map { case (l, i) => (l.size, i) }
+      .sortWith(_._1 < _._1)
+      .map(_._2)
 }

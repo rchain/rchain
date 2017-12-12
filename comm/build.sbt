@@ -19,6 +19,9 @@ libraryDependencies ++= Seq(
   // Command-line parsing
   "org.rogach" %% "scallop" % "3.0.3",
 
+  // Hashing
+  "org.scorexfoundation" %% "scrypto" % "2.0.0",
+
   // Logging
   "com.typesafe.scala-logging" %% "scala-logging" % "3.7.2",
   "ch.qos.logback" % "logback-classic" % "1.2.3"

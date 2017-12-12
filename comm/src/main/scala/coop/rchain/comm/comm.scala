@@ -26,11 +26,13 @@ case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def key = id.key
+  val sKey = key.map(_.toChar).mkString
 
-  override def toString = {
-    val sKey = key.map("%02x" format _).mkString
+  override def toString =
     s"#{PeerNode $sKey}"
-  }
+
+  def toAddress: String =
+    s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
 }
 
 trait Notary {
