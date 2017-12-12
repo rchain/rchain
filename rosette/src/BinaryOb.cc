@@ -68,35 +68,35 @@ void BinaryOb::traversePtrs(V__PSOb f) {
 
 
 ByteVec::ByteVec(int sz)
-    : BinaryOb(sizeof(ByteVec) + align(sz * sizeof(Byte)), CLASS_META(ByteVec),
+    : BinaryOb(sizeof(ByteVec) + align(sz * sizeof(uint8_t)), CLASS_META(ByteVec),
                CLASS_SBO(ByteVec)),
       byteCount(sz) {
-    memset((char*)&this->byte(0), 0, align(sz * sizeof(Byte)));
+    memset((char*)&this->byte(0), 0, align(sz * sizeof(uint8_t)));
     ByteVec::updateCnt();
 }
 
 
 ByteVec::ByteVec(ByteVec* old, int newsize)
-    : BinaryOb(sizeof(ByteVec) + align(newsize * sizeof(Byte)), old->meta(),
+    : BinaryOb(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old->meta(),
                old->parent()),
       byteCount(newsize) {
     int oldsize = old->numberOfBytes();
     memcpy((char*)&this->byte(0), (char*)&old->byte(0),
-           min(oldsize, newsize) * sizeof(Byte));
+           min(oldsize, newsize) * sizeof(uint8_t));
     if (newsize > oldsize)
-        memset(&this->byte(0), 0, (newsize - oldsize) * sizeof(Byte));
+        memset(&this->byte(0), 0, (newsize - oldsize) * sizeof(uint8_t));
     ByteVec::updateCnt();
 }
 
 
 ByteVec* ByteVec::create(int n) {
-    void* loc = PALLOC(sizeof(ByteVec) + align(n * sizeof(Byte)));
+    void* loc = PALLOC(sizeof(ByteVec) + align(n * sizeof(uint8_t)));
     return NEW(loc) ByteVec(n);
 }
 
 
 ByteVec* ByteVec::create(ByteVec* old, int newsize) {
-    void* loc = PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(Byte)), old);
+    void* loc = PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old);
     return NEW(loc) ByteVec(old, newsize);
 }
 
@@ -128,13 +128,13 @@ Ob* ByteVec::subObject(int start, int n) {
     PROTECT_THIS(ByteVec);
     ByteVec* result = ByteVec::create(n);
     memcpy((char*)&result->byte(0), (char*)&SELF->byte(start),
-           n * sizeof(Byte));
+           n * sizeof(uint8_t));
     return result;
 }
 
 
 Word16Vec::Word16Vec(int n)
-    : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(Word16)),
+    : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(uint16_t)),
                CLASS_META(Word16Vec), CLASS_SBO(Word16Vec)),
       wordCount(n) {
     while (n--)
@@ -144,7 +144,7 @@ Word16Vec::Word16Vec(int n)
 
 
 Word16Vec::Word16Vec(Ob* meta, Ob* parent, int n)
-    : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(Word16)), meta, parent),
+    : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent),
       wordCount(n) {
     while (n--)
         this->word(n) = 0;
@@ -153,34 +153,34 @@ Word16Vec::Word16Vec(Ob* meta, Ob* parent, int n)
 
 
 Word16Vec::Word16Vec(Word16Vec* old, int newsize)
-    : BinaryOb(sizeof(Word16Vec) + align(newsize * sizeof(Word16)), old->meta(),
+    : BinaryOb(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old->meta(),
                old->parent()),
       wordCount(newsize) {
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
-           min(oldsize, newsize) * sizeof(Word16));
+           min(oldsize, newsize) * sizeof(uint16_t));
     if (newsize > oldsize)
-        memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(Word16));
+        memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(uint16_t));
     Word16Vec::updateCnt();
 }
 
 
 Word16Vec* Word16Vec::create(int n) {
-    void* loc = PALLOC(sizeof(Word16Vec) + align(n * sizeof(Word16)));
+    void* loc = PALLOC(sizeof(Word16Vec) + align(n * sizeof(uint16_t)));
     return NEW(loc) Word16Vec(n);
 }
 
 
 Word16Vec* Word16Vec::create(Ob* meta, Ob* parent, int n) {
     void* loc =
-        PALLOC2(sizeof(Word16Vec) + align(n * sizeof(Word16)), meta, parent);
+        PALLOC2(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent);
     return NEW(loc) Word16Vec(meta, parent, n);
 }
 
 
 Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
     void* loc =
-        PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(Word16)), old);
+        PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old);
     return NEW(loc) Word16Vec(old, newsize);
 }
 
@@ -214,13 +214,13 @@ Ob* Word16Vec::setNth(int n, Ob* v) {
 Ob* Word16Vec::subObject(int start, int n) {
     PROTECT_THIS(Word16Vec);
     Word16Vec* result = Word16Vec::create(n);
-    memcpy(&result->word(0), &SELF->word(start), n * sizeof(Word16));
+    memcpy(&result->word(0), &SELF->word(start), n * sizeof(uint16_t));
     return result;
 }
 
 
 Word32Vec::Word32Vec(int n)
-    : BinaryOb(sizeof(Word32Vec) + n * sizeof(Word32), CLASS_META(Word32Vec),
+    : BinaryOb(sizeof(Word32Vec) + n * sizeof(uint32_t), CLASS_META(Word32Vec),
                CLASS_SBO(Word32Vec)) {
     while (n--)
         this->word(n) = 0;
@@ -229,25 +229,25 @@ Word32Vec::Word32Vec(int n)
 
 
 Word32Vec::Word32Vec(Word32Vec* old, int newsize)
-    : BinaryOb(sizeof(Word32Vec) + newsize * sizeof(Word32), old->meta(),
+    : BinaryOb(sizeof(Word32Vec) + newsize * sizeof(uint32_t), old->meta(),
                old->parent()) {
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
-           min(oldsize, newsize) * sizeof(Word32));
+           min(oldsize, newsize) * sizeof(uint32_t));
     if (newsize > oldsize)
-        memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(Word32));
+        memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(uint32_t));
     Word32Vec::updateCnt();
 }
 
 
 Word32Vec* Word32Vec::create(int n) {
-    void* loc = PALLOC(sizeof(Word32Vec) + n * sizeof(Word32));
+    void* loc = PALLOC(sizeof(Word32Vec) + n * sizeof(uint32_t));
     return NEW(loc) Word32Vec(n);
 }
 
 
 Word32Vec* Word32Vec::create(Word32Vec* old, int newsize) {
-    void* loc = PALLOC1(sizeof(Word32Vec) + newsize * sizeof(Word32), old);
+    void* loc = PALLOC1(sizeof(Word32Vec) + newsize * sizeof(uint32_t), old);
     return NEW(loc) Word32Vec(old, newsize);
 }
 
@@ -281,7 +281,7 @@ Ob* Word32Vec::setNth(int n, Ob* v) {
 Ob* Word32Vec::subObject(int start, int n) {
     PROTECT_THIS(Word32Vec);
     Word32Vec* result = Word32Vec::create(n);
-    memcpy(&result->word(0), &SELF->word(start), n * sizeof(Word32));
+    memcpy(&result->word(0), &SELF->word(start), n * sizeof(uint32_t));
     return result;
 }
 

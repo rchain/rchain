@@ -312,7 +312,7 @@ enum Opcode {
 #define SET_OP_e1_op0(x, val) SET_FW(x, 0, 16, val)
 
 union Instr {
-    Word16 word;
+    uint16_t word;
     operator int();
 };
 

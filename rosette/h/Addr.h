@@ -30,7 +30,7 @@
 #pragma interface
 #endif
 
-Word32 pre_fixnum_to_addr(int x);
+uint32_t pre_fixnum_to_addr(int x);
 int addr_to_pre_fixnum(Ob *);
 
 #ifndef ADDR_TO_PRE_FIXNUM
@@ -38,7 +38,7 @@ int addr_to_pre_fixnum(Ob *);
 #define ADDR_TO_PRE_FIXNUM(x) nontrivial_addr_to_pre_fixnum(x)
 #define PRE_FIXNUM_TO_ADDR(x) nontrivial_pre_fixnum_to_addr(x)
 #else
-#define ADDR_TO_PRE_FIXNUM(x) ((Word32)(int)(x))
+#define ADDR_TO_PRE_FIXNUM(x) ((uint32_t)(int)(x))
 #define PRE_FIXNUM_TO_ADDR(x) ((int)(Ob *)(x))
 #endif
 #endif
@@ -46,7 +46,7 @@ int addr_to_pre_fixnum(Ob *);
 #define CHECK_ADDR(n, var)                    \
     if (!IS_FIXNUM(ARG(n)))                   \
         return PRIM_MISMATCH((n), "Address"); \
-    Word32 var = PRE_FIXNUM_TO_ADDR(FIXVAL(ARG(n)));
+    uint32_t var = PRE_FIXNUM_TO_ADDR(FIXVAL(ARG(n)));
 
 #define ADDR_TO_FIXNUM(x) FIXNUM(ADDR_TO_PRE_FIXNUM((Ob *)(void *)(x)))
 

@@ -866,10 +866,10 @@ nextop:
     case opApplyPrimTag | NextOff | UnwindOn:
     case opApplyPrimTag | NextOn | UnwindOff:
     case opApplyPrimTag | NextOn | UnwindOn: {
-        Word16 ext = FETCH.word;
+        uint16_t ext = FETCH.word;
         unsigned p_num = WORD_OP_e0_op0(ext);
         if (p_num == 255) {
-            const Word16 ext1 = FETCH.word;
+            const uint16_t ext1 = FETCH.word;
             p_num = ext1;
         }
 
@@ -896,10 +896,10 @@ nextop:
     case opApplyPrimArg | NextOff | UnwindOn:
     case opApplyPrimArg | NextOn | UnwindOff:
     case opApplyPrimArg | NextOn | UnwindOn: {
-        Word16 ext = FETCH.word;
+        uint16_t ext = FETCH.word;
         unsigned p_num = WORD_OP_e0_op0(ext);
         if (p_num == 255) {
-            const Word16 ext1 = FETCH.word;
+            const uint16_t ext1 = FETCH.word;
             p_num = ext1;
         }
 
@@ -927,10 +927,10 @@ nextop:
     case opApplyPrimReg | NextOff | UnwindOn:
     case opApplyPrimReg | NextOn | UnwindOff:
     case opApplyPrimReg | NextOn | UnwindOn: {
-        Word16 ext = FETCH.word;
+        uint16_t ext = FETCH.word;
         unsigned p_num = WORD_OP_e0_op0(ext);
         if (p_num == 255) {
-            const Word16 ext1 = FETCH.word;
+            const uint16_t ext1 = FETCH.word;
             p_num = ext1;
         }
 
@@ -956,10 +956,10 @@ nextop:
     case opApplyCmd | NextOff | UnwindOn:
     case opApplyCmd | NextOn | UnwindOff:
     case opApplyCmd | NextOn | UnwindOn: {
-        Word16 ext = FETCH.word;
+        uint16_t ext = FETCH.word;
         unsigned p_num = WORD_OP_e0_op0(ext);
         if (p_num == 255) {
-            const Word16 ext1 = FETCH.word;
+            const uint16_t ext1 = FETCH.word;
             p_num = ext1;
         }
 
@@ -1577,8 +1577,8 @@ void VirtualMachine::initVmTables() {
         ASSIGN(litvec, elem(1), templat);
     }
 
-    static const Word16 StartLabel = 0;
-    static const Word16 ResumeLabel = 8;
+    static const uint16_t StartLabel = 0;
+    static const uint16_t ResumeLabel = 8;
     int dummy = 0;
 
     /*  0 */ cb->emitF6(opOutstanding, ResumeLabel);

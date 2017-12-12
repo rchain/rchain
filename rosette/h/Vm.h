@@ -62,7 +62,7 @@ class VirtualMachine : public RootSet {
     ObStk* sleeperPool;
     Ctxt* upcallCtxt;
 
-    Word32* bytecodes;
+    uint32_t* bytecodes;
 
     static Ob* vmLiterals[16];
 

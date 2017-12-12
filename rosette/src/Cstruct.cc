@@ -55,7 +55,7 @@
 #include "ModuleInit.h"
 
 #ifdef MAP_BACK_ADDRESS
-extern Word32 nontrivial_pre_fixnum_to_addr(int);
+extern uint32_t nontrivial_pre_fixnum_to_addr(int);
 extern int nontrivial_addr_to_pre_fixnum(Ob*);
 #endif
 
@@ -86,8 +86,8 @@ extern AtomicDescriptor* obChar;
 // these live in Basic-support.cc
 extern Ob* newSBO(Ob* proto_sbo, Ob* id, Ob* prnt, Ob* ctxt);
 extern Ob* genActor(Ob* proto, Ob* sbo);
-extern Word32 mem_get_field(Word32* addr, int offset, int span, int sign);
-extern Word32* mem_set_field(Word32* addr, int offset, int span, Word32 bits);
+extern uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign);
+extern uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits);
 
 // some useful defines so i don't have to remember the accessors
 
@@ -114,7 +114,7 @@ static int local_page_size = getpagesize();
 
 #define OCTAGCOUNT 4
 
-Tuple* makeOCTag(Ob* self, Word32 nid) {
+Tuple* makeOCTag(Ob* self, uint32_t nid) {
     PROTECT(self);
     Tuple* OCTag = Tuple::create(OCTAGCOUNT, INVALID);
     OCTag->setNth(0, FIXNUM(nid));
@@ -127,7 +127,7 @@ Tuple* makeOCTag(Ob* self, Word32 nid) {
 
 /*
 Ob*
-makeOCTag(GenericDescriptor* self, Word32 base)
+makeOCTag(GenericDescriptor* self, uint32_t base)
 {
   return( FIXNUM(self->absoluteAddress(base)) );
 }
@@ -268,8 +268,8 @@ DEF_OPRN(Std, "nth", oprnCSNth, obCSNth);
 
 BUILTIN_CLASS(GenericDescriptor) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", GenericDescriptor, imported);
     OB_FIELD("free-on-gc", GenericDescriptor, freeStructOnGC);
@@ -357,7 +357,7 @@ void GenericDescriptor::traversePtrs(V__PSOb f) {
     useIfPtr(freeStructOnGC, f);
 }
 
-Ob* GenericDescriptor::oprnSwitch(Ctxt* ctxt, Word32 base, Tuple* path,
+Ob* GenericDescriptor::oprnSwitch(Ctxt* ctxt, uint32_t base, Tuple* path,
                                   int pindex) {
     PROTECT_THIS(GenericDescriptor);
     PROTECT(ctxt);
@@ -434,12 +434,12 @@ Ob* GenericDescriptor::nullDescriptor(Ctxt* ctxt) {
 }
 
 convertArgReturnPair GenericDescriptor::convertActualArg(Ctxt* ctxt, Ob* obj) {
-    cnvArgRetPair.val = (Word32)-1;
+    cnvArgRetPair.val = (uint32_t)-1;
     cnvArgRetPair.failp = 1;
     return cnvArgRetPair;
 }
 
-Ob* GenericDescriptor::convertActualRslt(Ctxt* ctxt, Word32 obj) {
+Ob* GenericDescriptor::convertActualRslt(Ctxt* ctxt, uint32_t obj) {
     if (obj == 0)
         return nullDescriptor(ctxt);
     else {
@@ -451,7 +451,7 @@ Ob* GenericDescriptor::convertActualRslt(Ctxt* ctxt, Word32 obj) {
     }
 }
 
-Ob* GenericDescriptor::sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* GenericDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     if (NULLP(path, pindex)) {
         return sBox(base + _offset);
     }
@@ -459,7 +459,7 @@ Ob* GenericDescriptor::sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
         return oprnSwitch(ctxt, base, path, pindex);
 }
 
-Ob* GenericDescriptor::sDesc(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* GenericDescriptor::sDesc(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     /* remember to ask about gc protection */
     if (NULLP(path, pindex)) {
         return sBox(base + _offset);
@@ -468,15 +468,15 @@ Ob* GenericDescriptor::sDesc(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
         return oprnSwitch(ctxt, base, path, pindex);
 }
 
-Ob* GenericDescriptor::sDeref(Ctxt* ctxt, Word32, Tuple* path, int) {
+Ob* GenericDescriptor::sDeref(Ctxt* ctxt, uint32_t, Tuple* path, int) {
     return runtimeError(ctxt, "Cannot de-reference ", path);
 }
 
-Ob* GenericDescriptor::select(Ctxt* ctxt, Word32, Tuple* path, int) {
+Ob* GenericDescriptor::select(Ctxt* ctxt, uint32_t, Tuple* path, int) {
     return runtimeError(ctxt, "Cannot select with: ", path);
 }
 
-Ob* GenericDescriptor::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+Ob* GenericDescriptor::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                             int pindex) {
     if (TYPEP(this, val)) {
         memcpy((void*)(base + _offset),
@@ -494,7 +494,7 @@ Ob* GenericDescriptor::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
     return runtimeError(ctxt, "S-set type-mismatch ", val);
 }
 
-Ob* GenericDescriptor::sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val,
+Ob* GenericDescriptor::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val,
                                  Tuple* path, int pindex) {
     // Needs protection code.
     PROTECT_THIS(GenericDescriptor);
@@ -505,7 +505,7 @@ Ob* GenericDescriptor::sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val,
     Ob* tupHead = INVALID;
     PROTECT(tupHead);
 
-    for (Word32 addr = base; !(NULLP(val, vindex)); addr = addr + SELF->_size) {
+    for (uint32_t addr = base; !(NULLP(val, vindex)); addr = addr + SELF->_size) {
         tupHead = TUPLE_HEAD(val, vindex);
         TUPLE_TAIL(val, vindex);
         (void)(SELF->sSet(ctxt, addr, tupHead, NIL));
@@ -519,12 +519,12 @@ Ob* GenericDescriptor::sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val,
     }
 }
 
-Ob* GenericDescriptor::nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path,
+Ob* GenericDescriptor::nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path,
                                int pindex) {
     PROTECT_THIS(GenericDescriptor);
     PROTECT(ctxt);
     PROTECT(path);
-    Word32 newBase = (base + (i * SELF->_size));
+    uint32_t newBase = (base + (i * SELF->_size));
     if (NULLP(path, pindex)) {
         return SELF->sBox(newBase + SELF->_offset);
     }
@@ -534,24 +534,24 @@ Ob* GenericDescriptor::nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path,
     }
 }
 
-Ob* GenericDescriptor::flatten(Ctxt* ctxt, Word32, RblTable*) {
+Ob* GenericDescriptor::flatten(Ctxt* ctxt, uint32_t, RblTable*) {
     return runtimeError(ctxt, "method undefined for ", this);
 }
 
-Word32 GenericDescriptor::absoluteAddress(Word32 base) {
-    Word32 newbase = (base + _offset);
-    Word32 newoff = newbase % 4;
-    return (Word32)(mem_get_field((Word32*)(newbase - newoff),
+uint32_t GenericDescriptor::absoluteAddress(uint32_t base) {
+    uint32_t newbase = (base + _offset);
+    uint32_t newoff = newbase % 4;
+    return (uint32_t)(mem_get_field((uint32_t*)(newbase - newoff),
                                   (int)(newoff * 8), (int)(_size * 8),
                                   BOOLVAL(RBLFALSE)));
 }
 
-void GenericDescriptor::setAddrContents(Word32 base, Word32 val) {
-    Word32 newbase, offset, *addr;
+void GenericDescriptor::setAddrContents(uint32_t base, uint32_t val) {
+    uint32_t newbase, offset, *addr;
     newbase = base + _offset;
     offset = newbase % 4;
 
-    mem_set_field((Word32*)(newbase - offset), (int)(offset * 8),
+    mem_set_field((uint32_t*)(newbase - offset), (int)(offset * 8),
                   (int)(_size * 8), val);
 }
 
@@ -575,39 +575,39 @@ NullDescriptor* NullDescriptor::create() {
     return NEW(loc) NullDescriptor(ext);
 }
 
-Ob* NullDescriptor::sGet(Ctxt*, Word32, Tuple*, int) {
+Ob* NullDescriptor::sGet(Ctxt*, uint32_t, Tuple*, int) {
     //(pure (S-get & r) (self))
     return this;
 }
 
-Ob* NullDescriptor::sDesc(Ctxt*, Word32, Tuple*, int) {
+Ob* NullDescriptor::sDesc(Ctxt*, uint32_t, Tuple*, int) {
     //(pure (S-desc & r) (self))
     return this;
 }
 
-Ob* NullDescriptor::sDeref(Ctxt* ctxt, Word32, Tuple* path, int) {
+Ob* NullDescriptor::sDeref(Ctxt* ctxt, uint32_t, Tuple* path, int) {
     //(pure (S-deref & r) (RuntimeError (self) "Cannot deref(^) " r))
     return runtimeError(ctxt, "Cannot deref(^) ", path);
 }
 
-Ob* NullDescriptor::select(Ctxt* ctxt, Word32, Tuple* path, int) {
+Ob* NullDescriptor::select(Ctxt* ctxt, uint32_t, Tuple* path, int) {
     //(pure (select & r) (RuntimeError (self) "Cannot select " r))
     return runtimeError(ctxt, "Cannot select ", path);
 }
 
-Ob* NullDescriptor::sSet(Ctxt* ctxt, Word32, Ob*, Tuple* path, int) {
+Ob* NullDescriptor::sSet(Ctxt* ctxt, uint32_t, Ob*, Tuple* path, int) {
     //(pure (S-set & r) (RuntimeError (self) "Cannot set(:=) " r))
     return runtimeError(ctxt, "Cannot set(:=) ", path);
 }
 
-Ob* NullDescriptor::nthBase(Ctxt* ctxt, Word32, int, Tuple* path, int) {
+Ob* NullDescriptor::nthBase(Ctxt* ctxt, uint32_t, int, Tuple* path, int) {
     //(pure (nth & r) (RuntimeError (self) "Cannot index " r))
     return runtimeError(ctxt, "Cannot index ", path);
 }
 
-Ob* NullDescriptor::flatten(Ctxt*, Word32, RblTable*) { return this; }
+Ob* NullDescriptor::flatten(Ctxt*, uint32_t, RblTable*) { return this; }
 
-Word32 NullDescriptor::absoluteAddress(Word32 base) { return (Word32)0; }
+uint32_t NullDescriptor::absoluteAddress(uint32_t base) { return (uint32_t)0; }
 
 pOb NullDescriptor::isNullP() { return RBLTRUE; }
 
@@ -619,8 +619,8 @@ pOb NullDescriptor::isNullP() { return RBLTRUE; }
 
 BUILTIN_CLASS(AtomicDescriptor) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", NullDescriptor, imported);
     OB_FIELD("free-on-gc", NullDescriptor, freeStructOnGC);
@@ -669,23 +669,23 @@ void AtomicDescriptor::traversePtrs(V__PSOb f) {
 convertArgReturnPair AtomicDescriptor::convertActualArg(Ctxt* ctxt, Ob* obj) {
     cnvArgRetPair.failp = 0;
     if (IS_FIXNUM(obj)) {
-        cnvArgRetPair.val = (Word32)FIXVAL(obj);
+        cnvArgRetPair.val = (uint32_t)FIXVAL(obj);
     }
     else if (TYPEP(this, obj)) {
-        cnvArgRetPair.val = (Word32)FIXVAL(sGet(ctxt, 0, NIL));
+        cnvArgRetPair.val = (uint32_t)FIXVAL(sGet(ctxt, 0, NIL));
     }
     else {
-        cnvArgRetPair.val = (Word32)-1;
+        cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
     return cnvArgRetPair;
 }
 
-Ob* AtomicDescriptor::convertActualRslt(Ctxt*, Word32 obj) {
+Ob* AtomicDescriptor::convertActualRslt(Ctxt*, uint32_t obj) {
     return FIXNUM(obj);
 }
 
-Ob* AtomicDescriptor::sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* AtomicDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     // Needs protection code.
 
     PROTECT_THIS(AtomicDescriptor);
@@ -699,7 +699,7 @@ Ob* AtomicDescriptor::sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
         return (SELF->oprnSwitch(ctxt, base, path, pindex));
 }
 
-Ob* AtomicDescriptor::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
+Ob* AtomicDescriptor::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                            int pindex) {
     // Needs protection code.
     PROTECT_THIS(AtomicDescriptor);
@@ -708,7 +708,7 @@ Ob* AtomicDescriptor::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
     PROTECT(path);
 
     if (IS_FIXNUM(val)) {
-        SELF->setAddrContents(base, (Word32)FIXVAL(val));
+        SELF->setAddrContents(base, (uint32_t)FIXVAL(val));
         if (!NULLP(path, pindex))
             return (SELF->oprnSwitch(ctxt, base, path, pindex));
         else
@@ -721,14 +721,14 @@ Ob* AtomicDescriptor::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path,
         return runtimeError(ctxt, "S-set type-mismatch ", val);
 }
 
-Ob* AtomicDescriptor::flatten(Ctxt* ctxt, Word32 base, RblTable*) {
+Ob* AtomicDescriptor::flatten(Ctxt* ctxt, uint32_t base, RblTable*) {
     return sGet(ctxt, base, NIL);
 }
 
-Word32 AtomicDescriptor::absoluteAddress(Word32 base) {
-    Word32 newbase = (base + _offset);
-    Word32 newoff = newbase % 4;
-    return (Word32)(mem_get_field((Word32*)(newbase - newoff),
+uint32_t AtomicDescriptor::absoluteAddress(uint32_t base) {
+    uint32_t newbase = (base + _offset);
+    uint32_t newoff = newbase % 4;
+    return (uint32_t)(mem_get_field((uint32_t*)(newbase - newoff),
                                   (int)(newoff * 8), (int)(_size * 8),
                                   BOOLVAL(_signed)));
 }
@@ -741,8 +741,8 @@ Word32 AtomicDescriptor::absoluteAddress(Word32 base) {
 
 BUILTIN_CLASS(CStructure) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CStructure, imported);
     OB_FIELD("free-on-gc", CStructure, freeStructOnGC);
@@ -795,7 +795,7 @@ void CStructure::traversePtrs(V__PSOb f) {
     useIfPtr(_fieldNames, f);
 }
 
-Ob* CStructure::select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* CStructure::select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     // Needs protection code.
     PROTECT_THIS(CStructure);
     PROTECT(ctxt);
@@ -821,7 +821,7 @@ Ob* CStructure::select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
     }
 }
 
-Ob* CStructure::sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val, Tuple* path,
+Ob* CStructure::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
                           int pindex) {
     // Needs protection code.
 
@@ -851,7 +851,7 @@ Ob* CStructure::sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val, Tuple* path,
         return runtimeError(ctxt, "S-tupleSet too many elements ", val);
 }
 
-Ob* CStructure::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CStructure::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CStructure);
     PROTECT(ctxt);
     PROTECT(occtxt);
@@ -901,16 +901,16 @@ Ob* CStructure::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
 
 BUILTIN_CLASS(CArray) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CArray, imported);
     OB_FIELD("free-on-gc", CArray, freeStructOnGC);
-    BIT_FIELD("numElems", CArray, _numElems, BITS(Word16));
+    BIT_FIELD("numElems", CArray, _numElems, BITS(uint16_t));
     OB_FIELD("elemDesc", CArray, _elemDesc);
 }
 
-CArray::CArray(Word16 cnt, GenericDescriptor* elemd, pExt ext)
+CArray::CArray(uint16_t cnt, GenericDescriptor* elemd, pExt ext)
     : GenericDescriptor(sizeof(CArray), CLASS_META(CArray), CLASS_SBO(CArray),
                         emptyMbox, ext),
       _numElems(cnt),
@@ -918,13 +918,13 @@ CArray::CArray(Word16 cnt, GenericDescriptor* elemd, pExt ext)
     CArray::updateCnt();
 }
 
-CArray::CArray(int s, pOb m, pOb p, pOb mbx, pExt ext, Word16 cnt,
+CArray::CArray(int s, pOb m, pOb p, pOb mbx, pExt ext, uint16_t cnt,
                GenericDescriptor* elemd)
     : GenericDescriptor(s, m, p, mbx, ext), _numElems(cnt), _elemDesc(elemd) {
     CArray::updateCnt();
 }
 
-CArray* CArray::create(Word16 cnt, GenericDescriptor* elmd) {
+CArray* CArray::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CArray), ext);
@@ -952,18 +952,18 @@ void CArray::traversePtrs(V__PSOb f) {
     useIfPtr(_elemDesc, f);
 }
 
-Ob* CArray::sTupleSet(Ctxt* ctxt, Word32 base, Tuple* val, Tuple* path,
+Ob* CArray::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
                       int pindex) {
     if (val->numberOfElements() <= _numElems)
         return (_elemDesc->sTupleSet(ctxt, base + _offset, val, path, pindex));
     return (runtimeError(ctxt, "S-tupleSet too many elements ", val));
 }
 
-Ob* CArray::nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path, int pindex) {
+Ob* CArray::nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path, int pindex) {
     // Needs protection code.
 
     if ((i >= 0) && (i <= _numElems)) {
-        Word32 addr = (base + _offset + (i * _elemDesc->_size));
+        uint32_t addr = (base + _offset + (i * _elemDesc->_size));
 
         if (NULLP(path, pindex))
             return (_elemDesc->sBox(addr));
@@ -976,7 +976,7 @@ Ob* CArray::nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path, int pindex) {
         return runtimeError(ctxt, "Index out of bounds ", path);
 }
 
-Ob* CArray::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CArray);
     PROTECT(ctxt);
     PROTECT(occtxt);
@@ -990,7 +990,7 @@ Ob* CArray::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
         PROTECT(rslt);
         occtxt->addKey(selfTag, rslt);
         for (int i = 0; i < SELF->_numElems; i++) {
-            Word32 addrKey =
+            uint32_t addrKey =
                 base + SELF->_offset + (i * sizeof(SELF->_elemDesc));
             rslt->setNth(i, SELF->_elemDesc->flatten(ctxt, addrKey, occtxt));
         }
@@ -1009,28 +1009,28 @@ Ob* CArray::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
 
 BUILTIN_CLASS(CharArray) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CharArray, imported);
     OB_FIELD("free-on-gc", CharArray, freeStructOnGC);
-    BIT_FIELD("numElems", CArray, _numElems, BITS(Word16));
+    BIT_FIELD("numElems", CArray, _numElems, BITS(uint16_t));
     OB_FIELD("elemDesc", CArray, _elemDesc);
 }
 
-CharArray::CharArray(Word16 cnt, GenericDescriptor* elemd, pExt ext)
+CharArray::CharArray(uint16_t cnt, GenericDescriptor* elemd, pExt ext)
     : CArray(sizeof(CharArray), CLASS_META(CharArray), CLASS_SBO(CharArray),
              emptyMbox, ext, cnt, elemd) {
     CharArray::updateCnt();
 }
 
-CharArray::CharArray(int s, pOb m, pOb p, pOb mbx, pExt ext, Word16 cnt,
+CharArray::CharArray(int s, pOb m, pOb p, pOb mbx, pExt ext, uint16_t cnt,
                      GenericDescriptor* elemd)
     : CArray(s, m, p, mbx, ext, cnt, elemd) {
     CharArray::updateCnt();
 }
 
-CharArray* CharArray::create(Word16 cnt, GenericDescriptor* elmd) {
+CharArray* CharArray::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharArray), ext);
@@ -1045,9 +1045,9 @@ CharArray* CharArray::create() {
     return NEW(loc) CharArray(0, tmp, ext);
 }
 
-Ob* CharArray::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
+Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
     if (STRINGP(val)) {
-        Word32 addr = base + _offset;
+        uint32_t addr = base + _offset;
         if (VALID_ADDR(addr)) {
             char* tmp = (char*)GET_STRING(val);
             (void)strncpy((char*)addr, tmp, _numElems);
@@ -1060,7 +1060,7 @@ Ob* CharArray::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
         return CArray::sSet(ctxt, base, val, path, pindex);
 }
 
-Ob* CharArray::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CharArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CharArray);
     PROTECT(ctxt);
     PROTECT(occtxt);
@@ -1070,7 +1070,7 @@ Ob* CharArray::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
     PROTECT(selfTag);
 
     if ((chck = occtxt->getKey(selfTag)) == ABSENT) {
-        Word32 addr = base + _offset;
+        uint32_t addr = base + _offset;
         if (VALID_ADDR(addr)) {
             Ob* rslt = RBLstring::create((int)_size, (char*)addr);
             PROTECT(rslt);
@@ -1092,22 +1092,22 @@ Ob* CharArray::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
 
 BUILTIN_CLASS(CharArray0) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CharArray, imported);
     OB_FIELD("free-on-gc", CharArray, freeStructOnGC);
-    BIT_FIELD("numElems", CArray, _numElems, BITS(Word16));
+    BIT_FIELD("numElems", CArray, _numElems, BITS(uint16_t));
     OB_FIELD("elemDesc", CArray, _elemDesc);
 }
 
-CharArray0::CharArray0(Word16 cnt, GenericDescriptor* elemd, pExt ext)
+CharArray0::CharArray0(uint16_t cnt, GenericDescriptor* elemd, pExt ext)
     : CharArray(sizeof(CharArray0), CLASS_META(CharArray0),
                 CLASS_SBO(CharArray0), emptyMbox, ext, cnt, elemd) {
     CharArray0::updateCnt();
 }
 
-CharArray0* CharArray0::create(Word16 cnt, GenericDescriptor* elmd) {
+CharArray0* CharArray0::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharArray0), ext);
@@ -1122,7 +1122,7 @@ CharArray0* CharArray0::create() {
     return NEW(loc) CharArray0(0, tmp, ext);
 }
 
-Ob* CharArray0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CharArray0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CharArray);
     PROTECT(ctxt);
     PROTECT(occtxt);
@@ -1132,7 +1132,7 @@ Ob* CharArray0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
     PROTECT(selfTag);
 
     if ((chck = occtxt->getKey(selfTag)) == ABSENT) {
-        Word32 addr = base + _offset;
+        uint32_t addr = base + _offset;
         if (VALID_ADDR(addr)) {
             Ob* rslt = RBLstring::create((char*)addr);
             PROTECT(rslt);
@@ -1154,8 +1154,8 @@ Ob* CharArray0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
 
 BUILTIN_CLASS(CRef) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CRef, imported);
     OB_FIELD("free-on-gc", CRef, freeStructOnGC);
@@ -1211,16 +1211,16 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
     GenericDescriptor* gobj = (GenericDescriptor*)obj;
     if (TYPEP(SELF, obj)) {
         if (VALID_ADDR(gobj->_offset)) {
-            Word32 addr = gobj->absoluteAddress(0);
+            uint32_t addr = gobj->absoluteAddress(0);
             if (VALID_ADDR(addr))
                 cnvArgRetPair.val = addr;
             else {
-                cnvArgRetPair.val = (Word32)-1;
+                cnvArgRetPair.val = (uint32_t)-1;
                 cnvArgRetPair.failp = 1;
             }
         }
         else {
-            cnvArgRetPair.val = (Word32)-1;
+            cnvArgRetPair.val = (uint32_t)-1;
             cnvArgRetPair.failp = 1;
         }
     }
@@ -1229,7 +1229,7 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
             VALID_ADDR(gobj->_offset)
         cnvArgRetPair.val = gobj->_offset;
         else {
-            cnvArgRetPair.val = (Word32)-1;
+            cnvArgRetPair.val = (uint32_t)-1;
             cnvArgRetPair.failp = 1;
         }
     }
@@ -1237,14 +1237,14 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
         cnvArgRetPair.val = 0;
     }
     else {
-        cnvArgRetPair.val = (Word32)-1;
+        cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
 
     return cnvArgRetPair;
 }
 
-Ob* CRef::convertActualRslt(Ctxt* ctxt, Word32 obj) {
+Ob* CRef::convertActualRslt(Ctxt* ctxt, uint32_t obj) {
     if (obj == 0)
         return _desc->nullDescriptor(ctxt);
     else {
@@ -1256,10 +1256,10 @@ Ob* CRef::convertActualRslt(Ctxt* ctxt, Word32 obj) {
     }
 }
 
-Ob* CRef::sDeref(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* CRef::sDeref(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     PROTECT(ctxt);
     PROTECT(path);
-    Word32 bddr = absoluteAddress(base);
+    uint32_t bddr = absoluteAddress(base);
     GenericDescriptor* d =
         ((bddr == 0) ? (GenericDescriptor*)(_desc->nullDescriptor(ctxt))
                      : _desc);
@@ -1270,15 +1270,15 @@ Ob* CRef::sDeref(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
         return (d->oprnSwitch(ctxt, bddr, path, pindex));
 }
 
-Ob* CRef::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
+Ob* CRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
     if (TUPLEP(val)) {
         return sTupleSet(ctxt, base, (Tuple*)val, path, pindex);
     }
     else {
-        Word32 msetval;
+        uint32_t msetval;
 
         if (TYPEP(this, val)) {
-            Word32 msetval = ((GenericDescriptor*)val)->absoluteAddress(0);
+            uint32_t msetval = ((GenericDescriptor*)val)->absoluteAddress(0);
         }
         else if (TYPEP(_desc, val)) {
             msetval = ((GenericDescriptor*)val)->_offset;
@@ -1302,8 +1302,8 @@ Ob* CRef::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
     }
 }
 
-Ob* CRef::nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path, int pindex) {
-    Word32 newbase = base + (i * _size);
+Ob* CRef::nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path, int pindex) {
+    uint32_t newbase = base + (i * _size);
     if (NULLP(path, pindex)) {
         return sBox(newbase + _offset);
     }
@@ -1313,7 +1313,7 @@ Ob* CRef::nthBase(Ctxt* ctxt, Word32 base, int i, Tuple* path, int pindex) {
     }
 }
 
-Ob* CRef::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CRef::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CRef);
     PROTECT(ctxt);
     PROTECT(occtxt);
@@ -1322,7 +1322,7 @@ Ob* CRef::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
     Ob* selfTag = makeOCTag(SELF, base + SELF->_offset);
     PROTECT(selfTag);
 
-    Word32 addr = SELF->absoluteAddress(base);
+    uint32_t addr = SELF->absoluteAddress(base);
 
     // Note: must check for nullness first.
 
@@ -1353,8 +1353,8 @@ Ob* CRef::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
 
 BUILTIN_CLASS(CharRef) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CharRef, imported);
     OB_FIELD("free-on-gc", CharRef, freeStructOnGC);
@@ -1388,7 +1388,7 @@ CharRef* CharRef::create() {
     return NEW(loc) CharRef(tmp, ext);
 }
 
-Ob* CharRef::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
+Ob* CharRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
     PROTECT_THIS(CharRef);
     PROTECT(ctxt);
     PROTECT(val);
@@ -1396,7 +1396,7 @@ Ob* CharRef::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
     if (STRINGP(val)) {
         RBLstring* stmp = (RBLstring*)val;
         char* saddr = new char[stmp->numberOfBytes()];
-        Word32 prev = SELF->absoluteAddress(base);
+        uint32_t prev = SELF->absoluteAddress(base);
 
 #ifdef MEMORYCAUTIOUS
         if (VALID_ADDR(prev))
@@ -1404,7 +1404,7 @@ Ob* CharRef::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
 #endif
 
         (void)strcpy((char*)saddr, (GET_STRING(val)));
-        SELF->setAddrContents(base, (Word32)saddr);
+        SELF->setAddrContents(base, (uint32_t)saddr);
         return NIV;
     }
     else
@@ -1424,24 +1424,24 @@ convertArgReturnPair CharRef::convertActualArg(Ctxt* ctxt, Ob* arg) {
             cnvArgRetPair.val = obj->_offset;
         }
         else {
-            cnvArgRetPair.val = (Word32)-1;
+            cnvArgRetPair.val = (uint32_t)-1;
             cnvArgRetPair.failp = 1;
         }
     }
     else if (STRINGP(obj)) {
-        cnvArgRetPair.val = (Word32)(GET_STRING(obj));
+        cnvArgRetPair.val = (uint32_t)(GET_STRING(obj));
     }
     else if (IS_FIXNUM(obj)) {
-        cnvArgRetPair.val = (Word32)(PRE_FIXNUM_TO_ADDR((FIXVAL(obj))));
+        cnvArgRetPair.val = (uint32_t)(PRE_FIXNUM_TO_ADDR((FIXVAL(obj))));
     }
     else if (IS_A(obj, ByteVec)) {
-        cnvArgRetPair.val = (Word32)((char*)&(((ByteVec*)obj)->byte(0)));
+        cnvArgRetPair.val = (uint32_t)((char*)&(((ByteVec*)obj)->byte(0)));
     }
     else if (obj->isNullP()) {
         cnvArgRetPair.val = 0;
     }
     else {
-        cnvArgRetPair.val = (Word32)-1;
+        cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
 
@@ -1456,8 +1456,8 @@ convertArgReturnPair CharRef::convertActualArg(Ctxt* ctxt, Ob* arg) {
 
 BUILTIN_CLASS(CRef0) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CRef0, imported);
     OB_FIELD("free-on-gc", CRef0, freeStructOnGC);
@@ -1492,7 +1492,7 @@ CRef0* CRef0::create() {
     return NEW(loc) CRef0(tmp, ext);
 }
 
-Ob* CRef0::sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* CRef0::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     if (NULLP(path, pindex)) {
         return flatten(ctxt, base, makeOccursCheckTable());
     }
@@ -1500,7 +1500,7 @@ Ob* CRef0::sGet(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
         return runtimeError(ctxt, "cannot access ", path);
 }
 
-Ob* CRef0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CRef0);
     PROTECT(ctxt);
     PROTECT(occtxt);
@@ -1510,20 +1510,20 @@ Ob* CRef0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
     // Ob* selfTag = makeOCTag( SELF, base );
     PROTECT(selfTag);
     if ((chck = occtxt->getKey(selfTag)) == ABSENT) {
-        Word32 addr = SELF->absoluteAddress(base);
+        uint32_t addr = SELF->absoluteAddress(base);
         if (addr == 0) {
             Ob* rslt = SELF->_desc->nullDescriptor(ctxt);
             PROTECT(rslt);
             occtxt->addKey(selfTag, rslt);
         }
         else {
-            Word32 skip = sizeof(SELF->_desc);
+            uint32_t skip = sizeof(SELF->_desc);
             Tuple* rslt = NIL;
             PROTECT(rslt);
             occtxt->addKey(selfTag, rslt);
             GenericDescriptor* itr = SELF->_desc;
             Ob* tmp = itr->flatten(ctxt, addr, occtxt);
-            Word32 iddr = addr + skip;
+            uint32_t iddr = addr + skip;
             PROTECT(tmp);
             for (; !(ISNULLP(tmp)); iddr = iddr + skip) {
                 rslt = ::rcons(rslt, tmp);
@@ -1545,8 +1545,8 @@ Ob* CRef0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
 
 BUILTIN_CLASS(CharRef0) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CharRef0, imported);
     OB_FIELD("free-on-gc", CharRef0, freeStructOnGC);
@@ -1565,12 +1565,12 @@ CharRef0* CharRef0::create() {
     return NEW(loc) CharRef0(ext);
 }
 
-Ob* CharRef0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CharRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CharRef0);
     PROTECT(ctxt);
     PROTECT(occtxt);
 
-    Word32 addr = SELF->absoluteAddress(base);
+    uint32_t addr = SELF->absoluteAddress(base);
     if (addr == 0) {
         return (obChar->nullDescriptor(ctxt));
     }
@@ -1583,19 +1583,19 @@ Ob* CharRef0::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
     }
 }
 
-Ob* CharRef0::sSet(Ctxt* ctxt, Word32 base, Ob* val, Tuple* path, int pindex) {
+Ob* CharRef0::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
     if (STRINGP(val)) {
         int valsize = strlen(GET_STRING(val));
         char* tmp = new char[valsize];
 
-        Word32 addr = absoluteAddress(base);
+        uint32_t addr = absoluteAddress(base);
 #ifdef MEMORYCAUTIOUS
         (void)free((char*)addr);
 #endif
 
         (void)strcpy(tmp, GET_STRING(val));
 
-        setAddrContents(base, (Word32)tmp);
+        setAddrContents(base, (uint32_t)tmp);
 
         return NIV;
     }
@@ -1608,7 +1608,7 @@ convertArgReturnPair CharRef0::convertActualArg(Ctxt* ctxt, Ob* arg) {
     cnvArgRetPair.failp = 0;
 
     if (STRINGP(obj)) {
-        cnvArgRetPair.val = (Word32)(GET_STRING(obj));
+        cnvArgRetPair.val = (uint32_t)(GET_STRING(obj));
     }
     else
         return CRef::convertActualArg(ctxt, arg);
@@ -1624,8 +1624,8 @@ convertArgReturnPair CharRef0::convertActualArg(Ctxt* ctxt, Ob* arg) {
 
 BUILTIN_CLASS(CUnion) {
     ADDR_FIELD("offset!", GenericDescriptor, _offset);
-    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(Word32));
-    BIT_FIELD("size!", GenericDescriptor, _size, BITS(Word32));
+    BIT_FIELD("align-to!", GenericDescriptor, _align_to, BITS(uint32_t));
+    BIT_FIELD("size!", GenericDescriptor, _size, BITS(uint32_t));
     OB_FIELD("mnemonic", GenericDescriptor, mnemonic);
     OB_FIELD("imported", CUnion, imported);
     OB_FIELD("free-on-gc", CUnion, freeStructOnGC);
@@ -1677,7 +1677,7 @@ void CUnion::traversePtrs(V__PSOb f) {
     useIfPtr(_fieldNames, f);
 }
 
-Ob* CUnion::select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
+Ob* CUnion::select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     // Needs protection code.
     PROTECT_THIS(CUnion);
     PROTECT(ctxt);
@@ -1703,7 +1703,7 @@ Ob* CUnion::select(Ctxt* ctxt, Word32 base, Tuple* path, int pindex) {
     }
 }
 
-Ob* CUnion::flatten(Ctxt* ctxt, Word32 base, RblTable* occtxt) {
+Ob* CUnion::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     PROTECT_THIS(CUnion);
     PROTECT(ctxt);
     PROTECT(occtxt);

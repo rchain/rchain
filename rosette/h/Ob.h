@@ -52,16 +52,7 @@
 #endif
 #endif
 
-#ifdef __GNUG__
-#include <stdint.h>
-typedef uint8_t Byte;
-typedef uint16_t Word16;
-typedef uint32_t Word32;
-#else
-typedef unsigned char Byte;
-typedef unsigned short Word16;
-typedef unsigned long Word32;
-#endif
+ #include <stdint.h>
 
 #if !defined(HAS_BOOL)
 typedef int bool;
@@ -480,7 +471,7 @@ inline HeaderBits::HeaderBits(int sz) {
 }
 
 struct convertArgReturnPair {
-    Word32 val;
+    uint32_t val;
     int failp;
 };
 
@@ -535,7 +526,7 @@ extern convertArgReturnPair cnvArgRetPair;
 class Base {
    public:
     static char** classNames;
-    static Word32* obCounts;
+    static uint32_t* obCounts;
     static int nClasses;
 
     Base(EMPTY);
@@ -651,7 +642,7 @@ class Ob : public Base {
     virtual pOb getAddr(int, int, int);
     virtual pOb setAddr(int, int, int, pOb);
     virtual pOb getField(int, int, int, int, int);
-    virtual pOb setField(int, int, int, int, Word32);
+    virtual pOb setField(int, int, int, int, uint32_t);
     virtual pOb indexedSize(EMPTY);
     virtual pOb nth(int);
     virtual pOb setNth(int, pOb);
@@ -678,7 +669,7 @@ class Ob : public Base {
     virtual bool matches(pCtxt);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 
     virtual pOb isNullP(EMPTY);
 

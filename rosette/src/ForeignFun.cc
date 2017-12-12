@@ -177,7 +177,7 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     PROTECT(ctxt);
     ForeignFunction* KONST __PRIM__ = this;
     Ctxt* KONST __CTXT__ = ctxt;
-    Word32 x[32];
+    uint32_t x[32];
     KONST int n = argConverters->numberOfElements();
     int i = 0;
     long res;

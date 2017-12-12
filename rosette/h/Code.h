@@ -67,7 +67,7 @@ class CodeBuf : public Ob {
     void emitE1(unsigned);
     void emitE2(unsigned, unsigned);
 
-    void patchAddress(int, Word16);
+    void patchAddress(int, uint16_t);
 
     int size();
     void clear();

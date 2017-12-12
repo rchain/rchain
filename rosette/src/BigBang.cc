@@ -107,7 +107,7 @@ CUnion* obCUnion = (CUnion*)INVALID;
 
 int BuiltinClass::nClasses = 0;
 BuiltinClass* BuiltinClass::root = 0;
-Word32* BuiltinClass::counts = 0;
+uint32_t* BuiltinClass::counts = 0;
 char** BuiltinClass::names = 0;
 
 
@@ -121,10 +121,10 @@ BuiltinClass::BuiltinClass(char* nm, pMeta* cmeta, pSBO* csbo, FIELD_FN ffn)
     root = this;
 }
 
-Word32* Base::obCounts = 0;
+uint32_t* Base::obCounts = 0;
 char** Base::classNames = {0};
 void BuiltinClass::allocBuiltinClasses() {
-    counts = new Word32[nClasses];
+    counts = new uint32_t[nClasses];
     names = new char*[nClasses];
     for (int i = 0; i < nClasses; i++) {
         counts[i] = 0;

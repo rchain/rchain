@@ -39,8 +39,8 @@
 #define SPANSIZE00(n) ((n) == 0 ? (1 << BitField00SpanSize) : (n))
 
 #ifdef MAP_BACK_ADDRESS
-Word32 nontrivial_pre_fixnum_to_addr(int x) {
-    Word32 y = x;
+uint32_t nontrivial_pre_fixnum_to_addr(int x) {
+    uint32_t y = x;
     if (x < END_SMALL_ADDR)
         return y;
     if (x >= END_SMALL_ADDR)
@@ -253,7 +253,7 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
                                 GET_ADDRVAR_OFFSET(loc), val);
     case LT_BitField:
         if (IS_FIXNUM(val)) {
-            Word32 bits = (Word32)FIXVAL(val);
+            uint32_t bits = (uint32_t)FIXVAL(val);
             return BASE(v)->setField(GET_BITFIELD_IND(loc),
                                      GET_BITFIELD_LEVEL(loc),
                                      GET_BITFIELD_OFFSET(loc),
@@ -265,7 +265,7 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
         }
     case LT_BitField00:
         if (IS_FIXNUM(val)) {
-            Word32 bits = (Word32)FIXVAL(val);
+            uint32_t bits = (uint32_t)FIXVAL(val);
             return BASE(v)->setField(0, 0, GET_BITFIELD00_OFFSET(loc),
                                      SPANSIZE(GET_BITFIELD00_SPAN(loc)), bits);
         }

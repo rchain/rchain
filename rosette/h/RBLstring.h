@@ -56,7 +56,7 @@ class RBLstring : public ByteVec {
     Ob* subObject(int, int);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 };
 
 #endif

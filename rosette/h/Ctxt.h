@@ -53,9 +53,9 @@ class Ctxt : public MboxOb {
 
    public:
     Location tag;
-    Byte nargs;
-    Byte outstanding;
-    Word16 pc;
+    uint8_t nargs;
+    uint8_t outstanding;
+    uint16_t pc;
 
     // Additions to or deletions from the following list must
     // be reflected in the definition of NumberOfCtxtRegs.

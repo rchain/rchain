@@ -201,7 +201,7 @@ void CodeBuf::emitE2(unsigned op0, unsigned op1) {
     }
 }
 
-void CodeBuf::patchAddress(int wordAddress, Word16 realAddress) {
+void CodeBuf::patchAddress(int wordAddress, uint16_t realAddress) {
     Instr* pc = codevec->absolutize(wordAddress);
     SET_OP_f6_pc((*pc), realAddress);
 }
@@ -370,7 +370,7 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opApplyPrimTag | NextOff | UnwindOn:
     case opApplyPrimTag | NextOn | UnwindOff:
     case opApplyPrimTag | NextOn | UnwindOn: {
-        Word16 extension = (*pc++).word;
+        uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
         if (prim_num == 255)
             prim_num = OP_e1_op0((*pc++));
@@ -387,7 +387,7 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opApplyPrimArg | NextOff | UnwindOn:
     case opApplyPrimArg | NextOn | UnwindOff:
     case opApplyPrimArg | NextOn | UnwindOn: {
-        Word16 extension = (*pc++).word;
+        uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
         if (prim_num == 255)
             prim_num = OP_e1_op0((*pc++));
@@ -404,7 +404,7 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opApplyPrimReg | NextOff | UnwindOn:
     case opApplyPrimReg | NextOn | UnwindOff:
     case opApplyPrimReg | NextOn | UnwindOn: {
-        Word16 extension = (*pc++).word;
+        uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
         if (prim_num == 255)
             prim_num = OP_e1_op0((*pc++));
@@ -421,7 +421,7 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opApplyCmd | NextOff | UnwindOn:
     case opApplyCmd | NextOn | UnwindOff:
     case opApplyCmd | NextOn | UnwindOn: {
-        Word16 extension = (*pc++).word;
+        uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
         if (prim_num == 255)
             prim_num = OP_e1_op0((*pc++));
