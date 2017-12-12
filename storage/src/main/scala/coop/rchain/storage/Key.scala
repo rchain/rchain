@@ -133,7 +133,6 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
 
   def compare(key: Key): Int = {
     var returnVal = 0
-    var returnValSet = false
 
     if (term == key.term) {
       0
@@ -144,31 +143,27 @@ class Key(keyIn: String) extends TermTree with Ordered[Key] {
     } else {
       val length = math.min(term.length, key.term.length)
       var i = 0
-      while (i < length && !returnValSet) {
+      while (i < length && returnVal == 0) {
         if (term(i) != key.term(i)) {
           // check if term(i) is letter and key.term(i) is digit or vice-versa
           if (Character.isLetter(term(i))
               && Character.isDigit(key.term(i))) {
             returnVal = -1
-            returnValSet = true
           } else if (Character.isDigit(term(i))
                      && Character.isLetter(key.term(i))) {
             returnVal = 1
-            returnValSet = true
           } else {
             if (term(i) < key.term(i)) {
               returnVal = -1
-              returnValSet = true
             } else if (term(i) > key.term(i)) {
               returnVal = 1
-              returnValSet = true
             }
           }
         }
         i += 1
       }
 
-      if (returnValSet) {
+      if (returnVal != 0) {
         returnVal
       } else {
         assert(term.length != key.term.length)
