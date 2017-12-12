@@ -26,6 +26,11 @@ case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 object Main {
   val logger = Logger("main")
 
+  /*
+   * Duration (in ms) to pause between successive queries for more peers.
+   */
+  val pauseTime = 5000L
+
   def whoami: Option[InetAddress] = {
     val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
     val addresses = ifaces
@@ -77,7 +82,7 @@ object Main {
 
     var lastCount = 0
     while (true) {
-      Thread.sleep(5000)
+      Thread.sleep(pauseTime)
       for (peer <- net.net.findMorePeers(10)) {
         logger.info(s"Possibly new peer: $peer.")
         net.connect(peer)

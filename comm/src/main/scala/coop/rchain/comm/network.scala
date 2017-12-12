@@ -73,10 +73,15 @@ case class UnicastNetwork(id: NodeIdentifier,
       var i = 0
       while (currentSet.size > 0 && potentials.size < limit && i < dists.size) {
         val dist = dists(i)
-        val target = id.key.to[mutable.ArrayBuffer]
-        val bno = dist / 8
-        val mask = 1 << (dist % 8)
-        target(bno) = (target(bno) ^ mask).toByte // A key at a distance dist from me
+        /*
+         * The general idea is to ask a peer for its peers around a certain
+         * distance from our own key. So, construct a key that first differs
+         * from ours at bit position dist.
+         */
+        val target = id.key.to[mutable.ArrayBuffer] // Our key
+        val byteIndex = dist / 8
+        val differentBit = 1 << (dist % 8)
+        target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
         currentSet.head.lookup(target) match {
           case Success(results) =>
             potentials ++= results.filter(r =>

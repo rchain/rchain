@@ -88,7 +88,7 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
           case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))
           case _          => Success(Seq())
         }
-      case Right(other) => Failure(new Exception("unaexpected response"))
+      case Right(other) => Failure(new Exception("unexpected response"))
       case Left(ex) =>
         ex match {
           case ProtocolException(exc) => Failure(exc)
