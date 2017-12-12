@@ -12,7 +12,8 @@ lazy val root = (project in file(".")).
     // set the main Scala source directory to be <base>/src
     scalaSource in Compile := baseDirectory.value / "src",
     // set the Scala test source directory to be <base>/test
-    scalaSource in Test := baseDirectory.value / "test",
+    // I had to comment out the following to get scalatest suites to run
+    // scalaSource in Test := baseDirectory.value / "test",
 
     excludeFilter in unmanagedSources := "*perf*",
 
@@ -33,17 +34,14 @@ lazy val root = (project in file(".")).
     libraryDependencies += "org.hamcrest" % "hamcrest-all" % "1.3" % "test",
     // https://mvnrepository.com/artifact/com.google.guava/guava
     // Date: Aug 04, 2017
-    libraryDependencies += "com.google.guava" % "guava" % "23.0"
+    libraryDependencies += "com.google.guava" % "guava" % "23.0",
     // http://www.scalatest.org/install
     // Date: Oct 10, 2017
-    // libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.1"
-    // libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+    libraryDependencies += "org.scalatest" % "scalatest_2.12" % "3.0.4",
 
-    // http://www.scalatest.org/install
-    // http://www.scalatest.org/supersafe
-    // Date: 0ct 10, 2017
-    // addSbtPlugin("com.artima.supersafe" % "sbtplugin" % "1.1.2")
+    connectInput in run := true,
+
+    logBuffered in Test := false
   )
 
-connectInput in run := true
 

@@ -17,9 +17,9 @@ object Main {
       UniTests.interactive(arg)
        */
 
-      UniTests.tests()
-      StorageTests.tests()
-      LmdbTests.tests()
+      // UniTests.tests()
+      // StorageTests.tests()
+      // LmdbTests.tests()
     } catch {
       case e: Throwable => {
         println("main(): " + e)

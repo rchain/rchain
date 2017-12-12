@@ -7,25 +7,14 @@
 
 package coop.rchain.storage
 
+import java.io.File
+import org.scalatest._
+
 // TODO: add timings to tests (get and put)
 
-object StorageTests {
+class StorageTests extends FlatSpec with Matchers {
 
-  def tests(): Unit = {
-
-    println("StorageTests.tests() begin")
-
-    loadFiles()
-
-    putGetDupSort()
-
-    println("StorageTests.tests() end")
-  }
-
-  def putGetDupSort(): Unit = {
-
-    println("putGetDupSort() begin")
-
+  "Storage with keys that are ints and strings are associated with multiple values" should "retrieve the expected values" in {
     val dirName: Option[String] = Some("storageGetDupSortDb")
     val name: Option[String] = Some("storageGetDupSort")
 
@@ -38,49 +27,39 @@ object StorageTests {
     assert(storConf.isValid())
 
     var storage = new Storage(storConf)
-    storage.deleteFiles()
 
     try {
       storage.put(1, 2)
       val getInt = storage.getInts(1)
-      assert(getInt.get(0) == 2)
+      assert(getInt.get.contains(2))
 
       storage.put(3, 4)
       storage.put(3, 5)
       val getInts = storage.getInts(3)
-      assert(getInts.get(0) == 4)
-      assert(getInts.get(1) == 5)
-
-      storage.put(10L, 20L)
-      // val getInt = lmdb.getLongLongs(10L)
-      // assert(getInt.get(0) == 2)
+      assert(getInts.get.contains(4))
+      assert(getInts.get.contains(5))
 
       storage.put("a", "b")
       val getStr = storage.getStrings("a")
       val str = getStr.get(0)
-      assert(str == "b")
+      assert(getStr.get.contains("b"))
 
       storage.put("c", "d")
       storage.put("c", "e")
       val getStrs = storage.getStrings("c")
-      assert(getStrs.get(0) == "d")
-      assert(getStrs.get(1) == "e")
+      assert(getStrs.get.contains("d"))
+      assert(getStrs.get.contains("e"))
     } catch {
       case e: Throwable => {
-        println("putGetDupSort(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
     }
-
-    println("putGetDupSort() end")
   }
 
-  def loadFiles(): Unit = {
-
-    println("loadFile() begin")
-
+  "Storage" should "load files and retrieve expected values" in {
     val basePath = System.getProperty("user.dir") +
       "/src/test/scala/coop/rchain/storage/stores/"
     val storeFlat = basePath + "storeFlat.txt"
@@ -99,32 +78,26 @@ object StorageTests {
 
     try {
 
-      storage.loadFile(storeFlat, true)
-      storage.loadFile(storeNested, true)
-      storage.loadFile(storeRecursive, true)
+      storage.loadFile(storeFlat)
+      storage.loadFile(storeNested)
+      storage.loadFile(storeRecursive)
 
       val itr = storage.uniKeys
       while (itr.hasNext) {
         val k = itr.next
         val strKey = k.term
         val valuesArray = storage.getStrings(strKey)
-        if (valuesArray.isDefined) {
-          for (strValue <- valuesArray.get) {
-            println(s"${k.term} -> $strValue")
-          }
-        } else {
-          println(s"${k.term}: no value found")
+        if (valuesArray.isEmpty) {
+          fail(s"${k.term}: no value found")
         }
       }
     } catch {
       case e: Throwable => {
-        println("simpleTest(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
     }
-
-    println("loadFile() end")
   }
 }
