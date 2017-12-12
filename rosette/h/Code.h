@@ -36,132 +36,102 @@
 #include "Ob.h"
 #include "Opcode.h"
 #include "Tuple.h"
-
+
 static const int DefaultCodeVecSize = 32;
 
 
-class CodeBuf : public Ob
-{
+class CodeBuf : public Ob {
     STD_DECLS(CodeBuf);
 
-  protected:
+   protected:
+    void growCodevec(int = DefaultCodeVecSize);
+    void deposit(Instr);
 
-    void	growCodevec (int = DefaultCodeVecSize);
-    void	deposit (Instr);
+    CodeBuf();
 
-    CodeBuf ();
+   public:
+    CodeVec* codevec;
+    Ob* pc;
 
-  public:
+    static CodeBuf* create();
 
-    CodeVec*	codevec;
-    Ob*		pc;
+    void emitF0(Opcode, unsigned = 0);
+    void emitF1(Opcode, unsigned, unsigned);
+    void emitF2(Opcode, unsigned, unsigned);
+    void emitF3(Opcode, unsigned, unsigned, unsigned);
+    void emitF4(Opcode, unsigned, unsigned, unsigned, unsigned);
+    void emitF5(Opcode, unsigned, unsigned, unsigned = 0);
+    void emitF6(Opcode, unsigned);
+    void emitF7(Opcode, unsigned, unsigned, unsigned, unsigned);
+    void emitE0(unsigned, unsigned);
+    void emitE1(unsigned);
+    void emitE2(unsigned, unsigned);
 
-    static CodeBuf* create ();
+    void patchAddress(int, Word16);
 
-    void	emitF0 (Opcode, unsigned = 0);
-    void	emitF1 (Opcode, unsigned, unsigned);
-    void	emitF2 (Opcode, unsigned, unsigned);
-    void	emitF3 (Opcode, unsigned, unsigned, unsigned);
-    void	emitF4 (Opcode, unsigned, unsigned, unsigned, unsigned);
-    void	emitF5 (Opcode, unsigned, unsigned, unsigned = 0);
-    void	emitF6 (Opcode, unsigned);
-    void	emitF7 (Opcode, unsigned, unsigned, unsigned, unsigned);
-    void	emitE0 (unsigned, unsigned);
-    void	emitE1 (unsigned);
-    void	emitE2 (unsigned, unsigned);
-
-    void	patchAddress (int, Word16);
-
-    int		size ();
-    void	clear ();
-    CodeVec*	finish ();
+    int size();
+    void clear();
+    CodeVec* finish();
 };
 
 
-inline
-int
-CodeBuf::size ()
-{
-    return FIXVAL(pc);
-}
+inline int CodeBuf::size() { return FIXVAL(pc); }
 
 
-
-class CodeVec : public Word16Vec
-{
+class CodeVec : public Word16Vec {
     STD_DECLS(CodeVec);
 
-  protected:
+   protected:
+    CodeVec(int);
 
-    CodeVec (int);
+   public:
+    static CodeVec* create(int);
 
-  public:
-
-    static CodeVec* create (int);
-
-    Instr&	instr (int);
-    Instr*	dumpInstr (Instr*, char*, Code*);
-    void	dumpOn (FILE*, Code*);
-    int		relativize (Instr*);
-    Instr*	absolutize (int);
+    Instr& instr(int);
+    Instr* dumpInstr(Instr*, char*, Code*);
+    void dumpOn(FILE*, Code*);
+    int relativize(Instr*);
+    Instr* absolutize(int);
 };
 
 
-inline Instr& CodeVec::instr (int n)		{ Instr* p = (Instr*)&word(0); return p[n]; }
-inline int    CodeVec::relativize (Instr* pc)	{ return pc - &instr(0); }
-inline Instr* CodeVec::absolutize (int pc)	{ return &instr(pc); }
+inline Instr& CodeVec::instr(int n) {
+    Instr* p = (Instr*)&word(0);
+    return p[n];
+}
+inline int CodeVec::relativize(Instr* pc) { return pc - &instr(0); }
+inline Instr* CodeVec::absolutize(int pc) { return &instr(pc); }
 
 
-
-
-
-class Code : public Ob
-{
+class Code : public Ob {
     STD_DECLS(Code);
 
-  protected:
+   protected:
+    Code(CodeVec*, Tuple*);
 
-    Code (CodeVec*, Tuple*);
+   public:
+    CodeVec* codevec;
+    Tuple* litvec;
 
-  public:
+    static Code* create(CodeVec*, Tuple*);
+    static Code* create(CodeBuf*, Tuple*);
 
-    CodeVec*	codevec;
-    Tuple*	litvec;
+    Instr* dumpInstr(Instr*, char*);
+    void dumpOn(FILE*);
 
-    static Code* create (CodeVec*, Tuple*);
-    static Code* create (CodeBuf*, Tuple*);
-
-    Instr*	dumpInstr (Instr*, char*);
-    void	dumpOn (FILE*);
-
-    Ob*		lit (int);
-    int		relativize (Instr*);
-    Instr*	absolutize (int);
-    Ob*		associatedSource ();
+    Ob* lit(int);
+    int relativize(Instr*);
+    Instr* absolutize(int);
+    Ob* associatedSource();
 };
 
 
-inline
-int
-Code::relativize (Instr* pc)
-{
-    return codevec->relativize(pc);
-}
+inline int Code::relativize(Instr* pc) { return codevec->relativize(pc); }
 
 
-inline
-Instr*
-Code::absolutize (int pc)
-{
-    return codevec->absolutize(pc);
-}
+inline Instr* Code::absolutize(int pc) { return codevec->absolutize(pc); }
 
 
-inline
-Ob*
-Code::lit (int n)
-{
-    return( litvec->elem(n) );
-}
+inline Ob* Code::lit(int n) { return (litvec->elem(n)); }
 
 #endif

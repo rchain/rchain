@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/src/rosh-config.cc,v 1.1.1.1 1993/02/12 01:25:51 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/src/rosh-config.cc,v 1.1.1.1
+1993/02/12 01:25:51 tomlic Exp $
  *
  * $Log: rosh-config.cc,v $
 // Revision 1.1.1.1  1993/02/12  01:25:51  tomlic
@@ -27,16 +28,15 @@
 
 #ifndef __RCS_ID__
 #define __RCS_ID__
-static const char *rcsid = "$Header: /mcc/project/carnot/root/master/pub-ess/src/rosh-config.cc,v 1.1.1.1 1993/02/12 01:25:51 tomlic Exp $";
+static const char *rcsid =
+    "$Header: /mcc/project/carnot/root/master/pub-ess/src/rosh-config.cc,v "
+    "1.1.1.1 1993/02/12 01:25:51 tomlic Exp $";
 #endif
 
 extern "C" {
-  void force_unix_load ();
+void force_unix_load();
 };
 
 extern "C" {
-void configuration_force_load()
-{
-  force_unix_load();
-}
+void configuration_force_load() { force_unix_load(); }
 }

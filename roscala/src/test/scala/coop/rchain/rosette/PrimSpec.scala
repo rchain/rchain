@@ -20,7 +20,6 @@ class PrimSpec extends FlatSpec with Matchers {
     selfEnv = null,
     rcvr = null,
     monitor = null,
-    _slot = null
   )
 
   "fxPlus" should "correctly add numbers" in {

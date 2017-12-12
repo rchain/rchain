@@ -32,17 +32,17 @@
 
 #include "rosette.h"
 
-extern unsigned	SurvivorSpaceSize;
-extern unsigned	InfantSpaceSize;
-extern unsigned	OldSpaceChunkSize;
+extern unsigned SurvivorSpaceSize;
+extern unsigned InfantSpaceSize;
+extern unsigned OldSpaceChunkSize;
 
-extern int	TenuringAge;
-extern int	ParanoidAboutGC;
-extern char	BootDirectory[];
-extern char	BootFile[];
-extern int	RestoringImage;
-extern char*	DefaultBootDirectory;
+extern int TenuringAge;
+extern int ParanoidAboutGC;
+extern char BootDirectory[];
+extern char BootFile[];
+extern int RestoringImage;
+extern char* DefaultBootDirectory;
 
-extern int	ParseCommandLine (int, char**);
+extern int ParseCommandLine(int, char**);
 
 #endif

@@ -36,21 +36,18 @@
 #include "Tuple.h"
 
 
-class MIActor : public Actor
-{
+class MIActor : public Actor {
     STD_DECLS(MIActor);
 
-  protected:
+   protected:
+    MIActor(pExt);
 
-    MIActor (pExt);
-
-  public:
-
-    static MIActor*	create (Tuple*);
-    Tuple*              classPrecedenceList();
-    virtual Ob*		lookup (Ob*, Ctxt*);
-    virtual bool        hasParentp (pOb);
-    virtual pOb         typeLub (pOb);
+   public:
+    static MIActor* create(Tuple*);
+    Tuple* classPrecedenceList();
+    virtual Ob* lookup(Ob*, Ctxt*);
+    virtual bool hasParentp(pOb);
+    virtual pOb typeLub(pOb);
 };
 
 
@@ -58,33 +55,27 @@ static const int MI_CPL_SLOT = 0;
 
 static const int BUILTIN_MI_SLOTS = 1;
 
-inline Tuple*
-MIActor::classPrecedenceList()
-{
-  return (Tuple*) extension->slot(MI_CPL_SLOT);
+inline Tuple* MIActor::classPrecedenceList() {
+    return (Tuple*)extension->slot(MI_CPL_SLOT);
 }
 
 
-
-class ProductType : public Actor
-{
+class ProductType : public Actor {
     STD_DECLS(ProductType);
 
-  protected:
+   protected:
+    ProductType(pExt);
 
-    ProductType (pExt);
-
-  public:
-
-    static ProductType*	create (Tuple*, pOb);
-    virtual bool        isCoveredByp (pOb);
-    virtual pOb         typeLub (pOb);
-    pOb                 star ();
-    Tuple*              definite ();
-    int                 numberOfElements ();
-    pOb                 elem (int);
-    pOb                 elemR (int);
-    virtual bool        typeMatchesp (pOb);
+   public:
+    static ProductType* create(Tuple*, pOb);
+    virtual bool isCoveredByp(pOb);
+    virtual pOb typeLub(pOb);
+    pOb star();
+    Tuple* definite();
+    int numberOfElements();
+    pOb elem(int);
+    pOb elemR(int);
+    virtual bool typeMatchesp(pOb);
 };
 
 
@@ -93,60 +84,42 @@ static const int PROD_REST_TYPE_SLOT = 1;
 
 static const int BUILTIN_ProductType_SLOTS = 2;
 
-inline pOb
-ProductType::star ()
-{
-  return extension->slot(PROD_REST_TYPE_SLOT);
+inline pOb ProductType::star() { return extension->slot(PROD_REST_TYPE_SLOT); }
+
+inline Tuple* ProductType::definite() {
+    return (Tuple*)(extension->slot(PROD_TYPE_TEMPLATE_SLOT));
 }
 
-inline Tuple*
-ProductType::definite ()
-{
-  return (Tuple*)(extension->slot(PROD_TYPE_TEMPLATE_SLOT));
+inline int ProductType::numberOfElements() {
+    return definite()->numberOfElements();
 }
 
-inline int
-ProductType::numberOfElements ()
-{
-  return definite()->numberOfElements();
-}
+inline pOb ProductType::elem(int i) { return definite()->elem(i); }
 
-inline pOb
-ProductType::elem (int i)
-{
-  return definite()->elem(i);
-}
-
-inline pOb
-ProductType::elemR (int i)
-{
-  if (i < definite()->numberOfElements())
-    return elem(i);
-  else
-    return star();
+inline pOb ProductType::elemR(int i) {
+    if (i < definite()->numberOfElements())
+        return elem(i);
+    else
+        return star();
 }
 
 
-
-class SumType : public Actor
-{
+class SumType : public Actor {
     STD_DECLS(SumType);
 
-  protected:
+   protected:
+    SumType(pExt);
 
-    SumType (pExt);
-
-  public:
-
-    static SumType*	create (Tuple*);
-    Tuple*              types ();
-    pOb                 elem (int);
-    int                 numberOfElements ();
-    virtual bool        compositeCoversp (pOb);
-    virtual bool        isCoveredByp (pOb);
-    pOb                 dominator ();
-    virtual pOb         typeLub (pOb);
-    pOb                 normalize ();
+   public:
+    static SumType* create(Tuple*);
+    Tuple* types();
+    pOb elem(int);
+    int numberOfElements();
+    virtual bool compositeCoversp(pOb);
+    virtual bool isCoveredByp(pOb);
+    pOb dominator();
+    virtual pOb typeLub(pOb);
+    pOb normalize();
 };
 
 
@@ -154,41 +127,27 @@ static const int SUM_TYPE_TYPES_SLOT = 0;
 
 static const int BUILTIN_SumType_SLOTS = 1;
 
-inline Tuple*
-SumType::types ()
-{
-  return (Tuple*) extension->slot(SUM_TYPE_TYPES_SLOT);
+inline Tuple* SumType::types() {
+    return (Tuple*)extension->slot(SUM_TYPE_TYPES_SLOT);
 }
 
-inline pOb
-SumType::elem (int i)
-{
-  return types()->elem(i);
-}
+inline pOb SumType::elem(int i) { return types()->elem(i); }
 
-inline int
-SumType::numberOfElements ()
-{
-  return types()->numberOfElements();
-}
+inline int SumType::numberOfElements() { return types()->numberOfElements(); }
 
 
-
-class MultiMethod : public Actor
-{
+class MultiMethod : public Actor {
     STD_DECLS(MultiMethod);
 
-  protected:
+   protected:
+    MultiMethod(pExt);
 
-    MultiMethod (pExt);
-
-  public:
-
-    static MultiMethod*	create ();
-    Tuple*              procList ();
-    pOb                 elem (int);
-    int                 numberOfElements ();
-    pOb         matchAndDispatch (pCtxt);
+   public:
+    static MultiMethod* create();
+    Tuple* procList();
+    pOb elem(int);
+    int numberOfElements();
+    pOb matchAndDispatch(pCtxt);
 };
 
 
@@ -196,52 +155,30 @@ static const int MM_PROC_LIST_SLOT = 0;
 
 static const int BUILTIN_MultiMethod_SLOTS = 1;
 
-inline Tuple*
-MultiMethod::procList ()
-{
-  return (Tuple*) extension->slot(MM_PROC_LIST_SLOT);
+inline Tuple* MultiMethod::procList() {
+    return (Tuple*)extension->slot(MM_PROC_LIST_SLOT);
 }
 
-inline pOb
-MultiMethod::elem (int i)
-{
-  return procList()->elem(i);
+inline pOb MultiMethod::elem(int i) { return procList()->elem(i); }
+
+inline int MultiMethod::numberOfElements() {
+    return procList()->numberOfElements();
 }
 
-inline int
-MultiMethod::numberOfElements ()
-{
-  return procList()->numberOfElements();
-}
-
-inline bool
-typeLessEq (pOb x, pOb y)
-{
-  return BASE(y)->coversp(x);
+inline bool typeLessEq(pOb x, pOb y) { return BASE(y)->coversp(x); }
+
+inline bool typeGreaterEq(pOb x, pOb y) { return BASE(x)->coversp(y); }
+
+inline bool typeEq(pOb x, pOb y) {
+    return (BASE(x)->coversp(y) && BASE(y)->coversp(x));
 }
 
-inline bool
-typeGreaterEq (pOb x, pOb y)
-{
-  return BASE(x)->coversp(y);
+inline bool typeLess(pOb x, pOb y) {
+    return (typeLessEq(x, y) && !typeEq(x, y));
 }
 
-inline bool
-typeEq (pOb x, pOb y)
-{
-  return (BASE(x)->coversp(y) && BASE(y)->coversp(x));
-}
-
-inline bool
-typeLess (pOb x, pOb y)
-{
-  return (typeLessEq(x, y) && !typeEq(x, y));
-}
-
-inline bool
-typeGreater (pOb x, pOb y)
-{
-  return (typeGreaterEq(x, y) && !typeEq(x, y));
+inline bool typeGreater(pOb x, pOb y) {
+    return (typeGreaterEq(x, y) && !typeEq(x, y));
 }
 
 #endif

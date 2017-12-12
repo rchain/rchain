@@ -32,53 +32,38 @@
 
 #include "rosette.h"
 
-class ResizeablePtrArray
-{
-  protected:
-    void**	array;
-    int		size;
+class ResizeablePtrArray {
+   protected:
+    void** array;
+    int size;
 
-public:
-    ResizeablePtrArray ();
-    ResizeablePtrArray (int);
-    ~ResizeablePtrArray ();
+   public:
+    ResizeablePtrArray();
+    ResizeablePtrArray(int);
+    ~ResizeablePtrArray();
 
-    int		capacity ();
-  
-    void	resize (int);
-    void	resize ();
+    int capacity();
 
-    void*&	operator [] (int);
+    void resize(int);
+    void resize();
+
+    void*& operator[](int);
 };
 
-inline ResizeablePtrArray::ResizeablePtrArray ()
-{
+inline ResizeablePtrArray::ResizeablePtrArray() {
     array = 0;
     size = 0;
 }
 
-inline ResizeablePtrArray::ResizeablePtrArray (int sz)
-{
-    array = new void* [sz];
+inline ResizeablePtrArray::ResizeablePtrArray(int sz) {
+    array = new void*[sz];
     size = sz;
 }
 
-inline int
-ResizeablePtrArray::capacity ()
-{
-    return size;
-}
+inline int ResizeablePtrArray::capacity() { return size; }
 
-inline void
-ResizeablePtrArray::resize ()
-{
-    resize(2*size);
-}
+inline void ResizeablePtrArray::resize() { resize(2 * size); }
 
-inline void*&
-ResizeablePtrArray::operator [] (int n)
-{
-    return array[n];
-}
+inline void*& ResizeablePtrArray::operator[](int n) { return array[n]; }
 
 #endif

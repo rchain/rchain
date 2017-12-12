@@ -35,15 +35,15 @@
 #include <stdio.h>
 
 extern "C" {
-void suicide (const char* fmt ...);
-void warning (const char* fmt ...);
-void warningx (const char* fmt ...);
+void suicide(const char* fmt...);
+void warning(const char* fmt...);
+void warningx(const char* fmt...);
 };
 
-extern void printLeading (FILE*, int, char = ' ');
-extern const char* numberSuffix (int);
-extern const char* plural (int);
-extern const char* properPrep (char*);
-extern const char* sys_errmsg ();
+extern void printLeading(FILE*, int, char = ' ');
+extern const char* numberSuffix(int);
+extern const char* plural(int);
+extern const char* properPrep(char*);
+extern const char* sys_errmsg();
 
 #endif

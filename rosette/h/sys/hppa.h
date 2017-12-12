@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/hppa.h,v 1.1.1.1 1993/02/12 01:25:03 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/hppa.h,v 1.1.1.1
+ 1993/02/12 01:25:03 tomlic Exp $
  *
  * $Log: hppa.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:03  tomlic
@@ -26,7 +27,7 @@
  @EC */
 
 #include <stdio.h>
-#include <sys/ioctl.h>  
+#include <sys/ioctl.h>
 
 #define OS "hpux"
 #define MACHINE "hp"
@@ -49,22 +50,23 @@ extern char *core_end;
    to receive the io signal when input is available on fd
 */
 
-#define       SET_SIGNAL_IO_DESIRED(result)		\
-do { int ssid_flag = -getpid();				\
-     result = ioctl(fd, SIOCSPGRP, &ssid_flag); } while(0)
+#define SET_SIGNAL_IO_DESIRED(result)              \
+    do {                                           \
+        int ssid_flag = -getpid();                 \
+        result = ioctl(fd, SIOCSPGRP, &ssid_flag); \
+    } while (0)
 
 #define UNEXEC "unexhp9k800.c"
 
 #ifdef c_plusplus
-typedef void (*SIG_PF) (int);
+typedef void (*SIG_PF)(int);
 extern "C" {
-  int set_fd_async(int,int);
-  int getpagesize(void);
-  void *valloc(unsigned int);
-  int getdtablesize();
-  void bzero (char *,int);
-  void bcopy(const char *, char *, int);
-
+int set_fd_async(int, int);
+int getpagesize(void);
+void *valloc(unsigned int);
+int getdtablesize();
+void bzero(char *, int);
+void bcopy(const char *, char *, int);
 };
 #endif
 
@@ -74,10 +76,12 @@ extern "C" {
 
 
 /* the include
-   /usr/include/sys/time.h:     extern int select(size_t, int *, int *, int *, const struct timeval *);
+   /usr/include/sys/time.h:     extern int select(size_t, int *, int *, int *,
+   const struct timeval *);
    does not match the fd_set * ..
-*/   
-#define SELECT(a,b,c,d,e) select(a, (int *)(void *)b,(int *)(void *)c,(int *)(void *)d,e)
+*/
+#define SELECT(a, b, c, d, e) \
+    select(a, (int *)(void *)b, (int *)(void *)c, (int *)(void *)d, e)
 
 #define WANT_LIBC_H
 #define NO_SYSENT_H
@@ -92,7 +96,7 @@ extern "C" {
 
 #define _STRING(stringify) #stringify
 
-#define NO_SETPRIORITY  
+#define NO_SETPRIORITY
 
 #define RBL_WOULDBLOCK ((errno == EWOULDBLOCK) || (errno == EAGAIN))
 

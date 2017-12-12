@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
-import coop.rchain.rosette.{Ctxt, Fixnum, PrimErrorWrapper}
+import coop.rchain.rosette.{Ctxt, Fixnum}
 import coop.rchain.rosette.prim.Prim._
 
 object Number {

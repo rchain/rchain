@@ -1,11 +1,16 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.expr.TupleExpr
+
 class Pattern
 
-class CompoundPattern extends Pattern {
-  def matchPattern(tuple: Tuple, n: Int): Option[Tuple] =
-    Some(Tuple.PLACEHOLDER)
+abstract class CompoundPattern(expr: TupleExpr) extends Pattern {
+  def `match`(argvec: Tuple, nargs: Int): Option[Tuple]
 }
 
-case class Template(keytuple: Tuple, keymeta: Ob, pat: CompoundPattern)
-    extends CompoundPattern
+case class IdVecPattern(expr: TupleExpr) extends CompoundPattern(expr) {
+  override def `match`(argvec: Tuple, nargs: Int): Option[Tuple] = {
+    val need = expr.numberOfElements()
+    if (need == nargs) Some(argvec) else None
+  }
+}

@@ -3,7 +3,6 @@ package coop.rchain.rosette.prim
 import coop.rchain.rosette._
 import coop.rchain.rosette.prim.Prim.mismatchArgs
 
-import scala.collection.mutable
 import scala.reflect.{classTag, ClassTag}
 
 sealed trait PrimError
@@ -12,7 +11,6 @@ case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
 case object ArithmeticError extends PrimError
 
 abstract class Prim extends Ob {
-  override val _slot: mutable.Seq[Ob] = null
   val name: String
   val minArgs: Int
   val maxArgs: Int

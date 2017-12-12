@@ -34,8 +34,8 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'strandPool on OpFork(n)) {
-      val newCtxt = testState.ctxt.copy(pc = PC.fromInt(n)) +: testState.strandPool
-      _ shouldBe newCtxt
+      val newCtxt = testState.ctxt.copy(pc = PC(n))
+      _ shouldBe newCtxt +: testState.strandPool
     }
 
     (theState >> 'exitFlag on OpHalt()) {
