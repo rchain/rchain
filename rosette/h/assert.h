@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/assert.h,v 1.1.1.1 1993/02/12 01:25:02 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/assert.h,v 1.1.1.1
+ 1993/02/12 01:25:02 tomlic Exp $
  *
  * $Log: assert.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:02  tomlic
@@ -28,20 +29,24 @@
 #ifndef ASSERTH
 #define ASSERTH
 
-  
+
 #ifdef __STDC__
 
-# ifndef NDEBUG
-# define assert(ex)	{if (!(ex)){(void)fprintf(stderr,"Assertion failed: file \"%s\", line %d\n", __FILE__, __LINE__);exit(1);}}
-# else
-#define assert(x) 
-# endif
+#ifndef NDEBUG
+#define assert(ex)                                                            \
+    {                                                                         \
+        if (!(ex)) {                                                          \
+            (void)fprintf(stderr, "Assertion failed: file \"%s\", line %d\n", \
+                          __FILE__, __LINE__);                                \
+            exit(1);                                                          \
+        }                                                                     \
+    }
+#else
+#define assert(x)
+#endif
 
 #else
-#define assert(x) 
-#endif
- 
+#define assert(x)
 #endif
 
-
-
+#endif

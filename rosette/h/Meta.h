@@ -32,25 +32,22 @@
 
 #include "Ob.h"
 
-class IndexedMeta : public StdMeta
-{
+class IndexedMeta : public StdMeta {
     STD_DECLS(IndexedMeta);
 
-  protected:
-
-    IndexedMeta (StdMeta*, int);
+   protected:
+    IndexedMeta(StdMeta*, int);
 
     friend class StdMeta;
 
-  public:
-
-    virtual Tuple*	keys (Ob*);
-    virtual Location	keyLoc (Ob*, pOb = ABSENT);
-    virtual Tuple*	locContour (Ob*);
+   public:
+    virtual Tuple* keys(Ob*);
+    virtual Location keyLoc(Ob*, pOb = ABSENT);
+    virtual Tuple* locContour(Ob*);
 };
 
 static const int INDEXEDMETA_START_INDEXED_PART_SLOT = BUILTIN_STDMETA_SLOTS;
 
-static const int BUILTIN_INDEXEDMETA_SLOTS = BUILTIN_STDMETA_SLOTS+1;
+static const int BUILTIN_INDEXEDMETA_SLOTS = BUILTIN_STDMETA_SLOTS + 1;
 
 #endif

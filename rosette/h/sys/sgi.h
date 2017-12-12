@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sgi.h,v 1.1.1.1 1993/02/12 01:25:04 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/h/sys/sgi.h,v 1.1.1.1
+ 1993/02/12 01:25:04 tomlic Exp $
  *
  * $Log: sgi.h,v $
  * Revision 1.1.1.1  1993/02/12  01:25:04  tomlic
@@ -26,9 +27,9 @@
  @EC */
 
 #ifndef CONFIG_INCLUDED
-#define CONFIG_INCLUDED  
+#define CONFIG_INCLUDED
 
-#define ARCH    "sgi"
+#define ARCH "sgi"
 #define MACHINE "sgi-mips"
 #define OS "irix"
 #define MIPS_SGI_SYSV 1
@@ -52,29 +53,29 @@
 /* You must supply something to cause the current process
    to receive the io signal when input is available on fd.
    return is < 0 on failure.
-*/   
+*/
 
 #define SET_SIGNAL_IO_DESIRED(result) \
-    result= (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
+    result = (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
 
 #define SET_SIGNAL_POLL_DESIRED(result) \
-  result= ioctl(fd,I_SETSIG,(desiredState ? S_INPUT | S_HIPRI : S_HIPRI))
-
+    result = ioctl(fd, I_SETSIG, (desiredState ? S_INPUT | S_HIPRI : S_HIPRI))
 
 
 #ifdef __cplusplus
-extern "C" {int setpgrp();
-	    int getpid();
-	    /*int execve(const char*, const char**, char**);*/
-	    int getpagesize();
-	    int strcasecmp(const char *, const char *);
-	    int getdtablesize();
-	    void *sbrk(char*);
-	    void* valloc(unsigned int);
-	    int setsid();
-	    int ioctl (int fildes, int	request, ...);
-	    void  bzero(void *,int);
-	  }
+extern "C" {
+int setpgrp();
+int getpid();
+/*int execve(const char*, const char**, char**);*/
+int getpagesize();
+int strcasecmp(const char *, const char *);
+int getdtablesize();
+void *sbrk(char *);
+void *valloc(unsigned int);
+int setsid();
+int ioctl(int fildes, int request, ...);
+void bzero(void *, int);
+}
 
 #endif
 #define vfork fork

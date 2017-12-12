@@ -10,9 +10,10 @@ case object WaitForAsync extends Work
 case class StrandsScheduled(state: VMState) extends Work
 
 object VirtualMachine {
-
   val loggerOpcode = Logger("opcode")
   val loggerStrand = Logger("strand")
+
+  val unknownRegister: Int => String = reg => s"Unknown register: $reg"
 
   val vmLiterals: Seq[Ob] = Seq(
     Fixnum(0),
@@ -225,6 +226,7 @@ object VirtualMachine {
       if (currentState.exitFlag) exit = true
     }
 
+    loggerOpcode.info("Exiting")
     currentState
   }
 
@@ -233,7 +235,7 @@ object VirtualMachine {
 
     if (mState.doXmitFlag) {
       // may set doNextThreadFlag
-      mState = doXmit(mState)
+      mState = doXmit(mState).set(_ >> 'doXmitFlag)(false)
     }
 
     if (mState.doRtnFlag) {
@@ -248,8 +250,8 @@ object VirtualMachine {
     }
 
     if (mState.doNextThreadFlag) {
-      val (isEmpty, newState) = getNextStrand(mState)
-      mState = newState.set(_ >> 'doNextThreadFlag)(false)
+      val (isEmpty, tmpState) = getNextStrand(mState)
+      mState = tmpState.set(_ >> 'doNextThreadFlag)(false)
 
       if (isEmpty) {
         mState = mState.set(_ >> 'exitFlag)(true)
@@ -258,6 +260,25 @@ object VirtualMachine {
 
     mState
   }
+
+  /** Stops the VM and appends a message to state.debugInfo if debugging is enabled */
+  def die(msg: String)(state: VMState): VMState =
+    state
+      .set(_ >> 'exitFlag)(true)
+      .set(_ >> 'exitCode)(1)
+      .update(_ >> 'debugInfo)(info => if (state.debug) info :+ msg else info)
+
+  def setCtxtReg(reg: Int, ob: Ob)(state: VMState): VMState =
+    state.ctxt.setReg(reg, ob) match {
+      case Some(newCtxt) => state.set(_ >> 'ctxt)(newCtxt)
+      case None => die(unknownRegister(reg))(state)
+    }
+
+  def getCtxtReg(reg: Int)(state: VMState): (Option[Ob], VMState) =
+    state.ctxt.getReg(reg) match {
+      case someOb @ Some(_) => (someOb, state)
+      case None => (None, die(unknownRegister(reg))(state))
+    }
 
   def doRtn(state: VMState): VMState = {
     val (isError, newState) = state.ctxt.ret(state.ctxt.rslt)(state)
@@ -270,13 +291,22 @@ object VirtualMachine {
       newState
   }
 
-  def doXmit(state: VMState): VMState =
-    state.ctxt.trgt match {
-      case ob: StdOprn => ob.dispatch(state)._2
-
+  def doXmit(state: VMState): VMState = {
+    val (result, newState) = state.ctxt.trgt match {
+      case ob: StdOprn => ob.dispatch(state)
       // TODO: Add other cases
-      case _ => state
+      case _ => (Right(Ob.NIV), state)
     }
+
+    result match {
+      case Right(ob) if ob.is(OTsysval) =>
+        // handleException(ob, instr, state.ctxt.tag)
+        newState.set(_ >> 'doNextThreadFlag)(true)
+      case Left(DeadThread) => newState.set(_ >> 'doNextThreadFlag)(true)
+      case _ if state.xmitData._2 => newState.set(_ >> 'doNextThreadFlag)(true)
+      case _ => newState
+    }
+  }
 
   def executeDispatch(op: Op, state: VMState): VMState =
     op match {
@@ -351,20 +381,31 @@ object VirtualMachine {
     state.update(_ >> 'ctxt)(Ctxt(Some(Tuple(op.n, None)), _))
 
   def execute(op: OpExtend, state: VMState): VMState = {
-    val formals = state.code.lit(op.v).asInstanceOf[Template]
-    val actuals = formals.matchPattern(state.ctxt.argvec, state.ctxt.nargs)
+    def getTemplate = state.code.lit(op.v).as[Template]
+    def matchActuals(template: Template) =
+      template.`match`(state.ctxt.argvec, state.ctxt.nargs)
+    def getStdExtension = state.ctxt.env.as[StdExtension]
 
-    actuals match {
-      case Some(tuple) =>
-        state
-          .set(_ >> 'ctxt >> 'nargs)(0)
-          .set(_ >> 'ctxt >> 'env)(
-            state.ctxt.env.extendWith(formals.keymeta, tuple))
+    val newState = for {
+      template <- getTemplate or die(
+        s"OpExtend: No template in state.code.litvec(${op.v})")(state)
 
-      case None =>
-        handleFormalsMismatch(formals)
+      tuple <- matchActuals(template) or
+        // TODO: Revisit
+        //handleFormalsMismatch(formals)
         state.set(_ >> 'doNextThreadFlag)(true)
+
+      env <- getStdExtension or die(
+        "OpExtend: state.ctxt.env needs to be a StdExtension")(state)
+
+    } yield {
+      val newEnv = env.extendWith(template.keyMeta, tuple)
+      state
+        .set(_ >> 'ctxt >> 'env)(newEnv)
+        .set(_ >> 'ctxt >> 'nargs)(0)
     }
+
+    newState.merge
   }
 
   def execute(op: OpOutstanding, state: VMState): VMState =
@@ -372,9 +413,10 @@ object VirtualMachine {
       .set(_ >> 'ctxt >> 'pc)(PC.fromInt(op.p))
       .set(_ >> 'ctxt >> 'outstanding)(op.n)
 
-  def execute(op: OpFork, state: VMState): VMState =
-    state.set(_ >> 'strandPool)(
-      state.ctxt.copy(pc = PC.fromInt(op.p)) +: state.strandPool)
+  def execute(op: OpFork, state: VMState): VMState = {
+    val newCtxt = state.ctxt.copy(pc = PC(op.p))
+    state.update(_ >> 'strandPool)(newCtxt +: _)
+  }
 
   def execute(op: OpXmitTag, state: VMState): VMState =
     state
@@ -676,14 +718,18 @@ object VirtualMachine {
 
     val env = (1 to level).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
-    val slot = if (op.i) {
-      val actor = new Actor { override val extension: Ob = env }
-      actor.extension.slot
+    val environment = if (op.i) {
+      env.as[Actor].map(_.extension)
     } else {
-      env.slot
+      Some(env)
     }
 
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.a, slot(op.o)))
+    environment match {
+      case Some(e) =>
+        state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
+          _.updated(op.a, e.slot(op.o)))
+      case None => die("OpXferLexToArg: Type mismatch")(state)
+    }
   }
 
   def execute(op: OpXferLexToReg, state: VMState): VMState = {
@@ -691,45 +737,23 @@ object VirtualMachine {
 
     val env = (1 to level).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
-    val slot = if (op.i) {
-      val actor = new Actor { override val extension: Ob = env }
-      actor.extension.slot
+    val environment = if (op.i) {
+      env.as[Actor].map(_.extension)
     } else {
-      env.slot
+      Some(env)
     }
 
-    setCtxtReg(op.r, slot(op.o))(state)
+    environment match {
+      case Some(e) =>
+        setCtxtReg(op.r, e.slot(op.o))(state)
+      case None => die("OpXferLexToReg: Type mismatch")(state)
+    }
+
   }
-
-  def setCtxtReg(reg: Int, ob: Ob)(state: VMState): VMState =
-    state.ctxt.setReg(reg, ob) match {
-      case Some(newCtxt) =>
-        state.set(_ >> 'ctxt)(newCtxt)
-      case None =>
-        state
-          .set(_ >> 'exitFlag)(true)
-          .set(_ >> 'exitCode)(1)
-          .update(_ >> 'debugInfo)(info =>
-            if (state.debug) info :+ unknownRegister(reg) else info)
-    }
-
-  def getCtxtReg(reg: Int)(state: VMState): (Option[Ob], VMState) =
-    state.ctxt.getReg(reg) match {
-      case someOb => (someOb, state)
-      case None =>
-        (None,
-         state
-           .set(_ >> 'exitFlag)(true)
-           .set(_ >> 'exitCode)(1)
-           .update(_ >> 'debugInfo)(info =>
-             if (state.debug) info :+ unknownRegister(reg) else info))
-    }
 
   def execute(op: OpXferGlobalToArg, state: VMState): VMState =
     state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
       _.updated(op.a, state.globalEnv.entry(op.g)))
-
-  val unknownRegister: Int => String = reg => s"Unknown register: $reg"
 
   def execute(op: OpXferGlobalToReg, state: VMState): VMState =
     setCtxtReg(op.r, state.globalEnv.entry(op.g))(state)

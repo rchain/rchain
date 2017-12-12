@@ -3,12 +3,9 @@ package coop.rchain.rosette.utils
 import coop.rchain.rosette.PC.PLACEHOLDER
 import coop.rchain.rosette._
 
-import scala.collection.mutable
-
 package object opcodes {
-  val someObs: mutable.Seq[Ob] = mutable.Seq(Ob.NIV, Ob.ABSENT)
-  val someTuple: Tuple =
-    Tuple(someObs, Ob.NIV +: Ob.NIV +: mutable.Seq.empty[Ob])
+  val someObs: Seq[Ob] = Seq(Ob.NIV, Ob.ABSENT)
+  val someTuple: Tuple = Tuple(someObs)
 
   val ctxt = Ctxt(
     tag = Location.LocTrgt,
@@ -24,13 +21,12 @@ package object opcodes {
     self2 = null,
     selfEnv = null,
     rcvr = null,
-    monitor = null,
-    _slot = null
+    monitor = null
   )
 
   val testState = VMState(
     Map.empty,
-    Code(someTuple, Seq(), Ob.NIV +: Ob.NIV +: someObs),
+    Code(someTuple, Seq()),
     ctxt,
     Location.LocTrgt,
     PLACEHOLDER,
@@ -38,6 +34,6 @@ package object opcodes {
     null,
     systemMonitor = null,
     currentMonitor = null,
-    globalEnv = TblObject(someObs, Ob.NIV +: Ob.NIV +: mutable.Seq.empty)
+    globalEnv = TblObject(someObs)
   )
 }

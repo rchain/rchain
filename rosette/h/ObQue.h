@@ -34,94 +34,71 @@
 
 #include "Ob.h"
 
-class ObQue
-{
-protected:
+class ObQue {
+   protected:
+    Ob** array;
+    Ob** head;
+    Ob** tail;
+    Ob** limit;
+    int size;
+    int last_added;
 
-  Ob**		array;
-  Ob**		head;
-  Ob**		tail;
-  Ob**		limit;
-  int		size;
-  int		last_added;
-  
-public:
+   public:
+    ObQue();
+    ObQue(int);
+    ~ObQue();
 
-  ObQue ();
-  ObQue (int);
-  ~ObQue ();
+    void init();
+    void reset();
+    void resize();
+    void resize(int);
+    int empty();
+    void enq(Ob*);
+    void push(Ob*);
+    Ob* deq();
 
-  void		init ();
-  void		reset ();
-  void		resize ();
-  void		resize (int);
-  int		empty ();
-  void		enq (Ob*);
-  void		push (Ob*);
-  Ob*		deq ();
-  
-  int		traversePtrs (PSOb__PSOb);
-  int		traversePtrs (SI__PSOb);
-  void		traversePtrs (V__PSOb);
+    int traversePtrs(PSOb__PSOb);
+    int traversePtrs(SI__PSOb);
+    void traversePtrs(V__PSOb);
 
-  Ob*&		operator [] (int);
+    Ob*& operator[](int);
 };
 
-inline
-Ob*&
-ObQue::operator [] (int n)
-{
-  return array[n];
-}
+inline Ob*& ObQue::operator[](int n) { return array[n]; }
 
-inline
-void
-ObQue::init ()
-{
-  last_added = 0;
-  head  = array;
-  tail  = array;
-  limit = array+size;
-}
-
-inline
-int
-ObQue::empty ()
-{
-    return (head == tail && !last_added);
-}
-
-inline
-void
-ObQue::enq (Ob* o)
-{
-  if ((head == tail && last_added)
-      || (tail == array && head == limit))
-    resize ();
-  if (tail == array)
-    tail = limit;
-  
-  last_added = 1;
-  (*--tail) = o;
-}
-
-inline
-Ob*
-ObQue::deq ()
-{
-  Ob* result;
-  if (empty ()) {
+inline void ObQue::init() {
     last_added = 0;
-    result = (Ob*) 0;
-  }
-  
-  if (head == array)
-    head = limit;
-  
-  last_added = 0;
-  --head;
-  result = *head;
-  return result;
+    head = array;
+    tail = array;
+    limit = array + size;
+}
+
+inline int ObQue::empty() { return (head == tail && !last_added); }
+
+inline void ObQue::enq(Ob* o) {
+    if ((head == tail && last_added) || (tail == array && head == limit))
+        resize();
+    if (tail == array)
+        tail = limit;
+
+    last_added = 1;
+    (*--tail) = o;
+}
+
+inline Ob* ObQue::deq() {
+    Ob* result;
+    if (empty()) {
+        last_added = 0;
+        result = (Ob*)0;
+    }
+
+    if (head == array)
+        head = limit;
+
+    last_added = 0;
+    --head;
+    result = *head;
+    return result;
 }
 
 #endif

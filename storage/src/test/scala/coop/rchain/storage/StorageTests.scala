@@ -31,32 +31,31 @@ class StorageTests extends FlatSpec with Matchers {
     try {
       storage.put(1, 2)
       val getInt = storage.getInts(1)
-      assert(getInt.get(0) == 2)
+      assert(getInt.get.contains(2))
 
       storage.put(3, 4)
       storage.put(3, 5)
       val getInts = storage.getInts(3)
-      assert(getInts.get(0) == 4)
-      assert(getInts.get(1) == 5)
+      assert(getInts.get.contains(4))
+      assert(getInts.get.contains(5))
 
       storage.put("a", "b")
       val getStr = storage.getStrings("a")
       val str = getStr.get(0)
-      assert(str == "b")
+      assert(getStr.get.contains("b"))
 
       storage.put("c", "d")
       storage.put("c", "e")
       val getStrs = storage.getStrings("c")
-      assert(getStrs.get(0) == "d")
-      assert(getStrs.get(1) == "e")
+      assert(getStrs.get.contains("d"))
+      assert(getStrs.get.contains("e"))
     } catch {
       case e: Throwable => {
-        fail("putGetDupSort(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(storConf.dirName.get).delete()
     }
   }
 
@@ -88,18 +87,17 @@ class StorageTests extends FlatSpec with Matchers {
         val k = itr.next
         val strKey = k.term
         val valuesArray = storage.getStrings(strKey)
-        if (!valuesArray.isDefined) {
+        if (valuesArray.isEmpty) {
           fail(s"${k.term}: no value found")
         }
       }
     } catch {
       case e: Throwable => {
-        fail("loadFiles(): " + e)
+        fail(e)
       }
     } finally {
       storage.close()
       storage.deleteFiles()
-      // new File(storConf.dirName.get).delete()
     }
   }
 }

@@ -44,27 +44,24 @@ class FrameStk;
 class Reader;
 
 
+class FrameStk {
+    int topframe;
+    int nexttop;
+    char* stk;
+    int stksize;
 
-class FrameStk
-{
-    int		topframe;
-    int		nexttop;
-    char*	stk;
-    int		stksize;
+    FrameStk();
+    ~FrameStk();
 
-    FrameStk ();
-    ~FrameStk ();
-
-    void*		alloc (int);
-    int			link (int);
-    ReaderFrame*	top ();
-    void		pop ();
-    int			empty ();
-    void		reset ();
+    void* alloc(int);
+    int link(int);
+    ReaderFrame* top();
+    void pop();
+    int empty();
+    void reset();
 
     friend class Reader;
 };
-
 
 
 enum ReaderMode {
@@ -79,73 +76,69 @@ enum ReaderMode {
 
 #undef ftop
 
-class Reader : public BinaryOb
-{
+class Reader : public BinaryOb {
     STD_DECLS(Reader);
 
-  protected:
-
-    char*	buf;
-    int		bufsize;
-    int		bufp;
-    char	errorEncountered;
-    enum {NOT_WAITING, WAITING_FOR_EXPR, WAITING_FOR_CHAR}
-		waitingOnIO;
+   protected:
+    char* buf;
+    int bufsize;
+    int bufp;
+    char errorEncountered;
+    enum { NOT_WAITING, WAITING_FOR_EXPR, WAITING_FOR_CHAR } waitingOnIO;
     unsigned short filler_up_please;
-    FrameStk	fstk;
-    ObStk	ostk;
+    FrameStk fstk;
+    ObStk ostk;
 
-    Reader (ReadTable*, FILE*);
+    Reader(ReadTable*, FILE*);
 
-    Ob*		resumeExpr ();
-    Ob*		resumeCh ();
-    Ob*		suspendReader ();
-    Ob*		finish (Ob*);
-    void	growBuffer ();
-    ReaderMode	acceptEscChar (int, int);
+    Ob* resumeExpr();
+    Ob* resumeCh();
+    Ob* suspendReader();
+    Ob* finish(Ob*);
+    void growBuffer();
+    ReaderMode acceptEscChar(int, int);
 
-  public:
+   public:
+    virtual ~Reader();
 
-    virtual ~Reader ();
+    static Reader* create(FILE*);
 
-    static Reader*	create (FILE*);
+    ReadTable* rt;
+    ReaderMode mode;
+    FILE* file;
+    int digitSeen;
 
-    ReadTable*	rt;
-    ReaderMode	mode;
-    FILE*	file;
-    int		digitSeen;
+    void buffer(int);
+    void resetBuffer();
+    char* finalizeBuffer();
+    Ob* finalizeAtom();
 
-    void	buffer (int);
-    void	resetBuffer ();
-    char* 	finalizeBuffer ();
-    Ob*		finalizeAtom ();
+    Ob* readExpr();
+    Ob* readCh();
+    Ob* resume();
+    Ob* error(const char*, ...);
+    void resetState();
 
-    Ob*		readExpr ();
-    Ob*		readCh ();
-    Ob*		resume ();
-    Ob*		error (const char*, ...);
-    void	resetState ();
+    void opush(Ob*);
+    Ob*& otop(int);
+    Ob* opop();
+    void odel(int);
 
-    void	opush (Ob*);
-    Ob*&	otop (int);
-    Ob*		opop ();
-    void	odel (int);
+    void* falloc(int);
+    int flink(int);
+    ReaderFrame* ftop();
+    void fpop();
 
-    void*	falloc (int);
-    int		flink (int);
-    ReaderFrame* ftop ();
-    void	fpop ();
+    ReaderMode accept(int, int = FALSE);
+    ReaderMode receiveOb(Ob*);
+    ReaderMode receiveChar(int);
+    ReaderMode receiveTerminator(int);
+    ReaderMode receiveDot(int);
 
-    ReaderMode	accept (int, int = FALSE);
-    ReaderMode	receiveOb (Ob*);
-    ReaderMode	receiveChar (int);
-    ReaderMode	receiveTerminator (int);
-    ReaderMode	receiveDot (int);
-
-    virtual Ob*		cloneTo (Ob*, Ob*);
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
 };
 
 

@@ -84,7 +84,6 @@ case class UnicastComm(local: PeerNode) extends Comm {
     */
   override def send(data: Seq[Byte], peer: PeerNode): Either[CommError, Unit] =
     encode(data).flatMap { payload =>
-      println(s"COMM Sending to ${peer.endpoint.udpSocketAddress}")
       val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
       try {
         sender.send(dgram)

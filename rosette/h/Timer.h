@@ -41,36 +41,32 @@
 enum TimerMode { tmUser, tmGC, tmSys, nModes };
 
 
-class Timer : public BinaryOb
-{
+class Timer : public BinaryOb {
     STD_DECLS(Timer);
 
-  protected:
+   protected:
+    Timer();
 
-    Timer ();
+   private:
+    int running;
+    TimerMode mode;
+    timeval tv[nModes];
+    struct rusage checkpoint;
 
-  private:
+    void updateTimer();
+    void inc(timeval&, long, long);
+    float fastTime(TimerMode);
 
-    int			running;
-    TimerMode		mode;
-    timeval		tv[nModes];
-    struct rusage	checkpoint;
+   public:
+    static Timer* create();
 
-    void	updateTimer ();
-    void	inc (timeval&, long, long);
-    float	fastTime (TimerMode);
-
-  public:
-
-    static Timer*	create ();
-
-    void	reset ();
-    void	start ();
-    void	stop ();
-    TimerMode	setMode (TimerMode);
-    float	time (TimerMode);
-    void	printStats (FILE*);
+    void reset();
+    void start();
+    void stop();
+    TimerMode setMode(TimerMode);
+    float time(TimerMode);
+    void printStats(FILE*);
 };
-  
+
 
 #endif

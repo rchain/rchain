@@ -34,40 +34,34 @@
 
 #include "Ob.h"
 
-class StdMthd : public Ob
-{
+class StdMthd : public Ob {
     STD_DECLS(StdMthd);
 
-  protected:
+   protected:
+    StdMthd(Code*, Ob*, Ob*);
+    StdMthd(int, Ob*, Ob*, Code*, Ob*, Ob*);
 
-    StdMthd (Code*, Ob*, Ob*);
-    StdMthd (int, Ob*, Ob*, Code*, Ob*, Ob*);
+   public:
+    Code* code;
+    Ob* id;
+    Ob* source;
 
-  public:
-
-    Code*	code;
-    Ob*		id;
-    Ob*		source;
-
-    static StdMthd*	create (Code*, Ob* = Qanon, Ob* = NIV);
-    virtual Ob*		dispatch (Ctxt*);
-    virtual Ob*		invoke (Ctxt*);
+    static StdMthd* create(Code*, Ob* = Qanon, Ob* = NIV);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
 
-class ReflectiveMthd : public StdMthd
-{
+class ReflectiveMthd : public StdMthd {
     STD_DECLS(ReflectiveMthd);
 
-  protected:
+   protected:
+    ReflectiveMthd(Code*, Ob* = Qanon, Ob* = NIV);
 
-    ReflectiveMthd (Code*, Ob* = Qanon, Ob* = NIV);
-
-  public:
-
-    static ReflectiveMthd*	create (Code*, Ob* = Qanon, Ob* = NIV);
-    virtual Ob*			dispatch (Ctxt*);
-    virtual Ob*			invoke (Ctxt*);
+   public:
+    static ReflectiveMthd* create(Code*, Ob* = Qanon, Ob* = NIV);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
 #endif
