@@ -54,8 +54,8 @@ program with no arguments.
 The fat jar built above may be run with Java like so:
 
 ```
-$ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/src-assembly-0.1-SNAPSHOT.jar
-17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://ac4b1fdee5a947e8a511383e698df99d@63.224.55.76:30304}.
+$ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/src-assembly-0.0.1.jar
+17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://ac4b1fdee5a947e8a511383e698df99d@63.224.55.75:30304}.
 ```
 
 ### Running via Docker
@@ -63,10 +63,14 @@ $ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.
 If you built a docker image called `rchain-comm:latest`, you can run that with
 
 ```
-$ docker run -ti -P rchain-comm:latest
+$ docker run -ti -p 30304:30304/udp rchain-comm:latest
 Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true
 04:20:56.910 [main] INFO main - Listening for traffic on #{Network rnode://c75981a613b547d7bd7e127c543e4d31@172.17.0.6:30304}.
 ```
+
+Note that the port used has to be mapped to the proper host port for the node to be able to advertise itself to the
+network properly. The host might also have to be set to the docker host's IP (not the container's IP, which will
+probably be the one chosen automatically), _and_ the port has to be open or forwarded from the immediate router.
 
 ### Command-line Arguments
 
@@ -86,20 +90,30 @@ By default, the node will not attempt to bootstrap into any other network and so
 only the one
 
 ```
---bootstrap TODO
+--bootstrap rnode://ace40ebca0924eb797bb69dfda04f5d9@216.83.154.106:30012
 ```
 
 #### Host and Port
 
-The system attempts to guess an good IP address and udp port that other nodes can use to communicate with this one. If
+The system attempts to guess an good IP address and UDP port that other nodes can use to communicate with this one. If
 it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
 
 ```
---host 1.2.3.4 --port 30304
+--host 1.2.3.4 --port 30304 --bootstrap rnode://ace40ebca0924eb797bb69dfda04f5d9@216.83.154.106:30012
 ```
 
-By default it uses udp port 30304. This is also how more than one node may be run on a single machine: just pick
-different ports.
+By default it uses UDP port 30304. This is also how more than one node may be run on a single machine: just pick
+different ports. Remember that if using Docker, ports have to be properly mapped and forwarded. For example, if we want
+to connect on the test net on UDP port 12345 and our machine's public IP address is 63.224.55.75, we could do it like
+so:
+
+```
+$ docker run -ti -p 12345:12345/udp rchain-comm:latest -p 12345 --host 63.224.55.75 --bootstrap rnode://ace40ebca0924eb797bb69dfda04f5d9@216.83.154.106:30012
+```
+
+Read more than you want to know about Docker networking starting about
+[here](https://docs.docker.com/engine/userguide/networking/work-with-networks/), but honestly, it's featureful and
+powerful enough that you need a [cheatsheet](https://github.com/wsargent/docker-cheat-sheet#exposing-ports).
 
 ## Notes
 
