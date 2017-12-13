@@ -10,9 +10,9 @@ An RChain node is addressed by an "rnode address", which has the following form
 rnode://<address-key>@<host-or-ip>:<udp-port>
 ```
 
-This version generates (non-cryptographically) random addresses of 128 bits, or 32 characters (UUIDs, essentially). Future releases
-will generate full-length 256- or 512-bit rnode addresses, but for demonstration purposes, 128 bits is about the limit of
-manageability.
+This version generates (non-cryptographically) random addresses of 128 bits, or 32 characters (UUIDs,
+essentially). Future releases will generate full-length 256- or 512-bit rnode addresses, but for demonstration purposes,
+128 bits is about the limit of manageability.
 
 ## Building from Source
 
@@ -20,8 +20,8 @@ Clone (or download and unpack) the master branch of the source.
 
 ### Building with `sbt`
 
-The only up-front build-time requirement is [sbt](http://www.scala-sbt.org/download.html), which should be installed according to
-your platform. It, in turn, will download and include all depedencies for the system.
+The only up-front build-time requirement is [sbt](http://www.scala-sbt.org/download.html), which should be installed
+according to your platform. It, in turn, will download and include all depedencies for the system.
 
 To build once `sbt` is installed, issue:
 
@@ -29,12 +29,13 @@ To build once `sbt` is installed, issue:
 sbt assembly
 ```
 
-This will download dependencies, if required, compile all the code, construct a single, large jar file, and run all the tests.
+This will download dependencies, if required, compile all the code, construct a single, large jar file, and run all the
+tests.
 
 ### Building via Docker
 
-If you have [docker](https://www.docker.com/) installed, you can build a docker image. Under the covers, the docker build process is
-the `sbt` build process, exactly as described above. The command
+If you have [docker](https://www.docker.com/) installed, you can build a docker image. Under the covers, the docker
+build process is the `sbt` build process, exactly as described above. The command
 
 ```
 docker build . -t rchain-comm:latest
@@ -45,8 +46,8 @@ will build an image tagged "latest" containing the jar file and a suitable entry
 
 ## Running a Node
 
-A simple, stand-alone node which does nothing but wait for another node to contact it may be invoked by running the program with no
-arguments.
+A simple, stand-alone node which does nothing but wait for another node to contact it may be invoked by running the
+program with no arguments.
 
 ### Running with Java
 
@@ -81,7 +82,8 @@ However it gets run, it responds to the following arguments:
 
 #### Bootstrapping
 
-By default, the node will not attempt to bootstrap into any other network and so will create a brand new network with only the one
+By default, the node will not attempt to bootstrap into any other network and so will create a brand new network with
+only the one
 
 ```
 --bootstrap TODO
@@ -89,24 +91,25 @@ By default, the node will not attempt to bootstrap into any other network and so
 
 #### Host and Port
 
-The system attempts to guess an good IP address and udp port that other nodes can use to communicate with this one. If it does not
-guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
+The system attempts to guess an good IP address and udp port that other nodes can use to communicate with this one. If
+it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
 
 ```
 --host 1.2.3.4 --port 30304
 ```
 
-By default it uses udp port 30304. This is also how more than one node may be run on a single machine: just pick different ports.
+By default it uses udp port 30304. This is also how more than one node may be run on a single machine: just pick
+different ports.
 
 ## Notes
 
 ### Caveats
 
-This is very much a work in progress. The networking overlay is only known to work when it can avail itself of visible IP addresses,
-either public or all contained within the same network. It does not yet include any special code for getting around a home firewall
-or a closed router, including uPNP handling. Any port used must be open. Additionally, it might be necessary to configure
-port-forwarding on your router. In some cases, it might even be necessary to specify your router's public IP address as the node
-address if your router's port-forwarding requires it.
+This is very much a work in progress. The networking overlay is only known to work when it can avail itself of visible
+IP addresses, either public or all contained within the same network. It does not yet include any special code for
+getting around a home firewall or a closed router, including uPNP handling. Any port used must be open. Additionally, it
+might be necessary to configure port-forwarding on your router. In some cases, it might even be necessary to specify
+your router's public IP address as the node address if your router's port-forwarding requires it.
 
 ### Dependency list
 
