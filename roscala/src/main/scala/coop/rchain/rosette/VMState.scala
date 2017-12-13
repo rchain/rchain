@@ -27,6 +27,7 @@ case class VMState(bytecodes: Map[Op, Long],
                    exitFlag: Boolean = false,
                    exitCode: Int = 0,
                    obCounts: Long = 0,
+                   interruptPending: Int = 0,
                    globalEnv: TblObject = TblObject.PLACEHOLDER)
     extends {
   def set[T](f: RootLens[VMState] ⇒ Lens[VMState, T])(value: T): VMState =

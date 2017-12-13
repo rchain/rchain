@@ -1,0 +1,52 @@
+// This is a will-be-unit-test for the arithmetic operations in Rholang.
+// Note that the currently outputted values are simply based on
+// Rosette's output. We probably want to change a lot of behavior
+// in the reimplementation.
+
+match [
+    // Addition
+
+    2+8,                        // 10
+    1+2+3+4+5+6+7+8+9+10,       // 55
+    2147483647+2147483647,      // -2
+    2.5+7.5,                    // 10.0
+    3.1415926535897932384626+3.1415926535897932384626, // 6.283185307179586
+
+    // Subtraction
+
+    47-37,                      // 10
+    -2147483647-1,              // 0
+
+    // Interestingly enough -2147483648 can't be parsed even though
+    // in theory it is the minimum 32-bit signed integer because
+    // the parser treats it as -1*2147483648
+
+    // Multiplication
+
+    2*5,                        // 10
+    -5*-2,                      // 10
+    2147483647*2147483647,      // 1
+
+    // -1.5*-1 fails *** 2nd argument is not a Float: ((FO Prim fl*) -1.5 -1)
+
+    // Division
+
+    120/12,                     // 10
+    2147483647/-1,              // 1
+
+    // 14/0 fails with Program received signal SIGFPE, Arithmetic exception.
+
+    // Mix
+
+    -10+4*5-(30/10)-2+5,        // 10
+    10+(10-10)*10,              // 10
+    10.5-0.5+2.5/2.5-1.0        // 10.0
+
+    ] with
+
+< 10, 55, -2, 10.0, 6.283185307179586, 10, 0, 10, 10, 1, 10, 1, 10, 10, 10.0 > => {
+    print("Pass")
+}
+_ => {
+    print("Fail")
+}

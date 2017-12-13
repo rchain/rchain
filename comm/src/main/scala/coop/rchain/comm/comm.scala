@@ -1,10 +1,8 @@
 package coop.rchain.comm
 
-import scala.util.Try
-
 trait Comm {
-  def send(data: Seq[Byte], p: PeerNode): Try[Unit]
-  def recv: Try[Seq[Byte]]
+  def send(data: Seq[Byte], p: PeerNode): Either[CommError, Unit]
+  def recv: Either[CommError, Seq[Byte]]
 }
 
 case class NodeIdentifier(pKey: Seq[Byte]) {
@@ -13,6 +11,8 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
     Vector[Byte](pKey: _*)
 
   def key = keccak256(2)
+
+  override def toString = key.map("%02x" format _).mkString
 }
 
 case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
@@ -26,9 +26,16 @@ case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def key = id.key
+  val sKey = key.map(_.toChar).mkString
 
-  override def toString = {
-    val sKey = key.map("%02x" format _).mkString
+  override def toString =
     s"#{PeerNode $sKey}"
-  }
+
+  def toAddress: String =
+    s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
+}
+
+trait Notary {
+  def sign(data: Seq[Byte]): Seq[Byte]
+  def checkSignature(sig: Seq[Byte]): Boolean
 }

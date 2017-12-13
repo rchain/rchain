@@ -59,7 +59,10 @@ object Location {
       case LocationGT(genericType) =>
         genericType match {
           case LTCtxtRegister(reg) =>
-            StoreCtxt(k.update(_ >> 'reg)(_.updated(reg, value)))
+            k.setReg(reg, value) match {
+              case Some(newCtxt) => StoreCtxt(newCtxt)
+              case None => StoreFail
+            }
 
           case LTArgRegister(argReg) =>
             if (argReg < k.argvec.elem.size) {
@@ -122,7 +125,7 @@ object Location {
         genericType match {
           case LTCtxtRegister(reg) =>
             if (reg < NumberOfCtxtRegs) {
-              k.reg(reg)
+              k.getReg(reg).getOrElse(Ob.INVALID)
             } else {
               Ob.INVALID
             }

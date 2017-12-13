@@ -36,97 +36,79 @@
 #include "Location.h"
 #include "Tuple.h"
 
-class Ctxt : public MboxOb
-{
+class Ctxt : public MboxOb {
     STD_DECLS(Ctxt);
 
-  protected:
+   protected:
+    int traversePtrs(PSOb__PSOb);
+    int traversePtrs(SI__PSOb);
+    void traversePtrs(V__PSOb);
 
-    int		traversePtrs (PSOb__PSOb);
-    int		traversePtrs (SI__PSOb);
-    void	traversePtrs (V__PSOb);
+    void inlineRcv(Ob*, Location);
 
-    void	inlineRcv (Ob*, Location);
+    Ctxt(Tuple*, Ctxt*);
+    Ctxt(Code*, Tuple*, Ctxt*, int = 0);
+    Ctxt(Ob*, Tuple*);
+    Ctxt(int, Ob*, Ob*, Ob*, Code*, Tuple*, Ctxt*, Location);
 
-    Ctxt (Tuple*, Ctxt*);
-    Ctxt (Code*, Tuple*, Ctxt*, int = 0);
-    Ctxt (Ob*, Tuple*);
-    Ctxt (int, Ob*, Ob*, Ob*, Code*, Tuple*, Ctxt*, Location);
-
-  public:
-
-    Location	tag;
-    Byte	nargs;
-    Byte	outstanding;
-    Word16	pc;
+   public:
+    Location tag;
+    uint8_t nargs;
+    uint8_t outstanding;
+    uint16_t pc;
 
     // Additions to or deletions from the following list must
     // be reflected in the definition of NumberOfCtxtRegs.
 
-    Ob*		rslt;		// reg[0]
-    Ob*		trgt;		// reg[1]
-    Tuple*	argvec;		// reg[2]
-    Ob*		env;		// reg[3]
-    Code*	code;		// reg[4]
-    Ctxt*	ctxt;		// reg[5]
-    Ob*		self2;		// reg[6]
-    Ob*		selfEnv;	// reg[7]
-    Ob*		rcvr;		// reg[8]
-    Monitor*	monitor;	// reg[9]
+    Ob* rslt;          // reg[0]
+    Ob* trgt;          // reg[1]
+    Tuple* argvec;     // reg[2]
+    Ob* env;           // reg[3]
+    Code* code;        // reg[4]
+    Ctxt* ctxt;        // reg[5]
+    Ob* self2;         // reg[6]
+    Ob* selfEnv;       // reg[7]
+    Ob* rcvr;          // reg[8]
+    Monitor* monitor;  // reg[9]
 
-    static Ctxt*	create (Tuple*, Ctxt*);
-    static Ctxt*	create (Code*, Tuple*, Ctxt*, int = 0);
-    static Ctxt*	create (Ob*, Tuple*);
+    static Ctxt* create(Tuple*, Ctxt*);
+    static Ctxt* create(Code*, Tuple*, Ctxt*, int = 0);
+    static Ctxt* create(Ob*, Tuple*);
 
-    pOb&		reg (int);	// for indirect access to the registers
-    pOb&		arg (int);
+    pOb& reg(int);  // for indirect access to the registers
+    pOb& arg(int);
 
-    virtual bool	applyK (Ob*, Location);
-    bool		rcv (Ob*, Location);
-    bool		ret (Ob*);
-    void		scheduleStrand ();
-    void		prepare ();
-    Ob*			missingBindingError (Ob*);
-    Ob*			vmError ();
+    virtual bool applyK(Ob*, Location);
+    bool rcv(Ob*, Location);
+    bool ret(Ob*);
+    void scheduleStrand();
+    void prepare();
+    Ob* missingBindingError(Ob*);
+    Ob* vmError();
 };
 
-inline
-pOb&
-Ctxt::reg (int n)
-{
+inline pOb& Ctxt::reg(int n) {
     pOb* p = (pOb*)&rslt;
     return p[n];
 }
 
-inline
-pOb&
-Ctxt::arg (int n)
-{
-    return argvec->elem(n);
-}
+inline pOb& Ctxt::arg(int n) { return argvec->elem(n); }
 
-inline
-bool
-Ctxt::ret (Ob* result)
-{
+inline bool Ctxt::ret(Ob* result) {
     return (this->tag != LocLimbo && applyK(result, this->tag));
 }
 
 
-
-class UpcallCtxt : public Ctxt
-{
+class UpcallCtxt : public Ctxt {
     STD_DECLS(UpcallCtxt);
 
-  protected:
+   protected:
+    UpcallCtxt(Code*, Tuple*, Ctxt*, Location);
 
-    UpcallCtxt (Code*, Tuple*, Ctxt*, Location);
+   public:
+    static UpcallCtxt* create(Code*, Tuple*, Ctxt*, Location);
 
-  public:
-
-    static UpcallCtxt*	create (Code*, Tuple*, Ctxt*, Location);
-
-    virtual bool	applyK (Ob*, Location);
+    virtual bool applyK(Ob*, Location);
 };
 
 #endif

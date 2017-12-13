@@ -5,28 +5,28 @@ import coop.rchain.rosette._
 
 package object opcodes {
   val someObs: Seq[Ob] = Seq(Ob.NIV, Ob.ABSENT)
-  val someTuple: Tuple = Tuple(someObs, Ob.NIV, Ob.NIV, Seq.empty)
+  val someTuple: Tuple = Tuple(someObs)
 
-  val ctxt = Ctxt(someTuple,
-                  null,
-                  null,
-                  null,
-                  null,
-                  null,
-                  0,
-                  0,
-                  Ob.NIV,
-                  PC.PLACEHOLDER,
-                  someObs,
-                  Ob.NIV,
-                  null,
-                  null,
-                  someObs,
-                  Location.LocTrgt)
+  val ctxt = Ctxt(
+    tag = Location.LocTrgt,
+    nargs = 0,
+    outstanding = 0,
+    pc = PC.PLACEHOLDER,
+    rslt = null,
+    trgt = null,
+    argvec = someTuple,
+    env = null,
+    code = null,
+    ctxt = null,
+    self2 = null,
+    selfEnv = null,
+    rcvr = null,
+    monitor = null
+  )
 
   val testState = VMState(
     Map.empty,
-    Code(someTuple, Ob.NIV, Ob.NIV, someObs),
+    Code(someTuple, Seq()),
     ctxt,
     Location.LocTrgt,
     PLACEHOLDER,
@@ -34,6 +34,6 @@ package object opcodes {
     null,
     systemMonitor = null,
     currentMonitor = null,
-    globalEnv = TblObject(someObs, Ob.NIV, Ob.NIV, Seq.empty)
+    globalEnv = TblObject(someObs)
   )
 }

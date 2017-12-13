@@ -44,7 +44,7 @@
 
 /* #include <generic.h> */
 
-#if !defined(_STRING)  || defined(MIPS_SGI_SYSV)
+#if !defined(_STRING) || defined(MIPS_SGI_SYSV)
 #if defined(__STDC__) || defined(MIPS_SGI_SYSV)
 #define _STRING(name) #name
 #else
@@ -52,9 +52,7 @@
 #endif
 #endif
 
-typedef unsigned char	Byte;
-typedef unsigned short	Word16;
-typedef unsigned long	Word32;
+ #include <stdint.h>
 
 #if !defined(HAS_BOOL)
 typedef int bool;
@@ -69,7 +67,7 @@ typedef int bool;
 
 #ifndef MIPS_SGI_SYSV
 #define KONST const
-#else 
+#else
 #define KONST
 #endif
 
@@ -79,77 +77,78 @@ typedef int bool;
 #define LONG_MIN (~LONG_MAX)
 #else
 #include <limits.h>
-#define BITS(type) (CHAR_BIT*sizeof(type))
+#define BITS(type) (CHAR_BIT * sizeof(type))
 #endif
 
 
-static const int WordSize    = BITS(void*);
-static const int TagSize     = 2;
-static const int EscTagSize  = 6;
+static const int WordSize = BITS(void*);
+static const int TagSize = 2;
+static const int EscTagSize = 6;
 
-static const unsigned TagMask    = ((unsigned)~0) >> (WordSize-TagSize);
-static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize-EscTagSize);
+static const unsigned TagMask = ((unsigned)~0) >> (WordSize - TagSize);
+static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize - EscTagSize);
 
 /* to do fix this  wfs*/
 #ifdef LITTLE_END
-#define BIG_END(x) 
+#define BIG_END(x)
 #else
 #define BIG_END(x) x
 #define LITTLE_END(x)
 #endif
 
-#define ESCAPED(n)   (((n)<<TagSize) + OTesc)
+#define ESCAPED(n) (((n) << TagSize) + OTesc)
 
 /* unused
   #define UNESCAPED(n) (n>>TagSize) */
 
-enum ObTag  { OTptr	= 0,
-	      OTsym	= 1,
-	      OTfixnum	= 2,
-	      OTesc	= 3,
+enum ObTag {
+    OTptr = 0,
+    OTsym = 1,
+    OTfixnum = 2,
+    OTesc = 3,
 
-	      /*
-	       * The escaped types can't use ESCAPED(0) because of some
-	       * encoding and decoding optimizations performed in the
-	       * following code.  This shouldn't cramp our style, since
-	       * type bits are only needed for atoms; we use the C++
-	       * class system to provide an arbitrarily large number of
-	       * distinct heap-allocated objects.
-	       *
-	       * Whenever a new escape type is added, the following steps
-	       * MUST be followed:
-	       *
-	       * 1. Allocate one of the remaining unused OT codes from
-	       *    the following list.
-	       *
-	       * 2. #define a "constructor" for the new type a la the
-	       *    already existing ones below.
-	       *
-	       * 3. Derive a class from Atom (a la RBLbool) in Atom.cc.
-	       *    See Atom.cc for examples.
-	       *
-	       * 4. Declare one instance of the new class (e.g.,
-	       *    prototypicalBool) in Atom.cc.  This is the instance
-	       *    into which an Ob of this type will be jammed (such as
-	       *    on output, for example).
-	       *
-	       * 5. Add a case to the body of decodeAtom(), which is the
-	       *    function that actually does the work when such a cast
-	       *    is performed.
-	       *
-	       * This housekeeping is an unfortunate consequence of C++'s
-	       * unwillingness to accommodate short immediate tags on
-	       * objects.  Things are much cleaner for the heap-allocated
-	       * objects, which fit much more nicely into C++'s model of
-	       * long immediate tags.
-	       */
+    /*
+     * The escaped types can't use ESCAPED(0) because of some
+     * encoding and decoding optimizations performed in the
+     * following code.  This shouldn't cramp our style, since
+     * type bits are only needed for atoms; we use the C++
+     * class system to provide an arbitrarily large number of
+     * distinct heap-allocated objects.
+     *
+     * Whenever a new escape type is added, the following steps
+     * MUST be followed:
+     *
+     * 1. Allocate one of the remaining unused OT codes from
+     *    the following list.
+     *
+     * 2. #define a "constructor" for the new type a la the
+     *    already existing ones below.
+     *
+     * 3. Derive a class from Atom (a la RBLbool) in Atom.cc.
+     *    See Atom.cc for examples.
+     *
+     * 4. Declare one instance of the new class (e.g.,
+     *    prototypicalBool) in Atom.cc.  This is the instance
+     *    into which an Ob of this type will be jammed (such as
+     *    on output, for example).
+     *
+     * 5. Add a case to the body of decodeAtom(), which is the
+     *    function that actually does the work when such a cast
+     *    is performed.
+     *
+     * This housekeeping is an unfortunate consequence of C++'s
+     * unwillingness to accommodate short immediate tags on
+     * objects.  Things are much cleaner for the heap-allocated
+     * objects, which fit much more nicely into C++'s model of
+     * long immediate tags.
+     */
 
-	      OTbool         = ESCAPED(1),
-	      OTchar         = ESCAPED(2),
-	      OTniv          = ESCAPED(3),
-	      OTsysval       = ESCAPED(4),
-	      OTlocation     = ESCAPED(5),
-	      };
+    OTbool = ESCAPED(1),
+    OTchar = ESCAPED(2),
+    OTniv = ESCAPED(3),
+    OTsysval = ESCAPED(4),
+    OTlocation = ESCAPED(5),
+};
 
 
 /*
@@ -160,29 +159,30 @@ enum ObTag  { OTptr	= 0,
  * strings for symbols) and the heap allocation routines obey this rule.
  */
 
-#define MAKETAGGED(t, p)	((pOb)((uintptr_t)(p) | (uintptr_t)(t)))
-#define MAKEESCTAGGED(t, p)	((pOb)(((uintptr_t)(p) << EscTagSize) | (uintptr_t)(t)))
+#define MAKETAGGED(t, p) ((pOb)((unsigned)(p) | (unsigned)(t)))
+#define MAKEESCTAGGED(t, p) \
+    ((pOb)(((unsigned)(p) << EscTagSize) | (unsigned)(t)))
 
-#define SYMBOL(p)	MAKETAGGED(OTsym, intern(p))
-#define FIXNUM(v)	((pOb)(((uintptr_t)(v) << TagSize) | (uintptr_t)OTfixnum))
+#define SYMBOL(p) MAKETAGGED(OTsym, intern(p))
+#define FIXNUM(v) ((pOb)(((unsigned)(v) << TagSize) | (unsigned)OTfixnum))
 
 #ifdef TWOS_COMPLEMENT
 
 // This sum macro probably only works on two's complement machines.
 
-#define FIXNUM_SUM(n, i)	((pOb)((intptr_t)n + (i<<TagSize)))
+#define FIXNUM_SUM(n, i) ((pOb)((int)n + (i << TagSize)))
 #else
-#define FIXNUM_SUM(n, i)	FIXNUM(FIXVAL(n) + (i))
+#define FIXNUM_SUM(n, i) FIXNUM(FIXVAL(n) + (i))
 #endif
 
-#define MAX_FIXNUM	FIXNUM(LONG_MAX>>TagSize)
-#define MIN_FIXNUM	FIXNUM(LONG_MIN>>TagSize)
+#define MAX_FIXNUM FIXNUM(LONG_MAX >> TagSize)
+#define MIN_FIXNUM FIXNUM(LONG_MIN >> TagSize)
 
-#define FIXNUM_INC(n)	(n = FIXNUM_SUM(n, 1))
-#define FIXNUM_DEC(n)	(n = FIXNUM_SUM(n, -1))
+#define FIXNUM_INC(n) (n = FIXNUM_SUM(n, 1))
+#define FIXNUM_DEC(n) (n = FIXNUM_SUM(n, -1))
 
-#define RBLBOOL(v)	MAKEESCTAGGED(OTbool, v)
-#define RBLCHAR(v)	MAKEESCTAGGED(OTchar, v)
+#define RBLBOOL(v) MAKEESCTAGGED(OTbool, v)
+#define RBLCHAR(v) MAKEESCTAGGED(OTchar, v)
 
 
 class Actor;
@@ -289,23 +289,22 @@ class Word32Vec;
 class XferNode;
 
 
-typedef Actor*        pSBO;
-typedef Ctxt*         pCtxt;
-typedef Ob*           pOb;
+typedef Actor* pSBO;
+typedef Ctxt* pCtxt;
+typedef Ob* pOb;
 typedef StdExtension* pExt;
-typedef StdMeta*      pMeta;
-typedef Tuple*        pTuple;
+typedef StdMeta* pMeta;
+typedef Tuple* pTuple;
 
 
-extern TupleExpr*	NILexpr;
-extern pTuple		NIL;
+extern TupleExpr* NILexpr;
+extern pTuple NIL;
 
 
 #define NI(string) notImplemented(string)
 
 
-extern pOb obcpy (pOb, pOb, int);
-
+extern pOb obcpy(pOb, pOb, int);
 
 
 extern pOb RBLEOF;
@@ -320,98 +319,85 @@ extern pOb emptyMbox;
 extern pOb lockedMbox;
 
 
-enum SysCode { syscodeInvalid, syscodeUpcall, syscodeSuspended, syscodeInterrupt, syscodeSleep, syscodeDeadThread };
+enum SysCode {
+    syscodeInvalid,
+    syscodeUpcall,
+    syscodeSuspended,
+    syscodeInterrupt,
+    syscodeSleep,
+    syscodeDeadThread
+};
 
-#define RBLTRUE  	RBLBOOL(TRUE)
-#define RBLFALSE	RBLBOOL(FALSE)
-#define NIV		MAKEESCTAGGED(OTniv,    0)
-#define INVALID		MAKEESCTAGGED(OTsysval, syscodeInvalid)
-#define UPCALL		MAKEESCTAGGED(OTsysval, syscodeUpcall)
-#define SUSPENDED	MAKEESCTAGGED(OTsysval, syscodeSuspended)
-#define INTERRUPT	MAKEESCTAGGED(OTsysval, syscodeInterrupt)
-#define SLEEP		MAKEESCTAGGED(OTsysval, syscodeSleep)
-#define DEADTHREAD	MAKEESCTAGGED(OTsysval, syscodeDeadThread)
+#define RBLTRUE RBLBOOL(TRUE)
+#define RBLFALSE RBLBOOL(FALSE)
+#define NIV MAKEESCTAGGED(OTniv, 0)
+#define INVALID MAKEESCTAGGED(OTsysval, syscodeInvalid)
+#define UPCALL MAKEESCTAGGED(OTsysval, syscodeUpcall)
+#define SUSPENDED MAKEESCTAGGED(OTsysval, syscodeSuspended)
+#define INTERRUPT MAKEESCTAGGED(OTsysval, syscodeInterrupt)
+#define SLEEP MAKEESCTAGGED(OTsysval, syscodeSleep)
+#define DEADTHREAD MAKEESCTAGGED(OTsysval, syscodeDeadThread)
 
 #include "Bits.h"
 
-#define GET_TAGGED_TAG(x) GET_LF(x,0,TagSize)
-#define GET_TAGGED_DATA(x) GET_LF(x,0+TagSize,WordSize-TagSize)
+#define GET_TAGGED_TAG(x) GET_LF(x, 0, TagSize)
+#define GET_TAGGED_DATA(x) GET_LF(x, 0 + TagSize, WordSize - TagSize)
 
-#define GET_ESCTAGGED_TAG(x) GET_LF(x,0,EscTagSize)
-#define GET_ESCTAGGED_DATA(x) GET_LF(x,0+EscTagSize,(WordSize-EscTagSize))
+#define GET_ESCTAGGED_TAG(x) GET_LF(x, 0, EscTagSize)
+#define GET_ESCTAGGED_DATA(x) GET_LF(x, 0 + EscTagSize, (WordSize - EscTagSize))
 
-union TagExtract
-{
+union TagExtract {
     pOb ptr;
     unsigned int locfields;
 };
 
 
-inline
-int
-TAG (pOb x)
-{
+inline int TAG(pOb x) {
     TagExtract te;
     te.ptr = x;
     return GET_TAGGED_TAG(te);
 }
 
-inline
-int
-ESCTAG (pOb x)
-{
+inline int ESCTAG(pOb x) {
     TagExtract te;
     te.ptr = x;
     return GET_ESCTAGGED_TAG(te);
 }
 
-#define SIGN_EXTEND(a,n) \
-  ((((int)a) << (WordSize - (n))) >>(WordSize - (n)))
+#define SIGN_EXTEND(a, n) ((((int)a) << (WordSize - (n))) >> (WordSize - (n)))
 
-inline
-int
-TAGVAL (pOb x)
-{
+inline int TAGVAL(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return SIGN_EXTEND(GET_TAGGED_DATA(te),WordSize-TagSize);
-
+    return SIGN_EXTEND(GET_TAGGED_DATA(te), WordSize - TagSize);
 }
 
-inline
-int
-ESCVAL (pOb x)
-{
+inline int ESCVAL(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te),WordSize-EscTagSize);
+    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te), WordSize - EscTagSize);
 }
 
 
-#define PTR(ob)		((pOb)(ob))
-#define NPTR(ob)	((pOb)(ob))
-#define SYMPTR(ob)	((char*)((uintptr_t)PTR(ob) - OTsym))
+#define PTR(ob) ((pOb)(ob))
+#define NPTR(ob) ((pOb)(ob))
+#define SYMPTR(ob) ((char*)((unsigned)PTR(ob) - OTsym))
 
-#define BOOLVAL(ob)	ESCVAL(ob)
-#define CHARVAL(ob)	ESCVAL(ob)
-#define FIXVAL(ob)	TAGVAL(ob)
-#define SYSVAL(ob)	((SysCode)ESCVAL(ob))
+#define BOOLVAL(ob) ESCVAL(ob)
+#define CHARVAL(ob) ESCVAL(ob)
+#define FIXVAL(ob) TAGVAL(ob)
+#define SYSVAL(ob) ((SysCode)ESCVAL(ob))
 
-#define IS_PTR(ob)	(TAG(ob) == OTptr)
-#define IS_SYM(ob)	(TAG(ob) == OTsym)
-#define IS_FIXNUM(ob)	(TAG(ob) == OTfixnum)
-#define IS(t, ob)	(t < OTesc ? (TAG(ob) == t) : (ESCTAG(ob) == t))
-
-
-extern pOb decodeAtom (pOb);
+#define IS_PTR(ob) (TAG(ob) == OTptr)
+#define IS_SYM(ob) (TAG(ob) == OTsym)
+#define IS_FIXNUM(ob) (TAG(ob) == OTfixnum)
+#define IS(t, ob) (t < OTesc ? (TAG(ob) == t) : (ESCTAG(ob) == t))
 
 
-inline
-pOb
-BASE (pOb v)
-{
-    return TAG(v) == OTptr ? v : decodeAtom(v);
-}
+extern pOb decodeAtom(pOb);
+
+
+inline pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
 
 
 /*
@@ -440,61 +426,53 @@ BASE (pOb v)
  */
 
 
-typedef pOb  (Ob::*PSOb__PSOb) ();
-typedef int  (Ob::*SI__PSOb) ();
-typedef void (Ob::*V__PSOb) ();
+typedef pOb (Ob::*PSOb__PSOb)();
+typedef int (Ob::*SI__PSOb)();
+typedef void (Ob::*V__PSOb)();
 
-extern int  useIfPtr (void*, PSOb__PSOb);
-extern int  useIfPtr (pOb, SI__PSOb);
-extern void useIfPtr (pOb, V__PSOb);
+extern int useIfPtr(void*, PSOb__PSOb);
+extern int useIfPtr(pOb, SI__PSOb);
+extern void useIfPtr(pOb, V__PSOb);
 
 /*
  * Use MF_ADDR(fn) to get the address of a member function.
  */
 
 #define MF_ADDR(fn) &fn
-
+
 enum GcFlags {
-  f_forwarded, // TRUE iff object has been forwarded.
-  f_remembered, // TRUE iff object has been remembered.
-  f_marked, // TRUE iff object has been marked.
-  f_freed, // TRUE iff object is on a free list somewhere.
-  f_visited, // TRUE iff object has been visited (auxiliary).
-  f_foreign, // TRUE iff object contains foreign pointers
-};	  
-
-struct HeaderLayout
-{   unsigned char flags;	// See above
-    unsigned char  age;		// The number of scavenges the object has survived.
-    unsigned short size;	// The total size (in bytes) of the object.
+    f_forwarded,   // TRUE iff object has been forwarded.
+    f_remembered,  // TRUE iff object has been remembered.
+    f_marked,      // TRUE iff object has been marked.
+    f_freed,       // TRUE iff object is on a free list somewhere.
+    f_visited,     // TRUE iff object has been visited (auxiliary).
+    f_foreign,     // TRUE iff object contains foreign pointers
 };
 
-union HeaderBits
-{
-    HeaderLayout 	fields;
-    unsigned int	all;
-
-    HeaderBits (HeaderBits&);
-    HeaderBits (int);
+struct HeaderLayout {
+    unsigned char flags;  // See above
+    unsigned char age;    // The number of scavenges the object has survived.
+    unsigned short size;  // The total size (in bytes) of the object.
 };
 
-inline
-HeaderBits::HeaderBits (HeaderBits& hb)
-{
-    all = hb.all;
-}
+union HeaderBits {
+    HeaderLayout fields;
+    unsigned int all;
 
-inline
-HeaderBits::HeaderBits (int sz)
-{
+    HeaderBits(HeaderBits&);
+    HeaderBits(int);
+};
+
+inline HeaderBits::HeaderBits(HeaderBits& hb) { all = hb.all; }
+
+inline HeaderBits::HeaderBits(int sz) {
     all = 0;
     fields.size = sz;
 }
 
-struct convertArgReturnPair
-{
-  Word32 val;
-  int    failp;
+struct convertArgReturnPair {
+    uint32_t val;
+    int failp;
 };
 
 extern convertArgReturnPair cnvArgRetPair;
@@ -542,27 +520,24 @@ extern convertArgReturnPair cnvArgRetPair;
  */
 
 
-
 #include "Location.h"
 
 
-class Base
-{
-  public:
+class Base {
+   public:
+    static char** classNames;
+    static uint32_t* obCounts;
+    static int nClasses;
 
-    static char**		classNames;
-    static unsigned long*	obCounts;
-    static int			nClasses;
+    Base(EMPTY);
 
-    Base (EMPTY);
-
-    virtual char*	typestring (EMPTY);
-    virtual void	updateCnt (EMPTY);
-    static void		defSlot (const char*, Location);
+    virtual char* typestring(EMPTY);
+    virtual void updateCnt(EMPTY);
+    static void defSlot(const char*, Location);
 };
 
 
-inline Base::Base (EMPTY) { }
+inline Base::Base(EMPTY) {}
 
 
 /*
@@ -583,24 +558,21 @@ struct InPlace_Constructor {
 #define BuildInPlace ((InPlace_Constructor*)0)
 
 
-class Ob : public Base
-{
-  protected:
-
+class Ob : public Base {
+   protected:
     static char stringbuf[256];
 
-    Ob (int, pOb, pOb);
-    Ob (InPlace_Constructor*);
-    Ob (InPlace_Constructor*, int);
-    Ob (InPlace_Constructor*, pOb, pOb);
+    Ob(int, pOb, pOb);
+    Ob(InPlace_Constructor*);
+    Ob(InPlace_Constructor*, int);
+    Ob(InPlace_Constructor*, pOb, pOb);
 
     friend class BuiltinClass;
     friend class OldSpace;
 
-  public:
-
-    HeaderBits	header;
-    pOb		_slot[2];
+   public:
+    HeaderBits header;
+    pOb _slot[2];
 
     /*
      * The mandatory meta and parent fields are contained in _slot[0] and
@@ -610,144 +582,144 @@ class Ob : public Base
      * object pointers.
      */
 
-    virtual ~Ob (EMPTY);
+    virtual ~Ob(EMPTY);
 
-    void* operator new (size_t);
-    void* operator new (size_t, void*);
-    void  operator delete (void*);
+    void* operator new(size_t);
+    void* operator new(size_t, void*);
+    void operator delete(void*);
 
-    pOb&	meta (EMPTY);
-    pOb&	parent (EMPTY);
-    pOb&	slot(int);
+    pOb& meta(EMPTY);
+    pOb& parent(EMPTY);
+    pOb& slot(int);
 
-    pOb*	endp (EMPTY);
-    pOb&	forwardingAddress (EMPTY);
-    void	forwardTo (pOb);
-    bool	checkStore (pOb);
-    bool	reallyCheckStore (pOb);
-    int		gcSensitive (EMPTY);
-    pOb		relocate (EMPTY);
-    bool	suspicious (EMPTY);
-    int		numberOfSlots (EMPTY);
-    void	clobberVtbl (pOb);
+    pOb* endp(EMPTY);
+    pOb& forwardingAddress(EMPTY);
+    void forwardTo(pOb);
+    bool checkStore(pOb);
+    bool reallyCheckStore(pOb);
+    int gcSensitive(EMPTY);
+    pOb relocate(EMPTY);
+    bool suspicious(EMPTY);
+    int numberOfSlots(EMPTY);
+    void clobberVtbl(pOb);
 
-    void	notImplemented (char*);
+    void notImplemented(char*);
 
-    void	mark (EMPTY);
-    void	check (EMPTY);
-    void	checkOb (EMPTY);
-    int		size (EMPTY);
-    int		obCount (EMPTY);
-    void	unvisit (EMPTY);
+    void mark(EMPTY);
+    void check(EMPTY);
+    void checkOb(EMPTY);
+    int size(EMPTY);
+    int obCount(EMPTY);
+    void unvisit(EMPTY);
 
-    virtual pOb	self (EMPTY);
+    virtual pOb self(EMPTY);
 
     /* Garbage collector interface */
 
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
-    virtual bool	gcFixup (EMPTY);
-    virtual bool	scavengeFixup (EMPTY);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
+    virtual bool gcFixup(EMPTY);
+    virtual bool scavengeFixup(EMPTY);
 
     /* Generic runtime actions */
 
-    virtual bool	ConstantP (EMPTY);
-    virtual Prim*	InlineablePrimP (EMPTY);
-    virtual void	printOn (FILE*);
-    virtual void	printQuotedOn (FILE*);
-    virtual void	displayOn (FILE* s);
-    virtual pOb		container (EMPTY);
-    virtual pOb		mailbox (EMPTY);
-    virtual pOb		setMailbox (pOb);
-    virtual pOb		rcons (pOb);
-    virtual int		addSlot (pOb, pOb);
-    virtual pOb		dup (EMPTY);
-    virtual pOb		clone (EMPTY);
-    virtual pOb		cloneTo (pOb, pOb);
-    virtual pOb		getLex (int, int, int);
-    virtual pOb		setLex (int, int, int, pOb);
-    virtual pOb		getAddr (int, int, int);
-    virtual pOb		setAddr (int, int, int, pOb);
-    virtual pOb		getField (int, int, int, int, int);
-    virtual pOb		setField (int, int, int, int, Word32);
-    virtual pOb		indexedSize (EMPTY);
-    virtual pOb		nth (int);
-    virtual pOb		setNth (int, pOb);
-    virtual pOb		subObject (int, int);
-    virtual const char*	asCstring (EMPTY);
-    virtual char*	asPathname (EMPTY);
+    virtual bool ConstantP(EMPTY);
+    virtual Prim* InlineablePrimP(EMPTY);
+    virtual void printOn(FILE*);
+    virtual void printQuotedOn(FILE*);
+    virtual void displayOn(FILE* s);
+    virtual pOb container(EMPTY);
+    virtual pOb mailbox(EMPTY);
+    virtual pOb setMailbox(pOb);
+    virtual pOb rcons(pOb);
+    virtual int addSlot(pOb, pOb);
+    virtual pOb dup(EMPTY);
+    virtual pOb clone(EMPTY);
+    virtual pOb cloneTo(pOb, pOb);
+    virtual pOb getLex(int, int, int);
+    virtual pOb setLex(int, int, int, pOb);
+    virtual pOb getAddr(int, int, int);
+    virtual pOb setAddr(int, int, int, pOb);
+    virtual pOb getField(int, int, int, int, int);
+    virtual pOb setField(int, int, int, int, uint32_t);
+    virtual pOb indexedSize(EMPTY);
+    virtual pOb nth(int);
+    virtual pOb setNth(int, pOb);
+    virtual pOb subObject(int, int);
+    virtual const char* asCstring(EMPTY);
+    virtual char* asPathname(EMPTY);
 
     /* Object actions */
 
-    virtual bool	isSynchronousTrgt (EMPTY);
-    virtual pOb		dispatch (pCtxt);
-    virtual pOb		invoke (pCtxt);
-    virtual pOb		lookup (pOb, pCtxt);
-    virtual pOb		lookupAndInvoke (pCtxt);
-    virtual pOb		nextMsg (MboxOb*, pOb);
-    virtual pOb		updateNoArgs ();
-    virtual pOb		update (bool, pCtxt);
-    virtual pOb		updateByLoc (bool, pCtxt);
-    virtual pOb		primitiveInitialize (pCtxt);
-    virtual pOb		receive (pCtxt);
-    virtual pOb		receiveMsg (MboxOb*, pCtxt);
-    virtual pOb		becomeNew (pOb, pCtxt);
-    virtual bool	accepts (pCtxt);
-    virtual bool	matches (pCtxt);
+    virtual bool isSynchronousTrgt(EMPTY);
+    virtual pOb dispatch(pCtxt);
+    virtual pOb invoke(pCtxt);
+    virtual pOb lookup(pOb, pCtxt);
+    virtual pOb lookupAndInvoke(pCtxt);
+    virtual pOb nextMsg(MboxOb*, pOb);
+    virtual pOb updateNoArgs();
+    virtual pOb update(bool, pCtxt);
+    virtual pOb updateByLoc(bool, pCtxt);
+    virtual pOb primitiveInitialize(pCtxt);
+    virtual pOb receive(pCtxt);
+    virtual pOb receiveMsg(MboxOb*, pCtxt);
+    virtual pOb becomeNew(pOb, pCtxt);
+    virtual bool accepts(pCtxt);
+    virtual bool matches(pCtxt);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob*         convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 
-    virtual pOb         isNullP(EMPTY);
+    virtual pOb isNullP(EMPTY);
 
     /* Type system methods */
-    pOb                 typep(pOb);
-    virtual bool        hasParentp(pOb);
-    virtual bool        compositeCoversp(pOb);
-    virtual bool        isCoveredByp(pOb);
-    virtual bool        coversp(pOb);
-    virtual bool        typeMatchesp(pOb);
-    virtual pOb         typeLub(pOb);
+    pOb typep(pOb);
+    virtual bool hasParentp(pOb);
+    virtual bool compositeCoversp(pOb);
+    virtual bool isCoveredByp(pOb);
+    virtual bool coversp(pOb);
+    virtual bool typeMatchesp(pOb);
+    virtual pOb typeLub(pOb);
 
     /* Meta actions */
 
-    virtual pTuple	keys (pOb);
-    virtual pTuple	locs (pOb);
-    virtual Location	keyLoc (pOb, pOb = ABSENT);
-    virtual pTuple	locContour (pOb);
-    virtual pTuple	contour (pOb);
-    virtual pOb		get (pOb, pOb, pCtxt);
-    virtual pOb		add (pOb, pOb, pOb, pCtxt);
-    virtual pOb		set (pOb, pOb, pOb, pCtxt);
-    virtual void	addRef (EMPTY);
-    virtual void	deleteRef (EMPTY);
-    virtual pOb		lookupOBO (pOb, pOb, pCtxt);
+    virtual pTuple keys(pOb);
+    virtual pTuple locs(pOb);
+    virtual Location keyLoc(pOb, pOb = ABSENT);
+    virtual pTuple locContour(pOb);
+    virtual pTuple contour(pOb);
+    virtual pOb get(pOb, pOb, pCtxt);
+    virtual pOb add(pOb, pOb, pOb, pCtxt);
+    virtual pOb set(pOb, pOb, pOb, pCtxt);
+    virtual void addRef(EMPTY);
+    virtual void deleteRef(EMPTY);
+    virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
     /* Table actions */
 
-    virtual pTuple	dumpKeys (EMPTY);
-    virtual pTuple	dumpPairs (EMPTY);
-    virtual int		nPairs (EMPTY);
-    virtual pOb		getKey (pOb);
-    virtual pOb		addKey (pOb, pOb);
+    virtual pTuple dumpKeys(EMPTY);
+    virtual pTuple dumpPairs(EMPTY);
+    virtual int nPairs(EMPTY);
+    virtual pOb getKey(pOb);
+    virtual pOb addKey(pOb, pOb);
 
     /* Compiler interface */
 
-    virtual Pattern*	makePattern (EMPTY);
-    virtual Template*	makeTemplate (EMPTY);
-    virtual AttrNode*	makeAttrNode (bool);
-    virtual pOb		unquote (EMPTY);
-    virtual Code*	compileWrt (pOb, pOb);
-    virtual Location	lex (pOb, int);
-    virtual pOb		extendWith (pOb);
-    virtual pOb		extendWith (pOb, pTuple);
+    virtual Pattern* makePattern(EMPTY);
+    virtual Template* makeTemplate(EMPTY);
+    virtual AttrNode* makeAttrNode(bool);
+    virtual pOb unquote(EMPTY);
+    virtual Code* compileWrt(pOb, pOb);
+    virtual Location lex(pOb, int);
+    virtual pOb extendWith(pOb);
+    virtual pOb extendWith(pOb, pTuple);
 
     /* error handlers */
 
-    virtual pOb		runtimeError (pCtxt, const char*, ...);
-    virtual pOb		mismatch (pCtxt, int, char*);
-    virtual pOb		mismatch (pCtxt, int, int);
+    virtual pOb runtimeError(pCtxt, const char*, ...);
+    virtual pOb mismatch(pCtxt, int, char*);
+    virtual pOb mismatch(pCtxt, int, int);
 };
 
 
@@ -755,16 +727,17 @@ class Ob : public Base
 
 #define HDR_FLAGS(p) ((p)->header.fields.flags)
 
-#define FORWARDED(p)	   (GET_FLAG((p)->header.fields.flags,f_forwarded))
-#define REMEMBERED(p)      (GET_FLAG((p)->header.fields.flags,f_remembered))
-#define MARKED(p)          (GET_FLAG((p)->header.fields.flags,f_marked))
-#define FREED(p)           (GET_FLAG((p)->header.fields.flags,f_freed))
-#define VISITED(p)         (GET_FLAG((p)->header.fields.flags,f_visited))
-#define FOREIGN(p)         (GET_FLAG((p)->header.fields.flags,f_foreign))
-#define AGE(p)             ((p)->header.fields.age)
-#define SIZE(p)            ((p)->header.fields.size)
+#define FORWARDED(p) (GET_FLAG((p)->header.fields.flags, f_forwarded))
+#define REMEMBERED(p) (GET_FLAG((p)->header.fields.flags, f_remembered))
+#define MARKED(p) (GET_FLAG((p)->header.fields.flags, f_marked))
+#define FREED(p) (GET_FLAG((p)->header.fields.flags, f_freed))
+#define VISITED(p) (GET_FLAG((p)->header.fields.flags, f_visited))
+#define FOREIGN(p) (GET_FLAG((p)->header.fields.flags, f_foreign))
+#define AGE(p) ((p)->header.fields.age)
+#define SIZE(p) ((p)->header.fields.size)
 
-#define SLOT_NUM(type, field) ((int)((pOb*)&((type*)0)->field - (pOb*)&((type*)0)->_slot[2]))
+#define SLOT_NUM(type, field) \
+    ((int)((pOb*)&((type*)0)->field - (pOb*)&((type*)0)->_slot[2]))
 #ifndef offsetof
 #define offsetof(type, field) ((int)&((type*)0)->field)
 #endif
@@ -794,49 +767,44 @@ class Ob : public Base
  */
 
 #define ASSIGN(ptr, field, val) (ptr)->checkStore((ptr)->field = (val))
-#define CHECK_STORE(base, vals) if (IS_OLD(base)) { pOb _base = base; vals; }
+#define CHECK_STORE(base, vals) \
+    if (IS_OLD(base)) {         \
+        pOb _base = base;       \
+        vals;                   \
+    }
 #define VAL(x) _base->reallyCheckStore(x)
 
 
 static const int MinObSize = sizeof(Ob);
 
 
-inline
-void*
-Ob::operator new (size_t, void* p)
-{
-    return p;
+inline void* Ob::operator new(size_t, void* p) { return p; }
+
+
+inline pOb& Ob::meta(EMPTY) { return _slot[0]; }
+inline pOb& Ob::parent(EMPTY) { return _slot[1]; }
+inline pOb& Ob::slot(int n) { return _slot[n + 2]; }
+inline pOb* Ob::endp(EMPTY) { return (pOb*)((char*)this + SIZE(this)); }
+inline pOb& Ob::forwardingAddress(EMPTY) { return _slot[0]; }
+inline bool Ob::checkStore(pOb v) {
+    return IS_OLD(this) && reallyCheckStore(v);
+}
+inline int Ob::gcSensitive(EMPTY) { return IS_NEW(this); }
+inline int Ob::numberOfSlots(EMPTY) {
+    return (SIZE(this) - sizeof(Ob)) / sizeof(pOb);
 }
 
 
-inline pOb& Ob::meta (EMPTY)			{ return _slot[0]; }
-inline pOb& Ob::parent (EMPTY)		{ return _slot[1]; }
-inline pOb& Ob::slot (int n)		{ return _slot[n+2]; }
-inline pOb* Ob::endp (EMPTY)			{ return (pOb*) ((char*)this + SIZE(this)); }
-inline pOb& Ob::forwardingAddress (EMPTY)	{ return _slot[0]; }
-inline bool Ob::checkStore (pOb v)	{ return IS_OLD(this) && reallyCheckStore(v); }
-inline int  Ob::gcSensitive (EMPTY)		{ return IS_NEW(this); }
-inline int  Ob::numberOfSlots (EMPTY)	{ return (SIZE(this)-sizeof(Ob))/sizeof(pOb); }
+inline Ob::Ob(InPlace_Constructor*) : header(this->header) {}
 
 
-inline
-Ob::Ob (InPlace_Constructor*)
-    : header(this->header)
-{ }
-
-
-inline
-Ob::Ob (InPlace_Constructor*, pOb meta, pOb parent)
-    : header(this->header)
-{
+inline Ob::Ob(InPlace_Constructor*, pOb meta, pOb parent)
+    : header(this->header) {
     ASSIGN(this, meta(), meta);
     ASSIGN(this, parent(), parent);
 }
 
-inline
-Ob::Ob (int sz, pOb meta, pOb parent)
-    : header(sz)
-{
+inline Ob::Ob(int sz, pOb meta, pOb parent) : header(sz) {
     /*
      * WARNING: sz must already be properly aligned.  The individual
      * constructors, which are already responsible for requesting the
@@ -848,184 +816,158 @@ Ob::Ob (int sz, pOb meta, pOb parent)
     this->parent() = parent;
 }
 
-
 
-class MboxOb : public Ob
-{
-  protected:
+class MboxOb : public Ob {
+   protected:
+    MboxOb(int, pOb, pOb, pOb);
+    MboxOb(InPlace_Constructor*);
 
-    MboxOb (int, pOb, pOb, pOb);
-    MboxOb (InPlace_Constructor*);
-  
-  public:
+   public:
+    pOb mbox;
 
-    pOb	mbox;
-
-    virtual pOb		mailbox (EMPTY);
-    virtual pOb		setMailbox (pOb);
-    virtual pOb		receive (pCtxt);
-    virtual void	schedule (pCtxt);
+    virtual pOb mailbox(EMPTY);
+    virtual pOb setMailbox(pOb);
+    virtual pOb receive(pCtxt);
+    virtual void schedule(pCtxt);
 };
 
 
-inline
-MboxOb::MboxOb (int sz, pOb meta, pOb parent, pOb mbox)
-    : Ob(sz, meta, parent)
-{
+inline MboxOb::MboxOb(int sz, pOb meta, pOb parent, pOb mbox)
+    : Ob(sz, meta, parent) {
     this->mbox = mbox;
 }
 
 
-inline
-MboxOb::MboxOb (InPlace_Constructor* ipc) : Ob(ipc) { }
+inline MboxOb::MboxOb(InPlace_Constructor* ipc) : Ob(ipc) {}
 
-
 
 class SlotDescriptor;
 
 
-#define STD_DECLS(classname)						      \
-friend class BuiltinClass;						      \
-public:									      \
-virtual void updateCnt (EMPTY);						      \
-virtual char* typestring (EMPTY);						      \
-static pMeta name2(classname,Meta);					      \
-static pSBO name2(classname,SBO);					      \
-static SlotDescriptor* _meta_fields
+#define STD_DECLS(classname)             \
+    friend class BuiltinClass;           \
+                                         \
+   public:                               \
+    virtual void updateCnt(EMPTY);       \
+    virtual char* typestring(EMPTY);     \
+    static pMeta name2(classname, Meta); \
+    static pSBO name2(classname, SBO);   \
+    static SlotDescriptor* _meta_fields
 
 
-#define CLASS_META(name) name2(name::name,Meta)
-#define CLASS_SBO(name) name2(name::name,SBO)
+#define CLASS_META(name) name2(name::name, Meta)
+#define CLASS_SBO(name) name2(name::name, SBO)
 
 
-inline pMeta META (pOb ob) { return (pMeta) ob->meta(); }
-inline pSBO SBO (pOb ob) { return (pSBO) ob->parent(); }
+inline pMeta META(pOb ob) { return (pMeta)ob->meta(); }
+inline pSBO SBO(pOb ob) { return (pSBO)ob->parent(); }
 
-
 
-class Actor : public MboxOb
-{
+class Actor : public MboxOb {
     STD_DECLS(Actor);
 
-  protected:
+   protected:
+    Actor(int, pOb, pOb, pOb, pExt);
+    Actor(InPlace_Constructor*);
+    Actor(pOb, pOb, pExt);
 
-    Actor (int, pOb, pOb, pOb, pExt);
-    Actor (InPlace_Constructor*);
-    Actor (pOb, pOb, pExt);
+   public:
+    pExt extension;
 
-  public:
+    static Actor* create(EMPTY);
+    static Actor* create(pOb, pOb, pExt);
 
-    pExt		extension;
-
-    static Actor* create (EMPTY);
-    static Actor* create (pOb, pOb, pExt);
-
-    virtual pOb 	container (EMPTY);
-    virtual int		addSlot (pOb, pOb);
-    virtual pOb		dup (EMPTY);
-    virtual pOb		cloneTo (pOb, pOb);
-    virtual pOb		updateNoArgs ();
-    virtual pOb		update (bool, pCtxt);
-    virtual pOb		updateByLoc (bool, pCtxt);
-    virtual pOb		primitiveInitialize (pCtxt);
-    virtual pOb		becomeNew (pOb, pCtxt);
-    virtual pOb		dispatch (pCtxt);
-    virtual pOb		lookupAndInvoke (pCtxt);
-    virtual void	schedule (pCtxt);
+    virtual pOb container(EMPTY);
+    virtual int addSlot(pOb, pOb);
+    virtual pOb dup(EMPTY);
+    virtual pOb cloneTo(pOb, pOb);
+    virtual pOb updateNoArgs();
+    virtual pOb update(bool, pCtxt);
+    virtual pOb updateByLoc(bool, pCtxt);
+    virtual pOb primitiveInitialize(pCtxt);
+    virtual pOb becomeNew(pOb, pCtxt);
+    virtual pOb dispatch(pCtxt);
+    virtual pOb lookupAndInvoke(pCtxt);
+    virtual void schedule(pCtxt);
 };
 
 
-inline Actor::Actor (int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
-    : MboxOb(sz, meta, parent, mbox), extension(ext)
-{ }
+inline Actor::Actor(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
+    : MboxOb(sz, meta, parent, mbox), extension(ext) {}
 
-inline Actor::Actor (InPlace_Constructor* ipc) : MboxOb(ipc) { }
+inline Actor::Actor(InPlace_Constructor* ipc) : MboxOb(ipc) {}
 
 
-class StdExtension : public Ob
-{
+class StdExtension : public Ob {
     STD_DECLS(StdExtension);
 
-  protected:
-
-    StdExtension (pOb, pOb, int);
-    StdExtension (pOb, pOb);
-    StdExtension (int);
-    StdExtension (pTuple);
+   protected:
+    StdExtension(pOb, pOb, int);
+    StdExtension(pOb, pOb);
+    StdExtension(int);
+    StdExtension(pTuple);
 
     friend class Tuple;
 
-  public:
-
-    static StdExtension* create (pOb, pOb, int);
-    static StdExtension* create (int);
-    static StdExtension* create (pTuple);
+   public:
+    static StdExtension* create(pOb, pOb, int);
+    static StdExtension* create(int);
+    static StdExtension* create(pTuple);
 };
 
 
-
-class TblObject : public Actor
-{
+class TblObject : public Actor {
     STD_DECLS(TblObject);
 
-  protected:
+   protected:
+    TblObject(pExt, pOb, pTuple);
 
-    TblObject (pExt, pOb, pTuple);
+   public:
+    pOb validExtent;
+    pTuple keyVec;
 
-  public:
+    static TblObject* create(EMPTY);
 
-    pOb		validExtent;
-    pTuple	keyVec;
-
-    static TblObject* create (EMPTY);
-
-    virtual int	addSlot (pOb, pOb);
-    pOb		entry (int);
-    pOb		entryKey (int);
+    virtual int addSlot(pOb, pOb);
+    pOb entry(int);
+    pOb entryKey(int);
 };
 
 
-inline
-pOb
-TblObject::entry (int n)
-{
-    return extension->slot(n);
-}
+inline pOb TblObject::entry(int n) { return extension->slot(n); }
 
-
-class StdMeta : public Actor
-{
+
+class StdMeta : public Actor {
     STD_DECLS(StdMeta);
 
-  protected:
+   protected:
+    StdMeta(int, pOb, pOb, pOb, pExt);
+    StdMeta(InPlace_Constructor*);
+    StdMeta(EMPTY);
+    StdMeta(pExt);
 
-    StdMeta (int, pOb, pOb, pOb, pExt);
-    StdMeta (InPlace_Constructor*);
-    StdMeta (EMPTY);
-    StdMeta (pExt);
-  public:
+   public:
+    static StdMeta* create(EMPTY);
+    static StdMeta* create(pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
 
-    static StdMeta* create (EMPTY);
-    static StdMeta* create (pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
+    virtual pOb cloneTo(pOb, pOb);
+    virtual pTuple keys(pOb);
+    virtual pTuple locs(pOb);
+    virtual Location keyLoc(pOb, pOb = ABSENT);
+    virtual pTuple locContour(pOb);
+    virtual pTuple contour(pOb);
+    virtual pOb get(pOb, pOb, pCtxt);
+    virtual pOb add(pOb, pOb, pOb, pCtxt);
+    virtual pOb set(pOb, pOb, pOb, pCtxt);
+    virtual void addRef(EMPTY);
+    virtual void deleteRef(EMPTY);
+    virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
-    virtual pOb		cloneTo (pOb, pOb);
-    virtual pTuple	keys (pOb);
-    virtual pTuple	locs (pOb);
-    virtual Location	keyLoc (pOb, pOb = ABSENT);
-    virtual pTuple	locContour (pOb);
-    virtual pTuple	contour (pOb);
-    virtual pOb		get (pOb, pOb, pCtxt);
-    virtual pOb		add (pOb, pOb, pOb, pCtxt);
-    virtual pOb		set (pOb, pOb, pOb, pCtxt);
-    virtual void	addRef (EMPTY);
-    virtual void	deleteRef (EMPTY);
-    virtual pOb		lookupOBO (pOb, pOb, pCtxt);
-
-    void	allocateMap (EMPTY);
-    pOb		map (EMPTY);
-    bool	isShared (EMPTY);
-    bool	clientsAreExtensible (EMPTY);
-    void	becomeIndexed (int);
+    void allocateMap(EMPTY);
+    pOb map(EMPTY);
+    bool isShared(EMPTY);
+    bool clientsAreExtensible(EMPTY);
+    void becomeIndexed(int);
 };
 
 
@@ -1035,37 +977,41 @@ static const int STDMETA_EXTENSIBLE_SLOT = 2;
 
 static const int BUILTIN_STDMETA_SLOTS = 3;
 
-inline pOb  StdMeta::map (EMPTY) { return extension->slot(STDMETA_MAP_SLOT); }
-inline bool StdMeta::isShared (EMPTY) { return extension->slot(STDMETA_REFCOUNT_SLOT) > FIXNUM(1); }
-inline bool StdMeta::clientsAreExtensible (EMPTY) { return BOOLVAL(extension->slot(STDMETA_EXTENSIBLE_SLOT)); }
+inline pOb StdMeta::map(EMPTY) { return extension->slot(STDMETA_MAP_SLOT); }
+inline bool StdMeta::isShared(EMPTY) {
+    return extension->slot(STDMETA_REFCOUNT_SLOT) > FIXNUM(1);
+}
+inline bool StdMeta::clientsAreExtensible(EMPTY) {
+    return BOOLVAL(extension->slot(STDMETA_EXTENSIBLE_SLOT));
+}
 
-inline
-StdMeta::StdMeta (int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
-    : Actor(sz, meta, parent, mbox, ext)
-{ }
+inline StdMeta::StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
+    : Actor(sz, meta, parent, mbox, ext) {}
 
-inline
-StdMeta::StdMeta (InPlace_Constructor* ipc)
-    : Actor(ipc)
-{ }
-
+inline StdMeta::StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
+
 extern pOb TopEnv;
 extern pOb Qanon;
 
-extern int	debugging_level;
+extern int debugging_level;
 
 #define IS_A(ob, type) (BASE(ob)->meta() == CLASS_META(type))
 
 
-extern void Define (char*, pOb, Ob* = GlobalEnv);
-extern void Define (pOb, pOb, Ob* = GlobalEnv);
+extern void Define(char*, pOb, Ob* = GlobalEnv);
+extern void Define(pOb, pOb, Ob* = GlobalEnv);
 
 
 /* defined in StringStore.cc */
-extern const char* intern (const char*);
+extern const char* intern(const char*);
 
-#define UNIMPLEMENTED(type,clas,op,args) type clas::op args { NI(_STRING(op)); return((type)INVALID); }
-#define UNIMPLEMENTED_VOID(clas,op,args) void clas::op args { NI(_STRING(op)); }
+#define UNIMPLEMENTED(type, clas, op, args) \
+    type clas::op args {                    \
+        NI(_STRING(op));                    \
+        return ((type)INVALID);             \
+    }
+#define UNIMPLEMENTED_VOID(clas, op, args) \
+    void clas::op args { NI(_STRING(op)); }
 
 /*
  * These macros are used to synthesize internal names for the functions
@@ -1076,9 +1022,9 @@ extern const char* intern (const char*);
  */
 
 
-typedef pOb PRIMFN (Ob*, pCtxt);
-#define PRIM_NAME(name) name2(_f_,name)
-#define BUILTIN_PRIM(name) pOb PRIM_NAME(name) (Ob* __PRIM__, pCtxt __CTXT__)
+typedef pOb PRIMFN(Ob*, pCtxt);
+#define PRIM_NAME(name) name2(_f_, name)
+#define BUILTIN_PRIM(name) pOb PRIM_NAME(name)(Ob * __PRIM__, pCtxt __CTXT__)
 
 #include "misc.h"
 

@@ -35,53 +35,38 @@
 #include "PtrCollect.h"
 #include "Ob.h"
 
-class ObStk : public PtrCollection
-{
-  public:
+class ObStk : public PtrCollection {
+   public:
+    ObStk();
+    ObStk(int);
 
-    ObStk ();
-    ObStk (int);
+    void reset();
+    void push(Ob*);
+    Ob* pop();
+    Ob*& top(int = 1);
 
-    void	reset ();
-    void	push (Ob*);
-    Ob*		pop ();
-    Ob*&	top (int = 1);
+    int traversePtrs(PSOb__PSOb);
+    int traversePtrs(SI__PSOb);
+    void traversePtrs(V__PSOb);
 
-    int		traversePtrs (PSOb__PSOb);
-    int		traversePtrs (SI__PSOb);
-    void	traversePtrs (V__PSOb);
-
-    void	scavenge ();
-    void	mark ();
-    void	check ();
+    void scavenge();
+    void mark();
+    void check();
 };
 
 
-inline ObStk::ObStk () : PtrCollection() { }
-inline ObStk::ObStk (int sz) : PtrCollection(sz) { }
+inline ObStk::ObStk() : PtrCollection() {}
+inline ObStk::ObStk(int sz) : PtrCollection(sz) {}
 
 
-inline
-void
-ObStk::push (Ob* o)
-{
-    PtrCollection::add((void*)o);
-}
+inline void ObStk::push(Ob* o) { PtrCollection::add((void*)o); }
 
 
-inline
-Ob*
-ObStk::pop ()
-{
-    return (Ob*)(*--next);
-}
+inline Ob* ObStk::pop() { return (Ob*)(*--next); }
 
 
-inline
-Ob*&
-ObStk::top (int n)
-{
-    Ob** p = (Ob**)(next-n);
+inline Ob*& ObStk::top(int n) {
+    Ob** p = (Ob**)(next - n);
     return *p;
 }
 

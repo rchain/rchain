@@ -1,0 +1,193 @@
+number of keys	1000
+number of values/key	1
+map size	32000
+number of keys	1000
+number of values/key	1
+map size	32000
+duration	1
+put	0
+puts/ms	-1
+get	1
+gets/ms	1000
+	
+number of keys	1300
+number of values/key	1
+map size	41600
+duration	0
+put	0
+puts/ms	-1
+get	0
+gets/ms	-1
+	
+number of keys	10000
+number of values/key	1
+map size	320000
+duration	7
+put	4
+puts/ms	2500
+get	3
+gets/ms	3333
+	
+number of keys	13000
+number of values/key	1
+map size	416000
+duration	9
+put	5
+puts/ms	2600
+get	4
+gets/ms	3250
+	
+number of keys	500000
+values/key	1
+map size	32000000
+duration	676
+put	348
+puts/ms	1436
+get	328
+gets/ms	1524
+	
+number of keys	500000
+values/key	1
+map size	32000000
+duration	650
+put	354
+puts/ms	1412
+get	296
+gets/ms	1689
+	
+number of keys	500000
+values/key	1
+map size	24000000
+duration	599
+put	307
+puts/ms	1628
+get	292
+gets/ms	1712
+	
+number of keys	500000
+values/key	1
+map size	16000000
+duration	579
+put	307
+puts/ms	1628
+get	272
+gets/ms	1838
+	
+number of keys	1000000
+values/key	1
+map size	32000000
+duration	1503
+put	724
+puts/ms	1381
+get	779
+gets/ms	1283
+	
+number of keys	2000000
+values/key	1
+map size	64000000
+duration	3702
+put	1921
+puts/ms	1041
+get	1781
+gets/ms	1122
+	
+number of keys	3000000
+values/key	1
+map size	96000000
+duration	6181
+put	3215
+puts/ms	933
+get	2966
+gets/ms	1011
+	
+number of keys	4000000
+values/key	1
+map size	128000000
+duration	8209
+put	4258
+puts/ms	939
+get	3951
+gets/ms	1012
+	
+number of keys	5000000
+values/key	1
+map size	160000000
+duration	10908
+put	5720
+puts/ms	874
+get	5188
+gets/ms	963
+	
+number of keys	6000000
+values/key	1
+map size	192000000
+duration	13672
+put	6978
+puts/ms	859
+get	6694
+gets/ms	896
+	
+number of keys	7000000
+values/key	1
+map size	224000000
+duration	16265
+put	8920
+puts/ms	784
+get	7345
+gets/ms	953
+	
+number of keys	8000000
+values/key	1
+map size	256000000
+duration	18034
+put	9361
+puts/ms	854
+get	8673
+gets/ms	922
+	
+number of keys	9000000
+values/key	1
+map size	288000000
+duration	21387
+put	10777
+puts/ms	835
+get	10610
+gets/ms	848
+	
+number of keys	10000000
+number of values/key	1
+map size	320000000
+duration	23210
+put	12023
+puts/ms	831
+get	11187
+gets/ms	893
+	
+number of keys	15000000
+values/key	1
+map size	480000000
+duration	36795
+put	19014
+puts/ms	788
+get	17781
+gets/ms	843
+	
+number of keys	20000000
+values/key	1
+map size	640000000
+duration	51195
+put	26198
+puts/ms	763
+get	24997
+gets/ms	800
+	
+number of keys	30000000
+values/key	1
+map size	960000000
+duration	86521
+put	43777
+puts/ms	685
+get	42744
+gets/ms	701
+	
+<decided to stop here?>	

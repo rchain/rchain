@@ -9,12 +9,10 @@
 
 package coop.rchain.rho2rose
 
-import coop.rchain.lib.term._
 import coop.rchain.lib.zipper._
 import coop.rchain.syntax.rholang._
 import coop.rchain.syntax.rholang.Absyn._
 
-import java_cup.runtime._
 import java.io._
 
 trait Rholang2RosetteCompilerT {
@@ -51,7 +49,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
     ast match {
-      case Some(Location(term: StrTermCtorAbbrevs.StrTermCtxt, _)) =>
+      case Some(Location(term: StrTermCtorAbbrevs.StrTermCtxt @unchecked, _)) =>
         term.rosetteSerializeOperation + term.rosetteSerialize
       case _ => "Not a StrTermCtxt"
     }
@@ -78,7 +76,22 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   }
 
   def main(args: Array[String]): Unit = {
-    val result = compile(args(0))
-    println(serialize(result))
+    args match {
+      case Array(fileName) => {
+        compile(fileName) match {
+          case result@Some(_) => {
+            val rbl: String = serialize(result)
+            val rblFileName = fileName.replaceAll(".rho$", "") + ".rbl"
+            new java.io.PrintWriter(rblFileName) { write(rbl); close }
+            System.err.println(s"compiled $fileName to $rblFileName")
+          }
+          case None => System.exit(1)
+        }
+      }
+      case _ => {
+        System.err.println("no input file?")
+        System.exit(1)
+      }
+    }
   }
 }

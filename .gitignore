@@ -34,3 +34,13 @@ target/
 lib_managed/
 src_managed/
 boot/
+
+# BNFC
+###################
+rholang/bnfc/
+rholang/src/main/java/coop/**
+
+# Rosette
+###################
+!rosette/bin/README
+rosette/src/*.o

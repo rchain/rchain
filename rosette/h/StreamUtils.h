@@ -34,20 +34,20 @@
 
 #include <ctype.h>
 
-inline int isoctal (char c) {return (isdigit(c) && (c < '8'));}
+inline int isoctal(char c) { return (isdigit(c) && (c < '8')); }
 
 typedef int (*errfn)(FILE*);
 
-extern int readError (FILE*, const char*, ...);
-extern int eofError (FILE*);
+extern int readError(FILE*, const char*, ...);
+extern int eofError(FILE*);
 
-extern char getEscapedChar (FILE*);
-extern char getSafeChar (FILE*, char = '\\');
+extern char getEscapedChar(FILE*);
+extern char getSafeChar(FILE*, char = '\\');
 
-extern int putEscapedChar (char, FILE*);
-extern int putSafeChar (char, FILE*, char = '\\');
+extern int putEscapedChar(char, FILE*);
+extern int putSafeChar(char, FILE*, char = '\\');
 
-extern char*	safeStrcpy (char*, char*, char = '\\');
-extern int	safeStrlen (char*, char = '\\');
+extern char* safeStrcpy(char*, char*, char = '\\');
+extern int safeStrlen(char*, char = '\\');
 
 #endif

@@ -41,12 +41,12 @@ enum VM_EVENT { VM_READ_EVENT, VM_WRITE_EVENT, VM_EXCEPTION_EVENT };
 extern int interruptPending;
 extern int arithmeticException;
 
-extern void handleInterrupts ();
-extern void ignoreInterrupts ();
+extern void handleInterrupts();
+extern void ignoreInterrupts();
 
-typedef void IO_HANDLER (VM_EVENT, int, void*);
+typedef void IO_HANDLER(VM_EVENT, int, void*);
 
-extern void RosetteSignalHandler (int, int);
+extern void RosetteSignalHandler(int, int);
 
 extern IO_HANDLER RosetteIoHandler;
 

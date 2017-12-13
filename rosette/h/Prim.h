@@ -43,131 +43,123 @@
 static const int MaxPrims = 1024;
 
 
-
-class Prim : public BinaryOb
-{
+class Prim : public BinaryOb {
     STD_DECLS(Prim);
 
-  protected:
+   protected:
+    static int primcount;
+    static Prim* inlineTbl[MaxPrims];
 
-    static int		primcount;
-    static Prim*	inlineTbl [MaxPrims];
+    Prim(char*, PRIMFN*, int, int);
 
-    Prim (char*, PRIMFN*, int, int);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
 
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
+    friend class BuiltinPrim;
 
-    friend class	BuiltinPrim;
+   public:
+    Ob* id;
+    PRIMFN* fn;
+    ArgNum minargs;
+    ArgNum maxargs;
+    unsigned short primnum;
 
-  public:
+    static Prim* create(char*, PRIMFN*, int, int);
+    static Prim* nthPrim(int);
 
-    Ob*			id;
-    PRIMFN*		fn;
-    ArgNum		minargs;
-    ArgNum		maxargs;
-    unsigned short	primnum;
-
-    static Prim*	create (char*, PRIMFN*, int, int);
-    static Prim*	nthPrim (int);
-
-    int			primNumber ();
-    virtual Prim*	InlineablePrimP ();
-    Ob*			dispatchHelper (Ctxt*);
-    virtual Ob*		dispatch (Ctxt*);
-    virtual Ob*		invoke (Ctxt*);
+    int primNumber();
+    virtual Prim* InlineablePrimP();
+    Ob* dispatchHelper(Ctxt*);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
-inline Prim* Prim::nthPrim (int n) { return Prim::inlineTbl[n]; }
+inline Prim* Prim::nthPrim(int n) { return Prim::inlineTbl[n]; }
 
 
-struct BuiltinPrimRecord
-{
-    char*	name;
-    PRIMFN*	fn;
-    Prim**	clientPrim;
-    ArgNum	min;
-    ArgNum	max;
-    unsigned short filler_up_please; 
+struct BuiltinPrimRecord {
+    char* name;
+    PRIMFN* fn;
+    Prim** clientPrim;
+    ArgNum min;
+    ArgNum max;
+    unsigned short filler_up_please;
 };
 
 
-class BuiltinPrim
-{
-  private:
+class BuiltinPrim {
+   private:
+    static BuiltinPrim* root;
+    const BuiltinPrimRecord* const record;
+    const BuiltinPrim* const link;
 
-    static BuiltinPrim*			root;
-    const BuiltinPrimRecord* const	record;
-    const BuiltinPrim* const		link;
+    void init() const;
 
-    void init () const;
+   public:
+    BuiltinPrim(const BuiltinPrimRecord*);
 
-  public:
-
-    BuiltinPrim (const BuiltinPrimRecord*);
-
-    static void		initBuiltinPrims ();
+    static void initBuiltinPrims();
 };
 
-int debug_builtinprim(char *);
-inline
-BuiltinPrim::BuiltinPrim (const BuiltinPrimRecord* bpr)
-    : record(bpr), link(BuiltinPrim::root)
-{
-    debug_builtinprim(this->record->name );
+int debug_builtinprim(char*);
+inline BuiltinPrim::BuiltinPrim(const BuiltinPrimRecord* bpr)
+    : record(bpr), link(BuiltinPrim::root) {
+    debug_builtinprim(this->record->name);
     BuiltinPrim::root = this;
 }
 
 
-
-
-
-#define INTERNAL_PRIM_NAME(pname) name2(_i_,pname)
-#define INTERNAL_PRIM_REC(pname) name2(_pr_,pname)
+#define INTERNAL_PRIM_NAME(pname) name2(_i_, pname)
+#define INTERNAL_PRIM_REC(pname) name2(_pr_, pname)
 
 #if 0
-#define DEF(ext_name,int_name,min,max)					      \
-Prim* int_name;								      \
-BUILTIN_PRIM(int_name);							      \
-static BuiltinPrimRecord INTERNAL_PRIM_REC(int_name)			      \
-    = {ext_name, PRIM_NAME(int_name), (min), (max), &int_name};		      \
-static BuiltinPrim INTERNAL_PRIM_NAME(int_name) (&INTERNAL_PRIM_REC(int_name));      \
-BUILTIN_PRIM(int_name)
+#define DEF(ext_name, int_name, min, max)                        \
+    Prim* int_name;                                              \
+    BUILTIN_PRIM(int_name);                                      \
+    static BuiltinPrimRecord INTERNAL_PRIM_REC(int_name) = {     \
+        ext_name, PRIM_NAME(int_name), (min), (max), &int_name}; \
+    static BuiltinPrim INTERNAL_PRIM_NAME(int_name)(             \
+        &INTERNAL_PRIM_REC(int_name));                           \
+    BUILTIN_PRIM(int_name)
 #else
-#define DEF(ext_name,int_name,min,max)					      \
-Prim* int_name;								      \
-BUILTIN_PRIM(int_name);							      \
-static BuiltinPrimRecord INTERNAL_PRIM_REC(int_name)			      \
-    = {ext_name, PRIM_NAME(int_name), &int_name,(min), (max),0 };		      \
-static BuiltinPrim INTERNAL_PRIM_NAME(int_name) (&INTERNAL_PRIM_REC(int_name));      \
-BUILTIN_PRIM(int_name)
+#define DEF(ext_name, int_name, min, max)                           \
+    Prim* int_name;                                                 \
+    BUILTIN_PRIM(int_name);                                         \
+    static BuiltinPrimRecord INTERNAL_PRIM_REC(int_name) = {        \
+        ext_name, PRIM_NAME(int_name), &int_name, (min), (max), 0}; \
+    static BuiltinPrim INTERNAL_PRIM_NAME(int_name)(                \
+        &INTERNAL_PRIM_REC(int_name));                              \
+    BUILTIN_PRIM(int_name)
 #endif
 
-#define CHECK(n,type,var)						      \
-if (!IS_A(ARG(n), type) ) return PRIM_MISMATCH((n), _STRING(type));	      \
-type* var = (type*) ARG(n);
+#define CHECK(n, type, var)                       \
+    if (!IS_A(ARG(n), type))                      \
+        return PRIM_MISMATCH((n), _STRING(type)); \
+    type* var = (type*)ARG(n);
 
-#define CHECK_FIXNUM(n,var)						      \
-if (!IS_FIXNUM(ARG(n))) return PRIM_MISMATCH((n), "Fixnum");	      \
-int var = FIXVAL(ARG(n));
+#define CHECK_FIXNUM(n, var)                 \
+    if (!IS_FIXNUM(ARG(n)))                  \
+        return PRIM_MISMATCH((n), "Fixnum"); \
+    int var = FIXVAL(ARG(n));
 
-#define CHECK_SYM(n,var)						      \
-if (!IS_SYM(ARG(n))) return PRIM_MISMATCH((n), "Symbol");		      \
-Ob* var = ARG(n);
+#define CHECK_SYM(n, var)                    \
+    if (!IS_SYM(ARG(n)))                     \
+        return PRIM_MISMATCH((n), "Symbol"); \
+    Ob* var = ARG(n);
 
-#define CHECK_TYPE(n,typ,var) \
-if (!(typeGreaterEq(CLASS_SBO(typ),ARG(n)))) \
-return PRIM_MISMATCH((n), _STRING(typ)); \
-typ* var = (typ*)(ARG(n));
+#define CHECK_TYPE(n, typ, var)                   \
+    if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \
+        return PRIM_MISMATCH((n), _STRING(typ));  \
+    typ* var = (typ*)(ARG(n));
 
-#define CHECK_TYPE_BASE(n,typ,var) \
-if (!(typeGreaterEq(CLASS_SBO(typ),ARG(n)))) \
-return PRIM_MISMATCH((n), _STRING(typ)); \
-typ* var = (typ*)(BASE(ARG(n)));
+#define CHECK_TYPE_BASE(n, typ, var)              \
+    if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \
+        return PRIM_MISMATCH((n), _STRING(typ));  \
+    typ* var = (typ*)(BASE(ARG(n)));
 
-#define PRIM_MISMATCH(n,s) __PRIM__->mismatch(__CTXT__,n,s)
-#define PRIM_ERROR(msg) __PRIM__->runtimeError(__CTXT__,msg)
+#define PRIM_MISMATCH(n, s) __PRIM__->mismatch(__CTXT__, n, s)
+#define PRIM_ERROR(msg) __PRIM__->runtimeError(__CTXT__, msg)
 
 #define NARGS __CTXT__->nargs
 #define ARGS __CTXT__->argvec

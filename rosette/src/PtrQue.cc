@@ -30,46 +30,30 @@
 
 static const int DefaultPtrQueSize = 32;
 
-PtrQue::PtrQue ()
-    : ResizeablePtrArray(DefaultPtrQueSize)
-{
-    init();
-}
+PtrQue::PtrQue() : ResizeablePtrArray(DefaultPtrQueSize) { init(); }
 
 
-PtrQue::PtrQue (int sz)
-    : ResizeablePtrArray(sz)
-{
-    init();
-}
+PtrQue::PtrQue(int sz) : ResizeablePtrArray(sz) { init(); }
 
 
-void
-PtrQue::resize ()
-{
-    resize(2*size);
-}
+void PtrQue::resize() { resize(2 * size); }
 
 
-void
-PtrQue::resize (int newsize)
-{
-    int offset = head-array;
+void PtrQue::resize(int newsize) {
+    int offset = head - array;
     ResizeablePtrArray::resize(newsize);
-    head = array+offset;
-    limit = array+size;
+    head = array + offset;
+    limit = array + size;
 }
 
 
-void
-PtrQue::compact ()
-{
+void PtrQue::compact() {
     void** end = head;
     void** ptr = array;
 
     for (void** current = array; current < end; current++)
-	if (*current != 0)
-	    *ptr++ = *current;
+        if (*current != 0)
+            *ptr++ = *current;
 
     head = ptr;
 }

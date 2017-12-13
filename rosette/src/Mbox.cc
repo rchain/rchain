@@ -41,86 +41,67 @@ Ob* emptyMbox = INVALID;
 Ob* lockedMbox = INVALID;
 
 
-BUILTIN_CLASS(EmptyMbox) { }
+BUILTIN_CLASS(EmptyMbox) {}
 
 
-EmptyMbox::EmptyMbox ()
-    : Ob(sizeof(EmptyMbox), CLASS_META(EmptyMbox), CLASS_SBO(EmptyMbox))
-{
+EmptyMbox::EmptyMbox()
+    : Ob(sizeof(EmptyMbox), CLASS_META(EmptyMbox), CLASS_SBO(EmptyMbox)) {
     EmptyMbox::updateCnt();
 }
 
 
-EmptyMbox*
-EmptyMbox::create ()
-{
+EmptyMbox* EmptyMbox::create() {
     void* loc = PALLOC(sizeof(EmptyMbox));
-    return NEW(loc) EmptyMbox ();
+    return NEW(loc) EmptyMbox();
 }
 
 
-Ob*
-EmptyMbox::cloneTo (Ob*, Ob*)
-{
-    return this;
-}
+Ob* EmptyMbox::cloneTo(Ob*, Ob*) { return this; }
 
 
-Ob*
-EmptyMbox::receiveMsg (MboxOb* client, Ctxt* task)
-{
+Ob* EmptyMbox::receiveMsg(MboxOb* client, Ctxt* task) {
     ASSIGN(client, mbox, lockedMbox);
     client->schedule(task);
     return NIV;
 }
 
 
-Ob*
-EmptyMbox::nextMsg (MboxOb* client, Ob* new_enabledSet)
-{
+Ob* EmptyMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
     warning("%s::nextMsg invoked", typestring());
     if (new_enabledSet != NIL) {
-	PROTECT(client);
-	QueueMbox* new_mbox = QueueMbox::create (new_enabledSet);
-	new_mbox->unlock();
-	ASSIGN(client, mbox, new_mbox);
+        PROTECT(client);
+        QueueMbox* new_mbox = QueueMbox::create(new_enabledSet);
+        new_mbox->unlock();
+        ASSIGN(client, mbox, new_mbox);
     }
     return NIV;
 }
 
-
 
-BUILTIN_CLASS(LockedMbox) { }
+BUILTIN_CLASS(LockedMbox) {}
 
 
-LockedMbox::LockedMbox ()
-    : Ob(sizeof(LockedMbox), CLASS_META(LockedMbox), CLASS_SBO(LockedMbox))
-{
+LockedMbox::LockedMbox()
+    : Ob(sizeof(LockedMbox), CLASS_META(LockedMbox), CLASS_SBO(LockedMbox)) {
     LockedMbox::updateCnt();
 }
 
 
-LockedMbox*
-LockedMbox::create ()
-{
+LockedMbox* LockedMbox::create() {
     void* loc = PALLOC(sizeof(LockedMbox));
-    return NEW(loc) LockedMbox ();
+    return NEW(loc) LockedMbox();
 }
 
 
-Ob*
-LockedMbox::cloneTo (Ob*, Ob*)
-{
-    return this;
-}
+Ob* LockedMbox::cloneTo(Ob*, Ob*) { return this; }
 
 
-Ob*
-LockedMbox::receiveMsg (MboxOb* client, Ctxt* task)
-{
-    PROTECT_THIS(LockedMbox); PROTECT(client); PROTECT(task);
+Ob* LockedMbox::receiveMsg(MboxOb* client, Ctxt* task) {
+    PROTECT_THIS(LockedMbox);
+    PROTECT(client);
+    PROTECT(task);
 
-    QueueMbox* new_mbox = QueueMbox::create (NIL);
+    QueueMbox* new_mbox = QueueMbox::create(NIL);
     assert(task != NIV);
     new_mbox->enqueue(task);
     ASSIGN(client, mbox, new_mbox);
@@ -129,33 +110,28 @@ LockedMbox::receiveMsg (MboxOb* client, Ctxt* task)
 }
 
 
-Ob*
-LockedMbox::nextMsg (MboxOb* client, Ob* new_enabledSet)
-{
+Ob* LockedMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
     if (new_enabledSet == NIL)
-	ASSIGN(client, mbox, emptyMbox);
+        ASSIGN(client, mbox, emptyMbox);
     else {
-	PROTECT(client);
-	QueueMbox* new_mbox = QueueMbox::create (new_enabledSet);
-	new_mbox->unlock();
-	ASSIGN(client, mbox, new_mbox);
+        PROTECT(client);
+        QueueMbox* new_mbox = QueueMbox::create(new_enabledSet);
+        new_mbox->unlock();
+        ASSIGN(client, mbox, new_mbox);
     }
     return NIV;
 }
 
-
 
-BUILTIN_CLASS(QueueMbox)
-{
-    OB_FIELD("locked",		QueueMbox, lockVal);
-    OB_FIELD("enabled-set",	QueueMbox, enabledSet);
-    OB_FIELD("queue",		QueueMbox, queue);
+BUILTIN_CLASS(QueueMbox) {
+    OB_FIELD("locked", QueueMbox, lockVal);
+    OB_FIELD("enabled-set", QueueMbox, enabledSet);
+    OB_FIELD("queue", QueueMbox, queue);
 }
 
 
-QueueMbox::QueueMbox (Ob* enabledSet, MboxQueue* queue)
-    : Ob(sizeof(QueueMbox), CLASS_META(QueueMbox), CLASS_SBO(QueueMbox))
-{
+QueueMbox::QueueMbox(Ob* enabledSet, MboxQueue* queue)
+    : Ob(sizeof(QueueMbox), CLASS_META(QueueMbox), CLASS_SBO(QueueMbox)) {
     this->lockVal = RBLTRUE;
     this->enabledSet = enabledSet;
     this->queue = queue;
@@ -163,93 +139,75 @@ QueueMbox::QueueMbox (Ob* enabledSet, MboxQueue* queue)
 }
 
 
-QueueMbox*
-QueueMbox::create (Ob* enabledSet)
-{
+QueueMbox* QueueMbox::create(Ob* enabledSet) {
     PROTECT(enabledSet);
-    MboxQueue* queue = MboxQueue::create ();
+    MboxQueue* queue = MboxQueue::create();
     void* loc = PALLOC1(sizeof(QueueMbox), queue);
-    return NEW(loc) QueueMbox (enabledSet, queue);
+    return NEW(loc) QueueMbox(enabledSet, queue);
 }
 
 
-Ob*
-QueueMbox::cloneTo (Ob*, Ob*)
-{
-    return emptyMbox;
-}
+Ob* QueueMbox::cloneTo(Ob*, Ob*) { return emptyMbox; }
 
 
-Ob*
-QueueMbox::receiveMsg (MboxOb* client, Ctxt* task)
-{
+Ob* QueueMbox::receiveMsg(MboxOb* client, Ctxt* task) {
     if (isLocked() || !enabledSet->accepts(task))
-	queue->enqueue(task);
+        queue->enqueue(task);
     else {
-	if (enabledSet == NIL)
-	    warning("NIL enabled-set on unlocked %s", typestring());
-	lock();
-	client->schedule(task);
+        if (enabledSet == NIL)
+            warning("NIL enabled-set on unlocked %s", typestring());
+        lock();
+        client->schedule(task);
     }
 
     return NIV;
 }
 
 
-Ob*
-QueueMbox::nextMsg (MboxOb* client, Ob* new_enabledSet)
-{
+Ob* QueueMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
     if (!isLocked()) {
-	warning("%s::nextMsg received on unlocked mbox", typestring());
-	return NIV;
+        warning("%s::nextMsg received on unlocked mbox", typestring());
+        return NIV;
     }
 
-    Ctxt* task = (Ctxt*) queue->maybeDequeue(new_enabledSet);
+    Ctxt* task = (Ctxt*)queue->maybeDequeue(new_enabledSet);
 
     if (task == INVALID) {
-	/*
-	 * Either there is no acceptable msg, or the queue was empty to
-	 * begin with.  In both cases we want to leave the mbox unlocked,
-	 * either by reverting to the (unique) emptyMbox if the
-	 * new_enabledSet is NIL, or by resetting lockVal if
-	 * new_enabledSet is non-NIL.
-	 */
+        /*
+         * Either there is no acceptable msg, or the queue was empty to
+         * begin with.  In both cases we want to leave the mbox unlocked,
+         * either by reverting to the (unique) emptyMbox if the
+         * new_enabledSet is NIL, or by resetting lockVal if
+         * new_enabledSet is non-NIL.
+         */
 
-	if (queue->isEmpty() && new_enabledSet == NIL)
-	    ASSIGN(client, mbox, emptyMbox);
-	else {
-	    ASSIGN(this, enabledSet, new_enabledSet);
-	    unlock();
-	}
+        if (queue->isEmpty() && new_enabledSet == NIL)
+            ASSIGN(client, mbox, emptyMbox);
+        else {
+            ASSIGN(this, enabledSet, new_enabledSet);
+            unlock();
+        }
     }
     else {
-	/*
-	 * The mbox is presumably locked at this point, and it should
-	 * remain so, either by reverting to the (unique) lockedMbox or
-	 * by keeping lockVal set.
-	 */
+        /*
+         * The mbox is presumably locked at this point, and it should
+         * remain so, either by reverting to the (unique) lockedMbox or
+         * by keeping lockVal set.
+         */
 
-	if (queue->isEmpty() && new_enabledSet == NIL)
-	    ASSIGN(client, mbox, lockedMbox);
-	else
-	    ASSIGN(this, enabledSet, new_enabledSet);
+        if (queue->isEmpty() && new_enabledSet == NIL)
+            ASSIGN(client, mbox, lockedMbox);
+        else
+            ASSIGN(this, enabledSet, new_enabledSet);
 
-	client->schedule(task);
+        client->schedule(task);
     }
 
     return NIV;
 }
 
 
-void
-QueueMbox::enqueue (Ob* val)
-{
-    queue->enqueue(val);
-}
+void QueueMbox::enqueue(Ob* val) { queue->enqueue(val); }
 
 
-Ob*
-QueueMbox::dequeue ()
-{
-    return queue->dequeue();
-}
+Ob* QueueMbox::dequeue() { return queue->dequeue(); }

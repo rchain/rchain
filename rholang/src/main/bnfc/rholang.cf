@@ -91,9 +91,9 @@ VarPtWild. VarPattern ::= "_" ;
 separator VarPattern "," ;
 
 -- Process patterns
+PPtVal.    PPattern4 ::= ValPattern ;
 PPtVar.    PPattern4 ::= VarPattern ;
 PPtNil.    PPattern4 ::= "Nil" ;
-PPtVal.    PPattern4 ::= ValPattern ;
 PPtDrop.   PPattern3 ::= "*" CPattern ;
 PPtInject. PPattern3 ::= "#" CPattern ;
 PPtOutput. PPattern2 ::= CPattern "!" "(" [PPattern] ")" ;
@@ -120,12 +120,17 @@ PtBranch. PatternPatternMatch ::= PPattern "=>" "{" PPattern "}" ;
 separator nonempty PatternPatternMatch "" ;
 
 -- Value patterns
+
+-- We only allow for constants in pattern matches
+-- unlike for Procs which can have arbitrary operations
 VPtStruct. ValPattern ::= Var "{" [PPattern] "}" ;
 VPtTuple. ValPattern ::= "<" [PPattern] ">" ;
 VPtTrue. ValPattern ::= "true" ;
 VPtFalse. ValPattern ::= "false" ;
 VPtInt. ValPattern ::= Integer ;
 VPtDbl. ValPattern ::= Double ;
+VPtNegInt. ValPattern ::= "-" Integer;
+VPtNegDbl. ValPattern ::= "-" Double;
 VPtStr. ValPattern ::= String ;
 --VPtString. ValPattern ::=  ;
 --VPtArray.  ValPattern ::=  ;
@@ -133,8 +138,8 @@ VPtStr. ValPattern ::= String ;
 separator nonempty ValPattern "," ;
 
 -- Names and variables
-token Name (upper (letter | digit | '_' | '\'')*) ;
-token Var (lower (letter | digit | '_' | '\'')*) ;
+token Name (upper (letter | digit | '_' | '\'' | '-' )*) ;
+token Var (lower (letter | digit | '_' | '\'' | '-')*) ;
 
 separator nonempty Var "," ;
 separator nonempty Name "," ;

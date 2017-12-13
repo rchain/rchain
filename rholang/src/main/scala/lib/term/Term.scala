@@ -12,17 +12,18 @@ import coop.rchain.lib.zipper._
 import scala.collection.SeqProxy
 
 trait Term[Namespace, /*+*/Tag]
-extends Tree[Tag] with SeqProxy[Either[Tag,Term[Namespace,Tag]]]
+extends Tree[Tag] with SeqProxy[Term[Namespace,Tag]]
   with Serializable {
-  def up /* [Tag1 >: Tag] */ ( tOrC : Either[Tag,Term[Namespace,Tag]] )
+  // Collects a list of all the tags in the tree.
+  def collectTags /* [Tag1 >: Tag] */ ( term : Term[Namespace,Tag] )
    : List[Tag] = {
-    tOrC match {
-      case Left( t ) => List( t )
-      case Right( TermBranch( ns, lbls ) ) => {
+    term match {
+      case TermLeaf( t ) => List( t )
+      case TermBranch( ns, lbls ) => {
 	( List[Tag]() /: lbls.flatMap( _.self ) )(
 	  {
 	    ( acc, e ) => {
-	      acc ++ up/*[Tag1]*/( e )
+	      acc ++ collectTags/*[Tag1]*/( e )
 	    }
 	  }
 	)
@@ -30,7 +31,8 @@ extends Tree[Tag] with SeqProxy[Either[Tag,Term[Namespace,Tag]]]
     }
   }
 
-  def atoms : Seq[Tag] = { this flatMap( up ) }
+  def atoms : Seq[Tag] = { this flatMap( collectTags ) }
+  def self : List[Term[Namespace,Tag]]
 }
 
 trait OntologicalStatus
@@ -42,7 +44,7 @@ class TermLeaf[Namespace,Tag]( val tag : Tag )
 extends TreeItem[Tag]( tag )
 with Term[Namespace,Tag]
 with Factual {
-  override def self = List( Left( tag ) )
+  override def self = List( this )
 }
 
 object TermLeaf extends Serializable {
@@ -57,7 +59,7 @@ trait AbstractTermBranch[Namespace,Tag]
 extends Term[Namespace,Tag] {
   def nameSpace : Namespace
   def labels : List[Term[Namespace,Tag]]
-  override def self = labels.map( Right( _ ) )
+  override def self = labels
 }
 
 class TermBranch[Namespace,Tag](
@@ -83,27 +85,7 @@ object TermBranch extends Serializable {
 trait TermCtxt[Namespace,Var,/*+*/Tag]
 extends Term[Either[Namespace,Var],Either[Tag,Var]] {
   type U/*[Tag1]*/ =
-    Either[
-      Either[Tag,Var],
-      Term[Either[Namespace,Var],Either[Tag,Var]]
-    ]
-  override def up /*[Tag1 >: Tag]*/ ( tOrC : U/*[Tag1]*/ )
-   : List[Either[Tag,Var]] = {
-    tOrC match {
-      case Left( t ) => List( t )
-      case Right( TermCtxtLeaf( tOrV ) ) => List( tOrV )
-      case Right( TermCtxtBranch( ns, lbls ) ) => {
-	val selves : List[U/*[Tag1]*/] = lbls.flatMap( _.self )
-	( List[Either[Tag,Var]]() /: selves )(
-	  {
-	    ( acc, e ) => {
-	      acc ++ up/*[Tag1]*/( e )
-	    }
-	  }
-	)
-      }
-    }
-  }  
+    Term[Either[Namespace,Var],Either[Tag,Var]]
 
   def names : Seq[Either[Tag,Var]] = {
     atoms filter(
@@ -133,8 +115,7 @@ class TermCtxtLeaf[Namespace,Var,Tag]( val tag : Either[Tag,Var] )
 extends TreeItem[Either[Tag,Var]]( tag )
 with TermCtxt[Namespace,Var,Tag]
 with Factual {
-  def this() = { this( null.asInstanceOf[Either[Tag,Var]] ) }
-  override def self = List( Left( tag ) )
+  override def self = List( this )
   override def toString = {
     tag match {
       case Left( t ) => "" + t + ""
@@ -160,9 +141,9 @@ object TermCtxtLeaf extends Serializable {
 
 trait AbstractTermCtxtBranch[Namespace,Var,Tag]
 extends TermCtxt[Namespace,Var,Tag] {  
-  override def self = labels.map( Right( _ ) )
   def nameSpace : Namespace
   def labels : List[TermCtxt[Namespace,Var,Tag]]
+  override def self = labels
   override def toString = {
     val lblStr =
       labels match {
@@ -203,7 +184,6 @@ class TermCtxtBranch[Namespace,Var,Tag](
 ) extends TreeSection[Either[Tag,Var]]( factuals )
 with AbstractTermCtxtBranch[Namespace,Var,Tag]
 with Factual {
-  def this() = { this( null.asInstanceOf[Namespace], Nil ) }
   override def labels : List[TermCtxt[Namespace,Var,Tag]] = {
     factuals
   }
@@ -261,30 +241,6 @@ trait TermCtxtInjector[Namespace,Var,Tag] {
       cLabel.factuals.map( injectLabel( _ ) )
     )
   }
-}
-
-trait TwoCell[Src,+Label,Trgt] {
-  def src   : Src
-  def label : Label
-  def trgt  : Trgt
-}
-class CTwoCell[Src,+Label,Trgt](
-  override val src : Src,
-  override val label : Label,
-  override val trgt : Trgt
-) extends TwoCell[Src,Label,Trgt]
-
-object CTwoCell extends Serializable {
-  def apply[Src,Label,Trgt](
-    src : Src, lbl : Label, trgt : Trgt 
-  ) : CTwoCell[Src,Label,Trgt] = {
-    new CTwoCell[Src,Label,Trgt]( src, lbl, trgt )
-  }
-  def unapply[Src,Label,Trgt](
-    cnxn : CTwoCell[Src,Label,Trgt]
-  ) : Option[(Src,Label,Trgt)] = {
-    Some( ( cnxn.src, cnxn.label, cnxn.trgt ) )
-  }  
 }
 
 case class StrTermLf( override val tag : String )

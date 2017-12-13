@@ -17,7 +17,8 @@
  */
 
 /*
- * $Header: /mcc/project/carnot/root/master/pub-ess/src/main.cc,v 1.1.1.1 1993/02/12 01:25:49 tomlic Exp $
+ * $Header: /mcc/project/carnot/root/master/pub-ess/src/main.cc,v 1.1.1.1
+1993/02/12 01:25:49 tomlic Exp $
  *
  * $Log: main.cc,v $
 // Revision 1.1.1.1  1993/02/12  01:25:49  tomlic
@@ -27,7 +28,9 @@
 
 #ifndef __RCS_ID__
 #define __RCS_ID__
-static const char *rcsid = "$Header: /mcc/project/carnot/root/master/pub-ess/src/main.cc,v 1.1.1.1 1993/02/12 01:25:49 tomlic Exp $";
+static const char* rcsid =
+    "$Header: /mcc/project/carnot/root/master/pub-ess/src/main.cc,v 1.1.1.1 "
+    "1993/02/12 01:25:49 tomlic Exp $";
 #endif
 
 #include "rosette.h"
@@ -37,10 +40,9 @@ static const char *rcsid = "$Header: /mcc/project/carnot/root/master/pub-ess/src
 #include <stdio.h>
 
 
-
-extern int BigBang (int, char**, char**);
-extern void BigCrunch ();
-extern int asyncHelper (int, int);
+extern int BigBang(int, char**, char**);
+extern void BigCrunch();
+extern int asyncHelper(int, int);
 
 // reference to the configuration_force routine that causes loading
 // of whatever libraries are desired for a given configuration
@@ -49,37 +51,35 @@ extern "C" void configuration_force_load();
 
 static int _ForceLoadFlag_ = 0;
 
-int
-main (int argc, char** argv, char** envp)
-{   char buf[BUFSIZ];
-    setbuf(stdin,buf);
+int main(int argc, char** argv, char** envp) {
+    char buf[BUFSIZ];
+    setbuf(stdin, buf);
     if (!BigBang(argc, argv, envp))
-	vm->reset();
+        vm->reset();
     vm->execute();
     if (_ForceLoadFlag_) {
-      configuration_force_load();
+        configuration_force_load();
     }
 
     while (!feof(stdin)) {
+        /*
+         * Turn off any async handling that might have been left on by a
+         * crash-and-burn at the higher levels.
+         */
 
-	/*
-	 * Turn off any async handling that might have been left on by a
-	 * crash-and-burn at the higher levels.
-	 */
+        if (asyncHelper(fileno(stdin), 0))
+            suicide("%s\nI'm too confused to continue", sys_errmsg());
 
-	if (asyncHelper(fileno(stdin), 0))
-	    suicide("%s\nI'm too confused to continue", sys_errmsg());
+        printf("kernel> ");
+        heap->gc();
+        StdinReader->resetState();
+        Ob* x = StdinReader->readExpr();
 
-	printf("kernel> ");
-	heap->gc();
-	StdinReader->resetState();
-	Ob* x = StdinReader->readExpr();
+        if (x == RBLEOF)
+            break;
 
-	if (x == RBLEOF)
-	    break;
-
-	clearerr(stdin);
-	vm->evaluate(x);
+        clearerr(stdin);
+        vm->evaluate(x);
     }
 
     putchar('\n');
