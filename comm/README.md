@@ -11,8 +11,8 @@ rnode://<address-key>@<host-or-ip>:<udp-port>
 ```
 
 This version generates (non-cryptographically) random addresses of 128 bits, or 32 characters (UUIDs, essentially). Future releases
-will generate full-length 256- or 512-bit rnode addresses in the future, but for demonstration purposes, 128 bits is about the limit
-of manageability.
+will generate full-length 256- or 512-bit rnode addresses, but for demonstration purposes, 128 bits is about the limit of
+manageability.
 
 ## Building from Source
 
