@@ -8,7 +8,7 @@ copy . /src
 workdir /src
 run rm ensime.sbt
 
-env JAVA_TOOL_OPTIONS -Dfile.encoding=UTF8
+env JAVA_TOOL_OPTIONS -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true
 
 run sbt assembly
 

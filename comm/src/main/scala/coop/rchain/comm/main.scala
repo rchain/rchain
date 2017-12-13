@@ -54,7 +54,6 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
-    println(conf)
     val name = UUID.randomUUID.toString.replaceAll("-", "")
     val host = conf.host.toOption match {
       case Some(host) => host
