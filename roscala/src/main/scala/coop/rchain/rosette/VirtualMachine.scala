@@ -427,9 +427,9 @@ object VirtualMachine {
 
   def execute(op: OpXmitArg, state: VMState): VMState =
     state
-      .set(_ >> 'ctxt >> 'nargs)(op.m)
+      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .set(_ >> 'ctxt >> 'tag)(Location.ArgReg(op.arg))
-      .set(_ >> 'xmitData)((op.u, op.n))
+      .set(_ >> 'xmitData)((op.unwind, op.next))
       .set(_ >> 'doXmitFlag)(true)
 
   def execute(op: OpXmitReg, state: VMState): VMState =
@@ -441,8 +441,8 @@ object VirtualMachine {
 
   def execute(op: OpXmit, state: VMState): VMState =
     state
-      .set(_ >> 'ctxt >> 'nargs)(op.m)
-      .set(_ >> 'xmitData)((op.u, op.n))
+      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+      .set(_ >> 'xmitData)((op.unwind, op.next))
       .set(_ >> 'doXmitFlag)(true)
 
   def execute(op: OpXmitTagXtnd, state: VMState): VMState =

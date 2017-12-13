@@ -40,6 +40,8 @@ class TransitionSpec extends FlatSpec with Matchers {
 
   val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, stdOprnPlus)
 
+  val xferGlobalToReg_plus = OpXferGlobalToReg(r = 1, g = 668)
+
   "Executing bytecode from expression \"(if #t 1 2)\"" should "result in state.ctxt.rslt == Fixnum(1)" in {
 
     /**
@@ -120,8 +122,8 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(OpAlloc(2),
                       OpImmediateLitToArg(value = 1, arg = 0),
                       OpImmediateLitToArg(value = 2, arg = 1),
-                      OpXferGlobalToReg(r = 1, g = 668),
-                      OpXmit(u = false, n = true, 2))
+                      xferGlobalToReg_plus,
+                      OpXmit(unwind = false, next = true, 2))
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Fixnum(3)
@@ -137,35 +139,83 @@ class TransitionSpec extends FlatSpec with Matchers {
       *  0:   alloc 2
       *  1:   lit 1,arg[0]
       *  2:   xfer global[+],trgt
-      *  4:   outstanding 12,1
-      *  6:   push/alloc 2
-      *  7:   lit 2,arg[0]
-      *  8:   lit 3,arg[1]
-      *  9:   xfer global[+],trgt
-      *  11:  xmit/nxt 2,arg[1]
-      *  12:  xmit/nxt 2
+      *  3:   outstanding 12,1
+      *  4:   push/alloc 2
+      *  5:   lit 2,arg[0]
+      *  6:   lit 3,arg[1]
+      *  7:   xfer global[+],trgt
+      *  8:   xmit/nxt 2,arg[1]
+      *  9:   xmit/nxt 2
       */
     val start =
       testState
         .set(_ >> 'globalEnv)(TblObject(globalEnv))
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
-        .set(_ >> 'ctxt >> 'ctxt >> 'ctxt)(testState.ctxt)
 
     val codevec = Seq(
       OpAlloc(2),
       OpImmediateLitToArg(value = 1, arg = 0),
-      OpXferGlobalToReg(r = 1, g = 668),
-      OpOutstanding(pc = 12, n = 1),
+      xferGlobalToReg_plus,
+      OpOutstanding(pc = 9, n = 1),
       OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 2, arg = 0),
       OpImmediateLitToArg(value = 3, arg = 1),
-      OpXferGlobalToReg(r = 1, g = 668),
-      OpXmitArg(u = false, n = true, m = 2, arg = 1),
-      OpXmit(u = false, n = true, m = 2)
+      xferGlobalToReg_plus,
+      OpXmitArg(unwind = false, next = true, nargs = 2, arg = 1),
+      OpXmit(unwind = false, next = true, nargs = 2)
     )
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Fixnum(6)
+  }
+
+  "Executing bytecode from expression \"(+ 1 (+ 2 (+ 3 4))\"" should "result in Fixnum(10)" in {
+
+    /**
+      * litvec:
+      *  0:   {RequestExpr}
+      * codevec:
+      *  0:   alloc 2
+      *  1:   lit 1,arg[0]
+      *  2:   xfer global[+],trgt
+      *  3:   outstanding 14,1
+      *  4:   push/alloc 2
+      *  5:   lit 2,arg[0]
+      *  6:   xfer global[+],trgt
+      *  7:   outstanding 13,1
+      *  8:   push/alloc 2
+      *  9:   lit 3,arg[0]
+      * 10:   lit 4,arg[1]
+      * 11:   xfer global[+],trgt
+      * 12:   xmit/nxt 2,arg[1]
+      * 13:   xmit/nxt 2,arg[1]
+      * 14:   xmit/nxt 2
+      */
+    val start =
+      testState
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      xferGlobalToReg_plus,
+      OpOutstanding(pc = 14, n = 1),
+      OpPushAlloc(n = 2),
+      OpImmediateLitToArg(value = 2, arg = 0),
+      xferGlobalToReg_plus,
+      OpOutstanding(pc = 13, n = 1),
+      OpPushAlloc(n = 2),
+      OpImmediateLitToArg(value = 3, arg = 0),
+      OpImmediateLitToArg(value = 4, arg = 1),
+      xferGlobalToReg_plus,
+      OpXmitArg(unwind = false, next = true, nargs = 2, arg = 1),
+      OpXmitArg(unwind = false, next = true, nargs = 2, arg = 1),
+      OpXmit(unwind = false, next = true, nargs = 2)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(10)
   }
 
   "Executing bytecode from expression \"(let [[x 1] [y 2]] (+ x y))\"" should "result in Fixnum(3)" in {
@@ -207,8 +257,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpAlloc(2),
       OpXferLexToArg(i = false, l = 0, o = 0, a = 0),
       OpXferLexToArg(i = false, l = 0, o = 1, a = 1),
-      OpXferGlobalToReg(r = 1, g = 668),
-      OpXmit(u = false, n = true, 2)
+      xferGlobalToReg_plus,
+      OpXmit(unwind = false, next = true, 2)
     )
 
     val end = VirtualMachine.executeSeq(codevec, start)
@@ -243,13 +293,13 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpAlloc(2),
       OpImmediateLitToArg(value = 1, arg = 0),
       OpImmediateLitToArg(value = 2, arg = 1),
-      OpXferGlobalToReg(r = 1, g = 668),
-      OpXmit(u = false, n = true, 2),
+      xferGlobalToReg_plus,
+      OpXmit(unwind = false, next = true, 2),
       OpAlloc(2),
       OpImmediateLitToArg(value = 3, arg = 0),
       OpImmediateLitToArg(value = 4, arg = 1),
-      OpXferGlobalToReg(r = 1, g = 668),
-      OpXmit(u = false, n = true, 2)
+      xferGlobalToReg_plus,
+      OpXmit(unwind = false, next = true, 2)
     )
 
     val end = VirtualMachine.executeSeq(codevec, start)
