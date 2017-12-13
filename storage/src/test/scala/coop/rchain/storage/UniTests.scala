@@ -7,39 +7,38 @@
 
 package coop.rchain.storage
 
+import java.io.File
 import java.io.IOException
 import java.lang._
-
 import org.scalatest._
-
 import scala.io.StdIn
 
+class UniTests extends FlatSpec with Matchers {
+  val basePath = System.getProperty("user.dir") +
+    "/src/test/scala/coop/rchain/storage/stores/"
+  val storeFlatPath = basePath + "storeFlat.txt"
+  val storeNestedPath = basePath + "storeNested.txt"
+  val storeRecursivePath = basePath + "storeRecursive.txt"
+
+  "Storage Unifier" should "unify nested keys" in {
     val storConf = new StorageConfig()
     storConf.isKeyToValues = true
     storConf.isWritable = true
-    storConf.baseDir = Some(System.getProperty("user.dir"))
+    storConf.baseDir = Some(basePath)
     storConf.dirName = Some("storageTestsRecursiveDb")
     storConf.name = Some("storageTestsRecursive")
     assert(storConf.isValid())
 
     var storage = new Storage(storConf)
-
     try {
-      storage.loadFile(storeFilePath, true)
+      storage.loadFile(storeRecursivePath)
     } catch {
-      case _: IOException =>
-        println("Error opening file: " + storeFilePath)
-        return "Error opening store file: " + storeFilePath
+      case _: IOException => {
+        fail("Error opening file: " + storeRecursivePath)
+      }
     }
 
-    println("Store contents:");
-    storage.displayUniKeys
-    println()
-
     try {
-
-      println("Starting tests"); println
-
       // a(Y)
       var query = new Key("a(Y)")
       var queryOutcome =
@@ -63,7 +62,6 @@ import scala.io.StdIn
              "query: " + query.term)
 
       // a(b(c(X), Y), f(2))
-      // more examples like this
       query = new Key("a(b(c(X), Y), f(2))")
       queryOutcome =
         QueryTools.queryResultsToArrayString(query,
@@ -104,10 +102,6 @@ import scala.io.StdIn
       storage.close()
       storage.deleteFiles()
     }
-
-    println("TestsRecursive() end")
-
-    "Completed tests"
   }
 
   "Storage Unifier" should "unify nested keys 2" in {
@@ -122,18 +116,12 @@ import scala.io.StdIn
 
     var storage = new Storage(storConf)
     try {
-      storage.loadFile(storeFilePath, true)
+      storage.loadFile(storeNestedPath)
     } catch {
-      case _: IOException =>
-        println("Error opening file: " + storeFilePath)
-        return "Error opening store file: " + storeFilePath
+      case _: IOException => {
+        fail("Error opening file: " + storeNestedPath)
+      }
     }
-
-    println("Store contents:");
-    storage.displayUniKeys
-    println()
-
-    println("Starting tests"); println
 
     try {
 
@@ -178,10 +166,6 @@ import scala.io.StdIn
       storage.close()
       storage.deleteFiles()
     }
-
-    println("TestsNested() end")
-
-    "Completed tests"
   }
 
   "Storage Unifier" should "unify flat keys" in {
@@ -196,18 +180,11 @@ import scala.io.StdIn
 
     var storage = new Storage(storConf)
     try {
-      storage.loadFile(storeFilePath, true)
+      storage.loadFile(storeFlatPath)
     } catch {
       case _: IOException =>
-        println("Error opening file: " + storeFilePath)
-        return "Error opening store file: " + storeFilePath
+        fail("Error opening file: " + storeFlatPath)
     }
-
-    println("Store contents:");
-    storage.displayUniKeys
-    println()
-
-    println("Starting tests"); println
 
     try {
       // a(1)
@@ -395,54 +372,31 @@ import scala.io.StdIn
       storage.close()
       storage.deleteFiles()
     }
-
-    println("TestsFlat() end")
-
-    "Completed tests"
   }
 
-  // evaluateTest
-  def evaluateTest(queryName: String,
+  def EvaluateTest(queryName: String,
                    unification: QueryTools.Unification,
                    oracle: UniOracle,
-                   display: Boolean = true): Boolean = {
+                   display: Boolean = false): Boolean = {
     val queryResults = unification.repr
 
     if (queryResults.length == 0) {
       if (display) {
-        println(s"$queryName failed, not in the store");
-        println
+        println(s"$queryName failed, not in the store"); println
       }
-      false
-    } else {
-      if (display) {
-        print(s"$queryName ")
-      }
+      return false
+    }
 
-      var returnVal = false
-      var returnValSet = false
+    if (display) { print(s"$queryName ") }
 
-    if (TestTools.ArraysEqual(queryResults, oracle.standard)) {
+    if (TestTools.arraysEqual(queryResults, oracle.standard)) {
       if (display) {
         println("succeeded:")
         for (i <- queryResults.indices) {
           println(queryResults(i))
         }
-      } else {
-        if (display) {
-          println("failed result:")
-          for (i <- 0 until queryResults.length) {
-            println(queryResults(i))
-          }
-          println("should be:")
-          for (i <- 0 until oracle.standard.length) {
-            println(oracle.standard(i))
-          }
-          println
-        }
-        returnVal = false
-        returnValSet = true
       }
+    } else {
       if (display) {
         println("failed result:")
         for (i <- queryResults.indices) {
@@ -453,7 +407,11 @@ import scala.io.StdIn
           println(oracle.standard(i))
         }
       }
+      if (display) { println }
+      return false
     }
+    if (display) { println }
+    true
   }
 
   // UniOracle is an oracle for a unification
@@ -492,13 +450,15 @@ import scala.io.StdIn
             val unified = query.unifyQuery(storage)
             val bindings =
               QueryTools.queryResultsToArrayString(query, unified, storage)
-            for (binding <- bindings)
+            for (binding <- bindings) {
               println(binding)
+            }
             for (key <- storage.unifyQuery(query)) {
               println(key.term)
             }
-            if (bindings.isEmpty)
+            if (bindings.isEmpty) {
               println("no match in store")
+            }
           }
           case "key-value" => {
             var (keyStr, valuesStr) = remainder.splitAt(remainder.indexOf("->"))
@@ -530,8 +490,6 @@ import scala.io.StdIn
   }
 
   def readLine(): (String, String) = {
-    var returnVal = ("", "")
-    var returnValSet = false
     var line = ""
     do {
       line = StdIn.readLine("a, d, q, e> ")
@@ -543,29 +501,19 @@ import scala.io.StdIn
         val outcome = line.splitAt(line.indexOf(' '))
         command = outcome._1
         remainder = outcome._2
-      } else
+      } else {
         command = line
+      }
 
       command match {
-        case "e" => {
-          returnVal = ("exit", "")
-          returnValSet = true
-        }
-        case "q" => {
-          returnVal = ("query", remainder)
-          returnValSet = true
-        }
-        case "a" => {
-          returnVal = ("key-value", remainder)
-          returnValSet = true
-        }
-        case "d" => {
-          returnVal = ("display", remainder)
-          returnValSet = true
-        }
+        case "e" => return ("exit", "")
+        case "q" => return ("query", remainder)
+        case "a" => return ("key-value", remainder)
+        case "d" => return ("display", remainder)
         case _ => {
-          if (!line.isEmpty)
-            println(s"unknown command: $command");
+          if (!line.isEmpty) {
+            println(s"unknown command: $command")
+          }
           line = ""
         }
       }
