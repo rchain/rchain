@@ -13,7 +13,7 @@ case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("0.0.1 RChain Communications Library")
 
   val name =
-    opt[String](default = None, short = 'n', descr = "Node name or key")
+    opt[String](default = None, short = 'n', descr = "Node name or key.")
 
   val port =
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
