@@ -58,12 +58,12 @@ class TransitionSpec extends FlatSpec with Matchers {
         .set(_ >> 'ctxt >> 'ctxt >> 'outstanding)(1)
         .set(_ >> 'ctxt >> 'ctxt >> 'pc)(PC(6)) // Setting pc to 6 so that the VM halts after strand is installed
 
-    val codevec = Seq(OpImmediateLitToReg(v = 8, reg = 0),
+    val codevec = Seq(OpImmediateLitToReg(lit = 8, reg = 0),
                       OpJmpFalse(4),
-                      OpImmediateLitToReg(v = 1, reg = 0),
-                      OpRtn(next = true),
-                      OpImmediateLitToReg(v = 2, reg = 0),
-                      OpRtn(next = true))
+                      OpImmediateLitToReg(lit = 1, reg = 0),
+                      OpRtn(n = true),
+                      OpImmediateLitToReg(lit = 2, reg = 0),
+                      OpRtn(n = true))
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.rslt shouldBe Fixnum(1)
@@ -88,12 +88,12 @@ class TransitionSpec extends FlatSpec with Matchers {
         .set(_ >> 'ctxt >> 'ctxt >> 'outstanding)(1)
         .set(_ >> 'ctxt >> 'ctxt >> 'pc)(PC(6)) // Setting pc to 6 so that the VM halts after strand is installed
 
-    val codevec = Seq(OpImmediateLitToReg(v = 9, reg = 0),
+    val codevec = Seq(OpImmediateLitToReg(lit = 9, reg = 0),
                       OpJmpFalse(4),
-                      OpImmediateLitToReg(v = 1, reg = 0),
-                      OpRtn(next = true),
-                      OpImmediateLitToReg(v = 2, reg = 0),
-                      OpRtn(next = true))
+                      OpImmediateLitToReg(lit = 1, reg = 0),
+                      OpRtn(n = true),
+                      OpImmediateLitToReg(lit = 2, reg = 0),
+                      OpRtn(n = true))
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.rslt shouldBe Fixnum(2)
@@ -154,7 +154,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpImmediateLitToArg(value = 1, arg = 0),
       OpXferGlobalToReg(reg = 1, g = 668),
       OpOutstanding(pc = 9, n = 1),
-      OpPushAlloc(next = 2),
+      OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 2, arg = 0),
       OpImmediateLitToArg(value = 3, arg = 1),
       OpXferGlobalToReg(reg = 1, g = 668),
@@ -198,11 +198,11 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpImmediateLitToArg(value = 1, arg = 0),
       OpXferGlobalToReg(reg = 1, g = 668),
       OpOutstanding(pc = 14, n = 1),
-      OpPushAlloc(next = 2),
+      OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 2, arg = 0),
       OpXferGlobalToReg(reg = 1, g = 668),
       OpOutstanding(pc = 13, n = 1),
-      OpPushAlloc(next = 2),
+      OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 3, arg = 0),
       OpImmediateLitToArg(value = 4, arg = 1),
       OpXferGlobalToReg(reg = 1, g = 668),
@@ -252,8 +252,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpNargs(2),
       OpExtend(1),
       OpAlloc(2),
-      OpXferLexToArg(i = false, l = 0, o = 0, a = 0),
-      OpXferLexToArg(i = false, l = 0, o = 1, a = 1),
+      OpXferLexToArg(i = false, l = 0, o = 0, arg = 0),
+      OpXferLexToArg(i = false, l = 0, o = 1, arg = 1),
       OpXferGlobalToReg(reg = 1, g = 668),
       OpXmit(unwind = false, next = true, 2)
     )
