@@ -12,6 +12,9 @@ import com.typesafe.scalalogging.Logger
 case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("0.0.1 RChain Communications Library")
 
+  val name =
+    opt[String](default = None, short = 'n', descr = "Node name or key")
+
   val port =
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
@@ -54,7 +57,12 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
-    val name = UUID.randomUUID.toString.replaceAll("-", "")
+
+    val name = conf.name.toOption match {
+      case Some(key) => key
+      case None => UUID.randomUUID.toString.replaceAll("-", "")
+    }
+
     val host = conf.host.toOption match {
       case Some(host) => host
       case None =>

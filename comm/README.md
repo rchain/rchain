@@ -55,7 +55,7 @@ The fat jar built above may be run with Java like so:
 
 ```
 $ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/src-assembly-0.0.1.jar
-17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://ac4b1fdee5a947e8a511383e698df99d@63.224.55.75:30304}.
+17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012}.
 ```
 
 ### Running via Docker
@@ -65,7 +65,7 @@ If you built a docker image called `rchain-comm:latest`, you can run that with
 ```
 $ docker run -ti -p 30304:30304/udp rchain-comm:latest
 Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true
-04:20:56.910 [main] INFO main - Listening for traffic on #{Network rnode://c75981a613b547d7bd7e127c543e4d31@172.17.0.6:30304}.
+04:20:56.910 [main] INFO main - Listening for traffic on #{Network rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012}.
 ```
 
 Note that the port used has to be mapped to the proper host port for the node to be able to advertise itself to the
@@ -90,7 +90,7 @@ By default, the node will not attempt to bootstrap into any other network and so
 only the one
 
 ```
---bootstrap rnode://ace40ebca0924eb797bb69dfda04f5d9@216.83.154.106:30012
+--bootstrap rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012
 ```
 
 #### Host and Port
@@ -104,11 +104,11 @@ it does not guess a usable pair, they may be specified on the command line using
 
 By default it uses UDP port 30304. This is also how more than one node may be run on a single machine: just pick
 different ports. Remember that if using Docker, ports have to be properly mapped and forwarded. For example, if we want
-to connect on the test net on UDP port 12345 and our machine's public IP address is 63.224.55.75, we could do it like
+to connect on the test net on UDP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like
 so:
 
 ```
-$ docker run -ti -p 12345:12345/udp rchain-comm:latest -p 12345 --host 63.224.55.75 --bootstrap rnode://ace40ebca0924eb797bb69dfda04f5d9@216.83.154.106:30012
+$ docker run -ti -p 12345:12345/udp rchain-comm:latest -p 12345 --host 1.2.3.4 --bootstrap rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012
 ```
 
 Read more than you want to know about Docker networking starting about
