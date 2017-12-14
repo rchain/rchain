@@ -372,7 +372,7 @@ object VirtualMachine {
     state.set(_ >> 'ctxt)(state.ctxt.ctxt)
 
   def execute(op: OpNargs, state: VMState): VMState =
-    state.set(_ >> 'ctxt >> 'nargs)(op.n)
+    state.set(_ >> 'ctxt >> 'nargs)(op.nargs)
 
   def execute(op: OpAlloc, state: VMState): VMState =
     state.set(_ >> 'ctxt >> 'argvec)(Tuple(op.n, NIV))
@@ -381,14 +381,14 @@ object VirtualMachine {
     state.update(_ >> 'ctxt)(Ctxt(Some(Tuple(op.n, None)), _))
 
   def execute(op: OpExtend, state: VMState): VMState = {
-    def getTemplate = state.code.lit(op.v).as[Template]
+    def getTemplate = state.code.lit(op.lit).as[Template]
     def matchActuals(template: Template) =
       template.`match`(state.ctxt.argvec, state.ctxt.nargs)
     def getStdExtension = state.ctxt.env.as[StdExtension]
 
     val newState = for {
       template <- getTemplate or die(
-        s"OpExtend: No template in state.code.litvec(${op.v})")(state)
+        s"OpExtend: No template in state.code.litvec(${op.lit})")(state)
 
       tuple <- matchActuals(template) or
         // TODO: Revisit
@@ -421,7 +421,7 @@ object VirtualMachine {
   def execute(op: OpXmitTag, state: VMState): VMState =
     state
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(LocationAtom(state.code.lit(op.v)))
+      .set(_ >> 'ctxt >> 'tag)(LocationAtom(state.code.lit(op.lit)))
       .set(_ >> 'xmitData)((op.unwind, op.next))
       .set(_ >> 'doXmitFlag)(true)
 
@@ -601,30 +601,30 @@ object VirtualMachine {
 
   def execute(op: OpRtn, state: VMState): VMState =
     state
-      .set(_ >> 'doRtnData)(op.n)
+      .set(_ >> 'doRtnData)(op.next)
       .set(_ >> 'doRtnFlag)(true)
 
   def execute(op: OpRtnTag, state: VMState): VMState =
     state
-      .set(_ >> 'ctxt >> 'tag)(LocationAtom(state.code.lit(op.v)))
-      .set(_ >> 'doRtnData)(op.n)
+      .set(_ >> 'ctxt >> 'tag)(LocationAtom(state.code.lit(op.lit)))
+      .set(_ >> 'doRtnData)(op.next)
       .set(_ >> 'doRtnFlag)(true)
 
   def execute(op: OpRtnArg, state: VMState): VMState =
     state
       .set(_ >> 'ctxt >> 'tag)(Location.ArgReg(op.arg))
-      .set(_ >> 'doRtnData)(op.n)
+      .set(_ >> 'doRtnData)(op.next)
       .set(_ >> 'doRtnFlag)(true)
 
   def execute(op: OpRtnReg, state: VMState): VMState =
     state
       .set(_ >> 'ctxt >> 'tag)(Location.CtxtReg(op.reg))
-      .set(_ >> 'doRtnData)(op.n)
+      .set(_ >> 'doRtnData)(op.next)
       .set(_ >> 'doRtnFlag)(true)
 
   def execute(op: OpUpcallRtn, state: VMState): VMState =
     state
-      .set(_ >> 'ctxt >> 'tag)(LocationAtom(state.code.lit(op.v)))
+      .set(_ >> 'ctxt >> 'tag)(LocationAtom(state.code.lit(op.lit)))
       .updateSelf(state => {
         val ctxt = state.ctxt
 
@@ -636,7 +636,7 @@ object VirtualMachine {
           case StoreCtxt(ctxt) =>
             state
               .set(_ >> 'ctxt)(ctxt)
-              .update(_ >> 'doNextThreadFlag)(if (op.n) true else _)
+              .update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
 
           case StoreGlobal(env) => state.set(_ >> 'globalEnv)(env)
         }
@@ -661,7 +661,7 @@ object VirtualMachine {
     state.set(_ >> 'pc >> 'relative)(op.pc)
 
   def execute(op: OpJmpCut, state: VMState): VMState = {
-    val cut = op.m
+    val cut = op.cut
 
     val env = (1 to cut).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
@@ -676,7 +676,7 @@ object VirtualMachine {
 
   def execute(op: OpLookupToArg, state: VMState): VMState = {
     val argno = op.arg
-    val key = state.code.lit(op.v)
+    val key = state.code.lit(op.lit)
 
     val value =
       state.ctxt.selfEnv.meta.lookupOBO(state.ctxt.selfEnv, key, state.ctxt)
@@ -696,7 +696,7 @@ object VirtualMachine {
 
   def execute(op: OpLookupToReg, state: VMState): VMState = {
     val regno = op.reg
-    val key = state.code.lit(op.v)
+    val key = state.code.lit(op.lit)
 
     val value =
       state.ctxt.selfEnv.meta.lookupOBO(state.ctxt.selfEnv, key, state.ctxt)
@@ -714,11 +714,11 @@ object VirtualMachine {
   }
 
   def execute(op: OpXferLexToArg, state: VMState): VMState = {
-    val level = op.l
+    val level = op.level
 
     val env = (1 to level).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
-    val environment = if (op.i) {
+    val environment = if (op.indirect) {
       env.as[Actor].map(_.extension)
     } else {
       Some(env)
@@ -727,17 +727,17 @@ object VirtualMachine {
     environment match {
       case Some(e) =>
         state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-          _.updated(op.arg, e.slot(op.o)))
+          _.updated(op.arg, e.slot(op.offset)))
       case None => die("OpXferLexToArg: Type mismatch")(state)
     }
   }
 
   def execute(op: OpXferLexToReg, state: VMState): VMState = {
-    val level = op.l
+    val level = op.level
 
     val env = (1 to level).foldLeft(state.ctxt.env)((env, _) => env.parent)
 
-    val environment = if (op.i) {
+    val environment = if (op.indirect) {
       env.as[Actor].map(_.extension)
     } else {
       Some(env)
@@ -745,7 +745,7 @@ object VirtualMachine {
 
     environment match {
       case Some(e) =>
-        setCtxtReg(op.reg, e.slot(op.o))(state)
+        setCtxtReg(op.reg, e.slot(op.offset))(state)
       case None => die("OpXferLexToReg: Type mismatch")(state)
     }
 
@@ -753,10 +753,10 @@ object VirtualMachine {
 
   def execute(op: OpXferGlobalToArg, state: VMState): VMState =
     state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.arg, state.globalEnv.entry(op.g)))
+      _.updated(op.arg, state.globalEnv.entry(op.global)))
 
   def execute(op: OpXferGlobalToReg, state: VMState): VMState =
-    setCtxtReg(op.reg, state.globalEnv.entry(op.g))(state)
+    setCtxtReg(op.reg, state.globalEnv.entry(op.global))(state)
 
   def execute(op: OpXferArgToArg, state: VMState): VMState =
     state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
@@ -779,7 +779,7 @@ object VirtualMachine {
 
   def execute(op: OpXferRsltToDest, state: VMState): VMState =
     state
-      .set(_ >> 'loc)(LocationAtom(state.code.lit(op.v)))
+      .set(_ >> 'loc)(LocationAtom(state.code.lit(op.lit)))
       .updateSelf(
         state => {
           import Location._
@@ -798,7 +798,7 @@ object VirtualMachine {
 
   def execute(op: OpXferSrcToRslt, state: VMState): VMState =
     state
-      .set(_ >> 'loc)(LocationAtom(state.code.lit(op.v)))
+      .set(_ >> 'loc)(LocationAtom(state.code.lit(op.lit)))
       .set(_ >> 'ctxt >> 'rslt)(
         Location.fetch(state.loc, state.ctxt, state.globalEnv))
 
@@ -807,10 +807,10 @@ object VirtualMachine {
       _.updated(op.arg, state.code.lit(op.lit)))
 
   def execute(op: OpIndLitToReg, state: VMState): VMState =
-    setCtxtReg(op.r, state.code.lit(op.lit))(state)
+    setCtxtReg(op.reg, state.code.lit(op.lit))(state)
 
   def execute(op: OpIndLitToRslt, state: VMState): VMState =
-    state.set(_ >> 'ctxt >> 'rslt)(state.code.lit(op.v))
+    state.set(_ >> 'ctxt >> 'rslt)(state.code.lit(op.lit))
 
   def execute(op: OpImmediateLitToArg, state: VMState): VMState =
     state.update(_ >> 'ctxt >> 'argvec >> 'elem)(

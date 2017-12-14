@@ -61,9 +61,9 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(OpImmediateLitToReg(lit = 8, reg = 0),
                       OpJmpFalse(4),
                       OpImmediateLitToReg(lit = 1, reg = 0),
-                      OpRtn(n = true),
+                      OpRtn(next = true),
                       OpImmediateLitToReg(lit = 2, reg = 0),
-                      OpRtn(n = true))
+                      OpRtn(next = true))
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.rslt shouldBe Fixnum(1)
@@ -91,9 +91,9 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(OpImmediateLitToReg(lit = 9, reg = 0),
                       OpJmpFalse(4),
                       OpImmediateLitToReg(lit = 1, reg = 0),
-                      OpRtn(n = true),
+                      OpRtn(next = true),
                       OpImmediateLitToReg(lit = 2, reg = 0),
-                      OpRtn(n = true))
+                      OpRtn(next = true))
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.rslt shouldBe Fixnum(2)
@@ -119,7 +119,7 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(OpAlloc(2),
                       OpImmediateLitToArg(value = 1, arg = 0),
                       OpImmediateLitToArg(value = 2, arg = 1),
-                      OpXferGlobalToReg(reg = 1, g = 668),
+                      OpXferGlobalToReg(reg = 1, global = 668),
                       OpXmit(unwind = false, next = true, 2))
 
     val end = VirtualMachine.executeSeq(codevec, start)
@@ -152,12 +152,12 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(
       OpAlloc(2),
       OpImmediateLitToArg(value = 1, arg = 0),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpOutstanding(pc = 9, n = 1),
       OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 2, arg = 0),
       OpImmediateLitToArg(value = 3, arg = 1),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpXmitArg(unwind = false, next = true, nargs = 2, arg = 1),
       OpXmit(unwind = false, next = true, nargs = 2)
     )
@@ -196,16 +196,16 @@ class TransitionSpec extends FlatSpec with Matchers {
     val codevec = Seq(
       OpAlloc(2),
       OpImmediateLitToArg(value = 1, arg = 0),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpOutstanding(pc = 14, n = 1),
       OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 2, arg = 0),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpOutstanding(pc = 13, n = 1),
       OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 3, arg = 0),
       OpImmediateLitToArg(value = 4, arg = 1),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpXmitArg(unwind = false, next = true, nargs = 2, arg = 1),
       OpXmitArg(unwind = false, next = true, nargs = 2, arg = 1),
       OpXmit(unwind = false, next = true, nargs = 2)
@@ -252,9 +252,9 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpNargs(2),
       OpExtend(1),
       OpAlloc(2),
-      OpXferLexToArg(i = false, l = 0, o = 0, arg = 0),
-      OpXferLexToArg(i = false, l = 0, o = 1, arg = 1),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferLexToArg(indirect = false, level = 0, offset = 0, arg = 0),
+      OpXferLexToArg(indirect = false, level = 0, offset = 1, arg = 1),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpXmit(unwind = false, next = true, 2)
     )
 
@@ -290,12 +290,12 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpAlloc(2),
       OpImmediateLitToArg(value = 1, arg = 0),
       OpImmediateLitToArg(value = 2, arg = 1),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpXmit(unwind = false, next = true, 2),
       OpAlloc(2),
       OpImmediateLitToArg(value = 3, arg = 0),
       OpImmediateLitToArg(value = 4, arg = 1),
-      OpXferGlobalToReg(reg = 1, g = 668),
+      OpXferGlobalToReg(reg = 1, global = 668),
       OpXmit(unwind = false, next = true, 2)
     )
 

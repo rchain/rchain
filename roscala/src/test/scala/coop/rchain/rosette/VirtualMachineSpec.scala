@@ -144,7 +144,7 @@ class VirtualMachineSpec extends WordSpec with Matchers {
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpXferGlobalToArg(
       arg = someObsInd,
-      g = someObsInd)) {
+      global = someObsInd)) {
       val elem = testState.globalEnv.entry(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
