@@ -396,7 +396,7 @@ int DynamicLoader::loadhelp(const char* ldTemplate, char* msgBuf) {
      */
     if (loadCheck != loadPoint) {
         sprintf(msgBuf, "load point is 0x%lx but sbrk(0) is 0x%lx",
-                (unsigned long)loadPoint, (unsigned long)loadCheck);
+                (uint32_t)loadPoint, (uint32_t)loadCheck);
         rtnCode = 9;
         goto quit;
     }
@@ -404,7 +404,7 @@ int DynamicLoader::loadhelp(const char* ldTemplate, char* msgBuf) {
 #ifdef LOAD_ON_PAGE_BOUNDARIES
     if (loadCheck & (PAGESIZE - 1L)) {
         sprintf(msgBuf, "allocated memory at 0x%lx - not page aligned",
-                (unsigned long)loadCheck);
+                (uint32_t)loadCheck);
         rtnCode = 10;
         goto quit;
     }
@@ -464,7 +464,7 @@ int DynamicLoader::dump(char* outFile, char* msgBuf) {
     FILE* reloc = 0;
     FILE* out = 0;
     struct exec relocHdr, outHdr;
-    unsigned long textStart, dataStart, endOfMem;
+    uint32_t textStart, dataStart, endOfMem;
     int textSpan, dataSpan, nBytes;
     int usermask;
     struct stat sbuf;

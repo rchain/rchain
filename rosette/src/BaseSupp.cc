@@ -277,21 +277,21 @@ uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
     switch (span) {
     case 8:
         if (sign)
-            ans = *(signed char*)((char*)addr + (offset / BITS(char)));
+            ans = *(int8_t*)((int8_t*)addr + (offset / BITS(int8_t)));
         else
-            ans = *(unsigned char*)((char*)addr + (offset / BITS(char)));
+            ans = *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t)));
         break;
     case 16:
         if (sign)
-            ans = *(signed short*)((short*)addr + (offset / BITS(short)));
+            ans = *(int16_t*)((int16_t*)addr + (offset / BITS(int16_t)));
         else
-            ans = *(unsigned short*)((short*)addr + (offset / BITS(short)));
+            ans = *(uint16_t*)((int16_t*)addr + (offset / BITS(int16_t)));
         break;
     case 32:
         if (sign)
-            ans = *(signed long*)((long*)addr + (offset / BITS(long)));
+            ans = *(int32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
         else
-            ans = *(unsigned long*)((long*)addr + (offset / BITS(long)));
+            ans = *(uint32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
         break;
     default: {
         /*
@@ -333,16 +333,16 @@ uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
 
     switch (span) {
     case 8:
-        *(unsigned char*)((char*)addr + (offset / BITS(char))) =
-            (unsigned char)bits;
+        *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t))) =
+            (uint8_t)bits;
         break;
     case 16:
-        *(unsigned short*)((short*)addr + (offset / BITS(short))) =
-            (unsigned short)bits;
+        *(uint16_t*)((int16_t*)addr + (offset / BITS(int16_t))) =
+            (uint16_t)bits;
         break;
     case 32:
-        *(unsigned long*)((long*)addr + (offset / BITS(long))) =
-            (unsigned long)bits;
+        *(uint32_t*)((int32_t*)addr + (offset / BITS(int32_t))) =
+            (uint32_t)bits;
         break;
     default: {
         /*

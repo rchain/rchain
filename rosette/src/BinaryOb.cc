@@ -104,10 +104,10 @@ ByteVec* ByteVec::create(ByteVec* old, int newsize) {
 void ByteVec::reset(EMPTY) { memset((char*)&byte(0), 0, numberOfBytes()); }
 
 
-unsigned long ByteVec::sum(EMPTY) {
-    unsigned long total = 0;
+uint32_t ByteVec::sum(EMPTY) {
+    uint32_t total = 0;
     for (int i = numberOfBytes(); i--;)
-        total += (unsigned long)byte(i);
+        total += (uint32_t)byte(i);
     return total;
 }
 
@@ -191,10 +191,10 @@ void Word16Vec::reset(EMPTY) {
 }
 
 
-unsigned long Word16Vec::sum(EMPTY) {
-    unsigned long total = 0;
+uint32_t Word16Vec::sum(EMPTY) {
+    uint32_t total = 0;
     for (int i = numberOfWords(); i--;)
-        total += (unsigned long)word(i);
+        total += (uint32_t)word(i);
     return total;
 }
 
@@ -258,10 +258,10 @@ void Word32Vec::reset(EMPTY) {
 }
 
 
-unsigned long Word32Vec::sum(EMPTY) {
-    unsigned long total = 0;
+uint32_t Word32Vec::sum(EMPTY) {
+    uint32_t total = 0;
     for (int i = numberOfWords(); i--;)
-        total += (unsigned long)word(i);
+        total += (uint32_t)word(i);
     return total;
 }
 

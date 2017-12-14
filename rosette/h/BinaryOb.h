@@ -81,7 +81,7 @@ class ByteVec : public BinaryOb {
     uint8_t& byte(int);
     int numberOfBytes(EMPTY);
     void reset(EMPTY);
-    unsigned long sum(EMPTY);
+    uint32_t sum(EMPTY);
 
     virtual Ob* indexedSize(EMPTY);
     virtual Ob* nth(int);
@@ -128,7 +128,7 @@ class Word16Vec : public BinaryOb {
     uint16_t& word(int);
     int numberOfWords(EMPTY);
     void reset(EMPTY);
-    unsigned long sum(EMPTY);
+    uint32_t sum(EMPTY);
 
     virtual Ob* indexedSize(EMPTY);
     virtual Ob* nth(int);
@@ -164,7 +164,7 @@ class Word32Vec : public BinaryOb {
     uint32_t& word(int);
     int numberOfWords(EMPTY);
     void reset(EMPTY);
-    unsigned long sum(EMPTY);
+    uint32_t sum(EMPTY);
 
     virtual Ob* indexedSize(EMPTY);
     virtual Ob* nth(int);
