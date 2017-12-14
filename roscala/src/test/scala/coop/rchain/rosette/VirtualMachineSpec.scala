@@ -129,8 +129,9 @@ class VirtualMachineSpec extends WordSpec with Matchers {
       _ shouldBe 1
     }
 
-    (theState >> 'ctxt >> 'argvec >> 'elem on OpXferArgToArg(d = someObsInd,
-                                                             s = someObsInd)) {
+    (theState >> 'ctxt >> 'argvec >> 'elem on OpXferArgToArg(
+      dest = someObsInd,
+      src = someObsInd)) {
       val elem = testState.ctxt.argvec.elem(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
@@ -142,14 +143,14 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpXferGlobalToArg(
-      a = someObsInd,
+      arg = someObsInd,
       g = someObsInd)) {
       val elem = testState.globalEnv.entry(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
     }
 
-    (theState >> 'ctxt >> 'rslt on OpXferRegToRslt(r = someObsInd)) {
+    (theState >> 'ctxt >> 'rslt on OpXferRegToRslt(reg = someObsInd)) {
       val elem = testState.ctxt.getReg(someObsInd)
       Some(_) shouldBe elem
     }
