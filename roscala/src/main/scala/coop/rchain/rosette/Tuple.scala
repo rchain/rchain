@@ -12,11 +12,6 @@ case object AbsentRest extends TupleError
 case object InvalidRest extends TupleError
 
 case class Tuple(elem: Seq[Ob]) extends Ob {
-  //TODO revisit
-  val metaTup: Ob = Ob.INVALID
-  val sboTup: Ob = Ob.INVALID
-
-  override val slot: Seq[Ob] = metaTup +: sboTup +: elem
 
   def accepts(msg: Ctxt): Boolean =
     if (this == Tuple.NIL) {
