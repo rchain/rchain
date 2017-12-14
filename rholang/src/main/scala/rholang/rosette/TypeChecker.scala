@@ -41,3 +41,45 @@ with Proc.Visitor[CheckerTypes.Ret, CheckerTypes.Arg]{
     override def visit( p: PContr, arg: Arg ): Ret = List()
     override def visit( p: PPar, arg: Arg ): Ret = List()
 }
+
+class SatisfiedVisitor
+extends TPattern.Visitor[Boolean, Proc]{
+    override def visit( tp: TPVerity, arg: Proc ): Boolean = true
+    override def visit( tp: TPNegation, arg: Proc ): Boolean = {
+        ! (tp.tpattern_.accept(this, arg))
+    }
+    override def visit ( tp: TPNullity, arg: Proc): Boolean = {
+      structurallyEquivalent(arg, new PNil())
+    }
+    override def visit ( tp: TPConjuction, arg: Proc): Boolean = {
+      (tp.tpattern_1.accept(this, arg) && tp.tpattern_2.accept(this, arg))
+    }
+    override def visit ( tp: TPDisjunction, arg: Proc): Boolean = {
+      (tp.tpattern_1.accept(this, arg) || tp.tpattern_2.accept(this, arg))
+    }
+    override def visit ( tp: TPDescent, arg: Proc): Boolean = {
+      arg match {
+        case pdrop: PDrop => nameEquivalent(pdrop.chan_, tp.chan_)
+        case _: Any => false
+      }
+    }
+    override def visit ( tp: TPElevation, arg: Proc): Boolean = {
+      arg match {
+        case plift : PLift => {
+          if (plift.listproc_.size() == 1) {
+            nominallySafisfies( tp.tpindicator_, plift.chan_ ) &&
+            tp.tpattern_.accept(this, plift.listproc_.get(0))
+          } else {
+            sys.error("unimplemented")
+          }
+        }
+        case _: Any => false
+      }
+    }
+    override def visit ( tp: TPActivity, arg: Proc): Boolean = sys.error("unimplemented")
+    override def visit ( tp: TPMixture, arg: Proc): Boolean = sys.error("unimplemented")
+    
+    def structurallyEquivalent( p1: Proc, p2: Proc): Boolean = sys.error("unimplemented")
+    def nameEquivalent( p1: Chan, p2: Chan): Boolean = sys.error("unimplemented")
+    def nominallySafisfies( ind: TPIndicator, chan: Chan): Boolean = sys.error("unimplemented")
+}

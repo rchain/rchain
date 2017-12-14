@@ -153,20 +153,17 @@ TPNullity. TPattern5 ::= "Nil" ;
 TPNegation. TPattern4 ::= "~" TPattern4 ;
 TPConjuction. TPattern3 ::= TPattern3 "&" TPattern4 ;
 TPDisjunction. TPattern2 ::= TPattern2 "\\/" TPattern3 ;
-TPDescent. TPattern1 ::= "*" TPNomination ;
+TPDescent. TPattern1 ::= "*" Chan ;
 TPElevation. TPattern1 ::= TPIndicator "!" "(" TPattern ")";
 TPActivity. TPattern1 ::= "for" "(" [TPatternBind] ")" "{" TPattern "}" ;
 TPMixture. TPattern ::= TPattern "|" TPattern1 ;
 coercions TPattern 5 ;
 
 TPIQuotFormula. TPIndicator ::= "@@" TPattern ;
-TPIChan. TPIndicator ::= TPNomination ;
+TPIChan. TPIndicator ::= Chan ;
 
-TPBind. TPatternBind ::= TPNomination "<-" TPIndicator ;
+TPBind. TPatternBind ::= Chan "<-" TPIndicator ;
 separator nonempty TPatternBind ";" ;
-
-TNVar. TPNomination ::= Var ;
-TNQuote. TPNomination ::= "@" Proc3 ;
 
 TAEmpty. TAnnotation ::= ;
 TAPattern. TAnnotation ::= ":" TPattern ;
