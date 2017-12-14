@@ -97,7 +97,7 @@ class VirtualMachine : public RootSet {
     Monitor* systemMonitor;
     Monitor* currentMonitor;
 
-    unsigned long sigvec;
+    uint32_t sigvec;
     Ob* sigPool[NSIG];
     IO_HANDLER* ioFn[FD_SETSIZE];
     Ob* ioPool[FD_SETSIZE];
@@ -118,7 +118,7 @@ class VirtualMachine : public RootSet {
     /* external applications immovable objects, e.g. fixnums, using    */
     /* these immovable objects as keys to the actors that do the real  */
     /* work.                                                           */
-    unsigned long extAppCBKeyGen;
+    uint32_t extAppCBKeyGen;
     RblTable* extAppCBRegistry;
 
     VirtualMachine();
