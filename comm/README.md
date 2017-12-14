@@ -21,7 +21,7 @@ Clone (or download and unpack) the master branch of the source.
 ### Building with `sbt`
 
 The only up-front build-time requirement is [sbt](http://www.scala-sbt.org/download.html), which should be installed
-according to your platform. It, in turn, will download and include all depedencies for the system.
+according to your platform. It, in turn, will download and include all dependencies for the system.
 
 To build once `sbt` is installed, issue:
 
@@ -55,7 +55,7 @@ The fat jar built above may be run with Java like so:
 
 ```
 $ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/src-assembly-0.0.1.jar
-17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://RChainAuthoritativeBootstrapNode@216.83.154.106:30012}.
+17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://ace40ebca0924eb797bb69dfda04f5d9@1.2.3.4:30304}.
 ```
 
 ### Running via Docker
@@ -65,7 +65,7 @@ If you built a docker image called `rchain-comm:latest`, you can run that with
 ```
 $ docker run -ti -p 30304:30304/udp rchain-comm:latest
 Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true
-04:20:56.910 [main] INFO main - Listening for traffic on #{Network rnode://RChainAuthoritativeBootstrapNode@216.83.154.106:30012}.
+04:20:56.910 [main] INFO main - Listening for traffic on #{Network rnode://ace40ebca0924eb797bb69dfda04f5d9@172.17.0.3:30304}.
 ```
 
 Note that the port used has to be mapped to the proper host port for the node to be able to advertise itself to the
@@ -88,19 +88,23 @@ However it gets run, it responds to the following arguments:
 #### Bootstrapping
 
 By default, the node will not attempt to bootstrap into any other network and so will create a brand new network with
-only the one
+only the one node sitting there, waiting for other nodes to contact it. Giving the argument
 
 ```
 --bootstrap rnode://RChainAuthoritativeBootstrapNode@216.83.154.106:30012
 ```
 
+will cause the new node to attempt to attach to the test net. There is nothing special about this node beyond the name:
+any node in the network can be used for bootstrapping, but the above node is the most likely to be up.
+
 #### Host and Port
 
-The system attempts to guess an good IP address and UDP port that other nodes can use to communicate with this one. If
-it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
+The system tries to guess a good IP address and a reasonable UDP port that other nodes can use to communicate with this
+one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port`
+options:
 
 ```
---host 1.2.3.4 --port 30304 --bootstrap rnode://ace40ebca0924eb797bb69dfda04f5d9@216.83.154.106:30012
+--host 1.2.3.4 --port 30304 --bootstrap rnode://RChainAuthoritativeBootstrapNode@216.83.154.106:30012
 ```
 
 By default it uses UDP port 30304. This is also how more than one node may be run on a single machine: just pick
