@@ -6,7 +6,7 @@ package coop.rchain.rho2rose
 
 import coop.rchain.lib.term._
 
-trait RosetteSerialization[Namespace, Var, Tag] {
+trait RosetteSerialization[Namespace, VarType, TagType] {
   def rosetteSerializeOperation: String = {
     this match {
       case leaf: StrTermPtdCtxtLf => ""
@@ -26,14 +26,19 @@ trait RosetteSerialization[Namespace, Var, Tag] {
   }
 }
 
-case class StrTermPtdCtxtLf(override val tag: Either[String, Either[String, String]])
-  extends TermCtxtLeaf[String, Either[String, String], String](tag) with Factual with RosetteSerialization[String, Either[String, String], String] {
+sealed trait LangOrCtxt[+LangType, +CtxtType]
+
+final case class Lang[+LangType]( lang : LangType ) extends LangOrCtxt[LangType, Nothing]
+final case class Ctxt[+CtxtType]( ctxt : CtxtType ) extends LangOrCtxt[Nothing, CtxtType]
+
+case class StrTermPtdCtxtLf(override val tag: TagOrVar[String, LangOrCtxt[String, String]])
+  extends TermCtxtLeaf[String, LangOrCtxt[String, String], String](tag) with Factual with RosetteSerialization[String, LangOrCtxt[String, String], String] {
   override def rosetteSerialize: String = {
     tag match {
-      case Left(t) => "" + t
-      case Right(v) => {
+      case Tag(t) => "" + t
+      case Var(v) => {
         v match {
-          case Left(language_v) => "" + language_v
+          case Lang(language_v) => "" + language_v
           case _ => "" + v
         }
       }
@@ -42,8 +47,8 @@ case class StrTermPtdCtxtLf(override val tag: Either[String, Either[String, Stri
 }
 
 case class StrTermPtdCtxtBr(override val nameSpace: String,
-                            override val labels: List[TermCtxt[String, Either[String, String], String] with Factual with RosetteSerialization[String, Either[String, String], String]]
-                           ) extends TermCtxtBranch[String, Either[String, String], String](nameSpace, labels) with Factual with RosetteSerialization[String, Either[String, String], String] {
+                            override val labels: List[TermCtxt[String, LangOrCtxt[String, String], String] with Factual with RosetteSerialization[String, LangOrCtxt[String, String], String]]
+                           ) extends TermCtxtBranch[String, LangOrCtxt[String, String], String](nameSpace, labels) with Factual with RosetteSerialization[String, LangOrCtxt[String, String], String] {
   override def rosetteSerializeOperation: String = {
     val result = labels match {
       case (albl: StrTermPtdCtxtBr) :: rlbls => {
@@ -82,7 +87,7 @@ case class StrTermPtdCtxtBr(override val nameSpace: String,
           var acc = ""
 
 
-          def serializeExpr(lbl: TermCtxt[String, Either[String, String], String] with Factual with RosetteSerialization[String, Either[String, String], String], i: Int) = {
+          def serializeExpr(lbl: TermCtxt[String, LangOrCtxt[String, String], String] with Factual with RosetteSerialization[String, LangOrCtxt[String, String], String], i: Int) = {
             if (i == 0) {
               acc = lbl.rosetteSerialize
             } else {

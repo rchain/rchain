@@ -19,23 +19,23 @@ import scala.language.postfixOps
 
 // TODO: Check if we can move these to a specific file like "RoselangNavigation.scala"
 // and see if we need change some of the new TermCtxtBranch[L,V,T] calls to more specific classes
-trait StrTermNavigation extends TermNavigation[String,Either[String,String],String]
-trait StrTermMutation extends TermMutation [String,Either[String,String],String]
-trait StrTermZipperComposition extends TermZipperComposition[String,Either[String,String],String]
+trait StrTermNavigation extends TermNavigation[String,LangOrCtxt[String,String],String]
+trait StrTermMutation extends TermMutation [String,LangOrCtxt[String,String],String]
+trait StrTermZipperComposition extends TermZipperComposition[String,LangOrCtxt[String,String],String]
 
 // V for language variable
 // K for "context" variable
 // G for "ground" value
 object StrTermCtorAbbrevs {
-  type StrTermCtxt = TermCtxt[String,Either[String,String],String] with Factual with RosetteSerialization[String,Either[String,String],String]
-  def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Right( Left( v ) ) )
-  def K( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Right( Right( v ) ) )
-  def G( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Left( v ) )
+  type StrTermCtxt = TermCtxt[String,LangOrCtxt[String,String],String] with Factual with RosetteSerialization[String,LangOrCtxt[String,String],String]
+  def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( Lang( v ) ) )
+  def K( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( Ctxt( v ) ) )
+  def G( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Tag( v ) )
   def B( v : String )( terms : StrTermCtxt* ) = StrTermPtdCtxtBr( v, terms.toList )
 }
 
 object StrZipAbbrevs {
-  type ValOrVar = Either[String,Either[String,String]]
+  type ValOrVar = TagOrVar[String,LangOrCtxt[String,String]]
   type LocVorV = Location[ValOrVar]
   def L( term : StrTermCtorAbbrevs.StrTermCtxt, ctxt : Context[ValOrVar] ) : LocVorV = Location( term, ctxt )   
   def HV( cv : String ) : LocVorV = 
@@ -166,10 +166,10 @@ extends FoldVisitor[VisitorTypes.R,VisitorTypes.A] {
 	)
 	*/
 	yLoc match {
-	  case Location( StrTermPtdCtxtLf( Right( Left( v ) ) ), Top( ) ) => {
+	  case Location( StrTermPtdCtxtLf( Var( Lang( v ) ) ), Top( ) ) => {
             throw new CompilerExceptions.UnexpectedCombination( xLoc, yLoc )
           }
-          case Location( StrTermPtdCtxtLf( Right( Right( v ) ) ), Top( ) ) => xLoc
+          case Location( StrTermPtdCtxtLf( Var( Ctxt( v ) ) ), Top( ) ) => xLoc
 	  case Location( _, Top( ) ) => {
 	    xCtxt match {
 	      case Top() => {
@@ -206,10 +206,10 @@ extends FoldVisitor[VisitorTypes.R,VisitorTypes.A] {
 	  }
 	  case _ => {
 	    xLoc match {
-              case Location( StrTermPtdCtxtLf( Right( Left( v ) ) ), Top() ) => {
+              case Location( StrTermPtdCtxtLf( Var( Lang( v ) ) ), Top() ) => {
                 throw new CompilerExceptions.UnexpectedCombination( xLoc, yLoc )
               }
-	      case Location( StrTermPtdCtxtLf( Right( Right( v ) ) ), Top() ) => {
+	      case Location( StrTermPtdCtxtLf( Var( Ctxt( v ) ) ), Top() ) => {
 		val loc = zipr.update( yLoc, xTerm )
 		/*
 		 println(
@@ -300,7 +300,7 @@ extends StrFoldCtxtVisitor {
 
   def isTopLevel( r : R ) : Boolean = {
     r match {
-      case Some( Location( StrTermPtdCtxtLf( Left( v ) ), Top() ) ) if v.equals( theCtxtVar ) => {
+      case Some( Location( StrTermPtdCtxtLf( Tag( v ) ), Top() ) ) if v.equals( theCtxtVar ) => {
         true
       }
       case _ => false
