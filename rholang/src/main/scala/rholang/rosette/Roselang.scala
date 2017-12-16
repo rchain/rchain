@@ -19,27 +19,23 @@ import scala.language.postfixOps
 
 // TODO: Check if we can move these to a specific file like "RoselangNavigation.scala"
 // and see if we need change some of the new TermCtxtBranch[L,V,T] calls to more specific classes
-trait StrTermNavigation extends TermNavigation[String,LangOrCtxt[String,String],String]
-trait StrTermMutation extends TermMutation [String,LangOrCtxt[String,String],String]
-trait StrTermZipperComposition extends TermZipperComposition[String,LangOrCtxt[String,String],String]
+trait StrTermNavigation extends TermNavigation[String,String,String]
+trait StrTermMutation extends TermMutation [String,String,String]
+trait StrTermZipperComposition extends TermZipperComposition[String,String,String]
 
-// V for language variable
-// K for "context" variable
+// V for variable
 // G for "ground" value
 object StrTermCtorAbbrevs {
-  type StrTermCtxt = TermCtxt[String,LangOrCtxt[String,String],String] with Factual with RosetteSerialization[String,LangOrCtxt[String,String],String]
-  def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( Lang( v ) ) )
-  def K( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( Ctxt( v ) ) )
+  type StrTermCtxt = TermCtxt[String,String,String] with Factual with RosetteSerialization[String,String,String]
+  def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( v ) )
   def G( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Tag( v ) )
   def B( v : String )( terms : StrTermCtxt* ) = StrTermPtdCtxtBr( v, terms.toList )
 }
 
 object StrZipAbbrevs {
-  type ValOrVar = TagOrVar[String,LangOrCtxt[String,String]]
+  type ValOrVar = TagOrVar[String,String]
   type LocVorV = Location[ValOrVar]
   def L( term : StrTermCtorAbbrevs.StrTermCtxt, ctxt : Context[ValOrVar] ) : LocVorV = Location( term, ctxt )   
-  def HV( cv : String ) : LocVorV = 
-    Location( StrTermCtorAbbrevs.K( cv ), Top[ValOrVar]() )
   def T() : Context[ValOrVar] = Top()
 }
 
