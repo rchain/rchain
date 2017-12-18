@@ -395,9 +395,6 @@ void InitBuiltinObs() {
 }
 
 
-//static int is_absolute_pathname(char* path) { return path && path[0] == '/'; }
-
-
 static void get_path_prefix(char* path, char* dir) {
     char* p = strrchr(path, '/');
     if (p) {

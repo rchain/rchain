@@ -863,8 +863,9 @@ int Heap::size() { return newSpace->size() + oldSpace->size(); }
  * debugger breakpoints.
  */
 
-//static void catchMagic() {}
-
+#ifdef DEBUG
+static void catchMagic() {}
+#endif
 
 static void* magicLoc = 0;
 

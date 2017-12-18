@@ -38,11 +38,10 @@
 extern "C" {
 void suicide(const char* fmt...) {
     va_list args;
-//    int status;
 
     va_start(args, fmt);
     fputs("*** fatal error: ", stderr);
-    /*status = */ vfprintf(stderr, fmt, args);
+    vfprintf(stderr, fmt, args);
     va_end(args);
     putc('\n', stderr);
     exit(1);
@@ -51,11 +50,10 @@ void suicide(const char* fmt...) {
 
 void warning(const char* fmt...) {
     va_list args;
-//    int status;
 
     va_start(args, fmt);
     fputs("*** warning: ", stderr);
-    /*status = */ vfprintf(stderr, fmt, args);
+    vfprintf(stderr, fmt, args);
     va_end(args);
     putc('\n', stderr);
 }
@@ -63,11 +61,10 @@ void warning(const char* fmt...) {
 
 void warningx(const char* fmt...) {
     va_list args;
-//    int status;
 
     va_start(args, fmt);
     fputs("***warning: ", stderr);
-    /*status = */ vfprintf(stderr, fmt, args);
+    vfprintf(stderr, fmt, args);
     va_end(args);
 }
 };
