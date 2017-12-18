@@ -36,11 +36,11 @@ extern "C" {
 
 int readError(FILE* f, const char* fmt, ...) {
     va_list args;
-    int status;
+//    int status;
 
     fprintf(stderr, "error: ");
     va_start(args, fmt);
-    status = vfprintf(stderr, fmt, args);
+    /*status = */ vfprintf(stderr, fmt, args);
     va_end(args);
     putc('\n', stderr);
 #if !defined(LINUX)

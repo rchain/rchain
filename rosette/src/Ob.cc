@@ -417,11 +417,12 @@ pOb Ob::getLex(int indirect, int level, int offset) {
     pOb p = this;
     while (level--)
         p = BASE(p->parent());
-    if (indirect)
+    if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
             return INVALID;
         else
             p = ((Actor*)p)->extension;
+    }
     return (offset < p->numberOfSlots() ? p->slot(offset) : INVALID);
 }
 
@@ -430,11 +431,12 @@ pOb Ob::setLex(int indirect, int level, int offset, pOb val) {
     pOb p = this;
     while (level--)
         p = BASE(p->parent());
-    if (indirect)
+    if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
             return INVALID;
         else
             p = ((Actor*)p)->extension;
+    }
     if (offset >= p->numberOfSlots())
         return INVALID;
     else {
@@ -448,11 +450,12 @@ pOb Ob::getAddr(int indirect, int level, int offset) {
     pOb p = this;
     while (level--)
         p = BASE(p->parent());
-    if (indirect)
+    if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
             return INVALID;
         else
             p = ((Actor*)p)->extension;
+    }
     return (offset < p->numberOfSlots()
                 ? FIXNUM(ADDR_TO_PRE_FIXNUM(p->slot(offset)))
                 : INVALID);
@@ -467,11 +470,12 @@ pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
     pOb p = this;
     while (level--)
         p = BASE(p->parent());
-    if (indirect)
+    if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
             return INVALID;
         else
             p = ((Actor*)p)->extension;
+    }
     if (offset >= p->numberOfSlots())
         return INVALID;
     else {

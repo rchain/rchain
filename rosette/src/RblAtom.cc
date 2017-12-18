@@ -101,7 +101,7 @@ bool Symbol::ConstantP() { return FALSE; }
 void Symbol::printOn(FILE* f) {
     char* str = SYMPTR(atom);
     char c;
-    while (c = *str++) {
+    while ((c = *str++)) {  // Assign and test
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);

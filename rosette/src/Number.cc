@@ -314,7 +314,7 @@ DEF("fx-lsl", fxLsl, 2, 2) {
 DEF("fx-lsr", fxLsr, 2, 2) {
     CHECK_FIXNUM(0, m);
     CHECK_FIXNUM(1, n);
-    unsigned long k = m;
+    u_int32_t k = m;
     return FIXNUM(k >> n);
 }
 

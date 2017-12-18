@@ -1217,16 +1217,16 @@ BUILTIN_CLASS(Reader) {}
 
 Reader::Reader(ReadTable* rt, FILE* f)
     : BinaryOb(align(sizeof(Reader)), CLASS_META(Reader), CLASS_SBO(Reader)),
-      rt(rt),
-      fstk(),
-      ostk(),
-      mode(START),
-      file(f),
       buf(NULL),
       bufsize(0),
       bufp(0),
+      errorEncountered(FALSE),
       waitingOnIO(NOT_WAITING),
-      errorEncountered(FALSE) {
+      fstk(),
+      ostk(),
+      rt(rt),
+      mode(START),
+      file(f) {
     heap->registerForeignOb(this);
     Reader::updateCnt();
 }

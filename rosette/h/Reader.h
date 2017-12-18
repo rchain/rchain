@@ -85,7 +85,7 @@ class Reader : public BinaryOb {
     int bufp;
     char errorEncountered;
     enum { NOT_WAITING, WAITING_FOR_EXPR, WAITING_FOR_CHAR } waitingOnIO;
-    unsigned short filler_up_please;
+    uint16_t filler_up_please;
     FrameStk fstk;
     ObStk ostk;
 

@@ -63,7 +63,7 @@ class Prim : public BinaryOb {
     PRIMFN* fn;
     ArgNum minargs;
     ArgNum maxargs;
-    unsigned short primnum;
+    uint16_t primnum;
 
     static Prim* create(char*, PRIMFN*, int, int);
     static Prim* nthPrim(int);
@@ -84,7 +84,7 @@ struct BuiltinPrimRecord {
     Prim** clientPrim;
     ArgNum min;
     ArgNum max;
-    unsigned short filler_up_please;
+    uint16_t filler_up_please;
 };
 
 

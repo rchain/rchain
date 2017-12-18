@@ -45,7 +45,7 @@ static unsigned long hash(const char* key) {
     unsigned h = 0, g;
     for (p = key; *p != '\0'; p++) {
         h = (h << 4) + *p;
-        if (g = h & 0xf0000000) {
+        if ((g = h & 0xf0000000)) { // Assign and test
             h = h ^ (g >> 24);
             h = h ^ g;
         }
@@ -164,7 +164,7 @@ char* StringChunk::align(char* p) {
 char* StringChunk::deposit(const char* sym) {
     char* result = bp;
     char* p = bp;
-    while (*p++ = *sym++)
+    while ((*p++ = *sym++)) // Assign and test
         ;
     bp = align(p);
     remaining -= bp - result;

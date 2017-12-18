@@ -348,7 +348,7 @@ DEF("ostream-log-time", obLogTime, 1, 1) {
         timeinfo = localtime(&rawtime);
         strftime(buf, sizeof(buf), "%Y-%m-%d %I:%M:%S\n", timeinfo);
 
-        if (errno = fprintf(strm->stream, "%s", buf)) {
+        if ((errno = fprintf(strm->stream, "%s", buf))) {   // Assign and test
             return FIXNUM(-errno);
         }
         else {

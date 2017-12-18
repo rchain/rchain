@@ -29,7 +29,7 @@
 #include "ModuleInit.h"
 
 Module::Module(const char* modname, void (*fn)())
-    : name(modname), initFn(fn), link(Module::root) {
+    : name(modname), link(Module::root), initFn(fn) {
     Module::root = this;
 }
 Module* Module::root = 0;

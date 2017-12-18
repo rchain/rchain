@@ -113,10 +113,10 @@ BUILTIN_CLASS(LabelNode) {}
 
 AttrNode::AttrNode(int sz, bool valueContext)
     : BinaryOb(sz, CLASS_META(AttrNode), CLASS_SBO(AttrNode)),
-      dest(LocRslt),
       av_size(0),
       outstanding(0),
       word(0),
+      dest(LocRslt),
       resume(NoParticularLabel),
       cu((CompilationUnit*)INVALID) {
     SET_ATTR(*this, f_valueContext, valueContext);
@@ -371,7 +371,7 @@ void AttrNode::emitLit(pOb val) {
         SELF->emitF0(opIndLitToRslt, valOffset);
         return;
     }
-    else if (valOffset < 16)
+    else if (valOffset < 16) {
         if (locType == LT_ArgRegister && argno < 16) {
             SELF->emitF1(opIndLitToArg, argno, valOffset);
             return;
@@ -380,6 +380,7 @@ void AttrNode::emitLit(pOb val) {
             SELF->emitF1(opIndLitToReg, regno, valOffset);
             return;
         }
+    }
 
     /*
      * If we get here, one or more of three conditions can hold:

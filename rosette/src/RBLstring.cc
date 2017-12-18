@@ -91,7 +91,7 @@ void RBLstring::printOn(FILE* f) {
     char* str = (char*)&byte(0);
     char c;
     fputc('\"', f);
-    while (c = *str++) {
+    while ((c = *str++)) {  // Assign and test
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);

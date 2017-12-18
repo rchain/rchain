@@ -402,8 +402,8 @@ BUILTIN_CLASS(Template) {
 Template::Template(Tuple* keytuple, Ob* keymeta, CompoundPattern* pat)
     : Ob(sizeof(Template), CLASS_META(Template), CLASS_SBO(Template)),
       keytuple(keytuple),
-      keymeta(keymeta),
-      pat(pat) {
+      pat(pat),
+      keymeta(keymeta) {
     Template::updateCnt();
 }
 
