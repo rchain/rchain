@@ -5,6 +5,11 @@ import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr.{LetExpr, TupleExpr}
 import org.scalatest._
 
+/**
+  * NOTE that in Roscala we are using one-byte offset for every opcode,
+  * so PC will change per unit for every opcode
+  *
+ */
 class TransitionSpec extends FlatSpec with Matchers {
   val testCtxt = Ctxt(
     tag = LocationGT(Location.LTCtxtRegister(0)),
@@ -129,20 +134,19 @@ class TransitionSpec extends FlatSpec with Matchers {
   "Executing bytecode from expression \"(+ 1 (+ 2 3))\"" should "result in Fixnum(6)" in {
 
     /**
-      *
       * litvec:
       *  0:   {RequestExpr}
       * codevec:
       *  0:   alloc 2
       *  1:   lit 1,arg[0]
       *  2:   xfer global[+],trgt
-      *  3:   outstanding 12,1
-      *  4:   push/alloc 2
-      *  5:   lit 2,arg[0]
-      *  6:   lit 3,arg[1]
-      *  7:   xfer global[+],trgt
-      *  8:   xmit/nxt 2,arg[1]
-      *  9:   xmit/nxt 2
+      *  4:   outstanding 12,1
+      *  6:   push/alloc 2
+      *  7:   lit 2,arg[0]
+      *  8:   lit 3,arg[1]
+      *  9:   xfer global[+],trgt
+      *  11:  xmit/nxt 2,arg[1]
+      *  12:  xmit/nxt 2
       */
     val start =
       testState
@@ -175,18 +179,18 @@ class TransitionSpec extends FlatSpec with Matchers {
       *  0:   alloc 2
       *  1:   lit 1,arg[0]
       *  2:   xfer global[+],trgt
-      *  3:   outstanding 14,1
-      *  4:   push/alloc 2
-      *  5:   lit 2,arg[0]
-      *  6:   xfer global[+],trgt
-      *  7:   outstanding 13,1
-      *  8:   push/alloc 2
-      *  9:   lit 3,arg[0]
-      * 10:   lit 4,arg[1]
-      * 11:   xfer global[+],trgt
-      * 12:   xmit/nxt 2,arg[1]
-      * 13:   xmit/nxt 2,arg[1]
-      * 14:   xmit/nxt 2
+      *  4:   outstanding 14,1
+      *  6:   push/alloc 2
+      *  7:   lit 2,arg[0]
+      *  8:   xfer global[+],trgt
+      * 10:   outstanding 13,1
+      * 12:   push/alloc 2
+      * 13:   lit 3,arg[0]
+      * 14:   lit 4,arg[1]
+      * 15:   xfer global[+],trgt
+      * 17:   xmit/nxt 2,arg[1]
+      * 18:   xmit/nxt 2,arg[1]
+      * 19:   xmit/nxt 2
       */
     val start =
       testState
