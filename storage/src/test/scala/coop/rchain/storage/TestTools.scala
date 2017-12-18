@@ -23,13 +23,16 @@ object TestTools {
 
     def nextKey(): Option[Int] = {
       if (numKeys <= countUsedKeys) {
-        return None
+        None
+      } else {
+        var r = randGen.nextInt(numKeys)
+        while (usedKeys(r)) {
+          r = randGen.nextInt(numKeys)
+        }
+        countUsedKeys += 1
+        usedKeys(r) = true
+        Some(r)
       }
-      var r = randGen.nextInt(numKeys)
-      while (usedKeys(r)) { r = randGen.nextInt(numKeys) }
-      countUsedKeys += 1
-      usedKeys(r) = true
-      Some(r)
     }
   }
 
@@ -46,19 +49,21 @@ object TestTools {
     blobs
   }
 
-  def ArraysEqual(a1: Array[String], a2: Array[String]): Boolean = {
-    if (a1.length != a2.length) return false
-    for (i <- 0 until a1.length) {
-      var contains = false
-      for (j <- 0 until a2.length) {
-        if (a1(i) == a2(j)) {
-          contains = true
+  def arraysEqual(a1: Array[String], a2: Array[String]): Boolean = {
+    if (a1.length != a2.length) {
+      false
+    } else {
+      var equal = true
+      val a1sorted = a1.sorted
+      val a2sorted = a2.sorted
+      var i = 0
+      while (i < a1sorted.length && equal) {
+        if (a1sorted(i) != a2sorted(i)) {
+          equal = false
         }
+        i += 1
       }
-      if (!contains) {
-        return false
-      }
+      equal
     }
-    true
   }
 }
