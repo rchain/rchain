@@ -294,16 +294,19 @@ bool Tuple::matches(Tuple* msg) {
             if ((elem(i) != msg->elem(i)) && (elem(i) != NIV)) {
                 if (IS_A(elem(i), Tuple)) {
                     if (IS_A(msg->elem(i), Tuple)) {
-                        if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i)))
+                        if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i))) {
                             return FALSE;
+                        }
                         else {
                         }
                     }
-                    else
+                    else {
                         return FALSE;
+                    }
                 }
-                else
+                else {
                     return FALSE;
+                }
             }
         }
 
