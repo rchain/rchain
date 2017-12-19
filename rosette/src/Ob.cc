@@ -515,36 +515,9 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
             ans = *(unsigned long*)((long*)p + (offset / BITS(long)));
         break;
     default: {
-        /*
-         * The following makes big-endian assumptions.
-         */
-
-        int wordOffset = offset / WordSize;
-        int bitOffset = offset % WordSize;
-
-        warning("%s suspect span in getField", span);
-        if (bitOffset + span > WordSize) {
-            uint32_t loBucket = *((uint32_t*)p + wordOffset);
-            uint32_t hiBucket = *((uint32_t*)p + wordOffset + 1);
-            int loSpan = WordSize - bitOffset;
-            int hiSpan = span - loSpan;
-
-            if (sign && (loBucket & (1L << (loSpan - 1))))
-                loBucket |= (~0L) << loSpan;
-            else
-                loBucket &= (1 << loSpan) - 1;
-
-            ans = ((loBucket << hiSpan) | (hiBucket >> (WordSize - hiSpan)));
-        }
-        else {
-            uint32_t bucket = *((uint32_t*)p + wordOffset);
-            uint32_t mask = (span == 32) ? -1 : (1L << span) - 1;
-            uint32_t bits = (bucket >> (WordSize - (bitOffset + span))) & mask;
-            if (sign && (bits & (1L << (span - 1))))
-                bits |= (span == 32) ? 0 : (~0L) << span;
-
-            ans = bits;
-        }
+        // Fields that are not multiples of 8 bits are not expected. Previously,
+        // this contained some complex and questionable big-endian dependent code.
+        ans = 0;
     }
     }
     return FIXNUM(ans);
@@ -573,32 +546,8 @@ pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
             (unsigned long)bits;
         break;
     default: {
-        /*
-         * The following makes big-endian assumptions.
-         */
-
-        int wordOffset = offset / WordSize;
-        int bitOffset = offset % WordSize;
-
-        warning("%s suspect span in setField", span);
-        if (bitOffset + span > WordSize) {
-            uint32_t* loBucketAddr = (uint32_t*)p + wordOffset;
-            uint32_t* hiBucketAddr = loBucketAddr + 1;
-            int loSpan = WordSize - bitOffset;
-            int hiSpan = span - loSpan;
-            uint32_t loMask = (1L << loSpan) - 1;
-            uint32_t hiMask = ~((1L << (WordSize - hiSpan)) - 1);
-            *loBucketAddr =
-                (*loBucketAddr & ~loMask) | ((bits >> hiSpan) & loMask);
-            *hiBucketAddr =
-                (*hiBucketAddr & ~hiMask) | (bits << (WordSize - hiSpan));
-        }
-        else {
-            uint32_t* bucketAddr = (uint32_t*)p + wordOffset;
-            int shift = WordSize - (bitOffset + span);
-            uint32_t mask = ((span == 32) ? -1 : (1L << span) - 1) << shift;
-            *bucketAddr = (*bucketAddr & ~mask) | ((bits << shift) & mask);
-        }
+        // Fields that are not multiples of 8 bits are not expected. Previously,
+        // this contained some complex and questionable big-endian dependent code.
     }
     }
     return this;

@@ -85,8 +85,7 @@ class ParserFrame {
     virtual ParserMode receiveEof(Parser*);
 };
 
-int debug_builtinprim(char* s) { /* printf("listing %s\n", s); */
-    return 0;
+void debug_builtinprim(char* s) { /* printf("listing %s\n", s); */
 }
 
 

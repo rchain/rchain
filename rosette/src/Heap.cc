@@ -633,11 +633,15 @@ void* OldSpace::alloc(unsigned sz) {
     if (sz <= MaxFixedSize && fixedFreeLists[sz])
         return (void*)unlink(fixedFreeLists[sz]);
 
-    if ((p = currentChunk->alloc(sz)))
+    p = currentChunk->alloc(sz);
+    if (NULL != p) {
         return p;
+    }
 
-    if ((p = miscAlloc(sz)))
+    p = miscAlloc(sz);
+    if (NULL!=p) {
         return p;
+    }
 
     addChunk(nextMultipleOf(sz, OldSpaceChunkSize));
     return currentChunk->alloc(sz);

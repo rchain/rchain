@@ -314,8 +314,7 @@ enum Opcode {
 class Instr {
     public:
 
-    Instr() : word(0)
-    {}
+    Instr() : word(0) {}
 
     uint16_t word;
     operator int();

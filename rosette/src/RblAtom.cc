@@ -101,7 +101,12 @@ bool Symbol::ConstantP() { return FALSE; }
 void Symbol::printOn(FILE* f) {
     char* str = SYMPTR(atom);
     char c;
-    while ((c = *str++)) {  // Assign and test
+    do {
+        c = *str++;
+        if ('\0' == c) {    // End of string
+            break;
+        }
+
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
@@ -131,7 +136,7 @@ void Symbol::printOn(FILE* f) {
                 break;
             }
         }
-    }
+    } while(true);
 }
 
 void Symbol::printQuotedOn(FILE* f) {

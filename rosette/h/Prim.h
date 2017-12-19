@@ -102,7 +102,7 @@ class BuiltinPrim {
     static void initBuiltinPrims();
 };
 
-int debug_builtinprim(char*);
+void debug_builtinprim(char*);
 inline BuiltinPrim::BuiltinPrim(const BuiltinPrimRecord* bpr)
     : record(bpr), link(BuiltinPrim::root) {
     debug_builtinprim(this->record->name);
