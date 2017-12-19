@@ -123,32 +123,43 @@ class Lmdb(dirNameIn: Option[String],
       key: K,
       value: V,
       txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-
-    if (key.isInstanceOf[String]
-        && getMaxKeySize < key.asInstanceOf[String].length) {
-      throw new RChainException("put(): key string is too long")
+    if (!isWritable) {
+      false
+    } else {
+      if (key.isInstanceOf[String]
+          && getMaxKeySize < key.asInstanceOf[String].length) {
+        throw new RChainException("put(): key string is too long")
+      }
+      val bbKey: Option[ByteBuffer] = Bb.create(key)
+      val bbValue = Bb.create(value)
+      if (!bbKey.isDefined || !bbValue.isDefined) {
+        false
+      } else {
+        putByteBuffer(bbKey.get, bbValue.get, txn)
+      }
     }
-    val bbKey: Option[ByteBuffer] = Bb.create(key)
-    val bbValue = Bb.create(value)
-    if (!bbKey.isDefined || !bbValue.isDefined) {
-      return false
-    }
-    putByteBuffer(bbKey.get, bbValue.get, txn)
   }
 
   def putByteBuffer(key: ByteBuffer,
                     value: ByteBuffer,
                     txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-    cursor.put(key, value)
-    cursor.close()
-    if (txnIn == None) { txn.commit() }
-    true
+    if (!isWritable) {
+      false
+    } else {
+      val txn =
+        if (txnIn == None) {
+          env.txnWrite()
+        } else {
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
+      cursor.put(key, value)
+      cursor.close()
+      if (txnIn == None) {
+        txn.commit()
+      }
+      true
+    }
   }
 
   // The getXx[K](key:K) returns an array of Xs.
@@ -161,58 +172,66 @@ class Lmdb(dirNameIn: Option[String],
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Int]] = {
 
     if (key.isInstanceOf[Key]) {
-      return getInts(key.asInstanceOf[Key].term, txnIn)
-    }
-    if (!Lmdb.isStringOrPrimitive(key)) {
+      getInts(key.asInstanceOf[Key].term, txnIn)
+    } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getInts(): key is not primitive or string")
-    }
+    } else {
+      var returnVal: Option[Array[Int]] = None
 
-    var bbKey = Lmdb.makeBbKey(key)
+      var bbKey = Lmdb.makeBbKey(key)
 
-    val txn =
-      if (txnIn == None) { env.txnRead() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    try {
-      var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
-      if (!outcome) {
-        return None
-      }
-
-      if (isKeyToValues) {
-        val blobsBuf = new ArrayBuffer[Int]()
-
-        outcome = cursor.seek(MDB_FIRST_DUP)
-        while (outcome) {
-          blobsBuf += cursor.`val`.getInt
-          outcome = cursor.seek(MDB_NEXT_DUP)
+      val txn =
+        if (txnIn == None) {
+          env.txnRead()
+        } else {
+          txnIn.get
         }
-        if (blobsBuf.isEmpty) {
-          return None
-        }
+      val cursor = db.openCursor(txn)
 
-        return Some(blobsBuf.toArray)
-      } else {
-        outcome = cursor.seek(MDB_GET_CURRENT)
+      try {
+        var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
         if (!outcome) {
-          throw new RChainException("getInts(): MDB_GET_CURRENT")
-        }
+          returnVal = None
+        } else {
+          if (isKeyToValues) {
+            val blobsBuf = new ArrayBuffer[Int]()
 
-        val valueArray = new Array[Int](1)
-        valueArray(0) = cursor.`val`.getInt
-        return Some(valueArray)
+            outcome = cursor.seek(MDB_FIRST_DUP)
+            while (outcome) {
+              blobsBuf += cursor.`val`.getInt
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
+
+            returnVal = if (blobsBuf.isEmpty) {
+              None
+            } else {
+              Some(blobsBuf.toArray)
+            }
+          } else {
+            outcome = cursor.seek(MDB_GET_CURRENT)
+            if (!outcome) {
+              throw new RChainException("getInts(): MDB_GET_CURRENT")
+            }
+
+            val valueArray = new Array[Int](1)
+            valueArray(0) = cursor.`val`.getInt
+            returnVal = Some(valueArray)
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("getInts(): " + e)
+          returnVal = None
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          txn.close()
+        }
       }
-    } catch {
-      case e: RChainException =>
-        Log("getInts(): " + e)
-        return None
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) { txn.close() }
+      returnVal
     }
-    None
   }
 
   // strings paired with a key are sorted
@@ -221,61 +240,69 @@ class Lmdb(dirNameIn: Option[String],
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[String]] = {
 
     if (key.isInstanceOf[Key]) {
-      return getStrings(key.asInstanceOf[Key].term, txnIn)
-    }
-    if (!Lmdb.isStringOrPrimitive(key)) {
+      getStrings(key.asInstanceOf[Key].term, txnIn)
+    } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getStrings(): key is not primitive or string")
-    }
+    } else {
+      var returnVal: Option[Array[String]] = None
 
-    var bbKey = Lmdb.makeBbKey(key)
+      var bbKey = Lmdb.makeBbKey(key)
 
-    val txn =
-      if (txnIn == None) { env.txnRead() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
+      val txn =
+        if (txnIn == None) {
+          env.txnRead()
+        } else {
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
 
-    try {
-      var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
-      if (!outcome) {
-        return None
-      }
-
-      if (isKeyToValues) {
-        val blobsBuf = new ArrayBuffer[String]()
-
-        outcome = cursor.seek(MDB_FIRST_DUP)
+      try {
+        var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
         if (!outcome) {
-          throw new RChainException("getStrings(): MDB_FIRST_DUP")
-        }
-        while (outcome) {
-          blobsBuf += Bb.bbToStr(cursor.`val`)
-          outcome = cursor.seek(MDB_NEXT_DUP)
-        }
-        if (blobsBuf.isEmpty) {
-          return None
-        }
+          returnVal = None
+        } else {
+          if (isKeyToValues) {
+            val blobsBuf = new ArrayBuffer[String]()
 
-        return Some(blobsBuf.toArray)
-      } else {
-        outcome = cursor.seek(MDB_GET_CURRENT)
-        if (!outcome) {
-          throw new RChainException("getStrings(): MDB_GET_CURRENT")
-        }
+            outcome = cursor.seek(MDB_FIRST_DUP)
+            if (!outcome) {
+              throw new RChainException("getStrings(): MDB_FIRST_DUP")
+            }
+            while (outcome) {
+              blobsBuf += Bb.bbToStr(cursor.`val`)
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
 
-        val valueArray = new Array[String](1)
-        valueArray(0) = Bb.bbToStr(cursor.`val`)
-        return Some(valueArray)
+            returnVal = if (blobsBuf.isEmpty) {
+              None
+            } else {
+              Some(blobsBuf.toArray)
+            }
+          } else {
+            outcome = cursor.seek(MDB_GET_CURRENT)
+            if (!outcome) {
+              throw new RChainException("getStrings(): MDB_GET_CURRENT")
+            }
+
+            val valueArray = new Array[String](1)
+            valueArray(0) = Bb.bbToStr(cursor.`val`)
+            returnVal = Some(valueArray)
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("getStrings(): " + e)
+          returnVal = None
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          txn.close()
+        }
       }
-    } catch {
-      case e: RChainException =>
-        Log("getStrings(): " + e)
-        return None
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) { txn.close() }
+      returnVal
     }
-    None
   }
 
   def getLongs[K: Bbable](
@@ -283,61 +310,67 @@ class Lmdb(dirNameIn: Option[String],
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Long]] = {
 
     if (key.isInstanceOf[Key]) {
-      return getLongs(key.asInstanceOf[Key].term, txnIn)
-    }
-    if (!Lmdb.isStringOrPrimitive(key)) {
+      getLongs(key.asInstanceOf[Key].term, txnIn)
+    } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getLongs(): key is not primitive or string")
-    }
+    } else {
+      var returnVal: Option[Array[Long]] = None
 
-    var bbKey = Lmdb.makeBbKey(key)
+      var bbKey = Lmdb.makeBbKey(key)
 
-    val txn =
-      if (txnIn == None) { env.txnRead() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
+      val txn =
+        if (txnIn == None) {
+          env.txnRead()
+        } else {
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
 
-    try {
-      var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
-      if (!outcome) {
-        return None
-      }
-
-      if (isKeyToValues) {
-        val blobsBuf = new ArrayBuffer[Long]()
-
-        outcome = cursor.seek(MDB_FIRST_DUP)
+      try {
+        var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
         if (!outcome) {
-          throw new RChainException("getLongs(): MDB_FIRST_DUP")
-        }
-        while (outcome) {
-          blobsBuf += cursor.`val`.getLong()
-          outcome = cursor.seek(MDB_NEXT_DUP)
-        }
-        if (blobsBuf.isEmpty) {
-          return None
-        }
+          returnVal = None
+        } else if (isKeyToValues) {
+          val blobsBuf = new ArrayBuffer[Long]()
 
-        return Some(blobsBuf.toArray)
-      } else {
-        outcome = cursor.seek(MDB_GET_CURRENT)
-        if (!outcome) {
-          throw new RChainException("getLongs(): MDB_GET_CURRENT")
-        }
+          outcome = cursor.seek(MDB_FIRST_DUP)
+          if (!outcome) {
+            throw new RChainException("getLongs(): MDB_FIRST_DUP")
+          }
+          while (outcome) {
+            blobsBuf += cursor.`val`.getLong()
+            outcome = cursor.seek(MDB_NEXT_DUP)
+          }
 
-        val valueArray = new Array[Long](1)
-        valueArray(0) = cursor.`val`.getLong()
-        return Some(valueArray)
+          returnVal = if (blobsBuf.isEmpty) {
+            None
+          } else {
+            Some(blobsBuf.toArray)
+          }
+        } else {
+          outcome = cursor.seek(MDB_GET_CURRENT)
+          if (!outcome) {
+            throw new RChainException("getLongs(): MDB_GET_CURRENT")
+          }
+
+          val valueArray = new Array[Long](1)
+          valueArray(0) = cursor.`val`.getLong()
+          returnVal = Some(valueArray)
+        }
+      } catch {
+        case e: RChainException =>
+          Log("getLongs(): " + e)
+          returnVal = None
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          txn.close()
+        }
       }
-    } catch {
-      case e: RChainException =>
-        Log("getLongs(): " + e)
-        return None
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) { txn.close() }
+      returnVal
     }
-    None
   }
 
   def getFloats[K: Bbable](
@@ -345,61 +378,69 @@ class Lmdb(dirNameIn: Option[String],
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Float]] = {
 
     if (key.isInstanceOf[Key]) {
-      return getFloats(key.asInstanceOf[Key].term, txnIn)
-    }
-    if (!Lmdb.isStringOrPrimitive(key)) {
+      getFloats(key.asInstanceOf[Key].term, txnIn)
+    } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getFloats(): key is not primitive or string")
-    }
+    } else {
+      var returnVal: Option[Array[Float]] = None
 
-    var bbKey = Lmdb.makeBbKey(key)
+      var bbKey = Lmdb.makeBbKey(key)
 
-    val txn =
-      if (txnIn == None) { env.txnRead() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
+      val txn =
+        if (txnIn == None) {
+          env.txnRead()
+        } else {
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
 
-    try {
-      var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
-      if (!outcome) {
-        return None
-      }
-
-      if (isKeyToValues) {
-        val blobsBuf = new ArrayBuffer[Float]()
-
-        outcome = cursor.seek(MDB_FIRST_DUP)
+      try {
+        var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
         if (!outcome) {
-          throw new RChainException("getFloats(): MDB_FIRST_DUP")
-        }
-        while (outcome) {
-          blobsBuf += cursor.`val`.getFloat()
-          outcome = cursor.seek(MDB_NEXT_DUP)
-        }
-        if (blobsBuf.isEmpty) {
-          return None
-        }
+          returnVal = None
+        } else {
+          if (isKeyToValues) {
+            val blobsBuf = new ArrayBuffer[Float]()
 
-        return Some(blobsBuf.toArray)
-      } else {
-        outcome = cursor.seek(MDB_GET_CURRENT)
-        if (!outcome) {
-          throw new RChainException("getFloats(): MDB_GET_CURRENT")
-        }
+            outcome = cursor.seek(MDB_FIRST_DUP)
+            if (!outcome) {
+              throw new RChainException("getFloats(): MDB_FIRST_DUP")
+            }
+            while (outcome) {
+              blobsBuf += cursor.`val`.getFloat()
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
 
-        val valueArray = new Array[Float](1)
-        valueArray(0) = cursor.`val`.getFloat()
-        return Some(valueArray)
+            returnVal = if (blobsBuf.isEmpty) {
+              None
+            } else {
+              Some(blobsBuf.toArray)
+            }
+          } else {
+            outcome = cursor.seek(MDB_GET_CURRENT)
+            if (!outcome) {
+              throw new RChainException("getFloats(): MDB_GET_CURRENT")
+            }
+
+            val valueArray = new Array[Float](1)
+            valueArray(0) = cursor.`val`.getFloat()
+            returnVal = Some(valueArray)
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("getFloats(): " + e)
+          returnVal = None
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          txn.close()
+        }
       }
-    } catch {
-      case e: RChainException =>
-        Log("getFloats(): " + e)
-        return None
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) { txn.close() }
+      returnVal
     }
-    None
   }
 
   def getDoubles[K: Bbable](
@@ -407,61 +448,69 @@ class Lmdb(dirNameIn: Option[String],
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[Double]] = {
 
     if (key.isInstanceOf[Key]) {
-      return getDoubles(key.asInstanceOf[Key].term, txnIn)
-    }
-    if (!Lmdb.isStringOrPrimitive(key)) {
+      getDoubles(key.asInstanceOf[Key].term, txnIn)
+    } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException("getDoubles(): key is not primitive or string")
-    }
+    } else {
+      var returnVal: Option[Array[Double]] = None
 
-    var bbKey = Lmdb.makeBbKey(key)
+      var bbKey = Lmdb.makeBbKey(key)
 
-    val txn =
-      if (txnIn == None) { env.txnRead() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
+      val txn =
+        if (txnIn == None) {
+          env.txnRead()
+        } else {
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
 
-    try {
-      var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
-      if (!outcome) {
-        return None
-      }
-
-      if (isKeyToValues) {
-        val blobsBuf = new ArrayBuffer[Double]()
-
-        outcome = cursor.seek(MDB_FIRST_DUP)
+      try {
+        var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
         if (!outcome) {
-          throw new RChainException("getDoubles(): MDB_FIRST_DUP")
-        }
-        while (outcome) {
-          blobsBuf += cursor.`val`.getDouble()
-          outcome = cursor.seek(MDB_NEXT_DUP)
-        }
-        if (blobsBuf.isEmpty) {
-          return None
-        }
+          returnVal = None
+        } else {
+          if (isKeyToValues) {
+            val blobsBuf = new ArrayBuffer[Double]()
 
-        return Some(blobsBuf.toArray)
-      } else {
-        outcome = cursor.seek(MDB_GET_CURRENT)
-        if (!outcome) {
-          throw new RChainException("getDoubles(): MDB_GET_CURRENT")
-        }
+            outcome = cursor.seek(MDB_FIRST_DUP)
+            if (!outcome) {
+              throw new RChainException("getDoubles(): MDB_FIRST_DUP")
+            }
+            while (outcome) {
+              blobsBuf += cursor.`val`.getDouble()
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
 
-        val valueArray = new Array[Double](1)
-        valueArray(0) = cursor.`val`.getDouble()
-        return Some(valueArray)
+            returnVal = if (blobsBuf.isEmpty) {
+              None
+            } else {
+              Some(blobsBuf.toArray)
+            }
+          } else {
+            outcome = cursor.seek(MDB_GET_CURRENT)
+            if (!outcome) {
+              throw new RChainException("getDoubles(): MDB_GET_CURRENT")
+            }
+
+            val valueArray = new Array[Double](1)
+            valueArray(0) = cursor.`val`.getDouble()
+            returnVal = Some(valueArray)
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("getDoubles(): " + e)
+          returnVal = None
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          txn.close()
+        }
       }
-    } catch {
-      case e: RChainException =>
-        Log("getDoubles(): " + e)
-        return None
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) { txn.close() }
+      returnVal
     }
-    None
   }
 
   // delete a key and the value associated with it
@@ -470,50 +519,57 @@ class Lmdb(dirNameIn: Option[String],
     if (!isWritable) { return false }
 
     if (key.isInstanceOf[Key]) {
-      return deleteKey(key.asInstanceOf[Key].term, txnIn)
-    }
-    if (!Lmdb.isStringOrPrimitive(key)) {
+      deleteKey(key.asInstanceOf[Key].term, txnIn)
+    } else if (!Lmdb.isStringOrPrimitive(key)) {
       throw new RChainException(
         "deleteKey(): key or value is not a string or primitive")
-    }
+    } else {
+      var deleted = false
 
-    val bbKey = Bb.create(key)
-    if (!bbKey.isDefined) {
-      return false
-    }
-
-    var deleted = false
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    try {
-      var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
-      if (!outcome) {
-        return false
-      }
-
-      if (isKeyToValues) {
-        cursor.delete(MDB_NODUPDATA)
+      val bbKey = Bb.create(key)
+      if (!bbKey.isDefined) {
+        deleted = false
       } else {
-        cursor.delete()
-      }
+        val txn =
+          if (txnIn == None) {
+            env.txnWrite()
+          } else {
+            txnIn.get
+          }
+        val cursor = db.openCursor(txn)
 
-      deleted = true
-    } catch {
-      case e: RChainException =>
-        Log("deleteKey(): " + e)
-        return false
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) {
-        if (deleted) { txn.commit() } else { txn.close() }
+        try {
+          var outcome = cursor.get(bbKey.get, MDB_SET_KEY)
+          if (!outcome) {
+            deleted = false
+          } else {
+            if (isKeyToValues) {
+              cursor.delete(MDB_NODUPDATA)
+            } else {
+              cursor.delete()
+            }
+
+            deleted = true
+          }
+        } catch {
+          case e: RChainException =>
+            Log("deleteKey(): " + e)
+            deleted = false
+          case e: Throwable =>
+            throw e
+        } finally {
+          cursor.close()
+          if (txnIn == None) {
+            if (deleted) {
+              txn.commit()
+            } else {
+              txn.close()
+            }
+          }
+        }
       }
+      deleted
     }
-    deleted
   }
 
   // delete a value associated with a key
@@ -522,40 +578,46 @@ class Lmdb(dirNameIn: Option[String],
       value: V,
       txn: Option[Txn[ByteBuffer]] = None): Boolean = {
 
-    if (!isWritable) { return false }
-
-    if (key.isInstanceOf[Key]) {
-      return delete(key.asInstanceOf[Key].term, value, txn)
-    }
-    if (value.isInstanceOf[Key]) {
-      return delete(key, value.asInstanceOf[Key].term, txn)
-    }
-
-    if (!Lmdb.isStringOrPrimitive(key)) {
-      throw new RChainException("delete(): key is not a string or primitive")
-    }
-    if (!Lmdb.isStringOrPrimitive(value)) {
-      throw new RChainException("delete(): value is not a string or primitive")
-    }
-
-    val bbKey = Bb.create(key)
-    if (!bbKey.isDefined) {
-      throw new RChainException("delete(): key cannot be translated to Bb")
-    }
-
-    return value match {
-      case _: Int   => { deleteBbValueInt(bbKey.get, Bb.create(value), txn) }
-      case _: Long  => { deleteBbValueLong(bbKey.get, Bb.create(value), txn) }
-      case _: Float => { deleteBbValueFloat(bbKey.get, Bb.create(value), txn) }
-      case _: Double => {
-        deleteBbValueDouble(bbKey.get, Bb.create(value), txn)
+    if (!isWritable) {
+      false
+    } else if (key.isInstanceOf[Key]) {
+      delete(key.asInstanceOf[Key].term, value, txn)
+    } else if (value.isInstanceOf[Key]) {
+      delete(key, value.asInstanceOf[Key].term, txn)
+    } else {
+      if (!Lmdb.isStringOrPrimitive(key)) {
+        throw new RChainException("delete(): key is not a string or primitive")
       }
-      case _: String => {
-        deleteBbValueString(bbKey.get, Bb.create(value), txn)
-      }
-      case _ => {
+      if (!Lmdb.isStringOrPrimitive(value)) {
         throw new RChainException(
           "delete(): value is not a string or primitive")
+      }
+
+      val bbKey = Bb.create(key)
+      if (!bbKey.isDefined) {
+        throw new RChainException("delete(): key cannot be translated to Bb")
+      }
+
+      value match {
+        case _: Int => {
+          deleteBbValueInt(bbKey.get, Bb.create(value), txn)
+        }
+        case _: Long => {
+          deleteBbValueLong(bbKey.get, Bb.create(value), txn)
+        }
+        case _: Float => {
+          deleteBbValueFloat(bbKey.get, Bb.create(value), txn)
+        }
+        case _: Double => {
+          deleteBbValueDouble(bbKey.get, Bb.create(value), txn)
+        }
+        case _: String => {
+          deleteBbValueString(bbKey.get, Bb.create(value), txn)
+        }
+        case _ => {
+          throw new RChainException(
+            "delete(): value is not a string or primitive")
+        }
       }
     }
   }
@@ -563,255 +625,307 @@ class Lmdb(dirNameIn: Option[String],
   def deleteBbValueInt(key: ByteBuffer,
                        optionValue: Option[ByteBuffer],
                        txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-    if (!isKeyToValues) { return false } // use deleteKey()
-    if (!optionValue.isDefined) {
+    if (!isWritable) {
+      false
+    } else if (!isKeyToValues) {
+      false // use deleteKey()
+    } else if (!optionValue.isDefined) {
       throw new RChainException("deleteBbValueInt(): value is invalid")
-    }
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    var deleted = false
-
-    try {
-      val bbValue = optionValue.get
-      val value = bbValue.getInt
-
-      var outcome = cursor.get(key, MDB_SET_KEY)
-      if (!outcome) {
-        return false
-      }
-
-      outcome = cursor.seek(MDB_FIRST_DUP)
-      while (outcome) {
-        val cursorValue: ByteBuffer = cursor.`val`
-        val v = cursorValue.getInt
-        if (value == v) {
-          cursor.delete()
-          deleted = true
-          outcome = false
+    } else {
+      val txn =
+        if (txnIn == None) {
+          env.txnWrite()
         } else {
-          outcome = cursor.seek(MDB_NEXT_DUP)
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
+
+      var deleted = false
+
+      try {
+        val bbValue = optionValue.get
+        val value = bbValue.getInt
+
+        var outcome = cursor.get(key, MDB_SET_KEY)
+        if (!outcome) {
+          deleted = false
+        } else {
+          outcome = cursor.seek(MDB_FIRST_DUP)
+          while (outcome) {
+            val cursorValue: ByteBuffer = cursor.`val`
+            val v = cursorValue.getInt
+            if (value == v) {
+              cursor.delete()
+              deleted = true
+              outcome = false
+            } else {
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("deleteBbValueInt(): " + e)
+          deleted = false
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          if (deleted) {
+            txn.commit()
+          } else {
+            txn.close()
+          }
         }
       }
-    } catch {
-      case e: RChainException =>
-        Log("deleteBbValueInt(): " + e)
-        return false
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) {
-        if (deleted) { txn.commit() } else { txn.close() }
-      }
+      deleted
     }
-    deleted
   }
 
   def deleteBbValueLong(key: ByteBuffer,
                         optionValue: Option[ByteBuffer],
                         txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-    if (!isKeyToValues) { return false } // use deleteKey()
-    if (!optionValue.isDefined) {
-      throw new RChainException("deleteBbValueLong(): value is invalid")
-    }
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    var deleted = false
-
-    try {
-      val bbValue = optionValue.get
-      val value = bbValue.getLong
-
-      var outcome = cursor.get(key, MDB_SET_KEY)
-      if (!outcome) {
-        return false
+    if (!isWritable) {
+      false
+    } else if (!isKeyToValues) {
+      false // use deleteKey()
+    } else {
+      if (!optionValue.isDefined) {
+        throw new RChainException("deleteBbValueLong(): value is invalid")
       }
 
-      outcome = cursor.seek(MDB_FIRST_DUP)
-      while (outcome) {
-        val cursorValue: ByteBuffer = cursor.`val`
-        val v = cursorValue.getLong
-        if (value == v) {
-          cursor.delete()
-          deleted = true
-          outcome = false
+      val txn =
+        if (txnIn == None) {
+          env.txnWrite()
         } else {
-          outcome = cursor.seek(MDB_NEXT_DUP)
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
+
+      var deleted = false
+
+      try {
+        val bbValue = optionValue.get
+        val value = bbValue.getLong
+
+        var outcome = cursor.get(key, MDB_SET_KEY)
+        if (!outcome) {
+          deleted = false
+        } else {
+          outcome = cursor.seek(MDB_FIRST_DUP)
+          while (outcome) {
+            val cursorValue: ByteBuffer = cursor.`val`
+            val v = cursorValue.getLong
+            if (value == v) {
+              cursor.delete()
+              deleted = true
+              outcome = false
+            } else {
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("deleteBbValueLong(): " + e)
+          deleted = false
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          if (deleted) {
+            txn.commit()
+          } else {
+            txn.close()
+          }
         }
       }
-    } catch {
-      case e: RChainException =>
-        Log("deleteBbValueLong(): " + e)
-        return false
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) {
-        if (deleted) { txn.commit() } else { txn.close() }
-      }
+      deleted
     }
-    deleted
   }
 
   def deleteBbValueFloat(key: ByteBuffer,
                          optionValue: Option[ByteBuffer],
                          txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-    if (!isKeyToValues) { return false } // use deleteKey()
-    if (!optionValue.isDefined) {
+    if (!isWritable) {
+      false
+    } else if (!isKeyToValues) {
+      false // use deleteKey()
+    } else if (!optionValue.isDefined) {
       throw new RChainException("deleteBbValueFloat(): value is invalid")
-    }
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    var deleted = false
-
-    try {
-      val bbValue = optionValue.get
-      val value = bbValue.getFloat
-
-      var outcome = cursor.get(key, MDB_SET_KEY)
-      if (!outcome) {
-        return false
-      }
-
-      outcome = cursor.seek(MDB_FIRST_DUP)
-      while (outcome) {
-        val cursorValue: ByteBuffer = cursor.`val`
-        val v = cursorValue.getFloat
-        if (value == v) {
-          cursor.delete()
-          deleted = true
-          outcome = false
+    } else {
+      val txn =
+        if (txnIn == None) {
+          env.txnWrite()
         } else {
-          outcome = cursor.seek(MDB_NEXT_DUP)
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
+
+      var deleted = false
+
+      try {
+        val bbValue = optionValue.get
+        val value = bbValue.getFloat
+
+        var outcome = cursor.get(key, MDB_SET_KEY)
+        if (!outcome) {
+          deleted = false
+        } else {
+          outcome = cursor.seek(MDB_FIRST_DUP)
+          while (outcome) {
+            val cursorValue: ByteBuffer = cursor.`val`
+            val v = cursorValue.getFloat
+            if (value == v) {
+              cursor.delete()
+              deleted = true
+              outcome = false
+            } else {
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("deleteBbValueFloat(): " + e)
+          deleted = false
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          if (deleted) {
+            txn.commit()
+          } else {
+            txn.close()
+          }
         }
       }
-    } catch {
-      case e: RChainException =>
-        Log("deleteBbValueFloat(): " + e)
-        return false
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) {
-        if (deleted) { txn.commit() } else { txn.close() }
-      }
+      deleted
     }
-    deleted
   }
 
   def deleteBbValueDouble(key: ByteBuffer,
                           optionValue: Option[ByteBuffer],
                           txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-    if (!isKeyToValues) { return false } // use deleteKey()
-    if (!optionValue.isDefined) {
+    if (!isWritable) {
+      false
+    } else if (!isKeyToValues) {
+      false // use deleteKey()
+    } else if (!optionValue.isDefined) {
       throw new RChainException("deleteBbValueDouble(): value is invalid")
-    }
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    var deleted = false
-
-    try {
-      val bbValue = optionValue.get
-      val value = bbValue.getDouble
-
-      var outcome = cursor.get(key, MDB_SET_KEY)
-      if (!outcome) {
-        return false
-      }
-
-      outcome = cursor.seek(MDB_FIRST_DUP)
-      while (outcome) {
-        val cursorValue: ByteBuffer = cursor.`val`
-        val v = cursorValue.getDouble
-        if (value == v) {
-          cursor.delete()
-          deleted = true
-          outcome = false
+    } else {
+      val txn =
+        if (txnIn == None) {
+          env.txnWrite()
         } else {
-          outcome = cursor.seek(MDB_NEXT_DUP)
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
+
+      var deleted = false
+
+      try {
+        val bbValue = optionValue.get
+        val value = bbValue.getDouble
+
+        var outcome = cursor.get(key, MDB_SET_KEY)
+        if (!outcome) {
+          deleted = false
+        } else {
+          outcome = cursor.seek(MDB_FIRST_DUP)
+          while (outcome) {
+            val cursorValue: ByteBuffer = cursor.`val`
+            val v = cursorValue.getDouble
+            if (value == v) {
+              cursor.delete()
+              deleted = true
+              outcome = false
+            } else {
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("deleteBbValueDouble(): " + e)
+          deleted = false
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          if (deleted) {
+            txn.commit()
+          } else {
+            txn.close()
+          }
         }
       }
-    } catch {
-      case e: RChainException =>
-        Log("deleteBbValueDouble(): " + e)
-        return false
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) {
-        if (deleted) { txn.commit() } else { txn.close() }
-      }
+      deleted
     }
-    deleted
   }
 
   def deleteBbValueString(key: ByteBuffer,
                           optionValue: Option[ByteBuffer],
                           txnIn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-    if (!isKeyToValues) { return false } // use deleteKey()
-    if (!optionValue.isDefined) {
+    if (!isWritable) {
+      false
+    } else if (!isKeyToValues) {
+      false // use deleteKey()
+    } else if (!optionValue.isDefined) {
       throw new RChainException("deleteBbValueString(): value is invalid")
-    }
-
-    val txn =
-      if (txnIn == None) { env.txnWrite() } else { txnIn.get }
-    val cursor = db.openCursor(txn)
-
-    var deleted = false
-
-    try {
-      var outcome = cursor.get(key, MDB_SET_KEY)
-      if (!outcome) {
-        return false
-      }
-
-      val bbValue = optionValue.get
-      val value = Bb.bbToStr(bbValue)
-
-      outcome = cursor.seek(MDB_FIRST_DUP)
-      while (outcome) {
-        val v = Bb.bbToStr(cursor.`val`)
-        if (value == v) {
-          cursor.delete()
-          deleted = true
-          outcome = false
+    } else {
+      val txn =
+        if (txnIn == None) {
+          env.txnWrite()
         } else {
-          outcome = cursor.seek(MDB_NEXT_DUP)
+          txnIn.get
+        }
+      val cursor = db.openCursor(txn)
+
+      var deleted = false
+
+      try {
+        var outcome = cursor.get(key, MDB_SET_KEY)
+        if (!outcome) {
+          deleted = false
+        } else {
+          val bbValue = optionValue.get
+          val value = Bb.bbToStr(bbValue)
+
+          outcome = cursor.seek(MDB_FIRST_DUP)
+          while (outcome) {
+            val v = Bb.bbToStr(cursor.`val`)
+            if (value == v) {
+              cursor.delete()
+              deleted = true
+              outcome = false
+            } else {
+              outcome = cursor.seek(MDB_NEXT_DUP)
+            }
+          }
+        }
+      } catch {
+        case e: RChainException =>
+          Log("deleteBbValueString(): " + e)
+          deleted = false
+        case e: Throwable =>
+          throw e
+      } finally {
+        cursor.close()
+        if (txnIn == None) {
+          if (deleted) {
+            txn.commit()
+          } else {
+            txn.close()
+          }
         }
       }
-    } catch {
-      case e: RChainException =>
-        Log("deleteBbValueString(): " + e)
-        return false
-      case e: Throwable =>
-        throw e
-    } finally {
-      cursor.close()
-      if (txnIn == None) {
-        if (deleted) { txn.commit() } else { txn.close() }
-      }
+      deleted
     }
-    deleted
   }
 
   // update a value associated with a key
@@ -820,72 +934,71 @@ class Lmdb(dirNameIn: Option[String],
       valueToBeReplaced: V,
       valueReplaceWith: V,
       txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-    if (!isWritable) { return false }
-
-    if (key.isInstanceOf[Key]) {
-      return update(key.asInstanceOf[Key].term,
-                    valueToBeReplaced,
-                    valueReplaceWith,
-                    txn)
-    }
-    if (valueToBeReplaced.isInstanceOf[Key] && valueReplaceWith
-          .isInstanceOf[Key]) {
-      return update(key,
-                    valueToBeReplaced.asInstanceOf[Key].term,
-                    valueReplaceWith.asInstanceOf[Key].term,
-                    txn)
-    }
-
-    if (!Lmdb.isStringOrPrimitive(key)) {
-      throw new RChainException("update(): key is not a string or primitive")
-    }
-    if (!Lmdb.isStringOrPrimitive(valueToBeReplaced)) {
-      throw new RChainException(
-        "update(): valueToBeReplaced is not a string or primitive")
-    }
-    if (!Lmdb.isStringOrPrimitive(valueReplaceWith)) {
-      throw new RChainException(
-        "update(): valueReplaceWith is not a string or primitive")
-    }
-    val bbKey = Bb.create(key)
-    if (!bbKey.isDefined) {
-      throw new RChainException("update(): key cannot be translated to Bb")
-    }
-
-    return valueToBeReplaced match {
-      case _: Int => {
-        updateBbValueInt(bbKey.get,
-                         valueToBeReplaced.asInstanceOf[Int],
-                         valueReplaceWith.asInstanceOf[Int],
-                         txn)
+    if (!isWritable) {
+      false
+    } else if (key.isInstanceOf[Key]) {
+      update(key.asInstanceOf[Key].term,
+             valueToBeReplaced,
+             valueReplaceWith,
+             txn)
+    } else if (valueToBeReplaced.isInstanceOf[Key] && valueReplaceWith
+                 .isInstanceOf[Key]) {
+      update(key,
+             valueToBeReplaced.asInstanceOf[Key].term,
+             valueReplaceWith.asInstanceOf[Key].term,
+             txn)
+    } else {
+      if (!Lmdb.isStringOrPrimitive(key)) {
+        throw new RChainException("update(): key is not a string or primitive")
       }
-      case _: Long => {
-        updateBbValueLong(bbKey.get,
-                          valueToBeReplaced.asInstanceOf[Long],
-                          valueReplaceWith.asInstanceOf[Long],
-                          txn)
-      }
-      case _: Float => {
-        updateBbValueFloat(bbKey.get,
-                           valueToBeReplaced.asInstanceOf[Float],
-                           valueReplaceWith.asInstanceOf[Float],
-                           txn)
-      }
-      case _: Double => {
-        updateBbValueDouble(bbKey.get,
-                            valueToBeReplaced.asInstanceOf[Double],
-                            valueReplaceWith.asInstanceOf[Double],
-                            txn)
-      }
-      case _: String => {
-        updateBbValueString(bbKey.get,
-                            valueToBeReplaced.asInstanceOf[String],
-                            valueReplaceWith.asInstanceOf[String],
-                            txn)
-      }
-      case _ => {
+      if (!Lmdb.isStringOrPrimitive(valueToBeReplaced)) {
         throw new RChainException(
-          "update(): value is not a string or primitive")
+          "update(): valueToBeReplaced is not a string or primitive")
+      }
+      if (!Lmdb.isStringOrPrimitive(valueReplaceWith)) {
+        throw new RChainException(
+          "update(): valueReplaceWith is not a string or primitive")
+      }
+      val bbKey = Bb.create(key)
+      if (!bbKey.isDefined) {
+        throw new RChainException("update(): key cannot be translated to Bb")
+      }
+
+      valueToBeReplaced match {
+        case _: Int => {
+          updateBbValueInt(bbKey.get,
+                           valueToBeReplaced.asInstanceOf[Int],
+                           valueReplaceWith.asInstanceOf[Int],
+                           txn)
+        }
+        case _: Long => {
+          updateBbValueLong(bbKey.get,
+                            valueToBeReplaced.asInstanceOf[Long],
+                            valueReplaceWith.asInstanceOf[Long],
+                            txn)
+        }
+        case _: Float => {
+          updateBbValueFloat(bbKey.get,
+                             valueToBeReplaced.asInstanceOf[Float],
+                             valueReplaceWith.asInstanceOf[Float],
+                             txn)
+        }
+        case _: Double => {
+          updateBbValueDouble(bbKey.get,
+                              valueToBeReplaced.asInstanceOf[Double],
+                              valueReplaceWith.asInstanceOf[Double],
+                              txn)
+        }
+        case _: String => {
+          updateBbValueString(bbKey.get,
+                              valueToBeReplaced.asInstanceOf[String],
+                              valueReplaceWith.asInstanceOf[String],
+                              txn)
+        }
+        case _ => {
+          throw new RChainException(
+            "update(): value is not a string or primitive")
+        }
       }
     }
   }
@@ -894,7 +1007,7 @@ class Lmdb(dirNameIn: Option[String],
                        valueToBeReplaced: Int,
                        valueReplaceWith: Int,
                        txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-
+    var returnVal = false
     try {
       val bbToBeReplaced = Bb.create(valueToBeReplaced)
       val bbReplaceWith = Bb.create(valueReplaceWith)
@@ -907,23 +1020,26 @@ class Lmdb(dirNameIn: Option[String],
       } else {
         outcome = deleteKey(key.getInt, txn)
       }
-      if (!outcome) { return false }
-      return putByteBuffer(key, bbReplaceWith.get, txn)
+      if (!outcome) {
+        returnVal = false
+      } else {
+        returnVal = putByteBuffer(key, bbReplaceWith.get, txn)
+      }
     } catch {
       case e: RChainException =>
         Log("updateBbValueInt(): " + e)
-        return false
+        returnVal = false
       case e: Throwable =>
         throw e
     }
-    false
+    returnVal
   }
 
   def updateBbValueLong(key: ByteBuffer,
                         valueToBeReplaced: Long,
                         valueReplaceWith: Long,
                         txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-
+    var returnVal = false
     try {
       val bbToBeReplaced = Bb.create(valueToBeReplaced)
       val bbReplaceWith = Bb.create(valueReplaceWith)
@@ -936,23 +1052,26 @@ class Lmdb(dirNameIn: Option[String],
       } else {
         outcome = deleteKey(key.getLong, txn)
       }
-      if (!outcome) { return false }
-      return putByteBuffer(key, bbReplaceWith.get, txn)
+      if (!outcome) {
+        returnVal = false
+      } else {
+        returnVal = putByteBuffer(key, bbReplaceWith.get, txn)
+      }
     } catch {
       case e: RChainException =>
         Log("updateBbValueLong(): " + e)
-        return false
+        returnVal = false
       case e: Throwable =>
         throw e
     }
-    false
+    returnVal
   }
 
   def updateBbValueFloat(key: ByteBuffer,
                          valueToBeReplaced: Float,
                          valueReplaceWith: Float,
                          txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-
+    var returnVal = false
     try {
       val bbToBeReplaced = Bb.create(valueToBeReplaced)
       val bbReplaceWith = Bb.create(valueReplaceWith)
@@ -965,23 +1084,26 @@ class Lmdb(dirNameIn: Option[String],
       } else {
         outcome = deleteKey(key.getLong, txn)
       }
-      if (!outcome) { return false }
-      return putByteBuffer(key, bbReplaceWith.get, txn)
+      if (!outcome) {
+        returnVal = false
+      } else {
+        returnVal = putByteBuffer(key, bbReplaceWith.get, txn)
+      }
     } catch {
       case e: RChainException =>
         Log("updateBbValueFloat(): " + e)
-        return false
+        returnVal = false
       case e: Throwable =>
         throw e
     }
-    false
+    returnVal
   }
 
   def updateBbValueDouble(key: ByteBuffer,
                           valueToBeReplaced: Double,
                           valueReplaceWith: Double,
                           txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-
+    var returnVal = false
     try {
       val bbToBeReplaced = Bb.create(valueToBeReplaced)
       val bbReplaceWith = Bb.create(valueReplaceWith)
@@ -994,23 +1116,26 @@ class Lmdb(dirNameIn: Option[String],
       } else {
         outcome = deleteKey(key.getLong, txn)
       }
-      if (!outcome) { return false }
-      return putByteBuffer(key, bbReplaceWith.get, txn)
+      if (!outcome) {
+        returnVal = false
+      } else {
+        returnVal = putByteBuffer(key, bbReplaceWith.get, txn)
+      }
     } catch {
       case e: RChainException =>
         Log("updateBbValueDouble(): " + e)
-        return false
+        returnVal = false
       case e: Throwable =>
         throw e
     }
-    false
+    returnVal
   }
 
   def updateBbValueString(key: ByteBuffer,
                           valueToBeReplaced: String,
                           valueReplaceWith: String,
                           txn: Option[Txn[ByteBuffer]] = None): Boolean = {
-
+    var returnVal = false
     try {
       val bbToBeReplaced = Bb.create(valueToBeReplaced)
       val bbReplaceWith = Bb.create(valueReplaceWith)
@@ -1023,24 +1148,27 @@ class Lmdb(dirNameIn: Option[String],
       } else {
         outcome = deleteKey(key.getLong, txn)
       }
-      if (!outcome) { return false }
-      return putByteBuffer(key, bbReplaceWith.get, txn)
+      if (!outcome) {
+        returnVal = false
+      } else {
+        returnVal = putByteBuffer(key, bbReplaceWith.get, txn)
+      }
     } catch {
       case e: RChainException =>
         Log("updateBbValueString(): " + e)
-        return false
+        returnVal = false
       case e: Throwable =>
         throw e
     }
-    false
+    returnVal
   }
 
   // Return rows that have keys and values that are Ints.
   // This method is just used for methods.
   protected[storage] def rowsIntInt(
       txnIn: Option[Txn[ByteBuffer]] = None): Option[Array[(Int, Int)]] = {
-
     var array = new ArrayBuffer[(Int, Int)]
+    var returnValIsNone = false
 
     val txn =
       if (txnIn == None) { env.txnRead() } else { txnIn.get }
@@ -1049,25 +1177,30 @@ class Lmdb(dirNameIn: Option[String],
     try {
       var outcome = cursor.seek(MDB_FIRST)
       if (!outcome) {
-        return None
+        returnValIsNone = true
+      } else {
+        while (outcome) {
+          val key = cursor.key().getInt
+          val value = cursor.`val`.getInt
+          array += ((key, value))
+          outcome = cursor.seek(MDB_NEXT)
+        }
       }
-
-      while (outcome) {
-        val key = cursor.key().getInt
-        val value = cursor.`val`.getInt
-        array += ((key, value))
-        outcome = cursor.seek(MDB_NEXT)
-      }
-      Some(array.toArray)
     } catch {
       case e: RChainException =>
         Log("rowsIntInt(): " + e)
-        return None
+        returnValIsNone = true
       case e: Throwable =>
         throw e
     } finally {
       cursor.close()
       if (txnIn == None) { txn.close() }
+    }
+
+    if (returnValIsNone) {
+      None
+    } else {
+      Some(array.toArray)
     }
   }
 
@@ -1088,8 +1221,8 @@ class Lmdb(dirNameIn: Option[String],
   // This method is just used for methods.
   protected[storage] def rowsStrStr(txnIn: Option[Txn[ByteBuffer]] = None)
     : Option[Array[(String, String)]] = {
-
     var array = new ArrayBuffer[(String, String)]
+    var returnValIsNone = false
 
     val txn =
       if (txnIn == None) { env.txnRead() } else { txnIn.get }
@@ -1098,20 +1231,19 @@ class Lmdb(dirNameIn: Option[String],
     try {
       var outcome = cursor.seek(MDB_FIRST)
       if (!outcome) {
-        return None
+        returnValIsNone = true
+      } else {
+        while (outcome) {
+          val key = Bb.bbToStr(cursor.key())
+          val value = Bb.bbToStr(cursor.`val`)
+          array += ((key, value))
+          outcome = cursor.seek(MDB_NEXT)
+        }
       }
-
-      while (outcome) {
-        val key = Bb.bbToStr(cursor.key())
-        val value = Bb.bbToStr(cursor.`val`)
-        array += ((key, value))
-        outcome = cursor.seek(MDB_NEXT)
-      }
-      Some(array.toArray)
     } catch {
       case e: RChainException =>
         Log("rowsStrStr(): " + e)
-        return None
+        returnValIsNone = true
       case e: Throwable =>
         throw e
     } finally {
@@ -1119,6 +1251,12 @@ class Lmdb(dirNameIn: Option[String],
       if (txnIn == None) {
         txn.close()
       }
+    }
+
+    if (returnValIsNone) {
+      None
+    } else {
+      Some(array.toArray)
     }
   }
 
@@ -1240,20 +1378,28 @@ object Lmdb {
    */
 
   def isStringOrPrimitive[T](t: T): Boolean = {
-    if (t.isInstanceOf[String]) return true
-    isPrimitive(t)
+    if (t.isInstanceOf[String]) {
+      true
+    } else {
+      isPrimitive(t)
+    }
   }
 
   def isPrimitive[T](t: T): Boolean = {
-    if (t.isInstanceOf[Byte]) return true
-    else if (t.isInstanceOf[Boolean]) return true
-    else if (t.isInstanceOf[Char]) return true
-    else if (t.isInstanceOf[Short]) return true
-    else if (t.isInstanceOf[Int]) return true
-    else if (t.isInstanceOf[Long]) return true
-    else if (t.isInstanceOf[Float]) return true
-    else if (t.isInstanceOf[Double]) return true
-    false
+    var is = false
+    if (t.isInstanceOf[Byte]) { is = true } else if (t.isInstanceOf[Boolean]) {
+      is = true
+    } else if (t.isInstanceOf[Char]) { is = true } else if (t.isInstanceOf[
+                                                              Short]) {
+      is = true
+    } else if (t.isInstanceOf[Int]) { is = true } else if (t.isInstanceOf[
+                                                               Long]) {
+      is = true
+    } else if (t.isInstanceOf[Float]) { is = true } else if (t.isInstanceOf[
+                                                               Double]) {
+      is = true
+    }
+    is
   }
 
   def makeBbKey[K: Bbable](key: K): Option[ByteBuffer] = {

@@ -47,7 +47,7 @@ class UniTests extends FlatSpec with Matchers {
                                              storage)
       var oracle =
         new UniOracle(Array("[queryVars:{Y:b(c(Y))},keyVars:{}] -> [X]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(X, Y)
@@ -58,7 +58,7 @@ class UniTests extends FlatSpec with Matchers {
                                              storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:b(c(A),d(e(B))),Y:f(C)},keyVars:{}] -> [Y]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(b(c(X), Y), f(2))
@@ -69,7 +69,7 @@ class UniTests extends FlatSpec with Matchers {
                                              storage)
       oracle = new UniOracle(
         Array("[queryVars:{X:A,Y:d(e(B))},keyVars:{A:X,C:2}] -> [Y]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(b(c(X), 1), f(2))
@@ -81,7 +81,7 @@ class UniTests extends FlatSpec with Matchers {
       // If constants were allowed to match a predicate:
       // Array("{X:A,1:d(e(B)),2:C} -> [Y]")
       oracle = new UniOracle(Array[String]())
-      assert(!EvaluateTest(query.term, queryOutcome, oracle),
+      assert(!evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // bt(X,bt(1,Y,3),bt(4,5,Z))
@@ -92,7 +92,7 @@ class UniTests extends FlatSpec with Matchers {
                                              storage)
       oracle =
         new UniOracle(Array("[queryVars:{X:0,Y:2,Z:6},keyVars:{}] -> [Z]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
     } catch {
       case e: Throwable => {
@@ -134,7 +134,7 @@ class UniTests extends FlatSpec with Matchers {
       var oracle = new UniOracle(
         Array("[queryVars:{X:Y},keyVars:{Y:X}] -> [two]",
               "[queryVars:{X:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(1)
@@ -146,7 +146,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [thirteen]",
               "[queryVars:{},keyVars:{}] -> [twelve]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(1,2)
@@ -156,7 +156,7 @@ class UniTests extends FlatSpec with Matchers {
                                              query.unifyQuery(storage),
                                              storage)
       oracle = new UniOracle(Array(""))
-      assert(!EvaluateTest(query.term, queryOutcome, oracle),
+      assert(!evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
     } catch {
       case e: Throwable => {
@@ -197,7 +197,7 @@ class UniTests extends FlatSpec with Matchers {
       var oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [what]",
               "[queryVars:{},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // Z(1)
@@ -207,7 +207,7 @@ class UniTests extends FlatSpec with Matchers {
                                              query.unifyQuery(storage),
                                              storage)
       oracle = new UniOracle(Array(""))
-      assert(!EvaluateTest(query.term, queryOutcome, oracle),
+      assert(!evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(2)
@@ -219,7 +219,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{}] -> [two]",
               "[queryVars:{},keyVars:{X:2}] -> [what]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(3)
@@ -229,7 +229,7 @@ class UniTests extends FlatSpec with Matchers {
                                              query.unifyQuery(storage),
                                              storage)
       oracle = new UniOracle(Array("[queryVars:{},keyVars:{X:3}] -> [what]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(X)
@@ -242,7 +242,7 @@ class UniTests extends FlatSpec with Matchers {
         Array("[queryVars:{X:2},keyVars:{}] -> [two]",
               "[queryVars:{},keyVars:{}] -> [what]",
               "[queryVars:{X:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // a(Y)
@@ -255,7 +255,7 @@ class UniTests extends FlatSpec with Matchers {
         Array("[queryVars:{Y:2},keyVars:{}] -> [two]",
               "[queryVars:{Y:X},keyVars:{X:Y}] -> [what]",
               "[queryVars:{Y:1},keyVars:{}] -> [one]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(1,1)
@@ -267,7 +267,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{},keyVars:{X:1}] -> [where]",
               "[queryVars:{},keyVars:{X:1,Y:1}] -> [this]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(1,2)
@@ -283,7 +283,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{},keyVars:{X:1,Y:2}] -> [this]",
           "[queryVars:{},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(1,X)
@@ -300,7 +300,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{X:Y},keyVars:{X:1,Y:X}] -> [this]",
           "[queryVars:{X:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(1,Y)
@@ -316,7 +316,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{},keyVars:{X:1}] -> [this]",
           "[queryVars:{Y:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(A,B)
@@ -333,7 +333,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{A:X,B:Y},keyVars:{X:A,Y:B}] -> [this]",
           "[queryVars:{A:1,B:2},keyVars:{}] -> [who]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(X,2)
@@ -350,7 +350,7 @@ class UniTests extends FlatSpec with Matchers {
           "[queryVars:{X:1},keyVars:{X:2}] -> [where]",
           "[queryVars:{},keyVars:{}] -> [how]"
         ))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
 
       // b(X,1)
@@ -362,7 +362,7 @@ class UniTests extends FlatSpec with Matchers {
       oracle = new UniOracle(
         Array("[queryVars:{X:1},keyVars:{X:1}] -> [where]",
               "[queryVars:{},keyVars:{Y:1}] -> [this]"))
-      assert(EvaluateTest(query.term, queryOutcome, oracle),
+      assert(evaluateTest(query.term, queryOutcome, oracle),
              "query: " + query.term)
     } catch {
       case e: Throwable => {
@@ -374,7 +374,7 @@ class UniTests extends FlatSpec with Matchers {
     }
   }
 
-  def EvaluateTest(queryName: String,
+  def evaluateTest(queryName: String,
                    unification: QueryTools.Unification,
                    oracle: UniOracle,
                    display: Boolean = false): Boolean = {
@@ -384,34 +384,43 @@ class UniTests extends FlatSpec with Matchers {
       if (display) {
         println(s"$queryName failed, not in the store"); println
       }
-      return false
+      false
     }
+    else {
+      var returnVal = true
 
-    if (display) { print(s"$queryName ") }
+      if (display) {
+        print(s"$queryName ")
+      }
 
-    if (TestTools.ArraysEqual(queryResults, oracle.standard)) {
-      if (display) {
-        println("succeeded:")
-        for (i <- queryResults.indices) {
-          println(queryResults(i))
+      if (TestTools.arraysEqual(queryResults, oracle.standard)) {
+        if (display) {
+          println("succeeded:")
+          for (i <- queryResults.indices) {
+            println(queryResults(i))
+          }
         }
+      } else {
+        if (display) {
+          println("failed result:")
+          for (i <- queryResults.indices) {
+            println(queryResults(i))
+          }
+          println("should be:")
+          for (i <- oracle.standard.indices) {
+            println(oracle.standard(i))
+          }
+        }
+        if (display) {
+          println
+        }
+        returnVal = false
       }
-    } else {
       if (display) {
-        println("failed result:")
-        for (i <- queryResults.indices) {
-          println(queryResults(i))
-        }
-        println("should be:")
-        for (i <- oracle.standard.indices) {
-          println(oracle.standard(i))
-        }
+        println
       }
-      if (display) { println }
-      return false
+      returnVal
     }
-    if (display) { println }
-    true
   }
 
   // UniOracle is an oracle for a unification
@@ -506,10 +515,10 @@ class UniTests extends FlatSpec with Matchers {
       }
 
       command match {
-        case "e" => return ("exit", "")
-        case "q" => return ("query", remainder)
-        case "a" => return ("key-value", remainder)
-        case "d" => return ("display", remainder)
+        case "e" => ("exit", "")
+        case "q" => ("query", remainder)
+        case "a" => ("key-value", remainder)
+        case "d" => ("display", remainder)
         case _ => {
           if (!line.isEmpty) {
             println(s"unknown command: $command")

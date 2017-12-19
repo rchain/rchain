@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
-java -jar /comm-assembly-0.1-SNAPSHOT.jar "$@"
+java -jar $RCHAIN_TARGET_JAR "$@"
