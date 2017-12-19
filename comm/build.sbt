@@ -1,4 +1,5 @@
 scalaVersion := "2.12.4"
+organization := "coop.rchain"
 version      := "0.0.1"
 
 PB.targets in Compile := Seq(
@@ -22,6 +23,9 @@ libraryDependencies ++= Seq(
 
   // Hashing
   "org.scorexfoundation" %% "scrypto" % "2.0.0",
+
+  // uPNP library
+  "org.bitlet" % "weupnp" % "0.1.+",
 
   // Logging
   "com.typesafe.scala-logging" %% "scala-logging" % "3.7.2",
