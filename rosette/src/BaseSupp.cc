@@ -274,7 +274,7 @@ DEF("prim-gen-actor", obGenActor, 3, 3) {
 uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
     static const int WordSize = BITS(uint32_t);
 
-    uint32_t ans=0;
+    uint32_t ans = 0;
 
     switch (span) {
     case 8:

@@ -639,7 +639,7 @@ void* OldSpace::alloc(unsigned sz) {
     }
 
     p = miscAlloc(sz);
-    if (NULL!=p) {
+    if (NULL != p) {
         return p;
     }
 
