@@ -403,7 +403,7 @@ int tcpConnectByname(char* nm, int port) {
 }
 
 int tcpConnectByaddr(char* addr, int port) {
-    unsigned long ia;
+    in_addr_t ia;
 
     ia = inet_addr(addr);
     if (ia < 0)

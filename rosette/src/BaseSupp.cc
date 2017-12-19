@@ -150,10 +150,12 @@ int slashify_char(char c, char buf[], int slash_blank) {
             buf[1] = 'r';
             break;
         default:
-            if (isprint(c))
+            if (isprint(c)) {
                 buf[1] = c;
-            else
-                sprintf(&buf[1], "x%02x", (unsigned char)c);
+            }
+            else {
+                sprintf(&buf[1], "x%02x", (uint8_t)c);
+            }
             break;
         }
         switch (c) {
@@ -272,7 +274,7 @@ DEF("prim-gen-actor", obGenActor, 3, 3) {
 uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
     static const int WordSize = BITS(uint32_t);
 
-    long ans;
+    uint32_t ans = 0;
 
     switch (span) {
     case 8:
@@ -294,35 +296,9 @@ uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
             ans = *(uint32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
         break;
     default: {
-        /*
-         * The following makes big-endian assumptions.
-         */
-
-        int wordOffset = offset / WordSize;
-        int bitOffset = offset % WordSize;
-
-        if (bitOffset + span > WordSize) {
-            uint32_t loBucket = *(addr + wordOffset);
-            uint32_t hiBucket = *(addr + wordOffset + 1);
-            int loSpan = WordSize - bitOffset;
-            int hiSpan = span - loSpan;
-
-            if (sign && (loBucket & (1L << (loSpan - 1))))
-                loBucket |= (~0L) << loSpan;
-            else
-                loBucket &= (1 << loSpan) - 1;
-
-            ans = ((loBucket << hiSpan) | (hiBucket >> (WordSize - hiSpan)));
-        }
-        else {
-            uint32_t bucket = *(addr + wordOffset);
-            uint32_t mask = (span == 32) ? -1 : (1L << span) - 1;
-            uint32_t bits = (bucket >> (WordSize - (bitOffset + span))) & mask;
-            if (sign && (bits & (1L << (span - 1))))
-                bits |= (span == 32) ? 0 : (~0L) << span;
-
-            ans = bits;
-        }
+        // Fields that are not multiples of 8 bits are not expected. Previously,
+        // this contained some complex and questionable big-endian dependent code.
+        ans = 0;
     }
     }
     return ans;
@@ -345,31 +321,8 @@ uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
             (uint32_t)bits;
         break;
     default: {
-        /*
-         * The following makes big-endian assumptions.
-         */
-
-        int wordOffset = offset / WordSize;
-        int bitOffset = offset % WordSize;
-
-        if (bitOffset + span > WordSize) {
-            uint32_t* loBucketAddr = addr + wordOffset;
-            uint32_t* hiBucketAddr = loBucketAddr + 1;
-            int loSpan = WordSize - bitOffset;
-            int hiSpan = span - loSpan;
-            uint32_t loMask = (1L << loSpan) - 1;
-            uint32_t hiMask = ~((1L << (WordSize - hiSpan)) - 1);
-            *loBucketAddr =
-                (*loBucketAddr & ~loMask) | ((bits >> hiSpan) & loMask);
-            *hiBucketAddr =
-                (*hiBucketAddr & ~hiMask) | (bits << (WordSize - hiSpan));
-        }
-        else {
-            uint32_t* bucketAddr = addr + wordOffset;
-            int shift = WordSize - (bitOffset + span);
-            uint32_t mask = ((span == 32) ? -1 : (1L << span) - 1) << shift;
-            *bucketAddr = (*bucketAddr & ~mask) | ((bits << shift) & mask);
-        }
+        // Fields that are not multiples of 8 bits are not expected. Previously,
+        // this contained some complex and questionable big-endian dependent code.
     }
     }
     return addr;
@@ -520,7 +473,7 @@ DEF("char*->string", char_star_to_string, 1, 1) {
     if (addr >= local_page_size)
         return RBLstring::create((char*)addr);
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("ob@", ob_address, 1, 1) { return ADDR_TO_FIXNUM((int)BASE(ARG(0))); }
@@ -558,7 +511,7 @@ DEF("u_bzero", unix_bzero, 2, 2) {
         return FIXNUM(0);
     }
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("u_free", unix_free, 1, 1) {
@@ -569,7 +522,7 @@ DEF("u_free", unix_free, 1, 1) {
         return FIXNUM(0);
     }
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("memcpy", unix_memcpy, 3, 3) {
@@ -581,7 +534,7 @@ DEF("memcpy", unix_memcpy, 3, 3) {
         return ADDR_TO_FIXNUM(
             memcpy((char*)dest_addr, (char*)src_addr, n_bytes));
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("fcntl", unix_fcntl, 3, 3) {
@@ -655,7 +608,7 @@ DEF("_c2bv", _c_struct_to_byte_vec, 3, 3) {
         return ARG(0);
     }
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("c2bv", c_struct_to_byte_vec, 2, 2) {
@@ -667,7 +620,7 @@ DEF("c2bv", c_struct_to_byte_vec, 2, 2) {
         return dest_bv;
     }
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("c2str", cpy_char_star_to_string, 2, 2) {
@@ -680,7 +633,7 @@ DEF("c2str", cpy_char_star_to_string, 2, 2) {
         return dest_str;
     }
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("string->fx", string_to_fx, 1, 1) {
@@ -704,7 +657,7 @@ DEF("strlen", c_strlen, 1, 1) {
     if (addr >= local_page_size)
         return FIXNUM(strlen((char*)addr));
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("prim-string->", cpy_string_char_star, 2, 2) {
@@ -716,7 +669,7 @@ DEF("prim-string->", cpy_string_char_star, 2, 2) {
         return src_str;
     }
     else
-        PRIM_ERROR("invalid address");
+        return PRIM_ERROR("invalid address");
 }
 
 DEF("set-io-pool", set_io_pool, 1, 1) {
@@ -756,6 +709,8 @@ DEF("uRead", unix_read, 3, 3) {
         return FIXNUM(read(fd, (char*)&((ByteVec*)ARG(1))->byte(0), len));
     else if (IS_A(ARG(1), RBLstring))
         return FIXNUM(read(fd, (char*)&((RBLstring*)ARG(1))->byte(0), len));
+    else
+        return PRIM_ERROR("unix_read on invalid type");
 }
 
 DEF("uWrite", unix_write, 3, 3) {
@@ -766,6 +721,8 @@ DEF("uWrite", unix_write, 3, 3) {
         return FIXNUM(write(fd, (char*)&((ByteVec*)ARG(1))->byte(0), len));
     else if (IS_A(ARG(1), RBLstring))
         return FIXNUM(write(fd, (char*)&((RBLstring*)ARG(1))->byte(0), len));
+    else
+        return PRIM_ERROR("unix_write on invalid type");
 }
 
 DEF("fd-open-ostream", fd_open_ostream, 2, 2) {

@@ -348,8 +348,9 @@ DEF("ostream-log-time", obLogTime, 1, 1) {
         timeinfo = localtime(&rawtime);
         strftime(buf, sizeof(buf), "%Y-%m-%d %I:%M:%S\n", timeinfo);
 
-        if (errno = fprintf(strm->stream, "%s", buf)) {
-            return FIXNUM(-errno);
+        int length = fprintf(strm->stream, "%s", buf);
+        if (length <= 0) {
+            return PRIM_ERROR("Error writing to ostream");
         }
         else {
             return NIV;

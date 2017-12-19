@@ -48,11 +48,12 @@ ObQue::~ObQue() { delete array; }
 void ObQue::push(Ob* o) {
     if (head == tail && last_added)
         resize();
-    else if (head == limit)
+    else if (head == limit) {
         if (tail == array)
             resize();
         else
             head = array;
+    }
 
     last_added = 1;
     (*head++) = o;

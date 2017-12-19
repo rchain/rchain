@@ -290,18 +290,25 @@ bool Tuple::matches(Tuple* msg) {
 
     int n = numberOfElements();
     if (n > 0 && n <= msg->numberOfElements()) {
-        for (int i = 0; i < n; i++)
-            if ((elem(i) != msg->elem(i)) && (elem(i) != NIV))
-                if (IS_A(elem(i), Tuple))
-                    if (IS_A(msg->elem(i), Tuple))
-                        if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i)))
+        for (int i = 0; i < n; i++) {
+            if ((elem(i) != msg->elem(i)) && (elem(i) != NIV)) {
+                if (IS_A(elem(i), Tuple)) {
+                    if (IS_A(msg->elem(i), Tuple)) {
+                        if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i))) {
                             return FALSE;
+                        }
                         else {
                         }
-                    else
+                    }
+                    else {
                         return FALSE;
-                else
+                    }
+                }
+                else {
                     return FALSE;
+                }
+            }
+        }
 
         return TRUE;
     }

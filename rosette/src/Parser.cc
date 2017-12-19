@@ -85,7 +85,7 @@ class ParserFrame {
     virtual ParserMode receiveEof(Parser*);
 };
 
-int debug_builtinprim(char* s) { /* printf("listing %s\n", s); */
+void debug_builtinprim(char* s) { /* printf("listing %s\n", s); */
 }
 
 
@@ -1225,17 +1225,17 @@ BUILTIN_CLASS(Parser) {
 
 Parser::Parser(ParseTable* rt)
     : BinaryOb(align(sizeof(Parser)), CLASS_META(Parser), CLASS_SBO(Parser)),
-      rt(rt),
-      fstk(),
-      ostk(),
-      mode(START),
       inbuf((RBLstring*)NIV),
       inp(0),
       buf(NULL),
       bufsize(0),
       bufp(0),
+      errorEncountered(FALSE),
       waitingOnIO(NOT_WAITING),
-      errorEncountered(FALSE) {
+      rt(rt),
+      mode(START),
+      fstk(),
+      ostk() {
     heap->registerForeignOb(this);
     Parser::updateCnt();
 }
