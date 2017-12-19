@@ -23,3 +23,8 @@ The `comm` subproject contains code for network related operations for RChain.
 ### Storage
 
 The `storage` subproject contains code related to the key-value storage of the RChain blockchain.
+
+### Filing Issues
+
+You can file issues in our Public Jira Instance here: https://rchain.atlassian.net/secure/CreateIssue!default.jspa
+
