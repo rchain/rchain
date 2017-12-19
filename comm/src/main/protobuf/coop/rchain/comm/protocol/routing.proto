@@ -27,6 +27,14 @@ message ReturnHeader {
     uint64 seq            = 2;
 }
 
+message Whoami {
+}
+
+message WhoamiResponse {
+    bytes  host = 1;
+    uint32 port = 2;
+}
+
 message Ping {
 }
 
@@ -56,5 +64,7 @@ message Protocol {
         Lookup              lookup          = 6;
         LookupResponse      lookup_response = 7;
         Disconnect          disconnect      = 8;
+        Whoami              whoami          = 9;
+        WhoamiResponse      whoami_response = 10;
     }
 }

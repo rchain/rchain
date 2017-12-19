@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import java.net.{DatagramPacket, DatagramSocket}
+import java.net.{DatagramPacket, DatagramSocket, SocketAddress}
 import scala.util.control.NonFatal
 
 /**
@@ -18,16 +18,22 @@ import scala.util.control.NonFatal
   * (`local`) be given; this supplies the source data for datagrams it
   * sends.
   */
-case class UnicastComm(local: PeerNode) extends Comm {
-  val receiver = new DatagramSocket(local.endpoint.udpPort)
-  val sender = new DatagramSocket()
+case class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
+  println(s"LOCAL: ${local.endpoint.udpSocketAddress}")
+
+  // val receiver = new DatagramSocket(local.endpoint.udpPort)
+  // val sender = new DatagramSocket(local.endpoint.udpSocketAddress)
+
+  // val receiver = new DatagramSocket(local.endpoint.udpPort)
+  val sender = new DatagramSocket(local.endpoint.udpPort)
 
   /*
    * Timeout for recv() calls; might need to be adjusted lower. This
    * is unrelated to timeout configurable for round-trip messages in a
    * ProtocolHandler.
    */
-  receiver.setSoTimeout(500) // 500 ms
+  // receiver.setSoTimeout(500) // 500 ms
+  sender.setSoTimeout(500) // 500 ms
 
   val recv_buffer = new Array[Byte](65508)
   val recv_dgram = new DatagramPacket(recv_buffer, recv_buffer.size)
@@ -68,10 +74,16 @@ case class UnicastComm(local: PeerNode) extends Comm {
     * Returns `Right` with the bytes read from the socket or Left with
     * an error, if something went wrong.
     */
-  override def recv: Either[CommError, Seq[Byte]] =
+  override def recv: Either[CommError, (SocketAddress, Seq[Byte])] =
     try {
-      receiver.receive(recv_dgram)
-      decode(recv_dgram.getData)
+      // receiver.receive(recv_dgram)
+      sender.receive(recv_dgram)
+      // println(s"RECV from ${recv_dgram.getSocketAddress}")
+      // sender.send(new DatagramPacket("FOO".getBytes, 0, 3, recv_dgram.getSocketAddress))
+      decode(recv_dgram.getData) match {
+        case Right(data) => Right((recv_dgram.getSocketAddress, data))
+        case Left(err) => Left(err)
+      }
     } catch {
       case NonFatal(ex: Exception) => Left(DatagramException(ex))
     }
@@ -86,6 +98,7 @@ case class UnicastComm(local: PeerNode) extends Comm {
     encode(data).flatMap { payload =>
       val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
       try {
+        // println(s"SEND from ${sender.getLocalSocketAddress} -> ${dgram.getSocketAddress}")
         sender.send(dgram)
         Right(())
       } catch {

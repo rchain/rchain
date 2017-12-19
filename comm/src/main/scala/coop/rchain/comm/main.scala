@@ -35,27 +35,37 @@ object Main {
   val pauseTime = 5000L
 
   def whoami: Option[InetAddress] = {
-    val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
-    val addresses = ifaces
-      .flatMap(_.asScala)
-      .map(_.getAddress)
-      .toList
-      .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
-    if (addresses.contains(false)) {
-      Some(addresses(false).head)
-    } else {
-      val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-      if (addresses.contains(false)) {
-        Some(addresses(false).head)
-      } else if (addresses.contains(true)) {
-        Some(addresses(true).head)
-      } else {
-        None
+    val upnp = new UPnP
+
+    logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
+
+    upnp.localAddress match {
+      case Some(addy) => Some(addy)
+      case None => {
+        val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
+        val addresses = ifaces
+          .flatMap(_.asScala)
+          .map(_.getAddress)
+          .toList
+          .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
+        if (addresses.contains(false)) {
+          Some(addresses(false).head)
+        } else {
+          val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
+          if (addresses.contains(false)) {
+            Some(addresses(false).head)
+          } else if (addresses.contains(true)) {
+            Some(addresses(true).head)
+          } else {
+            None
+          }
+        }
       }
     }
   }
 
   def main(args: Array[String]): Unit = {
+
     val conf = Conf(args)
 
     val name = conf.name.toOption match {

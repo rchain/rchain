@@ -1,8 +1,10 @@
 package coop.rchain.comm
 
-trait Comm {
+import java.net.InetSocketAddress
+
+trait Comm[A] {
   def send(data: Seq[Byte], p: PeerNode): Either[CommError, Unit]
-  def recv: Either[CommError, Seq[Byte]]
+  def recv: Either[CommError, (A, Seq[Byte])]
 }
 
 case class NodeIdentifier(pKey: Seq[Byte]) {
@@ -16,8 +18,11 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
 }
 
 case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
-  val tcpSocketAddress = new java.net.InetSocketAddress(host, tcpPort)
-  val udpSocketAddress = new java.net.InetSocketAddress(host, udpPort)
+  val tcpSocketAddress = new InetSocketAddress(host, tcpPort)
+  val udpSocketAddress = new InetSocketAddress(host, udpPort)
+
+  def withUdp(udp: java.net.InetSocketAddress): Endpoint =
+    Endpoint(udp.getHostString, tcpPort, udp.getPort)
 }
 
 /**
@@ -33,6 +38,9 @@ case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def toAddress: String =
     s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
+
+  def withUdpSocket(udp: java.net.InetSocketAddress): PeerNode =
+    PeerNode(id, endpoint.withUdp(udp))
 }
 
 trait Notary {

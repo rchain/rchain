@@ -1,6 +1,6 @@
 scalaVersion := "2.12.4"
 organization := "coop.rchain"
-version      := "0.0.1"
+version      := "0.1"
 
 PB.targets in Compile := Seq(
   PB.gens.java -> (sourceManaged in Compile).value,
@@ -74,6 +74,6 @@ dockerfile in docker := {
 }
 
 imageNames in docker := Seq(
-  ImageName(s"rchain-${name.value}:latest"),
-  ImageName(s"rchain-${name.value}:v${version.value}")
+  ImageName(s"rchain/rchain-${name.value}:latest"),
+  ImageName(s"rchain/rchain-${name.value}:v${version.value}")
 )
