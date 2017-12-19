@@ -54,7 +54,7 @@ program with no arguments.
 The fat jar built above may be run with Java like so:
 
 ```
-$ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/src-assembly-0.0.1.jar
+$ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/comm-assembly-0.0.1.jar
 17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://ace40ebca0924eb797bb69dfda04f5d9@1.2.3.4:30304}.
 ```
 

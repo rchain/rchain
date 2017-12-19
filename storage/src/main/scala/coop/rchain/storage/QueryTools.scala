@@ -39,85 +39,91 @@ object QueryTools {
   def unifyParams(
       queryParams: ArrayBuffer[TermTree],
       keyParams: ArrayBuffer[TermTree]): (Boolean, Array[Binding]) = {
+    var returnVal = true
+
     if (queryParams.length != keyParams.length) {
-      return (false, Array[Binding]())
-    }
+      (false, Array[Binding]())
+    } else {
+      var bindings = new ArrayBuffer[Binding]()
 
-    var bindings = new ArrayBuffer[Binding]()
+      var i = 0
+      while (i < queryParams.length && returnVal) {
+        val queryParam = queryParams(i)
+        val keyParam = keyParams(i)
 
-    for (i <- 0 until queryParams.length) {
-      val queryParam = queryParams(i)
-      val keyParam = keyParams(i)
-
-      if (queryParam.isKey && keyParam.isKey) {
-        val queryPred = queryParam.asInstanceOf[Key]
-        val keyPred = keyParam.asInstanceOf[Key]
-        if (queryPred.name == keyPred.name
-            && queryPred.arity == keyPred.arity) {
-          val (success, bindingsToAdd) =
-            unifyParams(queryPred.params.params, keyPred.params.params)
-          if (success) {
-            for (b <- bindingsToAdd) {
-              bindings += b
+        if (queryParam.isKey && keyParam.isKey) {
+          val queryPred = queryParam.asInstanceOf[Key]
+          val keyPred = keyParam.asInstanceOf[Key]
+          if (queryPred.name == keyPred.name
+              && queryPred.arity == keyPred.arity) {
+            val (success, bindingsToAdd) =
+              unifyParams(queryPred.params.params, keyPred.params.params)
+            if (success) {
+              for (b <- bindingsToAdd) {
+                bindings += b
+              }
+            } else {
+              returnVal = false
             }
           } else {
-            return (false, Array[Binding]())
+            returnVal = false
+          }
+        } else if (queryParam.isVariable) {
+          if (keyParam.isKey) {
+            // variable is bound to key
+            val queryVar = queryParam.asInstanceOf[Variable]
+            val keyPred = keyParam.asInstanceOf[Key]
+            val binding = new Binding(queryVar, keyPred)
+            bindings += binding
+          } else if (keyParam.isVariable) {
+            val queryVar = queryParam.asInstanceOf[Variable]
+            val keyVar = keyParam.asInstanceOf[Variable]
+            val binding = new Binding(queryVar, keyVar)
+            bindings += binding
+          } else if (keyParam.isConstant) {
+            val queryVar = queryParam.asInstanceOf[Variable]
+            val keyConst = keyParam.asInstanceOf[Constant]
+            val binding = new Binding(queryVar, keyConst)
+            bindings += binding
+          } else {
+            returnVal = false
+          }
+        } else if (queryParam.isConstant) {
+          if (keyParam.isKey) {
+            /* constants do not unify with Keys
+               val queryConst = queryParam.asInstanceOf[Constant]
+               val keyPred = keyParam.asInstanceOf[Key]
+               // set variable to constant
+               val binding = new Binding(queryConst, keyPred)
+               bindings += binding
+             */
+            returnVal = false
+          } else if (keyParam.isVariable) {
+            val queryConst = queryParam.asInstanceOf[Constant]
+            val keyVar = keyParam.asInstanceOf[Variable]
+            // set variable to constant
+            val binding = new Binding(queryConst, keyVar)
+            bindings += binding
+          } else if (keyParam.isConstant
+                     && queryParam.term == keyParam.term) {
+            val queryConst = queryParam.asInstanceOf[Constant]
+            val keyConst = keyParam.asInstanceOf[Constant]
+            val binding = new Binding(queryConst, keyConst)
+            bindings += binding
+          } else {
+            returnVal = false
           }
         } else {
-          return (false, Array[Binding]())
+          returnVal = false
         }
-      } else if (queryParam.isVariable) {
-        if (keyParam.isKey) {
-          // variable is bound to key
-          val queryVar = queryParam.asInstanceOf[Variable]
-          val keyPred = keyParam.asInstanceOf[Key]
-          val binding = new Binding(queryVar, keyPred)
-
-          bindings += binding
-        } else if (keyParam.isVariable) {
-          val queryVar = queryParam.asInstanceOf[Variable]
-          val keyVar = keyParam.asInstanceOf[Variable]
-          val binding = new Binding(queryVar, keyVar)
-          bindings += binding
-        } else if (keyParam.isConstant) {
-          val queryVar = queryParam.asInstanceOf[Variable]
-          val keyConst = keyParam.asInstanceOf[Constant]
-          val binding = new Binding(queryVar, keyConst)
-          bindings += binding
-        } else {
-          return (false, Array[Binding]())
-        }
-      } else if (queryParam.isConstant) {
-        if (keyParam.isKey) {
-          /* constants do not unify with Keys
-          val queryConst = queryParam.asInstanceOf[Constant]
-          val keyPred = keyParam.asInstanceOf[Key]
-          // set variable to constant
-          val binding = new Binding(queryConst, keyPred)
-          bindings += binding
-           */
-          return (false, Array[Binding]())
-        } else if (keyParam.isVariable) {
-          val queryConst = queryParam.asInstanceOf[Constant]
-          val keyVar = keyParam.asInstanceOf[Variable]
-          // set variable to constant
-          val binding = new Binding(queryConst, keyVar)
-
-          bindings += binding
-        } else if (keyParam.isConstant
-                   && queryParam.term == keyParam.term) {
-          val queryConst = queryParam.asInstanceOf[Constant]
-          val keyConst = keyParam.asInstanceOf[Constant]
-          val binding = new Binding(queryConst, keyConst)
-          bindings += binding
-        } else {
-          return (false, Array[Binding]())
-        }
+        i += 1
+      }
+      if (returnVal) {
+        (true, bindings.toArray)
       } else {
-        return (false, Array[Binding]())
+        (false, Array[Binding]())
       }
     }
-    (true, bindings.toArray)
   }
 
   // Given the key, return a new key with all the bindings substituted
