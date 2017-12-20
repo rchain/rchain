@@ -38,7 +38,8 @@ class UPnP(port: Int) {
     try {
       gateway match {
         case Some(device) =>
-          Right(device.addPortMapping(port, port, localAddress.get.getHostAddress, "UDP", "RChain"))
+          Right(
+            device.addPortMapping(port, port, localAddress.get.getHostAddress, "UDP", "RChain"))
         case None => Left(UnknownCommError("no gateway"))
       }
     } catch {

@@ -19,7 +19,11 @@ case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
   val bootstrap =
-    opt[String](default = None, short = 'b', descr = "Bootstrap rnode address for initial seed.")
+    opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
+                short = 'b',
+                descr = "Bootstrap rnode address for initial seed.")
+
+  val standalone = opt[Boolean](default = Some(false), short = 's', descr = "Start a stand-alone node (no bootstrapping).")
 
   val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
@@ -71,7 +75,7 @@ object Main {
 
     val name = conf.name.toOption match {
       case Some(key) => key
-      case None => UUID.randomUUID.toString.replaceAll("-", "")
+      case None      => UUID.randomUUID.toString.replaceAll("-", "")
     }
 
     val host = conf.host.toOption match {
@@ -88,9 +92,13 @@ object Main {
     val net = p2p.Network(addy)
     logger.info(s"Listening for traffic on $net.")
 
-    conf.bootstrap.foreach { address =>
-      logger.info(s"Bootstrapping from $address.")
-      net.connect(address)
+    if (!conf.standalone()) {
+      conf.bootstrap.foreach { address =>
+        logger.info(s"Bootstrapping from $address.")
+        net.connect(address)
+      }
+    } else {
+      logger.info(s"Starting stand-alone node.")
     }
 
     sys.addShutdownHook {
