@@ -22,7 +22,8 @@ object StrTermCtorAbbrevs {
   type StrTermCtxt = TermCtxt[String,String,String] with RosetteSerialization[String,String,String]
   def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( v ) )
   def G( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Tag( v ) )
-  def B( v : String )( terms : StrTermCtxt* ) = StrTermPtdCtxtBr( v, terms.toList )
+  def B( v : String )( terms : StrTermCtxt* ) : StrTermCtxt = StrTermPtdCtxtBr( v, terms.toList )
+  def BL( v : String )( terms : List[StrTermCtxt] ) : StrTermCtxt = StrTermPtdCtxtBr( v, terms )
 }
 
 object StrZipAbbrevs {
@@ -137,7 +138,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
               }
             }
           )
-          B( _rx )( (List( ( V( op ) ) ) ++ qterms):_* )
+          BL( _rx )( V( op ) :: qterms )
         }
       }
     }
@@ -197,7 +198,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
           }
         } else {
           val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsComponents)
-          (B(_list)(formalsUnwrapped: _*), B(_list)(quotedFormalsUnwrapped: _*), B(_list)(productFreshesUnwrapped: _*))
+          (BL(_list)(formalsUnwrapped), BL(_list)(quotedFormalsUnwrapped), BL(_list)(productFreshesUnwrapped))
         }
 
       val consumeTerm = B("consume")(TS, B(_list)( G(p.var_) ), B(_list)(wildcard), B(_list)(quotedFormals), G("#t"))
@@ -271,7 +272,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       )
 
     for( cTerm : StrTermCtxt <- p.chan_.accept(this, arg ) ) yield {
-      B( _produce )( (List( TS ) ++ List(cTerm) ++ List(V("**wildcard**")) ++ actls):_* )
+      BL( _produce )( TS :: cTerm :: V("**wildcard**") :: actls )
     }
   }
 
@@ -311,9 +312,9 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
           case bind => throw new UnexpectedBindingType(bind)
         }
         val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsComponents)
-        val consumeTerm = B("consume")(TS, B(_list)(chanTerms: _*), B(_list)(wildcards: _*), B(_list)(quotedPtrnTerms: _*), G("#f")) // #f for persistent
-        val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFreshes: _*), B(_list)(productFreshes: _*)), consumeTerm)
-        val bodyTerm = B("")(B("proc")(B(_list)(B(_list)(ptrnTerms: _*)), procTerm), B(_list)(productFreshes: _*))
+        val consumeTerm = B("consume")(TS, BL(_list)(chanTerms), BL(_list)(wildcards), BL(_list)(quotedPtrnTerms), G("#f")) // #f for persistent
+        val letBindingsTerm = B(_list)(B(_list)(BL(_list)(unificationFreshes), BL(_list)(productFreshes)), consumeTerm)
+        val bodyTerm = B("")(B("proc")(B(_list)(BL(_list)(ptrnTerms)), procTerm), BL(_list)(productFreshes))
         B("let")(B(_list)(letBindingsTerm), bodyTerm)
       }
     }
@@ -354,7 +355,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         val fresh = V(FreshSymbol(v))
         B(_list)(V( v ), fresh)
       } } )
-      B( "let" )( ( List(B(_list)(newBindings:_*)) ++ List( pTerm )):_* )
+      B( "let" )( (BL(_list)(newBindings)), pTerm )
     })
   }
   override def visit(  p : PChoice, arg : A ) : R = {
@@ -581,7 +582,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         }
       )        
 
-    B( p.var_ )( actls:_* )
+    BL( p.var_ )( actls )
   }
   override def visit(  p : PPar, arg : A ) : R = {
     /*
@@ -664,7 +665,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
             }
           }
         )
-      B("")( (List(V(s"""${p.var_}""")) ++ List(q) ++ qArgs ):_* )
+      BL("")( V(s"""${p.var_}""") :: q :: qArgs )
     }
   }
   override def visit( p : QNeg, arg : A) : R = {
@@ -776,7 +777,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
           }
         }
       )
-    B(_list)( procTerms:_* )
+    BL(_list)( procTerms )
   }
 
   /* Pattern */
@@ -819,7 +820,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         }
       )
 
-    B(p.var_)( structContents:_* )
+    BL(p.var_)( structContents )
   }
   override def visit(  p : VPtTuple, arg : A ) : R = {
     import scala.collection.JavaConverters._
@@ -840,7 +841,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         }
       )
 
-    B(_list)( tupleContents:_* )
+    BL(_list)( tupleContents )
   }
   override def visit(  p : VPtTrue, arg: A ): R = {
     G( s"""#t""")
