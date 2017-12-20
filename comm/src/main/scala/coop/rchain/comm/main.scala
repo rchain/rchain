@@ -10,7 +10,7 @@ import coop.rchain.p2p
 import com.typesafe.scalalogging.Logger
 
 case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  version("0.0.1 RChain Communications Library")
+  version("RChain Communications Library version 0.1")
 
   val name =
     opt[String](default = None, short = 'n', descr = "Node name or key.")
@@ -19,7 +19,11 @@ case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
   val bootstrap =
-    opt[String](default = None, short = 'b', descr = "Bootstrap rnode address for initial seed.")
+    opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
+                short = 'b',
+                descr = "Bootstrap rnode address for initial seed.")
+
+  val standalone = opt[Boolean](default = Some(false), short = 's', descr = "Start a stand-alone node (no bootstrapping).")
 
   val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
@@ -34,39 +38,50 @@ object Main {
    */
   val pauseTime = 5000L
 
-  def whoami: Option[InetAddress] = {
-    val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
-    val addresses = ifaces
-      .flatMap(_.asScala)
-      .map(_.getAddress)
-      .toList
-      .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
-    if (addresses.contains(false)) {
-      Some(addresses(false).head)
-    } else {
-      val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-      if (addresses.contains(false)) {
-        Some(addresses(false).head)
-      } else if (addresses.contains(true)) {
-        Some(addresses(true).head)
-      } else {
-        None
+  def whoami(port: Int): Option[InetAddress] = {
+
+    val upnp = new UPnP(port)
+
+    logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
+
+    upnp.localAddress match {
+      case Some(addy) => Some(addy)
+      case None => {
+        val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
+        val addresses = ifaces
+          .flatMap(_.asScala)
+          .map(_.getAddress)
+          .toList
+          .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
+        if (addresses.contains(false)) {
+          Some(addresses(false).head)
+        } else {
+          val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
+          if (addresses.contains(false)) {
+            Some(addresses(false).head)
+          } else if (addresses.contains(true)) {
+            Some(addresses(true).head)
+          } else {
+            None
+          }
+        }
       }
     }
   }
 
   def main(args: Array[String]): Unit = {
+
     val conf = Conf(args)
 
     val name = conf.name.toOption match {
       case Some(key) => key
-      case None => UUID.randomUUID.toString.replaceAll("-", "")
+      case None      => UUID.randomUUID.toString.replaceAll("-", "")
     }
 
     val host = conf.host.toOption match {
       case Some(host) => host
       case None =>
-        whoami match {
+        whoami(conf.port()) match {
           case Some(addy) => addy.getHostAddress
           case None       => "localhost"
         }
@@ -77,9 +92,13 @@ object Main {
     val net = p2p.Network(addy)
     logger.info(s"Listening for traffic on $net.")
 
-    conf.bootstrap.foreach { address =>
-      logger.info(s"Bootstrapping from $address.")
-      net.connect(address)
+    if (!conf.standalone()) {
+      conf.bootstrap.foreach { address =>
+        logger.info(s"Bootstrapping from $address.")
+        net.connect(address)
+      }
+    } else {
+      logger.info(s"Starting stand-alone node.")
     }
 
     sys.addShutdownHook {
