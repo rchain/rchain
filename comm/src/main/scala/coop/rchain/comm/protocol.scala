@@ -128,15 +128,6 @@ trait ProtocolResponse extends ProtocolMessage {
   def returnHeader: Option[ReturnHeader] = proto.returnHeader
 }
 
-case class WhoamiMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield WhoamiResponseMessage(ProtocolMessage.whoamiResponse(src, h, "foo", 23), System.currentTimeMillis)
-}
-
-case class WhoamiResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
-
 /**
   * A ping is a simple are-you-there? message.
   */
@@ -219,19 +210,6 @@ object ProtocolMessage {
       .withTimestamp(h.timestamp)
       .withSeq(h.seq)
 
-  def whoami(src: ProtocolNode): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withWhoami(Whoami())
-
-  def whoamiResponse(src: ProtocolNode, h: Header, host: String, port: Int): Protocol =
-    Protocol()
-      .withHeader(header(src))
-      .withReturnHeader(returnHeader(h))
-      .withWhoamiResponse(WhoamiResponse()
-        .withHost(host)
-        .withPort(port))
-
   def ping(src: ProtocolNode): Protocol =
     Protocol()
       .withHeader(header(src))
@@ -276,9 +254,6 @@ object ProtocolMessage {
     Protocol.parseFrom(bytes.toArray) match {
       case msg: Protocol =>
         msg.message match {
-          case Protocol.Message.Whoami(_) => Some(WhoamiMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.WhoamiResponse(_) =>
-            Some(WhoamiResponseMessage(msg, System.currentTimeMillis))
           case Protocol.Message.Ping(_)   => Some(PingMessage(msg, System.currentTimeMillis))
           case Protocol.Message.Pong(_)   => Some(PongMessage(msg, System.currentTimeMillis))
           case Protocol.Message.Lookup(_) => Some(LookupMessage(msg, System.currentTimeMillis))

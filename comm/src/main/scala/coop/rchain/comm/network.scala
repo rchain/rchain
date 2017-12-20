@@ -109,7 +109,6 @@ case class UnicastNetwork(id: NodeIdentifier,
       // higher-level protocols.
       table.observe(new ProtocolNode(sender, this), next == None)
       msg match {
-        case whoami @ WhoamiMessage(_, _)         => handleWhoami(sender, whoami)
         case ping @ PingMessage(_, _)             => handlePing(sender, ping)
         case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
         case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
@@ -132,16 +131,6 @@ case class UnicastNetwork(id: NodeIdentifier,
         case Some(promise) => promise.success(Right(msg))
         case None          => next.foreach(_.dispatch(sock, msg))
       }
-    }
-
-  /**
-    * Clue the requester in as to its public host and port as observed at this node.
-    */
-  private def handleWhoami(sender: PeerNode, whoami: WhoamiMessage): Unit =
-    for {
-      resp <- whoami.response(local)
-    } {
-      comm.send(resp.toByteSeq, sender)
     }
 
   /**

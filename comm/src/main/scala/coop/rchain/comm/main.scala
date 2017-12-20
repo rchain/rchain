@@ -34,9 +34,10 @@ object Main {
    */
   val pauseTime = 5000L
 
-  def whoami: Option[InetAddress] = {
-    val upnp = new UPnP
+  def whoami(port: Int): Option[InetAddress] = {
 
+    val upnp = new UPnP(port)
+ 
     logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
 
     upnp.localAddress match {
@@ -76,7 +77,7 @@ object Main {
     val host = conf.host.toOption match {
       case Some(host) => host
       case None =>
-        whoami match {
+        whoami(conf.port()) match {
           case Some(addy) => addy.getHostAddress
           case None       => "localhost"
         }
