@@ -1,5 +1,5 @@
 scalaVersion := "2.12.4"
-organization := "coop.rchain"
+organization := "rchain"
 version      := "0.1"
 
 PB.targets in Compile := Seq(
@@ -14,10 +14,13 @@ libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.truea
 libraryDependencies ++= Seq(
   "org.scalactic" %% "scalactic" % "3.0.1",
   "org.scalatest" %% "scalatest" % "3.0.1" % "test",
+
   // URI Parsing
   "io.lemonlabs" %% "scala-uri" % "0.5.0",
+
   // Command-line parsing
   "org.rogach" %% "scallop" % "3.0.3",
+
   // Hashing
   "org.scorexfoundation" %% "scrypto" % "2.0.0",
 
@@ -74,6 +77,6 @@ dockerfile in docker := {
 }
 
 imageNames in docker := Seq(
-  ImageName(s"rchain/rchain-${name.value}:latest"),
-  ImageName(s"rchain/rchain-${name.value}:v${version.value}")
+  ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
+  ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
 )
