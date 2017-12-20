@@ -9,6 +9,13 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 import com.typesafe.scalalogging.Logger
 
+/**
+  * Simple class that attempts to find and use a uPnP router for networking.
+  *
+  * Registers the given port for UDP transmission through a NAT.
+  *
+  * Cribbed from https://github.com/ScorexFoundation/Scorex/blob/503fda982d96707db8731f954ac6428b1d17e4e8/src/main/scala/scorex/core/network/UPnP.scala.
+  */
 class UPnP(port: Int) {
   val logger = Logger("upnp")
 

@@ -37,7 +37,7 @@ object Main {
   def whoami(port: Int): Option[InetAddress] = {
 
     val upnp = new UPnP(port)
- 
+
     logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
 
     upnp.localAddress match {
