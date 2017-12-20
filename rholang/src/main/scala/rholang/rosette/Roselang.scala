@@ -733,7 +733,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
       q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      B("==")(q1,q2)
+      B("=")(q1,q2)
     }
   }
   override def visit( p : QNeq, arg : A) : R = {
