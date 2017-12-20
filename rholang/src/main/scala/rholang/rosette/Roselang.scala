@@ -19,7 +19,7 @@ import scala.language.postfixOps
 // V for variable
 // G for "ground" value
 object StrTermCtorAbbrevs {
-  type StrTermCtxt = TermCtxt[String,String,String] with Factual with RosetteSerialization[String,String,String]
+  type StrTermCtxt = TermCtxt[String,String,String] with RosetteSerialization[String,String,String]
   def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( v ) )
   def G( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Tag( v ) )
   def B( v : String )( terms : StrTermCtxt* ) = StrTermPtdCtxtBr( v, terms.toList )
