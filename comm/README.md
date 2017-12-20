@@ -20,22 +20,47 @@ Clone (or download and unpack) the master branch of the source.
 
 ### Building with `sbt`
 
-The only up-front build-time requirement is [sbt](http://www.scala-sbt.org/download.html), which should be installed
-according to your platform. It, in turn, will download and include all dependencies for the system.
+The only up-front build-time requirements are the Java Development Toolkit (we've been using [OpenJDK version
+1.8.0_151](http://openjdk.java.net/install/)) and [sbt](http://www.scala-sbt.org/download.html), both of which should be installed
+according to your platform.
 
-To build once `sbt` is installed, issue:
+To build, simply issue from a terminal:
 
 ```
 sbt assembly
 ```
 
-This will download dependencies, if required, compile all the code, construct a single, large jar file, and run all the
-tests.
+This will download dependencies, if required, compile all the code, construct a single, large jar file, and run all the tests.
 
 ### Building via Docker
 
-If you have [docker](https://www.docker.com/) installed, you can build a docker image. Under the covers, the docker
-build process is the `sbt` build process, exactly as described above. The command
+The only Docker combination that has been extensively tested is
+
+```
+Client:
+ Version:      17.09.1-ce
+ API version:  1.32
+ Go version:   go1.8.3
+ Git commit:   19e2cf6
+ Built:        Thu Dec  7 22:24:28 2017
+ OS/Arch:      linux/amd64
+
+Server:
+ Version:      17.09.1-ce
+ API version:  1.32 (minimum version 1.12)
+ Go version:   go1.8.3
+ Git commit:   19e2cf6
+ Built:        Thu Dec  7 22:23:07 2017
+ OS/Arch:      linux/amd64
+ Experimental: false
+```
+
+though others are expected to work.
+
+#### Docker by itself
+
+If you have [docker](https://www.docker.com/) installed, you can build a docker image. Under the covers, the docker build process is
+the `sbt` build process, exactly as described above. The command
 
 ```
 docker build . -t rchain-comm:latest
@@ -43,34 +68,64 @@ docker build . -t rchain-comm:latest
 
 will build an image tagged "latest" containing the jar file and a suitable entry point.
 
+#### Docker via `sbt`
+
+If the requirement for building via `sbt` are _also_ met, you can request that `sbt` build and tag docker images:
+
+```
+sbt docker
+```
+
+We recommend this method, as it is much quicker and builds a much slimmer image.
 
 ## Running a Node
 
-A simple, stand-alone node which does nothing but wait for another node to contact it may be invoked by running the
-program with no arguments.
+By default, the communication system attempts to connect itself to the test RChain network by bootstrapping from a known node in
+that network. Note that this release prints a great deal of diagnostic information.
+
+### Running via Docker
+
+By far the simplest way to run this code is by using Docker and the official image at Docker Hub:
+
+```
+$ docker run -ti rchain/rchain-comm
+Unable to find image 'rchain/rchain-comm:latest' locally
+latest: Pulling from rchain/rchain-comm
+Status: Downloaded newer image for rchain/rchain-comm:latest
+16:45:51.344 [main] INFO main - uPnP: None -> None
+16:45:51.467 [main] INFO main - Listening for traffic on #{Network rnode://a94bd1f373ae4dd39dbb78f03a131075@172.17.0.2:30304}.
+16:45:51.469 [main] INFO main - Bootstrapping from rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012.
+16:45:51.470 [main] DEBUG p2p - connect(): Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
+```
 
 ### Running with Java
 
 The fat jar built above may be run with Java like so:
 
 ```
-$ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/comm-assembly-0.0.1.jar
-17:34:52.110 [main] INFO main - Listening for traffic on #{Network rnode://ace40ebca0924eb797bb69dfda04f5d9@1.2.3.4:30304}.
+$ java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar target/scala-2.12/comm-assembly-0.1.jar
+07:57:16.465 [main] INFO main - uPnP: Some(/10.0.0.3) -> Some(192.168.1.1)
+07:57:16.584 [main] INFO main - Listening for traffic on #{Network rnode://f869a0d0a21744e1807b4176b0217e56@10.0.0.3:30304}.
+07:57:16.585 [main] INFO main - Bootstrapping from rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012.
+07:57:16.586 [main] DEBUG p2p - connect(): Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
 ```
 
-### Running via Docker
+### Running Local Image via Docker
 
 If you built a docker image called `rchain-comm:latest`, you can run that with
 
 ```
-$ docker run -ti -p 30304:30304/udp rchain-comm:latest
-Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true
-04:20:56.910 [main] INFO main - Listening for traffic on #{Network rnode://ace40ebca0924eb797bb69dfda04f5d9@172.17.0.3:30304}.
+$ docker run -ti rchain-comm
+Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF8
+16:42:48.310 [main] INFO main - uPnP: None -> None
+16:42:48.414 [main] INFO main - Listening for traffic on #{Network rnode://0acfd966f69a412ebd8c0b267c9817dc@172.17.0.2:30304}.
+16:42:48.415 [main] INFO main - Bootstrapping from rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012.
+16:42:48.416 [main] DEBUG p2p - connect(): Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
 ```
 
-Note that the port used has to be mapped to the proper host port for the node to be able to advertise itself to the
-network properly. The host might also have to be set to the docker host's IP (not the container's IP, which will
-probably be the one chosen automatically), _and_ the port has to be open or forwarded from the immediate router.
+Note that the port used has to be mapped to the proper host port for the node to be able to advertise itself to the network
+properly. This may happen automatically, and it may not; it completely depends on how your computer and network are configured. Some
+monkeying with `docker run` options may be required, and the `--host` and `--port` options to this system may also help.
 
 ### Command-line Arguments
 
@@ -81,6 +136,7 @@ However it gets run, it responds to the following arguments:
   -h, --host  <arg>        Hostname or IP of this node.
   -n, --name  <arg>        Node name or key.
   -p, --port  <arg>        Network port to use.
+  -s, --standalone         Start a stand-alone node (no bootstrapping).
       --help               Show help message
       --version            Show version of this program
 ```

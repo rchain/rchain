@@ -19,8 +19,6 @@ import scala.util.control.NonFatal
   * sends.
   */
 case class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
-  println(s"LOCAL: ${local.endpoint.udpSocketAddress}")
-
   val socket = new DatagramSocket(local.endpoint.udpPort)
 
   /*

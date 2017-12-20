@@ -10,7 +10,7 @@ import coop.rchain.p2p
 import com.typesafe.scalalogging.Logger
 
 case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  version("0.0.1 RChain Communications Library")
+  version("RChain Communications Library version 0.1")
 
   val name =
     opt[String](default = None, short = 'n', descr = "Node name or key.")
