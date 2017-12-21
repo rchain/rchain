@@ -77,6 +77,8 @@ dockerfile in docker := {
 }
 
 imageNames in docker := Seq(
-  ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
-  ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
+  //ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
+  //ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
+  ImageName(s"${organization.value}/test:latest"),
+  ImageName(s"${organization.value}/test:v${version.value}")
 )
