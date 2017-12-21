@@ -26,5 +26,5 @@ The `storage` subproject contains code related to the key-value storage of the R
 
 ### Filing Issues
 
-You can file issues in our Public Jira Instance here: https://rchain.atlassian.net/secure/CreateIssue!default.jspa
+File issues in our Public Jira Instance: [File a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
 
