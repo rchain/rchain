@@ -753,8 +753,6 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
         std::regex r(re_s); // Compile the regexp
 
         if (std::regex_match(str_s, r) == true) {   // See if it matches
-            const char *ret_str;
-            size_t len;
             rv = RBLstring::create(str_s);
         }
         else {
