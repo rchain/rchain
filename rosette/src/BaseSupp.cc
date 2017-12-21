@@ -746,16 +746,14 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
 
     Ob* rv;
 
-    char* re_s = (char*)&re->byte(0);
-    char* str_s = (char*)&str->byte(0);
+    auto str_s = (char*)&str->byte(0);
 
     try {
-        std::regex r(re_s); // Compile the regexp
+        std::regex r(re->asCstring()); // Compile the regexp
 
-        if (std::regex_match(str_s, r) == true) {   // See if it matches
+        if (std::regex_match(str_s, r)) {   // See if it matches
             rv = RBLstring::create(str_s);
-        }
-        else {
+        } else {
             rv = RBLFALSE;
         }
         return rv;
