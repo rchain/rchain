@@ -35,7 +35,7 @@ ARCH		= linux
 #
 #  The plan is to eventually compile with -Wall and -Werror
 #
-CPPFLAGS	= -ggdb -I ../h -I ../h/sys -DARCH_INC=\"$(ARCH).h\" -m32 -Wall -Wno-write-strings -Wno-invalid-offsetof -Wno-delete-incomplete -Wno-deprecated-declarations -Wno-unused-variable -Wno-sign-compare -Wno-init-self
+CPPFLAGS	= -std=c++11 -ggdb -I ../h -I ../h/sys -DARCH_INC=\"$(ARCH).h\" -m32 -Wall -Wno-write-strings -Wno-invalid-offsetof -Wno-delete-incomplete -Wno-deprecated-declarations -Wno-unused-variable -Wno-sign-compare -Wno-init-self
 
 #LDCC		= gcc -g $(W_STATIC) -DGCC27X -lm
 #LDCC		= g++ -g $(W_STATIC) -DGCC27X -lm -m32
@@ -49,7 +49,7 @@ OBJS		= Actor.o RblAtom.o BigBang.o BinaryOb.o Code.o CommandLine.o \
 		Queue.o RBLstring.o RBLstream.o Reader.o Table.o Tuple.o \
 		Vm.o ObQue.o ObStk.o PtrCollect.o ResizeAry.o RblStack.o \
 		StreamUtils.o StringStore.o Timer.o misc.o Timestamp.o \
-		Opcode.o regexp.o main.o $(_ESS.Extras_)
+		Opcode.o main.o $(_ESS.Extras_)
 
 
 PARENT		= $(dir $(cwd))

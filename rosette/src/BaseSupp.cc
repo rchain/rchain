@@ -58,6 +58,9 @@ extern "C" {
 #include <sysent.h>
 #endif
 
+#include <string>
+#include <regex>
+
 #include "RblAtom.h"
 #include "BinaryOb.h"
 #include "Ctxt.h"
@@ -72,7 +75,6 @@ extern "C" {
 #include "Table.h"
 #include "Tuple.h"
 #include "Vm.h"
-#include "regexp.h"
 #include "Addr.h"
 
 #ifdef SYSV4
@@ -742,24 +744,22 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
     CHECK(0, RBLstring, re);
     CHECK(1, RBLstring, str);
 
-    char *re_s, *str_s;
-    regexp* r;
-    Ob* rv;
+    auto str_s = (char*)&str->byte(0);
 
-    re_s = (char*)&re->byte(0);
-    str_s = (char*)&str->byte(0);
+    try {
+        std::regex r(re->asCstring()); // Compile the regexp
 
-    if ((r = GS_regcomp(re_s)) && GS_regexec(r, str_s)) {
-        int len = r->endp[0] - r->startp[0];
-        char* res = (char*)malloc(len + 1);
-        strncpy(res, r->startp[0], len);
-        res[len] = '\0';
-        rv = RBLstring::create(res);
-        free(res);
+        if (std::regex_match(str_s, r)) {   // See if it matches
+            return RBLstring::create(str_s);
+        } else {
+            return RBLFALSE;
+        }
     }
-    else
-        rv = RBLFALSE;
-    return rv;
+    catch (const std::regex_error& e) {
+        warning("Regex expression error: %s code=%d", e.what(), e.code());
+        return RBLFALSE;
+    }
+
 }
 
 DEF("socketpair", sysSocketpair, 0, 0) {
