@@ -744,24 +744,20 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
     CHECK(0, RBLstring, re);
     CHECK(1, RBLstring, str);
 
-    Ob* rv;
-
     auto str_s = (char*)&str->byte(0);
 
     try {
         std::regex r(re->asCstring()); // Compile the regexp
 
         if (std::regex_match(str_s, r)) {   // See if it matches
-            rv = RBLstring::create(str_s);
+            return RBLstring::create(str_s);
         } else {
-            rv = RBLFALSE;
+            return RBLFALSE;
         }
-        return rv;
     }
     catch (const std::regex_error& e) {
         warning("Regex expression error: %s code=%d", e.what(), e.code());
-        rv = RBLFALSE;
-        return rv;
+        return RBLFALSE;
     }
 
 }
