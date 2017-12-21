@@ -4,6 +4,7 @@ for i in rbl/rosette/tests/*; do
 	filename_without_extension="${filename%.*}"
 	echo "(load 'tests/$filename_without_extension 'silent)" >> rbl/rosette/configuration.rbl
 done
+# Add this line to exit after loading rbl files. This is needed for Travis to work correctly.
 echo "(exit)" >> rbl/rosette/configuration.rbl
 
 # Create file for printing results

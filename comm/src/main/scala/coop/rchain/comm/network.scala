@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import java.net.SocketTimeoutException
+import java.net.{SocketAddress, SocketTimeoutException}
 import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
@@ -14,13 +14,13 @@ import scala.util.{Failure, Success}
   */
 case class UnicastNetwork(id: NodeIdentifier,
                           endpoint: Endpoint,
-                          next: Option[ProtocolDispatcher] = None)
+                          next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
-    with ProtocolDispatcher {
+    with ProtocolDispatcher[SocketAddress] {
 
   val logger = Logger("network-overlay")
 
-  def this(peer: PeerNode, next: Option[ProtocolDispatcher]) =
+  def this(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]]) =
     this(peer.id, peer.endpoint, next)
 
   case class PendingKey(remote: Seq[Byte], timestamp: Long, seq: Long)
@@ -36,10 +36,10 @@ case class UnicastNetwork(id: NodeIdentifier,
     override def run =
       while (true) {
         comm.recv match {
-          case Right(res) =>
+          case Right((sock, res)) =>
             for {
               msg <- ProtocolMessage.parse(res)
-            } dispatch(msg)
+            } dispatch(sock, msg)
           case Left(err: CommError) =>
             err match {
               case DatagramException(ex: SocketTimeoutException) => ()
@@ -95,10 +95,16 @@ case class UnicastNetwork(id: NodeIdentifier,
     potentials.toSeq
   }
 
-  def dispatch(msg: ProtocolMessage): Unit =
+  def dispatch(sock: SocketAddress, msg: ProtocolMessage): Unit =
     for {
-      sender <- msg.sender
+      sndr <- msg.sender
     } {
+      val sender =
+        sock match {
+          case (s: java.net.InetSocketAddress) =>
+            sndr.withUdpSocket(s)
+          case _ => sndr
+        }
       // Update sender's last-seen time, adding it if there are no
       // higher-level protocols.
       table.observe(new ProtocolNode(sender, this), next == None)
@@ -106,8 +112,8 @@ case class UnicastNetwork(id: NodeIdentifier,
         case ping @ PingMessage(_, _)             => handlePing(sender, ping)
         case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
         case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
-        case resp: ProtocolResponse               => handleResponse(sender, resp)
-        case _                                    => next.foreach(_.dispatch(msg))
+        case resp: ProtocolResponse               => handleResponse(sock, sender, resp)
+        case _                                    => next.foreach(_.dispatch(sock, msg))
       }
     }
 
@@ -117,13 +123,13 @@ case class UnicastNetwork(id: NodeIdentifier,
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
-  private def handleResponse(sender: PeerNode, msg: ProtocolResponse): Unit =
+  private def handleResponse(sock: SocketAddress, sender: PeerNode, msg: ProtocolResponse): Unit =
     for {
       ret <- msg.returnHeader
     } {
       pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)) match {
         case Some(promise) => promise.success(Right(msg))
-        case None          => next.foreach(_.dispatch(msg))
+        case None          => next.foreach(_.dispatch(sock, msg))
       }
     }
 
