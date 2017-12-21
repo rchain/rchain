@@ -758,7 +758,8 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
         }
         return rv;
     }
-    catch(...) {
+    catch (const std::regex_error& e) {
+        warning("Regex expression error: %s code=%d", e.what(), e.code());
         rv = RBLFALSE;
         return rv;
     }
