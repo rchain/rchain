@@ -5,7 +5,7 @@ add_library(rosettecore BaseSupp.cc Actor.cc RblAtom.cc BigBang.cc BinaryOb.cc C
     Operation.cc Parser.cc Pattern.cc Prim.cc Proc.cc Queue.cc RBLstring.cc
     RBLstream.cc Reader.cc Table.cc Tuple.cc Vm.cc ObQue.cc ObStk.cc
     PtrCollect.cc ResizeAry.cc RblStack.cc StreamUtils.cc StringStore.cc
-    Timer.cc misc.cc Timestamp.cc Opcode.cc regexp.cc rosette-config.cc)
+    Timer.cc misc.cc Timestamp.cc Opcode.cc rosette-config.cc)
 
 
 add_executable(rosette main.cc)
