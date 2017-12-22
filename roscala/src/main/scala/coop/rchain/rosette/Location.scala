@@ -320,7 +320,6 @@ object Location {
   def ArgReg(n: Int): Location = {
     if (n > MaxArgs) {
       suicide(s"Location.ArgReg: invalid arg register index ($n)")
-      null
     }
 
     LocationGT(LTArgRegister(n))

@@ -51,7 +51,7 @@ case object NetworkAddress {
     }
 }
 
-case class Network(homeAddress: String) extends ProtocolDispatcher {
+case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.SocketAddress] {
   val logger = Logger("p2p")
 
   val local = NetworkAddress.parse(homeAddress) match {
@@ -134,10 +134,17 @@ case class Network(homeAddress: String) extends ProtocolDispatcher {
       net.add(sender)
     }
 
-  override def dispatch(msg: ProtocolMessage): Unit =
+  override def dispatch(sock: java.net.SocketAddress, msg: ProtocolMessage): Unit =
     for {
-      sender <- msg.sender
+      sndr <- msg.sender
     } {
+      val sender =
+        sock match {
+          case (s: java.net.InetSocketAddress) =>
+            sndr.withUdpSocket(s)
+          case _ => sndr
+        }
+
       msg match {
         case upstream @ UpstreamMessage(proto, _) =>
           for {

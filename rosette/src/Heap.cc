@@ -633,11 +633,15 @@ void* OldSpace::alloc(unsigned sz) {
     if (sz <= MaxFixedSize && fixedFreeLists[sz])
         return (void*)unlink(fixedFreeLists[sz]);
 
-    if (p = currentChunk->alloc(sz))
+    p = currentChunk->alloc(sz);
+    if (NULL != p) {
         return p;
+    }
 
-    if (p = miscAlloc(sz))
+    p = miscAlloc(sz);
+    if (NULL != p) {
         return p;
+    }
 
     addChunk(nextMultipleOf(sz, OldSpaceChunkSize));
     return currentChunk->alloc(sz);
@@ -808,8 +812,8 @@ Heap::Heap(unsigned infantSpaceSize, unsigned survivorSpaceSize,
       oldSpace(new OldSpace(oldSpaceChunkSize)),
       foreignObs(new ForeignObTbl),
       gcAgenda(new GCAgenda),
-      rootSets(new PtrCollection),
       tenuredObs(new ObStk),
+      rootSets(new PtrCollection),
       newSpaceBase(newSpace->base),
       newSpaceLimit(newSpace->limit) {
     scavengeCount = 0;
@@ -863,8 +867,9 @@ int Heap::size() { return newSpace->size() + oldSpace->size(); }
  * debugger breakpoints.
  */
 
+#ifdef DEBUG
 static void catchMagic() {}
-
+#endif
 
 static void* magicLoc = 0;
 

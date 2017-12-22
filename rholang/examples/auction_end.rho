@@ -1,0 +1,15 @@
+// Rholang snippet to end an auction
+// Note that the rtn value corresponds to the channel that the
+// original auction contract is waiting
+// For example, rtn = 'Rholang-rtn-121266325
+
+// The system time in this contract matters.
+// If auction_end is not executed after the auction contract
+// is instantiated in such a way that the system time can
+// tell the difference, the call will fail.
+
+new anyone, unused_rtn in {
+    for (auction_contract <- rtn) {
+        @auction_contract.get("auction_end")!([anyone, unused_rtn])
+    }
+}

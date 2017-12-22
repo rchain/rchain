@@ -67,16 +67,21 @@ class Constant(param: String) extends Atom {
 object TermTools {
   def createTermTree(term: String): TermTree = {
     // This method is not intended to create Params
-    if (isVariable(term)) return new Variable(term)
-    if (isConstant(term)) return new Constant(term)
-    // KeyLexer requires the first term be a key
-    assert(term.indexOf("(") < term.indexOf(")"))
-    val lexer = new KeyLexer(term)
-    val lexToken = lexer.NextToken
-    if (lexToken.token == Token.Key)
-      return new Key(term)
-    throw new RChainException(
-      "createTermTree: not recognized: " + lexToken.tokenStr)
+    if (isVariable(term)) {
+      new Variable(term)
+    } else if (isConstant(term)) {
+      new Constant(term)
+    } else {
+      // KeyLexer requires the first term be a key
+      assert(term.indexOf("(") < term.indexOf(")"))
+      val lexer = new KeyLexer(term)
+      val lexToken = lexer.nextToken
+      if (lexToken.token != Token.Key) {
+        throw new RChainException(
+          "createTermTree: not recognized: " + lexToken.tokenStr)
+      }
+      new Key(term)
+    }
   }
 
   def isVariable(s: String): Boolean = {

@@ -12,6 +12,7 @@ case object AbsentRest extends TupleError
 case object InvalidRest extends TupleError
 
 case class Tuple(elem: Seq[Ob]) extends Ob {
+
   def accepts(msg: Ctxt): Boolean =
     if (this == Tuple.NIL) {
       true
@@ -116,11 +117,12 @@ case class Tuple(elem: Seq[Ob]) extends Ob {
 
 object Tuple {
 
-  object NIL extends Tuple(null)
+  object NIL extends Tuple(Seq.empty)
 
-  val Placeholder = new Tuple(Seq())
+  val Placeholder = Tuple(Seq.empty)
 
-  def apply(init: Ob) = new Tuple(Seq(init))
+  def apply(init: Ob): Tuple =
+    Tuple(Seq(init))
 
   def apply(t1: Tuple, t2: Tuple): Tuple =
     new Tuple(t1.elem ++ t2.elem)
@@ -144,7 +146,7 @@ object Tuple {
   def apply(a: Int, b: Ob): Tuple = new Tuple(Seq.fill(a)(b))
 
   def apply(a: Int, b: Option[Ob]): Tuple =
-    new Tuple(null)
+    Tuple(Seq.fill(a)(b getOrElse Ob.INVALID))
 
   def cons(ob: Ob, t: Tuple): Tuple =
     new Tuple(ob +: t.elem)

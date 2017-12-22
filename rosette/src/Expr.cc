@@ -742,11 +742,12 @@ DEF("tupleexpr-split", tplexprSplit, 2, 2) {
     CHECK(0, TupleExpr, expr);
     CHECK_FIXNUM(1, n);
 
-    if (expr == NILexpr)
+    if (expr == NILexpr) {
         if (n == 0)
             return Tuple::create(1, NILexpr);
         else
             return PRIM_ERROR("can't split");
+    }
 
     KONST int s = expr->numberOfElements();
 

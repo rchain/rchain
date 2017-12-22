@@ -61,7 +61,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
-      visit( ast, Here() )
+      visit( ast, null )
     }
     catch {
       case e : FileNotFoundException => {

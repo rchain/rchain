@@ -92,7 +92,25 @@ case class Ctxt(tag: Location,
 }
 
 object Ctxt {
-  def apply(tuple: Option[Tuple], ctxt: Ctxt): Ctxt = PLACEHOLDER
+  def apply(tuple: Option[Tuple], ctxt: Ctxt): Ctxt = {
+    val t = tuple.getOrElse(Tuple.Placeholder)
+    Ctxt(
+      tag = LocRslt,
+      nargs = t.elem.size,
+      outstanding = 0,
+      pc = PC(0),
+      rslt = Ob.NIV,
+      trgt = Ob.NIV,
+      argvec = t,
+      env = ctxt.env,
+      code = ctxt.code,
+      ctxt = ctxt,
+      self2 = ctxt.self2,
+      selfEnv = ctxt.selfEnv,
+      rcvr = ctxt.rcvr,
+      monitor = ctxt.monitor
+    )
+  }
 
   def apply(trgt: Ob, argvec: Tuple): Ctxt = PLACEHOLDER
 

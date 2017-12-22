@@ -450,14 +450,14 @@ enum GcFlags {
 };
 
 struct HeaderLayout {
-    unsigned char flags;  // See above
-    unsigned char age;    // The number of scavenges the object has survived.
-    unsigned short size;  // The total size (in bytes) of the object.
+    uint8_t flags;  // See above
+    uint8_t age;    // The number of scavenges the object has survived.
+    uint16_t size;  // The total size (in bytes) of the object.
 };
 
 union HeaderBits {
     HeaderLayout fields;
-    unsigned int all;
+    uint32_t all;
 
     HeaderBits(HeaderBits&);
     HeaderBits(int);

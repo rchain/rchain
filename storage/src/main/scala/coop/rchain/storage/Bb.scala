@@ -45,6 +45,6 @@ object Bb {
     // https://worldmodscode.wordpress.com/2012/12/14/the-java-bytebuffer-a-crash-course/
     val bytes: Array[Byte] = new Array[Byte](bb.remaining)
     bb.duplicate.get(bytes)
-    return new String(bytes)
+    new String(bytes)
   }
 }

@@ -91,7 +91,13 @@ void RBLstring::printOn(FILE* f) {
     char* str = (char*)&byte(0);
     char c;
     fputc('\"', f);
-    while (c = *str++) {
+
+    do {
+        c = *str++;
+        if ('\0' == c) {    // End of the string
+            break;
+        }
+
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
@@ -122,7 +128,8 @@ void RBLstring::printOn(FILE* f) {
                 break;
             }
         }
-    }
+    } while (true);
+    
     fputc('\"', f);
 }
 

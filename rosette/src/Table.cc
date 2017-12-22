@@ -232,7 +232,7 @@ RblTable::Entry* RblTable::hashLookup(pOb key) {
 void RblTable::linearAdd(pOb key, pOb val) {
     for (int i = 0; i < numberOfEntries; i++) {
         Entry* p = &entry(i);
-        if ((*hitFn)(p->key, key))
+        if ((*hitFn)(p->key, key)) {
             if (val == ABSENT) {
                 /*
                  * Delete this entry by compacting the table.  This
@@ -251,6 +251,7 @@ void RblTable::linearAdd(pOb key, pOb val) {
                 tbl->checkStore(p->val = val);
                 return;
             }
+        }
     }
 
     if (val == ABSENT)

@@ -9,14 +9,14 @@ import com.google.protobuf.any.{Any => AnyProto}
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
 
-trait ProtocolDispatcher {
+trait ProtocolDispatcher[A] {
 
   /**
     * Handle an incoming message. This function is intended to thread
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch(msg: ProtocolMessage): Unit
+  def dispatch(extra: A, msg: ProtocolMessage): Unit
 }
 
 /**
