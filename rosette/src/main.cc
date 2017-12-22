@@ -54,8 +54,9 @@ static int _ForceLoadFlag_ = 0;
 int main(int argc, char** argv, char** envp) {
     char buf[BUFSIZ];
     setbuf(stdin, buf);
-    if (!BigBang(argc, argv, envp))
+    if (!BigBang(argc, argv, envp)) {
         vm->reset();
+    }
     vm->execute();
     if (_ForceLoadFlag_) {
         configuration_force_load();
