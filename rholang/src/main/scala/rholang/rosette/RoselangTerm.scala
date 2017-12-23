@@ -27,7 +27,7 @@ trait RosetteSerialization[Namespace, VarType, TagType] {
 }
 
 case class StrTermPtdCtxtLf(override val tag: TagOrVar[String, String])
-  extends TermCtxtLeaf[String, String, String](tag) with Factual with RosetteSerialization[String, String, String] {
+  extends TermCtxtLeaf[String, String, String](tag) with RosetteSerialization[String, String, String] {
   override def rosetteSerialize: String = {
     tag match {
       case Tag(t) => "" + t
@@ -37,8 +37,8 @@ case class StrTermPtdCtxtLf(override val tag: TagOrVar[String, String])
 }
 
 case class StrTermPtdCtxtBr(override val nameSpace: String,
-                            override val labels: List[TermCtxt[String, String, String] with Factual with RosetteSerialization[String, String, String]]
-                           ) extends TermCtxtBranch[String, String, String](nameSpace, labels) with Factual with RosetteSerialization[String, String, String] {
+                            override val labels: List[TermCtxt[String, String, String] with RosetteSerialization[String, String, String]]
+                           ) extends TermCtxtBranch[String, String, String](nameSpace, labels) with RosetteSerialization[String, String, String] {
   override def rosetteSerializeOperation: String = {
     val result = labels match {
       case (albl: StrTermPtdCtxtBr) :: rlbls => {
@@ -77,7 +77,7 @@ case class StrTermPtdCtxtBr(override val nameSpace: String,
           var acc = ""
 
 
-          def serializeExpr(lbl: TermCtxt[String, String, String] with Factual with RosetteSerialization[String, String, String], i: Int) = {
+          def serializeExpr(lbl: TermCtxt[String, String, String] with RosetteSerialization[String, String, String], i: Int) = {
             if (i == 0) {
               acc = lbl.rosetteSerialize
             } else {
