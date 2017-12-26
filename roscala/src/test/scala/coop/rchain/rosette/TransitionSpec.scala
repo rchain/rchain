@@ -2,14 +2,14 @@ package coop.rchain.rosette
 
 import coop.rchain.rosette
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.expr.{LetExpr, TupleExpr}
+import coop.rchain.rosette.expr.{LetExpr, RequestExpr, TupleExpr}
 import org.scalatest._
 
 /**
   * NOTE that in Roscala we are using one-byte offset for every opcode,
   * so PC will change per unit for every opcode
   *
- */
+  */
 class TransitionSpec extends FlatSpec with Matchers {
   val testCtxt = Ctxt(
     tag = LocationGT(Location.LTCtxtRegister(0)),
@@ -305,5 +305,39 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt should (be(Fixnum(3)) or be(Fixnum(7)))
+  }
+
+  "Executing bytecode from expression \"(+ 1.2 2.3)\"" should "result in RoFloat(3.5)" in {
+
+    /**
+      * litvec:
+      &   0:   {RequestExpr}
+      &   1:   1.1
+      &   2:   2.2
+      & odevec:
+      &   0:   alloc 2
+      &   1:   liti 1,arg[0]
+      &   2:   liti 2,arg[1]
+      &   3:   xfer global[+],trgt
+      &   5:   xmit/nxt 2
+      */
+
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .update(_ >> 'code >> 'litvec)(_ =>
+          Tuple(Seq(RequestExpr, RoFloat(1.2), RoFloat(2.3))))
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpIndLitToArg(arg = 0, lit = 1),
+      OpIndLitToArg(arg = 1, lit = 2),
+      OpXferGlobalToReg(reg = 1, global = 668),
+      OpXmit(unwind = false, next = true, nargs = 2)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe RoFloat(3.5)
   }
 }

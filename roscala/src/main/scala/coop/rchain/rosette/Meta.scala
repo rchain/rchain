@@ -15,6 +15,7 @@ object Meta {
         result.left.flatMap {
           // TODO:
           // BASE(BASE(client)->parent())->lookup(key, ctxt)
+          case Absent if client.isInstanceOf[RoFloat] => Right(prim.Prims(197))
           case Absent => Right(prim.Prims(226))
         }
       }
