@@ -68,7 +68,6 @@ extern "C" {
 #endif
 
 #include <stdio.h>
-#include <varargs.h>
 #include <memory.h>
 #include <osfcn.h>
 

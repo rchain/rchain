@@ -34,11 +34,11 @@ static const char* rcsid =
 #endif
 
 #include "rosette.h"
+#include "Prim.h"
 #include "Reader.h"
 #include "Vm.h"
 #include <ctype.h>
 #include <stdio.h>
-
 
 extern int BigBang(int, char**, char**);
 extern void BigCrunch();
@@ -52,39 +52,39 @@ extern "C" void configuration_force_load();
 static int _ForceLoadFlag_ = 0;
 
 int main(int argc, char** argv, char** envp) {
-    char buf[BUFSIZ];
-    setbuf(stdin, buf);
-    if (!BigBang(argc, argv, envp))
+
+    if (!BigBang(argc, argv, envp)) {
         vm->reset();
+    }
+
     vm->execute();
+
     if (_ForceLoadFlag_) {
         configuration_force_load();
     }
 
     while (!feof(stdin)) {
+        const char* prompt = "rosette> ";
         /*
          * Turn off any async handling that might have been left on by a
          * crash-and-burn at the higher levels.
          */
-
-        if (asyncHelper(fileno(stdin), 0))
-            suicide("%s\nI'm too confused to continue", sys_errmsg());
-
-        printf("kernel> ");
         heap->gc();
         StdinReader->resetState();
+
+        printf(prompt);
         Ob* x = StdinReader->readExpr();
 
-        if (x == RBLEOF)
+        if (x == RBLEOF) {
             break;
+        }
 
         clearerr(stdin);
         vm->evaluate(x);
     }
 
     putchar('\n');
-
     BigCrunch();
-
     exit(0);
 }
+
