@@ -35,6 +35,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 include_directories("${PROJECT_SOURCE_DIR}/h")
 include_directories("${PROJECT_SOURCE_DIR}/h/sys")
 add_subdirectory (src)
+add_subdirectory (rbl/rosette)
 
 include_directories("${PROJECT_BINARY_DIR}")
 
