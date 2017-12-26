@@ -40,6 +40,7 @@ extern int TenuringAge;
 extern int ParanoidAboutGC;
 extern char BootDirectory[];
 extern char BootFile[];
+extern char RunFile[];
 extern int RestoringImage;
 extern char* DefaultBootDirectory;
 

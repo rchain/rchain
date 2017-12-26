@@ -35,15 +35,9 @@ extends Tree[TagType] with SeqProxy[Term[Namespace,TagType]]
   def self : List[Term[Namespace,TagType]]
 }
 
-trait OntologicalStatus
-trait Factual extends OntologicalStatus
-trait Hypothetical extends OntologicalStatus
-trait Theoretical extends OntologicalStatus
-
 class TermLeaf[Namespace,TagType]( val tag : TagType )
 extends TreeItem[TagType]( tag )
-with Term[Namespace,TagType]
-with Factual {
+with Term[Namespace,TagType] {
   override def self = List( this )
 }
 
@@ -64,11 +58,10 @@ extends Term[Namespace,TagType] {
 
 class TermBranch[Namespace,TagType](
   override val nameSpace : Namespace,
-  val factuals : List[Term[Namespace,TagType] with Factual]
+  val factuals : List[Term[Namespace,TagType]]
 ) extends TreeSection[TagType]( factuals )
 with AbstractTermBranch[Namespace,TagType]
-with Term[Namespace,TagType]
-with Factual {
+with Term[Namespace,TagType] {
   override def labels : List[Term[Namespace,TagType]] = {
     factuals
   }
@@ -123,8 +116,7 @@ extends Term[NamespaceOrVar[Namespace,VarType],TagOrVar[TagType,VarType]] {
 
 class TermCtxtLeaf[Namespace,VarType,TagType]( val tag : TagOrVar[TagType,VarType] )
 extends TreeItem[TagOrVar[TagType,VarType]]( tag )
-with TermCtxt[Namespace,VarType,TagType]
-with Factual {
+with TermCtxt[Namespace,VarType,TagType] {
   override def self = List( this )
   override def toString = {
     tag match {
@@ -190,10 +182,9 @@ extends TermCtxt[Namespace,VarType,TagType] {
 
 class TermCtxtBranch[Namespace,VarType,TagType](
   override val nameSpace : Namespace,
-  val factuals : List[TermCtxt[Namespace,VarType,TagType] with Factual]
+  val factuals : List[TermCtxt[Namespace,VarType,TagType]]
 ) extends TreeSection[TagOrVar[TagType,VarType]]( factuals )
-with AbstractTermCtxtBranch[Namespace,VarType,TagType]
-with Factual {
+with AbstractTermCtxtBranch[Namespace,VarType,TagType] {
   override def labels : List[TermCtxt[Namespace,VarType,TagType]] = {
     factuals
   }
@@ -222,7 +213,7 @@ object TermCtxtBranch extends Serializable {
   ) : Option[
 	(
 	  Namespace,
-	  List[TermCtxt[Namespace,VarType,TagType] with Factual]
+	  List[TermCtxt[Namespace,VarType,TagType]]
 	)
       ] = {
     Some( ( cnxnCtxtBranch.nameSpace, cnxnCtxtBranch.factuals
@@ -232,7 +223,7 @@ object TermCtxtBranch extends Serializable {
 
 trait TermCtxtInjector[Namespace,VarType,TagType] {
   def injectLabel( cLabel : Term[Namespace,TagType] )
-  : TermCtxt[Namespace,VarType,TagType] with Factual = {
+  : TermCtxt[Namespace,VarType,TagType] = {
     cLabel match {
       case cLeaf : TermLeaf[Namespace,TagType] =>
 	inject( cLeaf )
@@ -241,11 +232,11 @@ trait TermCtxtInjector[Namespace,VarType,TagType] {
     }
   }
   def inject( cLabel : TermLeaf[Namespace,TagType] )
-  : TermCtxt[Namespace,VarType,TagType] with Factual = {
+  : TermCtxt[Namespace,VarType,TagType] = {
     new TermCtxtLeaf( Tag( cLabel.tag ) )
   }
   def inject( cLabel : TermBranch[Namespace,TagType] )
-  : TermCtxt[Namespace,VarType,TagType] with Factual = {
+  : TermCtxt[Namespace,VarType,TagType] = {
     new TermCtxtBranch(
       cLabel.nameSpace,
       cLabel.factuals.map( injectLabel( _ ) )

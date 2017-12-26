@@ -52,7 +52,6 @@ extern "C" void configuration_force_load();
 static int _ForceLoadFlag_ = 0;
 
 int main(int argc, char** argv, char** envp) {
-
     if (!BigBang(argc, argv, envp)) {
         vm->reset();
     }

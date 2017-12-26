@@ -29,6 +29,7 @@
 #include "rosette.h"
 
 #include <stdarg.h>
+#include <errno.h>
 
 #include <unistd.h>
 #include <sys/param.h>
@@ -493,6 +494,21 @@ static void LoadBootFiles() {
         vm->load(expr);
 }
 
+static void LoadRunFile() {
+    if (strcmp(RunFile, "") != 0) {
+        FILE *run = fopen(RunFile, "r");
+        if (run) {
+            Reader* reader = Reader::create(run);
+            PROTECT(reader);
+
+            Ob* expr = INVALID;
+            while ((expr = reader->readExpr()) != RBLEOF)
+                vm->load(expr);
+        } else {
+            suicide("Unable to open RunFile \"%s\": %s", RunFile, strerror(errno));
+        }
+    }
+}
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
@@ -579,6 +595,7 @@ int BigBang(int argc, char** argv, char** envp) {
         Define("argv", GetArgv(argc, argv));
         Define("envp", GetEnvp(envp));
         LoadBootFiles();
+        LoadRunFile();
 
         heap->tenureEverything();
     }
