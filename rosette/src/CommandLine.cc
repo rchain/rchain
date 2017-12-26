@@ -44,6 +44,7 @@ int ParanoidAboutGC = 0;
 char* DefaultBootDirectory = DEFAULT;
 char BootDirectory[MAXPATHLEN] = DEFAULT;
 char BootFile[MAXPATHLEN] = "";
+char RunFile[MAXPATHLEN] = "";
 
 /*
  * RestoringImage is set to 0 in the initial boot-rosette image, but it
@@ -58,7 +59,7 @@ int RestoringImage = 0;
 void usage(const char* name) {
     suicide(
         "Usage: %s [-t num] [-p [num]] [-is num] [-ss num] [-os num] [-boot "
-        "filename]",
+        "filename] [-run filename]",
         name);
 }
 
@@ -158,6 +159,17 @@ int ParseCommandLine(int argc, char** argv) {
                 strcpy(BootFile, argv[i + 1]);
             else
                 usage(cmd_name);
+            DeleteArgs(i, argc, argv, 2);
+            argc -= 2;
+            continue;
+        }
+
+        if (strcmp(argv[i], "-run") == 0) {
+            if (i + 1 < argc) {
+                strcpy(RunFile, argv[i + 1]);
+            } else {
+                usage(cmd_name);
+            }
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;
