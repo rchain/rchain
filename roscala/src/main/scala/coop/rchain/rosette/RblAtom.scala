@@ -16,3 +16,16 @@ case class Fixnum(value: Int, override val slot: Seq[Ob] = Seq(StdMeta()))
 
   def /(that: Fixnum) = Fixnum(this.value / that.value)
 }
+
+case class RblFloat(value: Double, override val slot: Seq[Ob] = Seq(StdMeta()))
+    extends RblAtom {
+  override def toString: String = s"Float($value)"
+
+  def +(that: RblFloat) = RblFloat(this.value + that.value)
+
+  def -(that: RblFloat) = RblFloat(this.value - that.value)
+
+  def *(that: RblFloat) = RblFloat(this.value * that.value)
+
+  def /(that: RblFloat) = RblFloat(this.value / that.value)
+}
