@@ -450,5 +450,5 @@ object Number {
       Right(m >>> n)
     }
   }
-
+  
 }
