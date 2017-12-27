@@ -46,4 +46,3 @@
 (load 'primitives 'silent)
 
 (load 'tests/README 'silent)
-(load 'tests/README 'silent)
