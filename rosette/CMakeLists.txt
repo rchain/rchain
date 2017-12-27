@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.5.2 FATAL_ERROR)
+cmake_minimum_required (VERSION 3.5.1 FATAL_ERROR)
 project (rosette CXX)
 set (rosette_VERSION_MAJOR 1)
 set (rosette_VERSION_MINOR 0)
