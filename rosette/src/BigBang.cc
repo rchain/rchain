@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 
 #include <stdarg.h>
@@ -36,16 +26,6 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <fcntl.h>
-
-#ifndef __GNUG__
-#ifndef SYSV4
-#include <osfcn.h>
-#endif
-#endif
-
-#ifdef SYSV4
-#include <stropts.h>
-#endif
 
 #include "RblAtom.h"
 #include "CommandLine.h"
@@ -73,9 +53,7 @@
 #include "ModuleInit.h"
 
 
-extern "C" {
 int access(const char*, int);
-}
 
 convertArgReturnPair cnvArgRetPair;
 
