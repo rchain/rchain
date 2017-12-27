@@ -10,8 +10,11 @@ The `comm` subproject contains code for network related operations for RChain.
 
 The network layer is the lowest level component in the architecture and it
 is featured in our **Node.Hello (v0.1) release**. The simplest way to get
-started is with docker: `docker run -ti rchain/rchain-comm`. For other options,
-see `README.md` under `comm`.
+started is with [docker][]: `docker run -ti rchain/rchain-comm`. For other options,
+see [comm/README.md][cr].
+
+[docker]: https://store.docker.com/community/images/rchain/rchain-comm
+[cr]: https://github.com/rchain/rchain/tree/master/comm
 
 ### Rholang
 
