@@ -311,23 +311,22 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     /**
       * litvec:
-      &   0:   {RequestExpr}
-      &   1:   1.1
-      &   2:   2.2
-      & odevec:
-      &   0:   alloc 2
-      &   1:   liti 1,arg[0]
-      &   2:   liti 2,arg[1]
-      &   3:   xfer global[+],trgt
-      &   5:   xmit/nxt 2
+      *   0:   {RequestExpr}
+      *   1:   1.1
+      *   2:   2.2
+      * codevec:
+      *   0:   alloc 2
+      *   1:   liti 1,arg[0]
+      *   2:   liti 2,arg[1]
+      *   3:   xfer global[+],trgt
+      *   5:   xmit/nxt 2
       */
-
     val start =
       testState
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
         .set(_ >> 'globalEnv)(TblObject(globalEnv))
         .update(_ >> 'code >> 'litvec)(_ =>
-          Tuple(Seq(RequestExpr, RoFloat(1.2), RoFloat(2.3))))
+          Tuple(Seq(RequestExpr, RblFloat(1.2), RblFloat(2.3))))
 
     val codevec = Seq(
       OpAlloc(2),
@@ -338,6 +337,6 @@ class TransitionSpec extends FlatSpec with Matchers {
     )
 
     val end = VirtualMachine.executeSeq(codevec, start)
-    end.ctxt.ctxt.rslt shouldBe RoFloat(3.5)
+    end.ctxt.ctxt.rslt shouldBe RblFloat(3.5)
   }
 }

@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
-import coop.rchain.rosette.{Ctxt, Fixnum, RoFloat}
+import coop.rchain.rosette.{Ctxt, Fixnum, RblFloat}
 import coop.rchain.rosette.prim.Prim._
 
 object Number {
@@ -101,13 +101,13 @@ object Number {
     override val minArgs: Int = 0
     override val maxArgs: Int = MaxArgs
 
-    @checkTypeMismatch[RoFloat]
+    @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RoFloat] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(RoFloat(0)) {
-        case (accum, float: RoFloat) => accum + float
+      Right(ctxt.argvec.elem.take(n).foldLeft(RblFloat(0)) {
+        case (accum, float: RblFloat) => accum + float
       })
     }
   }
