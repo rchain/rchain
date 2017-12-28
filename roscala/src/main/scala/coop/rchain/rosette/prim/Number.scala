@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
-import coop.rchain.rosette.{Ctxt, Fixnum, RblFloat, RblBool}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, RblFloat}
 import coop.rchain.rosette.prim.Prim._
 
 object Number {
@@ -101,13 +101,18 @@ object Number {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
-      Right(m < n)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+      checkFixnum(0, ctxt.argvec.elem) match {
+        case Left(m) => Left(m)
+
+        case Right(m) => {
+          checkFixnum(1, ctxt.argvec.elem) match {
+            case Left(_) => Right(RblBool(false))
+            case Right(n) => Right(m < n)
+          }
+        }
+      }
   }
 
   object fxLe extends Prim {
@@ -115,13 +120,18 @@ object Number {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
-      Right(m <= n)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+      checkFixnum(0, ctxt.argvec.elem) match {
+        case Left(m) => Left(m)
+
+        case Right(m) => {
+          checkFixnum(1, ctxt.argvec.elem) match {
+            case Left(_) => Right(RblBool(false))
+            case Right(n) => Right(m <= n)
+          }
+        }
+      }
   }
 
   object fxGt extends Prim {
@@ -129,13 +139,18 @@ object Number {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
-      Right(m > n)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+      checkFixnum(0, ctxt.argvec.elem) match {
+        case Left(m) => Left(m)
+
+        case Right(m) => {
+          checkFixnum(1, ctxt.argvec.elem) match {
+            case Left(_) => Right(RblBool(false))
+            case Right(n) => Right(m > n)
+          }
+        }
+      }
   }
 
   object fxGe extends Prim {
@@ -143,13 +158,18 @@ object Number {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
-      Right(m >= n)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+      checkFixnum(0, ctxt.argvec.elem) match {
+        case Left(m) => Left(m)
+
+        case Right(m) => {
+          checkFixnum(1, ctxt.argvec.elem) match {
+            case Left(_) => Right(RblBool(false))
+            case Right(n) => Right(m >= n)
+          }
+        }
+      }
   }
 
   object fxEq extends Prim {
@@ -157,13 +177,18 @@ object Number {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
-      Right(m == n)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+      checkFixnum(0, ctxt.argvec.elem) match {
+        case Left(m) => Left(m)
+
+        case Right(m) => {
+          checkFixnum(1, ctxt.argvec.elem) match {
+            case Left(_) => Right(RblBool(false))
+            case Right(n) => Right(m == n)
+          }
+        }
+      }
   }
 
   object fxNe extends Prim {
@@ -171,13 +196,18 @@ object Number {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
-      Right(m != n)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+      checkFixnum(0, ctxt.argvec.elem) match {
+        case Left(m) => Left(m)
+
+        case Right(m) => {
+          checkFixnum(1, ctxt.argvec.elem) match {
+            case Left(_) => Right(RblBool(false))
+            case Right(n) => Right(m != n)
+          }
+        }
+      }
   }
 
   object fxMin extends Prim {
@@ -208,8 +238,8 @@ object Number {
       val n = ctxt.nargs
 
       Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(Int.MinValue)) {
-        case (minVal, fixnum: Fixnum) =>
-          if (minVal.value > fixnum.value) minVal else fixnum
+        case (maxVal, fixnum: Fixnum) =>
+          if (maxVal.value > fixnum.value) maxVal else fixnum
       })
     }
   }
@@ -255,16 +285,20 @@ object Number {
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
-      val n = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
-      if (n <= 0)
-        return Left(ArithmeticError)
-      try {
-        val logn = Math.log(n.toDouble)
-        val log2 = Math.log(2.0)
-        Right(Fixnum(Math.ceil(logn / log2).toInt))
-      } catch {
-        case e: ArithmeticException =>
-          Left(ArithmeticError)
+      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
+
+      if (m <= 0) {
+        Left(ArithmeticError)
+      } else {
+        try {
+          val logn = Math.log(m.toDouble)
+          val log2 = Math.log(2.0)
+
+          Right(Fixnum(Math.ceil(logn / log2).toInt))
+        } catch {
+          case e: ArithmeticException =>
+            Left(ArithmeticError)
+        }
       }
     }
   }
@@ -277,17 +311,20 @@ object Number {
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
-      val n = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
-      if (n <= 0) {
-        return Left(ArithmeticError)
-      }
-      try {
-        val logn = Math.log(n.toDouble)
-        val log2 = Math.log(2.0)
-        Right(Fixnum(Math.floor(logn / log2).toInt))
-      } catch {
-        case e: ArithmeticException =>
-          Left(ArithmeticError)
+      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
+
+      if (m <= 0) {
+        Left(ArithmeticError)
+      } else {
+        try {
+          val logn = Math.log(m.toDouble)
+          val log2 = Math.log(2.0)
+
+          Right(Fixnum(Math.floor(logn / log2).toInt))
+        } catch {
+          case e: ArithmeticException =>
+            Left(ArithmeticError)
+        }
       }
     }
   }
@@ -301,6 +338,7 @@ object Number {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
+
       Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(~0)) {
         case (accum, fixnum: Fixnum) => accum & fixnum
       })
@@ -316,6 +354,7 @@ object Number {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
+
       Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
         case (accum, fixnum: Fixnum) => accum | fixnum
       })
@@ -331,6 +370,7 @@ object Number {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
+
       Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
         case (accum, fixnum: Fixnum) => accum ^ fixnum
       })
@@ -345,8 +385,9 @@ object Number {
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
-      val n = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
-      Right(Fixnum(~n.value))
+      val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
+
+      Right(Fixnum(~m.value))
     }
   }
 
@@ -363,6 +404,7 @@ object Number {
       val commonBits = ctxt.argvec.elem.take(n).foldLeft(Fixnum(~0)) {
         case (accum, fixnum: Fixnum) => accum & fixnum
       }
+
       if (commonBits.value != 0) {
         Right(Fixnum(1))
       } else {
@@ -432,7 +474,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
-      Right(m <<< n)
+      Right(m << n)
     }
   }
 
@@ -466,4 +508,11 @@ object Number {
       })
     }
   }
+
+  private def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
+    if (!elem(n).isInstanceOf[Fixnum]) {
+      Left(TypeMismatch(n, Fixnum.getClass().getName()))
+    } else {
+      Right(elem(n).asInstanceOf[Fixnum])
+    }
 }

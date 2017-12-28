@@ -75,6 +75,9 @@ class PrimSpec extends FlatSpec with Matchers {
   "fxLt" should "correctly return whether former smaller than latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Fixnum(5))))
     fxLt.fn(newCtxt) should be(Right(RblBool(true)))
+
+    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
+    fxLt.fn(newCtxt2) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-fixnum arguments" in {
@@ -85,6 +88,9 @@ class PrimSpec extends FlatSpec with Matchers {
   "fxLe" should "correctly return whether former smaller than or equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Fixnum(2))))
     fxLe.fn(newCtxt) should be(Right(RblBool(true)))
+
+    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
+    fxLe.fn(newCtxt2) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-fixnum arguments" in {
@@ -95,6 +101,9 @@ class PrimSpec extends FlatSpec with Matchers {
   "fxGt" should "correctly return whether former greater than latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(5)), Tuple(Fixnum(2))))
     fxGt.fn(newCtxt) should be(Right(RblBool(true)))
+
+    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
+    fxGt.fn(newCtxt2) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-fixnum arguments" in {
@@ -105,6 +114,9 @@ class PrimSpec extends FlatSpec with Matchers {
   "fxGe" should "correctly return whether former greater than or equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(5)), Tuple(Fixnum(5))))
     fxGe.fn(newCtxt) should be(Right(RblBool(true)))
+
+    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
+    fxGe.fn(newCtxt2) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-fixnum arguments" in {
@@ -115,6 +127,9 @@ class PrimSpec extends FlatSpec with Matchers {
   "fxEq" should "correctly return whether former equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(5)), Tuple(Fixnum(5))))
     fxEq.fn(newCtxt) should be(Right(RblBool(true)))
+
+    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
+    fxEq.fn(newCtxt2) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-fixnum arguments" in {
@@ -125,6 +140,9 @@ class PrimSpec extends FlatSpec with Matchers {
   "fxNe" should "correctly return whether former is not equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(5)), Tuple(Fixnum(5))))
     fxNe.fn(newCtxt) should be(Right(RblBool(false)))
+
+    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
+    fxNe.fn(newCtxt2) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-fixnum arguments" in {
