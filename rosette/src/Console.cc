@@ -33,6 +33,7 @@
 #ifndef NO_SYSENT_H
 #include <sysent.h>
 #endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -40,16 +41,14 @@
 #include <errno.h>
 #include <osfcn.h>
 
-#ifdef HPUX
+#include <sys/socket.h>
 #include <unistd.h>
-#endif
 
 #ifdef MIPS_SGI_SYSV
 #include <sys/param.h>
 #include <sys/types.h>
 #endif
 
-#include <sys/socket.h>
 
 #ifdef MIPS_SGI_SYSV
 #include <unistd.h>
@@ -62,10 +61,6 @@ int setpgrp();
 int setsid();
 }
 #endif
-
-extern int errno;
-extern int sys_nerr;
-extern char* sys_errlist[];
 
 #define OK 0
 #define NOTOK (-1)

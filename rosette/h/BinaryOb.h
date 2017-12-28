@@ -41,21 +41,20 @@
  */
 
 class BinaryOb : public Ob {
+
    protected:
-    BinaryOb(int, pOb, pOb);
-    BinaryOb(InPlace_Constructor*, pOb, pOb);
+    BinaryOb(int sz, pOb meta, pOb parent):
+        Ob(sz, meta, parent) {}
+
+    BinaryOb(InPlace_Constructor* ipc, pOb meta, pOb parent):
+        Ob(ipc, meta, parent) {}
+
 
    public:
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 };
-
-inline BinaryOb::BinaryOb(int sz, pOb meta, pOb parent)
-    : Ob(sz, meta, parent) {}
-
-inline BinaryOb::BinaryOb(InPlace_Constructor* ipc, pOb meta, pOb parent)
-    : Ob(ipc, meta, parent) {}
 
 
 class ByteVec : public BinaryOb {

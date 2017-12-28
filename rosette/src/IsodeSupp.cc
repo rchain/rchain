@@ -44,7 +44,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
-#include <varargs.h>
 #include <memory.h>
 #include <osfcn.h>
 #ifdef MIPS_SGI_SYSV

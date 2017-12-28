@@ -28,7 +28,10 @@
 #define OS "linux"
 #define LINUX
 
+#ifndef GCC27X
 #define GCC27X
+#endif
+
 #define NO_SYSENT_H
 
 #define DO_UNGETC
