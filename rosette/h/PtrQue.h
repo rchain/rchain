@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_PtrQue_h)
 #define _PtrQue_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "ResizeablePtrArray.h"
 
 class PtrQue : public ResizeablePtrArray {
@@ -53,21 +41,21 @@ class PtrQue : public ResizeablePtrArray {
 };
 
 
-inline void PtrQue::init() {
+void PtrQue::init() {
     head = array;
     limit = array + size;
 }
 
-inline int PtrQue::empty() { return head == array; }
+int PtrQue::empty() { return head == array; }
 
 
-inline void PtrQue::add(void* p) {
+void PtrQue::add(void* p) {
     if (head >= limit)
         resize();
     *head++ = p;
 }
 
 
-inline void PtrQue::del(int n) { head -= n; }
+void PtrQue::del(int n) { head -= n; }
 
 #endif

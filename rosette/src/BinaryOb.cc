@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "BinaryOb.h"
 
 #include "CommandLine.h"
@@ -43,7 +33,7 @@ void undersizedObError(EMPTY) {
 }
 
 
-inline static int min(int m, int n) { return m < n ? m : n; }
+static int min(int m, int n) { return m < n ? m : n; }
 
 
 BUILTIN_CLASS(ByteVec) {}
@@ -220,22 +210,28 @@ Ob* Word16Vec::subObject(int start, int n) {
 
 
 Word32Vec::Word32Vec(int n)
-    : BinaryOb(sizeof(Word32Vec) + n * sizeof(uint32_t), CLASS_META(Word32Vec),
-               CLASS_SBO(Word32Vec)) {
-    while (n--)
+    : BinaryOb(sizeof(Word32Vec) + n * sizeof(uint32_t),
+            CLASS_META(Word32Vec), CLASS_SBO(Word32Vec)) {
+
+    while (n--) {
         this->word(n) = 0;
+    }
+
     Word32Vec::updateCnt();
 }
 
 
 Word32Vec::Word32Vec(Word32Vec* old, int newsize)
-    : BinaryOb(sizeof(Word32Vec) + newsize * sizeof(uint32_t), old->meta(),
-               old->parent()) {
+    : BinaryOb(sizeof(Word32Vec) + newsize * sizeof(uint32_t),
+            old->meta(), old->parent()) {
+
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
            min(oldsize, newsize) * sizeof(uint32_t));
-    if (newsize > oldsize)
+
+    if (newsize > oldsize) {
         memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(uint32_t));
+    }
     Word32Vec::updateCnt();
 }
 
@@ -253,23 +249,29 @@ Word32Vec* Word32Vec::create(Word32Vec* old, int newsize) {
 
 
 void Word32Vec::reset(EMPTY) {
-    for (int i = numberOfWords(); i--;)
+    for (int i = numberOfWords(); i--;) {
         word(i) = 0;
+    }
 }
 
 
 uint32_t Word32Vec::sum(EMPTY) {
     uint32_t total = 0;
-    for (int i = numberOfWords(); i--;)
+    for (int i = numberOfWords(); i--;) {
         total += (uint32_t)word(i);
+    }
     return total;
 }
 
 
-Ob* Word32Vec::indexedSize(EMPTY) { return FIXNUM(numberOfWords()); }
+Ob* Word32Vec::indexedSize(EMPTY) {
+    return FIXNUM(numberOfWords());
+}
 
 
-Ob* Word32Vec::nth(int n) { return FIXNUM(word(n)); }
+Ob* Word32Vec::nth(int n) {
+    return FIXNUM(word(n));
+}
 
 
 Ob* Word32Vec::setNth(int n, Ob* v) {

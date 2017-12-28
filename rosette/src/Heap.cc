@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 #include "BinaryOb.h"
 #include "CommandLine.h"
@@ -209,16 +199,16 @@ class SpaceTrav {
 };
 
 
-inline SpaceTrav::SpaceTrav(Space* space) {
+SpaceTrav::SpaceTrav(Space* space) {
     sp = space;
     current = sp->base;
 }
-inline bool SpaceTrav::valid() { return current < sp->next; }
-inline Ob* SpaceTrav::get() { return (Ob*)current; }
-inline void SpaceTrav::advance() {
+bool SpaceTrav::valid() { return current < sp->next; }
+Ob* SpaceTrav::get() { return (Ob*)current; }
+void SpaceTrav::advance() {
     current = (char*)current + SIZE((Ob*)current);
 }
-inline SpaceTrav::operator void*() { return valid() ? this : NULL; }
+SpaceTrav::operator void*() { return valid() ? this : NULL; }
 
 
 Space::Space(void* b, unsigned sz) : base(b), limit((char*)b + sz) {
@@ -230,13 +220,13 @@ Space::Space(void* b, unsigned sz) : base(b), limit((char*)b + sz) {
 }
 
 
-inline void Space::reset() { next = base; }
+void Space::reset() { next = base; }
 
 
 int Space::size() { return ((char*)limit - (char*)base); }
 
 
-inline void Space::free(Ob* p) {
+void Space::free(Ob* p) {
     if (!FREED(p)) {
         SET_FLAG(HDR_FLAGS(p), f_freed);
         if (FOREIGN(p) && !FORWARDED(p))
@@ -245,7 +235,7 @@ inline void Space::free(Ob* p) {
 }
 
 
-inline void* Space::alloc(unsigned sz) {
+void* Space::alloc(unsigned sz) {
     register void* current = next;
     register void* temp = (char*)current + sz;
 
@@ -258,7 +248,7 @@ inline void* Space::alloc(unsigned sz) {
 }
 
 
-inline bool Space::contains(Ob* p) {
+bool Space::contains(Ob* p) {
     return (base <= (void*)p) && ((void*)p < limit);
 }
 
@@ -316,7 +306,7 @@ void RememberedSet::reallyRemember(Ob* p) {
 }
 
 
-inline void RememberedSet::remember(Ob* p) {
+void RememberedSet::remember(Ob* p) {
     if (!REMEMBERED(p))
         reallyRemember(p);
 }
@@ -364,7 +354,7 @@ NewSpace::NewSpace(unsigned isize, unsigned ssize)
 NewSpace::~NewSpace() { delete base; }
 
 
-inline void* NewSpace::alloc(unsigned sz) { return infants->alloc(sz); }
+void* NewSpace::alloc(unsigned sz) { return infants->alloc(sz); }
 
 
 void NewSpace::scavenge() {
@@ -454,7 +444,7 @@ void NewSpace::check() {
 }
 
 
-inline void NewSpace::remember(Ob* p) { rememberedSet->remember(p); }
+void NewSpace::remember(Ob* p) { rememberedSet->remember(p); }
 
 
 class OldSpaceChunk : public Space {
@@ -527,7 +517,7 @@ void OldSpaceChunk::checkUnrememberedPtrs() {
 }
 
 
-inline void OldSpaceChunk::free(Ob* p) {
+void OldSpaceChunk::free(Ob* p) {
     Space::free(p);
     parent->link(p);
 }
@@ -619,7 +609,7 @@ void OldSpace::link(Ob* p) {
 }
 
 
-inline Ob* OldSpace::unlink(Ob*& freelist) {
+Ob* OldSpace::unlink(Ob*& freelist) {
     Ob* p = freelist;
     freelist = p->forwardingAddress();
     REMOVE_FLAG(HDR_FLAGS(p), f_freed);
@@ -657,7 +647,7 @@ void* OldSpace::miscAlloc(unsigned sz) {
 }
 
 
-inline void OldSpace::free(Ob* p) { currentChunk->free(p); }
+void OldSpace::free(Ob* p) { currentChunk->free(p); }
 
 
 void OldSpace::resetFreeLists() {
@@ -874,7 +864,7 @@ static void catchMagic() {}
 static void* magicLoc = 0;
 
 
-inline void* Heap::alloc(unsigned sz) {
+void* Heap::alloc(unsigned sz) {
     void* loc = newSpace->alloc(sz);
 #ifdef DEBUG
     if (loc == magicLoc)
@@ -1140,6 +1130,7 @@ relocate:
     return FORWARDED(this) ? forwardingAddress() : heap->copyAndForward(this);
 }
 
+int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
 void* palloc(unsigned sz) {
     void* loc = heap->alloc(sz);

@@ -19,19 +19,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Ob_h)
 #define _RBL_Ob_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "rosette.h"
 #include <stddef.h>
@@ -42,8 +31,6 @@
 
 #define TWOS_COMPLEMENT
 
-/* #include <generic.h> */
-
 #if !defined(_STRING) || defined(MIPS_SGI_SYSV)
 #if defined(__STDC__) || defined(MIPS_SGI_SYSV)
 #define _STRING(name) #name
@@ -52,7 +39,7 @@
 #endif
 #endif
 
- #include <stdint.h>
+#include <stdint.h>
 
 #if !defined(HAS_BOOL)
 typedef int bool;
@@ -99,7 +86,7 @@ static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize - EscTagSize);
 #define ESCAPED(n) (((n) << TagSize) + OTesc)
 
 /* unused
-  #define UNESCAPED(n) (n>>TagSize) */
+#define UNESCAPED(n) (n>>TagSize) */
 
 enum ObTag {
     OTptr = 0,
@@ -351,33 +338,7 @@ union TagExtract {
     unsigned int locfields;
 };
 
-
-inline int TAG(pOb x) {
-    TagExtract te;
-    te.ptr = x;
-    return GET_TAGGED_TAG(te);
-}
-
-inline int ESCTAG(pOb x) {
-    TagExtract te;
-    te.ptr = x;
-    return GET_ESCTAGGED_TAG(te);
-}
-
 #define SIGN_EXTEND(a, n) ((((int)a) << (WordSize - (n))) >> (WordSize - (n)))
-
-inline int TAGVAL(pOb x) {
-    TagExtract te;
-    te.ptr = x;
-    return SIGN_EXTEND(GET_TAGGED_DATA(te), WordSize - TagSize);
-}
-
-inline int ESCVAL(pOb x) {
-    TagExtract te;
-    te.ptr = x;
-    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te), WordSize - EscTagSize);
-}
-
 
 #define PTR(ob) ((pOb)(ob))
 #define NPTR(ob) ((pOb)(ob))
@@ -393,12 +354,62 @@ inline int ESCVAL(pOb x) {
 #define IS_FIXNUM(ob) (TAG(ob) == OTfixnum)
 #define IS(t, ob) (t < OTesc ? (TAG(ob) == t) : (ESCTAG(ob) == t))
 
-
 extern pOb decodeAtom(pOb);
+int TAG(pOb x);
+int ESCTAG(pOb x);
+int TAGVAL(pOb x);
+int ESCVAL(pOb x);
 
+pOb BASE(pOb v);
 
-inline pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
+/*
+ * When assigning into a heap-allocated object, we must always check
+ * whether
+ *
+ * 	1) the container object is in old space, and (if so)
+ * 	2) the value being written is a pointer into new space.
+ *
+ * ASSIGN takes care of those checks and records the necessary
+ * information.  If there are to be consecutive assignments into fields
+ * of the same container, it is a better idea to use the CHECK_STORE/VAL
+ * macro combination, since it will generate less setup code.  It takes
+ * the form
+ *
+ * 	container->field1 = val1;
+ * 	...
+ * 	container->fieldN = valN;
+ * 	CHECK_STORE(container, (VAL(val1), ..., VAL(valN)));
+ *
+ * This is somewhat dangerous, however, in that you *must* guarantee that
+ * no scavenges can take place between the first assignment and the
+ * invocation of CHECK_STORE.
+ */
+#define ASSIGN(ptr, field, val) (ptr)->checkStore((ptr)->field = (val))
+#define CHECK_STORE(base, vals) \
+    if (IS_OLD(base)) {         \
+        pOb _base = base;       \
+        vals;                   \
+    }
+#define VAL(x) _base->reallyCheckStore(x)
 
+#define HDR_FLAGS(p) ((p)->header.fields.flags)
+
+#define FORWARDED(p) (GET_FLAG((p)->header.fields.flags, f_forwarded))
+#define REMEMBERED(p) (GET_FLAG((p)->header.fields.flags, f_remembered))
+#define MARKED(p) (GET_FLAG((p)->header.fields.flags, f_marked))
+#define FREED(p) (GET_FLAG((p)->header.fields.flags, f_freed))
+#define VISITED(p) (GET_FLAG((p)->header.fields.flags, f_visited))
+#define FOREIGN(p) (GET_FLAG((p)->header.fields.flags, f_foreign))
+#define AGE(p) ((p)->header.fields.age)
+#define SIZE(p) ((p)->header.fields.size)
+
+#define SLOT_NUM(type, field) \
+    ((int)((pOb*)&((type*)0)->field - (pOb*)&((type*)0)->_slot[2]))
+#ifndef offsetof
+#define offsetof(type, field) ((int)&((type*)0)->field)
+#endif
+
+#include "Heap.h"
 
 /*
  * The three useIfPtr routines are used to conditionally invoke member
@@ -459,16 +470,14 @@ union HeaderBits {
     HeaderLayout fields;
     uint32_t all;
 
-    HeaderBits(HeaderBits&);
-    HeaderBits(int);
+    HeaderBits(HeaderBits& hb) { all = hb.all; }
+
+    HeaderBits(int sz) {
+        all = 0;
+        fields.size = sz;
+    }
+
 };
-
-inline HeaderBits::HeaderBits(HeaderBits& hb) { all = hb.all; }
-
-inline HeaderBits::HeaderBits(int sz) {
-    all = 0;
-    fields.size = sz;
-}
 
 struct convertArgReturnPair {
     uint32_t val;
@@ -524,20 +533,19 @@ extern convertArgReturnPair cnvArgRetPair;
 
 
 class Base {
-   public:
-    static char** classNames;
-    static uint32_t* obCounts;
-    static int nClasses;
+    public:
+        static char** classNames;
+        static uint32_t* obCounts;
+        static int nClasses;
 
-    Base(EMPTY);
+        Base() {}
 
-    virtual char* typestring(EMPTY);
-    virtual void updateCnt(EMPTY);
-    static void defSlot(const char*, Location);
+        virtual char* typestring(EMPTY);
+        virtual void updateCnt(EMPTY);
+        static void defSlot(const char*, Location);
 };
 
 
-inline Base::Base(EMPTY) {}
 
 
 /*
@@ -559,286 +567,207 @@ struct InPlace_Constructor {
 
 
 class Ob : public Base {
-   protected:
-    static char stringbuf[256];
+    protected:
+        static char stringbuf[256];
 
-    Ob(int, pOb, pOb);
-    Ob(InPlace_Constructor*);
-    Ob(InPlace_Constructor*, int);
-    Ob(InPlace_Constructor*, pOb, pOb);
+        Ob(InPlace_Constructor*, int);
+        Ob(InPlace_Constructor*) : header(this->header) {}
 
-    friend class BuiltinClass;
-    friend class OldSpace;
+        Ob(InPlace_Constructor*, pOb meta, pOb parent)
+            : header(this->header) {
+                ASSIGN(this, meta(), meta);
+                ASSIGN(this, parent(), parent);
+            }
 
-   public:
-    HeaderBits header;
-    pOb _slot[2];
+        Ob(int sz, pOb meta, pOb parent) : header(sz) {
+            /*
+             * WARNING: sz must already be properly aligned.  The individual
+             * constructors, which are already responsible for requesting the
+             * allocator to give them a chunk of memory, must ensure that they
+             * only request chunks that are multiples of the alignment quantum.
+             */
 
-    /*
-     * The mandatory meta and parent fields are contained in _slot[0] and
-     * _slot[1], respectively.  We declare things as an array to
-     * guarantee contiguity, and to make things easier for the scavenging
-     * and gc routines that want to regard objects as simple vectors of
-     * object pointers.
-     */
+            this->meta() = meta;
+            this->parent() = parent;
+        }
 
-    virtual ~Ob(EMPTY);
+        friend class BuiltinClass;
+        friend class OldSpace;
 
-    void* operator new(size_t);
-    void* operator new(size_t, void*);
-    void operator delete(void*);
+    public:
+        HeaderBits header;
+        pOb _slot[2];
 
-    pOb& meta(EMPTY);
-    pOb& parent(EMPTY);
-    pOb& slot(int);
+        /*
+         * The mandatory meta and parent fields are contained in _slot[0] and
+         * _slot[1], respectively.  We declare things as an array to
+         * guarantee contiguity, and to make things easier for the scavenging
+         * and gc routines that want to regard objects as simple vectors of
+         * object pointers.
+         */
 
-    pOb* endp(EMPTY);
-    pOb& forwardingAddress(EMPTY);
-    void forwardTo(pOb);
-    bool checkStore(pOb);
-    bool reallyCheckStore(pOb);
-    int gcSensitive(EMPTY);
-    pOb relocate(EMPTY);
-    bool suspicious(EMPTY);
-    int numberOfSlots(EMPTY);
-    void clobberVtbl(pOb);
+        virtual ~Ob(EMPTY);
 
-    void notImplemented(char*);
+        void* operator new(size_t);
+        void* operator new(size_t, void* p) { return p; }
+        void operator delete(void*);
 
-    void mark(EMPTY);
-    void check(EMPTY);
-    void checkOb(EMPTY);
-    int size(EMPTY);
-    int obCount(EMPTY);
-    void unvisit(EMPTY);
+        pOb& meta(EMPTY) { return _slot[0]; }
+        pOb& parent(EMPTY) { return _slot[1]; }
+        pOb& slot(int n) { return _slot[n + 2]; }
 
-    virtual pOb self(EMPTY);
+        pOb* endp(EMPTY) { return (pOb*)((char*)this + SIZE(this)); }
+        pOb& forwardingAddress(EMPTY) { return _slot[0]; }
+        bool checkStore(pOb v) { return IS_OLD(this) && reallyCheckStore(v); }
+        int gcSensitive(EMPTY) { return IS_NEW(this); }
+        int numberOfSlots(EMPTY) { return (SIZE(this) - sizeof(Ob)) / sizeof(pOb); }
 
-    /* Garbage collector interface */
+        void forwardTo(pOb);
+        bool reallyCheckStore(pOb);
+        pOb relocate(EMPTY);
+        bool suspicious(EMPTY);
+        void clobberVtbl(pOb);
 
-    virtual int traversePtrs(PSOb__PSOb);
-    virtual int traversePtrs(SI__PSOb);
-    virtual void traversePtrs(V__PSOb);
-    virtual bool gcFixup(EMPTY);
-    virtual bool scavengeFixup(EMPTY);
+        void notImplemented(char*);
 
-    /* Generic runtime actions */
+        void mark(EMPTY);
+        void check(EMPTY);
+        void checkOb(EMPTY);
+        int size(EMPTY);
+        int obCount(EMPTY);
+        void unvisit(EMPTY);
 
-    virtual bool ConstantP(EMPTY);
-    virtual Prim* InlineablePrimP(EMPTY);
-    virtual void printOn(FILE*);
-    virtual void printQuotedOn(FILE*);
-    virtual void displayOn(FILE* s);
-    virtual pOb container(EMPTY);
-    virtual pOb mailbox(EMPTY);
-    virtual pOb setMailbox(pOb);
-    virtual pOb rcons(pOb);
-    virtual int addSlot(pOb, pOb);
-    virtual pOb dup(EMPTY);
-    virtual pOb clone(EMPTY);
-    virtual pOb cloneTo(pOb, pOb);
-    virtual pOb getLex(int, int, int);
-    virtual pOb setLex(int, int, int, pOb);
-    virtual pOb getAddr(int, int, int);
-    virtual pOb setAddr(int, int, int, pOb);
-    virtual pOb getField(int, int, int, int, int);
-    virtual pOb setField(int, int, int, int, uint32_t);
-    virtual pOb indexedSize(EMPTY);
-    virtual pOb nth(int);
-    virtual pOb setNth(int, pOb);
-    virtual pOb subObject(int, int);
-    virtual const char* asCstring(EMPTY);
-    virtual char* asPathname(EMPTY);
+        virtual pOb self(EMPTY);
 
-    /* Object actions */
+        /* Garbage collector interface */
 
-    virtual bool isSynchronousTrgt(EMPTY);
-    virtual pOb dispatch(pCtxt);
-    virtual pOb invoke(pCtxt);
-    virtual pOb lookup(pOb, pCtxt);
-    virtual pOb lookupAndInvoke(pCtxt);
-    virtual pOb nextMsg(MboxOb*, pOb);
-    virtual pOb updateNoArgs();
-    virtual pOb update(bool, pCtxt);
-    virtual pOb updateByLoc(bool, pCtxt);
-    virtual pOb primitiveInitialize(pCtxt);
-    virtual pOb receive(pCtxt);
-    virtual pOb receiveMsg(MboxOb*, pCtxt);
-    virtual pOb becomeNew(pOb, pCtxt);
-    virtual bool accepts(pCtxt);
-    virtual bool matches(pCtxt);
+        virtual int traversePtrs(PSOb__PSOb);
+        virtual int traversePtrs(SI__PSOb);
+        virtual void traversePtrs(V__PSOb);
+        virtual bool gcFixup(EMPTY);
+        virtual bool scavengeFixup(EMPTY);
 
-    virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
+        /* Generic runtime actions */
 
-    virtual pOb isNullP(EMPTY);
+        virtual bool ConstantP(EMPTY);
+        virtual Prim* InlineablePrimP(EMPTY);
+        virtual void printOn(FILE*);
+        virtual void printQuotedOn(FILE*);
+        virtual void displayOn(FILE* s);
+        virtual pOb container(EMPTY);
+        virtual pOb mailbox(EMPTY);
+        virtual pOb setMailbox(pOb);
+        virtual pOb rcons(pOb);
+        virtual int addSlot(pOb, pOb);
+        virtual pOb dup(EMPTY);
+        virtual pOb clone(EMPTY);
+        virtual pOb cloneTo(pOb, pOb);
+        virtual pOb getLex(int, int, int);
+        virtual pOb setLex(int, int, int, pOb);
+        virtual pOb getAddr(int, int, int);
+        virtual pOb setAddr(int, int, int, pOb);
+        virtual pOb getField(int, int, int, int, int);
+        virtual pOb setField(int, int, int, int, uint32_t);
+        virtual pOb indexedSize(EMPTY);
+        virtual pOb nth(int);
+        virtual pOb setNth(int, pOb);
+        virtual pOb subObject(int, int);
+        virtual const char* asCstring(EMPTY);
+        virtual char* asPathname(EMPTY);
 
-    /* Type system methods */
-    pOb typep(pOb);
-    virtual bool hasParentp(pOb);
-    virtual bool compositeCoversp(pOb);
-    virtual bool isCoveredByp(pOb);
-    virtual bool coversp(pOb);
-    virtual bool typeMatchesp(pOb);
-    virtual pOb typeLub(pOb);
+        /* Object actions */
 
-    /* Meta actions */
+        virtual bool isSynchronousTrgt(EMPTY);
+        virtual pOb dispatch(pCtxt);
+        virtual pOb invoke(pCtxt);
+        virtual pOb lookup(pOb, pCtxt);
+        virtual pOb lookupAndInvoke(pCtxt);
+        virtual pOb nextMsg(MboxOb*, pOb);
+        virtual pOb updateNoArgs();
+        virtual pOb update(bool, pCtxt);
+        virtual pOb updateByLoc(bool, pCtxt);
+        virtual pOb primitiveInitialize(pCtxt);
+        virtual pOb receive(pCtxt);
+        virtual pOb receiveMsg(MboxOb*, pCtxt);
+        virtual pOb becomeNew(pOb, pCtxt);
+        virtual bool accepts(pCtxt);
+        virtual bool matches(pCtxt);
 
-    virtual pTuple keys(pOb);
-    virtual pTuple locs(pOb);
-    virtual Location keyLoc(pOb, pOb = ABSENT);
-    virtual pTuple locContour(pOb);
-    virtual pTuple contour(pOb);
-    virtual pOb get(pOb, pOb, pCtxt);
-    virtual pOb add(pOb, pOb, pOb, pCtxt);
-    virtual pOb set(pOb, pOb, pOb, pCtxt);
-    virtual void addRef(EMPTY);
-    virtual void deleteRef(EMPTY);
-    virtual pOb lookupOBO(pOb, pOb, pCtxt);
+        virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
+        virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 
-    /* Table actions */
+        virtual pOb isNullP(EMPTY);
 
-    virtual pTuple dumpKeys(EMPTY);
-    virtual pTuple dumpPairs(EMPTY);
-    virtual int nPairs(EMPTY);
-    virtual pOb getKey(pOb);
-    virtual pOb addKey(pOb, pOb);
+        /* Type system methods */
+        pOb typep(pOb);
+        virtual bool hasParentp(pOb);
+        virtual bool compositeCoversp(pOb);
+        virtual bool isCoveredByp(pOb);
+        virtual bool coversp(pOb);
+        virtual bool typeMatchesp(pOb);
+        virtual pOb typeLub(pOb);
 
-    /* Compiler interface */
+        /* Meta actions */
 
-    virtual Pattern* makePattern(EMPTY);
-    virtual Template* makeTemplate(EMPTY);
-    virtual AttrNode* makeAttrNode(bool);
-    virtual pOb unquote(EMPTY);
-    virtual Code* compileWrt(pOb, pOb);
-    virtual Location lex(pOb, int);
-    virtual pOb extendWith(pOb);
-    virtual pOb extendWith(pOb, pTuple);
+        virtual pTuple keys(pOb);
+        virtual pTuple locs(pOb);
+        virtual Location keyLoc(pOb, pOb = ABSENT);
+        virtual pTuple locContour(pOb);
+        virtual pTuple contour(pOb);
+        virtual pOb get(pOb, pOb, pCtxt);
+        virtual pOb add(pOb, pOb, pOb, pCtxt);
+        virtual pOb set(pOb, pOb, pOb, pCtxt);
+        virtual void addRef(EMPTY);
+        virtual void deleteRef(EMPTY);
+        virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
-    /* error handlers */
+        /* Table actions */
 
-    virtual pOb runtimeError(pCtxt, const char*, ...);
-    virtual pOb mismatch(pCtxt, int, char*);
-    virtual pOb mismatch(pCtxt, int, int);
+        virtual pTuple dumpKeys(EMPTY);
+        virtual pTuple dumpPairs(EMPTY);
+        virtual int nPairs(EMPTY);
+        virtual pOb getKey(pOb);
+        virtual pOb addKey(pOb, pOb);
+
+        /* Compiler interface */
+
+        virtual Pattern* makePattern(EMPTY);
+        virtual Template* makeTemplate(EMPTY);
+        virtual AttrNode* makeAttrNode(bool);
+        virtual pOb unquote(EMPTY);
+        virtual Code* compileWrt(pOb, pOb);
+        virtual Location lex(pOb, int);
+        virtual pOb extendWith(pOb);
+        virtual pOb extendWith(pOb, pTuple);
+
+        /* error handlers */
+
+        virtual pOb runtimeError(pCtxt, const char*, ...);
+        virtual pOb mismatch(pCtxt, int, char*);
+        virtual pOb mismatch(pCtxt, int, int);
 };
-
-
-#include "Heap.h"
-
-#define HDR_FLAGS(p) ((p)->header.fields.flags)
-
-#define FORWARDED(p) (GET_FLAG((p)->header.fields.flags, f_forwarded))
-#define REMEMBERED(p) (GET_FLAG((p)->header.fields.flags, f_remembered))
-#define MARKED(p) (GET_FLAG((p)->header.fields.flags, f_marked))
-#define FREED(p) (GET_FLAG((p)->header.fields.flags, f_freed))
-#define VISITED(p) (GET_FLAG((p)->header.fields.flags, f_visited))
-#define FOREIGN(p) (GET_FLAG((p)->header.fields.flags, f_foreign))
-#define AGE(p) ((p)->header.fields.age)
-#define SIZE(p) ((p)->header.fields.size)
-
-#define SLOT_NUM(type, field) \
-    ((int)((pOb*)&((type*)0)->field - (pOb*)&((type*)0)->_slot[2]))
-#ifndef offsetof
-#define offsetof(type, field) ((int)&((type*)0)->field)
-#endif
-
-
-/*
- * When assigning into a heap-allocated object, we must always check
- * whether
- *
- * 	1) the container object is in old space, and (if so)
- * 	2) the value being written is a pointer into new space.
- *
- * ASSIGN takes care of those checks and records the necessary
- * information.  If there are to be consecutive assignments into fields
- * of the same container, it is a better idea to use the CHECK_STORE/VAL
- * macro combination, since it will generate less setup code.  It takes
- * the form
- *
- * 	container->field1 = val1;
- * 	...
- * 	container->fieldN = valN;
- * 	CHECK_STORE(container, (VAL(val1), ..., VAL(valN)));
- *
- * This is somewhat dangerous, however, in that you *must* guarantee that
- * no scavenges can take place between the first assignment and the
- * invocation of CHECK_STORE.
- */
-
-#define ASSIGN(ptr, field, val) (ptr)->checkStore((ptr)->field = (val))
-#define CHECK_STORE(base, vals) \
-    if (IS_OLD(base)) {         \
-        pOb _base = base;       \
-        vals;                   \
-    }
-#define VAL(x) _base->reallyCheckStore(x)
 
 
 static const int MinObSize = sizeof(Ob);
 
 
-inline void* Ob::operator new(size_t, void* p) { return p; }
-
-
-inline pOb& Ob::meta(EMPTY) { return _slot[0]; }
-inline pOb& Ob::parent(EMPTY) { return _slot[1]; }
-inline pOb& Ob::slot(int n) { return _slot[n + 2]; }
-inline pOb* Ob::endp(EMPTY) { return (pOb*)((char*)this + SIZE(this)); }
-inline pOb& Ob::forwardingAddress(EMPTY) { return _slot[0]; }
-inline bool Ob::checkStore(pOb v) {
-    return IS_OLD(this) && reallyCheckStore(v);
-}
-inline int Ob::gcSensitive(EMPTY) { return IS_NEW(this); }
-inline int Ob::numberOfSlots(EMPTY) {
-    return (SIZE(this) - sizeof(Ob)) / sizeof(pOb);
-}
-
-
-inline Ob::Ob(InPlace_Constructor*) : header(this->header) {}
-
-
-inline Ob::Ob(InPlace_Constructor*, pOb meta, pOb parent)
-    : header(this->header) {
-    ASSIGN(this, meta(), meta);
-    ASSIGN(this, parent(), parent);
-}
-
-inline Ob::Ob(int sz, pOb meta, pOb parent) : header(sz) {
-    /*
-     * WARNING: sz must already be properly aligned.  The individual
-     * constructors, which are already responsible for requesting the
-     * allocator to give them a chunk of memory, must ensure that they
-     * only request chunks that are multiples of the alignment quantum.
-     */
-
-    this->meta() = meta;
-    this->parent() = parent;
-}
-
-
 class MboxOb : public Ob {
-   protected:
-    MboxOb(int, pOb, pOb, pOb);
-    MboxOb(InPlace_Constructor*);
+    protected:
+        MboxOb(int sz, pOb meta, pOb parent, pOb mbox)
+            : Ob(sz, meta, parent) {
+                this->mbox = mbox;
+            }
 
-   public:
-    pOb mbox;
+        MboxOb(InPlace_Constructor* ipc) : Ob(ipc) {}
 
-    virtual pOb mailbox(EMPTY);
-    virtual pOb setMailbox(pOb);
-    virtual pOb receive(pCtxt);
-    virtual void schedule(pCtxt);
+    public:
+        pOb mbox;
+
+        virtual pOb mailbox(EMPTY);
+        virtual pOb setMailbox(pOb);
+        virtual pOb receive(pCtxt);
+        virtual void schedule(pCtxt);
 };
-
-
-inline MboxOb::MboxOb(int sz, pOb meta, pOb parent, pOb mbox)
-    : Ob(sz, meta, parent) {
-    this->mbox = mbox;
-}
-
-
-inline MboxOb::MboxOb(InPlace_Constructor* ipc) : Ob(ipc) {}
 
 
 class SlotDescriptor;
@@ -846,32 +775,34 @@ class SlotDescriptor;
 
 #define STD_DECLS(classname)             \
     friend class BuiltinClass;           \
-                                         \
-   public:                               \
-    virtual void updateCnt(EMPTY);       \
-    virtual char* typestring(EMPTY);     \
-    static pMeta name2(classname, Meta); \
-    static pSBO name2(classname, SBO);   \
-    static SlotDescriptor* _meta_fields
+\
+public:                               \
+virtual void updateCnt(EMPTY);       \
+virtual char* typestring(EMPTY);     \
+static pMeta name2(classname, Meta); \
+static pSBO name2(classname, SBO);   \
+static SlotDescriptor* _meta_fields
 
 
 #define CLASS_META(name) name2(name::name, Meta)
 #define CLASS_SBO(name) name2(name::name, SBO)
 
 
-inline pMeta META(pOb ob) { return (pMeta)ob->meta(); }
-inline pSBO SBO(pOb ob) { return (pSBO)ob->parent(); }
+pMeta META(pOb ob);
+pSBO SBO(pOb ob);
 
 
 class Actor : public MboxOb {
     STD_DECLS(Actor);
 
-   protected:
-    Actor(int, pOb, pOb, pOb, pExt);
-    Actor(InPlace_Constructor*);
+    protected:
     Actor(pOb, pOb, pExt);
+    Actor(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
+        : MboxOb(sz, meta, parent, mbox), extension(ext) {}
 
-   public:
+    Actor(InPlace_Constructor* ipc) : MboxOb(ipc) {}
+
+    public:
     pExt extension;
 
     static Actor* create(EMPTY);
@@ -892,16 +823,10 @@ class Actor : public MboxOb {
 };
 
 
-inline Actor::Actor(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
-    : MboxOb(sz, meta, parent, mbox), extension(ext) {}
-
-inline Actor::Actor(InPlace_Constructor* ipc) : MboxOb(ipc) {}
-
-
 class StdExtension : public Ob {
     STD_DECLS(StdExtension);
 
-   protected:
+    protected:
     StdExtension(pOb, pOb, int);
     StdExtension(pOb, pOb);
     StdExtension(int);
@@ -909,7 +834,7 @@ class StdExtension : public Ob {
 
     friend class Tuple;
 
-   public:
+    public:
     static StdExtension* create(pOb, pOb, int);
     static StdExtension* create(int);
     static StdExtension* create(pTuple);
@@ -919,34 +844,41 @@ class StdExtension : public Ob {
 class TblObject : public Actor {
     STD_DECLS(TblObject);
 
-   protected:
+    protected:
     TblObject(pExt, pOb, pTuple);
 
-   public:
+    public:
     pOb validExtent;
     pTuple keyVec;
 
     static TblObject* create(EMPTY);
 
     virtual int addSlot(pOb, pOb);
-    pOb entry(int);
+    pOb entry(int n) { return extension->slot(n); }
     pOb entryKey(int);
+
 };
 
 
-inline pOb TblObject::entry(int n) { return extension->slot(n); }
+static const int STDMETA_MAP_SLOT = 0;
+static const int STDMETA_REFCOUNT_SLOT = 1;
+static const int STDMETA_EXTENSIBLE_SLOT = 2;
+
+static const int BUILTIN_STDMETA_SLOTS = 3;
 
 
 class StdMeta : public Actor {
     STD_DECLS(StdMeta);
 
-   protected:
-    StdMeta(int, pOb, pOb, pOb, pExt);
-    StdMeta(InPlace_Constructor*);
+    protected:
     StdMeta(EMPTY);
     StdMeta(pExt);
+    StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
+        : Actor(sz, meta, parent, mbox, ext) {}
 
-   public:
+    StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
+
+    public:
     static StdMeta* create(EMPTY);
     static StdMeta* create(pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
 
@@ -964,31 +896,21 @@ class StdMeta : public Actor {
     virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
     void allocateMap(EMPTY);
-    pOb map(EMPTY);
-    bool isShared(EMPTY);
-    bool clientsAreExtensible(EMPTY);
+
+    pOb map(EMPTY) { return extension->slot(STDMETA_MAP_SLOT); }
+
+    bool isShared(EMPTY) {
+        return extension->slot(STDMETA_REFCOUNT_SLOT) > FIXNUM(1);
+    }
+
+    bool clientsAreExtensible(EMPTY) {
+        return BOOLVAL(extension->slot(STDMETA_EXTENSIBLE_SLOT));
+    }
+
+
     void becomeIndexed(int);
 };
 
-
-static const int STDMETA_MAP_SLOT = 0;
-static const int STDMETA_REFCOUNT_SLOT = 1;
-static const int STDMETA_EXTENSIBLE_SLOT = 2;
-
-static const int BUILTIN_STDMETA_SLOTS = 3;
-
-inline pOb StdMeta::map(EMPTY) { return extension->slot(STDMETA_MAP_SLOT); }
-inline bool StdMeta::isShared(EMPTY) {
-    return extension->slot(STDMETA_REFCOUNT_SLOT) > FIXNUM(1);
-}
-inline bool StdMeta::clientsAreExtensible(EMPTY) {
-    return BOOLVAL(extension->slot(STDMETA_EXTENSIBLE_SLOT));
-}
-
-inline StdMeta::StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
-    : Actor(sz, meta, parent, mbox, ext) {}
-
-inline StdMeta::StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
 
 extern pOb TopEnv;
 extern pOb Qanon;

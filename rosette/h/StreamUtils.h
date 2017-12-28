@@ -16,25 +16,13 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_StreamUtils_h)
 #define _StreamUtils_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include <ctype.h>
 
-inline int isoctal(char c) { return (isdigit(c) && (c < '8')); }
+int isoctal(char c);
 
 typedef int (*errfn)(FILE*);
 

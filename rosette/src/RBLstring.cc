@@ -16,23 +16,11 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "RBLstring.h"
-
 #include "CommandLine.h"
 #include "Ctxt.h"
 #include "Prim.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 

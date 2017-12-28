@@ -16,12 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
 #if defined(USE_DYNLOAD)
 /*
  * The code for DynamicLoader::loadhelp is adapted from the code
@@ -104,31 +98,15 @@
  * will be a standard...
  */
 
-#if defined(__GNUG__)
 typedef void* sbrk_t;
-#else
-typedef caddr_t sbrk_t;
-#endif
 
-extern "C" {
 #include <a.out.h>
 int getegid(void);
 int geteuid(void);
 sbrk_t sbrk(int);
-/*
-#ifndef c_plusplus
-    int chmod (const char*, int);
-    int umask (int);
-    int setbuffer (FILE*, char*, int);
-#endif
-*/
+
 int getpagesize();
-#if defined(__GNUG__)
 int unlink(const char*);
-#else
-int unlink(char*);
-#endif
-}
 
 #include "misc.h"
 #include "Dynload.h"

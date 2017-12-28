@@ -16,19 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Meta_h)
 #define _RBL_Meta_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "Ob.h"
 

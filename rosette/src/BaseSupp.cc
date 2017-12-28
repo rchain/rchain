@@ -16,25 +16,13 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
 /* Basic-support.cc: provides a variety of useful prims related to
  * system programming in Rosette
  */
 
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 
-extern "C" {
-#include <errno.h>
-};
+#include <cerrno>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -94,7 +82,7 @@ extern Prim* obRuntimeError;
 extern Ob* obSBO;
 extern Ob* emptyMbox;
 
-inline int min(int a, int b) { return (a < b) ? a : b; }
+int min(int a, int b) { return (a < b) ? a : b; }
 
 DEF_OPRN(Sync, "kind", oprnKind, obRuntimeError);
 
@@ -778,7 +766,7 @@ DEF("socketpair", sysSocketpair, 0, 0) {
     return ans;
 }
 
-inline void setup_io(int in, int out, int err) {
+void setup_io(int in, int out, int err) {
     int nfds = getdtablesize();
 
     for (int fd = 0; fd < nfds; fd++)

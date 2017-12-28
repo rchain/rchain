@@ -16,19 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_ResizeablePtrArray_h)
 #define _ResizeablePtrArray_h 1
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "rosette.h"
 
@@ -38,32 +27,25 @@ class ResizeablePtrArray {
     int size;
 
    public:
-    ResizeablePtrArray();
-    ResizeablePtrArray(int);
+    ResizeablePtrArray() {
+        array = 0;
+        size = 0;
+    }
+
+    ResizeablePtrArray(int sz) {
+        array = new void*[sz];
+        size = sz;
+    }
+
     ~ResizeablePtrArray();
 
-    int capacity();
-
     void resize(int);
-    void resize();
 
-    void*& operator[](int);
+    int capacity() { return size; }
+    void resize() { resize(2 * size); }
+
+    void*& operator[](int n) { return array[n]; }
+
 };
-
-inline ResizeablePtrArray::ResizeablePtrArray() {
-    array = 0;
-    size = 0;
-}
-
-inline ResizeablePtrArray::ResizeablePtrArray(int sz) {
-    array = new void*[sz];
-    size = sz;
-}
-
-inline int ResizeablePtrArray::capacity() { return size; }
-
-inline void ResizeablePtrArray::resize() { resize(2 * size); }
-
-inline void*& ResizeablePtrArray::operator[](int n) { return array[n]; }
 
 #endif

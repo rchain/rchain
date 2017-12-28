@@ -16,18 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Ob.h"
-
 #include "RblAtom.h"
 #include "Code.h"
 #include "CommandLine.h"
@@ -68,6 +57,35 @@ char* getcwd(char*);
 #undef NULL
 #endif
 #include <sys/param.h>
+
+
+pMeta META(pOb ob) { return (pMeta)ob->meta(); }
+pSBO SBO(pOb ob) { return (pSBO)ob->parent(); }
+pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
+
+int TAG(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return GET_TAGGED_TAG(te);
+}
+
+int ESCTAG(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return GET_ESCTAGGED_TAG(te);
+}
+
+int TAGVAL(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return SIGN_EXTEND(GET_TAGGED_DATA(te), WordSize - TagSize);
+}
+
+int ESCVAL(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te), WordSize - EscTagSize);
+}
 
 
 char* Base::typestring() { return "unknown type"; }
@@ -132,7 +150,7 @@ bool Ob::reallyCheckStore(pOb val) {
 static const int SuspicionThreshold = sizeof(Ob) + 8192 * sizeof(pOb);
 
 
-inline bool Ob::suspicious() {
+bool Ob::suspicious() {
     return (SIZE(this) < MinObSize || (SIZE(this) > SuspicionThreshold));
 }
 
@@ -262,7 +280,7 @@ void Ob::unvisit() {
 }
 
 
-inline int inlineUseIfPtr(void* v, PSOb__PSOb f) {
+int inlineUseIfPtr(void* v, PSOb__PSOb f) {
     pOb* pp = (pOb*)v;
     pOb p = *pp;
     if (IS_PTR(p)) {
@@ -281,7 +299,7 @@ inline int inlineUseIfPtr(void* v, PSOb__PSOb f) {
 
 int useIfPtr(void* v, PSOb__PSOb f) { return inlineUseIfPtr(v, f); }
 
-inline int inlineUseIfPtr(pOb v, SI__PSOb f) {
+int inlineUseIfPtr(pOb v, SI__PSOb f) {
     return IS_PTR(v) ? (PTR(v)->*f)() : 0;
 }
 
@@ -289,7 +307,7 @@ inline int inlineUseIfPtr(pOb v, SI__PSOb f) {
 int useIfPtr(pOb v, SI__PSOb f) { return inlineUseIfPtr(v, f); }
 
 
-inline void inlineUseIfPtr(pOb v, V__PSOb f) {
+void inlineUseIfPtr(pOb v, V__PSOb f) {
     if (IS_PTR(v))
         (PTR(v)->*f)();
 }

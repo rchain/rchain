@@ -16,23 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header: /mcc/project/carnot/root/master/pub-ess/src/rbl-rosy.cc,v 1.1.1.1
-1993/02/12 01:25:50 tomlic Exp $
- *
- * $Log: rbl-rosy.cc,v $
-// Revision 1.1.1.1  1993/02/12  01:25:50  tomlic
-// pub release of rosette
-//
- @EC */
-
-#ifndef __RCS_ID__
-#define __RCS_ID__
-static const char* rcsid =
-    "$Header: /mcc/project/carnot/root/master/pub-ess/src/rbl-rosy.cc,v "
-    "1.1.1.1 1993/02/12 01:25:50 tomlic Exp $";
-#endif
-
 /* rbl-rosy.c - Rosette rosy interface */
 
 /* INCLUDES */
@@ -136,7 +119,7 @@ void force_load_libisode() {
 ## #START insert of Isode - support.cc####extern StdOprn* oprnResumeIO;
 extern Prim* obRuntimeError;
 
-inline void AddIsodeIoHandler(int fd, IO_HANDLER* handler) {
+void AddIsodeIoHandler(int fd, IO_HANDLER* handler) {
     vm->addIoHandler(fd, handler, INVALID, 1);
 }
 
@@ -441,7 +424,7 @@ void StringEventToRosette(int type, int fd, Ob* ob) {
     }
 }
 
-inline void deleteIoHandler(int fd) { vm->deleteIoHandler(fd); }
+void deleteIoHandler(int fd) { vm->deleteIoHandler(fd); }
 
 ## #END insert of Isode -
     support.cc## #

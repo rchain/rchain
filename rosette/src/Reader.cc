@@ -16,35 +16,19 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Reader.h"
-
 #include "Expr.h"
 #include "Number.h"
 #include "Ob.h"
 #include "ObStk.h"
 #include "Prim.h"
 #include "RBLstring.h"
-
 #include "BuiltinClass.h"
-
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <signal.h>
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 #include <errno.h>
 #include <assert.h>
 #include <memory.h>
@@ -128,13 +112,13 @@ class ReadTable {
  */
 
 
-inline int ReadTable::isDelimiter(int c) { return attributes[c] & _DELIMITER; }
+int ReadTable::isDelimiter(int c) { return attributes[c] & _DELIMITER; }
 
 
-inline void* Reader::falloc(int sz) { return fstk.alloc(sz); }
+void* Reader::falloc(int sz) { return fstk.alloc(sz); }
 
 
-inline int FrameStk::link(int sz) {
+int FrameStk::link(int sz) {
     /*
      * We will store ReaderFrame link fields as relative offsets so that
      * we don't have so much work to do when we resize (and move) a
@@ -147,26 +131,26 @@ inline int FrameStk::link(int sz) {
 }
 
 
-inline int Reader::flink(int sz) { return fstk.link(sz); }
+int Reader::flink(int sz) { return fstk.link(sz); }
 
 
-inline ReaderFrame* FrameStk::top() { return (ReaderFrame*)&stk[topframe]; }
+ReaderFrame* FrameStk::top() { return (ReaderFrame*)&stk[topframe]; }
 
 
-inline ReaderFrame* Reader::ftop() { return fstk.top(); }
+ReaderFrame* Reader::ftop() { return fstk.top(); }
 
 
-inline void Reader::fpop() { fstk.pop(); }
+void Reader::fpop() { fstk.pop(); }
 
 
-inline void Reader::buffer(int c) {
+void Reader::buffer(int c) {
     if (bufp >= bufsize)
         growBuffer();
     buf[bufp++] = c;
 }
 
 
-inline ReaderMode Reader::accept(int c, int gapsPermitted) {
+ReaderMode Reader::accept(int c, int gapsPermitted) {
     if (c == EOF)
         return STOP;
     else if (c == '\\')
@@ -191,12 +175,12 @@ FrameStk::~FrameStk() {
 }
 
 
-inline void* ReaderFrame::operator new(size_t) {
+void* ReaderFrame::operator new(size_t) {
     suicide("operator new not allowed for Rosette objects\n");
     return NULL;
 }
 
-inline void* ReaderFrame::operator new(size_t, void* p) { return p; }
+void* ReaderFrame::operator new(size_t, void* p) { return p; }
 
 
 void* FrameStk::alloc(int sz) {
@@ -238,7 +222,7 @@ void FrameStk::reset() {
  */
 
 
-inline ReaderFrame::ReaderFrame(Reader* r, int sz) : link(r->flink(sz)) {}
+ReaderFrame::ReaderFrame(Reader* r, int sz) : link(r->flink(sz)) {}
 
 ReaderMode ReaderFrame::process(int, Reader*) {
     suicide("ReaderFrame::process is abstract");
@@ -466,7 +450,7 @@ class AtomFrame : public ReaderFrame {
 };
 
 
-inline AtomFrame::AtomFrame(Reader* r, int sz) : ReaderFrame(r, sz) {}
+AtomFrame::AtomFrame(Reader* r, int sz) : ReaderFrame(r, sz) {}
 
 
 AtomFrame::AtomFrame(Reader* r) : ReaderFrame(r, sizeof(AtomFrame)) {}

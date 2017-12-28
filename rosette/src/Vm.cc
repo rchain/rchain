@@ -16,18 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Vm.h"
-
 #include "Code.h"
 #include "CommandLine.h"
 #include "Ctxt.h"
@@ -119,7 +108,7 @@ VirtualMachine::~VirtualMachine() {
 void VirtualMachine::installEnv(pOb newenv) { ASSIGN(ctxt, env, newenv); }
 
 
-inline void VirtualMachine::installCode(Code* cd, int relativePc) {
+void VirtualMachine::installCode(Code* cd, int relativePc) {
     code = cd;
     pc.relative = relativePc;
     pc.absolute = code->absolutize(relativePc);

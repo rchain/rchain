@@ -19,22 +19,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Heap_h)
 #define _RBL_Heap_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "Ob.h"
-/* #include <new.h> */
 
 #ifndef NEW
 #define NEW(loc) new (loc)
@@ -61,6 +49,7 @@ class RootSet {
 typedef void (RootSet::*RootSet_Fn)();
 
 
+class Ob;
 class NewSpace;
 class OldSpace;
 class ForeignObTbl;
@@ -70,6 +59,7 @@ class PtrCollection;
 
 
 class Heap {
+   public:
     NewSpace* const newSpace;
     OldSpace* const oldSpace;
     ForeignObTbl* const foreignObs;
@@ -96,9 +86,8 @@ class Heap {
     Ob* copyAndForward(Ob*);
     void traverseRootSets(RootSet_Fn);
 
-    friend Ob* Ob::relocate(EMPTY);
+    //friend Ob* Ob::relocate(EMPTY);
 
-   public:
     Heap(unsigned, unsigned, unsigned);
     ~Heap(EMPTY);
 
@@ -114,7 +103,9 @@ class Heap {
     Ob* tenure(Ob*);
     void tenureEverything(EMPTY);
 
-    bool is_new(Ob*);
+    bool is_new(Ob* p) {
+        return ((void*)p >= newSpaceBase && (void*)p < newSpaceLimit);
+    }
 
     bool validPtrAfterScavenge(Ob*);
     void registerForeignOb(Ob*);
@@ -197,21 +188,19 @@ class ProtectedItem {
     friend void Init_Heap(EMPTY);
 
    public:
-    ProtectedItem(void*);
-    ~ProtectedItem(EMPTY);
+    ProtectedItem(void* v) : next(root), item(v) {
+        root = this;
+    }
+
+    ~ProtectedItem() { root = next; }
 };
 
-inline ProtectedItem::ProtectedItem(void* v) : next(root), item(v) {
-    root = this;
-}
-
-inline ProtectedItem::~ProtectedItem(EMPTY) { root = next; }
 
 
 #define PROTECT(v) ProtectedItem name2(_, v)(&v)
 #define PROTECT_THIS(type) \
     type* __this__ = this; \
-    PROTECT(__this__)
+PROTECT(__this__)
 #define SELF __this__
 
 
@@ -251,11 +240,7 @@ extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
 
 static const int alignmentmask = 3;
 
-inline int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
-
-inline bool Heap::is_new(Ob* p) {
-    return ((void*)p >= newSpaceBase && (void*)p < newSpaceLimit);
-}
+int align(int size);
 
 
 #define IS_OLD(p) (!heap->is_new(p))

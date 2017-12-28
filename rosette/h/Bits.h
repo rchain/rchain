@@ -16,19 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Bits_h)
 #define _RBL_Bits_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 /* Make a mask for bits i < j, masking j-i bits */
 #define MASK_RANGE(i, j) ((~(~0 << (j - i))) << i)

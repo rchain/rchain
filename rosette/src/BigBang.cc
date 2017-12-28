@@ -19,7 +19,7 @@
 #include "rosette.h"
 
 #include <stdarg.h>
-#include <errno.h>
+#include <cerrno>
 
 #include <unistd.h>
 #include <sys/param.h>

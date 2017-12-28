@@ -16,12 +16,3 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header: /mcc/project/carnot/root/master/pub-ess/h/osfcn.h,v 1.1.1.1
- 1993/02/12 01:25:02 tomlic Exp $
- *
- * $Log: osfcn.h,v $
- * Revision 1.1.1.1  1993/02/12  01:25:02  tomlic
- * pub release of rosette
- *
- @EC */

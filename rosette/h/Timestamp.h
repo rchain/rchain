@@ -16,19 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Timestamp_h)
 #define _RBL_Timestamp_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 extern char timestamp[];
 extern char version[];

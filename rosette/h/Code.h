@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Code_h)
 #define _RBL_Code_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 #include "Ob.h"
 #include "Opcode.h"
@@ -69,13 +57,10 @@ class CodeBuf : public Ob {
 
     void patchAddress(int, uint16_t);
 
-    int size();
+    int size() { return FIXVAL(pc); }
     void clear();
     CodeVec* finish();
 };
-
-
-inline int CodeBuf::size() { return FIXVAL(pc); }
 
 
 class CodeVec : public Word16Vec {
@@ -87,29 +72,26 @@ class CodeVec : public Word16Vec {
    public:
     static CodeVec* create(int);
 
-    Instr& instr(int);
     Instr* dumpInstr(Instr*, char*, Code*);
     void dumpOn(FILE*, Code*);
-    int relativize(Instr*);
-    Instr* absolutize(int);
+
+    Instr& instr(int n) {
+        Instr* p = (Instr*)&word(0);
+        return p[n];
+    }
+
+    int relativize(Instr* pc) { return pc - &instr(0); }
+    Instr* absolutize(int pc) { return &instr(pc); }
 };
-
-
-inline Instr& CodeVec::instr(int n) {
-    Instr* p = (Instr*)&word(0);
-    return p[n];
-}
-inline int CodeVec::relativize(Instr* pc) { return pc - &instr(0); }
-inline Instr* CodeVec::absolutize(int pc) { return &instr(pc); }
 
 
 class Code : public Ob {
     STD_DECLS(Code);
 
-   protected:
+    protected:
     Code(CodeVec*, Tuple*);
 
-   public:
+    public:
     CodeVec* codevec;
     Tuple* litvec;
 
@@ -119,19 +101,11 @@ class Code : public Ob {
     Instr* dumpInstr(Instr*, char*);
     void dumpOn(FILE*);
 
-    Ob* lit(int);
-    int relativize(Instr*);
-    Instr* absolutize(int);
+    int relativize(Instr* pc) { return codevec->relativize(pc); }
+    Instr* absolutize(int pc) { return codevec->absolutize(pc); }
+    Ob* lit(int n) { return (litvec->elem(n)); }
+
     Ob* associatedSource();
 };
-
-
-inline int Code::relativize(Instr* pc) { return codevec->relativize(pc); }
-
-
-inline Instr* Code::absolutize(int pc) { return codevec->absolutize(pc); }
-
-
-inline Ob* Code::lit(int n) { return (litvec->elem(n)); }
 
 #endif

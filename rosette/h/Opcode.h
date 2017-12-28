@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Opcode_h)
 #define _RBL_Opcode_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 /*
@@ -315,12 +303,9 @@ class Instr {
     public:
 
     Instr() : word(0) {}
-
+    operator int() { return (int)word; }
     uint16_t word;
-    operator int();
 };
-
-inline Instr::operator int() { return (int)word; }
 
 extern char* opcodeStrings[];
 

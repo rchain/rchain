@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Expr_h)
 #define _RBL_Expr_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 
@@ -302,9 +290,14 @@ class TupleExpr : public Expr {
     static TupleExpr* create(Ob**, int, Ob* = NILexpr);
     static TupleExpr* create(int, Ob* = NILexpr);
 
-    Ob*& elem(int);
+    Ob*& elem(int n) {
+        return _slot[n + 3];  // skip the meta, parent, and rest fields
+    }
 
-    int numberOfElements();
+    int numberOfElements() {
+        return (SIZE(this) - sizeof(TupleExpr)) / sizeof(Ob*);
+    }
+
     bool allPairs();
     bool allSymbols();
 
@@ -323,13 +316,5 @@ class TupleExpr : public Expr {
 };
 
 
-inline Ob*& TupleExpr::elem(int n) {
-    return _slot[n + 3];  // skip the meta, parent, and rest fields
-}
-
-
-inline int TupleExpr::numberOfElements() {
-    return (SIZE(this) - sizeof(TupleExpr)) / sizeof(Ob*);
-}
 
 #endif

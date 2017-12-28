@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Pattern_h)
 #define _RBL_Pattern_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 class Pattern : public Ob {
@@ -162,14 +150,13 @@ class Template : public Ob {
     static Template* create(TupleExpr*);
     static Template* create(Tuple*, Ob*, CompoundPattern*);
 
-    Tuple* match(Tuple*, int);
+    Tuple* match(Tuple* argvec, int nargs) {
+        return (pat->match(argvec, nargs));
+    }
+
     Ob* fail(Ob*);
     Ob* cloneTo(Ob*, Ob*);
 };
 
-
-inline Tuple* Template::match(Tuple* argvec, int nargs) {
-    return (pat->match(argvec, nargs));
-}
 
 #endif

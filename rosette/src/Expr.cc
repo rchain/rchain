@@ -16,18 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Expr.h"
-
 #include "Ctxt.h"
 #include "Prim.h"
 #include "Tuple.h"
@@ -37,14 +26,14 @@
 #include <memory.h>
 
 
-inline Expr::Expr(int sz, Ob* meta, Ob* parent) : Ob(sz, meta, parent) {}
+Expr::Expr(int sz, Ob* meta, Ob* parent) : Ob(sz, meta, parent) {}
 
 
-inline LetExpr::LetExpr(int sz, Ob* meta, Ob* parent, TupleExpr* te, Ob* b)
+LetExpr::LetExpr(int sz, Ob* meta, Ob* parent, TupleExpr* te, Ob* b)
     : Expr(sz, meta, parent), bindings(te), body(b) {}
 
 
-inline MethodExpr::MethodExpr(int sz, Ob* meta, Ob* parent, Ob* i, Ob* f, Ob* b)
+MethodExpr::MethodExpr(int sz, Ob* meta, Ob* parent, Ob* i, Ob* f, Ob* b)
     : Expr(sz, meta, parent), identity(i), formals(f), body(b) {}
 
 
@@ -326,7 +315,7 @@ RequestExpr::RequestExpr(Ob* t, TupleExpr* te)
 }
 
 
-inline RequestExpr::RequestExpr(int sz, Ob* meta, Ob* parent, Ob* t,
+RequestExpr::RequestExpr(int sz, Ob* meta, Ob* parent, Ob* t,
                                 TupleExpr* te)
     : Expr(sz, meta, parent), target(t), msg(te) {}
 
