@@ -103,16 +103,11 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem) match {
-        case Left(m) => Left(m)
-
-        case Right(m) => {
-          checkFixnum(1, ctxt.argvec.elem) match {
-            case Left(_) => Right(RblBool(false))
-            case Right(n) => Right(m < n)
-          }
-        }
-      }
+      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+        checkFixnum(1, ctxt.argvec.elem)
+          .map(n => m < n)
+          .getOrElse(RblBool(false))
+      })
   }
 
   object fxLe extends Prim {
@@ -122,16 +117,11 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem) match {
-        case Left(m) => Left(m)
-
-        case Right(m) => {
-          checkFixnum(1, ctxt.argvec.elem) match {
-            case Left(_) => Right(RblBool(false))
-            case Right(n) => Right(m <= n)
-          }
-        }
-      }
+      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+        checkFixnum(1, ctxt.argvec.elem)
+          .map(n => m <= n)
+          .getOrElse(RblBool(false))
+      })
   }
 
   object fxGt extends Prim {
@@ -141,16 +131,11 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem) match {
-        case Left(m) => Left(m)
-
-        case Right(m) => {
-          checkFixnum(1, ctxt.argvec.elem) match {
-            case Left(_) => Right(RblBool(false))
-            case Right(n) => Right(m > n)
-          }
-        }
-      }
+      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+        checkFixnum(1, ctxt.argvec.elem)
+          .map(n => m > n)
+          .getOrElse(RblBool(false))
+      })
   }
 
   object fxGe extends Prim {
@@ -160,16 +145,11 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem) match {
-        case Left(m) => Left(m)
-
-        case Right(m) => {
-          checkFixnum(1, ctxt.argvec.elem) match {
-            case Left(_) => Right(RblBool(false))
-            case Right(n) => Right(m >= n)
-          }
-        }
-      }
+      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+        checkFixnum(1, ctxt.argvec.elem)
+          .map(n => m >= n)
+          .getOrElse(RblBool(false))
+      })
   }
 
   object fxEq extends Prim {
@@ -179,16 +159,11 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem) match {
-        case Left(m) => Left(m)
-
-        case Right(m) => {
-          checkFixnum(1, ctxt.argvec.elem) match {
-            case Left(_) => Right(RblBool(false))
-            case Right(n) => Right(m == n)
-          }
-        }
-      }
+      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+        checkFixnum(1, ctxt.argvec.elem)
+          .map(n => m == n)
+          .getOrElse(RblBool(false))
+      })
   }
 
   object fxNe extends Prim {
@@ -198,16 +173,11 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem) match {
-        case Left(m) => Left(m)
-
-        case Right(m) => {
-          checkFixnum(1, ctxt.argvec.elem) match {
-            case Left(_) => Right(RblBool(false))
-            case Right(n) => Right(m != n)
-          }
-        }
-      }
+      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+        checkFixnum(1, ctxt.argvec.elem)
+          .map(n => m != n)
+          .getOrElse(RblBool(false))
+      })
   }
 
   object fxMin extends Prim {

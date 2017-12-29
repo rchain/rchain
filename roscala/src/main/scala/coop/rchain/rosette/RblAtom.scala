@@ -1,7 +1,6 @@
 package coop.rchain.rosette
 
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.Ob.{OTbool, OTfixnum}
 
 trait RblAtom extends Ob
 
