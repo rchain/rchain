@@ -86,8 +86,6 @@ class Heap {
     Ob* copyAndForward(Ob*);
     void traverseRootSets(RootSet_Fn);
 
-    // friend Ob* Ob::relocate(EMPTY);
-
     Heap(unsigned, unsigned, unsigned);
     ~Heap(EMPTY);
 
@@ -237,7 +235,7 @@ extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
 
 static const int alignmentmask = 3;
 
-int align(int size);
+int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
 
 #define IS_OLD(p) (!heap->is_new(p))

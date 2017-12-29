@@ -1126,7 +1126,6 @@ relocate:
     return FORWARDED(this) ? forwardingAddress() : heap->copyAndForward(this);
 }
 
-int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
 void* palloc(unsigned sz) {
     void* loc = heap->alloc(sz);
