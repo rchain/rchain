@@ -85,9 +85,6 @@ static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize - EscTagSize);
 
 #define ESCAPED(n) (((n) << TagSize) + OTesc)
 
-/* unused
-#define UNESCAPED(n) (n>>TagSize) */
-
 enum ObTag {
     OTptr = 0,
     OTsym = 1,
