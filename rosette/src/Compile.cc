@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Compile.h"
 
 #include "Code.h"
@@ -173,58 +163,57 @@ void AttrNode::traversePtrs(V__PSOb f) {
 }
 
 
-inline void AttrNode::emitF0(Opcode opcode, unsigned op) {
+void AttrNode::emitF0(Opcode opcode, unsigned op) {
     cu->codebuf->emitF0(opcode, op);
 }
 
 
-inline void AttrNode::emitF1(Opcode opcode, unsigned op0, unsigned op1) {
+void AttrNode::emitF1(Opcode opcode, unsigned op0, unsigned op1) {
     cu->codebuf->emitF1(opcode, op0, op1);
 }
 
 
-inline void AttrNode::emitF2(Opcode opcode, unsigned op0, unsigned op1) {
+void AttrNode::emitF2(Opcode opcode, unsigned op0, unsigned op1) {
     cu->codebuf->emitF2(opcode, op0, op1);
 }
 
 
-inline void AttrNode::emitF3(Opcode opcode, unsigned op0, unsigned op1,
-                             unsigned op2) {
+void AttrNode::emitF3(Opcode opcode, unsigned op0, unsigned op1, unsigned op2) {
     cu->codebuf->emitF3(opcode, op0, op1, op2);
 }
 
 
-inline void AttrNode::emitF4(Opcode opcode, unsigned unwind, unsigned next,
-                             unsigned nargs, unsigned op0) {
+void AttrNode::emitF4(Opcode opcode, unsigned unwind, unsigned next,
+                      unsigned nargs, unsigned op0) {
     cu->codebuf->emitF4(opcode, unwind, next, nargs, op0);
 }
 
 
-inline void AttrNode::emitF5(Opcode opcode, unsigned unwind, unsigned next,
-                             unsigned op0) {
+void AttrNode::emitF5(Opcode opcode, unsigned unwind, unsigned next,
+                      unsigned op0) {
     cu->codebuf->emitF5(opcode, unwind, next, op0);
 }
 
 
-inline void AttrNode::emitF6(Opcode opcode, unsigned pc) {
+void AttrNode::emitF6(Opcode opcode, unsigned pc) {
     cu->codebuf->emitF6(opcode, pc);
 }
 
 
-inline void AttrNode::emitF7(Opcode opcode, unsigned indirect, unsigned level,
-                             unsigned offset, unsigned op0) {
+void AttrNode::emitF7(Opcode opcode, unsigned indirect, unsigned level,
+                      unsigned offset, unsigned op0) {
     cu->codebuf->emitF7(opcode, indirect, level, offset, op0);
 }
 
 
-inline void AttrNode::emitE0(unsigned op0, unsigned op1) {
+void AttrNode::emitE0(unsigned op0, unsigned op1) {
     cu->codebuf->emitE0(op0, op1);
 }
 
 
-inline void AttrNode::emitE1(unsigned op0) { cu->codebuf->emitE1(op0); }
+void AttrNode::emitE1(unsigned op0) { cu->codebuf->emitE1(op0); }
 
-inline void AttrNode::emitE2(unsigned op0, unsigned op1) {
+void AttrNode::emitE2(unsigned op0, unsigned op1) {
     cu->codebuf->emitE2(op0, op1);
 }
 
@@ -868,10 +857,10 @@ void XferNode::emitDispatchCode(bool, bool, RtnCode, Label next) {
 }
 
 
-inline ExprStack::ExprStack() : exprs(NIL), top(FIXNUM(0)) {}
+ExprStack::ExprStack() : exprs(NIL), top(FIXNUM(0)) {}
 
 
-inline CompoundNode::CompoundNode(int sz, bool ctxt) : AttrNode(sz, ctxt) {}
+CompoundNode::CompoundNode(int sz, bool ctxt) : AttrNode(sz, ctxt) {}
 
 
 void CompoundNode::addTo(ExprStack* exprstack, AttrNode* node) {
@@ -1724,7 +1713,7 @@ void IfNode::emitWrapup(RtnCode rtn, Label next) {
 }
 
 
-inline LetNode::LetNode(int sz, bool ctxt, LetExpr* le)
+LetNode::LetNode(int sz, bool ctxt, LetExpr* le)
     : CompoundNode(sz, ctxt),
       expr(le),
       templat((Template*)INVALID),
@@ -1857,7 +1846,7 @@ void LetrecNode::emitWrapup(RtnCode rtn, Label next) {
 }
 
 
-inline MethodNode::MethodNode(int sz, MethodExpr* me, bool valueCtxt)
+MethodNode::MethodNode(int sz, MethodExpr* me, bool valueCtxt)
     : AttrNode(sz, valueCtxt) {
     this->expr = me;
     this->code = (Code*)INVALID;

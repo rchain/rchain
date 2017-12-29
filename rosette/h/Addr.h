@@ -16,19 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Addr_h)
 #define _RBL_Addr_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 uint32_t pre_fixnum_to_addr(int x);
 int addr_to_pre_fixnum(Ob *);

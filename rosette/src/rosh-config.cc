@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header: /mcc/project/carnot/root/master/pub-ess/src/rosh-config.cc,v 1.1.1.1
-1993/02/12 01:25:51 tomlic Exp $
- *
- * $Log: rosh-config.cc,v $
-// Revision 1.1.1.1  1993/02/12  01:25:51  tomlic
-// pub release of rosette
-//
- @EC */
-
 #ifndef __RCS_ID__
 #define __RCS_ID__
 static const char *rcsid =

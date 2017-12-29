@@ -16,18 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Number.h"
-
 #include "Ctxt.h"
 #include "Interrupt.h"
 #include "Prim.h"
@@ -40,8 +29,8 @@
 #include <math.h>
 
 
-inline static int min(int m, int n) { return m < n ? m : n; }
-inline static int max(int m, int n) { return m > n ? m : n; }
+static int min(int m, int n) { return m < n ? m : n; }
+static int max(int m, int n) { return m > n ? m : n; }
 
 
 Ob* checkFxResult(Prim* prim, Ctxt* ctxt, int answer) {

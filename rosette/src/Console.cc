@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #define IN_CONSOLE
 
 #include "rosette.h"
@@ -52,33 +42,27 @@
 
 #ifdef MIPS_SGI_SYSV
 #include <unistd.h>
-extern "C" {
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
 int setpgrp();
 int setsid();
-}
+
 #endif
 
 #define OK 0
 #define NOTOK (-1)
 
 static int image;
-
-//
-
 static void finish() { exit(0); }
-
 static void passthru(int sig) { (void)kill(image, sig); }
-
 static void terminate() {
     (void)kill(image, SIGTERM);
     exit(0);
 }
 
-//
 
 main(int, char** argv) {
     char buffer[BUFSIZ];

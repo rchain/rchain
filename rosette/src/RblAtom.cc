@@ -16,19 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "RblAtom.h"
-
 #include "Compile.h"
 #include "Ctxt.h"
 #include "Ob.h"
@@ -37,7 +25,6 @@
 #include "RBLstring.h"
 #include "Tuple.h"
 #include "StreamUtils.h"
-
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
 
@@ -73,7 +60,7 @@ Ob* Qanon;
 Ob* Qunnamed;
 
 
-inline RblAtom::RblAtom(int sz, Ob* meta, Ob* sbo) : Ob(sz, meta, sbo) {
+RblAtom::RblAtom(int sz, Ob* meta, Ob* sbo) : Ob(sz, meta, sbo) {
     atom = INVALID;
 }
 
@@ -103,7 +90,7 @@ void Symbol::printOn(FILE* f) {
     char c;
     do {
         c = *str++;
-        if ('\0' == c) {    // End of string
+        if ('\0' == c) {  // End of string
             break;
         }
 
@@ -136,7 +123,7 @@ void Symbol::printOn(FILE* f) {
                 break;
             }
         }
-    } while(true);
+    } while (true);
 }
 
 void Symbol::printQuotedOn(FILE* f) {

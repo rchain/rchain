@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "CommandLine.h"
 
 #include <string.h>
@@ -167,7 +157,8 @@ int ParseCommandLine(int argc, char** argv) {
         if (strcmp(argv[i], "-run") == 0) {
             if (i + 1 < argc) {
                 strcpy(RunFile, argv[i + 1]);
-            } else {
+            }
+            else {
                 usage(cmd_name);
             }
             DeleteArgs(i, argc, argv, 2);

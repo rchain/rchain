@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Timer_h)
 #define _RBL_Timer_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 #include <sys/time.h>

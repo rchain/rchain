@@ -16,18 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
-
 #include <string.h>
 
 
@@ -172,7 +161,7 @@ char* StringChunk::deposit(const char* sym) {
         if (0 == c) {
             break;
         }
-    } while(true);
+    } while (true);
 
     bp = align(p);
     remaining -= bp - result;

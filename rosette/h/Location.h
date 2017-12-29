@@ -16,19 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Location_h)
 #define _RBL_Location_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "Ob.h"
 
@@ -194,14 +183,8 @@ union Location {
 #define SET_BITFIELD00_SIGN(x, val) \
     SET_LF(x, GENERIC_SIZE + BitField00SpanSize + BitField00OffsetSize, 1, val)
 
-inline int operator==(Location loc1, Location loc2) {
-    return loc1.atom == loc2.atom;
-}
-
-
-inline int operator!=(Location loc1, Location loc2) {
-    return loc1.atom != loc2.atom;
-}
+int operator==(Location loc1, Location loc2);
+int operator!=(Location loc1, Location loc2);
 
 
 extern bool store(Location, Ctxt*, Ob*);

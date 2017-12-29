@@ -15,24 +15,15 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "StreamUtils.h"
 
-extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
-};
+
+
+int isoctal(char c) { return (isdigit(c) && (c < '8')); }
+
 
 int readError(FILE* f, const char* fmt, ...) {
     va_list args;

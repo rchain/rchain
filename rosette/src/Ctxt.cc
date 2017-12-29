@@ -16,18 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Ctxt.h"
-
 #include "Code.h"
 #include "Operation.h"
 #include "Prim.h"
@@ -82,8 +71,8 @@ BUILTIN_CLASS(UpcallCtxt) {
 }
 
 
-inline Ctxt::Ctxt(int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code,
-                  Tuple* argvec, Ctxt* ctxt, Location loc)
+Ctxt::Ctxt(int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code, Tuple* argvec,
+           Ctxt* ctxt, Location loc)
     : MboxOb(sz, meta, parent, mbox),
       tag(loc),
       nargs(argvec->numberOfElements()),

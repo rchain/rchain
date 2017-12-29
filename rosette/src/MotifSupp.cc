@@ -16,12 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
 #include "rosette.h"
 IS_IMPLEMENTATION
 

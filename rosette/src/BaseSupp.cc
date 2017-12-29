@@ -16,25 +16,13 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
 /* Basic-support.cc: provides a variety of useful prims related to
  * system programming in Rosette
  */
 
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 
-extern "C" {
-#include <errno.h>
-};
+#include <cerrno>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -94,7 +82,7 @@ extern Prim* obRuntimeError;
 extern Ob* obSBO;
 extern Ob* emptyMbox;
 
-inline int min(int a, int b) { return (a < b) ? a : b; }
+int min(int a, int b) { return (a < b) ? a : b; }
 
 DEF_OPRN(Sync, "kind", oprnKind, obRuntimeError);
 
@@ -299,7 +287,8 @@ uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
-        // this contained some complex and questionable big-endian dependent code.
+        // this contained some complex and questionable big-endian dependent
+        // code.
         ans = 0;
     }
     }
@@ -311,8 +300,7 @@ uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
 
     switch (span) {
     case 8:
-        *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t))) =
-            (uint8_t)bits;
+        *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t))) = (uint8_t)bits;
         break;
     case 16:
         *(uint16_t*)((int16_t*)addr + (offset / BITS(int16_t))) =
@@ -324,7 +312,8 @@ uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
-        // this contained some complex and questionable big-endian dependent code.
+        // this contained some complex and questionable big-endian dependent
+        // code.
     }
     }
     return addr;
@@ -441,7 +430,8 @@ DEF("M-get", addressGetField, 3, 3) {
     if (base < local_page_size)
         return PRIM_ERROR("invalid address");
     else if ((span >= 1) && (span <= 4)) {
-        uint32_t rslt = mem_get_field(addr, offset * 8, span * 8, BOOLVAL(sign));
+        uint32_t rslt =
+            mem_get_field(addr, offset * 8, span * 8, BOOLVAL(sign));
 
         return FIXNUM((int)rslt);
     }
@@ -461,7 +451,8 @@ DEF("M-set", addressSetField, 3, 3) {
     if (base < local_page_size)
         return PRIM_ERROR("invalid address");
     else if ((span >= 1) && (span <= 4)) {
-        uint32_t* rslt = mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
+        uint32_t* rslt =
+            mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
 
         return ADDR_TO_FIXNUM((int)addr);
     }
@@ -747,11 +738,12 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
     auto str_s = (char*)&str->byte(0);
 
     try {
-        std::regex r(re->asCstring()); // Compile the regexp
+        std::regex r(re->asCstring());  // Compile the regexp
 
-        if (std::regex_match(str_s, r)) {   // See if it matches
+        if (std::regex_match(str_s, r)) {  // See if it matches
             return RBLstring::create(str_s);
-        } else {
+        }
+        else {
             return RBLFALSE;
         }
     }
@@ -759,7 +751,6 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
         warning("Regex expression error: %s code=%d", e.what(), e.code());
         return RBLFALSE;
     }
-
 }
 
 DEF("socketpair", sysSocketpair, 0, 0) {
@@ -778,7 +769,7 @@ DEF("socketpair", sysSocketpair, 0, 0) {
     return ans;
 }
 
-inline void setup_io(int in, int out, int err) {
+void setup_io(int in, int out, int err) {
     int nfds = getdtablesize();
 
     for (int fd = 0; fd < nfds; fd++)

@@ -16,18 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- */
-
 #if !defined(_RBL_Dynload_h)
 #define _RBL_Dynload_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #ifdef A_OUT_HDR
 #include A_OUT_HDR

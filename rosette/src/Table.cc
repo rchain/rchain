@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Table.h"
 
 #include "Ctxt.h"
@@ -162,7 +152,7 @@ void RblTable::hashResize() {
  */
 
 
-inline int RblTable::hash(pOb key) { return ((int)PTR(key) >> TagSize); }
+int RblTable::hash(pOb key) { return ((int)PTR(key) >> TagSize); }
 
 
 void RblTable::hashify() {

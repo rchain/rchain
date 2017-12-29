@@ -16,19 +16,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
-
 #include "rosette.h"
-
 #include "Code.h"
 #include "Ctxt.h"
 #include "Location.h"
@@ -37,6 +25,11 @@
 
 #define SPANSIZE(n) ((n) == 0 ? (1 << BitFieldSpanSize) : (n))
 #define SPANSIZE00(n) ((n) == 0 ? (1 << BitField00SpanSize) : (n))
+
+int operator==(Location loc1, Location loc2) { return loc1.atom == loc2.atom; }
+
+
+int operator!=(Location loc1, Location loc2) { return loc1.atom != loc2.atom; }
 
 #ifdef MAP_BACK_ADDRESS
 uint32_t nontrivial_pre_fixnum_to_addr(int x) {

@@ -16,13 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #define ARCH "x86"
 #define MACHINE "x86"
 #define OS "linux"
@@ -48,5 +41,6 @@
    to receive the io signal when input is available on fd.
    return is < 0 on failure.
 */
+
 #define SET_SIGNAL_IO_DESIRED(result) \
     result = (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)

@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Tuple.h"
-
 #include "Ctxt.h"
 #include "MI.h"
 #include "Prim.h"
-
 #include "BuiltinClass.h"
 
 #if !defined(GCC27X)

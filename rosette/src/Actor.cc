@@ -16,31 +16,19 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
-
 #include "Ctxt.h"
 #include "Meta.h"
 #include "Ob.h"
 #include "Operation.h"
 #include "Prim.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 #include <memory.h>
 
 
-inline static int max(int m, int n) { return m > n ? m : n; }
+static int max(int m, int n) { return m > n ? m : n; }
 
 
 BUILTIN_CLASS(StdExtension) {}

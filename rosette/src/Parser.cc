@@ -16,35 +16,19 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Parser.h"
-
 #include "Expr.h"
 #include "Number.h"
 #include "Ob.h"
 #include "ObStk.h"
 #include "Prim.h"
 #include "RBLstring.h"
-
 #include "BuiltinClass.h"
-
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <signal.h>
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 #include <errno.h>
 #include <assert.h>
 #include <memory.h>
@@ -89,12 +73,12 @@ void debug_builtinprim(char* s) { /* printf("listing %s\n", s); */
 }
 
 
-inline void* ParserFrame::operator new(size_t s) {
+void* ParserFrame::operator new(size_t s) {
     suicide("operator new not allowed for Rosette objects\n");
     return NULL;
 }
 
-inline void* ParserFrame::operator new(size_t, void* p) { return p; }
+void* ParserFrame::operator new(size_t, void* p) { return p; }
 
 
 class ParseMacro {
@@ -131,13 +115,13 @@ class ParseTable {
  */
 
 
-inline int ParseTable::isDelimiter(int c) { return attributes[c] & _DELIMITER; }
+int ParseTable::isDelimiter(int c) { return attributes[c] & _DELIMITER; }
 
 
-inline void* Parser::falloc(int sz) { return fstk.alloc(sz); }
+void* Parser::falloc(int sz) { return fstk.alloc(sz); }
 
 
-inline int PFrameStk::link(int sz) {
+int PFrameStk::link(int sz) {
     /*
      * We will store ParserFrame link fields as relative offsets so that
      * we don't have so much work to do when we resize (and move) a
@@ -150,25 +134,25 @@ inline int PFrameStk::link(int sz) {
 }
 
 
-inline ParserFrame* PFrameStk::top() { return (ParserFrame*)&stk[topframe]; }
+ParserFrame* PFrameStk::top() { return (ParserFrame*)&stk[topframe]; }
 
-inline int Parser::flink(int sz) { return fstk.link(sz); }
-
-
-inline ParserFrame* Parser::ftop() { return fstk.top(); }
+int Parser::flink(int sz) { return fstk.link(sz); }
 
 
-inline void Parser::fpop() { fstk.pop(); }
+ParserFrame* Parser::ftop() { return fstk.top(); }
 
 
-inline void Parser::buffer(int c) {
+void Parser::fpop() { fstk.pop(); }
+
+
+void Parser::buffer(int c) {
     if (bufp >= bufsize)
         growBuffer();
     buf[bufp++] = c;
 }
 
 
-inline ParserMode Parser::accept(int c, int gapsPermitted) {
+ParserMode Parser::accept(int c, int gapsPermitted) {
     if (c == EOF)
         return STOP;
     else if (c == '\\')
@@ -232,7 +216,7 @@ void PFrameStk::reset() {
  */
 
 
-inline ParserFrame::ParserFrame(Parser* r, int sz) : link(r->flink(sz)) {}
+ParserFrame::ParserFrame(Parser* r, int sz) : link(r->flink(sz)) {}
 
 ParserMode ParserFrame::process(int, Parser*) {
     suicide("ParserFrame::process is abstract");
@@ -461,7 +445,7 @@ class AtomFrame : public ParserFrame {
 };
 
 
-inline AtomFrame::AtomFrame(Parser* r, int sz) : ParserFrame(r, sz) {}
+AtomFrame::AtomFrame(Parser* r, int sz) : ParserFrame(r, sz) {}
 
 
 AtomFrame::AtomFrame(Parser* r) : ParserFrame(r, sizeof(AtomFrame)) {}

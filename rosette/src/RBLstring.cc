@@ -16,23 +16,11 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "RBLstring.h"
-
 #include "CommandLine.h"
 #include "Ctxt.h"
 #include "Prim.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 
@@ -94,7 +82,7 @@ void RBLstring::printOn(FILE* f) {
 
     do {
         c = *str++;
-        if ('\0' == c) {    // End of the string
+        if ('\0' == c) {  // End of the string
             break;
         }
 
@@ -129,7 +117,7 @@ void RBLstring::printOn(FILE* f) {
             }
         }
     } while (true);
-    
+
     fputc('\"', f);
 }
 

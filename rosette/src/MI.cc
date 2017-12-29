@@ -16,16 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "MI.h"
 
 #include "Interrupt.h"
@@ -438,6 +428,18 @@ pOb MultiMethod::matchAndDispatch(pCtxt ctxt) {
     }
 
     return this->runtimeError(ctxt, "type mismatch - no matching proc");
+}
+
+bool typeLessEq(pOb x, pOb y) { return BASE(y)->coversp(x); }
+bool typeGreaterEq(pOb x, pOb y) { return BASE(x)->coversp(y); }
+bool typeEq(pOb x, pOb y) {
+    return (BASE(x)->coversp(y) && BASE(y)->coversp(x));
+}
+
+bool typeLess(pOb x, pOb y) { return (typeLessEq(x, y) && !typeEq(x, y)); }
+
+bool typeGreater(pOb x, pOb y) {
+    return (typeGreaterEq(x, y) && !typeEq(x, y));
 }
 
 DEF("multiMethod-lookup-and-invoke", multiMethodLookupAndInvoke, 2, 2) {

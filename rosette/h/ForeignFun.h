@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Foreign_Fun_h)
 #define _RBL_Foreign_Fun_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 #define STD_FOREIGN_FUNCTION_STYLE 1

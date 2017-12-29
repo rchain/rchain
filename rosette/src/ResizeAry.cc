@@ -16,21 +16,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "ResizeAry.h"
-
-extern "C" {
 #include <stdlib.h>
-};
 
 ResizeablePtrArray::~ResizeablePtrArray() { delete array; }
 

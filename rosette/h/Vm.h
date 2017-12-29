@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Vm_h)
 #define _RBL_Vm_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 #include "Interrupt.h"
 #include "Location.h"
@@ -144,7 +132,7 @@ class VirtualMachine : public RootSet {
 
     int addSignalHandler(int, SIG_PF, Ob* = INVALID);
     int deleteSignalHandler(int);
-    void acceptSignal(int);
+    void acceptSignal(int sig) { sigvec |= sigmask(sig); }
     Ob* initiateRosetteSignal(int);
     void resetSignals();
 
@@ -158,9 +146,6 @@ class VirtualMachine : public RootSet {
 
     void printStats(FILE*);
 };
-
-
-inline void VirtualMachine::acceptSignal(int sig) { sigvec |= sigmask(sig); }
 
 
 extern VirtualMachine* vm;

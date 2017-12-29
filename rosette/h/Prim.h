@@ -16,29 +16,19 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- */
-
 #if !defined(_RBL_Prim_h)
 #define _RBL_Prim_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "BinaryOb.h"
 #include "Ctxt.h"
 
+void debug_builtinprim(char*);
 
 /*
  * The encoding for opApplyPrim assumes that the prim offset fits in one
  * byte.  If MaxPrims is made larger than 256, changes will be required
  * Code.h, Code.cc, and Vm.cc to change the encoding of opApplyPrim.
  */
-
 
 static const int MaxPrims = 1024;
 
@@ -66,7 +56,7 @@ class Prim : public BinaryOb {
     uint16_t primnum;
 
     static Prim* create(char*, PRIMFN*, int, int);
-    static Prim* nthPrim(int);
+    static Prim* nthPrim(int n) { return Prim::inlineTbl[n]; }
 
     int primNumber();
     virtual Prim* InlineablePrimP();
@@ -74,8 +64,6 @@ class Prim : public BinaryOb {
     virtual Ob* dispatch(Ctxt*);
     virtual Ob* invoke(Ctxt*);
 };
-
-inline Prim* Prim::nthPrim(int n) { return Prim::inlineTbl[n]; }
 
 
 struct BuiltinPrimRecord {
@@ -97,17 +85,14 @@ class BuiltinPrim {
     void init() const;
 
    public:
-    BuiltinPrim(const BuiltinPrimRecord*);
+    BuiltinPrim(const BuiltinPrimRecord* bpr)
+        : record(bpr), link(BuiltinPrim::root) {
+        debug_builtinprim(this->record->name);
+        BuiltinPrim::root = this;
+    }
 
     static void initBuiltinPrims();
 };
-
-void debug_builtinprim(char*);
-inline BuiltinPrim::BuiltinPrim(const BuiltinPrimRecord* bpr)
-    : record(bpr), link(BuiltinPrim::root) {
-    debug_builtinprim(this->record->name);
-    BuiltinPrim::root = this;
-}
 
 
 #define INTERNAL_PRIM_NAME(pname) name2(_i_, pname)

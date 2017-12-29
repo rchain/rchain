@@ -16,22 +16,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Pattern.h"
-
 #include "Expr.h"
 #include "Meta.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
 
@@ -41,7 +29,7 @@ pOb NILmeta;
 CompoundPattern* NILpattern;
 Template* NILtemplate;
 
-inline Pattern::Pattern(int sz, Ob* meta, Ob* parent) : Ob(sz, meta, parent) {}
+Pattern::Pattern(int sz, Ob* meta, Ob* parent) : Ob(sz, meta, parent) {}
 
 
 UNIMPLEMENTED_VOID(Pattern, stuffKeys, (Tuple*, int));
@@ -125,8 +113,7 @@ int ConstPattern::numberOfKeys(void) { return 0; }
 void ConstPattern::stuffKeys(Tuple*, int) {}
 
 
-inline CompoundPattern::CompoundPattern(int sz, Ob* meta, Ob* parent,
-                                        TupleExpr* e)
+CompoundPattern::CompoundPattern(int sz, Ob* meta, Ob* parent, TupleExpr* e)
     : Pattern(sz, meta, parent), expr(e) {}
 
 
