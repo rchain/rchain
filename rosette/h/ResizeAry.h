@@ -45,7 +45,6 @@ class ResizeablePtrArray {
     void resize() { resize(2 * size); }
 
     void*& operator[](int n) { return array[n]; }
-
 };
 
 #endif

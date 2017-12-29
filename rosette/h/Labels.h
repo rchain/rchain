@@ -67,7 +67,6 @@ class FixupVec : public BinaryOb {
     int capacity() {
         return ((SIZE(this) - sizeof(FixupVec)) / sizeof(FixupEntry));
     }
-
 };
 
 

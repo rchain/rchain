@@ -74,7 +74,6 @@ class PtrCollectionTrav {
     void*& get() { return pc->array[current]; }
 
     operator void*() { return valid() ? this : 0; }
-
 };
 
 

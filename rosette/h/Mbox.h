@@ -72,9 +72,7 @@ class QueueMbox : public Ob {
     void unlock() { lockVal = RBLFALSE; }
     void enqueue(Ob*);
     Ob* dequeue();
-
 };
-
 
 
 extern Ob* emptyMbox;

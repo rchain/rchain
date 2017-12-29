@@ -113,8 +113,7 @@ int ConstPattern::numberOfKeys(void) { return 0; }
 void ConstPattern::stuffKeys(Tuple*, int) {}
 
 
-CompoundPattern::CompoundPattern(int sz, Ob* meta, Ob* parent,
-                                        TupleExpr* e)
+CompoundPattern::CompoundPattern(int sz, Ob* meta, Ob* parent, TupleExpr* e)
     : Pattern(sz, meta, parent), expr(e) {}
 
 

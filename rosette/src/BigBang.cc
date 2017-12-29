@@ -474,7 +474,7 @@ static void LoadBootFiles() {
 
 static void LoadRunFile() {
     if (strcmp(RunFile, "") != 0) {
-        FILE *run = fopen(RunFile, "r");
+        FILE* run = fopen(RunFile, "r");
         if (run) {
             Reader* reader = Reader::create(run);
             PROTECT(reader);
@@ -482,8 +482,10 @@ static void LoadRunFile() {
             Ob* expr = INVALID;
             while ((expr = reader->readExpr()) != RBLEOF)
                 vm->load(expr);
-        } else {
-            suicide("Unable to open RunFile \"%s\": %s", RunFile, strerror(errno));
+        }
+        else {
+            suicide("Unable to open RunFile \"%s\": %s", RunFile,
+                    strerror(errno));
         }
     }
 }

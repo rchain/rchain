@@ -82,7 +82,7 @@ void RBLstring::printOn(FILE* f) {
 
     do {
         c = *str++;
-        if ('\0' == c) {    // End of the string
+        if ('\0' == c) {  // End of the string
             break;
         }
 
@@ -117,7 +117,7 @@ void RBLstring::printOn(FILE* f) {
             }
         }
     } while (true);
-    
+
     fputc('\"', f);
 }
 

@@ -58,8 +58,8 @@ void BinaryOb::traversePtrs(V__PSOb f) {
 
 
 ByteVec::ByteVec(int sz)
-    : BinaryOb(sizeof(ByteVec) + align(sz * sizeof(uint8_t)), CLASS_META(ByteVec),
-               CLASS_SBO(ByteVec)),
+    : BinaryOb(sizeof(ByteVec) + align(sz * sizeof(uint8_t)),
+               CLASS_META(ByteVec), CLASS_SBO(ByteVec)),
       byteCount(sz) {
     memset((char*)&this->byte(0), 0, align(sz * sizeof(uint8_t)));
     ByteVec::updateCnt();
@@ -86,7 +86,8 @@ ByteVec* ByteVec::create(int n) {
 
 
 ByteVec* ByteVec::create(ByteVec* old, int newsize) {
-    void* loc = PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old);
+    void* loc =
+        PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old);
     return NEW(loc) ByteVec(old, newsize);
 }
 
@@ -143,8 +144,8 @@ Word16Vec::Word16Vec(Ob* meta, Ob* parent, int n)
 
 
 Word16Vec::Word16Vec(Word16Vec* old, int newsize)
-    : BinaryOb(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old->meta(),
-               old->parent()),
+    : BinaryOb(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)),
+               old->meta(), old->parent()),
       wordCount(newsize) {
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
@@ -210,9 +211,8 @@ Ob* Word16Vec::subObject(int start, int n) {
 
 
 Word32Vec::Word32Vec(int n)
-    : BinaryOb(sizeof(Word32Vec) + n * sizeof(uint32_t),
-            CLASS_META(Word32Vec), CLASS_SBO(Word32Vec)) {
-
+    : BinaryOb(sizeof(Word32Vec) + n * sizeof(uint32_t), CLASS_META(Word32Vec),
+               CLASS_SBO(Word32Vec)) {
     while (n--) {
         this->word(n) = 0;
     }
@@ -222,9 +222,8 @@ Word32Vec::Word32Vec(int n)
 
 
 Word32Vec::Word32Vec(Word32Vec* old, int newsize)
-    : BinaryOb(sizeof(Word32Vec) + newsize * sizeof(uint32_t),
-            old->meta(), old->parent()) {
-
+    : BinaryOb(sizeof(Word32Vec) + newsize * sizeof(uint32_t), old->meta(),
+               old->parent()) {
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
            min(oldsize, newsize) * sizeof(uint32_t));
@@ -264,14 +263,10 @@ uint32_t Word32Vec::sum(EMPTY) {
 }
 
 
-Ob* Word32Vec::indexedSize(EMPTY) {
-    return FIXNUM(numberOfWords());
-}
+Ob* Word32Vec::indexedSize(EMPTY) { return FIXNUM(numberOfWords()); }
 
 
-Ob* Word32Vec::nth(int n) {
-    return FIXNUM(word(n));
-}
+Ob* Word32Vec::nth(int n) { return FIXNUM(word(n)); }
 
 
 Ob* Word32Vec::setNth(int n, Ob* v) {

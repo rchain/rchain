@@ -45,8 +45,6 @@ class RblStack : public Ob {
     Ob* nth(int);
     Ob* setNth(int, Ob*);
     Ob* subObject(int, int);
-
-
 };
 
 #endif

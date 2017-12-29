@@ -71,91 +71,91 @@ BUILTIN_CLASS(UpcallCtxt) {
 }
 
 
-Ctxt::Ctxt(int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code,
-        Tuple* argvec, Ctxt* ctxt, Location loc)
+Ctxt::Ctxt(int sz, Ob* meta, Ob* parent, Ob* mbox, Code* code, Tuple* argvec,
+           Ctxt* ctxt, Location loc)
     : MboxOb(sz, meta, parent, mbox),
-    tag(loc),
-    nargs(argvec->numberOfElements()),
-    outstanding(1),
-    pc(0),
-    rslt(NIV),
-    trgt(NIV),
-    argvec(argvec),
-    env(ctxt->env),
-    code(code),
-    ctxt(ctxt->ctxt),
-    self2(ctxt->self2),
-    selfEnv(ctxt->selfEnv),
-    rcvr(ctxt->rcvr) {}
+      tag(loc),
+      nargs(argvec->numberOfElements()),
+      outstanding(1),
+      pc(0),
+      rslt(NIV),
+      trgt(NIV),
+      argvec(argvec),
+      env(ctxt->env),
+      code(code),
+      ctxt(ctxt->ctxt),
+      self2(ctxt->self2),
+      selfEnv(ctxt->selfEnv),
+      rcvr(ctxt->rcvr) {}
 
 
 Ctxt::Ctxt(Tuple* t, Ctxt* p)
     : MboxOb(sizeof(Ctxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox),
-    tag(LocRslt),
-    nargs(t->numberOfElements()),
-    outstanding(0),
-    pc(0),
-    rslt(NIV),
-    trgt(NIV),
-    argvec(t),
-    env(p->env),
-    code(p->code),
-    ctxt(p),
-    self2(p->self2),
-    selfEnv(p->selfEnv),
-    rcvr(p->rcvr),
-    monitor(p->monitor) {
-        Ctxt::updateCnt();
-    }
+      tag(LocRslt),
+      nargs(t->numberOfElements()),
+      outstanding(0),
+      pc(0),
+      rslt(NIV),
+      trgt(NIV),
+      argvec(t),
+      env(p->env),
+      code(p->code),
+      ctxt(p),
+      self2(p->self2),
+      selfEnv(p->selfEnv),
+      rcvr(p->rcvr),
+      monitor(p->monitor) {
+    Ctxt::updateCnt();
+}
 
 
 Ctxt::Ctxt(Code* c, Tuple* t, Ctxt* p, int o)
     : MboxOb(sizeof(Ctxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox),
-    tag(LocRslt),
-    nargs(t->numberOfElements()),
-    outstanding(o),
-    pc(0),
-    rslt(NIV),
-    trgt(NIV),
-    argvec(t),
-    code(c),
-    ctxt(p) {
-        if (p != NIV) {
-            this->env = p->env;
-            this->self2 = p->self2;
-            this->selfEnv = p->selfEnv;
-            this->rcvr = p->rcvr;
-            this->monitor = p->monitor;
-        }
-        else {
-            this->env = GlobalEnv;
-            this->self2 = NIV;
-            this->selfEnv = TopEnv;
-            this->rcvr = NIV;
-            this->monitor = vm->currentMonitor;
-        }
-        Ctxt::updateCnt();
+      tag(LocRslt),
+      nargs(t->numberOfElements()),
+      outstanding(o),
+      pc(0),
+      rslt(NIV),
+      trgt(NIV),
+      argvec(t),
+      code(c),
+      ctxt(p) {
+    if (p != NIV) {
+        this->env = p->env;
+        this->self2 = p->self2;
+        this->selfEnv = p->selfEnv;
+        this->rcvr = p->rcvr;
+        this->monitor = p->monitor;
     }
+    else {
+        this->env = GlobalEnv;
+        this->self2 = NIV;
+        this->selfEnv = TopEnv;
+        this->rcvr = NIV;
+        this->monitor = vm->currentMonitor;
+    }
+    Ctxt::updateCnt();
+}
 
 
 Ctxt::Ctxt(Ob* trgt, Tuple* argvec)
     : MboxOb(sizeof(Ctxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox),
-    tag(LocLimbo),
-    nargs(argvec->numberOfElements()),
-    outstanding(0),
-    pc(0),
-    rslt(NIV),
-    trgt(trgt),
-    argvec(argvec),
-    env(GlobalEnv),
-    code((Code*)NIV),
-    ctxt((Ctxt*)NIV),
-    self2(NIV),
-    selfEnv(NIV),
-    rcvr(NIV),
-    monitor(vm->currentMonitor) {
-        Ctxt::updateCnt();
-    }
+      tag(LocLimbo),
+      nargs(argvec->numberOfElements()),
+      outstanding(0),
+      pc(0),
+      rslt(NIV),
+      trgt(trgt),
+      argvec(argvec),
+      env(GlobalEnv),
+      code((Code*)NIV),
+      ctxt((Ctxt*)NIV),
+      self2(NIV),
+      selfEnv(NIV),
+      rcvr(NIV),
+      monitor(vm->currentMonitor) {
+    Ctxt::updateCnt();
+}
 
 
 Ctxt* Ctxt::create(Tuple* t, Ctxt* p) {
@@ -278,13 +278,13 @@ Ob* Ctxt::vmError() {
 
 UpcallCtxt::UpcallCtxt(Code* code, Tuple* argvec, Ctxt* ctxt, Location loc)
     : Ctxt(sizeof(UpcallCtxt), CLASS_META(Ctxt), CLASS_SBO(Ctxt), emptyMbox,
-            code, argvec, ctxt, loc) {
-        UpcallCtxt::updateCnt();
-    }
+           code, argvec, ctxt, loc) {
+    UpcallCtxt::updateCnt();
+}
 
 
 UpcallCtxt* UpcallCtxt::create(Code* code, Tuple* argvec, Ctxt* ctxt,
-        Location tag) {
+                               Location tag) {
     void* loc = PALLOC3(sizeof(UpcallCtxt), code, argvec, ctxt);
     return NEW(loc) UpcallCtxt(code, argvec, ctxt, tag);
 }

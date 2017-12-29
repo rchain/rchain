@@ -476,7 +476,6 @@ union HeaderBits {
         all = 0;
         fields.size = sz;
     }
-
 };
 
 struct convertArgReturnPair {
@@ -533,19 +532,17 @@ extern convertArgReturnPair cnvArgRetPair;
 
 
 class Base {
-    public:
-        static char** classNames;
-        static uint32_t* obCounts;
-        static int nClasses;
+   public:
+    static char** classNames;
+    static uint32_t* obCounts;
+    static int nClasses;
 
-        Base() {}
+    Base() {}
 
-        virtual char* typestring(EMPTY);
-        virtual void updateCnt(EMPTY);
-        static void defSlot(const char*, Location);
+    virtual char* typestring(EMPTY);
+    virtual void updateCnt(EMPTY);
+    static void defSlot(const char*, Location);
 };
-
-
 
 
 /*
@@ -567,184 +564,183 @@ struct InPlace_Constructor {
 
 
 class Ob : public Base {
-    protected:
-        static char stringbuf[256];
+   protected:
+    static char stringbuf[256];
 
-        Ob(InPlace_Constructor*, int);
-        Ob(InPlace_Constructor*) : header(this->header) {}
+    Ob(InPlace_Constructor*, int);
+    Ob(InPlace_Constructor*) : header(this->header) {}
 
-        Ob(InPlace_Constructor*, pOb meta, pOb parent)
-            : header(this->header) {
-                ASSIGN(this, meta(), meta);
-                ASSIGN(this, parent(), parent);
-            }
+    Ob(InPlace_Constructor*, pOb meta, pOb parent) : header(this->header) {
+        ASSIGN(this, meta(), meta);
+        ASSIGN(this, parent(), parent);
+    }
 
-        Ob(int sz, pOb meta, pOb parent) : header(sz) {
-            /*
-             * WARNING: sz must already be properly aligned.  The individual
-             * constructors, which are already responsible for requesting the
-             * allocator to give them a chunk of memory, must ensure that they
-             * only request chunks that are multiples of the alignment quantum.
-             */
-
-            this->meta() = meta;
-            this->parent() = parent;
-        }
-
-        friend class BuiltinClass;
-        friend class OldSpace;
-
-    public:
-        HeaderBits header;
-        pOb _slot[2];
-
+    Ob(int sz, pOb meta, pOb parent) : header(sz) {
         /*
-         * The mandatory meta and parent fields are contained in _slot[0] and
-         * _slot[1], respectively.  We declare things as an array to
-         * guarantee contiguity, and to make things easier for the scavenging
-         * and gc routines that want to regard objects as simple vectors of
-         * object pointers.
+         * WARNING: sz must already be properly aligned.  The individual
+         * constructors, which are already responsible for requesting the
+         * allocator to give them a chunk of memory, must ensure that they
+         * only request chunks that are multiples of the alignment quantum.
          */
 
-        virtual ~Ob(EMPTY);
+        this->meta() = meta;
+        this->parent() = parent;
+    }
 
-        void* operator new(size_t);
-        void* operator new(size_t, void* p) { return p; }
-        void operator delete(void*);
+    friend class BuiltinClass;
+    friend class OldSpace;
 
-        pOb& meta(EMPTY) { return _slot[0]; }
-        pOb& parent(EMPTY) { return _slot[1]; }
-        pOb& slot(int n) { return _slot[n + 2]; }
+   public:
+    HeaderBits header;
+    pOb _slot[2];
 
-        pOb* endp(EMPTY) { return (pOb*)((char*)this + SIZE(this)); }
-        pOb& forwardingAddress(EMPTY) { return _slot[0]; }
-        bool checkStore(pOb v) { return IS_OLD(this) && reallyCheckStore(v); }
-        int gcSensitive(EMPTY) { return IS_NEW(this); }
-        int numberOfSlots(EMPTY) { return (SIZE(this) - sizeof(Ob)) / sizeof(pOb); }
+    /*
+     * The mandatory meta and parent fields are contained in _slot[0] and
+     * _slot[1], respectively.  We declare things as an array to
+     * guarantee contiguity, and to make things easier for the scavenging
+     * and gc routines that want to regard objects as simple vectors of
+     * object pointers.
+     */
 
-        void forwardTo(pOb);
-        bool reallyCheckStore(pOb);
-        pOb relocate(EMPTY);
-        bool suspicious(EMPTY);
-        void clobberVtbl(pOb);
+    virtual ~Ob(EMPTY);
 
-        void notImplemented(char*);
+    void* operator new(size_t);
+    void* operator new(size_t, void* p) { return p; }
+    void operator delete(void*);
 
-        void mark(EMPTY);
-        void check(EMPTY);
-        void checkOb(EMPTY);
-        int size(EMPTY);
-        int obCount(EMPTY);
-        void unvisit(EMPTY);
+    pOb& meta(EMPTY) { return _slot[0]; }
+    pOb& parent(EMPTY) { return _slot[1]; }
+    pOb& slot(int n) { return _slot[n + 2]; }
 
-        virtual pOb self(EMPTY);
+    pOb* endp(EMPTY) { return (pOb*)((char*)this + SIZE(this)); }
+    pOb& forwardingAddress(EMPTY) { return _slot[0]; }
+    bool checkStore(pOb v) { return IS_OLD(this) && reallyCheckStore(v); }
+    int gcSensitive(EMPTY) { return IS_NEW(this); }
+    int numberOfSlots(EMPTY) { return (SIZE(this) - sizeof(Ob)) / sizeof(pOb); }
 
-        /* Garbage collector interface */
+    void forwardTo(pOb);
+    bool reallyCheckStore(pOb);
+    pOb relocate(EMPTY);
+    bool suspicious(EMPTY);
+    void clobberVtbl(pOb);
 
-        virtual int traversePtrs(PSOb__PSOb);
-        virtual int traversePtrs(SI__PSOb);
-        virtual void traversePtrs(V__PSOb);
-        virtual bool gcFixup(EMPTY);
-        virtual bool scavengeFixup(EMPTY);
+    void notImplemented(char*);
 
-        /* Generic runtime actions */
+    void mark(EMPTY);
+    void check(EMPTY);
+    void checkOb(EMPTY);
+    int size(EMPTY);
+    int obCount(EMPTY);
+    void unvisit(EMPTY);
 
-        virtual bool ConstantP(EMPTY);
-        virtual Prim* InlineablePrimP(EMPTY);
-        virtual void printOn(FILE*);
-        virtual void printQuotedOn(FILE*);
-        virtual void displayOn(FILE* s);
-        virtual pOb container(EMPTY);
-        virtual pOb mailbox(EMPTY);
-        virtual pOb setMailbox(pOb);
-        virtual pOb rcons(pOb);
-        virtual int addSlot(pOb, pOb);
-        virtual pOb dup(EMPTY);
-        virtual pOb clone(EMPTY);
-        virtual pOb cloneTo(pOb, pOb);
-        virtual pOb getLex(int, int, int);
-        virtual pOb setLex(int, int, int, pOb);
-        virtual pOb getAddr(int, int, int);
-        virtual pOb setAddr(int, int, int, pOb);
-        virtual pOb getField(int, int, int, int, int);
-        virtual pOb setField(int, int, int, int, uint32_t);
-        virtual pOb indexedSize(EMPTY);
-        virtual pOb nth(int);
-        virtual pOb setNth(int, pOb);
-        virtual pOb subObject(int, int);
-        virtual const char* asCstring(EMPTY);
-        virtual char* asPathname(EMPTY);
+    virtual pOb self(EMPTY);
 
-        /* Object actions */
+    /* Garbage collector interface */
 
-        virtual bool isSynchronousTrgt(EMPTY);
-        virtual pOb dispatch(pCtxt);
-        virtual pOb invoke(pCtxt);
-        virtual pOb lookup(pOb, pCtxt);
-        virtual pOb lookupAndInvoke(pCtxt);
-        virtual pOb nextMsg(MboxOb*, pOb);
-        virtual pOb updateNoArgs();
-        virtual pOb update(bool, pCtxt);
-        virtual pOb updateByLoc(bool, pCtxt);
-        virtual pOb primitiveInitialize(pCtxt);
-        virtual pOb receive(pCtxt);
-        virtual pOb receiveMsg(MboxOb*, pCtxt);
-        virtual pOb becomeNew(pOb, pCtxt);
-        virtual bool accepts(pCtxt);
-        virtual bool matches(pCtxt);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
+    virtual bool gcFixup(EMPTY);
+    virtual bool scavengeFixup(EMPTY);
 
-        virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-        virtual Ob* convertActualRslt(Ctxt*, uint32_t);
+    /* Generic runtime actions */
 
-        virtual pOb isNullP(EMPTY);
+    virtual bool ConstantP(EMPTY);
+    virtual Prim* InlineablePrimP(EMPTY);
+    virtual void printOn(FILE*);
+    virtual void printQuotedOn(FILE*);
+    virtual void displayOn(FILE* s);
+    virtual pOb container(EMPTY);
+    virtual pOb mailbox(EMPTY);
+    virtual pOb setMailbox(pOb);
+    virtual pOb rcons(pOb);
+    virtual int addSlot(pOb, pOb);
+    virtual pOb dup(EMPTY);
+    virtual pOb clone(EMPTY);
+    virtual pOb cloneTo(pOb, pOb);
+    virtual pOb getLex(int, int, int);
+    virtual pOb setLex(int, int, int, pOb);
+    virtual pOb getAddr(int, int, int);
+    virtual pOb setAddr(int, int, int, pOb);
+    virtual pOb getField(int, int, int, int, int);
+    virtual pOb setField(int, int, int, int, uint32_t);
+    virtual pOb indexedSize(EMPTY);
+    virtual pOb nth(int);
+    virtual pOb setNth(int, pOb);
+    virtual pOb subObject(int, int);
+    virtual const char* asCstring(EMPTY);
+    virtual char* asPathname(EMPTY);
 
-        /* Type system methods */
-        pOb typep(pOb);
-        virtual bool hasParentp(pOb);
-        virtual bool compositeCoversp(pOb);
-        virtual bool isCoveredByp(pOb);
-        virtual bool coversp(pOb);
-        virtual bool typeMatchesp(pOb);
-        virtual pOb typeLub(pOb);
+    /* Object actions */
 
-        /* Meta actions */
+    virtual bool isSynchronousTrgt(EMPTY);
+    virtual pOb dispatch(pCtxt);
+    virtual pOb invoke(pCtxt);
+    virtual pOb lookup(pOb, pCtxt);
+    virtual pOb lookupAndInvoke(pCtxt);
+    virtual pOb nextMsg(MboxOb*, pOb);
+    virtual pOb updateNoArgs();
+    virtual pOb update(bool, pCtxt);
+    virtual pOb updateByLoc(bool, pCtxt);
+    virtual pOb primitiveInitialize(pCtxt);
+    virtual pOb receive(pCtxt);
+    virtual pOb receiveMsg(MboxOb*, pCtxt);
+    virtual pOb becomeNew(pOb, pCtxt);
+    virtual bool accepts(pCtxt);
+    virtual bool matches(pCtxt);
 
-        virtual pTuple keys(pOb);
-        virtual pTuple locs(pOb);
-        virtual Location keyLoc(pOb, pOb = ABSENT);
-        virtual pTuple locContour(pOb);
-        virtual pTuple contour(pOb);
-        virtual pOb get(pOb, pOb, pCtxt);
-        virtual pOb add(pOb, pOb, pOb, pCtxt);
-        virtual pOb set(pOb, pOb, pOb, pCtxt);
-        virtual void addRef(EMPTY);
-        virtual void deleteRef(EMPTY);
-        virtual pOb lookupOBO(pOb, pOb, pCtxt);
+    virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 
-        /* Table actions */
+    virtual pOb isNullP(EMPTY);
 
-        virtual pTuple dumpKeys(EMPTY);
-        virtual pTuple dumpPairs(EMPTY);
-        virtual int nPairs(EMPTY);
-        virtual pOb getKey(pOb);
-        virtual pOb addKey(pOb, pOb);
+    /* Type system methods */
+    pOb typep(pOb);
+    virtual bool hasParentp(pOb);
+    virtual bool compositeCoversp(pOb);
+    virtual bool isCoveredByp(pOb);
+    virtual bool coversp(pOb);
+    virtual bool typeMatchesp(pOb);
+    virtual pOb typeLub(pOb);
 
-        /* Compiler interface */
+    /* Meta actions */
 
-        virtual Pattern* makePattern(EMPTY);
-        virtual Template* makeTemplate(EMPTY);
-        virtual AttrNode* makeAttrNode(bool);
-        virtual pOb unquote(EMPTY);
-        virtual Code* compileWrt(pOb, pOb);
-        virtual Location lex(pOb, int);
-        virtual pOb extendWith(pOb);
-        virtual pOb extendWith(pOb, pTuple);
+    virtual pTuple keys(pOb);
+    virtual pTuple locs(pOb);
+    virtual Location keyLoc(pOb, pOb = ABSENT);
+    virtual pTuple locContour(pOb);
+    virtual pTuple contour(pOb);
+    virtual pOb get(pOb, pOb, pCtxt);
+    virtual pOb add(pOb, pOb, pOb, pCtxt);
+    virtual pOb set(pOb, pOb, pOb, pCtxt);
+    virtual void addRef(EMPTY);
+    virtual void deleteRef(EMPTY);
+    virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
-        /* error handlers */
+    /* Table actions */
 
-        virtual pOb runtimeError(pCtxt, const char*, ...);
-        virtual pOb mismatch(pCtxt, int, char*);
-        virtual pOb mismatch(pCtxt, int, int);
+    virtual pTuple dumpKeys(EMPTY);
+    virtual pTuple dumpPairs(EMPTY);
+    virtual int nPairs(EMPTY);
+    virtual pOb getKey(pOb);
+    virtual pOb addKey(pOb, pOb);
+
+    /* Compiler interface */
+
+    virtual Pattern* makePattern(EMPTY);
+    virtual Template* makeTemplate(EMPTY);
+    virtual AttrNode* makeAttrNode(bool);
+    virtual pOb unquote(EMPTY);
+    virtual Code* compileWrt(pOb, pOb);
+    virtual Location lex(pOb, int);
+    virtual pOb extendWith(pOb);
+    virtual pOb extendWith(pOb, pTuple);
+
+    /* error handlers */
+
+    virtual pOb runtimeError(pCtxt, const char*, ...);
+    virtual pOb mismatch(pCtxt, int, char*);
+    virtual pOb mismatch(pCtxt, int, int);
 };
 
 
@@ -752,21 +748,20 @@ static const int MinObSize = sizeof(Ob);
 
 
 class MboxOb : public Ob {
-    protected:
-        MboxOb(int sz, pOb meta, pOb parent, pOb mbox)
-            : Ob(sz, meta, parent) {
-                this->mbox = mbox;
-            }
+   protected:
+    MboxOb(int sz, pOb meta, pOb parent, pOb mbox) : Ob(sz, meta, parent) {
+        this->mbox = mbox;
+    }
 
-        MboxOb(InPlace_Constructor* ipc) : Ob(ipc) {}
+    MboxOb(InPlace_Constructor* ipc) : Ob(ipc) {}
 
-    public:
-        pOb mbox;
+   public:
+    pOb mbox;
 
-        virtual pOb mailbox(EMPTY);
-        virtual pOb setMailbox(pOb);
-        virtual pOb receive(pCtxt);
-        virtual void schedule(pCtxt);
+    virtual pOb mailbox(EMPTY);
+    virtual pOb setMailbox(pOb);
+    virtual pOb receive(pCtxt);
+    virtual void schedule(pCtxt);
 };
 
 
@@ -775,13 +770,13 @@ class SlotDescriptor;
 
 #define STD_DECLS(classname)             \
     friend class BuiltinClass;           \
-\
-public:                               \
-virtual void updateCnt(EMPTY);       \
-virtual char* typestring(EMPTY);     \
-static pMeta name2(classname, Meta); \
-static pSBO name2(classname, SBO);   \
-static SlotDescriptor* _meta_fields
+                                         \
+   public:                               \
+    virtual void updateCnt(EMPTY);       \
+    virtual char* typestring(EMPTY);     \
+    static pMeta name2(classname, Meta); \
+    static pSBO name2(classname, SBO);   \
+    static SlotDescriptor* _meta_fields
 
 
 #define CLASS_META(name) name2(name::name, Meta)
@@ -795,14 +790,14 @@ pSBO SBO(pOb ob);
 class Actor : public MboxOb {
     STD_DECLS(Actor);
 
-    protected:
+   protected:
     Actor(pOb, pOb, pExt);
     Actor(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
         : MboxOb(sz, meta, parent, mbox), extension(ext) {}
 
     Actor(InPlace_Constructor* ipc) : MboxOb(ipc) {}
 
-    public:
+   public:
     pExt extension;
 
     static Actor* create(EMPTY);
@@ -826,7 +821,7 @@ class Actor : public MboxOb {
 class StdExtension : public Ob {
     STD_DECLS(StdExtension);
 
-    protected:
+   protected:
     StdExtension(pOb, pOb, int);
     StdExtension(pOb, pOb);
     StdExtension(int);
@@ -834,7 +829,7 @@ class StdExtension : public Ob {
 
     friend class Tuple;
 
-    public:
+   public:
     static StdExtension* create(pOb, pOb, int);
     static StdExtension* create(int);
     static StdExtension* create(pTuple);
@@ -844,10 +839,10 @@ class StdExtension : public Ob {
 class TblObject : public Actor {
     STD_DECLS(TblObject);
 
-    protected:
+   protected:
     TblObject(pExt, pOb, pTuple);
 
-    public:
+   public:
     pOb validExtent;
     pTuple keyVec;
 
@@ -856,7 +851,6 @@ class TblObject : public Actor {
     virtual int addSlot(pOb, pOb);
     pOb entry(int n) { return extension->slot(n); }
     pOb entryKey(int);
-
 };
 
 
@@ -870,7 +864,7 @@ static const int BUILTIN_STDMETA_SLOTS = 3;
 class StdMeta : public Actor {
     STD_DECLS(StdMeta);
 
-    protected:
+   protected:
     StdMeta(EMPTY);
     StdMeta(pExt);
     StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
@@ -878,7 +872,7 @@ class StdMeta : public Actor {
 
     StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
 
-    public:
+   public:
     static StdMeta* create(EMPTY);
     static StdMeta* create(pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
 

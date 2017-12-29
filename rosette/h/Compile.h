@@ -42,8 +42,6 @@
  * label is kept as a reminder.
  */
 
-#define protected public
-
 class CompilationUnit : public BinaryOb {
     STD_DECLS(CompilationUnit);
 

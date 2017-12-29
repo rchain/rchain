@@ -299,9 +299,7 @@ int inlineUseIfPtr(void* v, PSOb__PSOb f) {
 
 int useIfPtr(void* v, PSOb__PSOb f) { return inlineUseIfPtr(v, f); }
 
-int inlineUseIfPtr(pOb v, SI__PSOb f) {
-    return IS_PTR(v) ? (PTR(v)->*f)() : 0;
-}
+int inlineUseIfPtr(pOb v, SI__PSOb f) { return IS_PTR(v) ? (PTR(v)->*f)() : 0; }
 
 
 int useIfPtr(pOb v, SI__PSOb f) { return inlineUseIfPtr(v, f); }
@@ -534,7 +532,8 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
-        // this contained some complex and questionable big-endian dependent code.
+        // this contained some complex and questionable big-endian dependent
+        // code.
         ans = 0;
     }
     }
@@ -565,7 +564,8 @@ pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
-        // this contained some complex and questionable big-endian dependent code.
+        // this contained some complex and questionable big-endian dependent
+        // code.
     }
     }
     return this;
@@ -1157,8 +1157,8 @@ DEF("set-field", objectSetField, 5, 5) {
     CHECK_FIXNUM(2, span);
     CHECK(3, RblBool, indirect);
     CHECK_FIXNUM(4, bits);
-    pOb rslt =
-        BASE(ARG(0))->setField(BOOLVAL(indirect), 0, start, span, (uint32_t)bits);
+    pOb rslt = BASE(ARG(0))->setField(BOOLVAL(indirect), 0, start, span,
+                                      (uint32_t)bits);
 
     return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
 }

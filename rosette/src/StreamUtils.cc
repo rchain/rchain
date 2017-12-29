@@ -22,9 +22,7 @@
 #include <stdarg.h>
 
 
-int isoctal(char c) {
-    return (isdigit(c) && (c < '8'));
-}
+int isoctal(char c) { return (isdigit(c) && (c < '8')); }
 
 
 int readError(FILE* f, const char* fmt, ...) {
@@ -42,9 +40,7 @@ int readError(FILE* f, const char* fmt, ...) {
 }
 
 
-int eofError(FILE* f) {
-    return readError(f, "unexpected eof");
-}
+int eofError(FILE* f) { return readError(f, "unexpected eof"); }
 
 
 char getEscapedChar(FILE* f) {

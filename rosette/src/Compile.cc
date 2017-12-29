@@ -178,20 +178,19 @@ void AttrNode::emitF2(Opcode opcode, unsigned op0, unsigned op1) {
 }
 
 
-void AttrNode::emitF3(Opcode opcode, unsigned op0, unsigned op1,
-                             unsigned op2) {
+void AttrNode::emitF3(Opcode opcode, unsigned op0, unsigned op1, unsigned op2) {
     cu->codebuf->emitF3(opcode, op0, op1, op2);
 }
 
 
 void AttrNode::emitF4(Opcode opcode, unsigned unwind, unsigned next,
-                             unsigned nargs, unsigned op0) {
+                      unsigned nargs, unsigned op0) {
     cu->codebuf->emitF4(opcode, unwind, next, nargs, op0);
 }
 
 
 void AttrNode::emitF5(Opcode opcode, unsigned unwind, unsigned next,
-                             unsigned op0) {
+                      unsigned op0) {
     cu->codebuf->emitF5(opcode, unwind, next, op0);
 }
 
@@ -202,7 +201,7 @@ void AttrNode::emitF6(Opcode opcode, unsigned pc) {
 
 
 void AttrNode::emitF7(Opcode opcode, unsigned indirect, unsigned level,
-                             unsigned offset, unsigned op0) {
+                      unsigned offset, unsigned op0) {
     cu->codebuf->emitF7(opcode, indirect, level, offset, op0);
 }
 

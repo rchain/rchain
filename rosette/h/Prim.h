@@ -66,7 +66,6 @@ class Prim : public BinaryOb {
 };
 
 
-
 struct BuiltinPrimRecord {
     char* name;
     PRIMFN* fn;

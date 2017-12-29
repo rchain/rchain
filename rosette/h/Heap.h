@@ -86,7 +86,7 @@ class Heap {
     Ob* copyAndForward(Ob*);
     void traverseRootSets(RootSet_Fn);
 
-    //friend Ob* Ob::relocate(EMPTY);
+    // friend Ob* Ob::relocate(EMPTY);
 
     Heap(unsigned, unsigned, unsigned);
     ~Heap(EMPTY);
@@ -188,19 +188,16 @@ class ProtectedItem {
     friend void Init_Heap(EMPTY);
 
    public:
-    ProtectedItem(void* v) : next(root), item(v) {
-        root = this;
-    }
+    ProtectedItem(void* v) : next(root), item(v) { root = this; }
 
     ~ProtectedItem() { root = next; }
 };
 
 
-
 #define PROTECT(v) ProtectedItem name2(_, v)(&v)
 #define PROTECT_THIS(type) \
     type* __this__ = this; \
-PROTECT(__this__)
+    PROTECT(__this__)
 #define SELF __this__
 
 

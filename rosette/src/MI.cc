@@ -436,9 +436,7 @@ bool typeEq(pOb x, pOb y) {
     return (BASE(x)->coversp(y) && BASE(y)->coversp(x));
 }
 
-bool typeLess(pOb x, pOb y) {
-    return (typeLessEq(x, y) && !typeEq(x, y));
-}
+bool typeLess(pOb x, pOb y) { return (typeLessEq(x, y) && !typeEq(x, y)); }
 
 bool typeGreater(pOb x, pOb y) {
     return (typeGreaterEq(x, y) && !typeEq(x, y));

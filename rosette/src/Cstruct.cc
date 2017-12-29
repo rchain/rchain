@@ -77,7 +77,8 @@ extern AtomicDescriptor* obChar;
 extern Ob* newSBO(Ob* proto_sbo, Ob* id, Ob* prnt, Ob* ctxt);
 extern Ob* genActor(Ob* proto, Ob* sbo);
 extern uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign);
-extern uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits);
+extern uint32_t* mem_set_field(uint32_t* addr, int offset, int span,
+                               uint32_t bits);
 
 // some useful defines so i don't have to remember the accessors
 
@@ -441,7 +442,8 @@ Ob* GenericDescriptor::convertActualRslt(Ctxt* ctxt, uint32_t obj) {
     }
 }
 
-Ob* GenericDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
+Ob* GenericDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path,
+                            int pindex) {
     if (NULLP(path, pindex)) {
         return sBox(base + _offset);
     }
@@ -449,7 +451,8 @@ Ob* GenericDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) 
         return oprnSwitch(ctxt, base, path, pindex);
 }
 
-Ob* GenericDescriptor::sDesc(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
+Ob* GenericDescriptor::sDesc(Ctxt* ctxt, uint32_t base, Tuple* path,
+                             int pindex) {
     /* remember to ask about gc protection */
     if (NULLP(path, pindex)) {
         return sBox(base + _offset);
@@ -495,7 +498,8 @@ Ob* GenericDescriptor::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val,
     Ob* tupHead = INVALID;
     PROTECT(tupHead);
 
-    for (uint32_t addr = base; !(NULLP(val, vindex)); addr = addr + SELF->_size) {
+    for (uint32_t addr = base; !(NULLP(val, vindex));
+         addr = addr + SELF->_size) {
         tupHead = TUPLE_HEAD(val, vindex);
         TUPLE_TAIL(val, vindex);
         (void)(SELF->sSet(ctxt, addr, tupHead, NIL));
@@ -532,8 +536,8 @@ uint32_t GenericDescriptor::absoluteAddress(uint32_t base) {
     uint32_t newbase = (base + _offset);
     uint32_t newoff = newbase % 4;
     return (uint32_t)(mem_get_field((uint32_t*)(newbase - newoff),
-                                  (int)(newoff * 8), (int)(_size * 8),
-                                  BOOLVAL(RBLFALSE)));
+                                    (int)(newoff * 8), (int)(_size * 8),
+                                    BOOLVAL(RBLFALSE)));
 }
 
 void GenericDescriptor::setAddrContents(uint32_t base, uint32_t val) {
@@ -719,8 +723,8 @@ uint32_t AtomicDescriptor::absoluteAddress(uint32_t base) {
     uint32_t newbase = (base + _offset);
     uint32_t newoff = newbase % 4;
     return (uint32_t)(mem_get_field((uint32_t*)(newbase - newoff),
-                                  (int)(newoff * 8), (int)(_size * 8),
-                                  BOOLVAL(_signed)));
+                                    (int)(newoff * 8), (int)(_size * 8),
+                                    BOOLVAL(_signed)));
 }
 
 /************************************************************************/
@@ -1035,7 +1039,8 @@ CharArray* CharArray::create() {
     return NEW(loc) CharArray(0, tmp, ext);
 }
 
-Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
+Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
+                    int pindex) {
     if (STRINGP(val)) {
         uint32_t addr = base + _offset;
         if (VALID_ADDR(addr)) {
@@ -1573,7 +1578,8 @@ Ob* CharRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     }
 }
 
-Ob* CharRef0::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
+Ob* CharRef0::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
+                   int pindex) {
     if (STRINGP(val)) {
         int valsize = strlen(GET_STRING(val));
         char* tmp = new char[valsize];

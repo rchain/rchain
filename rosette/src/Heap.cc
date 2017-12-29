@@ -205,9 +205,7 @@ SpaceTrav::SpaceTrav(Space* space) {
 }
 bool SpaceTrav::valid() { return current < sp->next; }
 Ob* SpaceTrav::get() { return (Ob*)current; }
-void SpaceTrav::advance() {
-    current = (char*)current + SIZE((Ob*)current);
-}
+void SpaceTrav::advance() { current = (char*)current + SIZE((Ob*)current); }
 SpaceTrav::operator void*() { return valid() ? this : NULL; }
 
 
@@ -248,9 +246,7 @@ void* Space::alloc(unsigned sz) {
 }
 
 
-bool Space::contains(Ob* p) {
-    return (base <= (void*)p) && ((void*)p < limit);
-}
+bool Space::contains(Ob* p) { return (base <= (void*)p) && ((void*)p < limit); }
 
 
 void Space::scan() {

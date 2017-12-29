@@ -161,7 +161,7 @@ char* StringChunk::deposit(const char* sym) {
         if (0 == c) {
             break;
         }
-    } while(true);
+    } while (true);
 
     bp = align(p);
     remaining -= bp - result;

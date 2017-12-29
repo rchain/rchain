@@ -315,8 +315,7 @@ RequestExpr::RequestExpr(Ob* t, TupleExpr* te)
 }
 
 
-RequestExpr::RequestExpr(int sz, Ob* meta, Ob* parent, Ob* t,
-                                TupleExpr* te)
+RequestExpr::RequestExpr(int sz, Ob* meta, Ob* parent, Ob* t, TupleExpr* te)
     : Expr(sz, meta, parent), target(t), msg(te) {}
 
 

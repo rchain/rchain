@@ -68,16 +68,15 @@ class ProductType : public Actor {
     virtual bool typeMatchesp(pOb);
 
 
-    int numberOfElements() {
-        return definite()->numberOfElements();
-    }
+    int numberOfElements() { return definite()->numberOfElements(); }
 
     pOb elem(int i) { return definite()->elem(i); }
 
     pOb elemR(int i) {
         if (i < definite()->numberOfElements()) {
             return elem(i);
-        } else {
+        }
+        else {
             return star();
         }
     }
@@ -91,10 +90,10 @@ static const int BUILTIN_SumType_SLOTS = 1;
 class SumType : public Actor {
     STD_DECLS(SumType);
 
-    protected:
+   protected:
     SumType(pExt);
 
-    public:
+   public:
     static SumType* create(Tuple*);
     virtual bool compositeCoversp(pOb);
     virtual bool isCoveredByp(pOb);
@@ -102,9 +101,7 @@ class SumType : public Actor {
     virtual pOb typeLub(pOb);
     pOb normalize();
 
-    Tuple* types() {
-        return (Tuple*)extension->slot(SUM_TYPE_TYPES_SLOT);
-    }
+    Tuple* types() { return (Tuple*)extension->slot(SUM_TYPE_TYPES_SLOT); }
 
     pOb elem(int i) { return types()->elem(i); }
     int numberOfElements() { return types()->numberOfElements(); }
@@ -117,23 +114,18 @@ static const int BUILTIN_MultiMethod_SLOTS = 1;
 class MultiMethod : public Actor {
     STD_DECLS(MultiMethod);
 
-    protected:
+   protected:
     MultiMethod(pExt);
 
-    public:
+   public:
     static MultiMethod* create();
     pOb matchAndDispatch(pCtxt);
 
-    Tuple* procList() {
-        return (Tuple*)extension->slot(MM_PROC_LIST_SLOT);
-    }
+    Tuple* procList() { return (Tuple*)extension->slot(MM_PROC_LIST_SLOT); }
 
     pOb elem(int i) { return procList()->elem(i); }
 
-    int numberOfElements() {
-        return procList()->numberOfElements();
-    }
-
+    int numberOfElements() { return procList()->numberOfElements(); }
 };
 
 bool typeLessEq(pOb x, pOb y);

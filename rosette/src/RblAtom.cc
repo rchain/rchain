@@ -90,7 +90,7 @@ void Symbol::printOn(FILE* f) {
     char c;
     do {
         c = *str++;
-        if ('\0' == c) {    // End of string
+        if ('\0' == c) {  // End of string
             break;
         }
 
@@ -123,7 +123,7 @@ void Symbol::printOn(FILE* f) {
                 break;
             }
         }
-    } while(true);
+    } while (true);
 }
 
 void Symbol::printQuotedOn(FILE* f) {

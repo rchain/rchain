@@ -30,26 +30,24 @@
  */
 
 class BinaryOb : public Ob {
+   protected:
+    BinaryOb(int sz, pOb meta, pOb parent) : Ob(sz, meta, parent) {}
 
-    protected:
-        BinaryOb(int sz, pOb meta, pOb parent):
-            Ob(sz, meta, parent) {}
-
-        BinaryOb(InPlace_Constructor* ipc, pOb meta, pOb parent):
-            Ob(ipc, meta, parent) {}
+    BinaryOb(InPlace_Constructor* ipc, pOb meta, pOb parent)
+        : Ob(ipc, meta, parent) {}
 
 
-    public:
-        virtual int traversePtrs(PSOb__PSOb);
-        virtual int traversePtrs(SI__PSOb);
-        virtual void traversePtrs(V__PSOb);
+   public:
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
 };
 
 
 class ByteVec : public BinaryOb {
     STD_DECLS(ByteVec);
 
-    protected:
+   protected:
     int byteCount;
 
     /*
@@ -63,10 +61,10 @@ class ByteVec : public BinaryOb {
 
     ByteVec(int sz, pOb meta, pOb parent, int numberOfBytes)
         : BinaryOb(sz, meta, parent) {
-            byteCount = numberOfBytes;
-        }
+        byteCount = numberOfBytes;
+    }
 
-    public:
+   public:
     uint8_t& byte(int n) {
         // NB(leaf): Argh.
         uint8_t* p = (uint8_t*)(((char*)&byteCount) + sizeof(byteCount));
@@ -91,7 +89,7 @@ class ByteVec : public BinaryOb {
 class Word16Vec : public BinaryOb {
     STD_DECLS(Word16Vec);
 
-    protected:
+   protected:
     int wordCount;
 
     /*
@@ -106,10 +104,10 @@ class Word16Vec : public BinaryOb {
 
     Word16Vec(int sz, pOb meta, pOb parent, int cnt)
         : BinaryOb(sz, meta, parent) {
-            wordCount = cnt;
-        }
+        wordCount = cnt;
+    }
 
-    public:
+   public:
     uint16_t& word(int n) {
         uint16_t* p = (uint16_t*)(((char*)&wordCount) + sizeof(wordCount));
         return p[n];
@@ -134,15 +132,13 @@ class Word16Vec : public BinaryOb {
 class Word32Vec : public BinaryOb {
     STD_DECLS(Word32Vec);
 
-    protected:
-
-    Word32Vec(int sz, pOb meta, pOb parent)
-        : BinaryOb(sz, meta, parent) {}
+   protected:
+    Word32Vec(int sz, pOb meta, pOb parent) : BinaryOb(sz, meta, parent) {}
 
     Word32Vec(int);
     Word32Vec(Word32Vec*, int);
 
-    public:
+   public:
     static Word32Vec* create(int);
     static Word32Vec* create(Word32Vec*, int);
 

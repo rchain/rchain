@@ -88,10 +88,10 @@ class CodeVec : public Word16Vec {
 class Code : public Ob {
     STD_DECLS(Code);
 
-    protected:
+   protected:
     Code(CodeVec*, Tuple*);
 
-    public:
+   public:
     CodeVec* codevec;
     Tuple* litvec;
 
