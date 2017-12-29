@@ -103,7 +103,7 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+      checkFixnum(0, ctxt.argvec.elem).map({ m =>
         checkFixnum(1, ctxt.argvec.elem)
           .map(n => m < n)
           .getOrElse(RblBool(false))
@@ -117,7 +117,7 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+      checkFixnum(0, ctxt.argvec.elem).map({ m =>
         checkFixnum(1, ctxt.argvec.elem)
           .map(n => m <= n)
           .getOrElse(RblBool(false))
@@ -131,7 +131,7 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+      checkFixnum(0, ctxt.argvec.elem).map({ m =>
         checkFixnum(1, ctxt.argvec.elem)
           .map(n => m > n)
           .getOrElse(RblBool(false))
@@ -145,7 +145,7 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+      checkFixnum(0, ctxt.argvec.elem).map({ m =>
         checkFixnum(1, ctxt.argvec.elem)
           .map(n => m >= n)
           .getOrElse(RblBool(false))
@@ -159,7 +159,7 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+      checkFixnum(0, ctxt.argvec.elem).map({ m =>
         checkFixnum(1, ctxt.argvec.elem)
           .map(n => m == n)
           .getOrElse(RblBool(false))
@@ -173,7 +173,7 @@ object Number {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
-      checkFixnum(0, ctxt.argvec.elem).map[RblBool]({ m =>
+      checkFixnum(0, ctxt.argvec.elem).map({ m =>
         checkFixnum(1, ctxt.argvec.elem)
           .map(n => m != n)
           .getOrElse(RblBool(false))
