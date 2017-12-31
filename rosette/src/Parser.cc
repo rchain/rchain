@@ -35,11 +35,6 @@
 #include <memory.h>
 #include <stdarg.h>
 
-#ifndef NEW
-#define NEW(x) new (x)
-#endif
-
-
 #define OPTIMIZE_ATOMS
 
 
@@ -540,7 +535,7 @@ ParserMode SpecialPFrame::process(int c, Parser* r)
             state = SP_EXPECTING_CHAR;
             return CONTINUE;
         } else if (isalpha(c)) {
-            (void)NEW(r->falloc(sizeof(AtomFrame))) AtomFrame(r);
+            new (r->falloc(sizeof(AtomFrame))) AtomFrame(r);
             r->resetBuffer();
             return r->accept(c);
         } else {
@@ -550,7 +545,7 @@ ParserMode SpecialPFrame::process(int c, Parser* r)
 
     case SP_EXPECTING_CHAR:
         if (c == '\\') {
-            (void)NEW(r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
+            new (r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
             return CONTINUE;
         } else {
             return r->receiveOb(RBLCHAR(c));
@@ -764,7 +759,7 @@ class CommentParseMacro : public ParseMacro {
 
 
 ParserMode CommentParseMacro::start(int, Parser* r) {
-    (void)NEW(r->falloc(sizeof(CommentFrame))) CommentFrame(r);
+    new (r->falloc(sizeof(CommentFrame))) CommentFrame(r);
     return CONTINUE;
 }
 
@@ -788,7 +783,7 @@ ParserMode AtomParseMacro::start(int c, Parser* r) {
      */
     r->mode = GROK_ATOM;
 #else
-    NEW(r->falloc(sizeof(AtomParseMacro))) AtomFrame(r);
+    new (r->falloc(sizeof(AtomParseMacro))) AtomFrame(r);
 #endif
     r->digitSeen = isdigit(c);
     r->resetBuffer();
@@ -806,7 +801,7 @@ class StringParseMacro : public ParseMacro {
 
 
 ParserMode StringParseMacro::start(int c, Parser* r) {
-    NEW(r->falloc(sizeof(StringFrame))) StringFrame(r, c);
+    new (r->falloc(sizeof(StringFrame))) StringFrame(r, c);
     r->resetBuffer();
     return CONTINUE;
 }
@@ -821,7 +816,7 @@ class _SpecialParseMacro : public ParseMacro {
 
 
 ParserMode _SpecialParseMacro::start(int, Parser* r) {
-    NEW(r->falloc(sizeof(SpecialPFrame))) SpecialPFrame(r);
+    new (r->falloc(sizeof(SpecialPFrame))) SpecialPFrame(r);
     return CONTINUE;
 }
 
@@ -835,7 +830,7 @@ class QuoteParseMacro : public ParseMacro {
 
 
 ParserMode QuoteParseMacro::start(int, Parser* r) {
-    NEW(r->falloc(sizeof(QuoteFrame))) QuoteFrame(r);
+    new (r->falloc(sizeof(QuoteFrame))) QuoteFrame(r);
     return START;
 }
 
@@ -885,7 +880,7 @@ ListParseMacro::ListParseMacro(int sc, int dc, int cc, FINALIZER f)
 
 
 ParserMode ListParseMacro::start(int, Parser* r) {
-    NEW(r->falloc(sizeof(ListFrame)))
+    new (r->falloc(sizeof(ListFrame)))
     ListFrame(r, dotChar, closingChar, finalizer);
     return START;
 }
@@ -1249,14 +1244,14 @@ Parser::~Parser() { inbuf = (RBLstring*)NIV; }
 
 Parser* Parser::create() {
     void* loc = PALLOC(align(sizeof(Parser)));
-    return NEW(loc) Parser(&StdParseTable);
+    return new (loc) Parser(&StdParseTable);
 }
 
 
 Ob* Parser::readExpr() {
     switch (waitingOnIO) {
     case NOT_WAITING:
-        (void)NEW(falloc(sizeof(TopFrame))) TopFrame(this);
+        new (falloc(sizeof(TopFrame))) TopFrame(this);
         mode = START;
         waitingOnIO = WAITING_FOR_EXPR;
         if (inbuf == (RBLstring*)NIV) {
@@ -1491,10 +1486,10 @@ ParserMode Parser::acceptEscChar(int c, int gapsPermitted) {
          * Make explicit the AtomFrame that is implicit in the GROK_ATOM
          * state.
          */
-        NEW(falloc(sizeof(AtomFrame))) AtomFrame(this);
+        new (falloc(sizeof(AtomFrame))) AtomFrame(this);
     }
 #endif
-    NEW(falloc(sizeof(EscCharFrame))) EscCharFrame(this, gapsPermitted);
+    new (falloc(sizeof(EscCharFrame))) EscCharFrame(this, gapsPermitted);
     return CONTINUE;
 }
 

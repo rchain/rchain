@@ -156,19 +156,19 @@ Ctxt::Ctxt(Ob* trgt, Tuple* argvec)
 
 Ctxt* Ctxt::create(Tuple* t, Ctxt* p) {
     void* loc = PALLOC2(sizeof(Ctxt), t, p);
-    return NEW(loc) Ctxt(t, p);
+    return new (loc) Ctxt(t, p);
 }
 
 
 Ctxt* Ctxt::create(Code* code, Tuple* t, Ctxt* p, int o) {
     void* loc = PALLOC3(sizeof(Ctxt), code, t, p);
-    return NEW(loc) Ctxt(code, t, p, o);
+    return new (loc) Ctxt(code, t, p, o);
 }
 
 
 Ctxt* Ctxt::create(Ob* trgt, Tuple* argvec) {
     void* loc = PALLOC2(sizeof(Ctxt), trgt, argvec);
-    return NEW(loc) Ctxt(trgt, argvec);
+    return new (loc) Ctxt(trgt, argvec);
 }
 
 
@@ -286,7 +286,7 @@ UpcallCtxt::UpcallCtxt(Code* code, Tuple* argvec, Ctxt* ctxt, Location loc)
 UpcallCtxt* UpcallCtxt::create(Code* code, Tuple* argvec, Ctxt* ctxt,
                                Location tag) {
     void* loc = PALLOC3(sizeof(UpcallCtxt), code, argvec, ctxt);
-    return NEW(loc) UpcallCtxt(code, argvec, ctxt, tag);
+    return new (loc) UpcallCtxt(code, argvec, ctxt, tag);
 }
 
 

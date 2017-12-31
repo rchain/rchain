@@ -46,7 +46,7 @@ Proc::Proc(Ob* env, Code* code, Ob* id, Ob* source)
 
 Proc* Proc::create(Ob* env, Code* code, Ob* id, Ob* source) {
     void* loc = PALLOC4(sizeof(Proc), env, code, id, source);
-    return NEW(loc) Proc(env, code, id, source);
+    return new (loc) Proc(env, code, id, source);
 }
 
 

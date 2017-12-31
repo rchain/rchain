@@ -307,7 +307,7 @@ RBLtopenv* RBLtopenv::create() {
 
     pMeta m = StdMeta::create(NIL, FIXNUM(1), RBLFALSE);
     void* loc = PALLOC1(sizeof(RBLtopenv), m);
-    return NEW(loc) RBLtopenv(m, INVALID);
+    return new (loc) RBLtopenv(m, INVALID);
 }
 
 

@@ -79,7 +79,7 @@ Symbol::Symbol()
 
 Symbol* Symbol::create() {
     void* loc = PALLOC(sizeof(Symbol));
-    return NEW(loc) Symbol();
+    return new (loc) Symbol();
 }
 
 bool Symbol::ConstantP() { return false; }
@@ -154,7 +154,7 @@ RblBool::RblBool()
 
 RblBool* RblBool::create() {
     void* loc = PALLOC(sizeof(RblBool));
-    return NEW(loc) RblBool();
+    return new (loc) RblBool();
 }
 
 const char* RblBool::asCstring() { return BOOLVAL(atom) ? "#t" : "#f"; }
@@ -180,7 +180,7 @@ Char::Char() : RblAtom(sizeof(Char), CLASS_META(Char), CLASS_SBO(Char)) {
 
 Char* Char::create() {
     void* loc = PALLOC(sizeof(Char));
-    return NEW(loc) Char();
+    return new (loc) Char();
 }
 
 void Char::printOn(FILE* f) {
@@ -209,7 +209,7 @@ Fixnum::Fixnum()
 
 Fixnum* Fixnum::create() {
     void* loc = PALLOC(sizeof(Fixnum));
-    return NEW(loc) Fixnum();
+    return new (loc) Fixnum();
 }
 
 char Fixnum::format[FixnumFormatSize] = "%d";
@@ -253,7 +253,7 @@ Niv::Niv() : RblAtom(sizeof(Niv), CLASS_META(Niv), CLASS_SBO(Niv)) {
 
 Niv* Niv::create() {
     void* loc = PALLOC(sizeof(Niv));
-    return NEW(loc) Niv();
+    return new (loc) Niv();
 }
 
 const char* Niv::asCstring() { return "#niv"; }
@@ -273,7 +273,7 @@ Sysval::Sysval()
 
 Sysval* Sysval::create() {
     void* loc = PALLOC(sizeof(Sysval));
-    return NEW(loc) Sysval();
+    return new (loc) Sysval();
 }
 
 const char* Sysval::asCstring() {
@@ -307,7 +307,7 @@ ExpandedLocation::ExpandedLocation()
 
 ExpandedLocation* ExpandedLocation::create() {
     void* loc = PALLOC(sizeof(ExpandedLocation));
-    return NEW(loc) ExpandedLocation();
+    return new (loc) ExpandedLocation();
 }
 
 const char* ExpandedLocation::asCstring() {

@@ -73,19 +73,19 @@ StdExtension::StdExtension(pTuple proto)
 StdExtension* StdExtension::create(pOb meta, pOb parent, int nslots) {
     void* loc =
         PALLOC2(sizeof(StdExtension) + nslots * sizeof(pOb), meta, parent);
-    return NEW(loc) StdExtension(meta, parent, nslots);
+    return new (loc) StdExtension(meta, parent, nslots);
 }
 
 
 StdExtension* StdExtension::create(int nslots) {
     void* loc = PALLOC(sizeof(StdExtension) + nslots * sizeof(pOb));
-    return NEW(loc) StdExtension(nslots);
+    return new (loc) StdExtension(nslots);
 }
 
 
 StdExtension* StdExtension::create(pTuple argvec) {
     void* loc = PALLOC1(SIZE(argvec), argvec);
-    return NEW(loc) StdExtension(argvec);
+    return new (loc) StdExtension(argvec);
 }
 
 
@@ -107,13 +107,13 @@ Actor* Actor::create() {
     PROTECT(meta);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(Actor), ext);
-    return NEW(loc) Actor(meta, INVALID, ext);
+    return new (loc) Actor(meta, INVALID, ext);
 }
 
 
 Actor* Actor::create(pOb meta, pOb parent, pExt ext) {
     void* loc = PALLOC3(sizeof(Actor), meta, parent, ext);
-    return NEW(loc) Actor(meta, parent, ext);
+    return new (loc) Actor(meta, parent, ext);
 }
 
 
@@ -264,7 +264,7 @@ TblObject::TblObject(pExt ext, pOb validExtent, pTuple keyVec)
 TblObject* TblObject::create() {
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(TblObject), ext);
-    return NEW(loc) TblObject(ext, FIXNUM(0), NIL);
+    return new (loc) TblObject(ext, FIXNUM(0), NIL);
 }
 
 

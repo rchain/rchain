@@ -25,11 +25,6 @@
 
 #include "Ob.h"
 
-#ifndef NEW
-#define NEW(loc) new (loc)
-#endif
-
-
 class RootSet {
 #ifdef __GNUG__
     int dummy;  // To suppress compiler warning about no data members.

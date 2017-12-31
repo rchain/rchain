@@ -59,19 +59,19 @@ RBLstring::RBLstring(int n, char* s)
 
 RBLstring* RBLstring::create(int n, char c) {
     void* loc = PALLOC(sizeof(RBLstring) + align(n));
-    return NEW(loc) RBLstring(n, c);
+    return new (loc) RBLstring(n, c);
 }
 
 
 RBLstring* RBLstring::create(char* s) {
     int n = strlen(s) + 1;
     void* loc = PALLOC(sizeof(RBLstring) + align(n));
-    return NEW(loc) RBLstring(n, s);
+    return new (loc) RBLstring(n, s);
 }
 
 RBLstring* RBLstring::create(int n, char* s) {
     void* loc = PALLOC(sizeof(RBLstring) + align(n + 1));
-    RBLstring* str = NEW(loc) RBLstring(n + 1, (char)0);
+    RBLstring* str = new (loc) RBLstring(n + 1, (char)0);
     memcpy((char*)&str->byte(0), s, n);
     return str;
 }

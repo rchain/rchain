@@ -62,7 +62,7 @@ Istream* Istream::create(Reader* r) {
     PROTECT(r);
     pExt ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(Istream), ext);
-    return NEW(loc) Istream(emptyMbox, ext, r);
+    return new (loc) Istream(emptyMbox, ext, r);
 }
 
 
@@ -93,7 +93,7 @@ Ostream::~Ostream() {
 
 Ostream* Ostream::create(FILE* ostrm) {
     void* loc = PALLOC(sizeof(Ostream));
-    return NEW(loc) Ostream(ostrm);
+    return new (loc) Ostream(ostrm);
 }
 
 

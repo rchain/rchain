@@ -84,14 +84,14 @@ ByteVec::ByteVec(ByteVec* old, int newsize)
 
 ByteVec* ByteVec::create(int n) {
     void* loc = PALLOC(sizeof(ByteVec) + align(n * sizeof(uint8_t)));
-    return NEW(loc) ByteVec(n);
+    return new (loc) ByteVec(n);
 }
 
 
 ByteVec* ByteVec::create(ByteVec* old, int newsize) {
     void* loc =
         PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old);
-    return NEW(loc) ByteVec(old, newsize);
+    return new (loc) ByteVec(old, newsize);
 }
 
 
@@ -169,21 +169,21 @@ Word16Vec::Word16Vec(Word16Vec* old, int newsize)
 
 Word16Vec* Word16Vec::create(int n) {
     void* loc = PALLOC(sizeof(Word16Vec) + align(n * sizeof(uint16_t)));
-    return NEW(loc) Word16Vec(n);
+    return new (loc) Word16Vec(n);
 }
 
 
 Word16Vec* Word16Vec::create(Ob* meta, Ob* parent, int n) {
     void* loc =
         PALLOC2(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent);
-    return NEW(loc) Word16Vec(meta, parent, n);
+    return new (loc) Word16Vec(meta, parent, n);
 }
 
 
 Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
     void* loc =
         PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old);
-    return NEW(loc) Word16Vec(old, newsize);
+    return new (loc) Word16Vec(old, newsize);
 }
 
 
@@ -250,13 +250,13 @@ Word32Vec::Word32Vec(Word32Vec* old, int newsize)
 
 Word32Vec* Word32Vec::create(int n) {
     void* loc = PALLOC(sizeof(Word32Vec) + n * sizeof(uint32_t));
-    return NEW(loc) Word32Vec(n);
+    return new (loc) Word32Vec(n);
 }
 
 
 Word32Vec* Word32Vec::create(Word32Vec* old, int newsize) {
     void* loc = PALLOC1(sizeof(Word32Vec) + newsize * sizeof(uint32_t), old);
-    return NEW(loc) Word32Vec(old, newsize);
+    return new (loc) Word32Vec(old, newsize);
 }
 
 

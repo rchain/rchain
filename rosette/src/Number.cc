@@ -323,7 +323,7 @@ Float::Float(Rfloat v)
 
 Float* Float::create(Rfloat v) {
     void* loc = PALLOC(sizeof(Float));
-    return NEW(loc) Float(v);
+    return new (loc) Float(v);
 }
 
 

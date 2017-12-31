@@ -537,7 +537,7 @@ void OldSpace::addChunk(int sz) {
          * it doesn't matter that an invalid pointer is stored in those
          * fields.
          */
-        Ob* p = NEW(currentChunk->next) Ob(excess, NULL, NULL);
+        Ob* p = new (currentChunk->next) Ob(excess, NULL, NULL);
         currentChunk->next = currentChunk->limit;
         SET_FLAG(HDR_FLAGS(p), f_freed);
         currentChunk->free(p);

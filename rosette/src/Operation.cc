@@ -44,7 +44,7 @@ StdOprn* StdOprn::create(pOb id, pOb sync) {
     ext->slot(STDOPRN_ID_SLOT) = id;
     ext->slot(STDOPRN_SYNC_SLOT) = sync;
     void* loc = PALLOC1(sizeof(StdOprn), ext);
-    return NEW(loc) StdOprn(ext);
+    return new (loc) StdOprn(ext);
 }
 
 
