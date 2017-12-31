@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -25,21 +26,18 @@
 
 #include "BuiltinClass.h"
 
+#include <algorithm>
 #include <ctype.h>
 #include <math.h>
-
-
-static int min(int m, int n) { return m < n ? m : n; }
-static int max(int m, int n) { return m > n ? m : n; }
 
 
 Ob* checkFxResult(Prim* prim, Ctxt* ctxt, int answer) {
     if (arithmeticException) {
         arithmeticException = 0;
         return prim->runtimeError(ctxt, "arithmetic exception");
-    }
-    else
+    } else {
         return FIXNUM(answer);
+    }
 }
 
 
@@ -107,8 +105,9 @@ DEF("fx%", fxMod, 2, 2) {
 
 DEF("fx<", fxLt, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m < n);
 }
@@ -116,8 +115,9 @@ DEF("fx<", fxLt, 2, 2) {
 
 DEF("fx<=", fxLe, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m <= n);
 }
@@ -125,8 +125,9 @@ DEF("fx<=", fxLe, 2, 2) {
 
 DEF("fx>", fxGt, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m > n);
 }
@@ -134,8 +135,9 @@ DEF("fx>", fxGt, 2, 2) {
 
 DEF("fx>=", fxGe, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m >= n);
 }
@@ -143,8 +145,9 @@ DEF("fx>=", fxGe, 2, 2) {
 
 DEF("fx=", fxEq, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m == n);
 }
@@ -152,8 +155,9 @@ DEF("fx=", fxEq, 2, 2) {
 
 DEF("fx!=", fxNe, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m != n);
 }
@@ -163,7 +167,7 @@ DEF("fx-min", fxMin, 1, MaxArgs) {
     CHECK_FIXNUM(0, result);
     for (int next = 1; next < NARGS; next++) {
         CHECK_FIXNUM(next, n);
-        result = min(result, n);
+        result = std::min(result, n);
     }
     return FIXNUM(result);
 }
@@ -173,7 +177,7 @@ DEF("fx-max", fxMax, 1, MaxArgs) {
     CHECK_FIXNUM(0, result);
     for (int next = 1; next < NARGS; next++) {
         CHECK_FIXNUM(next, n);
-        result = max(result, n);
+        result = std::max(result, n);
     }
     return FIXNUM(result);
 }
@@ -261,9 +265,9 @@ DEF("fx-cdiv", fxCdiv, 2, 2) {
     if (arithmeticException) {
         arithmeticException = 0;
         return PRIM_ERROR("division exception");
-    }
-    else
+    } else {
         return FIXNUM(result);
+    }
 }
 
 
@@ -319,7 +323,7 @@ Float::Float(Rfloat v)
 
 Float* Float::create(Rfloat v) {
     void* loc = PALLOC(sizeof(Float));
-    return NEW(loc) Float(v);
+    return new (loc) Float(v);
 }
 
 
@@ -336,9 +340,9 @@ Ob* checkFlResult(Prim* prim, Ctxt* ctxt, Rfloat answer) {
     if (arithmeticException) {
         arithmeticException = 0;
         return prim->runtimeError(ctxt, "arithmetic exception");
-    }
-    else
+    } else {
         return Float::create(answer);
+    }
 }
 
 
@@ -448,8 +452,9 @@ DEF("fl-min", flMin, 1, MaxArgs) {
     for (int next = 1; next < NARGS; next++) {
         CHECK(next, Float, n);
         Rfloat r = FLOATVAL(n);
-        if (r < result)
+        if (r < result) {
             result = r;
+        }
     }
     return Float::create(result);
 }
@@ -461,8 +466,9 @@ DEF("fl-max", flMax, 1, MaxArgs) {
     for (int next = 1; next < NARGS; next++) {
         CHECK(next, Float, n);
         Rfloat r = FLOATVAL(n);
-        if (r > result)
+        if (r > result) {
             result = r;
+        }
     }
     return Float::create(result);
 }

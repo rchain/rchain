@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -24,11 +25,6 @@
 #include "Vm.h"
 
 #include "BuiltinClass.h"
-
-#include <assert.h>
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 
 extern Ob* emptyMbox;
 extern Ob* lockedMbox;
@@ -126,14 +122,14 @@ Ctxt::Ctxt(Code* c, Tuple* t, Ctxt* p, int o)
         this->selfEnv = p->selfEnv;
         this->rcvr = p->rcvr;
         this->monitor = p->monitor;
-    }
-    else {
+    } else {
         this->env = GlobalEnv;
         this->self2 = NIV;
         this->selfEnv = TopEnv;
         this->rcvr = NIV;
         this->monitor = vm->currentMonitor;
     }
+
     Ctxt::updateCnt();
 }
 
@@ -160,19 +156,19 @@ Ctxt::Ctxt(Ob* trgt, Tuple* argvec)
 
 Ctxt* Ctxt::create(Tuple* t, Ctxt* p) {
     void* loc = PALLOC2(sizeof(Ctxt), t, p);
-    return NEW(loc) Ctxt(t, p);
+    return new (loc) Ctxt(t, p);
 }
 
 
 Ctxt* Ctxt::create(Code* code, Tuple* t, Ctxt* p, int o) {
     void* loc = PALLOC3(sizeof(Ctxt), code, t, p);
-    return NEW(loc) Ctxt(code, t, p, o);
+    return new (loc) Ctxt(code, t, p, o);
 }
 
 
 Ctxt* Ctxt::create(Ob* trgt, Tuple* argvec) {
     void* loc = PALLOC2(sizeof(Ctxt), trgt, argvec);
-    return NEW(loc) Ctxt(trgt, argvec);
+    return new (loc) Ctxt(trgt, argvec);
 }
 
 
@@ -183,8 +179,9 @@ int Ctxt::traversePtrs(PSOb__PSOb f) {
     sum += useIfPtr(&parent(), f);
     sum += useIfPtr(&mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         sum += useIfPtr(&reg(i), f);
+    }
 
     return sum;
 }
@@ -197,8 +194,9 @@ int Ctxt::traversePtrs(SI__PSOb f) {
     sum += useIfPtr(parent(), f);
     sum += useIfPtr(mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         sum += useIfPtr(reg(i), f);
+    }
 
     return sum;
 }
@@ -209,8 +207,9 @@ void Ctxt::traversePtrs(V__PSOb f) {
     useIfPtr(parent(), f);
     useIfPtr(mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         useIfPtr(reg(i), f);
+    }
 }
 
 
@@ -218,12 +217,13 @@ extern Code* rtnNxtCode;
 
 
 bool Ctxt::rcv(Ob* result, Location loc) {
-    if (store(loc, this, result))
-        return TRUE;
-    else {
-        if (--outstanding == 0)
+    if (store(loc, this, result)) {
+        return true;
+    } else {
+        if (--outstanding == 0) {
             scheduleStrand();
-        return FALSE;
+        }
+        return false;
     }
 }
 
@@ -286,7 +286,7 @@ UpcallCtxt::UpcallCtxt(Code* code, Tuple* argvec, Ctxt* ctxt, Location loc)
 UpcallCtxt* UpcallCtxt::create(Code* code, Tuple* argvec, Ctxt* ctxt,
                                Location tag) {
     void* loc = PALLOC3(sizeof(UpcallCtxt), code, argvec, ctxt);
-    return NEW(loc) UpcallCtxt(code, argvec, ctxt, tag);
+    return new (loc) UpcallCtxt(code, argvec, ctxt, tag);
 }
 
 
@@ -295,11 +295,11 @@ bool UpcallCtxt::applyK(Ob* val, Location loc) {
     assert(loc == tag);
 #endif
 
-    if (store(loc, ctxt, val))
-        return TRUE;
-    else {
+    if (store(loc, ctxt, val)) {
+        return true;
+    } else {
         ctxt->scheduleStrand();
-        return FALSE;
+        return false;
     }
 }
 
@@ -312,8 +312,9 @@ DEF("ctxt-rtn", ctxtRtn, 2, 2) {
 
 DEF("ctxt-resume", ctxtResume, 1, 1) {
     CHECK(0, Ctxt, k);
-    if (k->argvec->numberOfElements() > 0)
+    if (k->argvec->numberOfElements() > 0) {
         return BASE(k->argvec->elem(0))->receive(k);
-    else
-        return INVALID;
+    }
+
+    return INVALID;
 }

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -47,7 +48,7 @@ Timer::Timer() : BinaryOb(sizeof(Timer), CLASS_META(Timer), CLASS_SBO(Timer)) {
 
 Timer* Timer::create() {
     void* loc = PALLOC(sizeof(Timer));
-    return NEW(loc) Timer();
+    return new (loc) Timer();
 }
 
 
@@ -72,8 +73,7 @@ void Timer::inc(timeval& tv, long secs, long usecs) {
     if (tv.tv_usec >= 1000000) {
         tv.tv_usec -= 1000000;
         tv.tv_sec += 1;
-    }
-    else if (tv.tv_usec < 0) {
+    } else if (tv.tv_usec < 0) {
         tv.tv_usec += 1000000;
         tv.tv_sec -= 1;
     }
@@ -86,32 +86,35 @@ float Timer::fastTime(TimerMode m) {
 
 
 void Timer::reset() {
-    running = FALSE;
+    running = false;
     mode = tmUser;
-    for (int i = 0; i < nModes; i++)
+    for (int i = 0; i < nModes; i++) {
         tv[i].tv_sec = tv[i].tv_usec = 0;
+    }
 }
 
 
 void Timer::stop() {
     if (running) {
         updateTimer();
-        running = FALSE;
+        running = false;
     }
 }
 
 
 void Timer::start() {
     if (!running) {
-        running = TRUE;
+        running = true;
         getrusage(RUSAGE_SELF, &checkpoint);
     }
 }
 
 
 TimerMode Timer::setMode(TimerMode new_mode) {
-    if (running)
+    if (running) {
         updateTimer();
+    }
+
     TimerMode old_mode = mode;
     mode = new_mode;
     return old_mode;
@@ -119,15 +122,19 @@ TimerMode Timer::setMode(TimerMode new_mode) {
 
 
 float Timer::time(TimerMode m) {
-    if (running)
+    if (running) {
         updateTimer();
+    }
+
     return fastTime(m);
 }
 
 
 void Timer::printStats(FILE* f) {
-    if (running)
+    if (running) {
         updateTimer();
+    }
+
     fprintf(f, "time: %.2f secs (user), %.2f secs (gc), %.2f secs (system)",
             fastTime(tmUser), fastTime(tmGC), fastTime(tmSys));
 }

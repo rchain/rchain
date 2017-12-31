@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -87,10 +88,10 @@ int ParseCommandLine(int argc, char** argv) {
 
     while (i < argc) {
         if (strcmp(argv[i], "-t") == 0) {
-            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &TenuringAge))
-                ;
-            else
+            if (!(i + 1 < argc && sscanf(argv[i + 1], "%d", &TenuringAge))) {
                 usage(cmd_name);
+            }
+
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;
@@ -102,21 +103,23 @@ int ParseCommandLine(int argc, char** argv) {
                 ParanoidAboutGC = temp;
                 DeleteArgs(i, argc, argv, 2);
                 argc -= 2;
-            }
-            else {
+            } else {
                 ParanoidAboutGC = 1;
                 DeleteArgs(i, argc, argv);
                 argc--;
             }
+
             continue;
         }
 
         if (strcmp(argv[i], "-is") == 0) {
             int temp;
-            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp))
+            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp)) {
                 InfantSpaceSize = temp * 1024;
-            else
+            } else {
                 usage(cmd_name);
+            }
+
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;
@@ -124,10 +127,12 @@ int ParseCommandLine(int argc, char** argv) {
 
         if (strcmp(argv[i], "-ss") == 0) {
             int temp;
-            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp))
+            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp)) {
                 SurvivorSpaceSize = temp * 1024;
-            else
+            } else {
                 usage(cmd_name);
+            }
+
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;
@@ -135,20 +140,24 @@ int ParseCommandLine(int argc, char** argv) {
 
         if (strcmp(argv[i], "-os") == 0) {
             int temp;
-            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp))
+            if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp)) {
                 OldSpaceChunkSize = temp * 1024;
-            else
+            } else {
                 usage(cmd_name);
+            }
+
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;
         }
 
         if (strcmp(argv[i], "-boot") == 0) {
-            if (i + 1 < argc)
+            if (i + 1 < argc) {
                 strcpy(BootFile, argv[i + 1]);
-            else
+            } else {
                 usage(cmd_name);
+            }
+
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;
@@ -157,10 +166,10 @@ int ParseCommandLine(int argc, char** argv) {
         if (strcmp(argv[i], "-run") == 0) {
             if (i + 1 < argc) {
                 strcpy(RunFile, argv[i + 1]);
-            }
-            else {
+            } else {
                 usage(cmd_name);
             }
+
             DeleteArgs(i, argc, argv, 2);
             argc -= 2;
             continue;

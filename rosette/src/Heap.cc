@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -43,6 +44,8 @@ int malloc_verify();
 #endif
 
 static const int MaxFixedSize = sizeof(Ctxt);
+
+int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
 
 /*
@@ -136,9 +139,9 @@ static const int MaxFixedSize = sizeof(Ctxt);
 static int nextMultipleOf(int sz, int multiple) {
     int r = sz % multiple;
 
-    if (r == 0)
+    if (r == 0) {
         return sz;
-    else {
+    } else {
         int q = sz / multiple;
         return (q + 1) * multiple;
     }
@@ -227,8 +230,9 @@ int Space::size() { return ((char*)limit - (char*)base); }
 void Space::free(Ob* p) {
     if (!FREED(p)) {
         SET_FLAG(HDR_FLAGS(p), f_freed);
-        if (FOREIGN(p) && !FORWARDED(p))
+        if (FOREIGN(p) && !FORWARDED(p)) {
             p->Ob::~Ob();
+        }
     }
 }
 
@@ -241,8 +245,7 @@ void* Space::alloc(unsigned sz) {
         next = temp;
         return current;
     }
-    else
-        return 0;
+    return 0;
 }
 
 
@@ -252,17 +255,19 @@ bool Space::contains(Ob* p) { return (base <= (void*)p) && ((void*)p < limit); }
 void Space::scan() {
     for (SpaceTrav st(this); st; st.advance()) {
         Ob* p = st.get();
-        if (MARKED(p))
+        if (MARKED(p)) {
             REMOVE_FLAG(HDR_FLAGS(p), f_marked);
-        else
+        } else {
             free(p);
+        }
     }
 }
 
 
 void Space::check() {
-    for (SpaceTrav st(this); st; st.advance())
+    for (SpaceTrav st(this); st; st.advance()) {
         st.get()->check();
+    }
 }
 
 
@@ -303,8 +308,9 @@ void RememberedSet::reallyRemember(Ob* p) {
 
 
 void RememberedSet::remember(Ob* p) {
-    if (!REMEMBERED(p))
+    if (!REMEMBERED(p)) {
         reallyRemember(p);
+    }
 }
 
 
@@ -367,7 +373,7 @@ void NewSpace::scavenge() {
      * worthwhile to break the encapsulation here.
      */
 
-    while (TRUE) {
+    while (true) {
         while (rst) {
             void*& rp = rst.get();
             Ob* p = (Ob*)rp;
@@ -392,13 +398,15 @@ void NewSpace::scavenge() {
          * out.
          */
 
-        if (!st)
+        if (!st) {
             break;
+        }
 
         do {
             Ob* p = (Ob*)st.get();
-            if (!FREED(p))
+            if (!FREED(p)) {
                 p->traversePtrs(MF_ADDR(Ob::relocate));
+            }
             st.advance();
         } while (st);
     }
@@ -529,7 +537,7 @@ void OldSpace::addChunk(int sz) {
          * it doesn't matter that an invalid pointer is stored in those
          * fields.
          */
-        Ob* p = NEW(currentChunk->next) Ob(excess, NULL, NULL);
+        Ob* p = new (currentChunk->next) Ob(excess, NULL, NULL);
         currentChunk->next = currentChunk->limit;
         SET_FLAG(HDR_FLAGS(p), f_freed);
         currentChunk->free(p);
@@ -544,9 +552,9 @@ void OldSpaceChunk::scan() {
         Ob* p = st.get();
         if (MARKED(p)) {
             REMOVE_FLAG(HDR_FLAGS(p), f_marked);
-        }
-        else
+        } else {
             free(p);
+        }
     }
 }
 
@@ -562,8 +570,9 @@ OldSpace::OldSpace(unsigned oldSpaceChunkSize) {
     chunkCount = 1;
     currentChunk = new OldSpaceChunk(chunkSize, NULL, this);
     fixedFreeLists = new Ob*[MaxFixedSize + 1];
-    for (int i = 0; i <= MaxFixedSize; i++)
+    for (int i = 0; i <= MaxFixedSize; i++) {
         fixedFreeLists[i] = 0;
+    }
     miscFreeList = 0;
 }
 
@@ -580,18 +589,22 @@ OldSpace::~OldSpace() {
 
 
 bool OldSpace::contains(Ob* p) {
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-        if (currentChunk->contains(p))
-            return TRUE;
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        if (currentChunk->contains(p)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 
 int OldSpace::size() {
     int s = 0;
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
         s += chunk->size();
+    }
+
     return s;
 }
 
@@ -616,8 +629,9 @@ Ob* OldSpace::unlink(Ob*& freelist) {
 void* OldSpace::alloc(unsigned sz) {
     void* p;
 
-    if (sz <= MaxFixedSize && fixedFreeLists[sz])
+    if (sz <= MaxFixedSize && fixedFreeLists[sz]) {
         return (void*)unlink(fixedFreeLists[sz]);
+    }
 
     p = currentChunk->alloc(sz);
     if (NULL != p) {
@@ -635,9 +649,12 @@ void* OldSpace::alloc(unsigned sz) {
 
 
 void* OldSpace::miscAlloc(unsigned sz) {
-    for (Ob** next = &miscFreeList; *next; next = &(*next)->forwardingAddress())
-        if (SIZE(*next) == sz)
+    for (Ob** next = &miscFreeList; *next;
+         next = &(*next)->forwardingAddress()) {
+        if (SIZE(*next) == sz) {
             return (void*)unlink(*next);
+        }
+    }
 
     return 0;
 }
@@ -648,8 +665,9 @@ void OldSpace::free(Ob* p) { currentChunk->free(p); }
 
 void OldSpace::resetFreeLists() {
     miscFreeList = 0;
-    for (int i = 0; i <= MaxFixedSize; i++)
+    for (int i = 0; i <= MaxFixedSize; i++) {
         fixedFreeLists[i] = 0;
+    }
 }
 
 
@@ -657,12 +675,14 @@ void OldSpace::checkFreeLists(char* title) {
     Ob* p;
 
     for (int i = 0; i <= MaxFixedSize; i++) {
-        for (p = fixedFreeLists[i]; p != NULL; p = p->forwardingAddress())
-            if (SIZE(p) != i)
+        for (p = fixedFreeLists[i]; p != NULL; p = p->forwardingAddress()) {
+            if (SIZE(p) != i) {
                 warning(
                     "%d-byte object (at 0x%x) on free list %s for %d-byte "
                     "objects",
                     SIZE(p), (int)p, title, i);
+            }
+        }
     }
 }
 
@@ -671,23 +691,27 @@ void OldSpace::scan() {
     checkFreeLists("(before scan)");
 
     resetFreeLists();
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
         chunk->scan();
+    }
 
     checkFreeLists("(after scan)");
 }
 
 
 void OldSpace::check() {
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
         chunk->check();
+    }
+
     checkFreeLists("(after scavenge)");
 }
 
 
 void OldSpace::checkUnrememberedPtrs() {
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
         chunk->checkUnrememberedPtrs();
+    }
 }
 
 
@@ -715,8 +739,7 @@ void ForeignObTbl::scavenge() {
         if (FORWARDED(p)) {
             p = p->forwardingAddress();
             pct.get() = IS_OLD(p) ? NULL : p;
-        }
-        else {
+        } else {
             p->Ob::~Ob();
             pct.get() = NULL;
         }
@@ -737,8 +760,9 @@ void ForeignObTbl::scan() {
     for (PtrCollectionTrav pct(this); pct; pct.advance()) {
         void*& p = pct.get();
         Ob* h = (Ob*)p;
-        if (!MARKED(h))
+        if (!MARKED(h)) {
             p = NULL;
+        }
     }
 
     compact();
@@ -765,9 +789,9 @@ void GCAgenda::scavenge() {
         if (FORWARDED(h)) {
             h = h->forwardingAddress();
             p = h->scavengeFixup() ? h : NULL;
-        }
-        else if (!IS_OLD(h) || !h->scavengeFixup())
+        } else if (!IS_OLD(h) || !h->scavengeFixup()) {
             p = NULL;
+        }
     }
     compact();
 }
@@ -782,8 +806,9 @@ void GCAgenda::scan() {
     for (PtrCollectionTrav pcct(this); pcct; pcct.advance()) {
         void*& p = pcct.get();
         Ob* h = (Ob*)p;
-        if (!MARKED(h) || !h->gcFixup())
+        if (!MARKED(h) || !h->gcFixup()) {
             p = NULL;
+        }
     }
     compact();
 }
@@ -831,12 +856,13 @@ void Heap::addRootSet(RootSet* rs) { rootSets->add(rs); }
 
 
 void Heap::deleteRootSet(RootSet* rs) {
-    for (PtrCollectionTrav pct(rootSets); pct; pct.advance())
+    for (PtrCollectionTrav pct(rootSets); pct; pct.advance()) {
         if (rs == pct.get()) {
             pct.get() = NULL;
             rootSets->compact();
             return;
         }
+    }
 
     suicide("tried to delete non-existent root set");
 }
@@ -863,8 +889,9 @@ static void* magicLoc = 0;
 void* Heap::alloc(unsigned sz) {
     void* loc = newSpace->alloc(sz);
 #ifdef DEBUG
-    if (loc == magicLoc)
+    if (loc == magicLoc) {
         catchMagic();
+    }
 #endif
     return loc;
 }
@@ -873,8 +900,10 @@ void* Heap::alloc(unsigned sz) {
 void* Heap::scavengeAndAlloc(unsigned sz) {
     scavenge();
     void* loc = alloc(sz);
-    if (!loc)
+    if (!loc) {
         suicide("scavengeAndAlloc -- out of space");
+    }
+
     return loc;
 }
 
@@ -911,17 +940,18 @@ Ob* Heap::copyAndForward(Ob* oldLoc) {
          * forwardTo() because remember() sets a header bit that
          * forwardTo() clobbers.
          */
-    }
-    else
+    } else {
         oldLoc->forwardTo(newLoc);
+    }
 
     return newLoc;
 }
 
 
 void Heap::scavenge() {
-    if (ParanoidAboutGC)
+    if (ParanoidAboutGC) {
         oldSpace->checkUnrememberedPtrs();
+    }
 
     int oldChunkCount = oldSpace->chunkCount;
 
@@ -958,8 +988,9 @@ void Heap::scavenge() {
         gcAgenda->check();
 
 #if defined(MALLOC_DEBUGGING)
-        if (!malloc_verify())
+        if (!malloc_verify()) {
             suicide("Heap::scavenge -- malloc_verify found a problem");
+        }
 #endif
     }
 
@@ -972,8 +1003,9 @@ void Heap::scavenge() {
      * a GC after the fact to look for unnecessarily tenured objects.
      */
 
-    if (oldChunkCount != oldSpace->chunkCount)
+    if (oldChunkCount != oldSpace->chunkCount) {
         gc();
+    }
 }
 
 
@@ -1011,13 +1043,15 @@ void Heap::gc() {
 
 
 Ob* Heap::tenure(Ob* o) {
-    if (!IS_PTR(o))
+    if (!IS_PTR(o)) {
         return o;
+    }
 
     AGE(o) = TenuringAge;
     Ob* newLoc = copyAndForward(o);
-    if (FOREIGN(o))
+    if (FOREIGN(o)) {
         foreignObs->scavenge();
+    }
 
     tenuredObs->add(newLoc);
 
@@ -1123,7 +1157,11 @@ nochange:
     return this;
 
 relocate:
-    return FORWARDED(this) ? forwardingAddress() : heap->copyAndForward(this);
+    if (FORWARDED(this)) {
+        return forwardingAddress();
+    } else {
+        return heap->copyAndForward(this);
+    }
 }
 
 

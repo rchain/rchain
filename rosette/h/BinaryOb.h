@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -71,15 +72,15 @@ class ByteVec : public BinaryOb {
         return p[n];
     }
 
-    int numberOfBytes(EMPTY) { return byteCount; }
+    int numberOfBytes() { return byteCount; }
 
     static ByteVec* create(int);
     static ByteVec* create(ByteVec*, int);
 
-    void reset(EMPTY);
-    uint32_t sum(EMPTY);
+    void reset();
+    uint32_t sum();
 
-    virtual Ob* indexedSize(EMPTY);
+    virtual Ob* indexedSize();
     virtual Ob* nth(int);
     virtual Ob* setNth(int, Ob*);
     virtual Ob* subObject(int, int);
@@ -113,16 +114,16 @@ class Word16Vec : public BinaryOb {
         return p[n];
     }
 
-    int numberOfWords(EMPTY) { return wordCount; }
+    int numberOfWords() { return wordCount; }
 
     static Word16Vec* create(int);
     static Word16Vec* create(pOb, pOb, int);
     static Word16Vec* create(Word16Vec*, int);
 
-    void reset(EMPTY);
-    uint32_t sum(EMPTY);
+    void reset();
+    uint32_t sum();
 
-    virtual Ob* indexedSize(EMPTY);
+    virtual Ob* indexedSize();
     virtual Ob* nth(int);
     virtual Ob* setNth(int, Ob*);
     virtual Ob* subObject(int, int);

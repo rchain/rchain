@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -65,9 +66,7 @@ RblAtom::RblAtom(int sz, Ob* meta, Ob* sbo) : Ob(sz, meta, sbo) {
 }
 
 Ob* RblAtom::self() { return atom; }
-
 Ob* RblAtom::cloneTo(Ob*, Ob*) { return atom; }
-
 Ob* RblAtom::update(bool, Ctxt*) { return atom; }
 
 
@@ -80,10 +79,10 @@ Symbol::Symbol()
 
 Symbol* Symbol::create() {
     void* loc = PALLOC(sizeof(Symbol));
-    return NEW(loc) Symbol();
+    return new (loc) Symbol();
 }
 
-bool Symbol::ConstantP() { return FALSE; }
+bool Symbol::ConstantP() { return false; }
 
 void Symbol::printOn(FILE* f) {
     char* str = SYMPTR(atom);
@@ -97,10 +96,9 @@ void Symbol::printOn(FILE* f) {
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
-        }
-        else if (isprint(c) && !isspace(c))
+        } else if (isprint(c) && !isspace(c)) {
             fputc(c, f);
-        else {
+        } else {
             fputc('\\', f);
             switch (c) {
             case ' ':
@@ -132,11 +130,8 @@ void Symbol::printQuotedOn(FILE* f) {
 }
 
 void Symbol::displayOn(FILE* f) { fputs(SYMPTR(atom), f); }
-
 const char* Symbol::asCstring() { return SYMPTR(atom); }
-
 char* Symbol::asPathname() { return SYMPTR(atom); }
-
 Pattern* Symbol::makePattern() { return IdPattern::create(atom); }
 
 AttrNode* Symbol::makeAttrNode(bool valueCtxt) {
@@ -159,7 +154,7 @@ RblBool::RblBool()
 
 RblBool* RblBool::create() {
     void* loc = PALLOC(sizeof(RblBool));
-    return NEW(loc) RblBool();
+    return new (loc) RblBool();
 }
 
 const char* RblBool::asCstring() { return BOOLVAL(atom) ? "#t" : "#f"; }
@@ -168,11 +163,11 @@ convertArgReturnPair RblBool::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
         cnvArgRetPair.val = (uint32_t)BOOLVAL(obj);
         cnvArgRetPair.failp = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
+
     return cnvArgRetPair;
 }
 
@@ -185,7 +180,7 @@ Char::Char() : RblAtom(sizeof(Char), CLASS_META(Char), CLASS_SBO(Char)) {
 
 Char* Char::create() {
     void* loc = PALLOC(sizeof(Char));
-    return NEW(loc) Char();
+    return new (loc) Char();
 }
 
 void Char::printOn(FILE* f) {
@@ -197,6 +192,7 @@ void Char::printOn(FILE* f) {
 void Char::displayOn(FILE* f) { putc(CHARVAL(atom), f); }
 int Base::nClasses = 0;
 char Ob::stringbuf[256] = {0};
+
 const char* Char::asCstring() {
     Ob::stringbuf[0] = CHARVAL(atom);
     Ob::stringbuf[1] = '\0';
@@ -213,7 +209,7 @@ Fixnum::Fixnum()
 
 Fixnum* Fixnum::create() {
     void* loc = PALLOC(sizeof(Fixnum));
-    return NEW(loc) Fixnum();
+    return new (loc) Fixnum();
 }
 
 char Fixnum::format[FixnumFormatSize] = "%d";
@@ -228,8 +224,7 @@ convertArgReturnPair Fixnum::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
         cnvArgRetPair.val = FIXVAL(obj);
         cnvArgRetPair.failp = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 0;
     }
@@ -258,7 +253,7 @@ Niv::Niv() : RblAtom(sizeof(Niv), CLASS_META(Niv), CLASS_SBO(Niv)) {
 
 Niv* Niv::create() {
     void* loc = PALLOC(sizeof(Niv));
-    return NEW(loc) Niv();
+    return new (loc) Niv();
 }
 
 const char* Niv::asCstring() { return "#niv"; }
@@ -278,7 +273,7 @@ Sysval::Sysval()
 
 Sysval* Sysval::create() {
     void* loc = PALLOC(sizeof(Sysval));
-    return NEW(loc) Sysval();
+    return new (loc) Sysval();
 }
 
 const char* Sysval::asCstring() {
@@ -312,7 +307,7 @@ ExpandedLocation::ExpandedLocation()
 
 ExpandedLocation* ExpandedLocation::create() {
     void* loc = PALLOC(sizeof(ExpandedLocation));
-    return NEW(loc) ExpandedLocation();
+    return new (loc) ExpandedLocation();
 }
 
 const char* ExpandedLocation::asCstring() {
@@ -350,7 +345,6 @@ Ob* decodeAtom(Ob* v) {
         return prototypicalFixnum;
 
     case OTesc:
-
         switch (ESCTAG(v)) {
         case OTbool:
             prototypicalBool->atom = v;
@@ -422,66 +416,85 @@ MODULE_INIT(RblAtom) {
 
 
 DEF("ch<", charLt, 2, 2) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
-    if (!IS(OTchar, ARG(1)))
+    }
+
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
+    }
 
     return RBLBOOL((int)ARG(0) < (int)ARG(1));
 }
 
 
 DEF("ch<=", charLe, 2, 2) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
-    if (!IS(OTchar, ARG(1)))
+    }
+
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
+    }
 
     return RBLBOOL((int)ARG(0) <= (int)ARG(1));
 }
 
 DEF("ch=", charEq, 2, 2) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
-    if (!IS(OTchar, ARG(1)))
+    }
+
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
+    }
 
     return RBLBOOL((int)ARG(0) == (int)ARG(1));
 }
 
 DEF("ch!=", charNe, 2, 2) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
-    if (!IS(OTchar, ARG(1)))
+    }
+
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
+    }
 
     return RBLBOOL((int)ARG(0) != (int)ARG(1));
 }
 
 
 DEF("ch>=", charGe, 2, 2) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
-    if (!IS(OTchar, ARG(1)))
+    }
+
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
+    }
 
     return RBLBOOL((int)ARG(0) >= (int)ARG(1));
 }
 
 
 DEF("ch>", charGt, 2, 2) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
-    if (!IS(OTchar, ARG(1)))
+    }
+
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
+    }
 
     return RBLBOOL((int)ARG(0) > (int)ARG(1));
 }
 
 
 DEF("ch->fx", charToFixnum, 1, 1) {
-    if (!IS(OTchar, ARG(0)))
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
+    }
 
     return FIXNUM(CHARVAL(ARG(0)));
 }

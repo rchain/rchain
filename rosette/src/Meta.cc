@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -61,8 +62,9 @@ pMeta StdMeta::create(pTuple map, pOb ref_count, pOb extensible) {
         tbl = RblTable::create();
         KONST int n = map->numberOfElements();
         KONST bool indirect = extensible == RBLTRUE;
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < n; i++) {
             tbl->addKey(map->elem(i), LexVar(0, i, indirect).atom);
+        }
     }
 
     pExt ext = StdExtension::create(BUILTIN_STDMETA_SLOTS);
@@ -71,15 +73,16 @@ pMeta StdMeta::create(pTuple map, pOb ref_count, pOb extensible) {
     ext->slot(STDMETA_EXTENSIBLE_SLOT) = extensible;
 
     void* loc = PALLOC1(sizeof(StdMeta), ext);
-    return NEW(loc) StdMeta(ext);
+    return new (loc) StdMeta(ext);
 }
 
 
 pOb StdMeta::cloneTo(pOb new_meta, pOb new_parent) {
     extern pOb NILmeta;
 
-    if (this == NILmeta)
+    if (this == NILmeta) {
         return this;
+    }
 
     PROTECT_THIS(StdMeta);
     pMeta ob = (pMeta)SELF->Actor::cloneTo(new_meta, new_parent);
@@ -99,9 +102,9 @@ pTuple StdMeta::locs(pOb) { return NIL; }
 
 Location StdMeta::keyLoc(pOb key, pOb) {
     pOb atom = map()->getKey(key);
-    if (atom == ABSENT)
+    if (atom == ABSENT) {
         return LocLimbo;
-    else {
+    } else {
         Location loc;
         loc.atom = atom;
         return loc;
@@ -135,8 +138,9 @@ pOb StdMeta::get(pOb client, pOb key, pCtxt) {
      */
     switch (GET_GENERIC_TYPE(loc)) {
     case LT_LexVariable:
-        if (GET_LEXVAR_IND(loc))
+        if (GET_LEXVAR_IND(loc)) {
             container = ((Actor*)client)->extension;
+        }
         return container->slot(GET_LEXVAR_OFFSET(loc));
     case LT_Limbo:
         return ABSENT;
@@ -149,7 +153,7 @@ pOb StdMeta::get(pOb client, pOb key, pCtxt) {
 pOb StdMeta::add(pOb client, pOb key, pOb val, pCtxt ctxt) {
     Location descriptor = keyLoc(key, client);
 
-    if (descriptor == LocLimbo)
+    if (descriptor == LocLimbo) {
         if (clientsAreExtensible()) {
             PROTECT_THIS(StdMeta);
             PROTECT(client);
@@ -182,12 +186,13 @@ pOb StdMeta::add(pOb client, pOb key, pOb val, pCtxt ctxt) {
             }
 
             new_meta->map()->addKey(key, LexVar(0, offset, INDIRECT).atom);
-        }
-        else
+        } else {
             return BASE(ctxt->trgt)
                 ->runtimeError(ctxt, "can't add slot to non-extensible object");
-    else
+        }
+    } else {
         setValWrt(descriptor, client, val);
+    }
 
     return client;
 }
@@ -198,32 +203,40 @@ pOb StdMeta::set(pOb client, pOb key, pOb val, pCtxt ctxt) {
     if (descriptor != LocLimbo) {
         setValWrt(descriptor, client, val);
         return client;
-    }
-    else
+    } else {
         return ctxt->missingBindingError(key);
+    }
 }
 
 
 void StdMeta::addRef(void) {
     pOb& ref_count = extension->slot(STDMETA_REFCOUNT_SLOT);
-    if (ref_count != MAX_FIXNUM)
+    if (ref_count != MAX_FIXNUM) {
         FIXNUM_INC(ref_count);
+    }
 }
 
 
 void StdMeta::deleteRef(void) {
     pOb& ref_count = extension->slot(STDMETA_REFCOUNT_SLOT);
-    if (ref_count != MAX_FIXNUM)
+    if (ref_count != MAX_FIXNUM) {
         FIXNUM_DEC(ref_count);
+    }
 }
 
 
 pOb StdMeta::lookupOBO(pOb client, pOb key, pCtxt ctxt) {
-    if (interruptPending)
+    if (interruptPending) {
         return ABSENT;
+    }
+
     pOb result = get(client, key, ctxt);
-    return (result == ABSENT ? BASE(BASE(client)->parent())->lookup(key, ctxt)
-                             : result);
+
+    if (result == ABSENT) {
+        return BASE(BASE(client)->parent())->lookup(key, ctxt);
+    } else {
+        return result;
+    }
 }
 
 
@@ -235,7 +248,7 @@ void StdMeta::allocateMap() {
 
 
 void StdMeta::becomeIndexed(int start_indexed_part) {
-    NEW(this) IndexedMeta(this, start_indexed_part);
+    new (this) IndexedMeta(this, start_indexed_part);
 }
 
 
@@ -275,26 +288,29 @@ pTuple IndexedMeta::keys(pOb ob) {
     int base_offset = base_keys->numberOfElements();
     pTuple result = Tuple::create(base_offset + N, NIV);
     memcpy(&result->elem(0), &base_keys->elem(0), base_offset * sizeof(pOb));
-    for (int i = 0; i < N; i++)
+    for (int i = 0; i < N; i++) {
         result->elem(base_offset + i) = FIXNUM(i);
+    }
 
     return result;
 }
 
 
 Location IndexedMeta::keyLoc(pOb key, pOb client) {
-    if (IS_FIXNUM(key))
+    if (IS_FIXNUM(key)) {
         if ((client == ABSENT) ||
-            ((0 <= FIXVAL(key)) && (FIXVAL(key) < client->numberOfSlots())))
+            ((0 <= FIXVAL(key)) && (FIXVAL(key) < client->numberOfSlots()))) {
             return LexVar(
                 0,
                 FIXVAL(extension->slot(INDEXEDMETA_START_INDEXED_PART_SLOT)) +
                     FIXVAL(key),
                 clientsAreExtensible());
-        else
+        } else {
             return LocLimbo;
-    else
+        }
+    } else {
         return StdMeta::keyLoc(key, client);
+    }
 }
 
 

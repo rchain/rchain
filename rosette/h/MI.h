@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -67,16 +68,13 @@ class ProductType : public Actor {
 
     virtual bool typeMatchesp(pOb);
 
-
     int numberOfElements() { return definite()->numberOfElements(); }
-
     pOb elem(int i) { return definite()->elem(i); }
 
     pOb elemR(int i) {
         if (i < definite()->numberOfElements()) {
             return elem(i);
-        }
-        else {
+        } else {
             return star();
         }
     }

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -39,24 +40,8 @@
 #endif
 #endif
 
-#include <stdint.h>
-
-#if !defined(HAS_BOOL)
-typedef int bool;
-#endif
-
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
-
-#ifndef MIPS_SGI_SYSV
 #define KONST const
-#else
-#define KONST
-#endif
+#include <stdint.h>
 
 #if (defined(__GNUG__) && !defined(GCC27X)) || defined(sun)
 #include <values.h>
@@ -312,8 +297,8 @@ enum SysCode {
     syscodeDeadThread
 };
 
-#define RBLTRUE RBLBOOL(TRUE)
-#define RBLFALSE RBLBOOL(FALSE)
+#define RBLTRUE RBLBOOL(true)
+#define RBLFALSE RBLBOOL(false)
 #define NIV MAKEESCTAGGED(OTniv, 0)
 #define INVALID MAKEESCTAGGED(OTsysval, syscodeInvalid)
 #define UPCALL MAKEESCTAGGED(OTsysval, syscodeUpcall)
@@ -536,8 +521,8 @@ class Base {
 
     Base() {}
 
-    virtual char* typestring(EMPTY);
-    virtual void updateCnt(EMPTY);
+    virtual char* typestring();
+    virtual void updateCnt();
     static void defSlot(const char*, Location);
 };
 
@@ -599,61 +584,61 @@ class Ob : public Base {
      * object pointers.
      */
 
-    virtual ~Ob(EMPTY);
+    virtual ~Ob();
 
     void* operator new(size_t);
     void* operator new(size_t, void* p) { return p; }
     void operator delete(void*);
 
-    pOb& meta(EMPTY) { return _slot[0]; }
-    pOb& parent(EMPTY) { return _slot[1]; }
+    pOb& meta() { return _slot[0]; }
+    pOb& parent() { return _slot[1]; }
     pOb& slot(int n) { return _slot[n + 2]; }
 
-    pOb* endp(EMPTY) { return (pOb*)((char*)this + SIZE(this)); }
-    pOb& forwardingAddress(EMPTY) { return _slot[0]; }
+    pOb* endp() { return (pOb*)((char*)this + SIZE(this)); }
+    pOb& forwardingAddress() { return _slot[0]; }
     bool checkStore(pOb v) { return IS_OLD(this) && reallyCheckStore(v); }
-    int gcSensitive(EMPTY) { return IS_NEW(this); }
-    int numberOfSlots(EMPTY) { return (SIZE(this) - sizeof(Ob)) / sizeof(pOb); }
+    int gcSensitive() { return IS_NEW(this); }
+    int numberOfSlots() { return (SIZE(this) - sizeof(Ob)) / sizeof(pOb); }
 
     void forwardTo(pOb);
     bool reallyCheckStore(pOb);
-    pOb relocate(EMPTY);
-    bool suspicious(EMPTY);
+    pOb relocate();
+    bool suspicious();
     void clobberVtbl(pOb);
 
     void notImplemented(char*);
 
-    void mark(EMPTY);
-    void check(EMPTY);
-    void checkOb(EMPTY);
-    int size(EMPTY);
-    int obCount(EMPTY);
-    void unvisit(EMPTY);
+    void mark();
+    void check();
+    void checkOb();
+    int size();
+    int obCount();
+    void unvisit();
 
-    virtual pOb self(EMPTY);
+    virtual pOb self();
 
     /* Garbage collector interface */
 
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
-    virtual bool gcFixup(EMPTY);
-    virtual bool scavengeFixup(EMPTY);
+    virtual bool gcFixup();
+    virtual bool scavengeFixup();
 
     /* Generic runtime actions */
 
-    virtual bool ConstantP(EMPTY);
-    virtual Prim* InlineablePrimP(EMPTY);
+    virtual bool ConstantP();
+    virtual Prim* InlineablePrimP();
     virtual void printOn(FILE*);
     virtual void printQuotedOn(FILE*);
     virtual void displayOn(FILE* s);
-    virtual pOb container(EMPTY);
-    virtual pOb mailbox(EMPTY);
+    virtual pOb container();
+    virtual pOb mailbox();
     virtual pOb setMailbox(pOb);
     virtual pOb rcons(pOb);
     virtual int addSlot(pOb, pOb);
-    virtual pOb dup(EMPTY);
-    virtual pOb clone(EMPTY);
+    virtual pOb dup();
+    virtual pOb clone();
     virtual pOb cloneTo(pOb, pOb);
     virtual pOb getLex(int, int, int);
     virtual pOb setLex(int, int, int, pOb);
@@ -661,16 +646,16 @@ class Ob : public Base {
     virtual pOb setAddr(int, int, int, pOb);
     virtual pOb getField(int, int, int, int, int);
     virtual pOb setField(int, int, int, int, uint32_t);
-    virtual pOb indexedSize(EMPTY);
+    virtual pOb indexedSize();
     virtual pOb nth(int);
     virtual pOb setNth(int, pOb);
     virtual pOb subObject(int, int);
-    virtual const char* asCstring(EMPTY);
-    virtual char* asPathname(EMPTY);
+    virtual const char* asCstring();
+    virtual char* asPathname();
 
     /* Object actions */
 
-    virtual bool isSynchronousTrgt(EMPTY);
+    virtual bool isSynchronousTrgt();
     virtual pOb dispatch(pCtxt);
     virtual pOb invoke(pCtxt);
     virtual pOb lookup(pOb, pCtxt);
@@ -689,7 +674,7 @@ class Ob : public Base {
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
     virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 
-    virtual pOb isNullP(EMPTY);
+    virtual pOb isNullP();
 
     /* Type system methods */
     pOb typep(pOb);
@@ -710,24 +695,24 @@ class Ob : public Base {
     virtual pOb get(pOb, pOb, pCtxt);
     virtual pOb add(pOb, pOb, pOb, pCtxt);
     virtual pOb set(pOb, pOb, pOb, pCtxt);
-    virtual void addRef(EMPTY);
-    virtual void deleteRef(EMPTY);
+    virtual void addRef();
+    virtual void deleteRef();
     virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
     /* Table actions */
 
-    virtual pTuple dumpKeys(EMPTY);
-    virtual pTuple dumpPairs(EMPTY);
-    virtual int nPairs(EMPTY);
+    virtual pTuple dumpKeys();
+    virtual pTuple dumpPairs();
+    virtual int nPairs();
     virtual pOb getKey(pOb);
     virtual pOb addKey(pOb, pOb);
 
     /* Compiler interface */
 
-    virtual Pattern* makePattern(EMPTY);
-    virtual Template* makeTemplate(EMPTY);
+    virtual Pattern* makePattern();
+    virtual Template* makeTemplate();
     virtual AttrNode* makeAttrNode(bool);
-    virtual pOb unquote(EMPTY);
+    virtual pOb unquote();
     virtual Code* compileWrt(pOb, pOb);
     virtual Location lex(pOb, int);
     virtual pOb extendWith(pOb);
@@ -755,7 +740,7 @@ class MboxOb : public Ob {
    public:
     pOb mbox;
 
-    virtual pOb mailbox(EMPTY);
+    virtual pOb mailbox();
     virtual pOb setMailbox(pOb);
     virtual pOb receive(pCtxt);
     virtual void schedule(pCtxt);
@@ -769,8 +754,8 @@ class SlotDescriptor;
     friend class BuiltinClass;           \
                                          \
    public:                               \
-    virtual void updateCnt(EMPTY);       \
-    virtual char* typestring(EMPTY);     \
+    virtual void updateCnt();       \
+    virtual char* typestring();     \
     static pMeta name2(classname, Meta); \
     static pSBO name2(classname, SBO);   \
     static SlotDescriptor* _meta_fields
@@ -797,12 +782,12 @@ class Actor : public MboxOb {
    public:
     pExt extension;
 
-    static Actor* create(EMPTY);
+    static Actor* create();
     static Actor* create(pOb, pOb, pExt);
 
-    virtual pOb container(EMPTY);
+    virtual pOb container();
     virtual int addSlot(pOb, pOb);
-    virtual pOb dup(EMPTY);
+    virtual pOb dup();
     virtual pOb cloneTo(pOb, pOb);
     virtual pOb updateNoArgs();
     virtual pOb update(bool, pCtxt);
@@ -843,7 +828,7 @@ class TblObject : public Actor {
     pOb validExtent;
     pTuple keyVec;
 
-    static TblObject* create(EMPTY);
+    static TblObject* create();
 
     virtual int addSlot(pOb, pOb);
     pOb entry(int n) { return extension->slot(n); }
@@ -862,7 +847,7 @@ class StdMeta : public Actor {
     STD_DECLS(StdMeta);
 
    protected:
-    StdMeta(EMPTY);
+    StdMeta();
     StdMeta(pExt);
     StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
         : Actor(sz, meta, parent, mbox, ext) {}
@@ -870,7 +855,7 @@ class StdMeta : public Actor {
     StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
 
    public:
-    static StdMeta* create(EMPTY);
+    static StdMeta* create();
     static StdMeta* create(pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
 
     virtual pOb cloneTo(pOb, pOb);
@@ -882,19 +867,19 @@ class StdMeta : public Actor {
     virtual pOb get(pOb, pOb, pCtxt);
     virtual pOb add(pOb, pOb, pOb, pCtxt);
     virtual pOb set(pOb, pOb, pOb, pCtxt);
-    virtual void addRef(EMPTY);
-    virtual void deleteRef(EMPTY);
+    virtual void addRef();
+    virtual void deleteRef();
     virtual pOb lookupOBO(pOb, pOb, pCtxt);
 
-    void allocateMap(EMPTY);
+    void allocateMap();
 
-    pOb map(EMPTY) { return extension->slot(STDMETA_MAP_SLOT); }
+    pOb map() { return extension->slot(STDMETA_MAP_SLOT); }
 
-    bool isShared(EMPTY) {
+    bool isShared() {
         return extension->slot(STDMETA_REFCOUNT_SLOT) > FIXNUM(1);
     }
 
-    bool clientsAreExtensible(EMPTY) {
+    bool clientsAreExtensible() {
         return BOOLVAL(extension->slot(STDMETA_EXTENSIBLE_SLOT));
     }
 

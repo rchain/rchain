@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -50,8 +51,10 @@ int PtrQue::empty() { return head == array; }
 
 
 void PtrQue::add(void* p) {
-    if (head >= limit)
+    if (head >= limit) {
         resize();
+    }
+
     *head++ = p;
 }
 

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -36,13 +37,14 @@ ObQue::ObQue(int sz) {
 ObQue::~ObQue() { delete array; }
 
 void ObQue::push(Ob* o) {
-    if (head == tail && last_added)
+    if (head == tail && last_added) {
         resize();
-    else if (head == limit) {
-        if (tail == array)
+    } else if (head == limit) {
+        if (tail == array) {
             resize();
-        else
+        } else {
             head = array;
+        }
     }
 
     last_added = 1;
@@ -64,8 +66,7 @@ void ObQue::resize(int newSize) {
     if (tail < head) {
         offset = (int)(head - tail);
         memcpy((char*)newArray, (char*)tail, offset * sizeof(Ob*));
-    }
-    else {
+    } else {
         offset = (int)(limit - tail);
         memcpy((char*)newArray, (char*)tail, offset * sizeof(Ob*));
         memcpy((char*)(newArray + offset), (char*)array,
@@ -82,52 +83,61 @@ void ObQue::resize(int newSize) {
 }
 
 int ObQue::traversePtrs(PSOb__PSOb f) {
-    if (empty())
+    if (empty()) {
         return 0;
-    else {
+    } else {
         int sum = 0;
         pOb* p = (tail < head) ? tail : array;
 
-        for (; p < head; p++)
+        for (; p < head; p++) {
             sum += useIfPtr(p, f);
+        }
 
-        if (head <= tail)
-            for (p = tail; p < limit; p++)
+        if (head <= tail) {
+            for (p = tail; p < limit; p++) {
                 sum += useIfPtr(p, f);
+            }
+        }
 
         return sum;
     }
 }
 
 int ObQue::traversePtrs(SI__PSOb f) {
-    if (empty())
+    if (empty()) {
         return 0;
-    else {
+    } else {
         int sum = 0;
         pOb* p = (tail < head) ? tail : array;
 
-        for (; p < head; p++)
+        for (; p < head; p++) {
             sum += useIfPtr(*p, f);
+        }
 
-        if (head <= tail)
-            for (p = tail; p < limit; p++)
+        if (head <= tail) {
+            for (p = tail; p < limit; p++) {
                 sum += useIfPtr(*p, f);
+            }
+        }
 
         return sum;
     }
 }
 
 void ObQue::traversePtrs(V__PSOb f) {
-    if (empty())
+    if (empty()) {
         return;
-    else {
+    } else {
         pOb* p = (tail < head) ? tail : array;
 
-        for (; p < head; p++)
+        for (; p < head; p++) {
             useIfPtr(*p, f);
+        }
 
-        if (head <= tail)
-            for (p = tail; p < limit; p++)
+        if (head <= tail) {
+            for (p = tail; p < limit; p++) {
                 useIfPtr(*p, f);
+            }
+        }
     }
 }

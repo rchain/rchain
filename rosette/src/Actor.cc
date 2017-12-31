@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -25,10 +26,9 @@
 #include "Tuple.h"
 #include "BuiltinClass.h"
 
+#include <algorithm>
 #include <memory.h>
 
-
-static int max(int m, int n) { return m > n ? m : n; }
 
 
 BUILTIN_CLASS(StdExtension) {}
@@ -36,8 +36,10 @@ BUILTIN_CLASS(StdExtension) {}
 
 StdExtension::StdExtension(pOb meta, pOb parent, int nslots)
     : Ob(sizeof(StdExtension) + nslots * sizeof(pOb), meta, parent) {
-    while (nslots--)
+    while (nslots--) {
         this->slot(nslots) = INVALID;
+    }
+
     StdExtension::updateCnt();
 }
 
@@ -53,8 +55,10 @@ StdExtension::StdExtension(pOb newmeta, pOb newparent)
 StdExtension::StdExtension(int nslots)
     : Ob(sizeof(StdExtension) + nslots * sizeof(pOb), CLASS_META(StdExtension),
          CLASS_SBO(StdExtension)) {
-    while (nslots--)
+    while (nslots--) {
         this->slot(nslots) = INVALID;
+    }
+
     StdExtension::updateCnt();
 }
 
@@ -69,19 +73,19 @@ StdExtension::StdExtension(pTuple proto)
 StdExtension* StdExtension::create(pOb meta, pOb parent, int nslots) {
     void* loc =
         PALLOC2(sizeof(StdExtension) + nslots * sizeof(pOb), meta, parent);
-    return NEW(loc) StdExtension(meta, parent, nslots);
+    return new (loc) StdExtension(meta, parent, nslots);
 }
 
 
 StdExtension* StdExtension::create(int nslots) {
     void* loc = PALLOC(sizeof(StdExtension) + nslots * sizeof(pOb));
-    return NEW(loc) StdExtension(nslots);
+    return new (loc) StdExtension(nslots);
 }
 
 
 StdExtension* StdExtension::create(pTuple argvec) {
     void* loc = PALLOC1(SIZE(argvec), argvec);
-    return NEW(loc) StdExtension(argvec);
+    return new (loc) StdExtension(argvec);
 }
 
 
@@ -90,28 +94,30 @@ BUILTIN_CLASS(Actor) {}
 
 Actor::Actor(pOb meta, pOb parent, pExt ext)
     : MboxOb(sizeof(Actor), meta, parent, lockedMbox), extension(ext) {
-    if (meta != INVALID)
+    if (meta != INVALID) {
         BASE(meta)->addRef();
+    }
+
     Actor::updateCnt();
 }
 
 
-Actor* Actor::create(EMPTY) {
+Actor* Actor::create() {
     StdMeta* meta = StdMeta::create(NIL, FIXNUM(1));
     PROTECT(meta);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(Actor), ext);
-    return NEW(loc) Actor(meta, INVALID, ext);
+    return new (loc) Actor(meta, INVALID, ext);
 }
 
 
 Actor* Actor::create(pOb meta, pOb parent, pExt ext) {
     void* loc = PALLOC3(sizeof(Actor), meta, parent, ext);
-    return NEW(loc) Actor(meta, parent, ext);
+    return new (loc) Actor(meta, parent, ext);
 }
 
 
-pOb Actor::container(EMPTY) { return extension; }
+pOb Actor::container() { return extension; }
 
 
 int Actor::addSlot(pOb, pOb val) {
@@ -123,7 +129,7 @@ int Actor::addSlot(pOb, pOb val) {
 }
 
 
-pOb Actor::dup(EMPTY) {
+pOb Actor::dup() {
     PROTECT_THIS(Actor);
     KONST int sz = SIZE(SELF);
     pOb ob = (pOb)PALLOC(sz);
@@ -147,7 +153,7 @@ pOb Actor::cloneTo(pOb new_meta, pOb new_parent) {
 }
 
 
-pOb Actor::updateNoArgs(EMPTY) {
+pOb Actor::updateNoArgs() {
     PROTECT_THIS(Actor);
     mbox->nextMsg(SELF, NIL);
     return SELF;
@@ -165,8 +171,8 @@ pOb Actor::update(bool enabled_set_provided, pCtxt ctxt) {
         ASSIGN(SELF, extension, new_extension);
         result = SELF->Ob::update(enabled_set_provided, ctxt);
     }
-    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
 
+    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
     return result;
 }
 
@@ -182,8 +188,8 @@ pOb Actor::updateByLoc(bool enabled_set_provided, pCtxt ctxt) {
         ASSIGN(SELF, extension, new_extension);
         result = SELF->Ob::updateByLoc(enabled_set_provided, ctxt);
     }
-    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
 
+    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
     return result;
 }
 
@@ -222,9 +228,9 @@ pOb Actor::dispatch(pCtxt ctxt) {
 
 
 pOb Actor::lookupAndInvoke(pCtxt ctxt) {
-    if (BASE(ctxt->trgt)->isSynchronousTrgt())
+    if (BASE(ctxt->trgt)->isSynchronousTrgt()) {
         return Ob::lookupAndInvoke(ctxt);
-    else {
+    } else {
         receive(ctxt);
         return SUSPENDED;
     }
@@ -258,7 +264,7 @@ TblObject::TblObject(pExt ext, pOb validExtent, pTuple keyVec)
 TblObject* TblObject::create() {
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(TblObject), ext);
-    return NEW(loc) TblObject(ext, FIXNUM(0), NIL);
+    return new (loc) TblObject(ext, FIXNUM(0), NIL);
 }
 
 
@@ -270,7 +276,7 @@ int TblObject::addSlot(pOb key, pOb val) {
     if (n >= extension->numberOfSlots()) {
         PROTECT(key);
         PROTECT(val);
-        KONST int new_size = max(2 * n, MinimumTblObjectSlots);
+        KONST int new_size = std::max(2 * n, MinimumTblObjectSlots);
         StdExtension* ext = StdExtension::create(new_size);
         memcpy(&ext->slot(0), &SELF->extension->slot(0), n * sizeof(pOb));
         ASSIGN(SELF, extension, ext);
@@ -299,8 +305,9 @@ DEF("actor-new", actorNew, 3, 3) {
     pOb sbo = ARG(0);
     PROTECT(sbo);
 
-    if (keyVec->numberOfElements() != vals->numberOfElements())
+    if (keyVec->numberOfElements() != vals->numberOfElements()) {
         return PRIM_ERROR("non-conforming keys and initial values");
+    }
 
     pOb meta = StdMeta::create(keyVec, FIXNUM(0), RBLTRUE);
     PROTECT(meta);
@@ -310,7 +317,7 @@ DEF("actor-new", actorNew, 3, 3) {
 }
 
 
-#define EnabledSetProvided TRUE
+#define EnabledSetProvided true
 
 
 DEF("update!", actorUpdateBang, 0, MaxArgs) {

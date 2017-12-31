@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -21,11 +22,7 @@
 static const int DefaultPtrQueSize = 32;
 
 PtrQue::PtrQue() : ResizeablePtrArray(DefaultPtrQueSize) { init(); }
-
-
 PtrQue::PtrQue(int sz) : ResizeablePtrArray(sz) { init(); }
-
-
 void PtrQue::resize() { resize(2 * size); }
 
 
@@ -41,9 +38,11 @@ void PtrQue::compact() {
     void** end = head;
     void** ptr = array;
 
-    for (void** current = array; current < end; current++)
-        if (*current != 0)
+    for (void** current = array; current < end; current++) {
+        if (*current != 0) {
             *ptr++ = *current;
+        }
+    }
 
     head = ptr;
 }

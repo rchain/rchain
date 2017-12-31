@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -28,7 +29,7 @@
 #include <memory.h>
 
 
-void undersizedObError(EMPTY) {
+void undersizedObError() {
     suicide("Attempt to allocate an object smaller than the minimum allowed!");
 }
 
@@ -73,37 +74,41 @@ ByteVec::ByteVec(ByteVec* old, int newsize)
     int oldsize = old->numberOfBytes();
     memcpy((char*)&this->byte(0), (char*)&old->byte(0),
            min(oldsize, newsize) * sizeof(uint8_t));
-    if (newsize > oldsize)
+    if (newsize > oldsize) {
         memset(&this->byte(0), 0, (newsize - oldsize) * sizeof(uint8_t));
+    }
+
     ByteVec::updateCnt();
 }
 
 
 ByteVec* ByteVec::create(int n) {
     void* loc = PALLOC(sizeof(ByteVec) + align(n * sizeof(uint8_t)));
-    return NEW(loc) ByteVec(n);
+    return new (loc) ByteVec(n);
 }
 
 
 ByteVec* ByteVec::create(ByteVec* old, int newsize) {
     void* loc =
         PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old);
-    return NEW(loc) ByteVec(old, newsize);
+    return new (loc) ByteVec(old, newsize);
 }
 
 
-void ByteVec::reset(EMPTY) { memset((char*)&byte(0), 0, numberOfBytes()); }
+void ByteVec::reset() { memset((char*)&byte(0), 0, numberOfBytes()); }
 
 
-uint32_t ByteVec::sum(EMPTY) {
+uint32_t ByteVec::sum() {
     uint32_t total = 0;
-    for (int i = numberOfBytes(); i--;)
+    for (int i = numberOfBytes(); i--;) {
         total += (uint32_t)byte(i);
+    }
+
     return total;
 }
 
 
-Ob* ByteVec::indexedSize(EMPTY) { return FIXNUM(numberOfBytes()); }
+Ob* ByteVec::indexedSize() { return FIXNUM(numberOfBytes()); }
 
 
 Ob* ByteVec::nth(int n) { return FIXNUM(byte(n)); }
@@ -128,8 +133,10 @@ Word16Vec::Word16Vec(int n)
     : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(uint16_t)),
                CLASS_META(Word16Vec), CLASS_SBO(Word16Vec)),
       wordCount(n) {
-    while (n--)
+    while (n--) {
         this->word(n) = 0;
+    }
+
     Word16Vec::updateCnt();
 }
 
@@ -137,8 +144,10 @@ Word16Vec::Word16Vec(int n)
 Word16Vec::Word16Vec(Ob* meta, Ob* parent, int n)
     : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent),
       wordCount(n) {
-    while (n--)
+    while (n--) {
         this->word(n) = 0;
+    }
+
     Word16Vec::updateCnt();
 }
 
@@ -150,47 +159,51 @@ Word16Vec::Word16Vec(Word16Vec* old, int newsize)
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
            min(oldsize, newsize) * sizeof(uint16_t));
-    if (newsize > oldsize)
+    if (newsize > oldsize) {
         memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(uint16_t));
+    }
+
     Word16Vec::updateCnt();
 }
 
 
 Word16Vec* Word16Vec::create(int n) {
     void* loc = PALLOC(sizeof(Word16Vec) + align(n * sizeof(uint16_t)));
-    return NEW(loc) Word16Vec(n);
+    return new (loc) Word16Vec(n);
 }
 
 
 Word16Vec* Word16Vec::create(Ob* meta, Ob* parent, int n) {
     void* loc =
         PALLOC2(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent);
-    return NEW(loc) Word16Vec(meta, parent, n);
+    return new (loc) Word16Vec(meta, parent, n);
 }
 
 
 Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
     void* loc =
         PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old);
-    return NEW(loc) Word16Vec(old, newsize);
+    return new (loc) Word16Vec(old, newsize);
 }
 
 
-void Word16Vec::reset(EMPTY) {
-    for (int i = numberOfWords(); i--;)
+void Word16Vec::reset() {
+    for (int i = numberOfWords(); i--;) {
         word(i) = 0;
+    }
 }
 
 
-uint32_t Word16Vec::sum(EMPTY) {
+uint32_t Word16Vec::sum() {
     uint32_t total = 0;
-    for (int i = numberOfWords(); i--;)
+    for (int i = numberOfWords(); i--;) {
         total += (uint32_t)word(i);
+    }
     return total;
 }
 
 
-Ob* Word16Vec::indexedSize(EMPTY) { return FIXNUM(numberOfWords()); }
+Ob* Word16Vec::indexedSize() { return FIXNUM(numberOfWords()); }
 
 
 Ob* Word16Vec::nth(int n) { return FIXNUM(word(n)); }
@@ -237,24 +250,24 @@ Word32Vec::Word32Vec(Word32Vec* old, int newsize)
 
 Word32Vec* Word32Vec::create(int n) {
     void* loc = PALLOC(sizeof(Word32Vec) + n * sizeof(uint32_t));
-    return NEW(loc) Word32Vec(n);
+    return new (loc) Word32Vec(n);
 }
 
 
 Word32Vec* Word32Vec::create(Word32Vec* old, int newsize) {
     void* loc = PALLOC1(sizeof(Word32Vec) + newsize * sizeof(uint32_t), old);
-    return NEW(loc) Word32Vec(old, newsize);
+    return new (loc) Word32Vec(old, newsize);
 }
 
 
-void Word32Vec::reset(EMPTY) {
+void Word32Vec::reset() {
     for (int i = numberOfWords(); i--;) {
         word(i) = 0;
     }
 }
 
 
-uint32_t Word32Vec::sum(EMPTY) {
+uint32_t Word32Vec::sum() {
     uint32_t total = 0;
     for (int i = numberOfWords(); i--;) {
         total += (uint32_t)word(i);
@@ -263,7 +276,7 @@ uint32_t Word32Vec::sum(EMPTY) {
 }
 
 
-Ob* Word32Vec::indexedSize(EMPTY) { return FIXNUM(numberOfWords()); }
+Ob* Word32Vec::indexedSize() { return FIXNUM(numberOfWords()); }
 
 
 Ob* Word32Vec::nth(int n) { return FIXNUM(word(n)); }

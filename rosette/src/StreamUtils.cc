@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -125,8 +126,7 @@ int putSafeChar(char c, FILE* f, char escapeChar) {
     if (c == escapeChar) {
         putc(c, f);
         putc(c, f);
-    }
-    else if (isprint(c))
+    } else if (isprint(c))
         putc(c, f);
     else {
         putc(escapeChar, f);
@@ -163,8 +163,7 @@ char* safeStrcpy(char* dest, char* src, char escapeChar) {
         if (c == escapeChar) {
             *dest++ = c;
             *dest++ = c;
-        }
-        else if (isprint(c))
+        } else if (isprint(c))
             *dest++ = c;
         else {
             *dest++ = escapeChar;

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -45,13 +46,14 @@ Proc::Proc(Ob* env, Code* code, Ob* id, Ob* source)
 
 Proc* Proc::create(Ob* env, Code* code, Ob* id, Ob* source) {
     void* loc = PALLOC4(sizeof(Proc), env, code, id, source);
-    return NEW(loc) Proc(env, code, id, source);
+    return new (loc) Proc(env, code, id, source);
 }
 
 
 Ob* Proc::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tproc %s\n", BASE(id)->asCstring());
+    }
 
     ctxt->code = this->code;
     ctxt->env = this->env;

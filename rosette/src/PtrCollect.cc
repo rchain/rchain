@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -43,9 +44,11 @@ void PtrCollection::compact() {
     void** end = next;
     void** ptr = array;
 
-    for (void** current = array; current < end; current++)
-        if (*current != 0)
+    for (void** current = array; current < end; current++) {
+        if (*current != 0) {
             *ptr++ = *current;
+        }
+    }
 
     next = ptr;
 }
@@ -61,6 +64,7 @@ PtrCollectionTrav::PtrCollectionTrav(PtrCollection* collection) {
 void PtrCollectionTrav::advance() {
     int end = pc->next - pc->array;
     void** p = &pc->array[current];
-    while (++current < end && *++p == 0)
-        ;
+    while (++current < end && *++p == 0) {
+        continue;
+    }
 }

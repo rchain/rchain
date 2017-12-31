@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -48,13 +49,14 @@ StdMthd::StdMthd(Code* code, Ob* id, Ob* source)
 
 StdMthd* StdMthd::create(Code* code, Ob* id, Ob* source) {
     void* loc = PALLOC3(sizeof(StdMthd), code, id, source);
-    return NEW(loc) StdMthd(code, id, source);
+    return new (loc) StdMthd(code, id, source);
 }
 
 
 Ob* StdMthd::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tlocal mthd %s\n", BASE(id)->asCstring());
+    }
 
     /*
      * This is the path followed when invoking a "local" method.  Because
@@ -109,7 +111,7 @@ ReflectiveMthd::ReflectiveMthd(Code* code, Ob* id, Ob* source)
 
 ReflectiveMthd* ReflectiveMthd::create(Code* code, Ob* id, Ob* source) {
     void* loc = PALLOC3(sizeof(ReflectiveMthd), code, id, source);
-    return NEW(loc) ReflectiveMthd(code, id, source);
+    return new (loc) ReflectiveMthd(code, id, source);
 }
 
 

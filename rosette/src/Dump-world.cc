@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -35,10 +36,11 @@ extern int RestoringImage;
 
 DEF("image-dump", imageDump, 1, 1) {
     char* path = BASE(ARG(0))->asPathname();
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
-    RestoringImage = TRUE;
+    RestoringImage = true;
     char msg_buf[BUFSIZ];
 #if defined(DYNAMIC_LOADING)
     return (loader->dump(path, msg_buf) ? PRIM_ERROR(msg_buf) : RBLFALSE);
@@ -50,8 +52,9 @@ DEF("image-dump", imageDump, 1, 1) {
 
 DEF("image-restore", imageRestore, 1, MaxArgs) {
     char* path = BASE(ARG(0))->asPathname();
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     int argc = NARGS;
     char** argv = new char*[argc + 1];
@@ -62,6 +65,7 @@ DEF("image-restore", imageRestore, 1, MaxArgs) {
         char* s2 = new char[strlen(s1) + 1];
         argv[i] = strcpy(s2, s1);
     }
+
     argv[argc] = 0;
 
     extern char** environ;

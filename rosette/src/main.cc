@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -25,13 +26,6 @@
 // pub release of rosette
 //
  @EC */
-
-#ifndef __RCS_ID__
-#define __RCS_ID__
-static const char* rcsid =
-    "$Header: /mcc/project/carnot/root/master/pub-ess/src/main.cc,v 1.1.1.1 "
-    "1993/02/12 01:25:49 tomlic Exp $";
-#endif
 
 #include "rosette.h"
 #include "Prim.h"
@@ -71,7 +65,7 @@ int main(int argc, char** argv, char** envp) {
         heap->gc();
         StdinReader->resetState();
 
-        printf(prompt);
+        printf("%s", prompt);
         Ob* x = StdinReader->readExpr();
 
         if (x == RBLEOF) {
