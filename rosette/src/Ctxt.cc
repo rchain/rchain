@@ -26,11 +26,6 @@
 
 #include "BuiltinClass.h"
 
-#include <assert.h>
-#if !defined(GCC27X)
-#include <new.h>
-#endif
-
 extern Ob* emptyMbox;
 extern Ob* lockedMbox;
 

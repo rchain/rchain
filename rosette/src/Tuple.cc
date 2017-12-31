@@ -23,9 +23,6 @@
 #include "Prim.h"
 #include "BuiltinClass.h"
 
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 #include <memory.h>
 
 

@@ -26,10 +26,6 @@
 
 #include "BuiltinClass.h"
 
-#include <assert.h>
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 #include <memory.h>
 
 
