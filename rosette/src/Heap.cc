@@ -44,6 +44,10 @@ int malloc_verify();
 
 static const int MaxFixedSize = sizeof(Ctxt);
 
+int align(int size) {
+    return ((size + alignmentmask) & ~alignmentmask);
+}
+
 
 /*
  * The heap management code for RBL.  This is a two-tiered management
