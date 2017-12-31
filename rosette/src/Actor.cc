@@ -310,7 +310,7 @@ DEF("actor-new", actorNew, 3, 3) {
 }
 
 
-#define EnabledSetProvided TRUE
+#define EnabledSetProvided true
 
 
 DEF("update!", actorUpdateBang, 0, MaxArgs) {

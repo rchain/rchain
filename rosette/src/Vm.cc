@@ -150,16 +150,19 @@ bool VirtualMachine::getNextStrand() {
          */
 
         if (sleeperPool->empty())
-            if (nsigs == 0)
-                return TRUE;
-            else {
+            if (nsigs == 0) {
+                return true;
+            } else {
                 if (sigvec == 0) {
-                    if (debugging_level)
+                    if (debugging_level) {
                         printf("*** entering sigpause...\n");
+                    }
                     sigpause(0);
-                    if (debugging_level)
+                    if (debugging_level) {
                         printf("*** exiting sigpause...\n");
+                    }
                 }
+
                 handleSignal();
                 /*
                  * HandleSignal will presumably schedule one or more
@@ -181,7 +184,7 @@ bool VirtualMachine::getNextStrand() {
     if (strand->monitor != currentMonitor)
         installMonitor(strand->monitor);
     installCtxt(strand);
-    return FALSE;
+    return false;
 }
 
 
@@ -414,7 +417,7 @@ void VirtualMachine::handleApplyPrimUpcall(Instr instr, Location tag) {
     case opApplyPrimArg | NextOn:
     case opApplyPrimReg | NextOff:
     case opApplyPrimReg | NextOn:
-        cb->emitF5(opUpcallRtn, FALSE, OP_f5_next(instr), 0);
+        cb->emitF5(opUpcallRtn, false, OP_f5_next(instr), 0);
         litvec = Tuple::create(1, tag.atom);
         break;
     case opApplyCmd | NextOff:
@@ -1306,13 +1309,14 @@ void VirtualMachine::scheduleStrand(pCtxt strand) { strandPool->enq(strand); }
 
 int VirtualMachine::addSignalHandler(int sig, SIG_PF fn, Ob* ob) {
     SIG_PF oldFn = (SIG_PF)signal(sig, fn);
-    if (oldFn == (SIG_PF)SIG_ERR)
+    if (oldFn == (SIG_PF)SIG_ERR) {
         return -1;
-    else {
-        if (oldFn == (SIG_PF)SIG_DFL)
+    } else {
+        if (oldFn == (SIG_PF)SIG_DFL) {
             nsigs += (fn != (SIG_PF)SIG_DFL);
-        else
+        } else {
             nsigs -= (fn == (SIG_PF)SIG_DFL);
+        }
         sigPool[sig] = ob;
         return 0;
     }
@@ -1328,8 +1332,7 @@ Ob* VirtualMachine::initiateRosetteSignal(int sig) {
     if (sigPool[sig] == INVALID) {
         warning("no Rosette signal handler installed for signal %d", sig);
         return INVALID;
-    }
-    else {
+    } else {
         extern StdOprn* oprnSignal;
         Tuple* argvec = Tuple::create(2, NIV);
         argvec->elem(0) = sigPool[sig];
@@ -1376,14 +1379,21 @@ void VirtualMachine::resetSignals() {
 
     sigvec = 0;
     int i = 0;
-    for (; i < NSIG; i++)
+    for (; i < NSIG; i++) {
         sigPool[i] = INVALID;
-    for (i = 0; i < FD_SETSIZE; i++)
+    }
+
+    for (i = 0; i < FD_SETSIZE; i++) {
         ioFn[i] = 0;
-    for (i = 0; i < FD_SETSIZE; i++)
+    }
+
+    for (i = 0; i < FD_SETSIZE; i++) {
         ioPool[i] = INVALID;
-    for (i = 0; i < FD_SETSIZE; i++)
+    }
+
+    for (i = 0; i < FD_SETSIZE; i++) {
         rblio[i] = 0;
+    }
 
     /*
      * nsigs tells us how many non-default signal handlers are installed.
@@ -1450,14 +1460,16 @@ void VirtualMachine::addIoHandler(int fd, IO_HANDLER* fn, void* ob, int rbl) {
     ioPool[fd] = (Ob*)ob;
     FD_SET(fd, &fds);
     rblio[fd] = (rbl != 0);
-    if (fd >= nfds)
+    if (fd >= nfds) {
         nfds = fd + 1;
+    }
 }
 
 
 void VirtualMachine::deleteIoHandler(int fd) {
-    if ((fd < 0) || (fd >= nfds))
+    if ((fd < 0) || (fd >= nfds)) {
         return;
+    }
 
     ioFn[fd] = 0;
     ioPool[fd] = INVALID;
@@ -1472,9 +1484,11 @@ void VirtualMachine::deleteIoHandler(int fd) {
          * descriptor, which we do by running backwards through the file
          * descriptor set.
          */
-        for (nfds--; nfds > 0; nfds--)
-            if (FD_ISSET(nfds - 1, &fds))
+        for (nfds--; nfds > 0; nfds--) {
+            if (FD_ISSET(nfds - 1, &fds)) {
                 break;
+            }
+        }
     }
 
     if (nfds == 0) {
@@ -1574,12 +1588,12 @@ void VirtualMachine::initVmTables() {
     cb->emitE0(1, 0);
     /*  2 */ cb->emitF0(opExtend, 1);
     /*  3 */ cb->emitF0(opPushAlloc, 1);
-    /*  4 */ cb->emitF7(opXferLexToArg, FALSE, 0, 0, 0);
+    /*  4 */ cb->emitF7(opXferLexToArg, false, 0, 0, 0);
     /*  5 */ cb->emitF0(opXferGlobalToReg, CRN_Trgt);
     cb->emitE1(GLOBAL_OFFSET("print"));
-    /*  7 */ cb->emitF4(opXmitReg, FALSE, TRUE, 1, CRN_Rslt);
+    /*  7 */ cb->emitF4(opXmitReg, false, true, 1, CRN_Rslt);
     /*  8 */ cb->emitF1(opIndLitToReg, CRN_Argvec, 0);
-    /*  9 */ cb->emitF5(opApplyPrimReg, FALSE, FALSE, 1);
+    /*  9 */ cb->emitF5(opApplyPrimReg, false, false, 1);
     cb->emitE2(obDisplay->primNumber(), CRN_Rslt);
     /* 11 */ cb->emitF0(opAlloc, 1);
     /* 12 */ cb->emitF6(opOutstanding, StartLabel);
@@ -1593,7 +1607,7 @@ void VirtualMachine::initVmTables() {
     nxtCode = (Code*)heap->tenure(Code::create(cb, NIL));
 
     cb->clear();
-    cb->emitF5(opRtn, FALSE, TRUE);
+    cb->emitF5(opRtn, false, true);
     rtnNxtCode = (Code*)heap->tenure(Code::create(cb, NIL));
 
     vmLiterals[0x0] = FIXNUM(0);

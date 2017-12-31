@@ -117,7 +117,7 @@ class Parser : public BinaryOb {
     ParserFrame* ftop();
     void fpop();
 
-    ParserMode accept(int, int = FALSE);
+    ParserMode accept(int, int = false);
     ParserMode receiveOb(Ob*);
     ParserMode receiveChar(int);
     ParserMode receiveTerminator(int);

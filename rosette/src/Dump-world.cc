@@ -38,7 +38,7 @@ DEF("image-dump", imageDump, 1, 1) {
     if (!path)
         return PRIM_MISMATCH(0, "String or Symbol");
 
-    RestoringImage = TRUE;
+    RestoringImage = true;
     char msg_buf[BUFSIZ];
 #if defined(DYNAMIC_LOADING)
     return (loader->dump(path, msg_buf) ? PRIM_ERROR(msg_buf) : RBLFALSE);

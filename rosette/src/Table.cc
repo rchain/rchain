@@ -44,8 +44,8 @@ RblTable::RblTable(int max, Tuple* tbl)
     : BinaryOb(sizeof(RblTable), CLASS_META(RblTable), CLASS_SBO(RblTable)),
       maxEntries(max),
       numberOfEntries(0),
-      gcSensitiveKeys(FALSE),
-      registered(FALSE),
+      gcSensitiveKeys(false),
+      registered(false),
       tbl(tbl),
       hitFn(&RblTableDefaultHitFn) {
     assert(max % HashStride != 0);
@@ -73,8 +73,8 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
     : BinaryOb(sizeof(RblTable), CLASS_META(RblTable), CLASS_SBO(RblTable)),
       maxEntries(max),
       numberOfEntries(0),
-      gcSensitiveKeys(FALSE),
-      registered(FALSE),
+      gcSensitiveKeys(false),
+      registered(false),
       tbl(tbl),
       hitFn(rtabhfn) {
     assert(max % HashStride != 0);
@@ -165,7 +165,7 @@ void RblTable::hashify() {
 
 void RblTable::rehashCompletely() {
     assert(SIZE(tbl) == sizeof(Tuple) + maxEntries * sizeof(Entry));
-    gcSensitiveKeys = FALSE;
+    gcSensitiveKeys = false;
     numberOfEntries = 0;
     rehashCompletelyFrom(0);
 }
@@ -271,9 +271,9 @@ void RblTable::hashAdd(pOb key, pOb val) {
         }
 
         if (!gcSensitiveKeys && IS_PTR(key) && key->gcSensitive()) {
-            gcSensitiveKeys = TRUE;
+            gcSensitiveKeys = true;
             if (!registered) {
-                registered = TRUE;
+                registered = true;
                 heap->registerGCAgenda(this);
             }
         }
@@ -330,18 +330,18 @@ void RblTable::traversePtrs(V__PSOb f) {
 
 bool RblTable::gcFixup() {
     if (gcSensitiveKeys)
-        return TRUE;
+        return true;
     else
-        return (registered = FALSE);
+        return (registered = false);
 }
 
 
 bool RblTable::scavengeFixup() {
     rehashCompletely();
     if (gcSensitiveKeys)
-        return TRUE;
+        return true;
     else
-        return (registered = FALSE);
+        return (registered = false);
 }
 
 

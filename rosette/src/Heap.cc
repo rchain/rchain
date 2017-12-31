@@ -140,9 +140,9 @@ int align(int size) {
 static int nextMultipleOf(int sz, int multiple) {
     int r = sz % multiple;
 
-    if (r == 0)
+    if (r == 0) {
         return sz;
-    else {
+    } else {
         int q = sz / multiple;
         return (q + 1) * multiple;
     }
@@ -371,7 +371,7 @@ void NewSpace::scavenge() {
      * worthwhile to break the encapsulation here.
      */
 
-    while (TRUE) {
+    while (true) {
         while (rst) {
             void*& rp = rst.get();
             Ob* p = (Ob*)rp;
@@ -396,13 +396,15 @@ void NewSpace::scavenge() {
          * out.
          */
 
-        if (!st)
+        if (!st) {
             break;
+        }
 
         do {
             Ob* p = (Ob*)st.get();
-            if (!FREED(p))
+            if (!FREED(p)) {
                 p->traversePtrs(MF_ADDR(Ob::relocate));
+            }
             st.advance();
         } while (st);
     }
@@ -584,18 +586,22 @@ OldSpace::~OldSpace() {
 
 
 bool OldSpace::contains(Ob* p) {
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-        if (currentChunk->contains(p))
-            return TRUE;
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        if (currentChunk->contains(p)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 
 int OldSpace::size() {
     int s = 0;
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
         s += chunk->size();
+    }
+
     return s;
 }
 
@@ -620,8 +626,9 @@ Ob* OldSpace::unlink(Ob*& freelist) {
 void* OldSpace::alloc(unsigned sz) {
     void* p;
 
-    if (sz <= MaxFixedSize && fixedFreeLists[sz])
+    if (sz <= MaxFixedSize && fixedFreeLists[sz]) {
         return (void*)unlink(fixedFreeLists[sz]);
+    }
 
     p = currentChunk->alloc(sz);
     if (NULL != p) {
@@ -639,9 +646,13 @@ void* OldSpace::alloc(unsigned sz) {
 
 
 void* OldSpace::miscAlloc(unsigned sz) {
-    for (Ob** next = &miscFreeList; *next; next = &(*next)->forwardingAddress())
-        if (SIZE(*next) == sz)
+    for (Ob** next = &miscFreeList; *next;
+         next = &(*next)->forwardingAddress()) {
+
+        if (SIZE(*next) == sz) {
             return (void*)unlink(*next);
+        }
+    }
 
     return 0;
 }

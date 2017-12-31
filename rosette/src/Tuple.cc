@@ -233,14 +233,17 @@ Ob* Tuple::subObject(int i, int n) { return makeSlice(i, n); }
 
 
 bool Tuple::accepts(Ctxt* msg) {
-    if (this == NIL)
-        return TRUE;
-    else {
+    if (this == NIL) {
+        return true;
+    } else {
         int n = numberOfElements();
-        for (int i = 0; i < n; i++)
-            if (BASE(elem(i))->matches(msg))
-                return TRUE;
-        return FALSE;
+        for (int i = 0; i < n; i++) {
+            if (BASE(elem(i))->matches(msg)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -248,8 +251,9 @@ bool Tuple::accepts(Ctxt* msg) {
 bool Tuple::matches(Ctxt* msg) {
     int n = numberOfElements();
     if (n > 0 && n <= msg->nargs) {
-        if (elem(0) != msg->trgt)
-            return FALSE;
+        if (elem(0) != msg->trgt) {
+            return false;
+        }
 
         /*
          * Skip msg->arg(0), since it is actually the receiver of the
@@ -262,19 +266,22 @@ bool Tuple::matches(Ctxt* msg) {
          * 	[rcvr arg1 arg2 ...]
          */
 
-        for (int i = 1; i < n; i++)
-            if (elem(i) != msg->arg(i))
-                return FALSE;
+        for (int i = 1; i < n; i++) {
+            if (elem(i) != msg->arg(i)) {
+                return false;
+            }
+        }
 
-        return TRUE;
+        return true;
+    } else {
+        return false;
     }
-    else
-        return FALSE;
 }
 
 bool Tuple::matches(Tuple* msg) {
-    if (this == NIL)
-        return TRUE;
+    if (this == NIL) {
+        return true;
+    }
 
     int n = numberOfElements();
     if (n > 0 && n <= msg->numberOfElements()) {
@@ -283,25 +290,23 @@ bool Tuple::matches(Tuple* msg) {
                 if (IS_A(elem(i), Tuple)) {
                     if (IS_A(msg->elem(i), Tuple)) {
                         if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i))) {
-                            return FALSE;
+                            return false;
+                        } else {
+                            continue;
                         }
-                        else {
-                        }
+                    } else {
+                        return false;
                     }
-                    else {
-                        return FALSE;
-                    }
-                }
-                else {
-                    return FALSE;
+                } else {
+                    return false;
                 }
             }
         }
 
-        return TRUE;
+        return true;
     }
-    else
-        return FALSE;
+
+    return false;
 }
 
 

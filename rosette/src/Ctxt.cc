@@ -219,11 +219,11 @@ extern Code* rtnNxtCode;
 
 bool Ctxt::rcv(Ob* result, Location loc) {
     if (store(loc, this, result))
-        return TRUE;
+        return true;
     else {
         if (--outstanding == 0)
             scheduleStrand();
-        return FALSE;
+        return false;
     }
 }
 
@@ -296,10 +296,10 @@ bool UpcallCtxt::applyK(Ob* val, Location loc) {
 #endif
 
     if (store(loc, ctxt, val))
-        return TRUE;
+        return true;
     else {
         ctxt->scheduleStrand();
-        return FALSE;
+        return false;
     }
 }
 

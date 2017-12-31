@@ -45,13 +45,6 @@
 typedef int bool;
 #endif
 
-#ifndef TRUE
-#define TRUE 1
-#endif
-#ifndef FALSE
-#define FALSE 0
-#endif
-
 #ifndef MIPS_SGI_SYSV
 #define KONST const
 #else
@@ -312,8 +305,8 @@ enum SysCode {
     syscodeDeadThread
 };
 
-#define RBLTRUE RBLBOOL(TRUE)
-#define RBLFALSE RBLBOOL(FALSE)
+#define RBLTRUE RBLBOOL(true)
+#define RBLFALSE RBLBOOL(false)
 #define NIV MAKEESCTAGGED(OTniv, 0)
 #define INVALID MAKEESCTAGGED(OTsysval, syscodeInvalid)
 #define UPCALL MAKEESCTAGGED(OTsysval, syscodeUpcall)

@@ -803,9 +803,9 @@ DEF("prim-execvp", sysExecv, 5, 6) {
     CHECK_FIXNUM(3, out);
     CHECK_FIXNUM(4, err);
     int splitp;
-    if (NARGS == 5)
-        splitp = TRUE;
-    else {
+    if (NARGS == 5) {
+        splitp = true;
+    } else {
         CHECK(5, RblBool, x);
         splitp = BOOLVAL(x);
     }

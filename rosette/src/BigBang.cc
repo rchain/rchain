@@ -509,7 +509,7 @@ int BigBang(int argc, char** argv, char** envp) {
 
     argc = ParseCommandLine(argc, argv);
 
-    InBigBang = TRUE;
+    InBigBang = true;
 
     setsid();
 
@@ -581,7 +581,7 @@ int BigBang(int argc, char** argv, char** envp) {
     }
 
     handleInterrupts();
-    InBigBang = FALSE;
+    InBigBang = false;
 
     return RestoringImage;
 }

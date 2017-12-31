@@ -506,7 +506,7 @@ ReaderMode StringFrame::process(int c, Reader* r) {
          * Remember to tell the acceptance routine that "gaps" are
          * permitted in strings.
          */
-        return r->accept(c, TRUE);
+        return r->accept(c, true);
     }
 }
 
@@ -939,7 +939,7 @@ static Ob* ifFinalizer(Reader* r, Ob** stk, int n, Ob*) {
 }
 
 
-static Ob* blockHelper(Ob** stk, int n, bool implicit = TRUE) {
+static Ob* blockHelper(Ob** stk, int n, bool implicit = true) {
     if (n == 1)
         return stk[0];
     else {
@@ -953,7 +953,7 @@ static Ob* blockFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
     if (n < 2 || rest != NILexpr)
         return r->error("improper syntax for block expression");
 
-    return blockHelper(stk + 1, n - 1, FALSE);
+    return blockHelper(stk + 1, n - 1, false);
 }
 
 
@@ -1204,7 +1204,7 @@ Reader::Reader(ReadTable* rt, FILE* f)
       buf(NULL),
       bufsize(0),
       bufp(0),
-      errorEncountered(FALSE),
+      errorEncountered(false),
       waitingOnIO(NOT_WAITING),
       fstk(),
       ostk(),
@@ -1405,14 +1405,14 @@ Ob* Reader::error(const char* fmt, ...) {
     va_end(args);
     fputc('\n', stderr);
 
-    errorEncountered = TRUE;
+    errorEncountered = true;
     return READ_ERROR;
 }
 
 
 void Reader::resetState() {
     waitingOnIO = NOT_WAITING;
-    errorEncountered = FALSE;
+    errorEncountered = false;
     mode = START;
     fstk.reset();
     ostk.reset();
@@ -1425,7 +1425,7 @@ Ob* Reader::suspendReader() {
      * the lock and give up control.
      */
     if (errorEncountered) {
-        errorEncountered = FALSE;
+        errorEncountered = false;
         waitingOnIO = NOT_WAITING;
         return READ_ERROR;
     }

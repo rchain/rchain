@@ -83,7 +83,7 @@ Symbol* Symbol::create() {
     return NEW(loc) Symbol();
 }
 
-bool Symbol::ConstantP() { return FALSE; }
+bool Symbol::ConstantP() { return false; }
 
 void Symbol::printOn(FILE* f) {
     char* str = SYMPTR(atom);

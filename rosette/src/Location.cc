@@ -57,14 +57,14 @@ bool store(Location loc, Ctxt* k, Ob* val) {
     switch (GET_GENERIC_TYPE(loc)) {
     case LT_CtxtRegister:
         ASSIGN(k, reg(GET_CTXTREG_INDEX(loc)), val);
-        return FALSE;
+        return false;
 
     case LT_ArgRegister:
         if (GET_ARGREG_INDEX(loc) >= k->argvec->numberOfElements())
-            return TRUE;
+            return true;
         else {
             ASSIGN(k->argvec, elem(GET_ARGREG_INDEX(loc)), val);
-            return FALSE;
+            return false;
         }
 
     case LT_LexVariable:
@@ -79,7 +79,7 @@ bool store(Location loc, Ctxt* k, Ob* val) {
     case LT_GlobalVariable: {
         Ob* p = GlobalEnv->container();
         int n = GET_GLOBALVAR_OFFSET(loc);
-        return n < p->numberOfSlots() && (ASSIGN(p, slot(n), val), TRUE);
+        return n < p->numberOfSlots() && (ASSIGN(p, slot(n), val), true);
     }
 
     case LT_BitField:
@@ -96,7 +96,7 @@ bool store(Location loc, Ctxt* k, Ob* val) {
                                       (unsigned long)(FIXVAL(val))) == INVALID;
     case LT_Limbo:
     default:
-        return TRUE;
+        return true;
     }
 }
 
@@ -226,7 +226,7 @@ Ob* valWrt(Location loc, Ob* v) {
                                  SPANSIZE(GET_BITFIELD00_SPAN(loc)),
                                  GET_BITFIELD00_SIGN(loc));
     case LT_GlobalVariable:
-        return BASE(GlobalEnv)->getLex(TRUE, 0, GET_GLOBALVAR_OFFSET(loc));
+        return BASE(GlobalEnv)->getLex(true, 0, GET_GLOBALVAR_OFFSET(loc));
     case LT_Limbo:
         return ABSENT;
     default:
@@ -267,7 +267,7 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
             return INVALID;
         }
     case LT_GlobalVariable:
-        return BASE(GlobalEnv)->setLex(TRUE, 0, GET_GLOBALVAR_OFFSET(loc), val);
+        return BASE(GlobalEnv)->setLex(true, 0, GET_GLOBALVAR_OFFSET(loc), val);
     default:
         suicide("Location::setValWrt");
     }

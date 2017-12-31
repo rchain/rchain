@@ -40,43 +40,47 @@ pOb Ob::typep(pOb x) {
 }
 
 bool Ob::hasParentp(pOb X) {
-    if ((X == TopSBO) || (BASE(X) == this))
-        return TRUE;
-    else if (this == TopSBO)
-        return FALSE;
-    else
-        return BASE(parent())->hasParentp(X);
+    if ((X == TopSBO) || (BASE(X) == this)) {
+        return true;
+    } else if (this == TopSBO) {
+        return false;
+    }
+
+    return BASE(parent())->hasParentp(X);
 }
 
 bool Ob::compositeCoversp(pOb y) {
-    if (this->typep(y) == RBLTRUE)
-        return TRUE;
-    else
-        return BASE(y)->hasParentp(this);
+    if (this->typep(y) == RBLTRUE) {
+        return true;
+    }
+
+    return BASE(y)->hasParentp(this);
 }
 
 bool Ob::isCoveredByp(pOb x) { return BASE(x)->compositeCoversp(this->self()); }
 
 bool Ob::coversp(pOb y) {
-    if ((this == BASE(y)) || (this == TopSBO))
-        return TRUE;
-    else if (y == TopSBO)
-        return FALSE;
-    else
-        return BASE(y)->isCoveredByp(this);
+    if ((this == BASE(y)) || (this == TopSBO)) {
+        return true;
+    } else if (y == TopSBO) {
+        return false;
+    }
+
+    return BASE(y)->isCoveredByp(this);
 }
 
 bool RblAtom::coversp(pOb y) { return ((atom == y) && (y != NIV)); }
 
 pOb Ob::typeLub(pOb x) {
-    if (this->coversp(x))
+    if (this->coversp(x)) {
         return this->self();
-    else {
+    } else {
         pOb y = this->self();
-        if (BASE(x)->coversp(y))
+        if (BASE(x)->coversp(y)) {
             return x;
-        else
+        } else {
             return (BASE(this->parent()))->typeLub(x);
+        }
     }
 }
 
@@ -93,14 +97,17 @@ bool Tuple::typeMatcher(Tuple* type_template, pOb rest_type) {
     int N = numberOfElements();
     int M = typT->numberOfElements();
 
-    if (N < M)
-        return FALSE;
+    if (N < M) {
+        return false;
+    }
 
     int i = 0;
 
-    for (; i < min(N, M); i++)
-        if (!(BASE(typT->elem(i)))->typeMatchesp(elem(i)))
-            return FALSE;
+    for (; i < min(N, M); i++) {
+        if (!(BASE(typT->elem(i)))->typeMatchesp(elem(i))) {
+            return false;
+        }
+    }
 
     return elemsCoveredByp(rest_type, i);
 }
@@ -108,11 +115,13 @@ bool Tuple::typeMatcher(Tuple* type_template, pOb rest_type) {
 bool Tuple::elemsCoveredByp(pOb typ, int i) {
     int N = numberOfElements();
 
-    for (; i < N; i++)
-        if (!BASE(typ)->coversp(elem(i)))
-            return FALSE;
+    for (; i < N; i++) {
+        if (!BASE(typ)->coversp(elem(i))) {
+            return false;
+        }
+    }
 
-    return TRUE;
+    return true;
 }
 
 pOb tupleLub(Tuple* obs) {
@@ -175,39 +184,45 @@ Ob* MIActor::lookup(Ob* key, Ctxt* ctxt) {
 }
 
 bool MIActor::hasParentp(pOb typ) {
-    if ((this == typ) || (typ == TopSBO))
-        return TRUE;
+    if ((this == typ) || (typ == TopSBO)) {
+        return true;
+    }
 
-    if (interruptPending)
-        return FALSE;
+    if (interruptPending) {
+        return false;
+    }
 
     Tuple* cpl = classPrecedenceList();
 
-    if (!IS_A(cpl, Tuple))
+    if (!IS_A(cpl, Tuple)) {
         return BASE(typ)->coversp(cpl); /* assume: cpl is a type */
+    }
 
     int N = cpl->numberOfElements();
 
-    if (N == 0)
-        return FALSE;
+    if (N == 0) {
+        return false;
+    }
 
-    for (int i = 0; i < N; i++)
-        if (BASE(cpl->elem(i))->hasParentp(typ))
-            return TRUE;
+    for (int i = 0; i < N; i++) {
+        if (BASE(cpl->elem(i))->hasParentp(typ)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 pOb MIActor::typeLub(pOb x) {
-    if (this->coversp(x))
+    if (this->coversp(x)) {
         return this;
-    else if (BASE(x)->coversp(this))
+    } else if (BASE(x)->coversp(this)) {
         return x;
-    else {
+    } else {
         Tuple* cpl = classPrecedenceList();
-        if (!IS_A(cpl, Tuple))
+        if (!IS_A(cpl, Tuple)) {
             return BASE(x)->typeLub(cpl);
-        else {
+        } else {
             int N = cpl->numberOfElements();
             if (N == 0)
                 return NIV; /* there is no LUB! */
@@ -260,7 +275,7 @@ bool ProductType::typeMatchesp(pOb actuals) {
     if (IS_A(actuals, Tuple))
         return ((Tuple*)actuals)->typeMatcher(definite(), star());
     else
-        return FALSE;
+        return false;
 }
 
 bool ProductType::isCoveredByp(pOb x) {
@@ -270,29 +285,33 @@ bool ProductType::isCoveredByp(pOb x) {
     if (IS_A(x, ProductType)) {
         ProductType* w = (ProductType*)x;
         if ((this->star() != w->star()) &&
-            (!typeLessEq(this->star(), w->star())))
-            return FALSE;
+            (!typeLessEq(this->star(), w->star()))) {
+            return false;
+        }
 
         int N = this->numberOfElements();
         int M = w->numberOfElements();
 
-        if (N < M)
-            return FALSE;
+        if (N < M) {
+            return false;
+        }
 
-        for (int i = 0; i < N; i++)
-            if (!typeLessEq(this->elem(i), w->elemR(i)))
-                return FALSE;
+        for (int i = 0; i < N; i++) {
+            if (!typeLessEq(this->elem(i), w->elemR(i))) {
+                return false;
+            }
+        }
 
-        return TRUE;
-    }
-    else
+        return true;
+    } else {
         return BASE(x)->compositeCoversp(this);
+    }
 }
 
 pOb ProductType::typeLub(pOb x) {
-    if (!IS_A(x, ProductType))
+    if (!IS_A(x, ProductType)) {
         return TopSBO; /* except when x is a SumType !! */
-    else {
+    } else {
         ProductType* v = this;
         ProductType* w = (ProductType*)x;
         int N = v->numberOfElements();
@@ -346,32 +365,36 @@ SumType* SumType::create(Tuple* sum_types) {
 
 bool SumType::isCoveredByp(pOb X) {
     /* a sum is covered by X iff EVERY elem of types is covered by X */
-    for (int i = 0; i < numberOfElements(); i++)
-        if (!BASE(X)->coversp(elem(i)))
-            return FALSE;
+    for (int i = 0; i < numberOfElements(); i++) {
+        if (!BASE(X)->coversp(elem(i))) {
+            return false;
+        }
+    }
 
-    return TRUE;
+    return true;
 }
 
 bool SumType::compositeCoversp(pOb X) {
     /* a SumType covers X iff SOME elem of types covers X */
-    for (int i = 0; i < numberOfElements(); i++)
-        if (BASE(elem(i))->coversp(X))
-            return TRUE;
+    for (int i = 0; i < numberOfElements(); i++) {
+        if (BASE(elem(i))->coversp(X)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 pOb SumType::dominator() { return tupleLub(types()); }
 
 pOb SumType::typeLub(pOb x) {
-    if (this->coversp(x))
+    if (this->coversp(x)) {
         return this;
-    else if (BASE(x)->coversp(this))
+    } else if (BASE(x)->coversp(this)) {
         return x;
-    else if (!IS_A(x, SumType))
+    } else if (!IS_A(x, SumType)) {
         return SumType::create(cons(x, types()))->normalize();
-    else {
+    } else {
         Tuple* els = Tuple::create(this->types(), ((SumType*)x)->types());
         return SumType::create(els)->normalize();
     }

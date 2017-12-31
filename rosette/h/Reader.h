@@ -117,7 +117,7 @@ class Reader : public BinaryOb {
     ReaderFrame* ftop();
     void fpop();
 
-    ReaderMode accept(int, int = FALSE);
+    ReaderMode accept(int, int = false);
     ReaderMode receiveOb(Ob*);
     ReaderMode receiveChar(int);
     ReaderMode receiveTerminator(int);

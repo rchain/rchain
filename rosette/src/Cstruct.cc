@@ -1046,13 +1046,13 @@ Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
         if (VALID_ADDR(addr)) {
             char* tmp = (char*)GET_STRING(val);
             (void)strncpy((char*)addr, tmp, _numElems);
-        }
-        else
+        } else {
             return runtimeError(ctxt, "invalid address ", FIXNUM(addr));
+        }
         return NIV;
-    }
-    else
+    } else {
         return CArray::sSet(ctxt, base, val, path, pindex);
+    }
 }
 
 Ob* CharArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1071,12 +1071,12 @@ Ob* CharArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             PROTECT(rslt);
             occtxt->addKey(selfTag, rslt);
             return rslt;
-        }
-        else
+        } else {
             return runtimeError(ctxt, "invalid address");
-    }
-    else
+        }
+    } else {
         return chck;
+    }
 }
 
 /************************************************************************/

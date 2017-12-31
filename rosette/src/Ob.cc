@@ -130,10 +130,10 @@ void Ob::forwardTo(pOb p) {
 bool Ob::reallyCheckStore(pOb val) {
     if (IS_PTR(val) && IS_NEW(val)) {
         heap->remember(this);
-        return TRUE;
+        return true;
     }
-    else
-        return FALSE;
+
+    return false;
 }
 
 
@@ -369,7 +369,7 @@ extern pOb emptyMbox;
 
 
 pOb Ob::self() { return this; }
-bool Ob::ConstantP() { return TRUE; }
+bool Ob::ConstantP() { return true; }
 Prim* Ob::InlineablePrimP() { return (Prim*)INVALID; }
 void Ob::printOn(FILE* f) { fputs(asCstring(), f); }
 void Ob::printQuotedOn(FILE* f) { printOn(f); }
@@ -575,7 +575,7 @@ pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
 /* Object actions */
 
 
-bool Ob::isSynchronousTrgt() { return TRUE; }
+bool Ob::isSynchronousTrgt() { return true; }
 
 DEF("object-lookup-and-invoke", objectLookupAndInvoke, 2, 2) {
     CHECK(1, Ctxt, ctxt);
@@ -674,10 +674,10 @@ pOb Ob::receive(Ctxt* ctxt) {
 }
 
 
-bool Ob::accepts(Ctxt*) { return FALSE; }
+bool Ob::accepts(Ctxt*) { return false; }
 
 
-bool Ob::matches(Ctxt*) { return FALSE; }
+bool Ob::matches(Ctxt*) { return false; }
 
 
 pOb Ob::updateNoArgs() { return self(); }

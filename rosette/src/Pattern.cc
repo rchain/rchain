@@ -36,7 +36,7 @@ UNIMPLEMENTED_VOID(Pattern, stuffKeys, (Tuple*, int));
 UNIMPLEMENTED(bool, Pattern, matchIntoArgvec, (Tuple*, int, Ob*, int));
 
 
-bool Pattern::fail(Ob*) { return FALSE; }
+bool Pattern::fail(Ob*) { return false; }
 
 
 int Pattern::numberOfKeys(void) {
@@ -73,7 +73,7 @@ void IdPattern::stuffKeys(Tuple* keys, int offset) {
 
 bool IdPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
     ASSIGN(argvec, elem(offset), val);
-    return TRUE;
+    return true;
 }
 
 
@@ -100,7 +100,7 @@ ConstPattern* ConstPattern::create(Ob* val) {
 bool ConstPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
     if (val == this->val) {
         ASSIGN(argvec, elem(offset), val);
-        return TRUE;
+        return true;
     }
     else
         return fail(val);
@@ -179,7 +179,7 @@ bool IdVecPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
     if (need == nargs) {
         while (need--)
             ASSIGN(argvec, elem(need + offset), valvec->elem(need));
-        return TRUE;
+        return true;
     }
     else
         return fail(val);
@@ -248,7 +248,7 @@ bool IdAmperRestPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
         ASSIGN(argvec, elem(need + offset), rest);
         while (need--)
             ASSIGN(argvec, elem(need + offset), valvec->elem(need));
-        return TRUE;
+        return true;
     }
     else
         return fail(val);
@@ -343,15 +343,17 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
                                      int nargs) {
     int need = patvec->numberOfElements();
 
-    if (!IS_A(val, Tuple))
+    if (!IS_A(val, Tuple)) {
         return fail(val);
+    }
 
     Tuple* valvec = (Tuple*)val;
 
-    if (nargs < 0)
+    if (nargs < 0) {
         nargs = valvec->numberOfElements();
+    }
 
-    bool matched = TRUE;
+    bool matched = true;
     PROTECT_THIS(ComplexPattern);
     PROTECT(argvec);
     PROTECT(valvec);
@@ -362,8 +364,7 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             matched = pat->matchIntoArgvec(
                 argvec, offset + SELF->keyExtent(need), valvec->elem(need));
         }
-    }
-    else if (expr->rest != NILexpr && nargs >= need) {
+    } else if (expr->rest != NILexpr && nargs >= need) {
         Tuple* rest = valvec->makeSlice(need, nargs - need);
         ASSIGN(argvec, elem(offset + SELF->keyExtent(need)), rest);
         while (need-- && matched) {
@@ -371,9 +372,9 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             matched = pat->matchIntoArgvec(
                 argvec, offset + SELF->keyExtent(need), valvec->elem(need));
         }
-    }
-    else
+    } else {
         matched = fail(val);
+    }
 
     return matched;
 }
@@ -400,13 +401,15 @@ Template* Template::create(TupleExpr* te) {
 
     CompoundPattern* pat;
 
-    if (te->allSymbols())
-        if (te->rest == NILexpr)
+    if (te->allSymbols()) {
+        if (te->rest == NILexpr) {
             pat = IdVecPattern::create(te);
-        else
+        } else {
             pat = IdAmperRestPattern::create(te);
-    else
+        }
+    } else {
         pat = ComplexPattern::create(te);
+    }
 
     PROTECT(pat);
     Tuple* keys = Tuple::create(pat->numberOfKeys(), INVALID);
@@ -440,31 +443,36 @@ Ob* Template::cloneTo(Ob* new_meta, Ob* new_parent) {
 
 
 Pattern* TupleExpr::makePattern(EMPTY) {
-    if (this == NILexpr)
+    if (this == NILexpr) {
         return NILpattern;
+    }
 
     int n = numberOfElements();
 
-    while (n--)
-        if (!IS_SYM(elem(n)))
+    while (n--) {
+        if (!IS_SYM(elem(n))) {
             return ComplexPattern::create(this);
+        }
+    }
 
-    if (rest == NILexpr)
+    if (rest == NILexpr) {
         return IdVecPattern::create(this);
-    else if (IS_SYM(rest))
+    } else if (IS_SYM(rest)) {
         return IdAmperRestPattern::create(this);
-    else
+    } else {
         return ComplexPattern::create(this);
+    }
 }
 
 
 Template* TupleExpr::makeTemplate(EMPTY) {
-    if (this == NILexpr)
+    if (this == NILexpr) {
         return NILtemplate;
-    else if (rest != NILexpr && !IS_SYM(rest))
+    } else if (rest != NILexpr && !IS_SYM(rest)) {
         return (Template*)INVALID;
-    else
+    } else {
         return Template::create(this);
+    }
 }
 
 

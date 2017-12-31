@@ -146,18 +146,20 @@ void Parser::fpop() { fstk.pop(); }
 
 
 void Parser::buffer(int c) {
-    if (bufp >= bufsize)
+    if (bufp >= bufsize) {
         growBuffer();
+    }
+    
     buf[bufp++] = c;
 }
 
 
 ParserMode Parser::accept(int c, int gapsPermitted) {
-    if (c == EOF)
+    if (c == EOF) {
         return STOP;
-    else if (c == '\\')
+    } else if (c == '\\') {
         return acceptEscChar(c, gapsPermitted);
-    else {
+    } else {
         buffer(c);
 #if defined(OPTIMIZE_ATOMS)
         return (mode == GROK_ATOM) ? GROK_ATOM : CONTINUE;
@@ -458,8 +460,8 @@ ParserMode AtomFrame::process(int c, Parser* r) {
         Ob* v = r->finalizeAtom();
         return r->receiveOb(v);
     }
-    else
-        return r->accept(c);
+
+    return r->accept(c);
 }
 
 
@@ -501,7 +503,7 @@ ParserMode StringFrame::process(int c, Parser* r) {
          * Remember to tell the acceptance routine that "gaps" are
          * permitted in strings.
          */
-        return r->accept(c, TRUE);
+        return r->accept(c, true);
     }
 }
 
@@ -573,14 +575,10 @@ Ob* SpecialPFrame::checkSym(char* sym) {
      * It won't do to make this table-driven, because the values to be
      * returned are not necessarily valid at table-initialization time.
      */
-    if (strcmp(sym, "t") == 0)
-        return RBLTRUE;
-    if (strcmp(sym, "f") == 0)
-        return RBLFALSE;
-    if (strcmp(sym, "niv") == 0)
-        return NIV;
-    if (strcmp(sym, "absent") == 0)
-        return ABSENT;
+    if (strcmp(sym, "t") == 0) return RBLTRUE;
+    if (strcmp(sym, "f") == 0) return RBLFALSE;
+    if (strcmp(sym, "niv") == 0) return NIV;
+    if (strcmp(sym, "absent") == 0) return ABSENT;
     return INVALID;
 }
 
@@ -936,7 +934,7 @@ static Ob* ifFinalizer(Parser* r, Ob** stk, int n, Ob*) {
 }
 
 
-static Ob* blockHelper(Ob** stk, int n, bool implicit = TRUE) {
+static Ob* blockHelper(Ob** stk, int n, bool implicit = true) {
     if (n == 1)
         return stk[0];
     else {
@@ -950,7 +948,7 @@ static Ob* blockFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
     if (n < 2 || rest != NILexpr)
         return r->error("improper syntax for block expression");
 
-    return blockHelper(stk + 1, n - 1, FALSE);
+    return blockHelper(stk + 1, n - 1, false);
 }
 
 
@@ -1214,7 +1212,7 @@ Parser::Parser(ParseTable* rt)
       buf(NULL),
       bufsize(0),
       bufp(0),
-      errorEncountered(FALSE),
+      errorEncountered(false),
       waitingOnIO(NOT_WAITING),
       rt(rt),
       mode(START),
@@ -1379,14 +1377,14 @@ Ob* Parser::error(const char* fmt, ...) {
     va_end(args);
     fputc('\n', stderr);
 
-    errorEncountered = TRUE;
+    errorEncountered = true;
     return READ_ERROR;
 }
 
 
 void Parser::resetState() {
     waitingOnIO = NOT_WAITING;
-    errorEncountered = FALSE;
+    errorEncountered = false;
     mode = START;
     inbuf = (RBLstring*)NIV;
     inp = 0;
@@ -1401,7 +1399,7 @@ Ob* Parser::suspendParser() {
      * the lock and give up control.
      */
     if (errorEncountered) {
-        errorEncountered = FALSE;
+        errorEncountered = false;
         waitingOnIO = NOT_WAITING;
         return READ_ERROR;
     }
