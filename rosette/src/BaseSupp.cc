@@ -22,6 +22,7 @@
 
 #include "rosette.h"
 
+#include <algorithm>
 #include <cerrno>
 
 #include <unistd.h>
@@ -81,8 +82,6 @@ extern Prim* obRuntimeError;
 
 extern Ob* obSBO;
 extern Ob* emptyMbox;
-
-int min(int a, int b) { return (a < b) ? a : b; }
 
 DEF_OPRN(Sync, "kind", oprnKind, obRuntimeError);
 
@@ -381,7 +380,7 @@ DEF("identity1", obIdentity1, 0, MaxArgs) {
 pOb Ob::primitiveInitialize(pCtxt ctxt) {
     int n = ctxt->nargs - 1;
 
-    n = min(n, numberOfSlots());
+    n = std::min(n, numberOfSlots());
 
     for (int i = 0; i < n; i++)
         ASSIGN(self(), slot(i), ctxt->arg(i + 1));
@@ -403,7 +402,7 @@ pOb Actor::primitiveInitialize(pCtxt ctxt) {
     PROTECT(ctxt);
     int n = ctxt->nargs - 1;
 
-    n = min(n, extension->numberOfSlots());
+    n = std::min(n, extension->numberOfSlots());
 
     for (int i = 0; i < n; i++)
         ASSIGN(extension, slot(i), ctxt->arg(i + 1));
@@ -621,7 +620,8 @@ DEF("c2str", cpy_char_star_to_string, 2, 2) {
     CHECK_ADDR(1, src_addr);
 
     if (src_addr >= local_page_size) {
-        int len = min(strlen((char*)src_addr), dest_str->numberOfBytes());
+        int len = std::min((int)strlen((char*)src_addr),
+                           dest_str->numberOfBytes());
         memcpy(&dest_str->byte(0), (void*)src_addr, len);
         return dest_str;
     }
