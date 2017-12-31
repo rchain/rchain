@@ -20,13 +20,8 @@
 #include "Ctxt.h"
 
 #include <unistd.h>
-#include <osfcn.h>
-#ifndef NO_SYSENT_H
-#include <sysent.h>
-#endif
 
 #include "Cstruct.h"
-
 #include "RblAtom.h"
 #include "BinaryOb.h"
 #include "Heap.h"

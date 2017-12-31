@@ -23,11 +23,20 @@
 #if !defined(__ROSETTE__)
 #define __ROSETTE__
 
-#include "linux.h"
 #include "signal.h"
 
 #include <cassert>
 #include <stdio.h>
+
+// TODO(leaf): CMake doesn't trivially offer a way to figure this out.
+// However, I can't tell that it's being used for anything. So, for now
+// set this to something reasonable and hope to ignore it until we can
+// get rid of it.
+#define ARCH "x86_64"
+#define MACHINE "x86_64"
+#define OS "linux"
+#define LINUX
+
 
 #ifndef name2
 #define name2(x, y) x##y
@@ -39,8 +48,20 @@
 
 #define NEW(loc) new (loc)
 
-#ifndef EMPTY
-#define EMPTY
-#endif
+/* because of need for alignment on 8 byte boundary of doubles */
+#define USE_SHORT_FLOAT
+
+/* flag to use with fcntl to give non blocking io
+   the ~ of it should give blocking io
+ */
+#define FCNTL_NONBLOCK (FNDELAY | FASYNC)
+
+/* You must supply something to cause the current process
+   to receive the io signal when input is available on fd.
+   return is < 0 on failure.
+*/
+
+#define SET_SIGNAL_IO_DESIRED(result) \
+    result = (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
 
 #endif

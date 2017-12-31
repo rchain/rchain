@@ -36,15 +36,15 @@ class RootSet {
 #endif
 
    public:
-    virtual void preScavenge(EMPTY);
-    virtual void scavenge(EMPTY);
-    virtual void postScavenge(EMPTY);
+    virtual void preScavenge();
+    virtual void scavenge();
+    virtual void postScavenge();
 
-    virtual void preGC(EMPTY);
-    virtual void mark(EMPTY);
-    virtual void postGC(EMPTY);
+    virtual void preGC();
+    virtual void mark();
+    virtual void postGC();
 
-    virtual void check(EMPTY);
+    virtual void check();
 };
 
 typedef void (RootSet::*RootSet_Fn)();
@@ -88,19 +88,19 @@ class Heap {
     void traverseRootSets(RootSet_Fn);
 
     Heap(unsigned, unsigned, unsigned);
-    ~Heap(EMPTY);
+    ~Heap();
 
     void addRootSet(RootSet*);
     void deleteRootSet(RootSet*);
 
-    int size(EMPTY);
+    int size();
     void* alloc(unsigned);
     void* scavengeAndAlloc(unsigned);
     void remember(Ob*);
-    void scavenge(EMPTY);
-    void gc(EMPTY);
+    void scavenge();
+    void gc();
     Ob* tenure(Ob*);
-    void tenureEverything(EMPTY);
+    void tenureEverything();
 
     bool is_new(Ob* p) {
         return ((void*)p >= newSpaceBase && (void*)p < newSpaceLimit);
@@ -110,7 +110,7 @@ class Heap {
     void registerForeignOb(Ob*);
     void registerGCAgenda(Ob*);
 
-    void resetCounts(EMPTY);
+    void resetCounts();
     void printCounts(FILE*);
 };
 
@@ -179,12 +179,12 @@ class ProtectedItem {
     ProtectedItem* next;
     void* item;
 
-    static void scavenge(EMPTY);
-    static void mark(EMPTY);
-    static void check(EMPTY);
+    static void scavenge();
+    static void mark();
+    static void check();
 
     friend class Heap;
-    friend void Init_Heap(EMPTY);
+    friend void Init_Heap();
 
    public:
     ProtectedItem(void* v) : next(root), item(v) { root = this; }

@@ -102,7 +102,7 @@ Actor::Actor(pOb meta, pOb parent, pExt ext)
 }
 
 
-Actor* Actor::create(EMPTY) {
+Actor* Actor::create() {
     StdMeta* meta = StdMeta::create(NIL, FIXNUM(1));
     PROTECT(meta);
     StdExtension* ext = StdExtension::create(0);
@@ -117,7 +117,7 @@ Actor* Actor::create(pOb meta, pOb parent, pExt ext) {
 }
 
 
-pOb Actor::container(EMPTY) { return extension; }
+pOb Actor::container() { return extension; }
 
 
 int Actor::addSlot(pOb, pOb val) {
@@ -129,7 +129,7 @@ int Actor::addSlot(pOb, pOb val) {
 }
 
 
-pOb Actor::dup(EMPTY) {
+pOb Actor::dup() {
     PROTECT_THIS(Actor);
     KONST int sz = SIZE(SELF);
     pOb ob = (pOb)PALLOC(sz);
@@ -153,7 +153,7 @@ pOb Actor::cloneTo(pOb new_meta, pOb new_parent) {
 }
 
 
-pOb Actor::updateNoArgs(EMPTY) {
+pOb Actor::updateNoArgs() {
     PROTECT_THIS(Actor);
     mbox->nextMsg(SELF, NIL);
     return SELF;

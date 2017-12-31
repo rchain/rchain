@@ -105,7 +105,7 @@ static const int EXTERN_LABEL_ENTRY_LABEL = 1;
 static const int EXTERN_LABEL_ENTRIES = 2;
 
 
-Label LabelTable::newLabel(EMPTY) {
+Label LabelTable::newLabel() {
     int n = labelValues->numberOfWords();
     int next = FIXVAL(nextLabel);
 

@@ -460,7 +460,7 @@ Ob* Template::cloneTo(Ob* new_meta, Ob* new_parent) {
 }
 
 
-Pattern* TupleExpr::makePattern(EMPTY) {
+Pattern* TupleExpr::makePattern() {
     if (this == NILexpr) {
         return NILpattern;
     }
@@ -483,7 +483,7 @@ Pattern* TupleExpr::makePattern(EMPTY) {
 }
 
 
-Template* TupleExpr::makeTemplate(EMPTY) {
+Template* TupleExpr::makeTemplate() {
     if (this == NILexpr) {
         return NILtemplate;
     } else if (rest != NILexpr && !IS_SYM(rest)) {

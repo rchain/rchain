@@ -236,7 +236,7 @@ Tuple* Tuple::makeTail(int entriesToSkip) {
 }
 
 
-Ob* Tuple::indexedSize(EMPTY) { return FIXNUM(numberOfElements()); }
+Ob* Tuple::indexedSize() { return FIXNUM(numberOfElements()); }
 
 
 Ob* Tuple::nth(int n) { return elem(n); }

@@ -29,7 +29,7 @@
 #include <memory.h>
 
 
-void undersizedObError(EMPTY) {
+void undersizedObError() {
     suicide("Attempt to allocate an object smaller than the minimum allowed!");
 }
 
@@ -95,10 +95,10 @@ ByteVec* ByteVec::create(ByteVec* old, int newsize) {
 }
 
 
-void ByteVec::reset(EMPTY) { memset((char*)&byte(0), 0, numberOfBytes()); }
+void ByteVec::reset() { memset((char*)&byte(0), 0, numberOfBytes()); }
 
 
-uint32_t ByteVec::sum(EMPTY) {
+uint32_t ByteVec::sum() {
     uint32_t total = 0;
     for (int i = numberOfBytes(); i--;) {
         total += (uint32_t)byte(i);
@@ -108,7 +108,7 @@ uint32_t ByteVec::sum(EMPTY) {
 }
 
 
-Ob* ByteVec::indexedSize(EMPTY) { return FIXNUM(numberOfBytes()); }
+Ob* ByteVec::indexedSize() { return FIXNUM(numberOfBytes()); }
 
 
 Ob* ByteVec::nth(int n) { return FIXNUM(byte(n)); }
@@ -187,14 +187,14 @@ Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
 }
 
 
-void Word16Vec::reset(EMPTY) {
+void Word16Vec::reset() {
     for (int i = numberOfWords(); i--;) {
         word(i) = 0;
     }
 }
 
 
-uint32_t Word16Vec::sum(EMPTY) {
+uint32_t Word16Vec::sum() {
     uint32_t total = 0;
     for (int i = numberOfWords(); i--;) {
         total += (uint32_t)word(i);
@@ -203,7 +203,7 @@ uint32_t Word16Vec::sum(EMPTY) {
 }
 
 
-Ob* Word16Vec::indexedSize(EMPTY) { return FIXNUM(numberOfWords()); }
+Ob* Word16Vec::indexedSize() { return FIXNUM(numberOfWords()); }
 
 
 Ob* Word16Vec::nth(int n) { return FIXNUM(word(n)); }
@@ -260,14 +260,14 @@ Word32Vec* Word32Vec::create(Word32Vec* old, int newsize) {
 }
 
 
-void Word32Vec::reset(EMPTY) {
+void Word32Vec::reset() {
     for (int i = numberOfWords(); i--;) {
         word(i) = 0;
     }
 }
 
 
-uint32_t Word32Vec::sum(EMPTY) {
+uint32_t Word32Vec::sum() {
     uint32_t total = 0;
     for (int i = numberOfWords(); i--;) {
         total += (uint32_t)word(i);
@@ -276,7 +276,7 @@ uint32_t Word32Vec::sum(EMPTY) {
 }
 
 
-Ob* Word32Vec::indexedSize(EMPTY) { return FIXNUM(numberOfWords()); }
+Ob* Word32Vec::indexedSize() { return FIXNUM(numberOfWords()); }
 
 
 Ob* Word32Vec::nth(int n) { return FIXNUM(word(n)); }

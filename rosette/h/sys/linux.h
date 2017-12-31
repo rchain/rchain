@@ -22,14 +22,6 @@
 #define OS "linux"
 #define LINUX
 
-#ifndef GCC27X
-#define GCC27X
-#endif
-
-#define NO_SYSENT_H
-
-#define DO_UNGETC
-
 /* because of need for alignment on 8 byte boundary of doubles */
 #define USE_SHORT_FLOAT
 
