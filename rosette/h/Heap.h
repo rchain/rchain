@@ -26,10 +26,6 @@
 #include "Ob.h"
 
 class RootSet {
-#ifdef __GNUG__
-    int dummy;  // To suppress compiler warning about no data members.
-#endif
-
    public:
     virtual void preScavenge();
     virtual void scavenge();
