@@ -15,7 +15,7 @@ LIBDIR="${THIRD_PARTY_BUILD}/lib"
 export VERBOSE=1
 export DEBUG=1
 CMAKE_VARS="-DCMAKE_BUILD_TYPE=${BUILD:-Release}"
-PROCS_ARG="-j ${BUILD_PROCS:-1}"
+PROCS_ARG="-j ${BUILD_PROCS:-4}"
 
 SRCDIR=$(readlink -f $(pwd))
 if [ ! -d ${BUILD} ] ; then {
