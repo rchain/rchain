@@ -71,10 +71,10 @@ main(int, char** argv) {
 
     // Basic signal handling
 
-    (void)signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
-    (void)signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
-    (void)signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
-    (void)signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
+    signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
+    signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
+    signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
+    signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
 
     // Create pipe used to feed our syncrhonous stdin to rosette image
     // which handles its end of the pipe as an asynchronous stdin.
@@ -85,45 +85,43 @@ main(int, char** argv) {
     }
 
     switch (image = fork()) {
-    case NOTOK:  // Only if no memory or max processes exceeded
+        case NOTOK:  // Only if no memory or max processes exceeded
 
-        perror("Unable to fork rosette image");
-        exit(1);
+            perror("Unable to fork rosette image");
+            exit(1);
 
-    case OK:  // Ready to exec the image
+        case OK:  // Ready to exec the image
 
-        // Bind image's stdin to the pipe
+            // Bind image's stdin to the pipe
 
-        if (dup2(fds[0], 0) == NOTOK) {
-            perror("Unable to dup image stdin to pipe");
+            if (dup2(fds[0], 0) == NOTOK) {
+                perror("Unable to dup image stdin to pipe");
+                _exit(1);
+            }
+
+            // NB(orig).
+            setsid();
+
+            sprintf(bp, "%s.image", *argv);
+            *argv = bp;
+
+            // Note: execve resets caught signals to their defaults
+            execvp(bp, argv);
+
+            perror("Unable to exec rosette image");
             _exit(1);
-        }
 
-        (void)setsid();  // here ye here ye do not mess with this without
-        // seeing Christine or Greg Lavender!!!
+        default:  // Stuff input into pipe until EOF
+            // Only the image will do the writing to stdout/stderr
+            fclose(stdout);
+            fclose(stderr);
 
-        sprintf(bp, "%s.image", *argv);
-        *argv = bp;
-
-        // Note: execve resets caught signals to their defaults
-
-        execvp(bp, argv);
-
-        perror("Unable to exec rosette image");
-        _exit(1);
-
-    default:  // Stuff input into pipe until EOF
-
-        // Only the image will do the writing to stdout/stderr
-
-        (void)fclose(stdout);
-        (void)fclose(stderr);
-
-        for (;;) {
-            if (fgets(bp, sizeof(buffer), stdin))
-                write(fds[1], bp, strlen(bp));
-            else
-                terminate();
-        }
+            for (;;) {
+                if (fgets(bp, sizeof(buffer), stdin)) {
+                    write(fds[1], bp, strlen(bp));
+                } else {
+                    terminate();
+                }
+            }
     }
 }
