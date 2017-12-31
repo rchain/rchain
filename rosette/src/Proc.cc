@@ -50,8 +50,9 @@ Proc* Proc::create(Ob* env, Code* code, Ob* id, Ob* source) {
 
 
 Ob* Proc::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tproc %s\n", BASE(id)->asCstring());
+    }
 
     ctxt->code = this->code;
     ctxt->env = this->env;
@@ -72,10 +73,10 @@ DEF("proc-new", makeProc, 2, 4) {
     Ob* id = Qanon;
 
     switch (NARGS) {
-    case 4:
-        sp = ARG(3);
-    case 3:
-        id = ARG(2);
+        case 4:
+            sp = ARG(3);
+        case 3:
+            id = ARG(2);
     }
 
     return Proc::create(ARG(0), code, id, sp);

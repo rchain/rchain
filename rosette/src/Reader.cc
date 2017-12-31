@@ -113,8 +113,6 @@ class ReadTable {
 
 
 int ReadTable::isDelimiter(int c) { return attributes[c] & _DELIMITER; }
-
-
 void* Reader::falloc(int sz) { return fstk.alloc(sz); }
 
 
@@ -132,14 +130,8 @@ int FrameStk::link(int sz) {
 
 
 int Reader::flink(int sz) { return fstk.link(sz); }
-
-
 ReaderFrame* FrameStk::top() { return (ReaderFrame*)&stk[topframe]; }
-
-
 ReaderFrame* Reader::ftop() { return fstk.top(); }
-
-
 void Reader::fpop() { fstk.pop(); }
 
 
@@ -151,11 +143,11 @@ void Reader::buffer(int c) {
 
 
 ReaderMode Reader::accept(int c, int gapsPermitted) {
-    if (c == EOF)
+    if (c == EOF) {
         return STOP;
-    else if (c == '\\')
+    } else if (c == '\\') {
         return acceptEscChar(c, gapsPermitted);
-    else {
+    } else {
         buffer(c);
 #if defined(OPTIMIZE_ATOMS)
         return (mode == GROK_ATOM) ? GROK_ATOM : CONTINUE;
@@ -170,8 +162,7 @@ FrameStk::FrameStk() : topframe(-1), nexttop(0), stk(NULL), stksize(0) {}
 
 
 FrameStk::~FrameStk() {
-    if (stk)
-        delete stk;
+    if (stk) delete stk;
 }
 
 
@@ -190,6 +181,7 @@ void* FrameStk::alloc(int sz) {
             memcpy(newstk, stk, nexttop * sizeof(char));
             delete stk;
         }
+
         stk = newstk;
         stksize += 256;
     }
@@ -282,9 +274,9 @@ ReaderMode CommentFrame::process(int c, Reader* r) {
     if (c == EOF || c == '\n') {
         r->fpop();
         return START;
-    }
-    else
+    } else {
         return CONTINUE;
+    }
 }
 
 
@@ -335,88 +327,92 @@ class EscCharFrame : public ReaderFrame {
 
 EscCharFrame::EscCharFrame(Reader* r, int gp)
     : ReaderFrame(r, sizeof(EscCharFrame)),
-      gapPermitted(gp),
-      nchars(0),
-      base(0),
-      val(0) {}
+    gapPermitted(gp),
+    nchars(0),
+    base(0),
+    val(0) {
+}
 
 
 ReaderMode EscCharFrame::process(int c, Reader* r) {
     if (base == 0) {
         switch (c) {
-        case 'n':
-            c = '\n';
-            break;
-        case 'f':
-            c = '\f';
-            break;
-        case 'r':
-            c = '\r';
-            break;
-        case 't':
-            c = '\t';
-            break;
-        case 'b':
-            c = '\b';
-            break;
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-            base = 8;
-            val = c - '0';
-            nchars = 1;
-            break;
-        case 'x':
-            base = 16;
-            val = 0;
-            nchars = 0;
-            break;
-        case '\n':
-            if (gapPermitted)
-                base = -1;
-            break;
-        default:
-            break;
+            case 'n':
+                c = '\n';
+                break;
+            case 'f':
+                c = '\f';
+                break;
+            case 'r':
+                c = '\r';
+                break;
+            case 't':
+                c = '\t';
+                break;
+            case 'b':
+                c = '\b';
+                break;
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+                base = 8;
+                val = c - '0';
+                nchars = 1;
+                break;
+            case 'x':
+                base = 16;
+                val = 0;
+                nchars = 0;
+                break;
+            case '\n':
+                if (gapPermitted)
+                    base = -1;
+                break;
+            default:
+                break;
         }
-        if (base == 0)
+
+        if (base == 0) {
             return r->receiveChar(c);
-        else
+        } else {
             return CONTINUE;
-    }
-    else if (base == 8) {
-        if ('0' <= c && c < '8')
+        }
+    } else if (base == 8) {
+        if ('0' <= c && c < '8') {
             val = 8 * val + (c - '0');
-        else {
+        } else {
             /*
              * Pretend the digit was a zero.
              */
             val *= 8;
             (void)r->error("invalid octal digit ('%c')", c);
         }
-        if (++nchars == 3)
+
+        if (++nchars == 3) {
             return r->receiveChar(val);
-        else
+        } else {
             return CONTINUE;
-    }
-    else if (base == 16) {
-        if (isxdigit(c))
+        }
+    } else if (base == 16) {
+        if (isxdigit(c)) {
             val = 16 * val +
-                  (isdigit(c) ? c - '0' : 10 + (c - (isupper(c) ? 'A' : 'a')));
-        else {
+                (isdigit(c) ? c - '0' : 10 + (c - (isupper(c) ? 'A' : 'a')));
+        } else {
             val *= 16;
             (void)r->error("invalid hex digit ('%c')", c);
         }
-        if (++nchars == 2)
+
+        if (++nchars == 2) {
             return r->receiveChar(val);
-        else
+        } else {
             return CONTINUE;
-    }
-    else if (base == -1) {
+        }
+    } else if (base == -1) {
         if (c == '\\') {
             /*
              * We have just bumped into the gap terminator; eat it, drop
@@ -424,9 +420,9 @@ ReaderMode EscCharFrame::process(int c, Reader* r) {
              */
             r->fpop();
         }
+
         return CONTINUE;
-    }
-    else {
+    } else {
         suicide("unknown base (%d) in EscCharFrame", base);
         return STOP;
     }
@@ -440,13 +436,13 @@ ReaderMode EscCharFrame::process(int c, Reader* r) {
 
 
 class AtomFrame : public ReaderFrame {
-   protected:
-    AtomFrame(Reader*, int);
+    protected:
+        AtomFrame(Reader*, int);
 
-   public:
-    AtomFrame(Reader*);
-    virtual ReaderMode process(int, Reader*);
-    virtual ReaderMode receiveChar(int, Reader*);
+    public:
+        AtomFrame(Reader*);
+        virtual ReaderMode process(int, Reader*);
+        virtual ReaderMode receiveChar(int, Reader*);
 };
 
 
@@ -462,9 +458,9 @@ ReaderMode AtomFrame::process(int c, Reader* r) {
         PROTECT(r);
         Ob* v = r->finalizeAtom();
         return r->receiveOb(v);
-    }
-    else
+    } else {
         return r->accept(c);
+    }
 }
 
 
@@ -485,7 +481,7 @@ ReaderMode AtomFrame::receiveChar(int c, Reader* r) {
 class StringFrame : public AtomFrame {
     int delimiter;
 
-   public:
+    public:
     StringFrame(Reader*, int);
     virtual ReaderMode process(int, Reader*);
 };
@@ -495,20 +491,19 @@ StringFrame::StringFrame(Reader* r, int d)
     : AtomFrame(r, sizeof(StringFrame)), delimiter(d) {}
 
 
-ReaderMode StringFrame::process(int c, Reader* r) {
-    if (c == delimiter) {
-        PROTECT(r);
-        RBLstring* str = RBLstring::create(r->finalizeBuffer());
-        return r->receiveOb(str);
+    ReaderMode StringFrame::process(int c, Reader* r) {
+        if (c == delimiter) {
+            PROTECT(r);
+            RBLstring* str = RBLstring::create(r->finalizeBuffer());
+            return r->receiveOb(str);
+        } else {
+            /*
+             * Remember to tell the acceptance routine that "gaps" are
+             * permitted in strings.
+             */
+            return r->accept(c, true);
+        }
     }
-    else {
-        /*
-         * Remember to tell the acceptance routine that "gaps" are
-         * permitted in strings.
-         */
-        return r->accept(c, true);
-    }
-}
 
 
 /*
@@ -523,15 +518,15 @@ ReaderMode StringFrame::process(int c, Reader* r) {
 
 
 class SpecialFrame : public ReaderFrame {
-   private:
-    enum { SP_INIT, SP_EXPECTING_CHAR } state;
-    Ob* checkSym(char*);
+    private:
+        enum { SP_INIT, SP_EXPECTING_CHAR } state;
+        Ob* checkSym(char*);
 
-   public:
-    SpecialFrame(Reader*);
-    virtual ReaderMode process(int, Reader*);
-    virtual ReaderMode receiveOb(Ob*, Reader*);
-    virtual ReaderMode receiveChar(int, Reader*);
+    public:
+        SpecialFrame(Reader*);
+        virtual ReaderMode process(int, Reader*);
+        virtual ReaderMode receiveOb(Ob*, Reader*);
+        virtual ReaderMode receiveChar(int, Reader*);
 };
 
 
@@ -539,36 +534,34 @@ SpecialFrame::SpecialFrame(Reader* r)
     : ReaderFrame(r, sizeof(SpecialFrame)), state(SP_INIT) {}
 
 
-ReaderMode SpecialFrame::process(int c, Reader* r) {
-    switch (state) {
-    case SP_INIT:
-        if (c == '\\') {
-            state = SP_EXPECTING_CHAR;
-            return CONTINUE;
-        }
-        else if (isalpha(c)) {
-            (void)NEW(r->falloc(sizeof(AtomFrame))) AtomFrame(r);
-            r->resetBuffer();
-            return r->accept(c);
-        }
-        else {
-            (void)r->error("unknown special #%c", c);
-            return START;
-        }
+    ReaderMode SpecialFrame::process(int c, Reader* r) {
+        switch (state) {
+            case SP_INIT:
+                if (c == '\\') {
+                    state = SP_EXPECTING_CHAR;
+                    return CONTINUE;
+                } else if (isalpha(c)) {
+                    (void)NEW(r->falloc(sizeof(AtomFrame))) AtomFrame(r);
+                    r->resetBuffer();
+                    return r->accept(c);
+                } else {
+                    (void)r->error("unknown special #%c", c);
+                    return START;
+                }
 
-    case SP_EXPECTING_CHAR:
-        if (c == '\\') {
-            (void)NEW(r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
-            return CONTINUE;
-        }
-        else
-            return r->receiveOb(RBLCHAR(c));
+            case SP_EXPECTING_CHAR:
+                if (c == '\\') {
+                    (void)NEW(r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
+                    return CONTINUE;
+                } else {
+                    return r->receiveOb(RBLCHAR(c));
+                }
 
-    default:
-        suicide("unexpected case in SpecialFrame::process");
-        return STOP;
+            default:
+                suicide("unexpected case in SpecialFrame::process");
+                return STOP;
+        }
     }
-}
 
 
 Ob* SpecialFrame::checkSym(char* sym) {
@@ -576,14 +569,10 @@ Ob* SpecialFrame::checkSym(char* sym) {
      * It won't do to make this table-driven, because the values to be
      * returned are not necessarily valid at table-initialization time.
      */
-    if (strcmp(sym, "t") == 0)
-        return RBLTRUE;
-    if (strcmp(sym, "f") == 0)
-        return RBLFALSE;
-    if (strcmp(sym, "niv") == 0)
-        return NIV;
-    if (strcmp(sym, "absent") == 0)
-        return ABSENT;
+    if (strcmp(sym, "t") == 0) return RBLTRUE;
+    if (strcmp(sym, "f") == 0) return RBLFALSE;
+    if (strcmp(sym, "niv") == 0) return NIV;
+    if (strcmp(sym, "absent") == 0) return ABSENT;
     return INVALID;
 }
 
@@ -596,6 +585,7 @@ ReaderMode SpecialFrame::receiveOb(Ob* v, Reader* r) {
         r->fpop();
         return START;
     }
+
     return r->receiveOb(result);
 }
 
@@ -613,9 +603,9 @@ ReaderMode SpecialFrame::receiveChar(int c, Reader* r) {
 
 
 class QuoteFrame : public ReaderFrame {
-   public:
-    QuoteFrame(Reader*);
-    virtual ReaderMode receiveOb(Ob*, Reader*);
+    public:
+        QuoteFrame(Reader*);
+        virtual ReaderMode receiveOb(Ob*, Reader*);
 };
 
 
@@ -637,10 +627,10 @@ ReaderMode QuoteFrame::receiveOb(Ob* v, Reader* r) {
 
 
 class TopFrame : public ReaderFrame {
-   public:
-    TopFrame(Reader*);
-    virtual ReaderMode receiveOb(Ob*, Reader*);
-    virtual ReaderMode receiveEof(Reader*);
+    public:
+        TopFrame(Reader*);
+        virtual ReaderMode receiveOb(Ob*, Reader*);
+        virtual ReaderMode receiveEof(Reader*);
 };
 
 
@@ -670,63 +660,66 @@ typedef Ob* (*FINALIZER)(Reader*, Ob**, int, Ob*);
 
 
 class ListFrame : public ReaderFrame {
-   protected:
-    int nexprs;
-    int dotState;
-    int dotChar;
-    int closingChar;
-    FINALIZER finalizer;
+    protected:
+        int nexprs;
+        int dotState;
+        int dotChar;
+        int closingChar;
+        FINALIZER finalizer;
 
-   public:
-    ListFrame(Reader*, int, int, FINALIZER);
-    virtual ReaderMode receiveOb(Ob*, Reader*);
-    virtual ReaderMode receiveTerminator(int, Reader*);
-    virtual ReaderMode receiveDot(int, Reader*);
+    public:
+        ListFrame(Reader*, int, int, FINALIZER);
+        virtual ReaderMode receiveOb(Ob*, Reader*);
+        virtual ReaderMode receiveTerminator(int, Reader*);
+        virtual ReaderMode receiveDot(int, Reader*);
 };
 
 
 ListFrame::ListFrame(Reader* r, int dc, int cc, FINALIZER f)
     : ReaderFrame(r, sizeof(ListFrame)),
-      nexprs(0),
-      dotState(0),
-      dotChar(dc),
-      closingChar(cc),
-      finalizer(f) {}
+    nexprs(0),
+    dotState(0),
+    dotChar(dc),
+    closingChar(cc),
+    finalizer(f) {}
 
 
-ReaderMode ListFrame::receiveOb(Ob* subexpr, Reader* r) {
-    if (dotState == 0) {
-        ++nexprs;
-        r->opush(subexpr);
+    ReaderMode ListFrame::receiveOb(Ob* subexpr, Reader* r) {
+        if (dotState == 0) {
+            ++nexprs;
+            r->opush(subexpr);
+        } else if (dotState == 1) {
+            ++dotState;
+            r->opush(subexpr);
+        } else {
+            /*
+             * If we get here, we have found more than one expression
+             * following the dot character, which is an error.  The way this
+             * is written now, we will simply ignore the excess expressions.
+             */
+            r->error("more than one expression following '%c'", dotChar);
+            /*
+             * Don't return here; keep eating things in hopes of finding the
+             * terminator.
+             */
+        }
+
+        return START;
     }
-    else if (dotState == 1) {
-        ++dotState;
-        r->opush(subexpr);
-    }
-    else {
-        /*
-         * If we get here, we have found more than one expression
-         * following the dot character, which is an error.  The way this
-         * is written now, we will simply ignore the excess expressions.
-         */
-        (void)r->error("more than one expression following '%c'", dotChar);
-        /*
-         * Don't return here; keep eating things in hopes of finding the
-         * terminator.
-         */
-    }
-    return START;
-}
 
 
 ReaderMode ListFrame::receiveTerminator(int c, Reader* r) {
-    if (c != closingChar)
+    if (c != closingChar) {
         (void)r->error("unexpected closing '%c'", c);
+    }
+
     Ob* rest = NILexpr;
-    if (dotState == 1)
+    if (dotState == 1) {
         (void)r->error("no expression following '%c'", dotChar);
-    else if (dotState > 1)
+    } else if (dotState > 1) {
         rest = r->opop();
+    }
+
     PROTECT(r);
     Ob* result = (*finalizer)(r, &r->otop(nexprs), nexprs, rest);
     r->odel(nexprs);
@@ -735,10 +728,14 @@ ReaderMode ListFrame::receiveTerminator(int c, Reader* r) {
 
 
 ReaderMode ListFrame::receiveDot(int c, Reader* r) {
-    if (c != dotChar)
+    if (c != dotChar) {
         (void)r->error("received '%c' when expecting '%c'", c, dotChar);
-    if (dotState != 0)
+    }
+
+    if (dotState != 0) {
         (void)r->error("too many '%c's", c);
+    }
+
     dotState = 1;
     return START;
 }
@@ -750,8 +747,8 @@ ReadMacro::ReadMacro() {}
 
 
 class WhitespaceReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
@@ -759,20 +756,20 @@ ReaderMode WhitespaceReadMacro::start(int, Reader*) { return START; }
 
 
 class CommentReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
 ReaderMode CommentReadMacro::start(int, Reader* r) {
-    (void)NEW(r->falloc(sizeof(CommentFrame))) CommentFrame(r);
+    NEW(r->falloc(sizeof(CommentFrame))) CommentFrame(r);
     return CONTINUE;
 }
 
 
 class AtomReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
@@ -789,7 +786,7 @@ ReaderMode AtomReadMacro::start(int c, Reader* r) {
      */
     r->mode = GROK_ATOM;
 #else
-    (void)NEW(r->falloc(sizeof(AtomReadMacro))) AtomFrame(r);
+    NEW(r->falloc(sizeof(AtomReadMacro))) AtomFrame(r);
 #endif
     r->digitSeen = isdigit(c);
     r->resetBuffer();
@@ -801,13 +798,13 @@ ReaderMode AtomReadMacro::start(int c, Reader* r) {
 
 
 class StringReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
 ReaderMode StringReadMacro::start(int c, Reader* r) {
-    (void)NEW(r->falloc(sizeof(StringFrame))) StringFrame(r, c);
+    NEW(r->falloc(sizeof(StringFrame))) StringFrame(r, c);
     r->resetBuffer();
     return CONTINUE;
 }
@@ -816,8 +813,8 @@ ReaderMode StringReadMacro::start(int c, Reader* r) {
 /* SpecialReadMacro */
 
 class _SpecialReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
@@ -830,8 +827,8 @@ ReaderMode _SpecialReadMacro::start(int, Reader* r) {
 /* QuoteReadMacro */
 
 class QuoteReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
@@ -844,8 +841,8 @@ ReaderMode QuoteReadMacro::start(int, Reader* r) {
 /* DotReadMacro */
 
 class DotReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
@@ -855,8 +852,8 @@ ReaderMode DotReadMacro::start(int c, Reader* r) { return r->receiveDot(c); }
 /* ListTerminatorReadMacro */
 
 class ListTerminatorReadMacro : public ReadMacro {
-   public:
-    virtual ReaderMode start(int, Reader*);
+    public:
+        virtual ReaderMode start(int, Reader*);
 };
 
 
@@ -868,16 +865,16 @@ ReaderMode ListTerminatorReadMacro::start(int c, Reader* r) {
 /* ListReadMacro */
 
 class ListReadMacro : public ReadMacro {
-   protected:
-    int startChar;
-    int dotChar;
-    int closingChar;
-    FINALIZER finalizer;
+    protected:
+        int startChar;
+        int dotChar;
+        int closingChar;
+        FINALIZER finalizer;
 
-   public:
-    ListReadMacro(int, int, int, FINALIZER);
-    virtual ReaderMode start(int, Reader*);
-    void install(ReadTable*);
+    public:
+        ListReadMacro(int, int, int, FINALIZER);
+        virtual ReaderMode start(int, Reader*);
+        void install(ReadTable*);
 };
 
 
@@ -885,18 +882,19 @@ ListReadMacro::ListReadMacro(int sc, int dc, int cc, FINALIZER f)
     : ReadMacro(), startChar(sc), dotChar(dc), closingChar(cc), finalizer(f) {}
 
 
-ReaderMode ListReadMacro::start(int, Reader* r) {
-    (void)NEW(r->falloc(sizeof(ListFrame)))
-        ListFrame(r, dotChar, closingChar, finalizer);
-    return START;
-}
+    ReaderMode ListReadMacro::start(int, Reader* r) {
+        (void)NEW(r->falloc(sizeof(ListFrame)))
+            ListFrame(r, dotChar, closingChar, finalizer);
+        return START;
+    }
 
 
 static Ob* msgFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n == 0 && rest == NILexpr)
+    if (n == 0 && rest == NILexpr) {
         return NILexpr;
-    else
+    } else {
         return TupleExpr::create(stk, n, rest);
+    }
 }
 
 
@@ -904,14 +902,15 @@ static FINALIZER findSpecialForm(Ob* symbol);
 
 
 static Ob* rqstFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n == 0)
+    if (n == 0) {
         return r->error("no target in request expr");
+    }
 
     FINALIZER fn = findSpecialForm(stk[0]);
 
-    if (fn)
+    if (fn) {
         return (*fn)(r, stk, n, rest);
-    else {
+    } else {
         TupleExpr* msg = (TupleExpr*)msgFinalizer(r, stk + 1, n - 1, rest);
         return RequestExpr::create(stk[0], msg);
     }
@@ -919,30 +918,31 @@ static Ob* rqstFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* sendFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 2)
+    if (n < 2) {
         return r->error("no target in send expr");
+    }
 
     return (SendExpr::create(
-        stk[1], (TupleExpr*)msgFinalizer(r, stk + 2, n - 2, rest)));
+                stk[1], (TupleExpr*)msgFinalizer(r, stk + 2, n - 2, rest)));
 }
 
 
 static Ob* ifFinalizer(Reader* r, Ob** stk, int n, Ob*) {
     switch (n) {
-    case 4:
-        return IfExpr::create(stk[1], stk[2], stk[3]);
-    case 3:
-        return IfExpr::create(stk[1], stk[2]);
-    default:
-        return r->error("wrong number of branches for if expr");
+        case 4:
+            return IfExpr::create(stk[1], stk[2], stk[3]);
+        case 3:
+            return IfExpr::create(stk[1], stk[2]);
+        default:
+            return r->error("wrong number of branches for if expr");
     }
 }
 
 
 static Ob* blockHelper(Ob** stk, int n, bool implicit = true) {
-    if (n == 1)
+    if (n == 1) {
         return stk[0];
-    else {
+    } else {
         Tuple* subExprs = Tuple::create(stk, n);
         return BlockExpr::create(subExprs, RBLBOOL(implicit));
     }
@@ -950,22 +950,24 @@ static Ob* blockHelper(Ob** stk, int n, bool implicit = true) {
 
 
 static Ob* blockFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 2 || rest != NILexpr)
+    if (n < 2 || rest != NILexpr) {
         return r->error("improper syntax for block expression");
+    }
 
     return blockHelper(stk + 1, n - 1, false);
 }
 
 
 static Ob* freeFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 3 || rest != NILexpr)
+    if (n < 3 || rest != NILexpr) {
         return r->error("improper syntax for free expression");
+    }
 
     TupleExpr* p = (TupleExpr*)stk[1];
 
-    if (!IS_A(p, TupleExpr) || !p->allSymbols())
+    if (!IS_A(p, TupleExpr) || !p->allSymbols()) {
         return r->error("improper syntax for free expression");
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return FreeExpr::create(p, block);
@@ -974,8 +976,9 @@ static Ob* freeFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* methodFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 3 || rest != NILexpr)
+    if (n < 3 || rest != NILexpr) {
         return r->error("improper syntax for method expression");
+    }
 
     Ob* formals = stk[1];
     PROTECT(formals);
@@ -985,8 +988,9 @@ static Ob* methodFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* procFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 3 || rest != NILexpr)
+    if (n < 3 || rest != NILexpr) {
         return r->error("improper syntax for proc expression");
+    }
 
     Ob* formals = stk[1];
     PROTECT(formals);
@@ -996,8 +1000,9 @@ static Ob* procFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* namedProcFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 4 || rest != NILexpr)
+    if (n < 4 || rest != NILexpr) {
         return r->error("improper syntax for named-proc expression");
+    }
 
     Ob* formals = stk[2];
     PROTECT(formals);
@@ -1007,14 +1012,15 @@ static Ob* namedProcFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* letFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 3 || rest != NILexpr)
+    if (n < 3 || rest != NILexpr) {
         return r->error("improper syntax for let expression");
+    }
 
     TupleExpr* p = (TupleExpr*)stk[1];
 
-    if (!IS_A(p, TupleExpr) || !p->allPairs())
+    if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for let expression");
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return LetExpr::create(p, block);
@@ -1023,13 +1029,15 @@ static Ob* letFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* letstarFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 3 || rest != NILexpr)
+    if (n < 3 || rest != NILexpr) {
         return r->error("improper syntax for let* expression");
+    }
 
     TupleExpr* p = (TupleExpr*)stk[1];
 
-    if (!IS_A(p, TupleExpr) || !p->allPairs())
+    if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for let* expression");
+    }
 
     PROTECT(p);
     Ob* body = blockHelper(stk + 2, n - 2);
@@ -1046,14 +1054,15 @@ static Ob* letstarFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* letrecFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 3 || rest != NILexpr)
+    if (n < 3 || rest != NILexpr) {
         return r->error("improper syntax for letrec expression");
+    }
 
     TupleExpr* p = (TupleExpr*)stk[1];
 
-    if (!IS_A(p, TupleExpr) || !p->allPairs())
+    if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for letrec expression");
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return LetrecExpr::create(p, block);
@@ -1062,12 +1071,13 @@ static Ob* letrecFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* seqFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n < 2 || rest != NILexpr)
+    if (n < 2 || rest != NILexpr) {
         return r->error("improper syntax for seq expression");
+    }
 
-    if (n == 2)
+    if (n == 2) {
         return stk[1];
-    else {
+    } else {
         Tuple* subExprs = Tuple::create(stk + 1, n - 1);
         return SeqExpr::create(subExprs);
     }
@@ -1075,16 +1085,18 @@ static Ob* seqFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
 
 static Ob* setFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n != 3 || rest != NILexpr || !IS_SYM(stk[1]))
+    if (n != 3 || rest != NILexpr || !IS_SYM(stk[1])) {
         return r->error("improper syntax for set! expression");
+    }
 
     return SetExpr::create(stk[1], stk[2]);
 }
 
 
 static Ob* gotoFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
-    if (n != 2 || rest != NILexpr || !IS_SYM(stk[1]))
+    if (n != 2 || rest != NILexpr || !IS_SYM(stk[1])) {
         return r->error("improper syntax for goto expression");
+    }
 
     return GotoExpr::create(stk[1]);
 }
@@ -1093,8 +1105,9 @@ static Ob* gotoFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 static Ob* labelFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
     Ob* label;
 
-    if (n < 3 || rest != NILexpr || !IS_SYM(label = stk[n - 2]))
+    if (n < 3 || rest != NILexpr || !IS_SYM(label = stk[n - 2])) {
         return r->error("improper syntax for label expression");
+    }
 
     Ob* block = blockHelper(stk + 2, n - 2);
     return LabelExpr::create(label, block);
@@ -1118,34 +1131,20 @@ findSpecialForm(Ob* symbol) {
     extern Ob* Qlabel;
     extern Ob* Qfree;
 
-    if (symbol == Qif)
-        return ifFinalizer;
-    if (symbol == Qmethod)
-        return methodFinalizer;
-    if (symbol == Qproc)
-        return procFinalizer;
-    if (symbol == Qnamedproc)
-        return namedProcFinalizer;
-    if (symbol == Qlet)
-        return letFinalizer;
-    if (symbol == Qletstar)
-        return letstarFinalizer;
-    if (symbol == Qletrec)
-        return letrecFinalizer;
-    if (symbol == Qsend)
-        return sendFinalizer;
-    if (symbol == Qblock)
-        return blockFinalizer;
-    if (symbol == Qseq)
-        return seqFinalizer;
-    if (symbol == Qsetbang)
-        return setFinalizer;
-    if (symbol == Qgoto)
-        return gotoFinalizer;
-    if (symbol == Qlabel)
-        return labelFinalizer;
-    if (symbol == Qfree)
-        return freeFinalizer;
+    if (symbol == Qif) return ifFinalizer;
+    if (symbol == Qmethod) return methodFinalizer;
+    if (symbol == Qproc) return procFinalizer;
+    if (symbol == Qnamedproc) return namedProcFinalizer;
+    if (symbol == Qlet) return letFinalizer;
+    if (symbol == Qletstar) return letstarFinalizer;
+    if (symbol == Qletrec) return letrecFinalizer;
+    if (symbol == Qsend) return sendFinalizer;
+    if (symbol == Qblock) return blockFinalizer;
+    if (symbol == Qseq) return seqFinalizer;
+    if (symbol == Qsetbang) return setFinalizer;
+    if (symbol == Qgoto) return gotoFinalizer;
+    if (symbol == Qlabel) return labelFinalizer;
+    if (symbol == Qfree) return freeFinalizer;
     return 0;
 }
 
@@ -1175,13 +1174,14 @@ static ReadTable StdReadTable;
 
 
 ReadTable::ReadTable() {
-    for (int i = 0; i < NCHARS; i++)
+    for (int i = 0; i < NCHARS; i++) {
         if (isspace(i)) {
             tbl[i] = &_WRM;
             attributes[i] |= _DELIMITER;
-        }
-        else
+        } else {
             tbl[i] = &_ARM;
+        }
+    }
 
     tbl[';'] = &_CRM;
     attributes[';'] |= _DELIMITER;
@@ -1201,24 +1201,25 @@ BUILTIN_CLASS(Reader) {}
 
 Reader::Reader(ReadTable* rt, FILE* f)
     : BinaryOb(align(sizeof(Reader)), CLASS_META(Reader), CLASS_SBO(Reader)),
-      buf(NULL),
-      bufsize(0),
-      bufp(0),
-      errorEncountered(false),
-      waitingOnIO(NOT_WAITING),
-      fstk(),
-      ostk(),
-      rt(rt),
-      mode(START),
-      file(f) {
-    heap->registerForeignOb(this);
-    Reader::updateCnt();
-}
+    buf(NULL),
+    bufsize(0),
+    bufp(0),
+    errorEncountered(false),
+    waitingOnIO(NOT_WAITING),
+    fstk(),
+    ostk(),
+    rt(rt),
+    mode(START),
+    file(f) {
+        heap->registerForeignOb(this);
+        Reader::updateCnt();
+    }
 
 
 Reader::~Reader() {
-    if (file && file != stdin)
+    if (file && file != stdin) {
         fclose(file);
+    }
 }
 
 
@@ -1229,11 +1230,11 @@ Reader* Reader::create(FILE* f) {
 
 
 Ob* Reader::readCh() {
-    if (waitingOnIO != NOT_WAITING)
+    if (waitingOnIO != NOT_WAITING) {
         return finish(
-            error("IO synchronization problem with reader for file %d",
-                  fileno(file)));
-    else {
+                error("IO synchronization problem with reader for file %d",
+                    fileno(file)));
+    } else {
         waitingOnIO = WAITING_FOR_CHAR;
         return resumeCh();
     }
@@ -1241,11 +1242,11 @@ Ob* Reader::readCh() {
 
 
 Ob* Reader::readExpr() {
-    if (waitingOnIO != NOT_WAITING)
+    if (waitingOnIO != NOT_WAITING) {
         return finish(
-            error("IO synchronization problem with reader for file %d",
-                  fileno(file)));
-    else {
+                error("IO synchronization problem with reader for file %d",
+                    fileno(file)));
+    } else {
         (void)NEW(falloc(sizeof(TopFrame))) TopFrame(this);
         mode = START;
         waitingOnIO = WAITING_FOR_EXPR;
@@ -1256,17 +1257,17 @@ Ob* Reader::readExpr() {
 
 Ob* Reader::resume() {
     switch (waitingOnIO) {
-    case NOT_WAITING:
-        return finish(
-            error("IO synchronization problem with reader for file %d",
-                  fileno(file)));
-    case WAITING_FOR_EXPR:
-        return resumeExpr();
-    case WAITING_FOR_CHAR:
-        return resumeCh();
-    default:
-        suicide("invalid value for Reader::waitingOnIO (= %d)", waitingOnIO);
-        return NIV;
+        case NOT_WAITING:
+            return finish(
+                    error("IO synchronization problem with reader for file %d",
+                        fileno(file)));
+        case WAITING_FOR_EXPR:
+            return resumeExpr();
+        case WAITING_FOR_CHAR:
+            return resumeCh();
+        default:
+            suicide("invalid value for Reader::waitingOnIO (= %d)", waitingOnIO);
+            return NIV;
     }
 }
 
@@ -1279,13 +1280,15 @@ Ob* Reader::resumeCh() {
     int c = fgetc(file);
 #endif
 
-    if (c == EOF)
-        if (RBL_WOULDBLOCK)
+    if (c == EOF) {
+        if (RBL_WOULDBLOCK) {
             return suspendReader();
-        else
+        } else {
             return finish(RBLEOF);
-    else
+        }
+    } else {
         return finish(RBLCHAR(c));
+    }
 }
 
 
@@ -1330,65 +1333,66 @@ Ob* Reader::resumeExpr() {
         int c = fgetc(my->file);
 #endif
 
-        if (c == EOF && RBL_WOULDBLOCK)
-            return my->suspendReader();
+        if (c == EOF && RBL_WOULDBLOCK) return my->suspendReader();
 
         switch (nextMode) {
-        case START:
-            if (c == EOF)
-                nextMode = my->ftop()->receiveEof(my);
-            else
-                nextMode = my->rt->tbl[c]->start(c, my);
-            break;
+            case START:
+                if (c == EOF) {
+                    nextMode = my->ftop()->receiveEof(my);
+                } else {
+                    nextMode = my->rt->tbl[c]->start(c, my);
+                }
+                break;
 
-        case CONTINUE:
-            if (c == EOF)
-                nextMode = my->ftop()->receiveEof(my);
-            else
-                nextMode = my->ftop()->process(c, my);
-            break;
+            case CONTINUE:
+                if (c == EOF) {
+                    nextMode = my->ftop()->receiveEof(my);
+                } else {
+                    nextMode = my->ftop()->process(c, my);
+                }
+                break;
 
 #if defined(OPTIMIZE_ATOMS)
-        case GROK_ATOM:
-            /*
-             * In this case, there is an implicit AtomFrame on the fstk;
-             * in the event that nothing out-of-the-ordinary happens, we
-             * can just build up the symbol and finalize it without ever
-             * needing to materialize the frame.  If something "odd" does
-             * happen, such as bumping into an escape character or
-             * running out of input, we will materialize the frame and
-             * continue on from there.
-             */
-            if (my->rt->isDelimiter(c)) {
-                ungetc(c, my->file);
+            case GROK_ATOM:
                 /*
-                 * We can't use Reader::receiveOb here because the
-                 * AtomFrame is implicit, and receiveOb insists on
-                 * popping a frame.
+                 * In this case, there is an implicit AtomFrame on the fstk;
+                 * in the event that nothing out-of-the-ordinary happens, we
+                 * can just build up the symbol and finalize it without ever
+                 * needing to materialize the frame.  If something "odd" does
+                 * happen, such as bumping into an escape character or
+                 * running out of input, we will materialize the frame and
+                 * continue on from there.
                  */
-                Ob* v = my->finalizeAtom();
-                /*
-                 * Because finalizeAtom *might* cause a scavenge (if
-                 * we're unlucky enough to be reading a floating-point
-                 * number at just the right moment), it's not safe to use
-                 * "my" after this point.
-                 */
-                nextMode = SELF->ftop()->receiveOb(v, SELF);
-            }
-            else {
-                my->digitSeen |= isdigit(c);
-                nextMode = my->accept(c);
-            }
-            break;
+                if (my->rt->isDelimiter(c)) {
+                    ungetc(c, my->file);
+                    /*
+                     * We can't use Reader::receiveOb here because the
+                     * AtomFrame is implicit, and receiveOb insists on
+                     * popping a frame.
+                     */
+                    Ob* v = my->finalizeAtom();
+                    /*
+                     * Because finalizeAtom *might* cause a scavenge (if
+                     * we're unlucky enough to be reading a floating-point
+                     * number at just the right moment), it's not safe to use
+                     * "my" after this point.
+                     */
+                    nextMode = SELF->ftop()->receiveOb(v, SELF);
+                } else {
+                    my->digitSeen |= isdigit(c);
+                    nextMode = my->accept(c);
+                }
+                break;
 #endif
 
-        default:
-            suicide("unanticipated case in Reader::readExpr");
-            break;
+            default:
+                suicide("unanticipated case in Reader::readExpr");
+                break;
         }
 
-        if (nextMode == STOP)
+        if (nextMode == STOP) {
             return SELF->finish(SELF->opop());
+        }
     }
 }
 
@@ -1428,8 +1432,7 @@ Ob* Reader::suspendReader() {
         errorEncountered = false;
         waitingOnIO = NOT_WAITING;
         return READ_ERROR;
-    }
-    else {
+    } else {
         /*
          * Leave waitingOnIO unchanged, so that we will re-enter with the
          * proper state.
@@ -1444,8 +1447,7 @@ Ob* Reader::finish(Ob* v) {
     if (errorEncountered) {
         resetState();
         return READ_ERROR;
-    }
-    else {
+    } else {
         assert(ostk.empty());
         assert(fstk.empty());
         return v;
@@ -1464,11 +1466,7 @@ void Reader::opush(Ob* v) {
 
 
 Ob*& Reader::otop(int n) { return ostk.top(n); }
-
-
 Ob* Reader::opop() { return ostk.pop(); }
-
-
 void Reader::odel(int n) { ostk.del(n); }
 
 
@@ -1519,8 +1517,9 @@ void Reader::growBuffer() {
 
 
 void Reader::resetBuffer() {
-    if (buf)
+    if (buf) {
         buf[0] = '\0';
+    }
     bufp = 0;
 }
 
@@ -1535,16 +1534,19 @@ Ob* Reader::finalizeAtom() {
     char* sym = finalizeBuffer();
     char* delimiter = NULL;
 
-    if (!digitSeen)
+    if (!digitSeen) {
         return SYMBOL(sym);
+    }
 
     long n = strtol(sym, &delimiter, 0);
-    if ((n != 0 || delimiter != sym) && (*delimiter == '\0'))
+    if ((n != 0 || delimiter != sym) && (*delimiter == '\0')) {
         return FIXNUM(n);
+    }
 
     Rfloat d = strtod(sym, &delimiter);
-    if ((d != 0.0 || delimiter != sym) && (*delimiter == '\0'))
+    if ((d != 0.0 || delimiter != sym) && (*delimiter == '\0')) {
         return Float::create(d);
+    }
 
     return SYMBOL(sym);
 }
