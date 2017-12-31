@@ -16,13 +16,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#ifndef __RCS_ID__
-#define __RCS_ID__
-static const char *rcsid =
-    "$Header: /mcc/project/carnot/root/master/pub-ess/src/rosette-config.cc,v "
-    "1.1.1.1 1993/02/12 01:25:51 tomlic Exp $";
-#endif
-
 #define DECL(a)         \
     {                   \
         extern int a(); \
