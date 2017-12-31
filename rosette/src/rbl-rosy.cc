@@ -139,7 +139,8 @@ pOb ROI2ByteVec(struct ROI* indication, pTuple protos) {
         ByteVec* bv = ByteVec::create(proto, sz);
         memcpy((char*)&bv->byte(0), (char*)&indication->roi_un, sz);
         return bv;
-    } else {
+    }
+    else {
         return NIV;
     }
 }
@@ -263,7 +264,8 @@ void* fdopenOstream(int fd, char* mode) {
     FILE* f = fdopen(fd, mode);
     if (f) {
         return (void*)Ostream::create(f);
-    } else {
+    }
+    else {
         return FIXNUM(-errno);
     }
 }
@@ -300,10 +302,12 @@ void ConnectEventToRosette(int type, int fd, Ob* ob) {
             close(fd);
             vm->deleteIoHandler(fd);
             more = 0;
-        } else if (r < 0) {
+        }
+        else if (r < 0) {
             ASSIGN(av, elem(4), FIXNUM(-errno)); /* connected fd == #niv */
             more = 0;
-        } else {
+        }
+        else {
             ASSIGN(av, elem(3), FIXNUM(cinfo[0])); /* connected fd */
             ASSIGN(av, elem(4), FIXNUM(cinfo[1])); /* connect status */
         }
@@ -333,7 +337,8 @@ void AcceptEventToRosette(int type, int fd, Ob* ob) {
         if (new_fd == -1) {
             ASSIGN(av, elem(3), FIXNUM(-errno));
             more = 0;
-        } else {
+        }
+        else {
             ASSIGN(av, elem(3), FIXNUM(new_fd));
         }
 
@@ -370,10 +375,12 @@ void TcpEventToRosette(int type, int fd, Ob* ob) {
             close(fd);
             vm->deleteIoHandler(fd);
             more = 0;
-        } else if (r < 0) { /* err signalled via neg fixnum in elem(3) */
+        }
+        else if (r < 0) { /* err signalled via neg fixnum in elem(3) */
             ASSIGN(av, elem(3), FIXNUM(-errno));
             more = 0;
-        } else {
+        }
+        else {
             PROTECT(c);
             PROTECT(av);
             ByteVec* bv = ByteVec::create(r);
@@ -409,10 +416,12 @@ void StringEventToRosette(int type, int fd, Ob* ob) {
             close(fd);
             vm->deleteIoHandler(fd);
             more = 0;
-        } else if (r < 0) { /* err signalled via neg fixnum in elem(3) */
+        }
+        else if (r < 0) { /* err signalled via neg fixnum in elem(3) */
             ASSIGN(av, elem(3), FIXNUM(-errno));
             more = 0;
-        } else {
+        }
+        else {
             PROTECT(c);
             PROTECT(av);
             RBLstring* str = RBLstring::create(r, tcp_in_buf);
@@ -442,7 +451,8 @@ DEF("M-get", addressGetField, 3, 3) {
 
     if (base < local_page_size) {
         PRIM_ERROR("invalid address");
-    } else {
+    }
+    else {
         pOb rslt = BASE((pOb)addr)->getField(0, 0, offset, span, BOOLVAL(sign));
 
         return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
@@ -459,7 +469,8 @@ DEF("M-set", addressSetField, 3, 3) {
 
     if (base < local_page_size) {
         PRIM_ERROR("invalid address");
-    } else {
+    }
+    else {
         pOb rslt = BASE((pOb)addr)->setField(0, 0, offset, span, (uint32_t)val);
 
         return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
@@ -471,7 +482,8 @@ DEF("char*->string", char_star_to_string, 1, 1) {
 
     if (base >= local_page_size) {
         return RBLstring::create((char*)addr);
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -493,7 +505,8 @@ DEF("u_free", unix_free, 1, 1) {
 
     if (addr >= local_page_size) {
         return FIXNUM(free(addr));
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -505,7 +518,8 @@ DEF("memcpy", unix_memcpy, 3, 3) {
 
     if ((dest_addr >= local_page_size) && (src_addr >= local_page_size)) {
         return FIXNUM(memcpy(dest_addr, src_addr, n_bytes));
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -517,7 +531,8 @@ DEF("_c2bv", c_struct_to_byte_vec, 3, 3) {
     if (src_addr >= local_page_size) {
         memcpy(&(BASE(ARG(0))->slot(0)), src_addr, n_bytes);
         return ARG(0);
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -529,7 +544,8 @@ DEF("c2bv", c_struct_to_byte_vec, 2, 2) {
     if (src_addr >= local_page_size) {
         memcpy(&(dest_bv->byte(0)), src_addr, dest_bv->numberOfBytes());
         return dest_bv;
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -541,7 +557,8 @@ DEF("c2str", cpy_char_star_to_string, 2, 2) {
     if (src_addr >= local_page_size) {
         memcpy(&(dest_str->byte(0), src_addr, dest_str->numberOfBytes()));
         return dest_str;
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -562,7 +579,8 @@ DEF("strlen", c_strlen, 1, 1) {
     CHECK_FIXNUM(0, addr);
     if (addr >= local_page_size) {
         return FIXNUM(strlen((char*)addr));
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -574,7 +592,8 @@ DEF("prim-string->", cpy_string_char_star, 2, 2) {
     if (dest_addr >= local_page_size) {
         strcpy(dest_addr, &(src_str->byte(0)));
         return src_str;
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -614,7 +633,8 @@ DEF("prim_inet_makeaddr", prim_inet_makeaddr, 3, 3) {
     if (in_addr_addr >= local_page_size) {
         *ap = inet_makeaddr(net, lna);
         return ARG(0);
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -625,7 +645,8 @@ DEF("prim_inet_lnaof", prim_inet_lnaof, 1, 1) {
 
     if (in_addr_addr >= local_page_size) {
         return FIXNUM(inet_lnaof(*ap));
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -636,7 +657,8 @@ DEF("prim_inet_netof", prim_inet_netof, 1, 1) {
 
     if (in_addr_addr >= local_page_size) {
         return FIXNUM(inet_netof(*ap));
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -647,7 +669,8 @@ DEF("prim_inet_ntoa", prim_inet_ntoa, 1, 1) {
 
     if (in_addr_addr >= local_page_size) {
         return RBLstring::create(inet_ntoa(*ap));
-    } else {
+    }
+    else {
         PRIM_ERROR("invalid address");
     }
 }
@@ -786,7 +809,8 @@ char* getPeerAddr(int fd) {
 
     if (getpeername(fd, (struct sockaddr*)&sin, &len) < 0) {
         return "";
-    } else {
+    }
+    else {
         return inet_ntoa(sin.sin_addr);
     }
 }
@@ -804,7 +828,8 @@ char* getPeerName(int fd) {
 
     if (hep) {
         return hep->h_name;
-    } else {
+    }
+    else {
         return inet_ntoa(sin.sin_addr);
     }
 }
@@ -898,8 +923,10 @@ int Ro_Encode_and_Invoke(int fd, int op, int invokeID, IFP efn, caddr_t in,
     if (!efn || (result = (*efn)(&pe, 1, NULL, NULLCP, in)) == OK) {
         result = RoInvokeRequest(fd, op, ROS_ASYNC, pe, invokeID, NULLIP,
                                  ROS_NOPRIO, roi);
-    } else {
-        result = rosaplose(roi, ROS_CONGEST, NULLCP,
+    }
+    else {
+        result =
+            rosaplose(roi, ROS_CONGEST, NULLCP,
                       "error encoding argument for invocation %d, op %d, [%s]",
                       invokeID, op, PY_pepy);
     }
@@ -921,7 +948,8 @@ void rosette_advise(struct AcSAPabort* aca, char* event) {
     if (aca->aca_cc > 0) {
         (void)sprintf(buffer, "[%s] %*.*s", AcErrString(aca->aca_reason),
                       aca->aca_cc, aca->aca_cc, aca->aca_data);
-    } else {
+    }
+    else {
         (void)sprintf(buffer, "[%s]", AcErrString(aca->aca_reason));
     }
 
@@ -966,9 +994,12 @@ int Assoc_Initiate(char* myname, char* hostname, char* myservice,
         printf("%s: unknown object descriptor", mycontext);
     }
 
-    if ((ctx = oid_cpy(ctx)) == NULLOID) printf("out of memory");
-    if ((pci = ode2oid(mypci)) == NULLOID) printf("%s: unknown object descriptor", mypci);
-    if ((pci = oid_cpy(pci)) == NULLOID) printf("out of memory");
+    if ((ctx = oid_cpy(ctx)) == NULLOID)
+        printf("out of memory");
+    if ((pci = ode2oid(mypci)) == NULLOID)
+        printf("%s: unknown object descriptor", mypci);
+    if ((pci = oid_cpy(pci)) == NULLOID)
+        printf("out of memory");
 
     pc->pc_nctx = 1;
     pc->pc_ctx[0].pc_id = 1;
@@ -1015,13 +1046,15 @@ int RyAssocRequest(OID ctx, AEI aei, struct PSAPaddr* pa,
         rosette_advise(&aci->aci_abort, "A-ASSOCIATE.REQUEST");
 
         return NOTOK;
-    } else {
+    }
+    else {
         if (acc->acc_result != ACS_ACCEPT) {
             printf("association rejected: [%s]\n",
                    AcErrString(acc->acc_result));
 
             return NOTOK;
-        } else {
+        }
+        else {
             sd = acc->acc_sd;
             ACCFREE(acc);
 
@@ -1053,12 +1086,14 @@ int PsAssocRequest(OID ctx, AEI aei, struct PSAPaddr* pa,
                            NULLQOS, acc, aci, asy) == NOTOK) {
         rosette_advise(&aci->aci_abort, "A-ASSOCIATE.REQUEST");
         return NOTOK;
-    } else {
+    }
+    else {
         if (acc->acc_result != ACS_ACCEPT) {
             printf("association rejected: [%s]\n",
                    AcErrString(acc->acc_result));
             return NOTOK;
-        } else {
+        }
+        else {
             sd = acc->acc_sd;
             ACCFREE(acc);
 
@@ -1131,36 +1166,36 @@ void RpsFree(void* pi, int type) {
     }
 
     switch (type) {
-        case PI_DATA:
-            px = (struct PSAPdata*)pi;
-            PXFREE(px);
-            break;
-        case PI_TOKEN:
-            pt = (struct PSAPtoken*)pi;
-            PTFREE(pt);
-            break;
-        case PI_SYNC:
-            pn = (struct PSAPsync*)pi;
-            PNFREE(pn);
-            break;
-        case PI_ACTIVITY:
-            pv = (struct PSAPactivity*)pi;
-            PVFREE(pv);
-            break;
-        case PI_REPORT:
-            pr = (struct PSAPreport*)pi;
-            PPFREE(pr);
-            break;
-        case PI_FINISH:
-            pf = (struct PSAPfinish*)pi;
-            PFFREE(pf);
-            break;
-        case PI_ABORT:
-            pa = (struct PSAPabort*)pi;
-            PAFREE(pa)
-                break;
-        default:
-            break;
+    case PI_DATA:
+        px = (struct PSAPdata*)pi;
+        PXFREE(px);
+        break;
+    case PI_TOKEN:
+        pt = (struct PSAPtoken*)pi;
+        PTFREE(pt);
+        break;
+    case PI_SYNC:
+        pn = (struct PSAPsync*)pi;
+        PNFREE(pn);
+        break;
+    case PI_ACTIVITY:
+        pv = (struct PSAPactivity*)pi;
+        PVFREE(pv);
+        break;
+    case PI_REPORT:
+        pr = (struct PSAPreport*)pi;
+        PPFREE(pr);
+        break;
+    case PI_FINISH:
+        pf = (struct PSAPfinish*)pi;
+        PFFREE(pf);
+        break;
+    case PI_ABORT:
+        pa = (struct PSAPabort*)pi;
+        PAFREE(pa)
+        break;
+    default:
+        break;
     }
 }
 
@@ -1172,14 +1207,14 @@ void RpsFree(void* pi, int type) {
 #define ROI_NOTOK -2
 
 int AcAccept(struct AcSAPstart* acs, struct SSAPref* sf, int svc, Ob* ob,
-        IFP hndlr, struct AcSAPindication* aci,
-        struct RoSAPindication* roi) {
+             IFP hndlr, struct AcSAPindication* aci,
+             struct RoSAPindication* roi) {
     int r, sd = acs->acs_sd;
     struct PSAPstart* ps = &(acs->acs_start);
 
     r = AcAssocResponse(sd, ACS_ACCEPT, ACS_USER_NULL, NULLOID, NULLAEI, NULLPA,
-            NULLPC, PC_ACCEPT, ps->ps_prequirements, SR_DUPLEX,
-            SERIAL_NONE, ps->ps_settings, sf, NULLPEP, 0, aci);
+                        NULLPC, PC_ACCEPT, ps->ps_prequirements, SR_DUPLEX,
+                        SERIAL_NONE, ps->ps_settings, sf, NULLPEP, 0, aci);
     if (r == NOTOK) {
         return NOTOK;
     }
@@ -1199,13 +1234,13 @@ int AcAccept(struct AcSAPstart* acs, struct SSAPref* sf, int svc, Ob* ob,
 }
 
 int PsAcAccept(struct AcSAPstart* acs, struct SSAPref* sf, Ob* ob,
-        struct AcSAPindication* aci, struct PSAPindication* pi) {
+               struct AcSAPindication* aci, struct PSAPindication* pi) {
     int r, sd = acs->acs_sd;
     struct PSAPstart* ps = &(acs->acs_start);
 
     r = AcAssocResponse(sd, ACS_ACCEPT, ACS_USER_NULL, NULLOID, NULLAEI, NULLPA,
-            NULLPC, PC_ACCEPT, ps->ps_prequirements, SR_DUPLEX,
-            SERIAL_NONE, ps->ps_settings, sf, NULLPEP, 0, aci);
+                        NULLPC, PC_ACCEPT, ps->ps_prequirements, SR_DUPLEX,
+                        SERIAL_NONE, ps->ps_settings, sf, NULLPEP, 0, aci);
     if (r == NOTOK) {
         return NOTOK;
     }
@@ -1213,7 +1248,7 @@ int PsAcAccept(struct AcSAPstart* acs, struct SSAPref* sf, Ob* ob,
     ACSFREE(acs);
 
     if (PSetIndications(sd, RpsDATAser, RpsTOKENser, RpsSYNCser, RpsACTIVITYser,
-                RpsREPORTser, RpsFINISHser, RpsABORTser, pi) == NOTOK) {
+                        RpsREPORTser, RpsFINISHser, RpsABORTser, pi) == NOTOK) {
         return NOTOK;
     }
 
@@ -1226,11 +1261,11 @@ int PsAcAccept(struct AcSAPstart* acs, struct SSAPref* sf, Ob* ob,
 /* ARGSUSED */
 
 int AssocRelRequest(int sd, struct AcSAPrelease* acr,
-        struct AcSAPindication* aci) {
+                    struct AcSAPindication* aci) {
     int result;
 
     if ((result = AcRelRequest(sd, ACF_NORMAL, NULLPEP, 0, NOTOK, acr, aci)) ==
-            OK) {
+        OK) {
         deleteIoHandler(sd);
     }
 
@@ -1248,7 +1283,7 @@ int AssocUAbortRequest(int sd, struct AcSAPindication* aci) {
 }
 
 int AssocRelResponse(int sd, int status, int reason,
-        struct AcSAPindication* aci) {
+                     struct AcSAPindication* aci) {
     int result;
 
     if ((result = AcRelResponse(sd, status, reason, NULLPEP, 0, aci)) == OK) {

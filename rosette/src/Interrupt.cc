@@ -105,7 +105,8 @@ void RosetteIoHandler(VM_EVENT type, int fd, void*) {
     if (type == VM_READ_EVENT) {
         DO_UNGETC;
         vm->initiateRosetteIo(fd);
-    } else {
+    }
+    else {
         warning("ignoring %s event on file %d", eventName[type], fd);
     }
 }
@@ -121,7 +122,8 @@ DEF("sig-catch", sigCatch, 2, 2) {
         if (vm->deleteSignalHandler(sig) == -1) {
             return PRIM_ERROR(sys_errmsg());
         }
-    } else {
+    }
+    else {
         void (*fn)(FORMALS);
         fn = &RosetteSignalHandler;
         if (vm->addSignalHandler(sig, (SIG_PF)fn, ARG(1)) == -1) {
@@ -141,7 +143,8 @@ DEF("io-catch", ioCatch, 2, 2) {
 
     if (ARG(1) == NIV) {
         vm->deleteIoHandler(fd);
-    } else {
+    }
+    else {
         vm->addIoHandler(fd, &RosetteIoHandler, ARG(1), 1);
     }
 
@@ -187,7 +190,8 @@ void timeServiceHandler(FORMALS) {
                 ASSIGN(av, elem(0), sleeperinfo->nth(0)->nth(0));
                 ASSIGN(av, elem(1), sleeperinfo->nth(0)->nth(1));
                 BASE(sleeperinfo->nth(0)->nth(0))->receive(c);
-            } else {
+            }
+            else {
                 ASSIGN(av, elem(1), sleeperinfo->nth(0));
                 BASE(sleeperinfo->nth(0))->receive(c);
             }
@@ -195,14 +199,16 @@ void timeServiceHandler(FORMALS) {
             /* reset interval */
             sleeperinfo->setNth(1, sleeperinfo->nth(2));
             minint = FIXVAL(sleeperinfo->nth(2));
-        } else {
+        }
+        else {
             if (tmp < minint) {
                 minint = tmp;
             }
             sleeperinfo->setNth(1, FIXNUM(tmp));
         }
         newtshinfo = rcons(newtshinfo, sleeperinfo);
-    } else {
+    }
+    else {
         newtshinfo = rcons(newtshinfo, NIV);
     }
     for (int i = 2; i < tshinfo->numberOfElements(); i++) {
@@ -216,11 +222,13 @@ void timeServiceHandler(FORMALS) {
                 ASSIGN(av, elem(0), sleeperinfo->nth(0)->nth(0));
                 ASSIGN(av, elem(1), sleeperinfo->nth(0)->nth(1));
                 BASE(sleeperinfo->nth(0)->nth(0))->receive(c);
-            } else {
+            }
+            else {
                 ASSIGN(av, elem(1), sleeperinfo->nth(0));
                 BASE(sleeperinfo->nth(0))->receive(c);
             }
-        } else {
+        }
+        else {
             if (tmp < minint) {
                 minint = tmp;
             }
@@ -234,7 +242,8 @@ void timeServiceHandler(FORMALS) {
         vm->sigPool[sig] = newtshinfo;
         /* issue the next ualarm call */
         (void)ualarm(minint, 0);
-    } else { /* remove this handler from sighandlers */
+    }
+    else { /* remove this handler from sighandlers */
         vm->deleteSignalHandler(sig);
     }
 
@@ -288,7 +297,8 @@ else install handler and add etc. */
             coccoon->setNth(0, ARG(1));
             coccoon->setNth(1, NIV);
             coccoon->setNth(2, sleeper);
-        } else {
+        }
+        else {
             sleeper = Tuple::create(3, NIV);
             sleeper->setNth(0, beauty);
             sleeper->setNth(1, ARG(1));
@@ -305,7 +315,8 @@ else install handler and add etc. */
 
         /* issue the very first ualarm call */
         (void)ualarm((FIXVAL(ARG(1))), 0);
-    } else {
+    }
+    else {
         if (BOOLVAL(periodicP)) {
             if (vm->sigPool[SIGALRM]->nth(1) != NIV) {
                 PRIM_ERROR("must unregister periodic service first");
@@ -316,7 +327,8 @@ else install handler and add etc. */
             sleeper->setNth(1, ARG(1));
             sleeper->setNth(2, ARG(2));
             vm->sigPool[SIGALRM]->setNth(1, sleeper);
-        } else {
+        }
+        else {
             /* Actually, this code should check to see if the ARG(1) < min */
             sleeper = Tuple::create(2, NIV);
             sleeper->setNth(0, beauty);
@@ -343,7 +355,8 @@ DEF("prim-unregister-alarm", unregisterAlarm, 1, 1) {
     PROTECT(beauty);
     if (vm->sigPool[SIGALRM] == INVALID) {
         PRIM_ERROR("nothing to remove");
-    } else {
+    }
+    else {
         /* this loop should be folded back up to simplify the code! */
 
         Tuple* tmp = (Tuple*)(vm->sigPool[SIGALRM]);
@@ -372,7 +385,8 @@ DEF("prim-unregister-alarm", unregisterAlarm, 1, 1) {
 
                 if (disjunct2 || (disjunct3a && disjunct3b)) {
                     newtshinfo = rcons(newtshinfo, tmp->nth(i));
-                } else {
+                }
+                else {
                     flag = 1;
                 }
             }
@@ -385,15 +399,17 @@ DEF("prim-unregister-alarm", unregisterAlarm, 1, 1) {
                 (newtshinfo->nth(1) == NIV)) {
                 ualarm(0, 0);
                 vm->deleteSignalHandler(SIGALRM);
-            } else {
+            }
+            else {
                 vm->sigPool[SIGALRM] = newtshinfo;
             }
-
-        } else {
+        }
+        else {
             if ((tmp->numberOfElements() == 2) && (tmp->nth(1) != NIV)) {
                 ualarm(0, 0);
                 vm->deleteSignalHandler(SIGALRM);
-            } else {
+            }
+            else {
                 for (int i = 2; i < tmp->numberOfElements(); i++) {
                     newtshinfo = rcons(newtshinfo, tmp->nth(i));
                 }

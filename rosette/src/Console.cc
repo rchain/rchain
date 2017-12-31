@@ -85,43 +85,44 @@ main(int, char** argv) {
     }
 
     switch (image = fork()) {
-        case NOTOK:  // Only if no memory or max processes exceeded
+    case NOTOK:  // Only if no memory or max processes exceeded
 
-            perror("Unable to fork rosette image");
-            exit(1);
+        perror("Unable to fork rosette image");
+        exit(1);
 
-        case OK:  // Ready to exec the image
+    case OK:  // Ready to exec the image
 
-            // Bind image's stdin to the pipe
+        // Bind image's stdin to the pipe
 
-            if (dup2(fds[0], 0) == NOTOK) {
-                perror("Unable to dup image stdin to pipe");
-                _exit(1);
-            }
-
-            // NB(orig).
-            setsid();
-
-            sprintf(bp, "%s.image", *argv);
-            *argv = bp;
-
-            // Note: execve resets caught signals to their defaults
-            execvp(bp, argv);
-
-            perror("Unable to exec rosette image");
+        if (dup2(fds[0], 0) == NOTOK) {
+            perror("Unable to dup image stdin to pipe");
             _exit(1);
+        }
 
-        default:  // Stuff input into pipe until EOF
-            // Only the image will do the writing to stdout/stderr
-            fclose(stdout);
-            fclose(stderr);
+        // NB(orig).
+        setsid();
 
-            for (;;) {
-                if (fgets(bp, sizeof(buffer), stdin)) {
-                    write(fds[1], bp, strlen(bp));
-                } else {
-                    terminate();
-                }
+        sprintf(bp, "%s.image", *argv);
+        *argv = bp;
+
+        // Note: execve resets caught signals to their defaults
+        execvp(bp, argv);
+
+        perror("Unable to exec rosette image");
+        _exit(1);
+
+    default:  // Stuff input into pipe until EOF
+        // Only the image will do the writing to stdout/stderr
+        fclose(stdout);
+        fclose(stderr);
+
+        for (;;) {
+            if (fgets(bp, sizeof(buffer), stdin)) {
+                write(fds[1], bp, strlen(bp));
             }
+            else {
+                terminate();
+            }
+        }
     }
 }

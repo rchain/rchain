@@ -37,23 +37,24 @@ BUILTIN_CLASS(RBLstring) {}
 
 RBLstring::RBLstring(int n, char c)
     : ByteVec(sizeof(RBLstring) + align(n), CLASS_META(RBLstring),
-            CLASS_SBO(RBLstring), n) {
-        if (c == 0) {
-            memset(&byte(0), c, n);
-        } else {
-            memset(&byte(0), c, n - 1);
-            byte(n - 1) = 0;
-        }
-        RBLstring::updateCnt();
+              CLASS_SBO(RBLstring), n) {
+    if (c == 0) {
+        memset(&byte(0), c, n);
     }
+    else {
+        memset(&byte(0), c, n - 1);
+        byte(n - 1) = 0;
+    }
+    RBLstring::updateCnt();
+}
 
 
 RBLstring::RBLstring(int n, char* s)
     : ByteVec(sizeof(RBLstring) + align(n), CLASS_META(RBLstring),
-            CLASS_SBO(RBLstring), n) {
-        strcpy((char*)&byte(0), s);
-        RBLstring::updateCnt();
-    }
+              CLASS_SBO(RBLstring), n) {
+    strcpy((char*)&byte(0), s);
+    RBLstring::updateCnt();
+}
 
 
 RBLstring* RBLstring::create(int n, char c) {
@@ -89,29 +90,32 @@ void RBLstring::printOn(FILE* f) {
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
-        } else if (c == '\"') {
+        }
+        else if (c == '\"') {
             fputc('\\', f);
             fputc('\"', f);
-        } else if (isprint(c)) {
+        }
+        else if (isprint(c)) {
             fputc(c, f);
-        } else {
+        }
+        else {
             fputc('\\', f);
             switch (c) {
-                case '\n':
-                    fputc('n', f);
-                    break;
-                case '\f':
-                    fputc('f', f);
-                    break;
-                case '\t':
-                    fputc('t', f);
-                    break;
-                case '\r':
-                    fputc('r', f);
-                    break;
-                default:
-                    fprintf(f, "x%.2x", (int)c);
-                    break;
+            case '\n':
+                fputc('n', f);
+                break;
+            case '\f':
+                fputc('f', f);
+                break;
+            case '\t':
+                fputc('t', f);
+                break;
+            case '\r':
+                fputc('r', f);
+                break;
+            default:
+                fprintf(f, "x%.2x", (int)c);
+                break;
             }
         }
     } while (true);
@@ -221,48 +225,56 @@ DEF("string>=", stringGEQ, 2, 2) {
 
 DEF("string-ci=", string_ciEq, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring))
+        return RBLFALSE;
     RBLstring* str2 = (RBLstring*)ARG(1);
-    return RBLBOOL(
-            STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) == 0);
+    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) ==
+                   0);
 }
 
 DEF("string-ci!=", string_ciNEq, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring))
+        return RBLFALSE;
     RBLstring* str2 = (RBLstring*)ARG(1);
-    return RBLBOOL(
-            STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) != 0);
+    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) !=
+                   0);
 }
 
 DEF("string-ci<", string_ciLess, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring))
+        return RBLFALSE;
     RBLstring* str2 = (RBLstring*)ARG(1);
-    return RBLBOOL(
-            STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) < 0);
+    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) <
+                   0);
 }
 
 DEF("string-ci<=", string_ciLEQ, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring))
+        return RBLFALSE;
     RBLstring* str2 = (RBLstring*)ARG(1);
-    return RBLBOOL(
-            STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) <= 0);
+    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) <=
+                   0);
 }
 
 DEF("string-ci>", string_ciGtr, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring))
+        return RBLFALSE;
     RBLstring* str2 = (RBLstring*)ARG(1);
-    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) > 0);
+    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) >
+                   0);
 }
 
 DEF("string-ci>=", string_ciGEQ, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring))
+        return RBLFALSE;
     RBLstring* str2 = (RBLstring*)ARG(1);
-    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) >= 0);
+    return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) >=
+                   0);
 }
 
 
@@ -444,7 +456,8 @@ DEF("string-split", stringSplit, 2, 3) {
     if (NARGS == 3) {
         if (IS_FIXNUM(ARG(2))) {
             lim = FIXVAL(ARG(2));
-        } else {
+        }
+        else {
             return PRIM_ERROR("Fixnum expected for limit");
         }
     }
@@ -464,11 +477,12 @@ DEF("string-split", stringSplit, 2, 3) {
         }
 
         return ans;
-    } else {
+    }
+    else {
         for (x = 0; ((i < lim) && (x < sz));) {
             for (; x < sz; x++) {
-                if (!stringMemQAux(separators, string->byte(x))) {  
-                    break;  
+                if (!stringMemQAux(separators, string->byte(x))) {
+                    break;
                 }
             }
 
@@ -522,7 +536,8 @@ convertArgReturnPair RBLstring::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj) == RBLTRUE) {
         cnvArgRetPair.val = (uint32_t)(&((RBLstring*)obj)->byte(0));
         cnvArgRetPair.failp = 0;
-    } else {
+    }
+    else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }

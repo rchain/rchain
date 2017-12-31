@@ -108,7 +108,8 @@ void Monitor::printStats(FILE* f) {
             char* str = opcodeStrings[i];
             if (str) {
                 fprintf(f, "%8ul %s\n", n, str);
-            } else {
+            }
+            else {
                 fprintf(f, "%8ul ?%2x\n", n, i);
             }
         }

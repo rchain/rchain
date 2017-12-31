@@ -44,9 +44,7 @@ int malloc_verify();
 
 static const int MaxFixedSize = sizeof(Ctxt);
 
-int align(int size) {
-    return ((size + alignmentmask) & ~alignmentmask);
-}
+int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
 
 /*
@@ -142,7 +140,8 @@ static int nextMultipleOf(int sz, int multiple) {
 
     if (r == 0) {
         return sz;
-    } else {
+    }
+    else {
         int q = sz / multiple;
         return (q + 1) * multiple;
     }
@@ -258,7 +257,8 @@ void Space::scan() {
         Ob* p = st.get();
         if (MARKED(p)) {
             REMOVE_FLAG(HDR_FLAGS(p), f_marked);
-        } else {
+        }
+        else {
             free(p);
         }
     }
@@ -266,7 +266,7 @@ void Space::scan() {
 
 
 void Space::check() {
-    for (SpaceTrav st(this); st; st.advance()){ 
+    for (SpaceTrav st(this); st; st.advance()) {
         st.get()->check();
     }
 }
@@ -553,7 +553,8 @@ void OldSpaceChunk::scan() {
         Ob* p = st.get();
         if (MARKED(p)) {
             REMOVE_FLAG(HDR_FLAGS(p), f_marked);
-        } else {
+        }
+        else {
             free(p);
         }
     }
@@ -652,7 +653,6 @@ void* OldSpace::alloc(unsigned sz) {
 void* OldSpace::miscAlloc(unsigned sz) {
     for (Ob** next = &miscFreeList; *next;
          next = &(*next)->forwardingAddress()) {
-
         if (SIZE(*next) == sz) {
             return (void*)unlink(*next);
         }
@@ -741,7 +741,8 @@ void ForeignObTbl::scavenge() {
         if (FORWARDED(p)) {
             p = p->forwardingAddress();
             pct.get() = IS_OLD(p) ? NULL : p;
-        } else {
+        }
+        else {
             p->Ob::~Ob();
             pct.get() = NULL;
         }
@@ -791,7 +792,8 @@ void GCAgenda::scavenge() {
         if (FORWARDED(h)) {
             h = h->forwardingAddress();
             p = h->scavengeFixup() ? h : NULL;
-        } else if (!IS_OLD(h) || !h->scavengeFixup()) {
+        }
+        else if (!IS_OLD(h) || !h->scavengeFixup()) {
             p = NULL;
         }
     }
@@ -942,7 +944,8 @@ Ob* Heap::copyAndForward(Ob* oldLoc) {
          * forwardTo() because remember() sets a header bit that
          * forwardTo() clobbers.
          */
-    } else {
+    }
+    else {
         oldLoc->forwardTo(newLoc);
     }
 
@@ -1146,10 +1149,14 @@ Ob* Ob::relocate() {
         return (Ob*)INVALID;
     }
 
-    if ((void*)this >= heap->newSpace->limit) goto nochange;
-    if ((void*)this >= heap->newSpace->infants->base) goto relocate;
-    if ((void*)this < heap->newSpace->pastSurvivors->base) goto nochange;
-    if ((void*)this < heap->newSpace->pastSurvivors->limit) goto relocate;
+    if ((void*)this >= heap->newSpace->limit)
+        goto nochange;
+    if ((void*)this >= heap->newSpace->infants->base)
+        goto relocate;
+    if ((void*)this < heap->newSpace->pastSurvivors->base)
+        goto nochange;
+    if ((void*)this < heap->newSpace->pastSurvivors->limit)
+        goto relocate;
 
 nochange:
     return this;
@@ -1157,7 +1164,8 @@ nochange:
 relocate:
     if (FORWARDED(this)) {
         return forwardingAddress();
-    } else {
+    }
+    else {
         return heap->copyAndForward(this);
     }
 }

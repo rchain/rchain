@@ -147,7 +147,8 @@ DynamicLoader::DynamicLoader(const char* initial_relocFile) {
     if (findCmd(initial_relocFile, relocFile, getenv("PATH"))) {
         fprintf(stderr, "loader cannot find initial relocation file: %s\n",
                 initial_relocFile);
-    } else {
+    }
+    else {
         FILE* a_out = fopen(relocFile, "r");
         if (a_out == 0 || fread((char*)&myHdr, sizeof(myHdr), 1, a_out) != 1) {
             suicide("%s: %s\n", relocFile, sys_errmsg());
@@ -157,7 +158,8 @@ DynamicLoader::DynamicLoader(const char* initial_relocFile) {
 
 
 DynamicLoader::~DynamicLoader() {
-    if (modified) unlink(relocFile);
+    if (modified)
+        unlink(relocFile);
 }
 
 
@@ -197,7 +199,8 @@ int DynamicLoader::findCmd(const char* name, char* pathBuf, const char* paths) {
         if (isExecutable(name, uid, gid)) {
             strcpy(pathBuf, name);
             return 0;
-        } else {
+        }
+        else {
             pathBuf[0] = 0;
             return 1;
         }
@@ -532,7 +535,8 @@ int DynamicLoader::dump(char* outFile, char* msgBuf) {
         goto quit;
     }
 
-    while ((nBytes = fread(buffer, 1, sizeof(buffer), reloc)) == sizeof(buffer)) {
+    while ((nBytes = fread(buffer, 1, sizeof(buffer), reloc)) ==
+           sizeof(buffer)) {
         fwrite(buffer, 1, sizeof(buffer), out);
     }
 
@@ -704,7 +708,7 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
 
                 QUIT(0);
             }
-            
+
             if (strcmp(functionName, namebuf) == 0) {
                 QUIT((void*)sym[i].n_value);
             }

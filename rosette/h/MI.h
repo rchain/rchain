@@ -73,7 +73,8 @@ class ProductType : public Actor {
     pOb elemR(int i) {
         if (i < definite()->numberOfElements()) {
             return elem(i);
-        } else {
+        }
+        else {
             return star();
         }
     }

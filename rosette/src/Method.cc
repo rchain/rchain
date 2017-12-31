@@ -154,10 +154,10 @@ DEF("method-new", makeMethod, 1, 3) {
     Ob* id = Qanon;
 
     switch (NARGS) {
-        case 3:
-            sp = ARG(2);
-        case 2:
-            id = ARG(1);
+    case 3:
+        sp = ARG(2);
+    case 2:
+        id = ARG(1);
     }
 
     return StdMthd::create(code, id, sp);
@@ -171,10 +171,10 @@ DEF("reflective-method-new", makeReflectiveMethod, 1, 3) {
     Ob* id = Qanon;
 
     switch (NARGS) {
-        case 3:
-            sp = ARG(2);
-        case 2:
-            id = ARG(1);
+    case 3:
+        sp = ARG(2);
+    case 2:
+        id = ARG(1);
     }
 
     return ReflectiveMthd::create(code, id, sp);

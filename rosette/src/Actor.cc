@@ -36,8 +36,10 @@ BUILTIN_CLASS(StdExtension) {}
 
 StdExtension::StdExtension(pOb meta, pOb parent, int nslots)
     : Ob(sizeof(StdExtension) + nslots * sizeof(pOb), meta, parent) {
-    while (nslots--)
+    while (nslots--) {
         this->slot(nslots) = INVALID;
+    }
+
     StdExtension::updateCnt();
 }
 
@@ -53,8 +55,10 @@ StdExtension::StdExtension(pOb newmeta, pOb newparent)
 StdExtension::StdExtension(int nslots)
     : Ob(sizeof(StdExtension) + nslots * sizeof(pOb), CLASS_META(StdExtension),
          CLASS_SBO(StdExtension)) {
-    while (nslots--)
+    while (nslots--) {
         this->slot(nslots) = INVALID;
+    }
+
     StdExtension::updateCnt();
 }
 
@@ -226,7 +230,8 @@ pOb Actor::dispatch(pCtxt ctxt) {
 pOb Actor::lookupAndInvoke(pCtxt ctxt) {
     if (BASE(ctxt->trgt)->isSynchronousTrgt()) {
         return Ob::lookupAndInvoke(ctxt);
-    } else {
+    }
+    else {
         receive(ctxt);
         return SUSPENDED;
     }

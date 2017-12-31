@@ -126,7 +126,8 @@ Ctxt::Ctxt(Code* c, Tuple* t, Ctxt* p, int o)
         this->selfEnv = p->selfEnv;
         this->rcvr = p->rcvr;
         this->monitor = p->monitor;
-    } else {
+    }
+    else {
         this->env = GlobalEnv;
         this->self2 = NIV;
         this->selfEnv = TopEnv;
@@ -222,7 +223,8 @@ extern Code* rtnNxtCode;
 bool Ctxt::rcv(Ob* result, Location loc) {
     if (store(loc, this, result)) {
         return true;
-    } else {
+    }
+    else {
         if (--outstanding == 0) {
             scheduleStrand();
         }
@@ -300,7 +302,8 @@ bool UpcallCtxt::applyK(Ob* val, Location loc) {
 
     if (store(loc, ctxt, val)) {
         return true;
-    } else {
+    }
+    else {
         ctxt->scheduleStrand();
         return false;
     }

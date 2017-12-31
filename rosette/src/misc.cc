@@ -68,14 +68,14 @@ void printLeading(FILE* f, int cnt, char c) {
 
 const char* numberSuffix(int n) {
     switch (n) {
-        case 1:
-            return "st";
-        case 2:
-            return "nd";
-        case 3:
-            return "rd";
-        default:
-            return "th";
+    case 1:
+        return "st";
+    case 2:
+        return "nd";
+    case 3:
+        return "rd";
+    default:
+        return "th";
     }
 }
 
@@ -91,15 +91,15 @@ const char* properPrep(char* s) {
         }
 
         switch (c) {
-            case 'a':
-            case 'e':
-            case 'i':
-            case 'o':
-            case 'u':
-                return "an";
+        case 'a':
+        case 'e':
+        case 'i':
+        case 'o':
+        case 'u':
+            return "an";
 
-            default:
-                return "a";
+        default:
+            return "a";
         }
     }
     return "";

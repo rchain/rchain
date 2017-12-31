@@ -60,7 +60,8 @@ pOb StdOprn::dispatch(pCtxt ctxt) {
 
     if (0 < ctxt->nargs) {
         return BASE(ctxt->arg(0))->lookupAndInvoke(ctxt);
-    } else {
+    }
+    else {
         return runtimeError(ctxt, "no argument for dispatch");
     }
 }

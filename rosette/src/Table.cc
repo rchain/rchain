@@ -88,6 +88,7 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
         lookupFn = &RblTable::linearLookup;
         checkSizeFn = &RblTable::linearCheckSize;
     }
+
     RblTable::updateCnt();
 }
 
@@ -115,8 +116,9 @@ void RblTable::linearResize() {
     PROTECT_THIS(RblTable);
     int newSz = 2 * maxEntries;
 
-    if (newSz > RblTable::maxMaxTableSize)
+    if (newSz > RblTable::maxMaxTableSize) {
         newSz = RblTable::maxMaxTableSize;
+    }
 
     Tuple* newTbl = Tuple::create(newSz * 2, ABSENT);
     memcpy(&newTbl->elem(0), &SELF->entry(0), maxEntries * sizeof(Entry));
@@ -193,9 +195,11 @@ void RblTable::rehashCompletelyFrom(int n) {
 
 
 RblTable::Entry* RblTable::linearLookup(pOb key) {
-    for (int i = 0; i < maxEntries; i++)
-        if ((*hitFn)(entry(i).key, key))
+    for (int i = 0; i < maxEntries; i++) {
+        if ((*hitFn)(entry(i).key, key)) {
             return (entry(i).val == ABSENT ? 0 : &entry(i));
+        }
+    }
 
     return 0;
 }
@@ -207,12 +211,15 @@ RblTable::Entry* RblTable::hashLookup(pOb key) {
 
     while (numberOfProbes--) {
         Entry* p = &entry(probe);
-        if ((*hitFn)(p->key, key))
+        if ((*hitFn)(p->key, key)) {
             return p;
-        else if (p->key != ABSENT)
+        }
+        else if (p->key != ABSENT) {
             probe = (probe + HashStride) % maxEntries;
-        else
+        }
+        else {
             break;
+        }
     }
 
     return 0;
@@ -230,8 +237,10 @@ void RblTable::linearAdd(pOb key, pOb val) {
                  * have a key with an associated ABSENT value.  (That
                  * invariant is *not* maintained by hash tables.)
                  */
-                for (int j = i + 1; j < numberOfEntries; j++)
+                for (int j = i + 1; j < numberOfEntries; j++) {
                     entry(j - 1) = entry(j);
+                }
+
                 numberOfEntries--;
                 entry(numberOfEntries).key = ABSENT;
                 entry(numberOfEntries).val = ABSENT;
@@ -244,8 +253,9 @@ void RblTable::linearAdd(pOb key, pOb val) {
         }
     }
 
-    if (val == ABSENT)
+    if (val == ABSENT) {
         return;
+    }
 
     tbl->checkStore(entry(numberOfEntries).key = key);
     tbl->checkStore(entry(numberOfEntries).val = val);
@@ -259,8 +269,9 @@ void RblTable::hashAdd(pOb key, pOb val) {
 
     for (; numberOfProbes--; probe = (probe + HashStride) % maxEntries) {
         Entry* p = &entry(probe);
-        if (p->key != ABSENT && !((*hitFn)(p->key, key)))
+        if (p->key != ABSENT && !((*hitFn)(p->key, key))) {
             continue;
+        }
 
         if (val == ABSENT) {
             if (p->val != ABSENT) {
@@ -298,14 +309,16 @@ void RblTable::linearCheckSize() {
         hashify();
         hashCheckSize();
     }
-    else if (numberOfEntries >= maxEntries)
+    else if (numberOfEntries >= maxEntries) {
         linearResize();
+    }
 }
 
 
 void RblTable::hashCheckSize() {
-    if (4 * numberOfEntries > 3 * maxEntries)  // i.e., the table is 75% full
+    if (4 * numberOfEntries > 3 * maxEntries) {  // i.e., the table is 75% full
         hashResize();
+    }
 }
 
 
@@ -329,19 +342,23 @@ void RblTable::traversePtrs(V__PSOb f) {
 
 
 bool RblTable::gcFixup() {
-    if (gcSensitiveKeys)
+    if (gcSensitiveKeys) {
         return true;
-    else
+    }
+    else {
         return (registered = false);
+    }
 }
 
 
 bool RblTable::scavengeFixup() {
     rehashCompletely();
-    if (gcSensitiveKeys)
+    if (gcSensitiveKeys) {
         return true;
-    else
+    }
+    else {
         return (registered = false);
+    }
 }
 
 
@@ -351,8 +368,10 @@ pOb RblTable::cloneTo(pOb new_meta, pOb new_parent) {
     PROTECT(new_tbl);
     RblTable* new_table = (RblTable*)SELF->Ob::cloneTo(new_meta, new_parent);
     new_table->tbl = new_tbl;
-    if (new_table->gcSensitiveKeys)
+    if (new_table->gcSensitiveKeys) {
         heap->registerGCAgenda(new_table);
+    }
+
     return new_table;
 }
 
@@ -361,17 +380,21 @@ Tuple* RblTable::dumpKeys() {
     PROTECT_THIS(RblTable);
     Tuple* result = Tuple::create(numberOfEntries, NIV);
 
-    if (SELF->addFn == &RblTable::linearAdd)
-        for (int i = numberOfEntries; i--;)
+    if (SELF->addFn == &RblTable::linearAdd) {
+        for (int i = numberOfEntries; i--;) {
             result->elem(i) = SELF->entry(i).key;
+        }
+    }
     else {
         int i = 0;
         for (int j = maxEntries; j--;) {
             pOb key = SELF->entry(j).key;
             pOb val = SELF->entry(j).val;
-            if (key != ABSENT && val != ABSENT)
+            if (key != ABSENT && val != ABSENT) {
                 result->elem(i++) = key;
+            }
         }
+
         assert(i == SELF->numberOfEntries);
     }
 
@@ -383,9 +406,10 @@ Tuple* RblTable::dumpPairs() {
     PROTECT_THIS(RblTable);
     Tuple* result = Tuple::create(2 * numberOfEntries, NIV);
 
-    if (SELF->addFn == &RblTable::linearAdd)
+    if (SELF->addFn == &RblTable::linearAdd) {
         memcpy(&result->elem(0), &SELF->entry(0),
                SELF->numberOfEntries * sizeof(Entry));
+    }
     else {
         int i = 0;
         for (int j = maxEntries; j--;) {
@@ -416,8 +440,9 @@ pOb RblTable::addKey(pOb key, pOb val) {
     PROTECT_THIS(RblTable);
     PROTECT(key);
     PROTECT(val);
-    if (numberOfEntries >= RblTable::maxMaxTableSize)
+    if (numberOfEntries >= RblTable::maxMaxTableSize) {
         return DEADTHREAD;
+    }
     else {
         (SELF->*checkSizeFn)();
         SELF->addEntry(key, val);
@@ -429,10 +454,12 @@ pOb RblTable::addKey(pOb key, pOb val) {
 DEF("tbl-add", tblAdd, 3, 3) {
     CHECK(0, RblTable, tbl);
     pOb result = tbl->addKey(ARG(1), ARG(2));
-    if (result == DEADTHREAD)
+    if (result == DEADTHREAD) {
         return tbl->runtimeError(__CTXT__, "RblTable max size reached.");
-    else
+    }
+    else {
         return result;
+    }
 }
 
 

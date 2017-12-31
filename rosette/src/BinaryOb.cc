@@ -173,15 +173,15 @@ Word16Vec* Word16Vec::create(int n) {
 
 
 Word16Vec* Word16Vec::create(Ob* meta, Ob* parent, int n) {
-    void* loc = PALLOC2(sizeof(Word16Vec) + align(n * sizeof(uint16_t)),
-                        meta, parent);
+    void* loc =
+        PALLOC2(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent);
     return NEW(loc) Word16Vec(meta, parent, n);
 }
 
 
 Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
-    void* loc = PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)),
-                        old);
+    void* loc =
+        PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old);
     return NEW(loc) Word16Vec(old, newsize);
 }
 

@@ -101,7 +101,8 @@ Ob* LockedMbox::receiveMsg(MboxOb* client, Ctxt* task) {
 Ob* LockedMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
     if (new_enabledSet == NIL) {
         ASSIGN(client, mbox, emptyMbox);
-    } else {
+    }
+    else {
         PROTECT(client);
         QueueMbox* new_mbox = QueueMbox::create(new_enabledSet);
         new_mbox->unlock();
@@ -141,7 +142,8 @@ Ob* QueueMbox::cloneTo(Ob*, Ob*) { return emptyMbox; }
 Ob* QueueMbox::receiveMsg(MboxOb* client, Ctxt* task) {
     if (isLocked() || !enabledSet->accepts(task)) {
         queue->enqueue(task);
-    } else {
+    }
+    else {
         if (enabledSet == NIL) {
             warning("NIL enabled-set on unlocked %s", typestring());
         }
@@ -173,11 +175,13 @@ Ob* QueueMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
 
         if (queue->isEmpty() && new_enabledSet == NIL) {
             ASSIGN(client, mbox, emptyMbox);
-        } else {
+        }
+        else {
             ASSIGN(this, enabledSet, new_enabledSet);
             unlock();
         }
-    } else {
+    }
+    else {
         /*
          * The mbox is presumably locked at this point, and it should
          * remain so, either by reverting to the (unique) lockedMbox or
@@ -186,7 +190,8 @@ Ob* QueueMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
 
         if (queue->isEmpty() && new_enabledSet == NIL) {
             ASSIGN(client, mbox, lockedMbox);
-        } else {
+        }
+        else {
             ASSIGN(this, enabledSet, new_enabledSet);
         }
 

@@ -116,8 +116,9 @@ void VirtualMachine::installCode(Code* cd, int relativePc) {
 
 
 void VirtualMachine::installCtxt(pCtxt new_ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("*** new strand\n");
+    }
 
     ctxt = new_ctxt;
     installCode(ctxt->code, ctxt->pc);
@@ -125,8 +126,9 @@ void VirtualMachine::installCtxt(pCtxt new_ctxt) {
 
 
 void VirtualMachine::installMonitor(Monitor* monitor) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("*** new monitor: %s\n", BASE(monitor->id)->asCstring());
+    }
 
     currentMonitor->stop();
     currentMonitor = monitor;
@@ -149,14 +151,16 @@ bool VirtualMachine::getNextStrand() {
          * external event.
          */
 
-        if (sleeperPool->empty())
+        if (sleeperPool->empty()) {
             if (nsigs == 0) {
                 return true;
-            } else {
+            }
+            else {
                 if (sigvec == 0) {
                     if (debugging_level) {
                         printf("*** entering sigpause...\n");
                     }
+
                     sigpause(0);
                     if (debugging_level) {
                         printf("*** exiting sigpause...\n");
@@ -170,9 +174,12 @@ bool VirtualMachine::getNextStrand() {
                  * through this body again and try another time.
                  */
             }
+        }
         else {
-            if (debugging_level)
+            if (debugging_level) {
                 printf("*** waking sleepers\n");
+            }
+
             while (!sleeperPool->empty()) {
                 pCtxt sleeper = (pCtxt)sleeperPool->pop();
                 sleeper->scheduleStrand();
@@ -181,8 +188,10 @@ bool VirtualMachine::getNextStrand() {
     }
 
     pCtxt strand = (pCtxt)strandPool->deq();
-    if (strand->monitor != currentMonitor)
+    if (strand->monitor != currentMonitor) {
         installMonitor(strand->monitor);
+    }
+
     installCtxt(strand);
     return false;
 }
@@ -208,8 +217,9 @@ void VirtualMachine::setup(Code* exprCode, Code* printerCode, Location tag) {
     tmp_ctxt->tag = tag;
 
     const int n = Base::nClasses;
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         Base::obCounts[i] = 0;
+    }
 
     heap->resetCounts();
 
@@ -244,11 +254,16 @@ int VirtualMachine::traversePtrs(PSOb__PSOb f) {
     sum += sleeperPool->traversePtrs(f);
     sum += strandPool->traversePtrs(f);
     int i = 0;
-    for (; i < NSIG; i++)
+    for (; i < NSIG; i++) {
         sum += useIfPtr(&sigPool[i], f);
-    for (i = 0; i < nfds; i++)
-        if (rblio[i])
+    }
+
+    for (i = 0; i < nfds; i++) {
+        if (rblio[i]) {
             sum += useIfPtr(&ioPool[i], f);
+        }
+    }
+
     sum += useIfPtr(&extAppCBRegistry, f);
 
     return sum;
@@ -266,11 +281,16 @@ int VirtualMachine::traversePtrs(SI__PSOb f) {
     sum += sleeperPool->traversePtrs(f);
     sum += strandPool->traversePtrs(f);
     int i = 0;
-    for (; i < NSIG; i++)
+    for (; i < NSIG; i++) {
         sum += useIfPtr(sigPool[i], f);
-    for (i = 0; i < nfds; i++)
-        if (rblio[i])
+    }
+
+    for (i = 0; i < nfds; i++) {
+        if (rblio[i]) {
             sum += useIfPtr(ioPool[i], f);
+        }
+    }
+
     sum += useIfPtr(extAppCBRegistry, f);
 
     return sum;
@@ -286,11 +306,15 @@ void VirtualMachine::traversePtrs(V__PSOb f) {
     sleeperPool->traversePtrs(f);
     strandPool->traversePtrs(f);
     int i = 0;
-    for (; i < NSIG; i++)
+    for (; i < NSIG; i++) {
         useIfPtr(sigPool[i], f);
-    for (i = 0; i < nfds; i++)
-        if (rblio[i])
+    }
+
+    for (i = 0; i < nfds; i++) {
+        if (rblio[i]) {
             useIfPtr(ioPool[i], f);
+        }
+    }
     useIfPtr(extAppCBRegistry, f);
 }
 
@@ -310,10 +334,13 @@ int VirtualMachine::obCount() {
 
 
 void VirtualMachine::preScavenge() {
-    if (IS_PTR(code))
+    if (IS_PTR(code)) {
         pc.relative = code->relativize(pc.absolute);
-    if (currentMonitor != INVALID)
+    }
+
+    if (currentMonitor != INVALID) {
         currentMonitor->timer->setMode(tmGC);
+    }
 }
 
 
@@ -321,8 +348,10 @@ void VirtualMachine::scavenge() { traversePtrs(MF_ADDR(Ob::relocate)); }
 
 
 void VirtualMachine::postScavenge() {
-    if (IS_PTR(code))
+    if (IS_PTR(code)) {
         pc.absolute = code->absolutize(pc.relative);
+    }
+
     if (currentMonitor != INVALID) {
         currentMonitor->timer->setMode(tmUser);
         bytecodes = &currentMonitor->opcodeCounts->word(0);
@@ -349,17 +378,17 @@ void VirtualMachine::handleException(Ob* v, Instr instr, Location tag) {
         /* We don't do diddly */
         break;
     case syscodeUpcall:
-        if (family == ApplyPrimFamily)
+        if (family == ApplyPrimFamily) {
             handleApplyPrimUpcall(instr, tag);
-        else
+        }
+        else {
             handleXmitUpcall(instr, tag);
+        }
         break;
     case syscodeSuspended:
-        if (family == ApplyPrimFamily)
+        if (family == ApplyPrimFamily) {
             handleApplyPrimSuspend(instr);
-        else
-            /* Nothing happens; this is the usual case. */
-            ;
+        }
         break;
     case syscodeInterrupt:
         suicide("what to do with syscodeInterrupt?");
@@ -515,12 +544,17 @@ void VirtualMachine::handleSignal() {
 
         if (n > 0) {
             int i = 0;
-            for (i = 0; i < nfds; i++)
-                if (FD_ISSET(i, &rfds))
+            for (i = 0; i < nfds; i++) {
+                if (FD_ISSET(i, &rfds)) {
                     (*ioFn[i])(VM_READ_EVENT, i, ioPool[i]);
-            for (i = 0; i < nfds; i++)
-                if (FD_ISSET(i, &efds))
+                }
+            }
+
+            for (i = 0; i < nfds; i++) {
+                if (FD_ISSET(i, &efds)) {
                     (*ioFn[i])(VM_EXCEPTION_EVENT, i, ioPool[i]);
+                }
+            }
         }
         else if (n < 0) {
             switch (errno) {
@@ -536,7 +570,7 @@ void VirtualMachine::handleSignal() {
                 /* ferret out bad fd in fds */
                 fd_set tfds;
                 FD_ZERO(&tfds);
-                for (int i = 0; i < nfds; i++)
+                for (int i = 0; i < nfds; i++) {
                     if (FD_ISSET(i, &fds)) {
                         FD_SET(i, &tfds);
                         if (SELECT(nfds, &tfds, &wfds, &wfds, &timeout) < 0 &&
@@ -545,11 +579,12 @@ void VirtualMachine::handleSignal() {
                             FD_CLR(i, &fds);
                             deleteIoHandler(i);
                         }
+
                         FD_ZERO(&tfds);
                     }
-                goto retry_select;
+                    goto retry_select;
+                }
             }
-
             default:
                 warning(sys_errmsg());
                 break;
@@ -557,13 +592,14 @@ void VirtualMachine::handleSignal() {
         }
     }
 
-    for (int sig = 0; sigvec != 0 && sig < NSIG; sig++)
+    for (int sig = 0; sigvec != 0 && sig < NSIG; sig++) {
         if (sigvec & sigmask(sig)) {
             sigvec &= ~sigmask(sig);
             (void)initiateRosetteSignal(sig);
         }
+    }
 
-    (void)sigsetmask(oldmask); /* enable interrupts */
+    sigsetmask(oldmask); /* enable interrupts */
 }
 
 
@@ -575,12 +611,15 @@ pOb VirtualMachine::unwindAndApplyPrim(Prim* prim) {
     Tuple* new_argvec = NIL;
     Tuple* suffix = (Tuple*)ctxt->arg(ctxt->nargs);
     if (ctxt->nargs != 0 || suffix != NIL) {
-        if (!IS_A(suffix, Tuple))
+        if (!IS_A(suffix, Tuple)) {
             return prim->runtimeError(ctxt, "&rest value is not a tuple");
+        }
+
         new_argvec = Tuple::create(ctxt->nargs + suffix->numberOfElements(),
                                    ctxt->nargs, suffix);
-        for (int i = ctxt->nargs; i--;)
+        for (int i = ctxt->nargs; i--;) {
             new_argvec->elem(i) = old_argvec->elem(i);
+        }
     }
 
     /*
@@ -607,13 +646,16 @@ pOb VirtualMachine::unwindAndDispatch() {
     Tuple* new_argvec = NIL;
     Tuple* suffix = (Tuple*)ctxt->arg(ctxt->nargs);
     if (ctxt->nargs != 0 || suffix != NIL) {
-        if (!IS_A(suffix, Tuple))
+        if (!IS_A(suffix, Tuple)) {
             return BASE(ctxt->trgt)
                 ->runtimeError(ctxt, "&rest value is not a tuple");
+        }
+
         new_argvec = Tuple::create(ctxt->nargs + suffix->numberOfElements(),
                                    ctxt->nargs, suffix);
-        for (int i = ctxt->nargs; i--;)
+        for (int i = ctxt->nargs; i--;) {
             new_argvec->elem(i) = ctxt->arg(i);
+        }
     }
 
     /*
@@ -671,7 +713,6 @@ nextop:
 
     if (sigvec != 0)
         handleSignal();
-
     if (debugging_level)
         traceOpcode();
 
@@ -683,21 +724,17 @@ nextop:
         warning("halting...");
         goto exit;
 
-
     case opPush:
         ctxt = Ctxt::create(NIL, ctxt);
         goto nextop;
-
 
     case opPop:
         ctxt = ctxt->ctxt;
         goto nextop;
 
-
     case opNargs:
         ctxt->nargs = OP_f0_op0(instr);
         goto nextop;
-
 
     case opAlloc: {
         Tuple* t = Tuple::create(OP_f0_op0(instr), NIV);
@@ -726,6 +763,7 @@ nextop:
             PROTECT(formals);
             actuals = formals->match(ctxt->argvec, ctxt->nargs);
         }
+
         if (actuals == INVALID) {
             handleFormalsMismatch(formals);
             goto doNextThread;
@@ -737,7 +775,6 @@ nextop:
         }
     }
 
-
     case opOutstanding | 0:
     case opOutstanding | 1:
     case opOutstanding | 2:
@@ -745,7 +782,6 @@ nextop:
         ctxt->pc = OP_f6_pc(instr);
         ctxt->outstanding = OP_e0_op0(FETCH);
         goto nextop;
-
 
     case opFork | 0:
     case opFork | 1:
@@ -766,7 +802,6 @@ nextop:
         goto nextop;
     }
 
-
     case opXmitTag | NextOff | UnwindOff:
     case opXmitTag | NextOff | UnwindOn:
     case opXmitTag | NextOn | UnwindOff:
@@ -777,8 +812,10 @@ nextop:
     doXmit:
         result = (OP_f4_unwind(instr) ? unwindAndDispatch()
                                       : BASE(ctxt->trgt)->dispatch(ctxt));
-        if (result == DEADTHREAD)
+        if (result == DEADTHREAD) {
             goto doNextThread;
+        }
+
         if (result != SUSPENDED && IS(OTsysval, result)) {
             /*
              * SUSPENDED is the usual case, and it requires no action.
@@ -786,10 +823,12 @@ nextop:
             handleException(result, instr, ctxt->tag);
             goto doNextThread;
         }
-        if (OP_f4_next(instr))
-            goto doNextThread;
-        goto nextop;
 
+        if (OP_f4_next(instr)) {
+            goto doNextThread;
+        }
+
+        goto nextop;
 
     case opXmitArg | NextOff | UnwindOff:
     case opXmitArg | NextOff | UnwindOn:
@@ -799,7 +838,6 @@ nextop:
         ctxt->tag = ArgReg(OP_f4_op0(instr));
         goto doXmit;
 
-
     case opXmitReg | NextOff | UnwindOff:
     case opXmitReg | NextOff | UnwindOn:
     case opXmitReg | NextOn | UnwindOff:
@@ -808,14 +846,12 @@ nextop:
         ctxt->tag = CtxtReg((CtxtRegName)OP_f4_op0(instr));
         goto doXmit;
 
-
     case opXmit | NextOff | UnwindOff:
     case opXmit | NextOff | UnwindOn:
     case opXmit | NextOn | UnwindOff:
     case opXmit | NextOn | UnwindOn:
         ctxt->nargs = OP_f5_op0(instr);
         goto doXmit;
-
 
     case opXmitTagXtnd | NextOff | UnwindOff:
     case opXmitTagXtnd | NextOff | UnwindOn:
@@ -825,7 +861,6 @@ nextop:
         ctxt->tag.atom = code->lit(OP_e0_op0(FETCH));
         goto doXmit;
 
-
     case opXmitArgXtnd | NextOff | UnwindOff:
     case opXmitArgXtnd | NextOff | UnwindOn:
     case opXmitArgXtnd | NextOn | UnwindOff:
@@ -833,7 +868,6 @@ nextop:
         ctxt->nargs = OP_f5_op0(instr);
         ctxt->tag = ArgReg(OP_e0_op0(FETCH));
         goto doXmit;
-
 
     case opXmitRegXtnd | NextOff | UnwindOff:
     case opXmitRegXtnd | NextOff | UnwindOn:
@@ -843,7 +877,6 @@ nextop:
         ctxt->tag = CtxtReg((CtxtRegName)OP_e0_op0(FETCH));
         goto doXmit;
 
-
     case opSend | NextOff | UnwindOff:
     case opSend | NextOff | UnwindOn:
     case opSend | NextOn | UnwindOff:
@@ -852,7 +885,6 @@ nextop:
         ctxt->nargs = OP_f5_op0(instr);
         ctxt->tag = LocLimbo;
         goto doXmit;
-
 
     case opApplyPrimTag | NextOff | UnwindOff:
     case opApplyPrimTag | NextOff | UnwindOn:
@@ -870,19 +902,21 @@ nextop:
         loc.atom = code->lit(WORD_OP_e0_op1(ext));
         result = (OP_f5_unwind(instr) ? unwindAndApplyPrim(prim)
                                       : prim->dispatchHelper(ctxt));
-        if (result == DEADTHREAD)
+        if (result == DEADTHREAD) {
             goto doNextThread;
+        }
+
         if (IS(OTsysval, result)) {
             handleException(result, instr, loc);
             goto doNextThread;
         }
+
         if (store(loc, ctxt, result))
             goto vmError;
         if (OP_f5_next(instr))
             goto doNextThread;
         goto nextop;
     }
-
 
     case opApplyPrimArg | NextOff | UnwindOff:
     case opApplyPrimArg | NextOff | UnwindOn:
@@ -906,6 +940,7 @@ nextop:
             handleException(result, instr, ArgReg(argno));
             goto doNextThread;
         }
+
         if (argno >= ARG_LIMIT)
             goto vmError;
         ASSIGN(ctxt->argvec, elem(argno), result);
@@ -913,7 +948,6 @@ nextop:
             goto doNextThread;
         goto nextop;
     }
-
 
     case opApplyPrimReg | NextOff | UnwindOff:
     case opApplyPrimReg | NextOff | UnwindOn:
@@ -937,12 +971,12 @@ nextop:
             handleException(result, instr, CtxtReg((CtxtRegName)regno));
             goto doNextThread;
         }
+
         ASSIGN(ctxt, reg(regno), result);
         if (OP_f5_next(instr))
             goto doNextThread;
         goto nextop;
     }
-
 
     case opApplyCmd | NextOff | UnwindOff:
     case opApplyCmd | NextOff | UnwindOn:
@@ -981,10 +1015,12 @@ nextop:
     doRtn:
         if (ctxt->ret(ctxt->rslt))
             goto vmError;
-        if (OP_f5_next(instr))
+        if (OP_f5_next(instr)) {
             goto doNextThread;
-        else
+        }
+        else {
             goto nextop;
+        }
 
     case opRtnArg | NextOff:
     case opRtnArg | NextOn:
@@ -1000,10 +1036,12 @@ nextop:
     case opUpcallRtn | NextOff:
     case opUpcallRtn | NextOn:
         ctxt->tag.atom = code->lit(OP_f0_op0(instr));
-        if (store(ctxt->tag, ctxt->ctxt, ctxt->rslt))
+        if (store(ctxt->tag, ctxt->ctxt, ctxt->rslt)) {
             goto vmError;
-        if (OP_f5_next(instr))
+        }
+        if (OP_f5_next(instr)) {
             goto doNextThread;
+        }
     /* fall through */
 
 
@@ -1025,8 +1063,9 @@ nextop:
     case opJmpCut | 3: {
         int cut = OP_e0_op0(FETCH);
         pOb new_env = ctxt->env;
-        while (cut--)
+        while (cut--) {
             new_env = new_env->parent();
+        }
         ASSIGN(ctxt, env, new_env);
         /* fall through */
     }
@@ -1044,8 +1083,9 @@ nextop:
     case opJmpFalse | 1:
     case opJmpFalse | 2:
     case opJmpFalse | 3:
-        if (ctxt->rslt == RBLFALSE)
+        if (ctxt->rslt == RBLFALSE) {
             pc.absolute = code->absolutize(OP_f6_pc(instr));
+        }
         goto nextop;
 
 
@@ -1142,10 +1182,13 @@ nextop:
     case opXferLexToArg | IndirectOn | 7: {
         short level = OP_f7_level(instr);
         pOb env = ctxt->env;
-        while (level--)
+        while (level--) {
             env = BASE(env)->parent();
-        if (OP_f7_indirect(instr))
+        }
+
+        if (OP_f7_indirect(instr)) {
             env = ((Actor*)env)->extension;
+        }
         ASSIGN(ctxt->argvec, elem(OP_f7_op0(instr)),
                env->slot(OP_f7_offset(instr)));
         goto nextop;
@@ -1174,10 +1217,14 @@ nextop:
     case opXferLexToReg | IndirectOn | 7: {
         short level = OP_f7_level(instr);
         pOb env = ctxt->env;
-        while (level--)
+        while (level--) {
             env = BASE(env)->parent();
-        if (OP_f7_indirect(instr))
+        }
+
+        if (OP_f7_indirect(instr)) {
             env = ((Actor*)env)->extension;
+        }
+
         ASSIGN(ctxt, reg(OP_f7_op0(instr)), env->slot(OP_f7_offset(instr)));
         goto nextop;
     }
@@ -1223,10 +1270,12 @@ nextop:
 
     case opXferRsltToDest:
         loc.atom = code->lit(OP_f0_op0(instr));
-        if (store(loc, ctxt, ctxt->rslt))
+        if (store(loc, ctxt, ctxt->rslt)) {
             goto vmError;
-        else
+        }
+        else {
             goto nextop;
+        }
 
     case opXferSrcToRslt:
         loc.atom = code->lit(OP_f0_op0(instr));
@@ -1311,10 +1360,12 @@ int VirtualMachine::addSignalHandler(int sig, SIG_PF fn, Ob* ob) {
     SIG_PF oldFn = (SIG_PF)signal(sig, fn);
     if (oldFn == (SIG_PF)SIG_ERR) {
         return -1;
-    } else {
+    }
+    else {
         if (oldFn == (SIG_PF)SIG_DFL) {
             nsigs += (fn != (SIG_PF)SIG_DFL);
-        } else {
+        }
+        else {
             nsigs -= (fn == (SIG_PF)SIG_DFL);
         }
         sigPool[sig] = ob;
@@ -1332,7 +1383,8 @@ Ob* VirtualMachine::initiateRosetteSignal(int sig) {
     if (sigPool[sig] == INVALID) {
         warning("no Rosette signal handler installed for signal %d", sig);
         return INVALID;
-    } else {
+    }
+    else {
         extern StdOprn* oprnSignal;
         Tuple* argvec = Tuple::create(2, NIV);
         argvec->elem(0) = sigPool[sig];
@@ -1511,8 +1563,9 @@ void VirtualMachine::disableIo(int fd) { FD_CLR(fd, &fds); }
 
 
 Ob* VirtualMachine::initiateRosetteIo(int fd) {
-    if (ioPool[fd] == INVALID || !rblio[fd])
+    if (ioPool[fd] == INVALID || !rblio[fd]) {
         warning("mixup in io initiation on file descriptor %d", fd);
+    }
 
     extern StdOprn* oprnResumeIO;
     Tuple* argvec = Tuple::create(1, ioPool[fd]);

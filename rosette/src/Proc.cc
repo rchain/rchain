@@ -73,10 +73,10 @@ DEF("proc-new", makeProc, 2, 4) {
     Ob* id = Qanon;
 
     switch (NARGS) {
-        case 4:
-            sp = ARG(3);
-        case 3:
-            id = ARG(2);
+    case 4:
+        sp = ARG(3);
+    case 3:
+        id = ARG(2);
     }
 
     return Proc::create(ARG(0), code, id, sp);

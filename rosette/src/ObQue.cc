@@ -38,10 +38,12 @@ ObQue::~ObQue() { delete array; }
 void ObQue::push(Ob* o) {
     if (head == tail && last_added) {
         resize();
-    } else if (head == limit) {
+    }
+    else if (head == limit) {
         if (tail == array) {
             resize();
-        } else {
+        }
+        else {
             head = array;
         }
     }
@@ -65,7 +67,8 @@ void ObQue::resize(int newSize) {
     if (tail < head) {
         offset = (int)(head - tail);
         memcpy((char*)newArray, (char*)tail, offset * sizeof(Ob*));
-    } else {
+    }
+    else {
         offset = (int)(limit - tail);
         memcpy((char*)newArray, (char*)tail, offset * sizeof(Ob*));
         memcpy((char*)(newArray + offset), (char*)array,
@@ -84,7 +87,8 @@ void ObQue::resize(int newSize) {
 int ObQue::traversePtrs(PSOb__PSOb f) {
     if (empty()) {
         return 0;
-    } else {
+    }
+    else {
         int sum = 0;
         pOb* p = (tail < head) ? tail : array;
 
@@ -105,7 +109,8 @@ int ObQue::traversePtrs(PSOb__PSOb f) {
 int ObQue::traversePtrs(SI__PSOb f) {
     if (empty()) {
         return 0;
-    } else {
+    }
+    else {
         int sum = 0;
         pOb* p = (tail < head) ? tail : array;
 
@@ -126,7 +131,8 @@ int ObQue::traversePtrs(SI__PSOb f) {
 void ObQue::traversePtrs(V__PSOb f) {
     if (empty()) {
         return;
-    } else {
+    }
+    else {
         pOb* p = (tail < head) ? tail : array;
 
         for (; p < head; p++) {

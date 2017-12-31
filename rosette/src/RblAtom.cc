@@ -95,29 +95,31 @@ void Symbol::printOn(FILE* f) {
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
-        } else if (isprint(c) && !isspace(c)) {
+        }
+        else if (isprint(c) && !isspace(c)) {
             fputc(c, f);
-        } else {
+        }
+        else {
             fputc('\\', f);
             switch (c) {
-                case ' ':
-                    fputc(' ', f);
-                    break;
-                case '\n':
-                    fputc('n', f);
-                    break;
-                case '\f':
-                    fputc('f', f);
-                    break;
-                case '\t':
-                    fputc('t', f);
-                    break;
-                case '\r':
-                    fputc('r', f);
-                    break;
-                default:
-                    fprintf(f, "x%.2x", (int)c);
-                    break;
+            case ' ':
+                fputc(' ', f);
+                break;
+            case '\n':
+                fputc('n', f);
+                break;
+            case '\f':
+                fputc('f', f);
+                break;
+            case '\t':
+                fputc('t', f);
+                break;
+            case '\r':
+                fputc('r', f);
+                break;
+            default:
+                fprintf(f, "x%.2x", (int)c);
+                break;
             }
         }
     } while (true);
@@ -148,8 +150,8 @@ BUILTIN_CLASS(RblBool) {}
 
 RblBool::RblBool()
     : RblAtom(sizeof(RblBool), CLASS_META(RblBool), CLASS_SBO(RblBool)) {
-        RblBool::updateCnt();
-    }
+    RblBool::updateCnt();
+}
 
 RblBool* RblBool::create() {
     void* loc = PALLOC(sizeof(RblBool));
@@ -162,7 +164,8 @@ convertArgReturnPair RblBool::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
         cnvArgRetPair.val = (uint32_t)BOOLVAL(obj);
         cnvArgRetPair.failp = 0;
-    } else {
+    }
+    else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
@@ -203,8 +206,8 @@ BUILTIN_CLASS(Fixnum) {}
 
 Fixnum::Fixnum()
     : RblAtom(sizeof(Fixnum), CLASS_META(Fixnum), CLASS_SBO(Fixnum)) {
-        Fixnum::updateCnt();
-    }
+    Fixnum::updateCnt();
+}
 
 Fixnum* Fixnum::create() {
     void* loc = PALLOC(sizeof(Fixnum));
@@ -223,7 +226,8 @@ convertArgReturnPair Fixnum::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
         cnvArgRetPair.val = FIXVAL(obj);
         cnvArgRetPair.failp = 0;
-    } else {
+    }
+    else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 0;
     }
@@ -267,8 +271,8 @@ BUILTIN_CLASS(Sysval) {}
 
 Sysval::Sysval()
     : RblAtom(sizeof(Sysval), CLASS_META(Sysval), CLASS_SBO(Sysval)) {
-        Sysval::updateCnt();
-    }
+    Sysval::updateCnt();
+}
 
 Sysval* Sysval::create() {
     void* loc = PALLOC(sizeof(Sysval));
@@ -277,18 +281,18 @@ Sysval* Sysval::create() {
 
 const char* Sysval::asCstring() {
     switch (ESCVAL(atom)) {
-        case syscodeInvalid:
-            return "#inv";
-        case syscodeUpcall:
-            return "#upcall";
-        case syscodeSuspended:
-            return "#suspended";
-        case syscodeInterrupt:
-            return "#interrupt";
-        case syscodeSleep:
-            return "#sleep";
-        case syscodeDeadThread:
-            return "#deadThread";
+    case syscodeInvalid:
+        return "#inv";
+    case syscodeUpcall:
+        return "#upcall";
+    case syscodeSuspended:
+        return "#suspended";
+    case syscodeInterrupt:
+        return "#interrupt";
+    case syscodeSleep:
+        return "#sleep";
+    case syscodeDeadThread:
+        return "#deadThread";
     }
 
     suicide("unrecognized syscode value -- %d", ESCVAL(atom));
@@ -300,9 +304,9 @@ BUILTIN_CLASS(ExpandedLocation) {}
 
 ExpandedLocation::ExpandedLocation()
     : RblAtom(sizeof(ExpandedLocation), CLASS_META(ExpandedLocation),
-            CLASS_SBO(ExpandedLocation)) {
-        ExpandedLocation::updateCnt();
-    }
+              CLASS_SBO(ExpandedLocation)) {
+    ExpandedLocation::updateCnt();
+}
 
 ExpandedLocation* ExpandedLocation::create() {
     void* loc = PALLOC(sizeof(ExpandedLocation));
@@ -335,38 +339,38 @@ void tagError(Ob* v, ObTag t) {
 
 Ob* decodeAtom(Ob* v) {
     switch (TAG(v)) {
-        case OTsym:
-            prototypicalSym->atom = v;
-            return prototypicalSym;
+    case OTsym:
+        prototypicalSym->atom = v;
+        return prototypicalSym;
 
-        case OTfixnum:
-            prototypicalFixnum->atom = v;
-            return prototypicalFixnum;
+    case OTfixnum:
+        prototypicalFixnum->atom = v;
+        return prototypicalFixnum;
 
-        case OTesc:
-            switch (ESCTAG(v)) {
-                case OTbool:
-                    prototypicalBool->atom = v;
-                    return prototypicalBool;
+    case OTesc:
+        switch (ESCTAG(v)) {
+        case OTbool:
+            prototypicalBool->atom = v;
+            return prototypicalBool;
 
-                case OTchar:
-                    prototypicalChar->atom = v;
-                    return prototypicalChar;
+        case OTchar:
+            prototypicalChar->atom = v;
+            return prototypicalChar;
 
-                case OTniv:
-                    return prototypicalNiv;
+        case OTniv:
+            return prototypicalNiv;
 
-                case OTsysval:
-                    prototypicalSysval->atom = v;
-                    return prototypicalSysval;
+        case OTsysval:
+            prototypicalSysval->atom = v;
+            return prototypicalSysval;
 
-                case OTlocation:
-                    prototypicalExpandedLocation->atom = v;
-                    return prototypicalExpandedLocation;
+        case OTlocation:
+            prototypicalExpandedLocation->atom = v;
+            return prototypicalExpandedLocation;
 
-                default:
-                    suicide("decodeAtom -- unrecognized escape tag %d", ESCTAG(v));
-            }
+        default:
+            suicide("decodeAtom -- unrecognized escape tag %d", ESCTAG(v));
+        }
     }
 
     return INVALID;
