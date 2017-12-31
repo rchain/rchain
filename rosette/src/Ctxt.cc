@@ -126,8 +126,7 @@ Ctxt::Ctxt(Code* c, Tuple* t, Ctxt* p, int o)
         this->selfEnv = p->selfEnv;
         this->rcvr = p->rcvr;
         this->monitor = p->monitor;
-    }
-    else {
+    } else {
         this->env = GlobalEnv;
         this->self2 = NIV;
         this->selfEnv = TopEnv;
@@ -183,8 +182,9 @@ int Ctxt::traversePtrs(PSOb__PSOb f) {
     sum += useIfPtr(&parent(), f);
     sum += useIfPtr(&mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         sum += useIfPtr(&reg(i), f);
+    }
 
     return sum;
 }
@@ -197,8 +197,9 @@ int Ctxt::traversePtrs(SI__PSOb f) {
     sum += useIfPtr(parent(), f);
     sum += useIfPtr(mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         sum += useIfPtr(reg(i), f);
+    }
 
     return sum;
 }
