@@ -15,6 +15,7 @@ LIBDIR="${THIRD_PARTY_BUILD}/lib"
 export VERBOSE=1
 export DEBUG=1
 CMAKE_VARS="-DCMAKE_BUILD_TYPE=${BUILD:-Release}"
+PROCS_ARG="-j ${BUILD_PROCS:-1}"
 
 SRCDIR=$(readlink -f $(pwd))
 if [ ! -d ${BUILD} ] ; then {
@@ -23,7 +24,7 @@ if [ ! -d ${BUILD} ] ; then {
 
 cd ${BUILD}
 cmake -B${BUILD} -H${SRCDIR}
-make -j 8
+make ${PROCS_ARG}
 make test
 # TODO(leaf): We need a package command. Not integrated yet, but
 # leaving this breadcrumb to remind ourselves.
