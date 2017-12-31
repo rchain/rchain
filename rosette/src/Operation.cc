@@ -53,12 +53,16 @@ bool StdOprn::isSynchronousTrgt() {
 
 
 pOb StdOprn::dispatch(pCtxt ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\toprn %s\n",
                BASE(extension->slot(STDOPRN_ID_SLOT))->asCstring());
+    }
 
-    return (ctxt->nargs > 0 ? BASE(ctxt->arg(0))->lookupAndInvoke(ctxt)
-                            : runtimeError(ctxt, "no argument for dispatch"));
+    if (0 < ctxt->nargs) {
+        return BASE(ctxt->arg(0))->lookupAndInvoke(ctxt);
+    } else {
+        return runtimeError(ctxt, "no argument for dispatch");
+    }
 }
 
 
@@ -83,8 +87,9 @@ void BuiltinOprn::init() {
 
 
 void BuiltinOprn::initBuiltinOprns() {
-    for (BuiltinOprn* bop = BuiltinOprn::root; bop; bop = bop->link)
+    for (BuiltinOprn* bop = BuiltinOprn::root; bop; bop = bop->link) {
         bop->init();
+    }
 }
 
 

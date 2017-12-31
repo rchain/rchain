@@ -37,9 +37,9 @@ Ob* checkFxResult(Prim* prim, Ctxt* ctxt, int answer) {
     if (arithmeticException) {
         arithmeticException = 0;
         return prim->runtimeError(ctxt, "arithmetic exception");
-    }
-    else
+    } else {
         return FIXNUM(answer);
+    }
 }
 
 
@@ -60,18 +60,18 @@ DEF("fx-", fxMinus, 1, 2) {
     int result = 0;
 
     switch (NARGS) {
-    case 1: {
-        CHECK_FIXNUM(0, n);
-        result = -n;
-        break;
-    }
+        case 1: {
+            CHECK_FIXNUM(0, n);
+            result = -n;
+            break;
+        }
 
-    case 2: {
-        CHECK_FIXNUM(0, m);
-        CHECK_FIXNUM(1, n);
-        result = m - n;
-        break;
-    }
+        case 2: {
+            CHECK_FIXNUM(0, m);
+            CHECK_FIXNUM(1, n);
+            result = m - n;
+            break;
+        }
     }
 
     return FIXNUM(result);
@@ -107,8 +107,9 @@ DEF("fx%", fxMod, 2, 2) {
 
 DEF("fx<", fxLt, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m < n);
 }
@@ -116,8 +117,9 @@ DEF("fx<", fxLt, 2, 2) {
 
 DEF("fx<=", fxLe, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m <= n);
 }
@@ -125,8 +127,9 @@ DEF("fx<=", fxLe, 2, 2) {
 
 DEF("fx>", fxGt, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m > n);
 }
@@ -134,8 +137,9 @@ DEF("fx>", fxGt, 2, 2) {
 
 DEF("fx>=", fxGe, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m >= n);
 }
@@ -143,8 +147,9 @@ DEF("fx>=", fxGe, 2, 2) {
 
 DEF("fx=", fxEq, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m == n);
 }
@@ -152,8 +157,9 @@ DEF("fx=", fxEq, 2, 2) {
 
 DEF("fx!=", fxNe, 2, 2) {
     CHECK_FIXNUM(0, m);
-    if (!IS_FIXNUM(ARG(1)))
+    if (!IS_FIXNUM(ARG(1))) {
         return RBLFALSE;
+    }
     int n = FIXVAL(ARG(1));
     return RBLBOOL(m != n);
 }
@@ -261,9 +267,9 @@ DEF("fx-cdiv", fxCdiv, 2, 2) {
     if (arithmeticException) {
         arithmeticException = 0;
         return PRIM_ERROR("division exception");
-    }
-    else
+    } else {
         return FIXNUM(result);
+    }
 }
 
 
@@ -313,8 +319,8 @@ BUILTIN_CLASS(Float) {}
 
 Float::Float(Rfloat v)
     : BinaryOb(sizeof(Float), CLASS_META(Float), CLASS_SBO(Float)), val(v) {
-    Float::updateCnt();
-}
+        Float::updateCnt();
+    }
 
 
 Float* Float::create(Rfloat v) {
@@ -336,9 +342,9 @@ Ob* checkFlResult(Prim* prim, Ctxt* ctxt, Rfloat answer) {
     if (arithmeticException) {
         arithmeticException = 0;
         return prim->runtimeError(ctxt, "arithmetic exception");
-    }
-    else
+    } else {
         return Float::create(answer);
+    }
 }
 
 
@@ -362,18 +368,18 @@ DEF("fl-", flMinus, 1, 2) {
     Rfloat result = 0;
 
     switch (NARGS) {
-    case 1: {
-        CHECK(0, Float, n);
-        result = -FLOATVAL(n);
-        break;
-    }
+        case 1: {
+            CHECK(0, Float, n);
+            result = -FLOATVAL(n);
+            break;
+        }
 
-    case 2: {
-        CHECK(0, Float, m);
-        CHECK(1, Float, n);
-        result = FLOATVAL(m) - FLOATVAL(n);
-        break;
-    }
+        case 2: {
+            CHECK(0, Float, m);
+            CHECK(1, Float, n);
+            result = FLOATVAL(m) - FLOATVAL(n);
+            break;
+        }
     }
 
     return checkFlResult(flMinus, __CTXT__, result);
@@ -448,8 +454,9 @@ DEF("fl-min", flMin, 1, MaxArgs) {
     for (int next = 1; next < NARGS; next++) {
         CHECK(next, Float, n);
         Rfloat r = FLOATVAL(n);
-        if (r < result)
+        if (r < result) {
             result = r;
+        }
     }
     return Float::create(result);
 }
@@ -461,8 +468,9 @@ DEF("fl-max", flMax, 1, MaxArgs) {
     for (int next = 1; next < NARGS; next++) {
         CHECK(next, Float, n);
         Rfloat r = FLOATVAL(n);
-        if (r > result)
+        if (r > result) {
             result = r;
+        }
     }
     return Float::create(result);
 }
