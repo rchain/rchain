@@ -20,9 +20,6 @@
 #if !defined(_RBL_Addr_h)
 #define _RBL_Addr_h
 
-uint32_t pre_fixnum_to_addr(int x);
-int addr_to_pre_fixnum(Ob *);
-
 #ifndef ADDR_TO_PRE_FIXNUM
 #ifdef MAP_BACK_ADDRESS
 #define ADDR_TO_PRE_FIXNUM(x) nontrivial_addr_to_pre_fixnum(x)

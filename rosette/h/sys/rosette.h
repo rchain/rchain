@@ -36,7 +36,7 @@
 
 #define HAS_BOOL
 
-#include <assert.h>
+#include <cassert>
 #include <stdio.h>
 
 #ifndef name2
