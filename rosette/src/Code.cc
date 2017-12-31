@@ -56,8 +56,7 @@ void CodeBuf::deposit(Instr i) {
     if (codevec != INVALID && codevec->numberOfWords() > int_pc) {
         FIXNUM_INC(pc);
         p = codevec->absolutize(int_pc);
-    }
-    else {
+    } else {
         PROTECT_THIS(CodeBuf);
         SELF->growCodevec(DefaultCodeVecSize);
         FIXNUM_INC(SELF->pc);
@@ -74,8 +73,7 @@ void CodeBuf::growCodevec(int sz) {
     if (codevec == INVALID) {
         CodeVec* newcodevec = CodeVec::create(sz);
         ASSIGN(SELF, codevec, newcodevec);
-    }
-    else {
+    } else {
         CodeVec* newcodevec =
             CodeVec::create(SELF->codevec->numberOfWords() + sz);
         memcpy(&newcodevec->instr(0), &SELF->codevec->instr(0),
@@ -201,8 +199,9 @@ void CodeBuf::clear() { pc = FIXNUM(0); }
 
 
 CodeVec* CodeBuf::finish() {
-    if (codevec == INVALID || pc == 0)
+    if (codevec == INVALID || pc == 0) {
         suicide("trying to finish up an empty code vector");
+    }
 
     int int_pc = FIXVAL(pc);
     PROTECT_THIS(CodeBuf);
@@ -239,443 +238,442 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     Instr insn = *pc++;
 
     switch (OP_f0_opcode(insn)) {
-    case opHalt:
-        strcpy(buf, "halt");
-        goto noDest;
-
-    case opPush:
-        strcpy(buf, "push");
-        goto noDest;
-
-    case opPop:
-        strcpy(buf, "pop");
-        goto noDest;
-
-    case opNargs:
-        sprintf(buf, "nargs %d", (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opAlloc:
-        sprintf(buf, "alloc %d", (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opPushAlloc:
-        sprintf(buf, "push/alloc %d", (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opExtend:
-        sprintf(buf, "extend %d", (int)OP_f0_op0(insn));
-        goto noDest;
-
-
-    case opOutstanding | 0:
-    case opOutstanding | 1:
-    case opOutstanding | 2:
-    case opOutstanding | 3:
-        sprintf(buf, "outstanding %d,%d", (int)OP_f6_pc(insn),
-                (int)OP_e0_op0((*pc++)));
-        goto noDest;
-
-    case opFork | 0:
-    case opFork | 1:
-    case opFork | 2:
-    case opFork | 3:
-        sprintf(buf, "fork %d", (int)OP_f6_pc(insn));
-        goto noDest;
-
-
-    case opXmitTag | NextOff | UnwindOff:
-    case opXmitTag | NextOff | UnwindOn:
-    case opXmitTag | NextOn | UnwindOff:
-    case opXmitTag | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d,", OP_f4_unwind(insn) ? "/unwind" : "",
-                OP_f4_next(insn) ? "/nxt" : "", OP_f4_nargs(insn));
-        dest.atom = code->lit(OP_f4_op0(insn));
-        goto formatDest;
-
-    case opXmitArg | NextOff | UnwindOff:
-    case opXmitArg | NextOff | UnwindOn:
-    case opXmitArg | NextOn | UnwindOff:
-    case opXmitArg | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d,arg[%d]", OP_f4_unwind(insn) ? "/unwind" : "",
-                OP_f4_next(insn) ? "/nxt" : "", (int)OP_f4_nargs(insn),
-                (int)OP_f4_op0(insn));
-        goto noDest;
-
-    case opXmitReg | NextOff | UnwindOff:
-    case opXmitReg | NextOff | UnwindOn:
-    case opXmitReg | NextOn | UnwindOff:
-    case opXmitReg | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d,", OP_f4_unwind(insn) ? "/unwind" : "",
-                OP_f4_next(insn) ? "/nxt" : "", (int)OP_f4_nargs(insn));
-        dest = CtxtReg((CtxtRegName)OP_f4_op0(insn));
-        goto formatDest;
-
-    case opXmit | NextOff | UnwindOff:
-    case opXmit | NextOff | UnwindOn:
-    case opXmit | NextOn | UnwindOff:
-    case opXmit | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d", OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
-        goto noDest;
-
-
-    case opXmitTagXtnd | NextOff | UnwindOff:
-    case opXmitTagXtnd | NextOff | UnwindOn:
-    case opXmitTagXtnd | NextOn | UnwindOff:
-    case opXmitTagXtnd | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d,", OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", OP_f5_op0(insn));
-        dest.atom = code->lit(OP_e0_op0((*pc++)));
-        goto formatDest;
-
-    case opXmitArgXtnd | NextOff | UnwindOff:
-    case opXmitArgXtnd | NextOff | UnwindOn:
-    case opXmitArgXtnd | NextOn | UnwindOff:
-    case opXmitArgXtnd | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d,arg[%d]", OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn),
-                (int)OP_e0_op0((*pc++)));
-        goto noDest;
-
-    case opXmitRegXtnd | NextOff | UnwindOff:
-    case opXmitRegXtnd | NextOff | UnwindOn:
-    case opXmitRegXtnd | NextOn | UnwindOff:
-    case opXmitRegXtnd | NextOn | UnwindOn:
-        sprintf(buf, "xmit%s%s %d,", OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
-        dest = CtxtReg((CtxtRegName)(OP_e0_op0((*pc++))));
-        goto formatDest;
-
-    case opSend | NextOff | UnwindOff:
-    case opSend | NextOff | UnwindOn:
-    case opSend | NextOn | UnwindOff:
-    case opSend | NextOn | UnwindOn:
-        sprintf(buf, "send%s%s %d", OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
-        goto noDest;
-
-
-    case opApplyPrimTag | NextOff | UnwindOff:
-    case opApplyPrimTag | NextOff | UnwindOn:
-    case opApplyPrimTag | NextOn | UnwindOff:
-    case opApplyPrimTag | NextOn | UnwindOn: {
-        uint16_t extension = (*pc++).word;
-        unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
-            prim_num = OP_e1_op0((*pc++));
-
-        sprintf(buf, "%s%s%s %d,", SYMPTR(Prim::nthPrim(prim_num)->id),
-                OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
-        dest.atom = code->lit(WORD_OP_e0_op1(extension));
-        goto formatDest;
-    }
-
-
-    case opApplyPrimArg | NextOff | UnwindOff:
-    case opApplyPrimArg | NextOff | UnwindOn:
-    case opApplyPrimArg | NextOn | UnwindOff:
-    case opApplyPrimArg | NextOn | UnwindOn: {
-        uint16_t extension = (*pc++).word;
-        unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
-            prim_num = OP_e1_op0((*pc++));
-
-        sprintf(buf, "%s%s%s %d,arg[%d]", SYMPTR(Prim::nthPrim(prim_num)->id),
-                OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn),
-                (int)WORD_OP_e0_op1(extension));
-        goto noDest;
-    }
-
-
-    case opApplyPrimReg | NextOff | UnwindOff:
-    case opApplyPrimReg | NextOff | UnwindOn:
-    case opApplyPrimReg | NextOn | UnwindOff:
-    case opApplyPrimReg | NextOn | UnwindOn: {
-        uint16_t extension = (*pc++).word;
-        unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
-            prim_num = OP_e1_op0((*pc++));
-
-        sprintf(buf, "%s%s%s %d,", SYMPTR(Prim::nthPrim(prim_num)->id),
-                OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
-        dest = CtxtReg((CtxtRegName)WORD_OP_e0_op1(extension));
-        goto formatDest;
-    }
-
-
-    case opApplyCmd | NextOff | UnwindOff:
-    case opApplyCmd | NextOff | UnwindOn:
-    case opApplyCmd | NextOn | UnwindOff:
-    case opApplyCmd | NextOn | UnwindOn: {
-        uint16_t extension = (*pc++).word;
-        unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
-            prim_num = OP_e1_op0((*pc++));
-
-        sprintf(buf, "%s%s%s %d", SYMPTR(Prim::nthPrim(prim_num)->id),
-                OP_f5_unwind(insn) ? "/unwind" : "",
-                OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
-        goto noDest;
-    }
-
-
-    case opRtnTag | NextOff:
-    case opRtnTag | NextOn:
-        sprintf(buf, "rtn%s ", OP_f5_next(insn) ? "/nxt" : "");
-        dest.atom = code->lit(OP_f5_op0(insn));
-        goto formatDest;
-
-    case opRtnArg | NextOff:
-    case opRtnArg | NextOn:
-        sprintf(buf, "rtn%s arg[%d]", OP_f5_next(insn) ? "/nxt" : "",
-                OP_f5_op0(insn));
-        goto noDest;
-
-    case opRtnReg | NextOff:
-    case opRtnReg | NextOn:
-        sprintf(buf, "rtn%s ", OP_f5_next(insn) ? "/nxt" : "");
-        dest = CtxtReg((CtxtRegName)OP_f5_op0(insn));
-        goto formatDest;
-
-    case opRtn | NextOff:
-    case opRtn | NextOn:
-        sprintf(buf, "rtn%s", OP_f5_next(insn) ? "/nxt" : "");
-        goto noDest;
-
-    case opUpcallRtn | NextOff:
-    case opUpcallRtn | NextOn:
-        sprintf(buf, "upcall-rtn%s ", OP_f5_next(insn) ? "/nxt" : "");
-        dest.atom = code->lit(OP_f5_op0(insn));
-        goto formatDest;
-
-    case opUpcallResume:
-        strcpy(buf, "upcall-resume");
-        goto noDest;
-
-    case opNxt:
-        strcpy(buf, "nxt");
-        goto noDest;
-
-
-    case opJmp | 0:
-    case opJmp | 1:
-    case opJmp | 2:
-    case opJmp | 3:
-        sprintf(buf, "jmp %d", (int)OP_f6_pc(insn));
-        goto noDest;
-
-    case opJmpFalse | 0:
-    case opJmpFalse | 1:
-    case opJmpFalse | 2:
-    case opJmpFalse | 3:
-        sprintf(buf, "jf %d", (int)OP_f6_pc(insn));
-        goto noDest;
-
-    case opJmpCut | 0:
-    case opJmpCut | 1:
-    case opJmpCut | 2:
-    case opJmpCut | 3:
-        sprintf(buf, "jmp/cut %d,%d", (int)OP_e0_op0((*pc++)),
-                (int)OP_f6_pc(insn));
-        goto noDest;
-
-
-    case opLookupToArg | 0x0:
-    case opLookupToArg | 0x1:
-    case opLookupToArg | 0x2:
-    case opLookupToArg | 0x3:
-    case opLookupToArg | 0x4:
-    case opLookupToArg | 0x5:
-    case opLookupToArg | 0x6:
-    case opLookupToArg | 0x7:
-    case opLookupToArg | 0x8:
-    case opLookupToArg | 0x9:
-    case opLookupToArg | 0xa:
-    case opLookupToArg | 0xb:
-    case opLookupToArg | 0xc:
-    case opLookupToArg | 0xd:
-    case opLookupToArg | 0xe:
-    case opLookupToArg | 0xf:
-        sprintf(buf, "lookup %d,arg[%d]", (int)OP_f2_op1(insn),
-                (int)OP_f2_op0(insn));
-        goto noDest;
-
-    case opLookupToReg | 0x0:
-    case opLookupToReg | 0x1:
-    case opLookupToReg | 0x2:
-    case opLookupToReg | 0x3:
-    case opLookupToReg | 0x4:
-    case opLookupToReg | 0x5:
-    case opLookupToReg | 0x6:
-    case opLookupToReg | 0x7:
-    case opLookupToReg | 0x8:
-    case opLookupToReg | 0x9:
-    case opLookupToReg | 0xa:
-    case opLookupToReg | 0xb:
-    case opLookupToReg | 0xc:
-    case opLookupToReg | 0xd:
-    case opLookupToReg | 0xe:
-    case opLookupToReg | 0xf:
-        sprintf(buf, "lookup %d,", (int)OP_f2_op1(insn));
-        dest = CtxtReg((CtxtRegName)OP_f2_op0(insn));
-        goto formatDest;
-
-
-    case opXferLexToArg | 0:
-    case opXferLexToArg | 1:
-    case opXferLexToArg | 2:
-    case opXferLexToArg | 3:
-    case opXferLexToArg | 4:
-    case opXferLexToArg | 5:
-    case opXferLexToArg | 6:
-    case opXferLexToArg | 7:
-    case opXferLexToArg | IndirectOn | 0:
-    case opXferLexToArg | IndirectOn | 1:
-    case opXferLexToArg | IndirectOn | 2:
-    case opXferLexToArg | IndirectOn | 3:
-    case opXferLexToArg | IndirectOn | 4:
-    case opXferLexToArg | IndirectOn | 5:
-    case opXferLexToArg | IndirectOn | 6:
-    case opXferLexToArg | IndirectOn | 7:
-        sprintf(buf, (OP_f7_indirect(insn) ? "xfer lex[%d,(%d)],arg[%d]"
-                                           : "xfer lex[%d,%d],arg[%d]"),
-                (int)OP_f7_level(insn), (int)OP_f7_offset(insn),
-                (int)OP_f7_op0(insn));
-        goto noDest;
-
-    case opXferLexToReg | 0:
-    case opXferLexToReg | 1:
-    case opXferLexToReg | 2:
-    case opXferLexToReg | 3:
-    case opXferLexToReg | 4:
-    case opXferLexToReg | 5:
-    case opXferLexToReg | 6:
-    case opXferLexToReg | 7:
-    case opXferLexToReg | IndirectOn | 0:
-    case opXferLexToReg | IndirectOn | 1:
-    case opXferLexToReg | IndirectOn | 2:
-    case opXferLexToReg | IndirectOn | 3:
-    case opXferLexToReg | IndirectOn | 4:
-    case opXferLexToReg | IndirectOn | 5:
-    case opXferLexToReg | IndirectOn | 6:
-    case opXferLexToReg | IndirectOn | 7:
-        sprintf(buf, (OP_f7_indirect(insn) ? "xfer lex[%d,(%d)],"
-                                           : "xfer lex[%d,%d],"),
-                (int)OP_f7_level(insn), (int)OP_f7_offset(insn));
-        dest = CtxtReg((CtxtRegName)OP_f7_op0(insn));
-        goto formatDest;
-
-    case opXferGlobalToArg:
-        sprintf(buf, "xfer global[%s],arg[%d]",
-                BASE(GlobalEnv->entryKey(OP_e1_op0((*pc++))))->asCstring(),
-                (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opXferGlobalToReg:
-        sprintf(buf, "xfer global[%s],",
-                BASE(GlobalEnv->entryKey(OP_e1_op0((*pc++))))->asCstring());
-        dest = CtxtReg((CtxtRegName)OP_f0_op0(insn));
-        goto formatDest;
-
-    case opXferArgToArg:
-        sprintf(buf, "xfer arg[%d],arg[%d]", (int)OP_f1_op1(insn),
-                (int)OP_f1_op0(insn));
-        goto noDest;
-
-    case opXferRsltToArg:
-        sprintf(buf, "xfer rslt,arg[%d]", (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opXferArgToRslt:
-        sprintf(buf, "xfer arg[%d],rslt", (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opXferRsltToReg:
-        strcpy(buf, "xfer rslt,");
-        dest = CtxtReg((CtxtRegName)OP_f0_op0(insn));
-        goto formatDest;
-
-    case opXferRegToRslt:
-        strcpy(buf, "xfer ");
-        printRep(CtxtReg((CtxtRegName)OP_f0_op0(insn)), &buf[strlen(buf)]);
-        strcat(buf, ",rslt");
-        goto noDest;
-
-    case opXferRsltToDest:
-        strcpy(buf, "xfer rslt,");
-        dest.atom = code->lit(OP_f0_op0(insn));
-        goto formatDest;
-
-    case opXferSrcToRslt:
-        strcpy(buf, "xfer ");
-        dest.atom = code->lit(OP_f0_op0(insn));
-        printRep(dest, &buf[strlen(buf)]);
-        strcat(buf, ",rslt");
-        goto noDest;
-
-
-    case opIndLitToArg:
-        sprintf(buf, "liti %d,arg[%d]", (int)OP_f1_op1(insn),
-                (int)OP_f1_op0(insn));
-        goto noDest;
-
-    case opIndLitToReg:
-        sprintf(buf, "liti %d,", (int)OP_f1_op1(insn));
-        dest = CtxtReg((CtxtRegName)OP_f1_op0(insn));
-        goto formatDest;
-
-    case opIndLitToRslt:
-        sprintf(buf, "liti %d,rslt", (int)OP_f0_op0(insn));
-        goto noDest;
-
-    case opImmediateLitToArg | 0x0:
-    case opImmediateLitToArg | 0x1:
-    case opImmediateLitToArg | 0x2:
-    case opImmediateLitToArg | 0x3:
-    case opImmediateLitToArg | 0x4:
-    case opImmediateLitToArg | 0x5:
-    case opImmediateLitToArg | 0x6:
-    case opImmediateLitToArg | 0x7:
-    case opImmediateLitToArg | 0x8:
-    case opImmediateLitToArg | 0x9:
-    case opImmediateLitToArg | 0xa:
-    case opImmediateLitToArg | 0xb:
-        sprintf(buf, "lit %s,arg[%d]", immediateLitStrings[OP_f2_op0(insn)],
-                (int)OP_f2_op1(insn));
-        goto noDest;
-
-    case opImmediateLitToReg | 0x0:
-    case opImmediateLitToReg | 0x1:
-    case opImmediateLitToReg | 0x2:
-    case opImmediateLitToReg | 0x3:
-    case opImmediateLitToReg | 0x4:
-    case opImmediateLitToReg | 0x5:
-    case opImmediateLitToReg | 0x6:
-    case opImmediateLitToReg | 0x7:
-    case opImmediateLitToReg | 0x8:
-    case opImmediateLitToReg | 0x9:
-    case opImmediateLitToReg | 0xa:
-    case opImmediateLitToReg | 0xb:
-        sprintf(buf, "lit %s,", immediateLitStrings[OP_f2_op0(insn)]);
-        dest = CtxtReg((CtxtRegName)OP_f2_op1(insn));
-        goto formatDest;
-
-    default:
-        sprintf(buf, "illegal 0x%.4x", (int)insn.word);
-        goto noDest;
+        case opHalt:
+            strcpy(buf, "halt");
+            goto noDest;
+
+        case opPush:
+            strcpy(buf, "push");
+            goto noDest;
+
+        case opPop:
+            strcpy(buf, "pop");
+            goto noDest;
+
+        case opNargs:
+            sprintf(buf, "nargs %d", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opAlloc:
+            sprintf(buf, "alloc %d", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opPushAlloc:
+            sprintf(buf, "push/alloc %d", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opExtend:
+            sprintf(buf, "extend %d", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opOutstanding | 0:
+        case opOutstanding | 1:
+        case opOutstanding | 2:
+        case opOutstanding | 3:
+            sprintf(buf, "outstanding %d,%d", (int)OP_f6_pc(insn),
+                    (int)OP_e0_op0((*pc++)));
+            goto noDest;
+
+        case opFork | 0:
+        case opFork | 1:
+        case opFork | 2:
+        case opFork | 3:
+            sprintf(buf, "fork %d", (int)OP_f6_pc(insn));
+            goto noDest;
+
+
+        case opXmitTag | NextOff | UnwindOff:
+        case opXmitTag | NextOff | UnwindOn:
+        case opXmitTag | NextOn | UnwindOff:
+        case opXmitTag | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d,", OP_f4_unwind(insn) ? "/unwind" : "",
+                    OP_f4_next(insn) ? "/nxt" : "", OP_f4_nargs(insn));
+            dest.atom = code->lit(OP_f4_op0(insn));
+            goto formatDest;
+
+        case opXmitArg | NextOff | UnwindOff:
+        case opXmitArg | NextOff | UnwindOn:
+        case opXmitArg | NextOn | UnwindOff:
+        case opXmitArg | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d,arg[%d]", OP_f4_unwind(insn) ? "/unwind" : "",
+                    OP_f4_next(insn) ? "/nxt" : "", (int)OP_f4_nargs(insn),
+                    (int)OP_f4_op0(insn));
+            goto noDest;
+
+        case opXmitReg | NextOff | UnwindOff:
+        case opXmitReg | NextOff | UnwindOn:
+        case opXmitReg | NextOn | UnwindOff:
+        case opXmitReg | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d,", OP_f4_unwind(insn) ? "/unwind" : "",
+                    OP_f4_next(insn) ? "/nxt" : "", (int)OP_f4_nargs(insn));
+            dest = CtxtReg((CtxtRegName)OP_f4_op0(insn));
+            goto formatDest;
+
+        case opXmit | NextOff | UnwindOff:
+        case opXmit | NextOff | UnwindOn:
+        case opXmit | NextOn | UnwindOff:
+        case opXmit | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d", OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
+            goto noDest;
+
+
+        case opXmitTagXtnd | NextOff | UnwindOff:
+        case opXmitTagXtnd | NextOff | UnwindOn:
+        case opXmitTagXtnd | NextOn | UnwindOff:
+        case opXmitTagXtnd | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d,", OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", OP_f5_op0(insn));
+            dest.atom = code->lit(OP_e0_op0((*pc++)));
+            goto formatDest;
+
+        case opXmitArgXtnd | NextOff | UnwindOff:
+        case opXmitArgXtnd | NextOff | UnwindOn:
+        case opXmitArgXtnd | NextOn | UnwindOff:
+        case opXmitArgXtnd | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d,arg[%d]", OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn),
+                    (int)OP_e0_op0((*pc++)));
+            goto noDest;
+
+        case opXmitRegXtnd | NextOff | UnwindOff:
+        case opXmitRegXtnd | NextOff | UnwindOn:
+        case opXmitRegXtnd | NextOn | UnwindOff:
+        case opXmitRegXtnd | NextOn | UnwindOn:
+            sprintf(buf, "xmit%s%s %d,", OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
+            dest = CtxtReg((CtxtRegName)(OP_e0_op0((*pc++))));
+            goto formatDest;
+
+        case opSend | NextOff | UnwindOff:
+        case opSend | NextOff | UnwindOn:
+        case opSend | NextOn | UnwindOff:
+        case opSend | NextOn | UnwindOn:
+            sprintf(buf, "send%s%s %d", OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
+            goto noDest;
+
+        case opApplyPrimTag | NextOff | UnwindOff:
+        case opApplyPrimTag | NextOff | UnwindOn:
+        case opApplyPrimTag | NextOn | UnwindOff:
+        case opApplyPrimTag | NextOn | UnwindOn: {
+            uint16_t extension = (*pc++).word;
+            unsigned prim_num = WORD_OP_e0_op0(extension);
+            if (prim_num == 255) {
+                prim_num = OP_e1_op0((*pc++));
+            }
+
+            sprintf(buf, "%s%s%s %d,", SYMPTR(Prim::nthPrim(prim_num)->id),
+                    OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
+            dest.atom = code->lit(WORD_OP_e0_op1(extension));
+            goto formatDest;
+        }
+
+
+        case opApplyPrimArg | NextOff | UnwindOff:
+        case opApplyPrimArg | NextOff | UnwindOn:
+        case opApplyPrimArg | NextOn | UnwindOff:
+        case opApplyPrimArg | NextOn | UnwindOn: {
+            uint16_t extension = (*pc++).word;
+            unsigned prim_num = WORD_OP_e0_op0(extension);
+            if (prim_num == 255) {
+                prim_num = OP_e1_op0((*pc++));
+            }
+
+            sprintf(buf, "%s%s%s %d,arg[%d]", SYMPTR(Prim::nthPrim(prim_num)->id),
+                    OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn),
+                    (int)WORD_OP_e0_op1(extension));
+            goto noDest;
+        }
+
+
+        case opApplyPrimReg | NextOff | UnwindOff:
+        case opApplyPrimReg | NextOff | UnwindOn:
+        case opApplyPrimReg | NextOn | UnwindOff:
+        case opApplyPrimReg | NextOn | UnwindOn: {
+            uint16_t extension = (*pc++).word;
+            unsigned prim_num = WORD_OP_e0_op0(extension);
+            if (prim_num == 255) {
+                prim_num = OP_e1_op0((*pc++));
+            }
+
+            sprintf(buf, "%s%s%s %d,", SYMPTR(Prim::nthPrim(prim_num)->id),
+                    OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
+            dest = CtxtReg((CtxtRegName)WORD_OP_e0_op1(extension));
+            goto formatDest;
+        }
+
+        case opApplyCmd | NextOff | UnwindOff:
+        case opApplyCmd | NextOff | UnwindOn:
+        case opApplyCmd | NextOn | UnwindOff:
+        case opApplyCmd | NextOn | UnwindOn: {
+            uint16_t extension = (*pc++).word;
+            unsigned prim_num = WORD_OP_e0_op0(extension);
+            if (prim_num == 255) {
+                prim_num = OP_e1_op0((*pc++));
+            }
+
+            sprintf(buf, "%s%s%s %d", SYMPTR(Prim::nthPrim(prim_num)->id),
+                    OP_f5_unwind(insn) ? "/unwind" : "",
+                    OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
+            goto noDest;
+        }
+
+
+        case opRtnTag | NextOff:
+        case opRtnTag | NextOn:
+            sprintf(buf, "rtn%s ", OP_f5_next(insn) ? "/nxt" : "");
+            dest.atom = code->lit(OP_f5_op0(insn));
+            goto formatDest;
+
+        case opRtnArg | NextOff:
+        case opRtnArg | NextOn:
+            sprintf(buf, "rtn%s arg[%d]", OP_f5_next(insn) ? "/nxt" : "",
+                    OP_f5_op0(insn));
+            goto noDest;
+
+        case opRtnReg | NextOff:
+        case opRtnReg | NextOn:
+            sprintf(buf, "rtn%s ", OP_f5_next(insn) ? "/nxt" : "");
+            dest = CtxtReg((CtxtRegName)OP_f5_op0(insn));
+            goto formatDest;
+
+        case opRtn | NextOff:
+        case opRtn | NextOn:
+            sprintf(buf, "rtn%s", OP_f5_next(insn) ? "/nxt" : "");
+            goto noDest;
+
+        case opUpcallRtn | NextOff:
+        case opUpcallRtn | NextOn:
+            sprintf(buf, "upcall-rtn%s ", OP_f5_next(insn) ? "/nxt" : "");
+            dest.atom = code->lit(OP_f5_op0(insn));
+            goto formatDest;
+
+        case opUpcallResume:
+            strcpy(buf, "upcall-resume");
+            goto noDest;
+
+        case opNxt:
+            strcpy(buf, "nxt");
+            goto noDest;
+
+
+        case opJmp | 0:
+        case opJmp | 1:
+        case opJmp | 2:
+        case opJmp | 3:
+            sprintf(buf, "jmp %d", (int)OP_f6_pc(insn));
+            goto noDest;
+
+        case opJmpFalse | 0:
+        case opJmpFalse | 1:
+        case opJmpFalse | 2:
+        case opJmpFalse | 3:
+            sprintf(buf, "jf %d", (int)OP_f6_pc(insn));
+            goto noDest;
+
+        case opJmpCut | 0:
+        case opJmpCut | 1:
+        case opJmpCut | 2:
+        case opJmpCut | 3:
+            sprintf(buf, "jmp/cut %d,%d", (int)OP_e0_op0((*pc++)),
+                    (int)OP_f6_pc(insn));
+            goto noDest;
+
+
+        case opLookupToArg | 0x0:
+        case opLookupToArg | 0x1:
+        case opLookupToArg | 0x2:
+        case opLookupToArg | 0x3:
+        case opLookupToArg | 0x4:
+        case opLookupToArg | 0x5:
+        case opLookupToArg | 0x6:
+        case opLookupToArg | 0x7:
+        case opLookupToArg | 0x8:
+        case opLookupToArg | 0x9:
+        case opLookupToArg | 0xa:
+        case opLookupToArg | 0xb:
+        case opLookupToArg | 0xc:
+        case opLookupToArg | 0xd:
+        case opLookupToArg | 0xe:
+        case opLookupToArg | 0xf:
+            sprintf(buf, "lookup %d,arg[%d]", (int)OP_f2_op1(insn),
+                    (int)OP_f2_op0(insn));
+            goto noDest;
+
+        case opLookupToReg | 0x0:
+        case opLookupToReg | 0x1:
+        case opLookupToReg | 0x2:
+        case opLookupToReg | 0x3:
+        case opLookupToReg | 0x4:
+        case opLookupToReg | 0x5:
+        case opLookupToReg | 0x6:
+        case opLookupToReg | 0x7:
+        case opLookupToReg | 0x8:
+        case opLookupToReg | 0x9:
+        case opLookupToReg | 0xa:
+        case opLookupToReg | 0xb:
+        case opLookupToReg | 0xc:
+        case opLookupToReg | 0xd:
+        case opLookupToReg | 0xe:
+        case opLookupToReg | 0xf:
+            sprintf(buf, "lookup %d,", (int)OP_f2_op1(insn));
+            dest = CtxtReg((CtxtRegName)OP_f2_op0(insn));
+            goto formatDest;
+
+
+        case opXferLexToArg | 0:
+        case opXferLexToArg | 1:
+        case opXferLexToArg | 2:
+        case opXferLexToArg | 3:
+        case opXferLexToArg | 4:
+        case opXferLexToArg | 5:
+        case opXferLexToArg | 6:
+        case opXferLexToArg | 7:
+        case opXferLexToArg | IndirectOn | 0:
+        case opXferLexToArg | IndirectOn | 1:
+        case opXferLexToArg | IndirectOn | 2:
+        case opXferLexToArg | IndirectOn | 3:
+        case opXferLexToArg | IndirectOn | 4:
+        case opXferLexToArg | IndirectOn | 5:
+        case opXferLexToArg | IndirectOn | 6:
+        case opXferLexToArg | IndirectOn | 7:
+            sprintf(buf, (OP_f7_indirect(insn) ? "xfer lex[%d,(%d)],arg[%d]"
+                                               : "xfer lex[%d,%d],arg[%d]"),
+                    (int)OP_f7_level(insn), (int)OP_f7_offset(insn),
+                    (int)OP_f7_op0(insn));
+            goto noDest;
+
+        case opXferLexToReg | 0:
+        case opXferLexToReg | 1:
+        case opXferLexToReg | 2:
+        case opXferLexToReg | 3:
+        case opXferLexToReg | 4:
+        case opXferLexToReg | 5:
+        case opXferLexToReg | 6:
+        case opXferLexToReg | 7:
+        case opXferLexToReg | IndirectOn | 0:
+        case opXferLexToReg | IndirectOn | 1:
+        case opXferLexToReg | IndirectOn | 2:
+        case opXferLexToReg | IndirectOn | 3:
+        case opXferLexToReg | IndirectOn | 4:
+        case opXferLexToReg | IndirectOn | 5:
+        case opXferLexToReg | IndirectOn | 6:
+        case opXferLexToReg | IndirectOn | 7:
+            sprintf(buf, (OP_f7_indirect(insn) ? "xfer lex[%d,(%d)],"
+                                               : "xfer lex[%d,%d],"),
+                    (int)OP_f7_level(insn), (int)OP_f7_offset(insn));
+            dest = CtxtReg((CtxtRegName)OP_f7_op0(insn));
+            goto formatDest;
+
+        case opXferGlobalToArg:
+            sprintf(buf, "xfer global[%s],arg[%d]",
+                    BASE(GlobalEnv->entryKey(OP_e1_op0((*pc++))))->asCstring(),
+                    (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opXferGlobalToReg:
+            sprintf(buf, "xfer global[%s],",
+                    BASE(GlobalEnv->entryKey(OP_e1_op0((*pc++))))->asCstring());
+            dest = CtxtReg((CtxtRegName)OP_f0_op0(insn));
+            goto formatDest;
+
+        case opXferArgToArg:
+            sprintf(buf, "xfer arg[%d],arg[%d]", (int)OP_f1_op1(insn),
+                    (int)OP_f1_op0(insn));
+            goto noDest;
+
+        case opXferRsltToArg:
+            sprintf(buf, "xfer rslt,arg[%d]", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opXferArgToRslt:
+            sprintf(buf, "xfer arg[%d],rslt", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opXferRsltToReg:
+            strcpy(buf, "xfer rslt,");
+            dest = CtxtReg((CtxtRegName)OP_f0_op0(insn));
+            goto formatDest;
+
+        case opXferRegToRslt:
+            strcpy(buf, "xfer ");
+            printRep(CtxtReg((CtxtRegName)OP_f0_op0(insn)), &buf[strlen(buf)]);
+            strcat(buf, ",rslt");
+            goto noDest;
+
+        case opXferRsltToDest:
+            strcpy(buf, "xfer rslt,");
+            dest.atom = code->lit(OP_f0_op0(insn));
+            goto formatDest;
+
+        case opXferSrcToRslt:
+            strcpy(buf, "xfer ");
+            dest.atom = code->lit(OP_f0_op0(insn));
+            printRep(dest, &buf[strlen(buf)]);
+            strcat(buf, ",rslt");
+            goto noDest;
+
+
+        case opIndLitToArg:
+            sprintf(buf, "liti %d,arg[%d]", (int)OP_f1_op1(insn),
+                    (int)OP_f1_op0(insn));
+            goto noDest;
+
+        case opIndLitToReg:
+            sprintf(buf, "liti %d,", (int)OP_f1_op1(insn));
+            dest = CtxtReg((CtxtRegName)OP_f1_op0(insn));
+            goto formatDest;
+
+        case opIndLitToRslt:
+            sprintf(buf, "liti %d,rslt", (int)OP_f0_op0(insn));
+            goto noDest;
+
+        case opImmediateLitToArg | 0x0:
+        case opImmediateLitToArg | 0x1:
+        case opImmediateLitToArg | 0x2:
+        case opImmediateLitToArg | 0x3:
+        case opImmediateLitToArg | 0x4:
+        case opImmediateLitToArg | 0x5:
+        case opImmediateLitToArg | 0x6:
+        case opImmediateLitToArg | 0x7:
+        case opImmediateLitToArg | 0x8:
+        case opImmediateLitToArg | 0x9:
+        case opImmediateLitToArg | 0xa:
+        case opImmediateLitToArg | 0xb:
+            sprintf(buf, "lit %s,arg[%d]", immediateLitStrings[OP_f2_op0(insn)],
+                    (int)OP_f2_op1(insn));
+            goto noDest;
+
+        case opImmediateLitToReg | 0x0:
+        case opImmediateLitToReg | 0x1:
+        case opImmediateLitToReg | 0x2:
+        case opImmediateLitToReg | 0x3:
+        case opImmediateLitToReg | 0x4:
+        case opImmediateLitToReg | 0x5:
+        case opImmediateLitToReg | 0x6:
+        case opImmediateLitToReg | 0x7:
+        case opImmediateLitToReg | 0x8:
+        case opImmediateLitToReg | 0x9:
+        case opImmediateLitToReg | 0xa:
+        case opImmediateLitToReg | 0xb:
+            sprintf(buf, "lit %s,", immediateLitStrings[OP_f2_op0(insn)]);
+            dest = CtxtReg((CtxtRegName)OP_f2_op1(insn));
+            goto formatDest;
+
+        default:
+            sprintf(buf, "illegal 0x%.4x", (int)insn.word);
+            goto noDest;
 
     }  // end switch (opcode)
 
 formatDest:
-
     printRep(dest, &buf[strlen(buf)]);
 
 noDest:
-
     return pc;
 }
 
@@ -747,10 +745,11 @@ void Code::dumpOn(FILE* f) {
 
 
 Ob* Code::associatedSource() {
-    if (litvec == NIL)
+    if (litvec == NIL) {
         return SYMBOL("***source unavailable***");
-    else
-        return lit(0);
+    }
+
+    return lit(0);
 }
 
 
@@ -761,8 +760,9 @@ MODULE_INIT(Code) {
     extern int RestoringImage;
 
     if (!RestoringImage) {
-        for (int i = 0; i < MaxOpcodes; i++)
+        for (int i = 0; i < MaxOpcodes; i++) {
             opcodeStrings[i] = NULL;
+        }
 
         opcodeStrings[opHalt] = "halt";
         opcodeStrings[opPush] = "push";
@@ -995,16 +995,16 @@ DEF("opcode->string", opcodeString, 1, 1) {
 
     if (0 <= opcode && opcode < MaxOpcodes) {
         char* str = opcodeStrings[opcode];
-        if (str)
+        if (str) {
             return RBLstring::create(str);
-        else {
+        } else {
             char buf[32];
             sprintf(buf, "unknown:0x%2x", opcode);
             return RBLstring::create(buf);
         }
-    }
-    else
+    } else {
         return PRIM_ERROR("invalid opcode");
+    }
 }
 
 
