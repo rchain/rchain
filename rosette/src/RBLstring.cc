@@ -40,8 +40,7 @@ RBLstring::RBLstring(int n, char c)
               CLASS_SBO(RBLstring), n) {
     if (c == 0) {
         memset(&byte(0), c, n);
-    }
-    else {
+    } else {
         memset(&byte(0), c, n - 1);
         byte(n - 1) = 0;
     }
@@ -90,15 +89,12 @@ void RBLstring::printOn(FILE* f) {
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
-        }
-        else if (c == '\"') {
+        } else if (c == '\"') {
             fputc('\\', f);
             fputc('\"', f);
-        }
-        else if (isprint(c)) {
+        } else if (isprint(c)) {
             fputc(c, f);
-        }
-        else {
+        } else {
             fputc('\\', f);
             switch (c) {
             case '\n':
@@ -456,8 +452,7 @@ DEF("string-split", stringSplit, 2, 3) {
     if (NARGS == 3) {
         if (IS_FIXNUM(ARG(2))) {
             lim = FIXVAL(ARG(2));
-        }
-        else {
+        } else {
             return PRIM_ERROR("Fixnum expected for limit");
         }
     }
@@ -477,8 +472,7 @@ DEF("string-split", stringSplit, 2, 3) {
         }
 
         return ans;
-    }
-    else {
+    } else {
         for (x = 0; ((i < lim) && (x < sz));) {
             for (; x < sz; x++) {
                 if (!stringMemQAux(separators, string->byte(x))) {
@@ -536,8 +530,7 @@ convertArgReturnPair RBLstring::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj) == RBLTRUE) {
         cnvArgRetPair.val = (uint32_t)(&((RBLstring*)obj)->byte(0));
         cnvArgRetPair.failp = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }

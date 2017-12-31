@@ -113,8 +113,7 @@ Label LabelTable::newLabel(EMPTY) {
         Word16Vec* newvec = Word16Vec::create(labelValues, 2 * n);
         ASSIGN(SELF, labelValues, newvec);
         FIXNUM_INC(SELF->nextLabel);
-    }
-    else {
+    } else {
         FIXNUM_INC(nextLabel);
     }
 
@@ -143,8 +142,7 @@ void LabelTable::addFixup(int loc, Label label) {
         FixupVec* newvec = FixupVec::create(fixupValues, 2 * n);
         ASSIGN(SELF, fixupValues, newvec);
         SELF->fixupValues->addEntry(loc, label);
-    }
-    else {
+    } else {
         fixupValues->addEntry(loc, label);
     }
 }
@@ -160,8 +158,7 @@ Label LabelTable::getLabel(Ob* label_name) {
 
     if (pair == ABSENT) {
         return MissingLabel;
-    }
-    else {
+    } else {
         return (Label)FIXVAL(pair->elem(EXTERN_LABEL_ENTRY_LABEL));
     }
 }
@@ -172,8 +169,7 @@ LabelNode* LabelTable::getLabelNode(Ob* label_name) {
 
     if (pair == ABSENT) {
         return (LabelNode*)INVALID;
-    }
-    else {
+    } else {
         return (LabelNode*)pair->elem(EXTERN_LABEL_ENTRY_NODE);
     }
 }

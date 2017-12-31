@@ -101,8 +101,7 @@ bool ConstPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
     if (val == this->val) {
         ASSIGN(argvec, elem(offset), val);
         return true;
-    }
-    else {
+    } else {
         return fail(val);
     }
 }
@@ -185,8 +184,7 @@ bool IdVecPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             ASSIGN(argvec, elem(need + offset), valvec->elem(need));
         }
         return true;
-    }
-    else {
+    } else {
         return fail(val);
     }
 }
@@ -230,8 +228,7 @@ Tuple* IdAmperRestPattern::match(Tuple* argvec, int nargs) {
         Tuple* rest = argvec->makeSlice(need, nargs - need);
         ASSIGN(result, elem(need), rest);
         return result;
-    }
-    else {
+    } else {
         return (Tuple*)INVALID;
     }
 }
@@ -261,8 +258,7 @@ bool IdAmperRestPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
         }
 
         return true;
-    }
-    else {
+    } else {
         return fail(val);
     }
 }
@@ -382,8 +378,7 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             matched = pat->matchIntoArgvec(
                 argvec, offset + SELF->keyExtent(need), valvec->elem(need));
         }
-    }
-    else if (expr->rest != NILexpr && nargs >= need) {
+    } else if (expr->rest != NILexpr && nargs >= need) {
         Tuple* rest = valvec->makeSlice(need, nargs - need);
         ASSIGN(argvec, elem(offset + SELF->keyExtent(need)), rest);
         while (need-- && matched) {
@@ -391,8 +386,7 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             matched = pat->matchIntoArgvec(
                 argvec, offset + SELF->keyExtent(need), valvec->elem(need));
         }
-    }
-    else {
+    } else {
         matched = fail(val);
     }
 
@@ -424,12 +418,10 @@ Template* Template::create(TupleExpr* te) {
     if (te->allSymbols()) {
         if (te->rest == NILexpr) {
             pat = IdVecPattern::create(te);
-        }
-        else {
+        } else {
             pat = IdAmperRestPattern::create(te);
         }
-    }
-    else {
+    } else {
         pat = ComplexPattern::create(te);
     }
 
@@ -461,8 +453,7 @@ Ob* Template::fail(Ob*) { return INVALID; }
 Ob* Template::cloneTo(Ob* new_meta, Ob* new_parent) {
     if (this == NILtemplate) {
         return (Ob*)this;
-    }
-    else {
+    } else {
         return Ob::cloneTo(new_meta, new_parent);
     }
 }
@@ -483,11 +474,9 @@ Pattern* TupleExpr::makePattern(EMPTY) {
 
     if (rest == NILexpr) {
         return IdVecPattern::create(this);
-    }
-    else if (IS_SYM(rest)) {
+    } else if (IS_SYM(rest)) {
         return IdAmperRestPattern::create(this);
-    }
-    else {
+    } else {
         return ComplexPattern::create(this);
     }
 }
@@ -496,11 +485,9 @@ Pattern* TupleExpr::makePattern(EMPTY) {
 Template* TupleExpr::makeTemplate(EMPTY) {
     if (this == NILexpr) {
         return NILtemplate;
-    }
-    else if (rest != NILexpr && !IS_SYM(rest)) {
+    } else if (rest != NILexpr && !IS_SYM(rest)) {
         return (Template*)INVALID;
-    }
-    else {
+    } else {
         return Template::create(this);
     }
 }

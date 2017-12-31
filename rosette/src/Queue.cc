@@ -77,8 +77,7 @@ void Queue::enqueue(Ob* val) {
         qTail = FIXNUM((qt + 1) % qcapacity);
         FIXNUM_INC(nElems);
         ASSIGN(elems, elem(qt), val);
-    }
-    else {
+    } else {
         PROTECT_THIS(Queue);
         PROTECT(val);
         Tuple* new_elems = Tuple::create(2 * qcapacity, NIV);
@@ -304,11 +303,9 @@ DEF("queue-pat-dequeue", queuePDequeue, 2, 2) {
     CHECK(1, Tuple, pat);
     if (queue->isEmpty()) {
         return ABSENT;
-    }
-    else if (pat == NIL) {
+    } else if (pat == NIL) {
         return queue->dequeue();
-    }
-    else {
+    } else {
         return queue->patternDequeue(pat);
     }
 }
@@ -318,11 +315,9 @@ DEF("queue-pat-read", queuePRead, 2, 2) {
     CHECK(1, Tuple, pat);
     if (queue->isEmpty()) {
         return ABSENT;
-    }
-    else if (pat == NIL) {
+    } else if (pat == NIL) {
         return queue->elems->elem(FIXVAL(queue->qHead));
-    }
-    else {
+    } else {
         return queue->patternRead(pat);
     }
 }

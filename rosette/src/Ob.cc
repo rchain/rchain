@@ -235,8 +235,7 @@ void Ob::checkOb() {
 
     if (FREED(this)) {
         suicide("live %s has been freed", ts);
-    }
-    else if (MARKED(this)) {
+    } else if (MARKED(this)) {
         suicide("live %s still marked", ts);
     }
 
@@ -268,8 +267,7 @@ void Ob::checkOb() {
 int Ob::size() {
     if (VISITED(this)) {
         return 0;
-    }
-    else {
+    } else {
         SET_FLAG(HDR_FLAGS(this), f_visited);
         return SIZE(this) + traversePtrs(MF_ADDR(Ob::size));
     }
@@ -279,8 +277,7 @@ int Ob::size() {
 int Ob::obCount() {
     if (VISITED(this)) {
         return 0;
-    }
-    else {
+    } else {
         SET_FLAG(HDR_FLAGS(this), f_visited);
         return 1 + traversePtrs(MF_ADDR(Ob::obCount));
     }
@@ -303,12 +300,10 @@ int inlineUseIfPtr(void* v, PSOb__PSOb f) {
         if (p != q) {
             *pp = q;
             return 1;
-        }
-        else {
+        } else {
             return 0;
         }
-    }
-    else {
+    } else {
         return 0;
     }
 }
@@ -378,8 +373,7 @@ pOb obcpy(pOb dest, pOb src, int sz) {
     dest->header.fields.size = sz;
     if (FOREIGN(src)) {
         SET_FLAG(HDR_FLAGS(dest), f_foreign);
-    }
-    else {
+    } else {
         REMOVE_FLAG(HDR_FLAGS(dest), f_foreign);
     }
     return dest;
@@ -460,8 +454,7 @@ pOb Ob::getLex(int indirect, int level, int offset) {
     if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
             return INVALID;
-        }
-        else {
+        } else {
             p = ((Actor*)p)->extension;
         }
     }
@@ -479,16 +472,14 @@ pOb Ob::setLex(int indirect, int level, int offset, pOb val) {
     if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
             return INVALID;
-        }
-        else {
+        } else {
             p = ((Actor*)p)->extension;
         }
     }
 
     if (offset >= p->numberOfSlots()) {
         return INVALID;
-    }
-    else {
+    } else {
         ASSIGN(p, slot(offset), val);
         return val;
     }
@@ -504,16 +495,14 @@ pOb Ob::getAddr(int indirect, int level, int offset) {
     if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
             return INVALID;
-        }
-        else {
+        } else {
             p = ((Actor*)p)->extension;
         }
     }
 
     if (offset < p->numberOfSlots()) {
         return FIXNUM(ADDR_TO_PRE_FIXNUM(p->slot(offset)));
-    }
-    else {
+    } else {
         return INVALID;
     }
 }
@@ -534,16 +523,14 @@ pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
     if (indirect) {
         if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
             return INVALID;
-        }
-        else {
+        } else {
             p = ((Actor*)p)->extension;
         }
     }
 
     if (offset >= p->numberOfSlots()) {
         return INVALID;
-    }
-    else {
+    } else {
         ASSIGN(p, slot(offset), (pOb)addr);
         return val;
     }
@@ -642,8 +629,7 @@ DEF("object-lookup-and-invoke", objectLookupAndInvoke, 2, 2) {
 
     if (ctxt->nargs > 0) {
         return BASE(ctxt->arg(0))->lookupAndInvoke(ctxt);
-    }
-    else {
+    } else {
         return BASE(ctxt->trgt)->runtimeError(ctxt, "no argument for dispatch");
     }
 }
@@ -688,8 +674,7 @@ pOb Ob::invoke(Ctxt* ctxt) {
         }
 
         return me;
-    }
-    else {
+    } else {
         return BASE(ctxt->trgt)->runtimeError(ctxt, "bad method");
     }
 }
@@ -704,8 +689,7 @@ pOb Ob::lookup(pOb key, Ctxt* ctxt) {
     pOb result = BASE(meta())->get(me, key, ctxt);
     if (result == ABSENT) {
         return BASE(parent())->lookup(key, ctxt);
-    }
-    else {
+    } else {
         return result;
     }
 }
@@ -886,8 +870,7 @@ Location Ob::lex(pOb key, int level) {
         return level == 0 ? loc
                           : LexVar(GET_LEXVAR_LEVEL(loc) + level,
                                    GET_LEXVAR_OFFSET(loc), GET_LEXVAR_IND(loc));
-    }
-    else {
+    } else {
         return BASE(parent())->lex(key, level + 1);
     }
 }
@@ -953,16 +936,13 @@ pOb Ob::mismatch(Ctxt* ctxt, int argnum, char* type_name) {
 pOb Ob::mismatch(Ctxt* ctxt, int minargs, int maxargs) {
     if (maxargs == MaxArgs) {
         return runtimeError(ctxt, "expected %d or more arguments", minargs);
-    }
-    else if (minargs == maxargs) {
+    } else if (minargs == maxargs) {
         if (minargs == 1) {
             return runtimeError(ctxt, "expected 1 argument");
-        }
-        else {
+        } else {
             return runtimeError(ctxt, "expected %d arguments", minargs);
         }
-    }
-    else {
+    } else {
         return runtimeError(ctxt, "expected between %d and %d arguments",
                             minargs, maxargs);
     }
@@ -1002,8 +982,7 @@ DEF("compile", obCompile, 1, 3) {
 
     if (result == INVALID) {
         return PRIM_ERROR("compilation aborted");
-    }
-    else {
+    } else {
         return result;
     }
 }
@@ -1154,8 +1133,7 @@ DEF("prim-nth", objectNth, 2, 2) {
     pOb base = BASE(ARG(0));
     if (0 <= n && n < FIXVAL(base->indexedSize())) {
         return base->nth(n);
-    }
-    else {
+    } else {
         return PRIM_ERROR("subscript error");
     }
 }
@@ -1166,8 +1144,7 @@ DEF("prim-set-nth", objectSetNth, 3, 3) {
     pOb base = BASE(ARG(0));
     if (0 <= n && n < FIXVAL(base->indexedSize())) {
         return base->setNth(n, ARG(2));
-    }
-    else {
+    } else {
         return PRIM_ERROR("subscript error");
     }
 }
@@ -1179,8 +1156,7 @@ DEF("prim-sub-object", objectSubObject, 3, 3) {
     pOb base = BASE(ARG(0));
     if (0 <= i && 0 <= n && (i + n) <= FIXVAL(base->indexedSize())) {
         return base->subObject(i, n);
-    }
-    else {
+    } else {
         return PRIM_ERROR("subscript error");
     }
 }
@@ -1244,8 +1220,7 @@ DEF("get-field", objectGetField, 5, 5) {
 
     if (INVALID == rslt) {
         return PRIM_ERROR("invalid bit range");
-    }
-    else {
+    } else {
         return rslt;
     }
 }
@@ -1261,8 +1236,7 @@ DEF("set-field", objectSetField, 5, 5) {
 
     if (INVALID == rslt) {
         return PRIM_ERROR("invalid bit range");
-    }
-    else {
+    } else {
         return rslt;
     }
 }
@@ -1272,8 +1246,7 @@ DEF("classname", obClassname, 1, 1) {
     CHECK_FIXNUM(0, index);
     if (0 <= index && index < Base::nClasses) {
         return SYMBOL(Base::classNames[index]);
-    }
-    else {
+    } else {
         return PRIM_ERROR("bad class index");
     }
 }
@@ -1305,8 +1278,7 @@ DEF("cwd", sysCwd, 0, 0) {
     char buf[MAXPATHLEN];
     if (getcwd(buf)) {
         return RBLstring::create(buf);
-    }
-    else {
+    } else {
         return PRIM_ERROR(buf);
     }
 }

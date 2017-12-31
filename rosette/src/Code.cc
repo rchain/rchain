@@ -56,8 +56,7 @@ void CodeBuf::deposit(Instr i) {
     if (codevec != INVALID && codevec->numberOfWords() > int_pc) {
         FIXNUM_INC(pc);
         p = codevec->absolutize(int_pc);
-    }
-    else {
+    } else {
         PROTECT_THIS(CodeBuf);
         SELF->growCodevec(DefaultCodeVecSize);
         FIXNUM_INC(SELF->pc);
@@ -74,8 +73,7 @@ void CodeBuf::growCodevec(int sz) {
     if (codevec == INVALID) {
         CodeVec* newcodevec = CodeVec::create(sz);
         ASSIGN(SELF, codevec, newcodevec);
-    }
-    else {
+    } else {
         CodeVec* newcodevec =
             CodeVec::create(SELF->codevec->numberOfWords() + sz);
         memcpy(&newcodevec->instr(0), &SELF->codevec->instr(0),
@@ -999,14 +997,12 @@ DEF("opcode->string", opcodeString, 1, 1) {
         char* str = opcodeStrings[opcode];
         if (str) {
             return RBLstring::create(str);
-        }
-        else {
+        } else {
             char buf[32];
             sprintf(buf, "unknown:0x%2x", opcode);
             return RBLstring::create(buf);
         }
-    }
-    else {
+    } else {
         return PRIM_ERROR("invalid opcode");
     }
 }

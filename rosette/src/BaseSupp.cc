@@ -111,16 +111,13 @@ int slashify_char(char c, char buf[], int slash_blank) {
         buf[0] = c;
         buf[1] = c;
         buf[2] = 0;
-    }
-    else if (slash_blank && (c == ' ')) {
+    } else if (slash_blank && (c == ' ')) {
         buf[0] = escapeChar;
         buf[1] = ' ';
-    }
-    else if (isprint(c)) {
+    } else if (isprint(c)) {
         buf[0] = c;
         buf[1] = 0;
-    }
-    else {
+    } else {
         buf[0] = escapeChar;
         switch (c) {
         case '\n':
@@ -141,8 +138,7 @@ int slashify_char(char c, char buf[], int slash_blank) {
         default:
             if (isprint(c)) {
                 buf[1] = c;
-            }
-            else {
+            } else {
                 sprintf(&buf[1], "x%02x", (uint8_t)c);
             }
             break;
@@ -159,8 +155,7 @@ int slashify_char(char c, char buf[], int slash_blank) {
         default:
             if (isprint(c)) {
                 buf[2] = 0;
-            }
-            else {
+            } else {
                 buf[4] = 0;
             }
             break;
@@ -277,24 +272,21 @@ uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
     case 8:
         if (sign) {
             ans = *(int8_t*)((int8_t*)addr + (offset / BITS(int8_t)));
-        }
-        else {
+        } else {
             ans = *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t)));
         }
         break;
     case 16:
         if (sign) {
             ans = *(int16_t*)((int16_t*)addr + (offset / BITS(int16_t)));
-        }
-        else {
+        } else {
             ans = *(uint16_t*)((int16_t*)addr + (offset / BITS(int16_t)));
         }
         break;
     case 32:
         if (sign) {
             ans = *(int32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
-        }
-        else {
+        } else {
             ans = *(uint32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
         }
         break;
@@ -383,8 +375,7 @@ Ob* fdopenOstream(int fd, char* mode) {
     FILE* f = fdopen(fd, mode);
     if (f) {
         return Ostream::create(f);
-    }
-    else {
+    } else {
         return FIXNUM(-errno);
     }
 }
@@ -394,8 +385,7 @@ Ob* fdopenIstream(int fd) {
     if (f) {
         Reader* rdr = Reader::create(f);
         return Istream::create(rdr);
-    }
-    else {
+    } else {
         return FIXNUM(-errno);
     }
 }
@@ -403,8 +393,7 @@ Ob* fdopenIstream(int fd) {
 DEF("identity1", obIdentity1, 0, MaxArgs) {
     if (NARGS == 0) {
         return NIV;
-    }
-    else {
+    } else {
         return ARG(0);
     }
 }
@@ -426,8 +415,7 @@ pOb RblAtom::primitiveInitialize(pCtxt ctxt) {
 
     if (n >= 1) {
         return ctxt->arg(1);
-    }
-    else {
+    } else {
         return self();
     }
 }
@@ -464,8 +452,7 @@ DEF("M-get", addressGetField, 3, 3) {
 
     if (base < local_page_size) {
         return PRIM_ERROR("invalid address");
-    }
-    else if ((span >= 1) && (span <= 4)) {
+    } else if ((span >= 1) && (span <= 4)) {
         uint32_t rslt =
             mem_get_field(addr, offset * 8, span * 8, BOOLVAL(sign));
 
@@ -486,8 +473,7 @@ DEF("M-set", addressSetField, 3, 3) {
 
     if (base < local_page_size) {
         return PRIM_ERROR("invalid address");
-    }
-    else if ((span >= 1) && (span <= 4)) {
+    } else if ((span >= 1) && (span <= 4)) {
         uint32_t* rslt =
             mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
 
@@ -740,8 +726,7 @@ DEF("uRead", unix_read, 3, 3) {
 
     if (IS_A(ARG(1), ByteVec)) {
         return FIXNUM(read(fd, (char*)&((ByteVec*)ARG(1))->byte(0), len));
-    }
-    else if (IS_A(ARG(1), RBLstring)) {
+    } else if (IS_A(ARG(1), RBLstring)) {
         return FIXNUM(read(fd, (char*)&((RBLstring*)ARG(1))->byte(0), len));
     }
 
@@ -754,8 +739,7 @@ DEF("uWrite", unix_write, 3, 3) {
 
     if (IS_A(ARG(1), ByteVec)) {
         return FIXNUM(write(fd, (char*)&((ByteVec*)ARG(1))->byte(0), len));
-    }
-    else if (IS_A(ARG(1), RBLstring)) {
+    } else if (IS_A(ARG(1), RBLstring)) {
         return FIXNUM(write(fd, (char*)&((RBLstring*)ARG(1))->byte(0), len));
     }
 
@@ -784,12 +768,10 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
 
         if (std::regex_match(str_s, r)) {  // See if it matches
             return RBLstring::create(str_s);
-        }
-        else {
+        } else {
             return RBLFALSE;
         }
-    }
-    catch (const std::regex_error& e) {
+    } catch (const std::regex_error& e) {
         warning("Regex expression error: %s code=%d", e.what(), e.code());
         return RBLFALSE;
     }
@@ -850,8 +832,7 @@ DEF("prim-execvp", sysExecv, 5, 6) {
     int splitp;
     if (NARGS == 5) {
         splitp = true;
-    }
-    else {
+    } else {
         CHECK(5, RblBool, x);
         splitp = BOOLVAL(x);
     }
@@ -899,8 +880,7 @@ DEF("ostream-display-join", ostreamDisplayJoin, 2, MaxArgs) {
 
         if (errno != 0) {
             return FIXNUM(-errno);
-        }
-        else {
+        } else {
             return NIV;
         }
     }
@@ -961,8 +941,7 @@ DEF("tuple-unzip", tupleUnZip, 1, 2) {
     if (NARGS == 2) {
         if (IS_FIXNUM(ARG(1))) {
             n = FIXVAL(ARG(1));
-        }
-        else {
+        } else {
             return PRIM_ERROR("Fixnum expected for stride");
         }
     }
@@ -991,8 +970,7 @@ DEF("tuple-unzip", tupleUnZip, 1, 2) {
     for (; i < n; i++) {
         if (i < smn) {
             j = sdn + 1;
-        }
-        else {
+        } else {
             j = sdn;
         }
 
@@ -1027,8 +1005,7 @@ DEF("tuple-zip", tupleZip, 1, MaxArgs) {
             if (mx < j) {
                 mx = j;
             }
-        }
-        else {
+        } else {
             return PRIM_ERROR("non Tuple");
         }
     }

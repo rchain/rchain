@@ -385,8 +385,7 @@ static void get_path_prefix(char* path, char* dir) {
         int n = p - path;
         strncpy(dir, path, n);
         dir[n] = 0;
-    }
-    else {
+    } else {
         strcpy(dir, ".");
     }
 }
@@ -407,8 +406,7 @@ static FILE* FindBootFile() {
         strcpy(path, BootDirectory);
         strcat(path, "/");
         strcat(path, "boot.rbl");
-    }
-    else {
+    } else {
         get_path_prefix(BootFile, BootDirectory);
         strcpy(path, BootFile);
     }
@@ -494,8 +492,7 @@ static void LoadRunFile() {
             while ((expr = reader->readExpr()) != RBLEOF) {
                 vm->load(expr);
             }
-        }
-        else {
+        } else {
             suicide("Unable to open RunFile \"%s\": %s", RunFile,
                     strerror(errno));
         }
@@ -634,8 +631,7 @@ int asyncHelper(int fd, int desiredState) {
 #ifdef FCNTL_NONBLOCK
     if (desiredState) {
         flags |= FCNTL_NONBLOCK;
-    }
-    else {
+    } else {
         flags &= ~(FCNTL_NONBLOCK);
     }
 
@@ -661,8 +657,7 @@ int asyncHelper(int fd, int desiredState) {
 #else
         return -1;
 #endif
-    }
-    else {
+    } else {
         return 0;
     }
 }

@@ -135,8 +135,7 @@ DEF("istream-new", makeIstream, 1, 2) {
     if (f) {
         Reader* r = Reader::create(f);
         return Istream::create(r);
-    }
-    else {
+    } else {
         return PRIM_ERROR(sys_errmsg());
     }
 }
@@ -182,8 +181,7 @@ DEF("istream-readline", istreamReadLine, 1, 1) {
         if (c == '\n') {
             readline_buf[i] = 0;
             return RBLstring::create(readline_buf);
-        }
-        else {
+        } else {
             readline_buf[i] = c;
             cOb = stream->reader->readCh();
         }
@@ -240,8 +238,7 @@ DEF("ostream-new", makeOstream, 1, 2) {
 
     if (f) {
         return Ostream::create(f);
-    }
-    else {
+    } else {
         return PRIM_ERROR(sys_errmsg());
     }
 }
@@ -259,12 +256,10 @@ DEF("ostream-display", ostreamDisplay, 2, MaxArgs) {
 
         if (errno != 0) {
             return FIXNUM(-errno);
-        }
-        else {
+        } else {
             return NIV;
         }
-    }
-    else {
+    } else {
         return PRIM_ERROR("cannot display on closed ostream");
     }
 }
@@ -286,12 +281,10 @@ DEF("ostream-print", ostreamPrint, 2, MaxArgs) {
 
         if (errno != 0) {
             return FIXNUM(-errno);
-        }
-        else {
+        } else {
             return NIV;
         }
-    }
-    else {
+    } else {
         return PRIM_ERROR("cannot print on closed ostream");
     }
 }
@@ -319,8 +312,7 @@ DEF("stream-status", streamStat, 1, 1) {
     int status = stat(path, &statbuf);
     if (status) {
         return NIV;
-    }
-    else {
+    } else {
         ByteVec* result = ByteVec::create(sizeof(struct stat));
         memcpy(&result->byte(0), &statbuf, sizeof(struct stat));
         return result;
@@ -367,12 +359,10 @@ DEF("ostream-log-time", obLogTime, 1, 1) {
         int length = fprintf(strm->stream, "%s", buf);
         if (length <= 0) {
             return PRIM_ERROR("Error writing to ostream");
-        }
-        else {
+        } else {
             return NIV;
         }
-    }
-    else {
+    } else {
         return PRIM_ERROR("cannot print on closed ostream");
     }
 }
@@ -381,15 +371,13 @@ DEF("ostream-log-time", obLogTime, 1, 1) {
 DEF("prim-flush", obFlush, 0, 1) {
     if (NARGS == 0) {
         fflush(stdout);
-    }
-    else {
+    } else {
         CHECK(0, Ostream, strm);
         if (strm->stream) {
             if (fflush(strm->stream) == EOF) {
                 return FIXNUM(-errno);
             }
-        }
-        else {
+        } else {
             return PRIM_ERROR("cannot flush closed ostream");
         }
     }
@@ -405,15 +393,13 @@ DEF("getFd", obGetFd, 1, 1) {
 #else
         return FIXNUM(((Istream*)ARG(0))->reader->file->_file);
 #endif
-    }
-    else if (IS_A(ARG(0), Ostream)) {
+    } else if (IS_A(ARG(0), Ostream)) {
 #ifdef HPUX
         return FIXNUM(((Ostream*)ARG(0))->stream->__fileL);
 #else
         return FIXNUM(((Ostream*)ARG(0))->stream->_file);
 #endif
-    }
-    else {
+    } else {
         return FIXNUM(-1);
     }
 }

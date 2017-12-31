@@ -147,8 +147,7 @@ Tuple* Tuple::create() {
     if (NIL == INVALID) {
         void* loc = PALLOC(sizeof(Tuple));
         return NEW(loc) Tuple(0, INVALID);
-    }
-    else {
+    } else {
         return NIL;
     }
 }
@@ -262,8 +261,7 @@ Ob* Tuple::subObject(int i, int n) { return makeSlice(i, n); }
 bool Tuple::accepts(Ctxt* msg) {
     if (this == NIL) {
         return true;
-    }
-    else {
+    } else {
         int n = numberOfElements();
         for (int i = 0; i < n; i++) {
             if (BASE(elem(i))->matches(msg)) {
@@ -301,8 +299,7 @@ bool Tuple::matches(Ctxt* msg) {
         }
 
         return true;
-    }
-    else {
+    } else {
         return false;
     }
 }
@@ -320,16 +317,13 @@ bool Tuple::matches(Tuple* msg) {
                     if (IS_A(msg->elem(i), Tuple)) {
                         if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i))) {
                             return false;
-                        }
-                        else {
+                        } else {
                             continue;
                         }
-                    }
-                    else {
+                    } else {
                         return false;
                     }
-                }
-                else {
+                } else {
                     return false;
                 }
             }
@@ -432,8 +426,7 @@ DEF("tuple-concat", tplConcat, 0, MaxArgs) {
     default:
         if (resultsize == 0) {
             result = NIL;
-        }
-        else {
+        } else {
             result = Tuple::create(resultsize, NIV);
             Ob** resultp = &result->elem(0);
             for (i = 0; i < NARGS; i++) {
@@ -457,11 +450,9 @@ DEF("tuple-safe-nth", tplSafeNth, 2, 2) {
 
     if (n < 0) {
         return MIN_FIXNUM;
-    }
-    else if (n < t->numberOfElements()) {
+    } else if (n < t->numberOfElements()) {
         return t->elem(n);
-    }
-    else {
+    } else {
         return MAX_FIXNUM;
     }
 }

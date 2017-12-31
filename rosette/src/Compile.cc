@@ -235,11 +235,9 @@ unsigned AttrNode::getDestOffset() { return cu->extendLitvec(dest.atom); }
 void AttrNode::emitAlloc(unsigned n) {
     if (n == 0) {
         return;
-    }
-    else if (n < 256) {
+    } else if (n < 256) {
         emitF0(opAlloc, n);
-    }
-    else {
+    } else {
         cu->abort("argvec size (%d) too large for alloc instruction", n);
     }
 }
@@ -364,13 +362,11 @@ void AttrNode::emitLit(pOb val) {
         if (locType == LT_CtxtRegister && regno == CRN_Rslt) {
             SELF->emitF0(opIndLitToRslt, valOffset);
             return;
-        }
-        else if (valOffset < 16) {
+        } else if (valOffset < 16) {
             if (locType == LT_ArgRegister && argno < 16) {
                 SELF->emitF1(opIndLitToArg, argno, valOffset);
                 return;
-            }
-            else if (locType == LT_CtxtRegister) {
+            } else if (locType == LT_CtxtRegister) {
                 SELF->emitF1(opIndLitToReg, regno, valOffset);
                 return;
             }
@@ -423,8 +419,7 @@ void AttrNode::emitLookup(pOb symbol) {
     case LT_ArgRegister:
         if (argno < 16) {
             SELF->emitF2(opLookupToArg, argno, litOffset);
-        }
-        else {
+        } else {
             SELF->emitF2(opLookupToReg, CRN_Rslt, litOffset);
             SELF->emitF0(opXferRsltToArg, argno);
         }
@@ -456,8 +451,7 @@ void AttrNode::emitOpAndLabel(Opcode op, pOb label_name) {
 void AttrNode::emitPush(int nargs) {
     if (nargs == 0) {
         emitF0(opPush);
-    }
-    else {
+    } else {
         emitF0(opPushAlloc, nargs);
     }
 }
@@ -560,9 +554,8 @@ void AttrNode::emitXfer(Location source) {
             return;
         }
         }
-    }
-    else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
-             GET_LEXVAR_OFFSET(source) < 16) {
+    } else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
+               GET_LEXVAR_OFFSET(source) < 16) {
         KONST unsigned ind = GET_LEXVAR_IND(source);
         KONST unsigned level = GET_LEXVAR_LEVEL(source);
         KONST unsigned offset = GET_LEXVAR_OFFSET(source);
@@ -577,8 +570,7 @@ void AttrNode::emitXfer(Location source) {
                 SELF->emitF7(opXferLexToArg, ind, level, offset,
                              GET_ARGREG_INDEX(SELF->dest));
                 return;
-            }
-            else {
+            } else {
                 SELF->emitF7(opXferLexToReg, ind, level, offset, CRN_Rslt);
                 SELF->emitF0(opXferRsltToArg, GET_ARGREG_INDEX(SELF->dest));
                 return;
@@ -598,8 +590,7 @@ void AttrNode::emitXfer(Location source) {
             emitF1(opXferArgToArg, GET_ARGREG_INDEX(SELF->dest),
                    GET_ARGREG_INDEX(source));
             return;
-        }
-        else {
+        } else {
             SELF->emitF0(opXferArgToRslt, GET_ARGREG_INDEX(source));
             SELF->emitF0(opXferRsltToArg, GET_ARGREG_INDEX(SELF->dest));
             return;
@@ -749,8 +740,7 @@ void SymbolNode::emitDispatchCode(bool ctxtAvailable, bool, RtnCode rtn,
 
     if (SELF->loc == LocLimbo) {
         SELF->emitLookup(SELF->sym);
-    }
-    else {
+    } else {
         SELF->emitXfer(SELF->loc);
     }
 
@@ -901,12 +891,10 @@ void CompoundNode::addTo(ExprStack* exprstack, AttrNode* node) {
 void CompoundNode::analyze(AttrNode* node) {
     if (GET_ATTR(*node, f_simpleNode)) {
         addTo(&simple, node);
-    }
-    else if (GET_ATTR(*node, f_inlineableNode)) {
+    } else if (GET_ATTR(*node, f_inlineableNode)) {
         av_size = std::max(av_size, node->av_size);
         addTo(&inlined, node);
-    }
-    else {
+    } else {
         outstanding++;
         addTo(&nested, node);
     }
@@ -1019,8 +1007,7 @@ void CompoundNode::fixInlinedConflicts(ArgNum* free, int freeTop) {
 void CompoundNode::emitPrefix(bool ctxtAvailable, bool argvecAvailable) {
     if (!GET_FLAG(word, f_inlineableNode) && !ctxtAvailable) {
         emitPush(av_size);
-    }
-    else if (!argvecAvailable) {
+    } else if (!argvecAvailable) {
         emitAlloc(av_size);
     }
 }
@@ -1064,8 +1051,7 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     if (nestedCode) {
         if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        }
-        else if (inlinedCode) {
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
         }
 
@@ -1079,11 +1065,9 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     if (willWrapup || needPop) {
         if (nestedCode) {
             SELF->cu->setLabel(nestedExit);
-        }
-        else if (simpleCode) {
+        } else if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        }
-        else if (inlinedCode) {
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
         }
 
@@ -1094,8 +1078,7 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
                 SELF->cu->setLabel(finish);
             }
             SELF->emitF0(opPop);
-        }
-        else {
+        } else {
             SELF->emitWrapup(rtn, exit);
         }
     }
@@ -1333,8 +1316,7 @@ void BlockNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     if (nestedCode) {
         if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        }
-        else if (inlinedCode) {
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
         }
 
@@ -1348,11 +1330,9 @@ void BlockNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     if (needPop) {
         if (nestedCode) {
             SELF->cu->setLabel(nestedExit);
-        }
-        else if (simpleCode) {
+        } else if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        }
-        else if (inlinedCode) {
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
         }
 
@@ -1360,8 +1340,7 @@ void BlockNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
             Label finish = SELF->cu->newLabel();
             SELF->emitF0(opNxt);
             SELF->cu->setLabel(finish);
-        }
-        else {
+        } else {
             SELF->emitF0(opNxt);
         }
     }
@@ -1511,8 +1490,7 @@ void RequestNode::emitWrapup(RtnCode rtn, Label next) {
 
     if (primTrgt != FIXNUM(-1)) {
         emitApplyPrim(FIXVAL(primTrgt), nargs, unwind, rtn, next);
-    }
-    else {
+    } else {
         emitXmit(nargs, unwind, rtn, next);
     }
 }
@@ -1532,8 +1510,7 @@ void RequestNode::emitXmit(unsigned nargs, bool unwind, RtnCode rtn,
         case LT_CtxtRegister:
             if (nargs < 16) {
                 emitF4(opXmitReg, unwind, nxt, nargs, GET_CTXTREG_INDEX(dest));
-            }
-            else {
+            } else {
                 PROTECT_THIS(RequestNode);
                 SELF->emitF5(opXmitRegXtnd, unwind, nxt, nargs);
                 SELF->emitE0(GET_CTXTREG_INDEX(dest), 0);
@@ -1543,8 +1520,7 @@ void RequestNode::emitXmit(unsigned nargs, bool unwind, RtnCode rtn,
         case LT_ArgRegister:
             if (GET_ARGREG_INDEX(dest) < 16 && nargs < 16) {
                 emitF4(opXmitArg, unwind, nxt, nargs, GET_ARGREG_INDEX(dest));
-            }
-            else {
+            } else {
                 PROTECT_THIS(RequestNode);
                 SELF->emitF5(opXmitArgXtnd, unwind, nxt, nargs);
                 SELF->emitE0(GET_ARGREG_INDEX(dest), 0);
@@ -1560,8 +1536,7 @@ void RequestNode::emitXmit(unsigned nargs, bool unwind, RtnCode rtn,
             unsigned destOffset = SELF->getDestOffset();
             if (destOffset < 16 && nargs < 16) {
                 SELF->emitF4(opXmitTag, unwind, nxt, nargs, destOffset);
-            }
-            else {
+            } else {
                 SELF->emitF5(opXmitTagXtnd, unwind, nxt, nargs);
                 SELF->emitE0(destOffset, 0);
             }
@@ -1660,8 +1635,7 @@ void TupleNode::emitWrapup(RtnCode rtn, Label next) {
             SELF->dest = temp;
             SELF->emitApplyPrim(tplConsStar->primNumber(), nelems + 1, false,
                                 rtn, next);
-        }
-        else {
+        } else {
             if (rtn == TaggedRtn) {
                 SELF->dest = LocRslt;
             }
@@ -1670,8 +1644,7 @@ void TupleNode::emitWrapup(RtnCode rtn, Label next) {
             SELF->dest = temp;
             SELF->emitRtn(rtn, next);
         }
-    }
-    else {
+    } else {
         emitApplyPrim(tplConsStar->primNumber(), nelems + 1, false, rtn, next);
     }
 }
@@ -1970,8 +1943,7 @@ void MethodNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
 
     if (!ctxtAvailable) {
         SELF->emitPush(SELF->av_size);
-    }
-    else if (!argvecAvailable) {
+    } else if (!argvecAvailable) {
         SELF->emitAlloc(SELF->av_size);
     }
 
@@ -2116,8 +2088,7 @@ void ProcNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
 
     if (!ctxtAvailable) {
         SELF->emitPush(SELF->av_size);
-    }
-    else if (!argvecAvailable) {
+    } else if (!argvecAvailable) {
         SELF->emitAlloc(SELF->av_size);
     }
 
@@ -2294,8 +2265,7 @@ void GotoNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
         if (env == TopEnv) {
             cu->abort("attempt to jump to label '%s' not in an enclosing scope",
                       SYMPTR(labelName));
-        }
-        else if (n > MaximumCut) {
+        } else if (n > MaximumCut) {
             cu->abort(
                 "attempt to cut back more than %d lexical levels in jump to "
                 "label '%s'",
@@ -2312,8 +2282,7 @@ void GotoNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     if (n != 0) {
         SELF->emitOpAndLabel(opJmpCut, SELF->labelName);
         SELF->emitE0(n, 0);
-    }
-    else {
+    } else {
         SELF->emitOpAndLabel(opJmp, SELF->labelName);
     }
 }
@@ -2503,8 +2472,7 @@ Code* CompilationUnit::compileExpr(pOb ctEnv, pOb freeEnv) {
 
     if (SETJMP(SELF->abortbuf)) {
         return (Code*)INVALID;
-    }
-    else {
+    } else {
         SELF->graph->initialize(ctEnv, freeEnv, LocRslt, SELF);
     }
 
@@ -2533,8 +2501,7 @@ Code* CompilationUnit::compileBody(Template* templat, pOb ctEnv, pOb freeEnv) {
 
     if (SETJMP(SELF->abortbuf)) {
         return (Code*)INVALID;
-    }
-    else {
+    } else {
         SELF->graph->initialize(new_ctEnv, freeEnv, LocRslt, SELF);
     }
 
@@ -2632,8 +2599,7 @@ AttrNode* SendExpr::makeAttrNode(bool valueCtxt) {
         Tuple* subExprs = Tuple::create(1, this);
         BlockExpr* blockExpr = BlockExpr::create(subExprs, RBLTRUE);
         return blockExpr->makeAttrNode(true);
-    }
-    else
+    } else
         return SendNode::create(this, false);
 }
 
@@ -2678,8 +2644,7 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
             }
             if (tailarg)
                 ASSIGN(te, elem(nslices + semislice), SELF->rest);
-        }
-        else {
+        } else {
             /*
              * The expression is too big to represent as one concat of
              * MaxArgs-1 tupleexprs (each of maximum length MaxArgs), so

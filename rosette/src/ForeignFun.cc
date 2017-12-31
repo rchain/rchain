@@ -191,8 +191,7 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
                 result = runtimeError(ctxt, "type mismatch ");
                 ctxt->ret(result);
                 return result;
-            }
-            else {
+            } else {
                 x[i] = u.val;
             }
         }
@@ -647,8 +646,7 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         extern double ff_double_helper(double_fun, char*, int);
         double_fun fn = (double_fun)FIXVAL(Caddr);
         result = Float::create(ff_double_helper(fn, marshallingArea, nChars));
-    }
-    else {
+    } else {
         extern long ff_single_helper(single_fun, char*, int);
         single_fun fn = (single_fun)FIXVAL(Caddr);
         LONG_ARG rslt = ff_single_helper(fn, marshallingArea, nChars);
@@ -685,10 +683,11 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
             break;
 
         case RC_VoidStar:
-            if (rslt & 0xc0000000L)
+            if (rslt & 0xc0000000L) {
                 return PRIM_ERROR("unrepresentable address");
-            else
+            } else {
                 result = FIXNUM(rslt);
+            }
             break;
 
         case RC_ByteVec:

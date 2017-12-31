@@ -102,8 +102,7 @@ int ParseCommandLine(int argc, char** argv) {
                 ParanoidAboutGC = temp;
                 DeleteArgs(i, argc, argv, 2);
                 argc -= 2;
-            }
-            else {
+            } else {
                 ParanoidAboutGC = 1;
                 DeleteArgs(i, argc, argv);
                 argc--;
@@ -116,8 +115,7 @@ int ParseCommandLine(int argc, char** argv) {
             int temp;
             if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp)) {
                 InfantSpaceSize = temp * 1024;
-            }
-            else {
+            } else {
                 usage(cmd_name);
             }
 
@@ -130,8 +128,7 @@ int ParseCommandLine(int argc, char** argv) {
             int temp;
             if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp)) {
                 SurvivorSpaceSize = temp * 1024;
-            }
-            else {
+            } else {
                 usage(cmd_name);
             }
 
@@ -144,8 +141,7 @@ int ParseCommandLine(int argc, char** argv) {
             int temp;
             if (i + 1 < argc && sscanf(argv[i + 1], "%d", &temp)) {
                 OldSpaceChunkSize = temp * 1024;
-            }
-            else {
+            } else {
                 usage(cmd_name);
             }
 
@@ -157,8 +153,7 @@ int ParseCommandLine(int argc, char** argv) {
         if (strcmp(argv[i], "-boot") == 0) {
             if (i + 1 < argc) {
                 strcpy(BootFile, argv[i + 1]);
-            }
-            else {
+            } else {
                 usage(cmd_name);
             }
 
@@ -170,8 +165,7 @@ int ParseCommandLine(int argc, char** argv) {
         if (strcmp(argv[i], "-run") == 0) {
             if (i + 1 < argc) {
                 strcpy(RunFile, argv[i + 1]);
-            }
-            else {
+            } else {
                 usage(cmd_name);
             }
 

@@ -230,8 +230,7 @@ pOb Actor::dispatch(pCtxt ctxt) {
 pOb Actor::lookupAndInvoke(pCtxt ctxt) {
     if (BASE(ctxt->trgt)->isSynchronousTrgt()) {
         return Ob::lookupAndInvoke(ctxt);
-    }
-    else {
+    } else {
         receive(ctxt);
         return SUSPENDED;
     }

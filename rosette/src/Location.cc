@@ -70,8 +70,7 @@ bool store(Location loc, Ctxt* k, Ob* val) {
     case LT_ArgRegister:
         if (GET_ARGREG_INDEX(loc) >= k->argvec->numberOfElements()) {
             return true;
-        }
-        else {
+        } else {
             ASSIGN(k->argvec, elem(GET_ARGREG_INDEX(loc)), val);
             return false;
         }
@@ -260,8 +259,7 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
                                      GET_BITFIELD_LEVEL(loc),
                                      GET_BITFIELD_OFFSET(loc),
                                      SPANSIZE(GET_BITFIELD_SPAN(loc)), bits);
-        }
-        else {
+        } else {
             warning("Location::setValWrt arg not fixnum");
             return INVALID;
         }
@@ -270,8 +268,7 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
             uint32_t bits = (uint32_t)FIXVAL(val);
             return BASE(v)->setField(0, 0, GET_BITFIELD00_OFFSET(loc),
                                      SPANSIZE(GET_BITFIELD00_SPAN(loc)), bits);
-        }
-        else {
+        } else {
             warning("Location::setValWrt arg not fixnum");
             return INVALID;
         }

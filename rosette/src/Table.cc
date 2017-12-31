@@ -53,8 +53,7 @@ RblTable::RblTable(int max, Tuple* tbl)
         addFn = &RblTable::hashAdd;
         lookupFn = &RblTable::hashLookup;
         checkSizeFn = &RblTable::hashCheckSize;
-    }
-    else {
+    } else {
         addFn = &RblTable::linearAdd;
         lookupFn = &RblTable::linearLookup;
         checkSizeFn = &RblTable::linearCheckSize;
@@ -82,8 +81,7 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
         addFn = &RblTable::hashAdd;
         lookupFn = &RblTable::hashLookup;
         checkSizeFn = &RblTable::hashCheckSize;
-    }
-    else {
+    } else {
         addFn = &RblTable::linearAdd;
         lookupFn = &RblTable::linearLookup;
         checkSizeFn = &RblTable::linearCheckSize;
@@ -213,11 +211,9 @@ RblTable::Entry* RblTable::hashLookup(pOb key) {
         Entry* p = &entry(probe);
         if ((*hitFn)(p->key, key)) {
             return p;
-        }
-        else if (p->key != ABSENT) {
+        } else if (p->key != ABSENT) {
             probe = (probe + HashStride) % maxEntries;
-        }
-        else {
+        } else {
             break;
         }
     }
@@ -245,8 +241,7 @@ void RblTable::linearAdd(pOb key, pOb val) {
                 entry(numberOfEntries).key = ABSENT;
                 entry(numberOfEntries).val = ABSENT;
                 return;
-            }
-            else {
+            } else {
                 tbl->checkStore(p->val = val);
                 return;
             }
@@ -308,8 +303,7 @@ void RblTable::linearCheckSize() {
     if (numberOfEntries >= HashThreshold) {
         hashify();
         hashCheckSize();
-    }
-    else if (numberOfEntries >= maxEntries) {
+    } else if (numberOfEntries >= maxEntries) {
         linearResize();
     }
 }
@@ -344,8 +338,7 @@ void RblTable::traversePtrs(V__PSOb f) {
 bool RblTable::gcFixup() {
     if (gcSensitiveKeys) {
         return true;
-    }
-    else {
+    } else {
         return (registered = false);
     }
 }
@@ -355,8 +348,7 @@ bool RblTable::scavengeFixup() {
     rehashCompletely();
     if (gcSensitiveKeys) {
         return true;
-    }
-    else {
+    } else {
         return (registered = false);
     }
 }
@@ -384,8 +376,7 @@ Tuple* RblTable::dumpKeys() {
         for (int i = numberOfEntries; i--;) {
             result->elem(i) = SELF->entry(i).key;
         }
-    }
-    else {
+    } else {
         int i = 0;
         for (int j = maxEntries; j--;) {
             pOb key = SELF->entry(j).key;
@@ -409,8 +400,7 @@ Tuple* RblTable::dumpPairs() {
     if (SELF->addFn == &RblTable::linearAdd) {
         memcpy(&result->elem(0), &SELF->entry(0),
                SELF->numberOfEntries * sizeof(Entry));
-    }
-    else {
+    } else {
         int i = 0;
         for (int j = maxEntries; j--;) {
             pOb key = SELF->entry(j).key;
@@ -442,8 +432,7 @@ pOb RblTable::addKey(pOb key, pOb val) {
     PROTECT(val);
     if (numberOfEntries >= RblTable::maxMaxTableSize) {
         return DEADTHREAD;
-    }
-    else {
+    } else {
         (SELF->*checkSizeFn)();
         SELF->addEntry(key, val);
         return key;
@@ -456,8 +445,7 @@ DEF("tbl-add", tblAdd, 3, 3) {
     pOb result = tbl->addKey(ARG(1), ARG(2));
     if (result == DEADTHREAD) {
         return tbl->runtimeError(__CTXT__, "RblTable max size reached.");
-    }
-    else {
+    } else {
         return result;
     }
 }

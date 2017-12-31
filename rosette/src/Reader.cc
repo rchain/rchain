@@ -145,11 +145,9 @@ void Reader::buffer(int c) {
 ReaderMode Reader::accept(int c, int gapsPermitted) {
     if (c == EOF) {
         return STOP;
-    }
-    else if (c == '\\') {
+    } else if (c == '\\') {
         return acceptEscChar(c, gapsPermitted);
-    }
-    else {
+    } else {
         buffer(c);
 #if defined(OPTIMIZE_ATOMS)
         return (mode == GROK_ATOM) ? GROK_ATOM : CONTINUE;
@@ -277,8 +275,7 @@ ReaderMode CommentFrame::process(int c, Reader* r) {
     if (c == EOF || c == '\n') {
         r->fpop();
         return START;
-    }
-    else {
+    } else {
         return CONTINUE;
     }
 }
@@ -382,16 +379,13 @@ ReaderMode EscCharFrame::process(int c, Reader* r) {
 
         if (base == 0) {
             return r->receiveChar(c);
-        }
-        else {
+        } else {
             return CONTINUE;
         }
-    }
-    else if (base == 8) {
+    } else if (base == 8) {
         if ('0' <= c && c < '8') {
             val = 8 * val + (c - '0');
-        }
-        else {
+        } else {
             /*
              * Pretend the digit was a zero.
              */
@@ -401,29 +395,24 @@ ReaderMode EscCharFrame::process(int c, Reader* r) {
 
         if (++nchars == 3) {
             return r->receiveChar(val);
-        }
-        else {
+        } else {
             return CONTINUE;
         }
-    }
-    else if (base == 16) {
+    } else if (base == 16) {
         if (isxdigit(c)) {
             val = 16 * val +
                   (isdigit(c) ? c - '0' : 10 + (c - (isupper(c) ? 'A' : 'a')));
-        }
-        else {
+        } else {
             val *= 16;
             (void)r->error("invalid hex digit ('%c')", c);
         }
 
         if (++nchars == 2) {
             return r->receiveChar(val);
-        }
-        else {
+        } else {
             return CONTINUE;
         }
-    }
-    else if (base == -1) {
+    } else if (base == -1) {
         if (c == '\\') {
             /*
              * We have just bumped into the gap terminator; eat it, drop
@@ -433,8 +422,7 @@ ReaderMode EscCharFrame::process(int c, Reader* r) {
         }
 
         return CONTINUE;
-    }
-    else {
+    } else {
         suicide("unknown base (%d) in EscCharFrame", base);
         return STOP;
     }
@@ -470,8 +458,7 @@ ReaderMode AtomFrame::process(int c, Reader* r) {
         PROTECT(r);
         Ob* v = r->finalizeAtom();
         return r->receiveOb(v);
-    }
-    else {
+    } else {
         return r->accept(c);
     }
 }
@@ -509,8 +496,7 @@ ReaderMode StringFrame::process(int c, Reader* r) {
         PROTECT(r);
         RBLstring* str = RBLstring::create(r->finalizeBuffer());
         return r->receiveOb(str);
-    }
-    else {
+    } else {
         /*
          * Remember to tell the acceptance routine that "gaps" are
          * permitted in strings.
@@ -554,13 +540,11 @@ ReaderMode SpecialFrame::process(int c, Reader* r) {
         if (c == '\\') {
             state = SP_EXPECTING_CHAR;
             return CONTINUE;
-        }
-        else if (isalpha(c)) {
+        } else if (isalpha(c)) {
             (void)NEW(r->falloc(sizeof(AtomFrame))) AtomFrame(r);
             r->resetBuffer();
             return r->accept(c);
-        }
-        else {
+        } else {
             (void)r->error("unknown special #%c", c);
             return START;
         }
@@ -569,8 +553,7 @@ ReaderMode SpecialFrame::process(int c, Reader* r) {
         if (c == '\\') {
             (void)NEW(r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
             return CONTINUE;
-        }
-        else {
+        } else {
             return r->receiveOb(RBLCHAR(c));
         }
 
@@ -709,12 +692,10 @@ ReaderMode ListFrame::receiveOb(Ob* subexpr, Reader* r) {
     if (dotState == 0) {
         ++nexprs;
         r->opush(subexpr);
-    }
-    else if (dotState == 1) {
+    } else if (dotState == 1) {
         ++dotState;
         r->opush(subexpr);
-    }
-    else {
+    } else {
         /*
          * If we get here, we have found more than one expression
          * following the dot character, which is an error.  The way this
@@ -739,8 +720,7 @@ ReaderMode ListFrame::receiveTerminator(int c, Reader* r) {
     Ob* rest = NILexpr;
     if (dotState == 1) {
         (void)r->error("no expression following '%c'", dotChar);
-    }
-    else if (dotState > 1) {
+    } else if (dotState > 1) {
         rest = r->opop();
     }
 
@@ -916,8 +896,7 @@ ReaderMode ListReadMacro::start(int, Reader* r) {
 static Ob* msgFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
     if (n == 0 && rest == NILexpr) {
         return NILexpr;
-    }
-    else {
+    } else {
         return TupleExpr::create(stk, n, rest);
     }
 }
@@ -935,8 +914,7 @@ static Ob* rqstFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
     if (fn) {
         return (*fn)(r, stk, n, rest);
-    }
-    else {
+    } else {
         TupleExpr* msg = (TupleExpr*)msgFinalizer(r, stk + 1, n - 1, rest);
         return RequestExpr::create(stk[0], msg);
     }
@@ -968,8 +946,7 @@ static Ob* ifFinalizer(Reader* r, Ob** stk, int n, Ob*) {
 static Ob* blockHelper(Ob** stk, int n, bool implicit = true) {
     if (n == 1) {
         return stk[0];
-    }
-    else {
+    } else {
         Tuple* subExprs = Tuple::create(stk, n);
         return BlockExpr::create(subExprs, RBLBOOL(implicit));
     }
@@ -994,8 +971,7 @@ static Ob* freeFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
     if (!IS_A(p, TupleExpr) || !p->allSymbols()) {
         return r->error("improper syntax for free expression");
-    }
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return FreeExpr::create(p, block);
@@ -1048,8 +1024,7 @@ static Ob* letFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
     if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for let expression");
-    }
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return LetExpr::create(p, block);
@@ -1091,8 +1066,7 @@ static Ob* letrecFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
     if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for letrec expression");
-    }
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return LetrecExpr::create(p, block);
@@ -1107,8 +1081,7 @@ static Ob* seqFinalizer(Reader* r, Ob** stk, int n, Ob* rest) {
 
     if (n == 2) {
         return stk[1];
-    }
-    else {
+    } else {
         Tuple* subExprs = Tuple::create(stk + 1, n - 1);
         return SeqExpr::create(subExprs);
     }
@@ -1223,8 +1196,7 @@ ReadTable::ReadTable() {
         if (isspace(i)) {
             tbl[i] = &_WRM;
             attributes[i] |= _DELIMITER;
-        }
-        else {
+        } else {
             tbl[i] = &_ARM;
         }
     }
@@ -1280,8 +1252,7 @@ Ob* Reader::readCh() {
         return finish(
             error("IO synchronization problem with reader for file %d",
                   fileno(file)));
-    }
-    else {
+    } else {
         waitingOnIO = WAITING_FOR_CHAR;
         return resumeCh();
     }
@@ -1293,8 +1264,7 @@ Ob* Reader::readExpr() {
         return finish(
             error("IO synchronization problem with reader for file %d",
                   fileno(file)));
-    }
-    else {
+    } else {
         (void)NEW(falloc(sizeof(TopFrame))) TopFrame(this);
         mode = START;
         waitingOnIO = WAITING_FOR_EXPR;
@@ -1331,12 +1301,10 @@ Ob* Reader::resumeCh() {
     if (c == EOF) {
         if (RBL_WOULDBLOCK) {
             return suspendReader();
-        }
-        else {
+        } else {
             return finish(RBLEOF);
         }
-    }
-    else {
+    } else {
         return finish(RBLCHAR(c));
     }
 }
@@ -1390,8 +1358,7 @@ Ob* Reader::resumeExpr() {
         case START:
             if (c == EOF) {
                 nextMode = my->ftop()->receiveEof(my);
-            }
-            else {
+            } else {
                 nextMode = my->rt->tbl[c]->start(c, my);
             }
             break;
@@ -1399,8 +1366,7 @@ Ob* Reader::resumeExpr() {
         case CONTINUE:
             if (c == EOF) {
                 nextMode = my->ftop()->receiveEof(my);
-            }
-            else {
+            } else {
                 nextMode = my->ftop()->process(c, my);
             }
             break;
@@ -1431,8 +1397,7 @@ Ob* Reader::resumeExpr() {
                  * "my" after this point.
                  */
                 nextMode = SELF->ftop()->receiveOb(v, SELF);
-            }
-            else {
+            } else {
                 my->digitSeen |= isdigit(c);
                 nextMode = my->accept(c);
             }
@@ -1486,8 +1451,7 @@ Ob* Reader::suspendReader() {
         errorEncountered = false;
         waitingOnIO = NOT_WAITING;
         return READ_ERROR;
-    }
-    else {
+    } else {
         /*
          * Leave waitingOnIO unchanged, so that we will re-enter with the
          * proper state.
@@ -1502,8 +1466,7 @@ Ob* Reader::finish(Ob* v) {
     if (errorEncountered) {
         resetState();
         return READ_ERROR;
-    }
-    else {
+    } else {
         assert(ostk.empty());
         assert(fstk.empty());
         return v;

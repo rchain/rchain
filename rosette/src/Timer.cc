@@ -72,8 +72,7 @@ void Timer::inc(timeval& tv, long secs, long usecs) {
     if (tv.tv_usec >= 1000000) {
         tv.tv_usec -= 1000000;
         tv.tv_sec += 1;
-    }
-    else if (tv.tv_usec < 0) {
+    } else if (tv.tv_usec < 0) {
         tv.tv_usec += 1000000;
         tv.tv_sec -= 1;
     }

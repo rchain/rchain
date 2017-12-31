@@ -67,8 +67,7 @@ void RblStack::push(Ob* val) {
         new_elems->elem(N) = val;
         FIXNUM_INC(SELF->nElems);
         ASSIGN(SELF, elems, new_elems);
-    }
-    else {
+    } else {
         FIXNUM_INC(nElems);
         ASSIGN(elems, elem(N), val);
     }

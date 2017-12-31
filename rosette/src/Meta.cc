@@ -103,8 +103,7 @@ Location StdMeta::keyLoc(pOb key, pOb) {
     pOb atom = map()->getKey(key);
     if (atom == ABSENT) {
         return LocLimbo;
-    }
-    else {
+    } else {
         Location loc;
         loc.atom = atom;
         return loc;
@@ -186,13 +185,11 @@ pOb StdMeta::add(pOb client, pOb key, pOb val, pCtxt ctxt) {
             }
 
             new_meta->map()->addKey(key, LexVar(0, offset, INDIRECT).atom);
-        }
-        else {
+        } else {
             return BASE(ctxt->trgt)
                 ->runtimeError(ctxt, "can't add slot to non-extensible object");
         }
-    }
-    else {
+    } else {
         setValWrt(descriptor, client, val);
     }
 
@@ -205,8 +202,7 @@ pOb StdMeta::set(pOb client, pOb key, pOb val, pCtxt ctxt) {
     if (descriptor != LocLimbo) {
         setValWrt(descriptor, client, val);
         return client;
-    }
-    else {
+    } else {
         return ctxt->missingBindingError(key);
     }
 }
@@ -237,8 +233,7 @@ pOb StdMeta::lookupOBO(pOb client, pOb key, pCtxt ctxt) {
 
     if (result == ABSENT) {
         return BASE(BASE(client)->parent())->lookup(key, ctxt);
-    }
-    else {
+    } else {
         return result;
     }
 }
@@ -309,12 +304,10 @@ Location IndexedMeta::keyLoc(pOb key, pOb client) {
                 FIXVAL(extension->slot(INDEXEDMETA_START_INDEXED_PART_SLOT)) +
                     FIXVAL(key),
                 clientsAreExtensible());
-        }
-        else {
+        } else {
             return LocLimbo;
         }
-    }
-    else {
+    } else {
         return StdMeta::keyLoc(key, client);
     }
 }

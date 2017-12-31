@@ -154,8 +154,7 @@ bool VirtualMachine::getNextStrand() {
         if (sleeperPool->empty()) {
             if (nsigs == 0) {
                 return true;
-            }
-            else {
+            } else {
                 if (sigvec == 0) {
                     if (debugging_level) {
                         printf("*** entering sigpause...\n");
@@ -174,8 +173,7 @@ bool VirtualMachine::getNextStrand() {
                  * through this body again and try another time.
                  */
             }
-        }
-        else {
+        } else {
             if (debugging_level) {
                 printf("*** waking sleepers\n");
             }
@@ -380,8 +378,7 @@ void VirtualMachine::handleException(Ob* v, Instr instr, Location tag) {
     case syscodeUpcall:
         if (family == ApplyPrimFamily) {
             handleApplyPrimUpcall(instr, tag);
-        }
-        else {
+        } else {
             handleXmitUpcall(instr, tag);
         }
         break;
@@ -555,8 +552,7 @@ void VirtualMachine::handleSignal() {
                     (*ioFn[i])(VM_EXCEPTION_EVENT, i, ioPool[i]);
                 }
             }
-        }
-        else if (n < 0) {
+        } else if (n < 0) {
             switch (errno) {
             case EINTR:
                 goto retry_select;
@@ -767,8 +763,7 @@ nextop:
         if (actuals == INVALID) {
             handleFormalsMismatch(formals);
             goto doNextThread;
-        }
-        else {
+        } else {
             installEnv(BASE(ctxt->env)->extendWith(formals->keymeta, actuals));
             ctxt->nargs = 0;
             goto nextop;
@@ -1017,8 +1012,7 @@ nextop:
             goto vmError;
         if (OP_f5_next(instr)) {
             goto doNextThread;
-        }
-        else {
+        } else {
             goto nextop;
         }
 
@@ -1112,8 +1106,7 @@ nextop:
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
-        }
-        else if (val == ABSENT) {
+        } else if (val == ABSENT) {
             handleMissingBinding(key, ArgReg(argno));
             goto doNextThread;
         }
@@ -1146,8 +1139,7 @@ nextop:
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
-        }
-        else if (val == ABSENT) {
+        } else if (val == ABSENT) {
             handleMissingBinding(key, CtxtReg((CtxtRegName)regno));
             goto doNextThread;
         }
@@ -1272,8 +1264,7 @@ nextop:
         loc.atom = code->lit(OP_f0_op0(instr));
         if (store(loc, ctxt, ctxt->rslt)) {
             goto vmError;
-        }
-        else {
+        } else {
             goto nextop;
         }
 
@@ -1360,12 +1351,10 @@ int VirtualMachine::addSignalHandler(int sig, SIG_PF fn, Ob* ob) {
     SIG_PF oldFn = (SIG_PF)signal(sig, fn);
     if (oldFn == (SIG_PF)SIG_ERR) {
         return -1;
-    }
-    else {
+    } else {
         if (oldFn == (SIG_PF)SIG_DFL) {
             nsigs += (fn != (SIG_PF)SIG_DFL);
-        }
-        else {
+        } else {
             nsigs -= (fn == (SIG_PF)SIG_DFL);
         }
         sigPool[sig] = ob;
@@ -1383,8 +1372,7 @@ Ob* VirtualMachine::initiateRosetteSignal(int sig) {
     if (sigPool[sig] == INVALID) {
         warning("no Rosette signal handler installed for signal %d", sig);
         return INVALID;
-    }
-    else {
+    } else {
         extern StdOprn* oprnSignal;
         Tuple* argvec = Tuple::create(2, NIV);
         argvec->elem(0) = sigPool[sig];

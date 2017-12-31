@@ -119,8 +119,7 @@ main(int, char** argv) {
         for (;;) {
             if (fgets(bp, sizeof(buffer), stdin)) {
                 write(fds[1], bp, strlen(bp));
-            }
-            else {
+            } else {
                 terminate();
             }
         }

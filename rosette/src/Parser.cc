@@ -148,11 +148,9 @@ void Parser::buffer(int c) {
 ParserMode Parser::accept(int c, int gapsPermitted) {
     if (c == EOF) {
         return STOP;
-    }
-    else if (c == '\\') {
+    } else if (c == '\\') {
         return acceptEscChar(c, gapsPermitted);
-    }
-    else {
+    } else {
         buffer(c);
 #if defined(OPTIMIZE_ATOMS)
         return (mode == GROK_ATOM) ? GROK_ATOM : CONTINUE;
@@ -272,8 +270,7 @@ ParserMode CommentFrame::process(int c, Parser* r) {
     if (c == EOF || c == '\n') {
         r->fpop();
         return START;
-    }
-    else {
+    } else {
         return CONTINUE;
     }
 }
@@ -377,16 +374,13 @@ ParserMode EscCharFrame::process(int c, Parser* r) {
 
         if (base == 0) {
             return r->receiveChar(c);
-        }
-        else {
+        } else {
             return CONTINUE;
         }
-    }
-    else if (base == 8) {
+    } else if (base == 8) {
         if ('0' <= c && c < '8') {
             val = 8 * val + (c - '0');
-        }
-        else {
+        } else {
             /*
              * Pretend the digit was a zero.
              */
@@ -396,30 +390,25 @@ ParserMode EscCharFrame::process(int c, Parser* r) {
 
         if (++nchars == 3) {
             return r->receiveChar(val);
-        }
-        else {
+        } else {
             return CONTINUE;
         }
-    }
-    else if (base == 16) {
+    } else if (base == 16) {
         if (isxdigit(c)) {
             val =
                 16 * val +
                 (isdigit(c) ? c - '0' : ((c - (isupper(c) ? 'A' : 'a')) + 10));
-        }
-        else {
+        } else {
             val *= 16;
             (void)r->error("invalid hex digit ('%c')", c);
         }
 
         if (++nchars == 2) {
             return r->receiveChar(val);
-        }
-        else {
+        } else {
             return CONTINUE;
         }
-    }
-    else if (base == -1) {
+    } else if (base == -1) {
         if (c == '\\') {
             /*
              * We have just bumped into the gap terminator; eat it, drop
@@ -429,8 +418,7 @@ ParserMode EscCharFrame::process(int c, Parser* r) {
         }
 
         return CONTINUE;
-    }
-    else {
+    } else {
         suicide("unknown base (%d) in EscCharFrame", base);
         return STOP;
     }
@@ -504,8 +492,7 @@ ParserMode StringFrame::process(int c, Parser* r) {
         PROTECT(r);
         RBLstring* str = RBLstring::create(r->finalizeBuffer());
         return r->receiveOb(str);
-    }
-    else {
+    } else {
         /*
          * Remember to tell the acceptance routine that "gaps" are
          * permitted in strings.
@@ -551,13 +538,11 @@ ParserMode SpecialPFrame::process(int c, Parser* r)
         if (c == '\\') {
             state = SP_EXPECTING_CHAR;
             return CONTINUE;
-        }
-        else if (isalpha(c)) {
+        } else if (isalpha(c)) {
             (void)NEW(r->falloc(sizeof(AtomFrame))) AtomFrame(r);
             r->resetBuffer();
             return r->accept(c);
-        }
-        else {
+        } else {
             (void)r->error("unknown special #%c", c);
             return START;
         }
@@ -566,8 +551,7 @@ ParserMode SpecialPFrame::process(int c, Parser* r)
         if (c == '\\') {
             (void)NEW(r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
             return CONTINUE;
-        }
-        else {
+        } else {
             return r->receiveOb(RBLCHAR(c));
         }
 
@@ -706,12 +690,10 @@ ParserMode ListFrame::receiveOb(Ob* subexpr, Parser* r) {
     if (dotState == 0) {
         ++nexprs;
         r->opush(subexpr);
-    }
-    else if (dotState == 1) {
+    } else if (dotState == 1) {
         ++dotState;
         r->opush(subexpr);
-    }
-    else {
+    } else {
         /*
          * If we get here, we have found more than one expression
          * following the dot character, which is an error.  The way this
@@ -735,8 +717,7 @@ ParserMode ListFrame::receiveTerminator(int c, Parser* r) {
     Ob* rest = NILexpr;
     if (dotState == 1) {
         (void)r->error("no expression following '%c'", dotChar);
-    }
-    else if (dotState > 1) {
+    } else if (dotState > 1) {
         rest = r->opop();
     }
 
@@ -912,8 +893,7 @@ ParserMode ListParseMacro::start(int, Parser* r) {
 static Ob* msgFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
     if (n == 0 && rest == NILexpr) {
         return NILexpr;
-    }
-    else {
+    } else {
         return TupleExpr::create(stk, n, rest);
     }
 }
@@ -931,8 +911,7 @@ static Ob* rqstFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
 
     if (fn) {
         return (*fn)(r, stk, n, rest);
-    }
-    else {
+    } else {
         TupleExpr* msg = (TupleExpr*)msgFinalizer(r, stk + 1, n - 1, rest);
         return RequestExpr::create(stk[0], msg);
     }
@@ -964,8 +943,7 @@ static Ob* ifFinalizer(Parser* r, Ob** stk, int n, Ob*) {
 static Ob* blockHelper(Ob** stk, int n, bool implicit = true) {
     if (n == 1) {
         return stk[0];
-    }
-    else {
+    } else {
         Tuple* subExprs = Tuple::create(stk, n);
         return BlockExpr::create(subExprs, RBLBOOL(implicit));
     }
@@ -990,8 +968,7 @@ static Ob* freeFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
 
     if (!IS_A(p, TupleExpr) || !p->allSymbols()) {
         return r->error("improper syntax for free expression");
-    }
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return FreeExpr::create(p, block);
@@ -1044,8 +1021,7 @@ static Ob* letFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
 
     if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for let expression");
-    }
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return LetExpr::create(p, block);
@@ -1087,8 +1063,7 @@ static Ob* letrecFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
 
     if (!IS_A(p, TupleExpr) || !p->allPairs()) {
         return r->error("improper syntax for letrec expression");
-    }
-    else {
+    } else {
         PROTECT(p);
         Ob* block = blockHelper(stk + 2, n - 2);
         return LetrecExpr::create(p, block);
@@ -1103,8 +1078,7 @@ static Ob* seqFinalizer(Parser* r, Ob** stk, int n, Ob* rest) {
 
     if (n == 2) {
         return stk[1];
-    }
-    else {
+    } else {
         Tuple* subExprs = Tuple::create(stk + 1, n - 1);
         return SeqExpr::create(subExprs);
     }
@@ -1219,8 +1193,7 @@ ParseTable::ParseTable() {
         if (isspace(i)) {
             tbl[i] = &_WRM;
             attributes[i] |= _DELIMITER;
-        }
-        else {
+        } else {
             tbl[i] = &_ARM;
         }
     }
@@ -1287,8 +1260,7 @@ Ob* Parser::readExpr() {
         waitingOnIO = WAITING_FOR_EXPR;
         if (inbuf == (RBLstring*)NIV) {
             return suspendParser();
-        }
-        else {
+        } else {
             return resumeExpr();
         }
     default:
@@ -1358,8 +1330,7 @@ Ob* Parser::resumeExpr() {
         case START:
             if (c == EOF) {
                 nextMode = my->ftop()->receiveEof(my);
-            }
-            else {
+            } else {
                 nextMode = my->rt->tbl[c]->start(c, my);
             }
             break;
@@ -1367,8 +1338,7 @@ Ob* Parser::resumeExpr() {
         case CONTINUE:
             if (c == EOF) {
                 nextMode = my->ftop()->receiveEof(my);
-            }
-            else {
+            } else {
                 nextMode = my->ftop()->process(c, my);
             }
             break;
@@ -1399,8 +1369,7 @@ Ob* Parser::resumeExpr() {
                  * "my" after this point.
                  */
                 nextMode = SELF->ftop()->receiveOb(v, SELF);
-            }
-            else {
+            } else {
                 my->digitSeen |= isdigit(c);
                 nextMode = my->accept(c);
             }
@@ -1457,8 +1426,7 @@ Ob* Parser::suspendParser() {
         errorEncountered = false;
         waitingOnIO = NOT_WAITING;
         return READ_ERROR;
-    }
-    else {
+    } else {
         /*
          * Leave waitingOnIO unchanged, so that we will re-enter with the
          * proper state.
@@ -1473,8 +1441,7 @@ Ob* Parser::finish(Ob* v) {
     if (errorEncountered) {
         resetState();
         return READ_ERROR;
-    }
-    else {
+    } else {
         assert(ostk.empty());
         assert(fstk.empty());
         return v;

@@ -95,11 +95,9 @@ void Symbol::printOn(FILE* f) {
         if (c == '\\') {
             fputc('\\', f);
             fputc('\\', f);
-        }
-        else if (isprint(c) && !isspace(c)) {
+        } else if (isprint(c) && !isspace(c)) {
             fputc(c, f);
-        }
-        else {
+        } else {
             fputc('\\', f);
             switch (c) {
             case ' ':
@@ -164,8 +162,7 @@ convertArgReturnPair RblBool::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
         cnvArgRetPair.val = (uint32_t)BOOLVAL(obj);
         cnvArgRetPair.failp = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
@@ -226,8 +223,7 @@ convertArgReturnPair Fixnum::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (typep(obj)) {
         cnvArgRetPair.val = FIXVAL(obj);
         cnvArgRetPair.failp = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 0;
     }

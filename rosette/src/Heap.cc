@@ -140,8 +140,7 @@ static int nextMultipleOf(int sz, int multiple) {
 
     if (r == 0) {
         return sz;
-    }
-    else {
+    } else {
         int q = sz / multiple;
         return (q + 1) * multiple;
     }
@@ -257,8 +256,7 @@ void Space::scan() {
         Ob* p = st.get();
         if (MARKED(p)) {
             REMOVE_FLAG(HDR_FLAGS(p), f_marked);
-        }
-        else {
+        } else {
             free(p);
         }
     }
@@ -553,8 +551,7 @@ void OldSpaceChunk::scan() {
         Ob* p = st.get();
         if (MARKED(p)) {
             REMOVE_FLAG(HDR_FLAGS(p), f_marked);
-        }
-        else {
+        } else {
             free(p);
         }
     }
@@ -741,8 +738,7 @@ void ForeignObTbl::scavenge() {
         if (FORWARDED(p)) {
             p = p->forwardingAddress();
             pct.get() = IS_OLD(p) ? NULL : p;
-        }
-        else {
+        } else {
             p->Ob::~Ob();
             pct.get() = NULL;
         }
@@ -792,8 +788,7 @@ void GCAgenda::scavenge() {
         if (FORWARDED(h)) {
             h = h->forwardingAddress();
             p = h->scavengeFixup() ? h : NULL;
-        }
-        else if (!IS_OLD(h) || !h->scavengeFixup()) {
+        } else if (!IS_OLD(h) || !h->scavengeFixup()) {
             p = NULL;
         }
     }
@@ -944,8 +939,7 @@ Ob* Heap::copyAndForward(Ob* oldLoc) {
          * forwardTo() because remember() sets a header bit that
          * forwardTo() clobbers.
          */
-    }
-    else {
+    } else {
         oldLoc->forwardTo(newLoc);
     }
 
@@ -1164,8 +1158,7 @@ nochange:
 relocate:
     if (FORWARDED(this)) {
         return forwardingAddress();
-    }
-    else {
+    } else {
         return heap->copyAndForward(this);
     }
 }

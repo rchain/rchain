@@ -37,8 +37,7 @@ Ob* checkFxResult(Prim* prim, Ctxt* ctxt, int answer) {
     if (arithmeticException) {
         arithmeticException = 0;
         return prim->runtimeError(ctxt, "arithmetic exception");
-    }
-    else {
+    } else {
         return FIXNUM(answer);
     }
 }
@@ -268,8 +267,7 @@ DEF("fx-cdiv", fxCdiv, 2, 2) {
     if (arithmeticException) {
         arithmeticException = 0;
         return PRIM_ERROR("division exception");
-    }
-    else {
+    } else {
         return FIXNUM(result);
     }
 }
@@ -344,8 +342,7 @@ Ob* checkFlResult(Prim* prim, Ctxt* ctxt, Rfloat answer) {
     if (arithmeticException) {
         arithmeticException = 0;
         return prim->runtimeError(ctxt, "arithmetic exception");
-    }
-    else {
+    } else {
         return Float::create(answer);
     }
 }
