@@ -1,5 +1,4 @@
-
-add_test(NAME boot_rbl COMMAND rosette -boot boot.rbl)
+#add_test(NAME boot_rbl COMMAND rosette -boot boot.rbl)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/apropos.rbl
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/async-repl.rbl

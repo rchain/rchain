@@ -2573,12 +2573,15 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
                 TupleExpr* temp = SELF->makeSlice(offset, MaxArgs);
                 ASSIGN(te, elem(i), temp);
             }
+
             if (semislice) {
                 TupleExpr* temp = SELF->makeSlice(nelems - nrest, nrest);
                 ASSIGN(te, elem(nslices), temp);
             }
-            if (tailarg)
+
+            if (tailarg) {
                 ASSIGN(te, elem(nslices + semislice), SELF->rest);
+            }
         } else {
             /*
              * The expression is too big to represent as one concat of
@@ -2600,11 +2603,12 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
                 ASSIGN(te, elem(i), temp);
             }
 
-            if (tailarg)
+            if (tailarg) {
                 ASSIGN(te, elem(nSlices), SELF->rest);
+            }
         }
-        RequestExpr* re = RequestExpr::create(tplConcat, te);
 
+        RequestExpr* re = RequestExpr::create(tplConcat, te);
         return re->makeAttrNode(valueCtxt);
     }
 }
@@ -2663,10 +2667,11 @@ AttrNode* SeqExpr::makeAttrNode(bool valueCtxt) {
 
     switch (nexprs) {
     case 0:
-        if (valueCtxt)
+        if (valueCtxt) {
             return ConstNode::create(NIV, valueCtxt);
-        else
+        } else {
             return NullNode::create(valueCtxt);
+        }
 
     case 1:
         return BASE(subExprs->elem(0))->makeAttrNode(valueCtxt);
