@@ -131,8 +131,10 @@ IfExpr::IfExpr(Ob* c, Ob* t, Ob* f)
 
 
 IfExpr* IfExpr::create(Ob* c, Ob* t, Ob* f) {
-    if (f == INVALID)
+    if (f == INVALID) {
         f = NullExpr::create();
+    }
+
     void* loc = PALLOC3(sizeof(IfExpr), c, t, f);
     return NEW(loc) IfExpr(c, t, f);
 }
