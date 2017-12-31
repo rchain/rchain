@@ -26,10 +26,9 @@
 #include "Tuple.h"
 #include "BuiltinClass.h"
 
+#include <algorithm>
 #include <memory.h>
 
-
-static int max(int m, int n) { return m > n ? m : n; }
 
 
 BUILTIN_CLASS(StdExtension) {}
@@ -277,7 +276,7 @@ int TblObject::addSlot(pOb key, pOb val) {
     if (n >= extension->numberOfSlots()) {
         PROTECT(key);
         PROTECT(val);
-        KONST int new_size = max(2 * n, MinimumTblObjectSlots);
+        KONST int new_size = std::max(2 * n, MinimumTblObjectSlots);
         StdExtension* ext = StdExtension::create(new_size);
         memcpy(&ext->slot(0), &SELF->extension->slot(0), n * sizeof(pOb));
         ASSIGN(SELF, extension, ext);
