@@ -137,11 +137,11 @@ int OCHit(pOb key1, pOb key2) {
             int selvesEq = t1->nth(1) == t2->nth(1);
             return ((offsetAndBaseEq && parentsEq && metasEq) || (selvesEq));
         }
-        else
-            return 0;
-    }
-    else
+
         return 0;
+    }
+
+    return 0;
 }
 
 RblTable* makeOccursCheckTable() {
@@ -363,21 +363,23 @@ Ob* GenericDescriptor::oprnSwitch(Ctxt* ctxt, uint32_t base, Tuple* path,
         return SELF->sGet(ctxt, base, path, pindex);
     if (head == oprnSDesc)
         return SELF->sDesc(ctxt, base, path, pindex);
-    if (head == oprnSDeref)
+    if (head == oprnSDeref) {
         return SELF->sDeref(ctxt, base, path, pindex);
-    else {
-        if (head == oprnCSNth)
+    } else {
+        if (head == oprnCSNth) {
             return SELF->nthBase(ctxt, base, FIXVAL(TUPLE_HEAD(path, pindex)),
                                  path, pindex);
-        else {
+        } else {
             TUPLE_TAIL(path, pindex);
-            if (head == oprnSSet)
+            if (head == oprnSSet) {
                 return SELF->sSet(ctxt, base, TUPLE_HEAD(path, (pindex - 1)),
                                   path, pindex);
-            if (head == oprnSTupleSet)
+            }
+            if (head == oprnSTupleSet) {
                 return SELF->sTupleSet(ctxt, base,
                                        (Tuple*)TUPLE_HEAD(path, (pindex - 1)),
                                        path, pindex);
+            }
         }
     }
 
@@ -402,26 +404,26 @@ Ob* GenericDescriptor::nullDescriptor(Ctxt* ctxt) {
 
     if ((rslt = mta->get(prnt, oprnNull, ctxt)) == ABSENT) {
         Ob* knd = mta->get(prnt, oprnKind, ctxt);
-        if (knd == ABSENT)
+        if (knd == ABSENT) {
             return runtimeError(ctxt, "invalid kind ", prnt);
-        else {
-            const char* kname = BASE(knd)->asCstring();
-            const char* np = "Null";
-            char* nullactstr = new char[strlen(kname) + 5];
-            (void)strcat(strcpy(nullactstr, (char*)np), kname);
-            Ob* nullactid = SYMBOL(nullactstr);
-            PROTECT(nullactid);
-
-            Ob* ns = newSBO(obSBO, nullactid, CLASS_SBO(NullDescriptor), ctxt);
-            PROTECT(ns);
-            Ob* nd = genActor(obNullDescriptor, ns);
-            PROTECT(nd);
-            mta->add(prnt, oprnNull, nd, ctxt);
-            return nd;
         }
+
+        const char* kname = BASE(knd)->asCstring();
+        const char* np = "Null";
+        char* nullactstr = new char[strlen(kname) + 5];
+        (void)strcat(strcpy(nullactstr, (char*)np), kname);
+        Ob* nullactid = SYMBOL(nullactstr);
+        PROTECT(nullactid);
+
+        Ob* ns = newSBO(obSBO, nullactid, CLASS_SBO(NullDescriptor), ctxt);
+        PROTECT(ns);
+        Ob* nd = genActor(obNullDescriptor, ns);
+        PROTECT(nd);
+        mta->add(prnt, oprnNull, nd, ctxt);
+        return nd;
     }
-    else
-        return rslt;
+
+    return rslt;
 }
 
 convertArgReturnPair GenericDescriptor::convertActualArg(Ctxt* ctxt, Ob* obj) {
@@ -431,13 +433,14 @@ convertArgReturnPair GenericDescriptor::convertActualArg(Ctxt* ctxt, Ob* obj) {
 }
 
 Ob* GenericDescriptor::convertActualRslt(Ctxt* ctxt, uint32_t obj) {
-    if (obj == 0)
+    if (obj == 0) {
         return nullDescriptor(ctxt);
-    else {
+    } else {
         GenericDescriptor* rslt = (GenericDescriptor*)sBox(obj);
         rslt->imported = RBLTRUE;
-        if ((rslt->freeStructOnGC = freeStructOnGC) == RBLTRUE)
+        if ((rslt->freeStructOnGC = freeStructOnGC) == RBLTRUE) {
             heap->registerForeignOb(rslt);
+        }
         return rslt;
     }
 }
@@ -447,8 +450,8 @@ Ob* GenericDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path,
     if (NULLP(path, pindex)) {
         return sBox(base + _offset);
     }
-    else
-        return oprnSwitch(ctxt, base, path, pindex);
+
+    return oprnSwitch(ctxt, base, path, pindex);
 }
 
 Ob* GenericDescriptor::sDesc(Ctxt* ctxt, uint32_t base, Tuple* path,
@@ -457,8 +460,8 @@ Ob* GenericDescriptor::sDesc(Ctxt* ctxt, uint32_t base, Tuple* path,
     if (NULLP(path, pindex)) {
         return sBox(base + _offset);
     }
-    else
-        return oprnSwitch(ctxt, base, path, pindex);
+
+    return oprnSwitch(ctxt, base, path, pindex);
 }
 
 Ob* GenericDescriptor::sDeref(Ctxt* ctxt, uint32_t, Tuple* path, int) {
@@ -476,11 +479,10 @@ Ob* GenericDescriptor::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                (void*)(((GenericDescriptor*)val)->_offset), (int)_size);
         if (NULLP(path, pindex)) {
             return NIV;
-        }
-        else
+        } else {
             oprnSwitch(ctxt, base, path, pindex);
-    }
-    else if (TUPLEP(val)) {
+        }
+    } else if (TUPLEP(val)) {
         return sTupleSet(ctxt, base, (Tuple*)val, path, pindex);
     }
 
@@ -504,10 +506,10 @@ Ob* GenericDescriptor::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val,
         TUPLE_TAIL(val, vindex);
         (void)(SELF->sSet(ctxt, addr, tupHead, NIL));
     }
+
     if (NULLP(path, pindex)) {
         return NIV;
-    }
-    else {
+    } else {
         TUPLE_TAIL(path, pindex);
         return (SELF->oprnSwitch(ctxt, base, path, pindex));
     }
@@ -521,8 +523,7 @@ Ob* GenericDescriptor::nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path,
     uint32_t newBase = (base + (i * SELF->_size));
     if (NULLP(path, pindex)) {
         return SELF->sBox(newBase + SELF->_offset);
-    }
-    else {
+    } else {
         TUPLE_TAIL(path, pindex);
         return SELF->oprnSwitch(ctxt, newBase, path, pindex);
     }
@@ -664,11 +665,9 @@ convertArgReturnPair AtomicDescriptor::convertActualArg(Ctxt* ctxt, Ob* obj) {
     cnvArgRetPair.failp = 0;
     if (IS_FIXNUM(obj)) {
         cnvArgRetPair.val = (uint32_t)FIXVAL(obj);
-    }
-    else if (TYPEP(this, obj)) {
+    } else if (TYPEP(this, obj)) {
         cnvArgRetPair.val = (uint32_t)FIXVAL(sGet(ctxt, 0, NIL));
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
@@ -689,8 +688,8 @@ Ob* AtomicDescriptor::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     if (NULLP(path, pindex)) {
         return (FIXNUM(SELF->absoluteAddress(base)));
     }
-    else
-        return (SELF->oprnSwitch(ctxt, base, path, pindex));
+
+    return (SELF->oprnSwitch(ctxt, base, path, pindex));
 }
 
 Ob* AtomicDescriptor::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
@@ -703,16 +702,15 @@ Ob* AtomicDescriptor::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
 
     if (IS_FIXNUM(val)) {
         SELF->setAddrContents(base, (uint32_t)FIXVAL(val));
-        if (!NULLP(path, pindex))
+        if (!NULLP(path, pindex)) {
             return (SELF->oprnSwitch(ctxt, base, path, pindex));
-        else
-            return NIV;
-    }
-    else if (TUPLEP(val)) {
+        }
+        return NIV;
+    } else if (TUPLEP(val)) {
         return (SELF->sTupleSet(ctxt, base, (Tuple*)val, path, pindex));
     }
-    else
-        return runtimeError(ctxt, "S-set type-mismatch ", val);
+
+    return runtimeError(ctxt, "S-set type-mismatch ", val);
 }
 
 Ob* AtomicDescriptor::flatten(Ctxt* ctxt, uint32_t base, RblTable*) {
@@ -797,8 +795,7 @@ Ob* CStructure::select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
 
     if (NULLP(path, pindex)) {
         return runtimeError(ctxt, "Invalid path ", path);
-    }
-    else {
+    } else {
         Ob* symb = TUPLE_HEAD(path, pindex);
         PROTECT(symb);
         TUPLE_TAIL(path, pindex);
@@ -806,12 +803,11 @@ Ob* CStructure::select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
         PROTECT(d);
         if (d == ABSENT) {
             return runtimeError(ctxt, "Bad selector ", symb);
-        }
-        else if (NULLP(path, pindex)) {
+        } else if (NULLP(path, pindex)) {
             return (SELF->sBox(base + SELF->_offset + d->_offset));
         }
-        else
-            return d->oprnSwitch(ctxt, (base + SELF->_offset), path, pindex);
+
+        return d->oprnSwitch(ctxt, (base + SELF->_offset), path, pindex);
     }
 }
 
@@ -825,8 +821,10 @@ Ob* CStructure::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
     PROTECT(path);
 
     // Check this more carefully... LGM
-    if (TUPLEP(TUPLE_HEAD(val, 0)))
+    if (TUPLEP(TUPLE_HEAD(val, 0))) {
         return GenericDescriptor::sTupleSet(ctxt, base, val, path, pindex);
+    }
+
     if (val->numberOfElements() <= SELF->_fieldNames->numberOfElements()) {
         GenericDescriptor* entry;
         int vindex = 0;
@@ -839,10 +837,11 @@ Ob* CStructure::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
             entry->sSet(ctxt, (base + SELF->_offset), x, NIL);
             x = TUPLE_HEAD(val, vindex);
         }
+
         return NIV;
     }
-    else
-        return runtimeError(ctxt, "S-tupleSet too many elements ", val);
+
+    return runtimeError(ctxt, "S-tupleSet too many elements ", val);
 }
 
 Ob* CStructure::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -881,10 +880,11 @@ Ob* CStructure::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             rslt->setNth(2 * i, symb);
             rslt->setNth(2 * i + 1, tmp);
         }
+
         return rslt;
     }
-    else
-        return chck;
+
+    return chck;
 }
 
 /************************************************************************/
@@ -948,8 +948,10 @@ void CArray::traversePtrs(V__PSOb f) {
 
 Ob* CArray::sTupleSet(Ctxt* ctxt, uint32_t base, Tuple* val, Tuple* path,
                       int pindex) {
-    if (val->numberOfElements() <= _numElems)
+    if (val->numberOfElements() <= _numElems) {
         return (_elemDesc->sTupleSet(ctxt, base + _offset, val, path, pindex));
+    }
+
     return (runtimeError(ctxt, "S-tupleSet too many elements ", val));
 }
 
@@ -959,15 +961,14 @@ Ob* CArray::nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path, int pindex) {
     if ((i >= 0) && (i <= _numElems)) {
         uint32_t addr = (base + _offset + (i * _elemDesc->_size));
 
-        if (NULLP(path, pindex))
+        if (NULLP(path, pindex)) {
             return (_elemDesc->sBox(addr));
-        else {
-            TUPLE_TAIL(path, pindex);
-            return (_elemDesc->oprnSwitch(ctxt, addr, path, pindex));
         }
+
+        TUPLE_TAIL(path, pindex);
+        return (_elemDesc->oprnSwitch(ctxt, addr, path, pindex));
     }
-    else
-        return runtimeError(ctxt, "Index out of bounds ", path);
+    return runtimeError(ctxt, "Index out of bounds ", path);
 }
 
 Ob* CArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -991,8 +992,8 @@ Ob* CArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
 
         return rslt;
     }
-    else
-        return chck;
+
+    return chck;
 }
 
 /************************************************************************/
@@ -1046,13 +1047,13 @@ Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
         if (VALID_ADDR(addr)) {
             char* tmp = (char*)GET_STRING(val);
             (void)strncpy((char*)addr, tmp, _numElems);
+            return NIV;
         }
-        else
-            return runtimeError(ctxt, "invalid address ", FIXNUM(addr));
-        return NIV;
+
+        return runtimeError(ctxt, "invalid address ", FIXNUM(addr));
     }
-    else
-        return CArray::sSet(ctxt, base, val, path, pindex);
+
+    return CArray::sSet(ctxt, base, val, path, pindex);
 }
 
 Ob* CharArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1072,11 +1073,11 @@ Ob* CharArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             occtxt->addKey(selfTag, rslt);
             return rslt;
         }
-        else
-            return runtimeError(ctxt, "invalid address");
+
+        return runtimeError(ctxt, "invalid address");
     }
-    else
-        return chck;
+
+    return chck;
 }
 
 /************************************************************************/
@@ -1134,11 +1135,11 @@ Ob* CharArray0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             occtxt->addKey(selfTag, rslt);
             return rslt;
         }
-        else
-            return runtimeError(ctxt, "invalid address");
+
+        return runtimeError(ctxt, "invalid address");
     }
-    else
-        return chck;
+
+    return chck;
 }
 
 /************************************************************************/
@@ -1207,31 +1208,26 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
     if (TYPEP(SELF, obj)) {
         if (VALID_ADDR(gobj->_offset)) {
             uint32_t addr = gobj->absoluteAddress(0);
-            if (VALID_ADDR(addr))
+            if (VALID_ADDR(addr)) {
                 cnvArgRetPair.val = addr;
-            else {
+            } else {
                 cnvArgRetPair.val = (uint32_t)-1;
                 cnvArgRetPair.failp = 1;
             }
-        }
-        else {
+        } else {
             cnvArgRetPair.val = (uint32_t)-1;
             cnvArgRetPair.failp = 1;
         }
-    }
-    else if (TYPEP(SELF->_desc, obj)) {
-        if
-            VALID_ADDR(gobj->_offset)
-        cnvArgRetPair.val = gobj->_offset;
-        else {
+    } else if (TYPEP(SELF->_desc, obj)) {
+        if (VALID_ADDR(gobj->_offset)) {
+            cnvArgRetPair.val = gobj->_offset;
+        } else {
             cnvArgRetPair.val = (uint32_t)-1;
             cnvArgRetPair.failp = 1;
         }
-    }
-    else if (SELF->_desc->nullDescriptor(ctxt) == obj) {
+    } else if (SELF->_desc->nullDescriptor(ctxt) == obj) {
         cnvArgRetPair.val = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
@@ -1240,13 +1236,15 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
 }
 
 Ob* CRef::convertActualRslt(Ctxt* ctxt, uint32_t obj) {
-    if (obj == 0)
+    if (obj == 0) {
         return _desc->nullDescriptor(ctxt);
-    else {
+    } else {
         GenericDescriptor* rslt = (GenericDescriptor*)_desc->sBox(obj);
         rslt->imported = RBLTRUE;
-        if ((rslt->freeStructOnGC = freeStructOnGC) == RBLTRUE)
+        if ((rslt->freeStructOnGC = freeStructOnGC) == RBLTRUE) {
             heap->registerForeignOb(rslt);
+        }
+
         return rslt;
     }
 }
@@ -1259,38 +1257,35 @@ Ob* CRef::sDeref(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
         ((bddr == 0) ? (GenericDescriptor*)(_desc->nullDescriptor(ctxt))
                      : _desc);
 
-    if (NULLP(path, pindex))
+    if (NULLP(path, pindex)) {
         return (d->sBox(bddr));
-    else
-        return (d->oprnSwitch(ctxt, bddr, path, pindex));
+    }
+
+    return (d->oprnSwitch(ctxt, bddr, path, pindex));
 }
 
 Ob* CRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
     if (TUPLEP(val)) {
         return sTupleSet(ctxt, base, (Tuple*)val, path, pindex);
-    }
-    else {
+    } else {
         uint32_t msetval;
 
         if (TYPEP(this, val)) {
             uint32_t msetval = ((GenericDescriptor*)val)->absoluteAddress(0);
-        }
-        else if (TYPEP(_desc, val)) {
+        } else if (TYPEP(_desc, val)) {
             msetval = ((GenericDescriptor*)val)->_offset;
-        }
-        else if ((val == this->nullDescriptor(ctxt)) ||
-                 (val == _desc->nullDescriptor(ctxt))) {
+        } else if ((val == this->nullDescriptor(ctxt)) ||
+                   (val == _desc->nullDescriptor(ctxt))) {
             msetval = 0;
-        }
-        else
+        } else {
             return runtimeError(ctxt, "wrong type for assignment ", val);
+        }
 
         setAddrContents(base, msetval);
 
         if (NULLP(path, pindex)) {
             return NIV;
-        }
-        else {
+        } else {
             TUPLE_TAIL(path, pindex);
             return oprnSwitch(ctxt, base, path, pindex);
         }
@@ -1301,8 +1296,7 @@ Ob* CRef::nthBase(Ctxt* ctxt, uint32_t base, int i, Tuple* path, int pindex) {
     uint32_t newbase = base + (i * _size);
     if (NULLP(path, pindex)) {
         return sBox(newbase + _offset);
-    }
-    else {
+    } else {
         TUPLE_TAIL(path, pindex);
         return oprnSwitch(ctxt, newbase, path, pindex);
     }
@@ -1326,8 +1320,7 @@ Ob* CRef::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
         PROTECT(rslt);
         occtxt->addKey(selfTag, rslt);
         return rslt;
-    }
-    else {
+    } else {
         if ((chck = occtxt->getKey(selfTag)) == ABSENT) {
             Tuple* rslt = Tuple::create(2, INVALID);
             PROTECT(rslt);
@@ -1336,6 +1329,7 @@ Ob* CRef::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             rslt->setNth(1, SELF->_desc->flatten(ctxt, addr, occtxt));
             return rslt;
         }
+
         return chck;
     }
 }
@@ -1394,16 +1388,17 @@ Ob* CharRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
         uint32_t prev = SELF->absoluteAddress(base);
 
 #ifdef MEMORYCAUTIOUS
-        if (VALID_ADDR(prev))
+        if (VALID_ADDR(prev)) {
             (void)free((char*)prev);
+        }
 #endif
 
         (void)strcpy((char*)saddr, (GET_STRING(val)));
         SELF->setAddrContents(base, (uint32_t)saddr);
         return NIV;
-    }
-    else
+    } else {
         return SELF->CRef::sSet(ctxt, base, val, path, pindex);
+    }
 }
 
 convertArgReturnPair CharRef::convertActualArg(Ctxt* ctxt, Ob* arg) {
@@ -1413,29 +1408,22 @@ convertArgReturnPair CharRef::convertActualArg(Ctxt* ctxt, Ob* arg) {
     if (TYPEP(this, obj)) {
         // What goes here?
         cnvArgRetPair.val = absoluteAddress(0);
-    }
-    else if (TYPEGTRP(obCharArray, obj)) {
+    } else if (TYPEGTRP(obCharArray, obj)) {
         if (VALID_ADDR(obj->_offset)) {
             cnvArgRetPair.val = obj->_offset;
-        }
-        else {
+        } else {
             cnvArgRetPair.val = (uint32_t)-1;
             cnvArgRetPair.failp = 1;
         }
-    }
-    else if (STRINGP(obj)) {
+    } else if (STRINGP(obj)) {
         cnvArgRetPair.val = (uint32_t)(GET_STRING(obj));
-    }
-    else if (IS_FIXNUM(obj)) {
+    } else if (IS_FIXNUM(obj)) {
         cnvArgRetPair.val = (uint32_t)(PRE_FIXNUM_TO_ADDR((FIXVAL(obj))));
-    }
-    else if (IS_A(obj, ByteVec)) {
+    } else if (IS_A(obj, ByteVec)) {
         cnvArgRetPair.val = (uint32_t)((char*)&(((ByteVec*)obj)->byte(0)));
-    }
-    else if (obj->isNullP()) {
+    } else if (obj->isNullP()) {
         cnvArgRetPair.val = 0;
-    }
-    else {
+    } else {
         cnvArgRetPair.val = (uint32_t)-1;
         cnvArgRetPair.failp = 1;
     }
@@ -1490,9 +1478,9 @@ CRef0* CRef0::create() {
 Ob* CRef0::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
     if (NULLP(path, pindex)) {
         return flatten(ctxt, base, makeOccursCheckTable());
-    }
-    else
+    } else {
         return runtimeError(ctxt, "cannot access ", path);
+    }
 }
 
 Ob* CRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1510,8 +1498,7 @@ Ob* CRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             Ob* rslt = SELF->_desc->nullDescriptor(ctxt);
             PROTECT(rslt);
             occtxt->addKey(selfTag, rslt);
-        }
-        else {
+        } else {
             uint32_t skip = sizeof(SELF->_desc);
             Tuple* rslt = NIL;
             PROTECT(rslt);
@@ -1525,9 +1512,11 @@ Ob* CRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
                 occtxt->addKey(selfTag, rslt);
                 tmp = itr->flatten(ctxt, iddr, occtxt);
             }
+
             return rslt;
         }
     }
+
     return chck;
 }
 
@@ -1568,13 +1557,12 @@ Ob* CharRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     uint32_t addr = SELF->absoluteAddress(base);
     if (addr == 0) {
         return (obChar->nullDescriptor(ctxt));
-    }
-    else {
+    } else {
         if (VALID_ADDR(addr)) {
             return (RBLstring::create((char*)addr));
-        }
-        else
+        } else {
             return runtimeError(ctxt, "invalid address");
+        }
     }
 }
 
@@ -1594,9 +1582,9 @@ Ob* CharRef0::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
         setAddrContents(base, (uint32_t)tmp);
 
         return NIV;
-    }
-    else
+    } else {
         return CRef0::sSet(ctxt, base, val, path, pindex);
+    }
 }
 
 convertArgReturnPair CharRef0::convertActualArg(Ctxt* ctxt, Ob* arg) {
@@ -1605,9 +1593,9 @@ convertArgReturnPair CharRef0::convertActualArg(Ctxt* ctxt, Ob* arg) {
 
     if (STRINGP(obj)) {
         cnvArgRetPair.val = (uint32_t)(GET_STRING(obj));
-    }
-    else
+    } else {
         return CRef::convertActualArg(ctxt, arg);
+    }
 
     return cnvArgRetPair;
 }
@@ -1681,8 +1669,7 @@ Ob* CUnion::select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
 
     if (NULLP(path, pindex)) {
         return runtimeError(ctxt, "Invalid path ", path);
-    }
-    else {
+    } else {
         Ob* symb = TUPLE_HEAD(path, pindex);
         PROTECT(symb);
         TUPLE_TAIL(path, pindex);
@@ -1690,12 +1677,11 @@ Ob* CUnion::select(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
         PROTECT(d);
         if (d == ABSENT) {
             return runtimeError(ctxt, "Bad selector ", symb);
-        }
-        else if (NULLP(path, pindex)) {
+        } else if (NULLP(path, pindex)) {
             return SELF->sBox(base + SELF->_offset + d->_offset);
-        }
-        else
+        } else {
             return d->oprnSwitch(ctxt, (base + SELF->_offset), path, pindex);
+        }
     }
 }
 
@@ -1730,10 +1716,11 @@ Ob* CUnion::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
             rslt->setNth(2 * i, symb);
             rslt->setNth(2 * i + 1, tmp);
         }
+
         return rslt;
-    }
-    else
+    } else {
         return chck;
+    }
 }
 
 MODULE_INIT(Cstruct) {

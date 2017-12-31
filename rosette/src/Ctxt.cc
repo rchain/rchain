@@ -126,14 +126,14 @@ Ctxt::Ctxt(Code* c, Tuple* t, Ctxt* p, int o)
         this->selfEnv = p->selfEnv;
         this->rcvr = p->rcvr;
         this->monitor = p->monitor;
-    }
-    else {
+    } else {
         this->env = GlobalEnv;
         this->self2 = NIV;
         this->selfEnv = TopEnv;
         this->rcvr = NIV;
         this->monitor = vm->currentMonitor;
     }
+
     Ctxt::updateCnt();
 }
 
@@ -183,8 +183,9 @@ int Ctxt::traversePtrs(PSOb__PSOb f) {
     sum += useIfPtr(&parent(), f);
     sum += useIfPtr(&mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         sum += useIfPtr(&reg(i), f);
+    }
 
     return sum;
 }
@@ -197,8 +198,9 @@ int Ctxt::traversePtrs(SI__PSOb f) {
     sum += useIfPtr(parent(), f);
     sum += useIfPtr(mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         sum += useIfPtr(reg(i), f);
+    }
 
     return sum;
 }
@@ -209,8 +211,9 @@ void Ctxt::traversePtrs(V__PSOb f) {
     useIfPtr(parent(), f);
     useIfPtr(mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         useIfPtr(reg(i), f);
+    }
 }
 
 
@@ -218,12 +221,13 @@ extern Code* rtnNxtCode;
 
 
 bool Ctxt::rcv(Ob* result, Location loc) {
-    if (store(loc, this, result))
-        return TRUE;
-    else {
-        if (--outstanding == 0)
+    if (store(loc, this, result)) {
+        return true;
+    } else {
+        if (--outstanding == 0) {
             scheduleStrand();
-        return FALSE;
+        }
+        return false;
     }
 }
 
@@ -295,11 +299,11 @@ bool UpcallCtxt::applyK(Ob* val, Location loc) {
     assert(loc == tag);
 #endif
 
-    if (store(loc, ctxt, val))
-        return TRUE;
-    else {
+    if (store(loc, ctxt, val)) {
+        return true;
+    } else {
         ctxt->scheduleStrand();
-        return FALSE;
+        return false;
     }
 }
 
@@ -312,8 +316,9 @@ DEF("ctxt-rtn", ctxtRtn, 2, 2) {
 
 DEF("ctxt-resume", ctxtResume, 1, 1) {
     CHECK(0, Ctxt, k);
-    if (k->argvec->numberOfElements() > 0)
+    if (k->argvec->numberOfElements() > 0) {
         return BASE(k->argvec->elem(0))->receive(k);
-    else
-        return INVALID;
+    }
+
+    return INVALID;
 }

@@ -114,8 +114,9 @@ void BuiltinClass::allocBuiltinClasses() {
     Base::classNames = names;
     Base::obCounts = counts;
 
-    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link)
+    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link) {
         p->alloc();
+    }
 }
 
 
@@ -124,14 +125,16 @@ void BuiltinClass::initBuiltinClasses() {
     assert(emptyMbox != INVALID);
     assert(lockedMbox != INVALID);
 
-    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link)
+    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link) {
         p->init();
+    }
 }
 
 
 void BuiltinClass::enterBuiltinClasses() {
-    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link)
+    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link) {
         p->enter();
+    }
 }
 
 
@@ -165,9 +168,10 @@ void BuiltinClass::alloc() {
      * properly initialized later.
      */
 
-    if (*clientMeta == INVALID)
+    if (*clientMeta == INVALID) {
         *clientMeta = (pMeta)heap->tenure(
             StdMeta::create(NULL, MAX_FIXNUM, RBLBOOL(extensible)));
+    }
 
     /*
      * Pass INVALIDs for the meta, parents, and extensions of the sbo
@@ -177,9 +181,10 @@ void BuiltinClass::alloc() {
      * initialized).
      */
 
-    if (*clientSBO == INVALID)
+    if (*clientSBO == INVALID) {
         *clientSBO =
             (pSBO)heap->tenure(Actor::create(INVALID, INVALID, (pExt)INVALID));
+    }
 }
 
 
@@ -380,9 +385,9 @@ static void get_path_prefix(char* path, char* dir) {
         int n = p - path;
         strncpy(dir, path, n);
         dir[n] = 0;
-    }
-    else
+    } else {
         strcpy(dir, ".");
+    }
 }
 
 
@@ -394,13 +399,14 @@ static FILE* FindBootFile() {
     char* RosetteLib = getenv("ROSETTE_LIB");
 
     if (strcmp(BootFile, "") == 0) {
-        if (RosetteLib)
+        if (RosetteLib) {
             strcpy(BootDirectory, RosetteLib);
+        }
+
         strcpy(path, BootDirectory);
         strcat(path, "/");
         strcat(path, "boot.rbl");
-    }
-    else {
+    } else {
         get_path_prefix(BootFile, BootDirectory);
         strcpy(path, BootFile);
     }
@@ -408,13 +414,17 @@ static FILE* FindBootFile() {
     int baselen = strlen(path);
     const char** suffixp = StandardExtensions;
 
+    // TODO(leaf): This doesn't work as advertised. If the file can't
+    // be found, the path reported will incorrectly have the suffix
+    // appended.
     for (; access(path, R_OK) && *suffixp; suffixp++) {
         path[baselen] = '\0';
         strcat(path, *suffixp);
     }
 
-    if (!(*suffixp))
+    if (!(*suffixp)) {
         suicide("can't find boot file '%s'", path);
+    }
 
     Tuple* loadPaths = Tuple::create(1, RBLstring::create(BootDirectory));
     if (RosetteLib && strcmp(RosetteLib, BootDirectory)) {
@@ -422,8 +432,8 @@ static FILE* FindBootFile() {
         RBLstring* temp = RBLstring::create(RosetteLib);
         loadPaths = rcons(loadPaths, temp);
     }
-    Define("load-paths", loadPaths);
 
+    Define("load-paths", loadPaths);
     return fopen(path, "r");
 }
 
@@ -448,7 +458,7 @@ static RblTable* GetEnvp(char** envp) {
     PROTECT(RosetteEnvp);
     for (int i = 0; i < n; i++) {
         char* cstr = envp[i];
-        for (; *cstr != 0; cstr++)
+        for (; *cstr != 0; cstr++) {
             if (*cstr == '=') {
                 *cstr = '\x00';
                 Ob* k = SYMBOL(envp[i]);
@@ -458,6 +468,7 @@ static RblTable* GetEnvp(char** envp) {
                 RosetteEnvp->addKey(k, v);
                 break;
             }
+        }
     }
 
     return RosetteEnvp;
@@ -468,8 +479,9 @@ static void LoadBootFiles() {
     PROTECT(reader);
 
     Ob* expr = INVALID;
-    while ((expr = reader->readExpr()) != RBLEOF)
+    while ((expr = reader->readExpr()) != RBLEOF) {
         vm->load(expr);
+    }
 }
 
 static void LoadRunFile() {
@@ -480,10 +492,10 @@ static void LoadRunFile() {
             PROTECT(reader);
 
             Ob* expr = INVALID;
-            while ((expr = reader->readExpr()) != RBLEOF)
+            while ((expr = reader->readExpr()) != RBLEOF) {
                 vm->load(expr);
-        }
-        else {
+            }
+        } else {
             suicide("Unable to open RunFile \"%s\": %s", RunFile,
                     strerror(errno));
         }
@@ -509,7 +521,7 @@ int BigBang(int argc, char** argv, char** envp) {
 
     argc = ParseCommandLine(argc, argv);
 
-    InBigBang = TRUE;
+    InBigBang = true;
 
     setsid();
 
@@ -581,7 +593,7 @@ int BigBang(int argc, char** argv, char** envp) {
     }
 
     handleInterrupts();
-    InBigBang = FALSE;
+    InBigBang = false;
 
     return RestoringImage;
 }
@@ -615,14 +627,17 @@ int asyncHelper(int fd, int desiredState) {
     SET_SIGNAL_IO_DESIRED(result);
 
 #ifndef HPUX
-    if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
+    if ((flags = fcntl(fd, F_GETFL, 0)) == -1) {
         return -1;
+    }
 
 #ifdef FCNTL_NONBLOCK
-    if (desiredState)
+    if (desiredState) {
         flags |= FCNTL_NONBLOCK;
-    else
+    } else {
         flags &= ~(FCNTL_NONBLOCK);
+    }
+
 #else
     DO_BLOCKING
 #endif
@@ -645,9 +660,9 @@ int asyncHelper(int fd, int desiredState) {
 #else
         return -1;
 #endif
-    }
-    else
+    } else {
         return 0;
+    }
 }
 
 
@@ -661,10 +676,11 @@ DEF("async", asyncify, 1, 2) {
         f = stream->reader->file;
     }
 
-    if (asyncHelper(fileno(f), desiredState))
+    if (asyncHelper(fileno(f), desiredState)) {
         return RBLstring::create((char*)sys_errmsg());
-    else
-        return NIV;
+    }
+
+    return NIV;
 }
 
 
@@ -673,8 +689,9 @@ DEF("fdAsync", asyncify_fd, 2, 2) {
     CHECK(1, RblBool, b);
     int desiredState = BOOLVAL(b);
 
-    if (asyncHelper(fd, desiredState))
+    if (asyncHelper(fd, desiredState)) {
         return RBLstring::create((char*)sys_errmsg());
-    else
-        return NIV;
+    }
+
+    return NIV;
 }

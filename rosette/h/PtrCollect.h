@@ -48,6 +48,7 @@ class PtrCollection : public ResizeablePtrArray {
         if (next >= limit) {
             resize();
         }
+
         *next++ = p;
     }
 

@@ -71,10 +71,10 @@ main(int, char** argv) {
 
     // Basic signal handling
 
-    (void)signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
-    (void)signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
-    (void)signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
-    (void)signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
+    signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
+    signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
+    signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
+    signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
 
     // Create pipe used to feed our syncrhonous stdin to rosette image
     // which handles its end of the pipe as an asynchronous stdin.
@@ -99,31 +99,29 @@ main(int, char** argv) {
             _exit(1);
         }
 
-        (void)setsid();  // here ye here ye do not mess with this without
-        // seeing Christine or Greg Lavender!!!
+        // NB(orig).
+        setsid();
 
         sprintf(bp, "%s.image", *argv);
         *argv = bp;
 
         // Note: execve resets caught signals to their defaults
-
         execvp(bp, argv);
 
         perror("Unable to exec rosette image");
         _exit(1);
 
     default:  // Stuff input into pipe until EOF
-
         // Only the image will do the writing to stdout/stderr
-
-        (void)fclose(stdout);
-        (void)fclose(stderr);
+        fclose(stdout);
+        fclose(stderr);
 
         for (;;) {
-            if (fgets(bp, sizeof(buffer), stdin))
+            if (fgets(bp, sizeof(buffer), stdin)) {
                 write(fds[1], bp, strlen(bp));
-            else
+            } else {
                 terminate();
+            }
         }
     }
 }

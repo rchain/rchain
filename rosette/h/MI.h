@@ -67,16 +67,13 @@ class ProductType : public Actor {
 
     virtual bool typeMatchesp(pOb);
 
-
     int numberOfElements() { return definite()->numberOfElements(); }
-
     pOb elem(int i) { return definite()->elem(i); }
 
     pOb elemR(int i) {
         if (i < definite()->numberOfElements()) {
             return elem(i);
-        }
-        else {
+        } else {
             return star();
         }
     }

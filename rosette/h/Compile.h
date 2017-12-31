@@ -84,8 +84,8 @@ class CompilationUnit : public BinaryOb {
 
 
 enum RtnCode { ImplicitRtn, TaggedRtn, UntaggedRtn };
-static const bool CtxtAvailable = TRUE;
-static const bool ArgvecAvailable = TRUE;
+static const bool CtxtAvailable = true;
+static const bool ArgvecAvailable = true;
 
 #include "Bits.h"
 #define GET_ATTR(x, flag) GET_FLAG((x).word, flag)

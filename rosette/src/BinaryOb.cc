@@ -73,8 +73,10 @@ ByteVec::ByteVec(ByteVec* old, int newsize)
     int oldsize = old->numberOfBytes();
     memcpy((char*)&this->byte(0), (char*)&old->byte(0),
            min(oldsize, newsize) * sizeof(uint8_t));
-    if (newsize > oldsize)
+    if (newsize > oldsize) {
         memset(&this->byte(0), 0, (newsize - oldsize) * sizeof(uint8_t));
+    }
+
     ByteVec::updateCnt();
 }
 
@@ -97,8 +99,10 @@ void ByteVec::reset(EMPTY) { memset((char*)&byte(0), 0, numberOfBytes()); }
 
 uint32_t ByteVec::sum(EMPTY) {
     uint32_t total = 0;
-    for (int i = numberOfBytes(); i--;)
+    for (int i = numberOfBytes(); i--;) {
         total += (uint32_t)byte(i);
+    }
+
     return total;
 }
 
@@ -128,8 +132,10 @@ Word16Vec::Word16Vec(int n)
     : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(uint16_t)),
                CLASS_META(Word16Vec), CLASS_SBO(Word16Vec)),
       wordCount(n) {
-    while (n--)
+    while (n--) {
         this->word(n) = 0;
+    }
+
     Word16Vec::updateCnt();
 }
 
@@ -137,8 +143,10 @@ Word16Vec::Word16Vec(int n)
 Word16Vec::Word16Vec(Ob* meta, Ob* parent, int n)
     : BinaryOb(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent),
       wordCount(n) {
-    while (n--)
+    while (n--) {
         this->word(n) = 0;
+    }
+
     Word16Vec::updateCnt();
 }
 
@@ -150,8 +158,10 @@ Word16Vec::Word16Vec(Word16Vec* old, int newsize)
     int oldsize = old->numberOfWords();
     memcpy(&this->word(0), &old->word(0),
            min(oldsize, newsize) * sizeof(uint16_t));
-    if (newsize > oldsize)
+    if (newsize > oldsize) {
         memset(&this->word(oldsize), 0, (newsize - oldsize) * sizeof(uint16_t));
+    }
+
     Word16Vec::updateCnt();
 }
 
@@ -177,15 +187,17 @@ Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
 
 
 void Word16Vec::reset(EMPTY) {
-    for (int i = numberOfWords(); i--;)
+    for (int i = numberOfWords(); i--;) {
         word(i) = 0;
+    }
 }
 
 
 uint32_t Word16Vec::sum(EMPTY) {
     uint32_t total = 0;
-    for (int i = numberOfWords(); i--;)
+    for (int i = numberOfWords(); i--;) {
         total += (uint32_t)word(i);
+    }
     return total;
 }
 

@@ -37,7 +37,7 @@ MethodExpr::MethodExpr(int sz, Ob* meta, Ob* parent, Ob* i, Ob* f, Ob* b)
     : Expr(sz, meta, parent), identity(i), formals(f), body(b) {}
 
 
-bool Expr::ConstantP() { return FALSE; }
+bool Expr::ConstantP() { return false; }
 
 
 Ob* Expr::unquote() {
@@ -131,8 +131,10 @@ IfExpr::IfExpr(Ob* c, Ob* t, Ob* f)
 
 
 IfExpr* IfExpr::create(Ob* c, Ob* t, Ob* f) {
-    if (f == INVALID)
+    if (f == INVALID) {
         f = NullExpr::create();
+    }
+
     void* loc = PALLOC3(sizeof(IfExpr), c, t, f);
     return NEW(loc) IfExpr(c, t, f);
 }
@@ -179,6 +181,7 @@ LetExpr* LetExpr::create(TupleExpr* te, Ob* b) {
 
 
 Ob* LetExpr::boundId(int n) { return ((TupleExpr*)bindings->elem(n))->elem(0); }
+
 Ob* LetExpr::boundExpr(int n) {
     return ((TupleExpr*)bindings->elem(n))->elem(1);
 }
@@ -276,7 +279,7 @@ QuoteExpr* QuoteExpr::create(Ob* e) {
 }
 
 
-bool QuoteExpr::ConstantP() { return TRUE; }
+bool QuoteExpr::ConstantP() { return true; }
 Ob* QuoteExpr::unquote() { return expr; }
 
 
@@ -367,6 +370,7 @@ Ob* SeqExpr::setNth(int n, Ob* x) {
     ASSIGN(subExprs, elem(n), x);
     return this;
 }
+
 Ob* SeqExpr::subObject(int i, int n) {
     return SeqExpr::create(subExprs->makeSlice(i, n));
 }
@@ -418,8 +422,10 @@ TupleExpr::TupleExpr(int n, Ob* r)
      * As long as all TupleExprs are created through some version of
      * TupleExpr::create, this assumption should always hold.
      */
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         this->elem(i) = INVALID;
+    }
+
     TupleExpr::updateCnt();
 }
 
@@ -431,15 +437,14 @@ TupleExpr* TupleExpr::create() {
 
 
 TupleExpr* TupleExpr::create(Ob** p, int n, Ob* r) {
-    if (n == 0 && r == NILexpr)
+    if (n == 0 && r == NILexpr) {
         return NILexpr;
-    else if (!IS_A(r, TupleExpr) || r == NILexpr) {
+    } else if (!IS_A(r, TupleExpr) || r == NILexpr) {
         void* loc = PALLOC1(sizeof(TupleExpr) + n * sizeof(Ob*), r);
         TupleExpr* result = NEW(loc) TupleExpr(n, r);
         memcpy(&result->elem(0), &p[0], n * sizeof(Ob*));
         return result;
-    }
-    else {
+    } else {
         TupleExpr* rp = (TupleExpr*)r;
         int m = rp->numberOfElements();
         void* loc = PALLOC1(sizeof(TupleExpr) + (n + m) * sizeof(Ob*), rp);
@@ -452,16 +457,15 @@ TupleExpr* TupleExpr::create(Ob** p, int n, Ob* r) {
 
 
 TupleExpr* TupleExpr::create(int n, Ob* r) {
-    if (n == 0 && r == NILexpr)
+    if (n == 0 && r == NILexpr) {
         return NILexpr;
-    else if (!IS_A(r, TupleExpr) || r == NILexpr) {
+    } else if (!IS_A(r, TupleExpr) || r == NILexpr) {
         void* loc = PALLOC1(sizeof(TupleExpr) + n * sizeof(Ob*), r);
         TupleExpr* result = NEW(loc) TupleExpr(n, r);
         for (int i = 0; i < n; i++)
             result->elem(i) = INVALID;
         return result;
-    }
-    else {
+    } else {
         TupleExpr* rp = (TupleExpr*)r;
         int m = rp->numberOfElements();
         void* loc = PALLOC1(sizeof(TupleExpr) + (n + m) * sizeof(Ob*), rp);
@@ -475,31 +479,43 @@ TupleExpr* TupleExpr::create(int n, Ob* r) {
 
 
 bool TupleExpr::allPairs() {
-    for (int i = numberOfElements(); i--;)
+    for (int i = numberOfElements(); i--;) {
         if (!IS_A(elem(i), TupleExpr) ||
-            ((TupleExpr*)elem(i))->numberOfElements() != 2)
-            return FALSE;
-    return TRUE;
+            ((TupleExpr*)elem(i))->numberOfElements() != 2) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 
 bool TupleExpr::allSymbols() {
-    for (int i = numberOfElements(); i--;)
-        if (!IS_SYM(elem(i)))
-            return FALSE;
-    return TRUE;
+    for (int i = numberOfElements(); i--;) {
+        if (!IS_SYM(elem(i))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 
 bool TupleExpr::ConstantP() {
-    if (this == NILexpr)
-        return TRUE;
-    if (!BASE(rest)->ConstantP())
-        return FALSE;
-    for (int i = numberOfElements(); i--;)
-        if (!BASE(elem(i))->ConstantP())
-            return FALSE;
-    return TRUE;
+    if (this == NILexpr) {
+        return true;
+    }
+
+    if (!BASE(rest)->ConstantP()) {
+        return false;
+    }
+
+    for (int i = numberOfElements(); i--;) {
+        if (!BASE(elem(i))->ConstantP()) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 
@@ -515,8 +531,9 @@ TupleExpr* TupleExpr::cons(Ob* val) {
 
 
 TupleExpr* TupleExpr::makeSlice(int start, int span) {
-    if (this == NILexpr || span == 0)
+    if (this == NILexpr || span == 0) {
         return NILexpr;
+    }
 
     PROTECT_THIS(TupleExpr);
     TupleExpr* result = TupleExpr::create(span);
@@ -531,9 +548,9 @@ Ob* TupleExpr::cloneTo(Ob* new_meta, Ob* new_parent) {
 
 
 Ob* TupleExpr::unquote() {
-    if (this == NILexpr)
+    if (this == NILexpr) {
         return NIL;
-    else {
+    } else {
         PROTECT_THIS(TupleExpr);
         int n = SELF->numberOfElements();
         Tuple* t = Tuple::create(n, INVALID);
@@ -564,9 +581,9 @@ Ob* TupleExpr::subObject(int i, int n) { return makeSlice(i, n); }
 
 
 Ob* blockify(int start, int n, Tuple* exprs) {
-    if (n == 1)
+    if (n == 1) {
         return exprs->elem(start);
-    else {
+    } else {
         Tuple* subExprs = exprs->makeSlice(start, n);
         return BlockExpr::create(subExprs);
     }
@@ -623,9 +640,9 @@ DEF("sendexpr-basic-new", sendexprSX, 1, MaxArgs) {
 
 
 DEF("seqexpr-basic-new", seqexprSqX, 1, MaxArgs) {
-    if (NARGS == 1)
+    if (NARGS == 1) {
         return ARG(0);
-    else {
+    } else {
         Tuple* subExprs = ARGS->makeSlice(0, NARGS);
         return SeqExpr::create(subExprs);
     }
@@ -633,8 +650,9 @@ DEF("seqexpr-basic-new", seqexprSqX, 1, MaxArgs) {
 
 
 DEF("tupleexpr-basic-new", tplexprTX, 0, MaxArgs) {
-    if (NARGS == 0)
+    if (NARGS == 0) {
         return NILexpr;
+    }
 
     PROTECT(__CTXT__);
     TupleExpr* tx = TupleExpr::create(NARGS);
@@ -645,8 +663,9 @@ DEF("tupleexpr-basic-new", tplexprTX, 0, MaxArgs) {
 
 DEF("requestexpr->tuple", rqstexprToTuple, 1, 1) {
     CHECK(0, RequestExpr, rx);
-    if (!IS_A(rx->msg, TupleExpr))
+    if (!IS_A(rx->msg, TupleExpr)) {
         return PRIM_MISMATCH(0, "proper RequestExpr");
+    }
 
     PROTECT(rx);
     int n = rx->msg->numberOfElements();
@@ -674,12 +693,15 @@ DEF("tupleexpr-new-n", tplexprNewN, 4, 4) {
 
     CHECK_FIXNUM(2, n);
 
-    if (n == 0 && ARG(1) == NILexpr)
+    if (n == 0 && ARG(1) == NILexpr) {
         return NILexpr;
+    }
 
     TupleExpr* result = TupleExpr::create(n, ARG(1));
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         result->elem(i) = ARG(3);
+    }
+
     return result;
 }
 
@@ -702,8 +724,9 @@ DEF("tupleexpr-new", tplexprNew, 3, 3) {
     CHECK(2, Tuple, subExprs);
     int nexprs = subExprs->numberOfElements();
 
-    if (nexprs == 0 && ARG(1) == NILexpr)
+    if (nexprs == 0 && ARG(1) == NILexpr) {
         return NILexpr;
+    }
 
     PROTECT(__CTXT__);
     PROTECT(subExprs);
@@ -716,8 +739,9 @@ DEF("tupleexpr-new", tplexprNew, 3, 3) {
 DEF("tupleexpr->tuple", tplexprToTuple, 1, 1) {
     CHECK(0, TupleExpr, expr);
 
-    if (expr == NILexpr)
+    if (expr == NILexpr) {
         return NIL;
+    }
 
     PROTECT(expr);
     int n = expr->numberOfElements();
@@ -731,28 +755,29 @@ DEF("tupleexpr-split", tplexprSplit, 2, 2) {
     CHECK_FIXNUM(1, n);
 
     if (expr == NILexpr) {
-        if (n == 0)
+        if (n == 0) {
             return Tuple::create(1, NILexpr);
-        else
+        } else {
             return PRIM_ERROR("can't split");
+        }
     }
 
     KONST int s = expr->numberOfElements();
 
-    if (n > s)
+    if (n > s) {
         return PRIM_ERROR("can't split");
+    }
 
     TupleExpr* r;
     PROTECT(expr);
     PROTECT(r);
     if (s == n) {
-        if (expr->rest == NILexpr)
+        if (expr->rest == NILexpr) {
             r = NILexpr;
-        else {
+        } else {
             r = TupleExpr::create(0, expr->rest);
         }
-    }
-    else {
+    } else {
         r = expr->makeSlice(n, s - n);
         r->rest = expr->rest;
     }
@@ -766,19 +791,21 @@ DEF("tupleexpr-split", tplexprSplit, 2, 2) {
 DEF("tupleexpr-head", tplexprHead, 1, 1) {
     CHECK(0, TupleExpr, expr);
 
-    if (expr == NILexpr)
+    if (expr == NILexpr) {
         return NILexpr;
-    else if (expr->numberOfElements() >= 1)
+    } else if (expr->numberOfElements() >= 1) {
         return expr->elem(0);
-    else
+    } else {
         return PRIM_ERROR("no head");
+    }
 }
 
 DEF("tupleexpr-tail", tplexprTail, 1, 1) {
     CHECK(0, TupleExpr, expr);
 
-    if (expr == NILexpr)
+    if (expr == NILexpr) {
         return NILexpr;
+    }
 
     KONST int n = expr->numberOfElements();
     if (n > 1) {
@@ -786,11 +813,11 @@ DEF("tupleexpr-tail", tplexprTail, 1, 1) {
         TupleExpr* ans = expr->makeSlice(1, n - 1);
         ans->rest = expr->rest;
         return ans;
-    }
-    else if (expr->rest == NILexpr)
+    } else if (expr->rest == NILexpr) {
         return NILexpr;
-    else
+    } else {
         return TupleExpr::create(0, expr->rest);
+    }
 }
 
 DEF("tupleexpr-concat", tplexprConcat, 2, 2) {

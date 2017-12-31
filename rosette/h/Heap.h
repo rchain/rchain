@@ -235,7 +235,7 @@ extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
 
 static const int alignmentmask = 3;
 
-int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
+int align(int size);
 
 
 #define IS_OLD(p) (!heap->is_new(p))

@@ -31,12 +31,11 @@
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
 
+#include <algorithm>
+
 #include <assert.h>
 #include <setjmp.h>
 #include <stdarg.h>
-
-
-static int max(int m, int n) { return m > n ? m : n; }
 
 
 #if defined(__GNUG__)
@@ -133,8 +132,9 @@ int AttrNode::traversePtrs(PSOb__PSOb f) {
     pOb* p = &slot(SLOT_NUM(AttrNode, cu));
     KONST pOb* end = endp();
 
-    for (; p < (pOb*)end; p++)
+    for (; p < (pOb*)end; p++) {
         sum += useIfPtr(p, f);
+    }
 
     return sum;
 }
@@ -145,8 +145,9 @@ int AttrNode::traversePtrs(SI__PSOb f) {
     pOb* p = &slot(SLOT_NUM(AttrNode, cu));
     KONST pOb* end = endp();
 
-    for (; p < (pOb*)end; p++)
+    for (; p < (pOb*)end; p++) {
         sum += useIfPtr(*p, f);
+    }
 
     return sum;
 }
@@ -158,8 +159,9 @@ void AttrNode::traversePtrs(V__PSOb f) {
     pOb* p = &slot(SLOT_NUM(AttrNode, cu));
     KONST pOb* end = endp();
 
-    for (; p < (pOb*)end; p++)
+    for (; p < (pOb*)end; p++) {
         useIfPtr(*p, f);
+    }
 }
 
 
@@ -232,12 +234,13 @@ unsigned AttrNode::getDestOffset() { return cu->extendLitvec(dest.atom); }
 
 
 void AttrNode::emitAlloc(unsigned n) {
-    if (n == 0)
+    if (n == 0) {
         return;
-    else if (n < 256)
+    } else if (n < 256) {
         emitF0(opAlloc, n);
-    else
+    } else {
         cu->abort("argvec size (%d) too large for alloc instruction", n);
+    }
 }
 
 
@@ -251,9 +254,7 @@ void AttrNode::emitApplyPrim(unsigned primnum, unsigned nargs, bool unwind,
     if (dest == LocLimbo) {
         SELF->emitF5(opApplyCmd, unwind, next == NoneRemaining, nargs);
         SELF->emitE2(primnum, 0);
-    }
-
-    else
+    } else {
         switch (rtn) {
         case ImplicitRtn:
 
@@ -295,18 +296,19 @@ void AttrNode::emitApplyPrim(unsigned primnum, unsigned nargs, bool unwind,
                 op = cu->extendLitvec(dest.atom);
                 break;
             }
-            SELF->emitF5(opcode, unwind, FALSE, nargs);
+            SELF->emitF5(opcode, unwind, false, nargs);
             SELF->emitE2(primnum, op);
             SELF->emitUntaggedRtn(next);
             break;
 
         case TaggedRtn:
 
-            SELF->emitF5(opApplyPrimReg, unwind, FALSE, nargs);
+            SELF->emitF5(opApplyPrimReg, unwind, false, nargs);
             SELF->emitE2(primnum, CRN_Rslt);
             SELF->emitTaggedRtn(next);
             break;
         }
+    }
 }
 
 
@@ -324,11 +326,13 @@ void AttrNode::emitLit(pOb val) {
     KONST int regno = GET_CTXTREG_INDEX(dest);
 
 
-    for (int i = 0; i < 16; i++)
-        if (VirtualMachine::vmLiterals[i] == val)
+    for (int i = 0; i < 16; i++) {
+        if (VirtualMachine::vmLiterals[i] == val) {
             n = i;
+        }
+    }
 
-    if (n >= 0)
+    if (n >= 0) {
         switch (locType) {
         case LT_ArgRegister:
             emitF2(opImmediateLitToArg, n, argno);
@@ -344,6 +348,7 @@ void AttrNode::emitLit(pOb val) {
             return;
         }
         }
+    }
 
     /*
      * If we get here, the literal that we need to emit is not one that
@@ -359,13 +364,11 @@ void AttrNode::emitLit(pOb val) {
     if (locType == LT_CtxtRegister && regno == CRN_Rslt) {
         SELF->emitF0(opIndLitToRslt, valOffset);
         return;
-    }
-    else if (valOffset < 16) {
+    } else if (valOffset < 16) {
         if (locType == LT_ArgRegister && argno < 16) {
             SELF->emitF1(opIndLitToArg, argno, valOffset);
             return;
-        }
-        else if (locType == LT_CtxtRegister) {
+        } else if (locType == LT_CtxtRegister) {
             SELF->emitF1(opIndLitToReg, regno, valOffset);
             return;
         }
@@ -415,9 +418,9 @@ void AttrNode::emitLookup(pOb symbol) {
         break;
 
     case LT_ArgRegister:
-        if (argno < 16)
+        if (argno < 16) {
             SELF->emitF2(opLookupToArg, argno, litOffset);
-        else {
+        } else {
             SELF->emitF2(opLookupToReg, CRN_Rslt, litOffset);
             SELF->emitF0(opXferRsltToArg, argno);
         }
@@ -446,10 +449,11 @@ void AttrNode::emitOpAndLabel(Opcode op, pOb label_name) {
 
 
 void AttrNode::emitPush(int nargs) {
-    if (nargs == 0)
+    if (nargs == 0) {
         emitF0(opPush);
-    else
+    } else {
         emitF0(opPushAlloc, nargs);
+    }
 }
 
 
@@ -512,19 +516,19 @@ void AttrNode::emitTaggedRtn(Label next) {
      * value of SELF here.
      */
 
-    SELF->emitF5(opcode, FALSE, next == NoneRemaining, op);
+    SELF->emitF5(opcode, false, next == NoneRemaining, op);
 }
 
 
 void AttrNode::emitUntaggedRtn(Label next) {
-    if (dest != LocLimbo)
-        emitF5(opRtn, FALSE, next == NoneRemaining);
+    if (dest != LocLimbo) {
+        emitF5(opRtn, false, next == NoneRemaining);
+    }
 }
 
 
 void AttrNode::emitXfer(Location source) {
-    if (source == dest)
-        return;
+    if (source == dest) return;
 
     KONST LocationType destType = (LocationType)GET_GENERIC_TYPE(dest);
     KONST LocationType sourceType = (LocationType)GET_GENERIC_TYPE(source);
@@ -565,8 +569,7 @@ void AttrNode::emitXfer(Location source) {
                 SELF->emitF7(opXferLexToArg, ind, level, offset,
                              GET_ARGREG_INDEX(SELF->dest));
                 return;
-            }
-            else {
+            } else {
                 SELF->emitF7(opXferLexToReg, ind, level, offset, CRN_Rslt);
                 SELF->emitF0(opXferRsltToArg, GET_ARGREG_INDEX(SELF->dest));
                 return;
@@ -586,8 +589,7 @@ void AttrNode::emitXfer(Location source) {
             emitF1(opXferArgToArg, GET_ARGREG_INDEX(SELF->dest),
                    GET_ARGREG_INDEX(source));
             return;
-        }
-        else {
+        } else {
             SELF->emitF0(opXferArgToRslt, GET_ARGREG_INDEX(source));
             SELF->emitF0(opXferRsltToArg, GET_ARGREG_INDEX(SELF->dest));
             return;
@@ -652,8 +654,9 @@ void ConstNode::emitDispatchCode(bool ctxtAvailable, bool, RtnCode rtn,
     PROTECT_THIS(ConstNode);
     Location temp = dest;
 
-    if (rtn == TaggedRtn)
+    if (rtn == TaggedRtn) {
         dest = LocRslt;
+    }
 
     SELF->emitLit(SELF->val);
     SELF->dest = temp;
@@ -729,13 +732,15 @@ void SymbolNode::emitDispatchCode(bool ctxtAvailable, bool, RtnCode rtn,
     Location temp = dest;
     PROTECT_THIS(SymbolNode);
 
-    if (rtn == TaggedRtn)
+    if (rtn == TaggedRtn) {
         SELF->dest = LocRslt;
+    }
 
-    if (SELF->loc == LocLimbo)
+    if (SELF->loc == LocLimbo) {
         SELF->emitLookup(SELF->sym);
-    else
+    } else {
         SELF->emitXfer(SELF->loc);
+    }
 
     SELF->dest = temp;
     SELF->emitRtn(rtn, next);
@@ -747,9 +752,9 @@ int SymbolNode::primNumber() {
         pOb globalVal = GlobalEnv->entry(GET_GLOBALVAR_OFFSET(loc));
         Prim* prim = BASE(globalVal)->InlineablePrimP();
         return (prim == INVALID) ? -1 : prim->primNumber();
-    }
-    else
+    } else {
         return -1;
+    }
 }
 
 
@@ -809,9 +814,9 @@ int FreeNode::primNumber() { return body->primNumber(); }
 
 
 NullNode::NullNode(bool valueCtxt) : AttrNode(sizeof(NullNode), valueCtxt) {
-    SET_ATTR(*this, f_inlineableNode, TRUE);
-    SET_ATTR(*this, f_simpleNode, TRUE);
-    SET_ATTR(*this, f_producesValue, FALSE);
+    SET_ATTR(*this, f_inlineableNode, true);
+    SET_ATTR(*this, f_simpleNode, true);
+    SET_ATTR(*this, f_producesValue, false);
     NullNode::updateCnt();
 }
 
@@ -823,13 +828,14 @@ NullNode* NullNode::create(bool valueCtxt) {
 
 
 void NullNode::emitDispatchCode(bool, bool, RtnCode, Label next) {
-    if (next == NoneRemaining)
+    if (next == NoneRemaining) {
         emitF0(opNxt);
+    }
 }
 
 
 XferNode::XferNode(int source)
-    : AttrNode(sizeof(XferNode), TRUE), source(FIXNUM(source)) {
+    : AttrNode(sizeof(XferNode), true), source(FIXNUM(source)) {
     XferNode::updateCnt();
 }
 
@@ -845,15 +851,16 @@ void XferNode::emitDispatchCode(bool, bool, RtnCode, Label next) {
      * This code is only invoked in special circumstances (moving
      * temporary values to their ultimate locations) in which we know:
      *
-     * 	ctxtAvailable == TRUE
-     * 	argvecAvailable == TRUE
+     * 	ctxtAvailable == true
+     * 	argvecAvailable == true
      * 	rtn == ImplicitRtn
      */
 
     PROTECT_THIS(XferNode);
     SELF->emitXfer(ArgReg(FIXVAL(SELF->source)));
-    if (next == NoneRemaining)
+    if (next == NoneRemaining) {
         SELF->emitF0(opNxt);
+    }
 }
 
 
@@ -879,13 +886,12 @@ void CompoundNode::addTo(ExprStack* exprstack, AttrNode* node) {
 
 
 void CompoundNode::analyze(AttrNode* node) {
-    if (GET_ATTR(*node, f_simpleNode))
+    if (GET_ATTR(*node, f_simpleNode)) {
         addTo(&simple, node);
-    else if (GET_ATTR(*node, f_inlineableNode)) {
-        av_size = max(av_size, node->av_size);
+    } else if (GET_ATTR(*node, f_inlineableNode)) {
+        av_size = std::max(av_size, node->av_size);
         addTo(&inlined, node);
-    }
-    else {
+    } else {
         outstanding++;
         addTo(&nested, node);
     }
@@ -893,8 +899,7 @@ void CompoundNode::analyze(AttrNode* node) {
 
 
 void CompoundNode::rearrangeInlinedExprs() {
-    if (inlined.exprs == NIL)
-        return;
+    if (inlined.exprs == NIL) return;
 
     ArgNum freeArgs[MaxArgs];
     int top = determineFree(freeArgs);
@@ -919,8 +924,9 @@ int CompoundNode::determineFree(ArgNum* free) {
         }
     }
 
-    while (arg < av_size)
+    while (arg < av_size) {
         free[freeTop++] = arg++;
+    }
 
     return freeTop;
 }
@@ -934,12 +940,12 @@ void CompoundNode::sortInlinedExprs() {
         if (GET_GENERIC_TYPE(ni->dest) == LT_ArgRegister) {
             int N_i = ni->av_size;
             int dest_i = GET_ARGREG_INDEX(ni->dest);
-            int highest_i = max(N_i - 1, dest_i);
+            int highest_i = std::max(N_i - 1, dest_i);
             for (int j = i + 1; j < N; j++) {
                 AttrNode* nj = (AttrNode*)inlined.exprs->elem(j);
                 int N_j = nj->av_size;
                 int dest_j = GET_ARGREG_INDEX(nj->dest);
-                int highest_j = max(N_j - 1, dest_j);
+                int highest_j = std::max(N_j - 1, dest_j);
                 if (GET_GENERIC_TYPE(nj->dest) != LT_ArgRegister ||
                     highest_j > highest_i ||
                     (highest_j == highest_i &&
@@ -968,12 +974,15 @@ void CompoundNode::fixInlinedConflicts(ArgNum* free, int freeTop) {
 
     int j = 1, highest_j, nextTemp = SELF->av_size;
 
-    while (j < N && GET_GENERIC_TYPE(ni->dest) != LT_ArgRegister)
+    while (j < N && GET_GENERIC_TYPE(ni->dest) != LT_ArgRegister) {
         ni = (AttrNode*)SELF->inlined.exprs->elem(j++);
+    }
 
     for (; j < N; j++) {
         nj = (AttrNode*)SELF->inlined.exprs->elem(j);
-        highest_j = max(nj->av_size - 1, GET_ARGREG_INDEX(nj->dest));
+        // NB(leaf): Cast the 2nd argument, which is unsigned, to avoid type
+        // error.
+        highest_j = std::max(nj->av_size - 1, (int)GET_ARGREG_INDEX(nj->dest));
         if (GET_ARGREG_INDEX(ni->dest) <= highest_j) {
             int tempReg = (freeTop > 0 && free[freeTop - 1] > highest_j)
                               ? free[--freeTop]
@@ -992,10 +1001,11 @@ void CompoundNode::fixInlinedConflicts(ArgNum* free, int freeTop) {
 
 
 void CompoundNode::emitPrefix(bool ctxtAvailable, bool argvecAvailable) {
-    if (!GET_FLAG(word, f_inlineableNode) && !ctxtAvailable)
+    if (!GET_FLAG(word, f_inlineableNode) && !ctxtAvailable) {
         emitPush(av_size);
-    else if (!argvecAvailable)
+    } else if (!argvecAvailable) {
         emitAlloc(av_size);
+    }
 }
 
 
@@ -1021,30 +1031,33 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     }
 
     if (simpleCode) {
-        if (inlinedCode)
-            SELF->cu->setLabel(inlinedExit);
-        if (nestedCode || willWrapup || needPop)
-            simpleExit = SELF->cu->newLabel();
+        if (inlinedCode) SELF->cu->setLabel(inlinedExit);
+        if (nestedCode || willWrapup || needPop) simpleExit = SELF->cu->newLabel();
         SELF->emitSimpleExprDispatchCode(ImplicitRtn, simpleExit);
     }
 
     if (nestedCode) {
-        if (simpleCode)
+        if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        else if (inlinedCode)
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
-        if (willWrapup || needPop)
+        }
+
+        if (willWrapup || needPop) {
             nestedExit = SELF->cu->newLabel();
+        }
+
         SELF->emitNestedExprDispatchCode(TaggedRtn, nestedExit);
     }
 
     if (willWrapup || needPop) {
-        if (nestedCode)
+        if (nestedCode) {
             SELF->cu->setLabel(nestedExit);
-        else if (simpleCode)
+        } else if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        else if (inlinedCode)
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
+        }
 
         if (needPop) {
             if (willWrapup) {
@@ -1052,10 +1065,12 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
                 SELF->emitWrapup(rtn, finish);
                 SELF->cu->setLabel(finish);
             }
+
             SELF->emitF0(opPop);
-        }
-        else  // willWrapup == TRUE
+
+        } else {
             SELF->emitWrapup(rtn, exit);
+        }
     }
 }
 
@@ -1093,8 +1108,7 @@ void CompoundNode::emitInlinedExprDispatchCode(RtnCode rtn, Label exit) {
             Label next = last ? exit : SELF->cu->newLabel();
             AttrNode* node = (AttrNode*)exprs->elem(i);
             node->emitDispatchCode(CtxtAvailable, ArgvecAvailable, rtn, next);
-            if (!last)
-                SELF->cu->setLabel(next);
+            if (!last) SELF->cu->setLabel(next);
         }
     }
 }
@@ -1116,8 +1130,7 @@ void CompoundNode::emitNestedExprDispatchCode(RtnCode rtn, Label exit) {
             AttrNode* node = (AttrNode*)exprs->elem(i);
             node->emitDispatchCode(!CtxtAvailable, !ArgvecAvailable, rtn,
                                    nextExpr);
-            if (!last)
-                SELF->cu->setLabel(nextExpr);
+            if (!last) SELF->cu->setLabel(nextExpr);
         }
     }
 }
@@ -1181,7 +1194,7 @@ void BlockNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
 
     for (int i = 0; i < nexprs; i++) {
         AttrNode* node =
-            BASE(SELF->expr->subExprs->elem(i))->makeAttrNode(FALSE);
+            BASE(SELF->expr->subExprs->elem(i))->makeAttrNode(false);
         PROTECT(node);
         node->initialize(ctEnv, freeEnv, dest, SELF->cu);
         SELF->analyze(node);
@@ -1201,7 +1214,7 @@ void BlockNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
                     "position",
                     modifier);
             }
-            AttrNode* node = ConstNode::create(NIV, TRUE);
+            AttrNode* node = ConstNode::create(NIV, true);
             PROTECT(node);
             node->initialize(ctEnv, freeEnv, dest, SELF->cu);
             SELF->analyze(node);
@@ -1289,20 +1302,21 @@ void BlockNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     }
 
     if (needPop) {
-        if (nestedCode)
+        if (nestedCode) {
             SELF->cu->setLabel(nestedExit);
-        else if (simpleCode)
+        } else if (simpleCode) {
             SELF->cu->setLabel(simpleExit);
-        else if (inlinedCode)
+        } else if (inlinedCode) {
             SELF->cu->setLabel(inlinedExit);
+        }
 
         if (needPop) {
             Label finish = SELF->cu->newLabel();
             SELF->emitF0(opNxt);
             SELF->cu->setLabel(finish);
-        }
-        else  // willWrapup == TRUE
+        } else {
             SELF->emitF0(opNxt);
+        }
     }
 }
 
@@ -1390,7 +1404,7 @@ void RequestNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     SELF->av_size = nargs + hasRestArg;
     CompoundNode::initialize(ctEnv, freeEnv, dest, cu);
 
-    node = BASE(SELF->expr->target)->makeAttrNode(TRUE);
+    node = BASE(SELF->expr->target)->makeAttrNode(true);
     ASSIGN(SELF, trgtNode, node);
     node->initialize(ctEnv, freeEnv, LocTrgt, SELF->cu);
     ASSIGN(SELF, primTrgt, FIXNUM(node->primNumber()));
@@ -1415,7 +1429,7 @@ void RequestNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
          * the evaluation of the arguments, and let that mechanism worry
          * about scheduling the order, pushing and popping ctxts, etc.
          */
-        node = BASE(SELF->expr->msg->rest)->makeAttrNode(TRUE);
+        node = BASE(SELF->expr->msg->rest)->makeAttrNode(true);
         node->initialize(ctEnv, freeEnv, ArgReg(nargs), SELF->cu);
         SELF->analyze(node);
     }
@@ -1423,7 +1437,7 @@ void RequestNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     for (int i = nargs; i--;) {
         if (i > MaxArgs)
             cu->abort("cannot pass more than %d arguments", MaxArgs);
-        node = BASE(SELF->expr->msg->elem(i))->makeAttrNode(TRUE);
+        node = BASE(SELF->expr->msg->elem(i))->makeAttrNode(true);
         node->initialize(ctEnv, freeEnv, ArgReg(i), SELF->cu);
         SELF->analyze(node);
     }
@@ -1551,13 +1565,13 @@ void TupleNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     CompoundNode::initialize(ctEnv, freeEnv, dest, cu);
 
     if (restExpr) {
-        node = BASE(SELF->expr->rest)->makeAttrNode(TRUE);
+        node = BASE(SELF->expr->rest)->makeAttrNode(true);
         node->initialize(ctEnv, freeEnv, ArgReg(nelems), SELF->cu);
         SELF->analyze(node);
     }
 
     for (int i = nelems; i--;) {
-        node = BASE(SELF->expr->elem(i))->makeAttrNode(TRUE);
+        node = BASE(SELF->expr->elem(i))->makeAttrNode(true);
         node->initialize(ctEnv, freeEnv, ArgReg(i), SELF->cu);
         SELF->analyze(node);
     }
@@ -1588,10 +1602,9 @@ void TupleNode::emitWrapup(RtnCode rtn, Label next) {
             SELF->dest = ArgReg(nelems);
             SELF->emitLit(NIL);
             SELF->dest = temp;
-            SELF->emitApplyPrim(tplConsStar->primNumber(), nelems + 1, FALSE,
+            SELF->emitApplyPrim(tplConsStar->primNumber(), nelems + 1, false,
                                 rtn, next);
-        }
-        else {
+        } else {
             if (rtn == TaggedRtn)
                 SELF->dest = LocRslt;
 
@@ -1599,9 +1612,9 @@ void TupleNode::emitWrapup(RtnCode rtn, Label next) {
             SELF->dest = temp;
             SELF->emitRtn(rtn, next);
         }
+    } else {
+        emitApplyPrim(tplConsStar->primNumber(), nelems + 1, false, rtn, next);
     }
-    else
-        emitApplyPrim(tplConsStar->primNumber(), nelems + 1, FALSE, rtn, next);
 }
 
 
@@ -1630,7 +1643,7 @@ void IfNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
 
     CompoundNode::initialize(ctEnv, freeEnv, dest, cu);
 
-    node = BASE(SELF->expr->condition)->makeAttrNode(TRUE);
+    node = BASE(SELF->expr->condition)->makeAttrNode(true);
     node->initialize(ctEnv, freeEnv, LocRslt, SELF->cu);
     SELF->analyze(node);
     bool condInlineable = GET_ATTR(*node, f_inlineableNode);
@@ -1650,8 +1663,9 @@ void IfNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
               GET_ATTR(*(SELF->falseNode), f_inlineableNode)));
 
     if (condInlineable)
-        SELF->av_size = max(SELF->av_size, max(SELF->trueNode->av_size,
-                                               SELF->falseNode->av_size));
+        SELF->av_size = std::max(
+            SELF->av_size,
+            std::max(SELF->trueNode->av_size, SELF->falseNode->av_size));
 
     SET_ATTR(*SELF, f_producesValue,
              GET_ATTR(*(SELF->trueNode), f_producesValue));
@@ -1760,7 +1774,7 @@ void LetNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     PROTECT(letEnv);
 
     for (int i = nexprs; i--;) {
-        node = BASE(SELF->expr->boundExpr(i))->makeAttrNode(TRUE);
+        node = BASE(SELF->expr->boundExpr(i))->makeAttrNode(true);
         node->initialize(letEnv, freeEnv, SELF->ithLoc(i), SELF->cu);
         SELF->analyze(node);
     }
@@ -1884,7 +1898,7 @@ void MethodNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
                                   RtnCode rtn, Label next) {
     PROTECT_THIS(MethodNode);
 
-    AttrNode* node = NIL->makeAttrNode(TRUE);
+    AttrNode* node = NIL->makeAttrNode(true);
     PROTECT(node);
 
     node->initialize(TopEnv, TopEnv, LocRslt, SELF->cu);
@@ -1903,7 +1917,7 @@ void MethodNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     node->dest = ArgReg(2);
     node->emitLit(SELF->expr);
 
-    SELF->emitApplyPrim(constructor(), SELF->av_size, FALSE, rtn, next);
+    SELF->emitApplyPrim(constructor(), SELF->av_size, false, rtn, next);
 }
 
 
@@ -2018,7 +2032,7 @@ void ProcNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
                                 RtnCode rtn, Label next) {
     PROTECT_THIS(ProcNode);
 
-    AttrNode* node = NIL->makeAttrNode(TRUE);
+    AttrNode* node = NIL->makeAttrNode(true);
     PROTECT(node);
 
     node->initialize(TopEnv, TopEnv, LocRslt, SELF->cu);
@@ -2040,7 +2054,7 @@ void ProcNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     node->dest = ArgReg(3);
     node->emitLit(SELF->expr);
 
-    SELF->emitApplyPrim(constructor(), SELF->av_size, FALSE, rtn, next);
+    SELF->emitApplyPrim(constructor(), SELF->av_size, false, rtn, next);
 }
 
 
@@ -2068,7 +2082,7 @@ void SeqNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     SELF->analyze(SELF->first);
     SELF->second->initialize(ctEnv, freeEnv, dest, SELF->cu);
 
-    SELF->av_size = max(SELF->first->av_size, SELF->second->av_size);
+    SELF->av_size = std::max(SELF->first->av_size, SELF->second->av_size);
     SET_ATTR(*SELF, f_inlineableNode,
              GET_ATTR(*(SELF->first), f_inlineableNode) &&
                  GET_ATTR(*(SELF->second), f_inlineableNode));
@@ -2116,7 +2130,7 @@ void SetNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
 
     CompoundNode::initialize(ctEnv, freeEnv, dest, cu);
 
-    SymbolNode* sym = (SymbolNode*)BASE(expr->trgt)->makeAttrNode(TRUE);
+    SymbolNode* sym = (SymbolNode*)BASE(expr->trgt)->makeAttrNode(true);
     PROTECT(sym);
     sym->initialize(ctEnv, freeEnv, ArgReg(0), SELF->cu);
     ASSIGN(SELF, trgtNode, sym);
@@ -2124,7 +2138,7 @@ void SetNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     if (sym->loc == LocLimbo)
         cu->abort("can't set! free variables");
 
-    AttrNode* vn = BASE(SELF->expr->val)->makeAttrNode(TRUE);
+    AttrNode* vn = BASE(SELF->expr->val)->makeAttrNode(true);
     ASSIGN(SELF, valNode, vn);
     SELF->valNode->initialize(ctEnv, freeEnv, sym->loc, SELF->cu);
     SELF->analyze(SELF->valNode);
@@ -2133,7 +2147,7 @@ void SetNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
              GET_ATTR(*(SELF->valNode), f_inlineableNode));
     if (GET_ATTR(*SELF, f_inlineableNode)) {
         int n = SELF->valNode->av_size;
-        SELF->av_size = (sym->loc == LocRslt ? max(2, n) : n);
+        SELF->av_size = (sym->loc == LocRslt ? std::max(2, n) : n);
     }
 }
 
@@ -2211,9 +2225,9 @@ void GotoNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     if (n != 0) {
         SELF->emitOpAndLabel(opJmpCut, SELF->labelName);
         SELF->emitE0(n, 0);
-    }
-    else
+    } else {
         SELF->emitOpAndLabel(opJmp, SELF->labelName);
+    }
 }
 
 
@@ -2302,7 +2316,7 @@ CompilationUnit::CompilationUnit(pOb info, AttrNode* graph, CodeBuf* codebuf,
 CompilationUnit* CompilationUnit::create(pOb expr, pOb info, pOb source) {
     PROTECT(info);
     PROTECT(source);
-    AttrNode* graph = BASE(expr)->makeAttrNode(TRUE);
+    AttrNode* graph = BASE(expr)->makeAttrNode(true);
     PROTECT(graph);
     CodeBuf* codebuf = CodeBuf::create();
     PROTECT(codebuf);
@@ -2467,7 +2481,7 @@ void CompilationUnit::vwarning(const char* severity, const char* fmt,
 }
 
 
-void CompilationUnit::atTopLevel() { SET_ATTR(*graph, f_topLevel, TRUE); }
+void CompilationUnit::atTopLevel() { SET_ATTR(*graph, f_topLevel, true); }
 
 
 Label CompilationUnit::newLabel() { return labels->newLabel(); }
@@ -2518,10 +2532,10 @@ AttrNode* SendExpr::makeAttrNode(bool valueCtxt) {
 
         Tuple* subExprs = Tuple::create(1, this);
         BlockExpr* blockExpr = BlockExpr::create(subExprs, RBLTRUE);
-        return blockExpr->makeAttrNode(TRUE);
+        return blockExpr->makeAttrNode(true);
+    } else {
+        return SendNode::create(this, false);
     }
-    else
-        return SendNode::create(this, FALSE);
 }
 
 
@@ -2559,14 +2573,16 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
                 TupleExpr* temp = SELF->makeSlice(offset, MaxArgs);
                 ASSIGN(te, elem(i), temp);
             }
+
             if (semislice) {
                 TupleExpr* temp = SELF->makeSlice(nelems - nrest, nrest);
                 ASSIGN(te, elem(nslices), temp);
             }
-            if (tailarg)
+
+            if (tailarg) {
                 ASSIGN(te, elem(nslices + semislice), SELF->rest);
-        }
-        else {
+            }
+        } else {
             /*
              * The expression is too big to represent as one concat of
              * MaxArgs-1 tupleexprs (each of maximum length MaxArgs), so
@@ -2587,11 +2603,12 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
                 ASSIGN(te, elem(i), temp);
             }
 
-            if (tailarg)
+            if (tailarg) {
                 ASSIGN(te, elem(nSlices), SELF->rest);
+            }
         }
-        RequestExpr* re = RequestExpr::create(tplConcat, te);
 
+        RequestExpr* re = RequestExpr::create(tplConcat, te);
         return re->makeAttrNode(valueCtxt);
     }
 }
@@ -2650,10 +2667,11 @@ AttrNode* SeqExpr::makeAttrNode(bool valueCtxt) {
 
     switch (nexprs) {
     case 0:
-        if (valueCtxt)
+        if (valueCtxt) {
             return ConstNode::create(NIV, valueCtxt);
-        else
+        } else {
             return NullNode::create(valueCtxt);
+        }
 
     case 1:
         return BASE(subExprs->elem(0))->makeAttrNode(valueCtxt);
@@ -2665,7 +2683,7 @@ AttrNode* SeqExpr::makeAttrNode(bool valueCtxt) {
         tail = BASE(SELF->subExprs->elem(--nexprs))->makeAttrNode(valueCtxt);
         while (nexprs--) {
             AttrNode* head =
-                BASE(SELF->subExprs->elem(nexprs))->makeAttrNode(TRUE);
+                BASE(SELF->subExprs->elem(nexprs))->makeAttrNode(true);
             tail = SeqNode::create(head, tail, valueCtxt);
         }
         return tail;

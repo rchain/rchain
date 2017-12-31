@@ -36,7 +36,7 @@ UNIMPLEMENTED_VOID(Pattern, stuffKeys, (Tuple*, int));
 UNIMPLEMENTED(bool, Pattern, matchIntoArgvec, (Tuple*, int, Ob*, int));
 
 
-bool Pattern::fail(Ob*) { return FALSE; }
+bool Pattern::fail(Ob*) { return false; }
 
 
 int Pattern::numberOfKeys(void) {
@@ -73,7 +73,7 @@ void IdPattern::stuffKeys(Tuple* keys, int offset) {
 
 bool IdPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
     ASSIGN(argvec, elem(offset), val);
-    return TRUE;
+    return true;
 }
 
 
@@ -100,10 +100,10 @@ ConstPattern* ConstPattern::create(Ob* val) {
 bool ConstPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
     if (val == this->val) {
         ASSIGN(argvec, elem(offset), val);
-        return TRUE;
-    }
-    else
+        return true;
+    } else {
         return fail(val);
+    }
 }
 
 
@@ -150,8 +150,9 @@ int IdVecPattern::numberOfKeys(void) { return expr->numberOfElements(); }
 
 void IdVecPattern::stuffKeys(Tuple* keys, int offset) {
     int n = expr->numberOfElements();
-    while (n--)
+    while (n--) {
         ASSIGN(keys, elem(offset + n), expr->elem(n));
+    }
 }
 
 
@@ -168,21 +169,24 @@ bool IdVecPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
                                    int nargs) {
     int need = expr->numberOfElements();
 
-    if (!IS_A(val, Tuple))
+    if (!IS_A(val, Tuple)) {
         return fail(val);
+    }
 
     Tuple* valvec = (Tuple*)val;
 
-    if (nargs < 0)
+    if (nargs < 0) {
         nargs = valvec->numberOfElements();
+    }
 
     if (need == nargs) {
-        while (need--)
+        while (need--) {
             ASSIGN(argvec, elem(need + offset), valvec->elem(need));
-        return TRUE;
-    }
-    else
+        }
+        return true;
+    } else {
         return fail(val);
+    }
 }
 
 
@@ -208,8 +212,9 @@ IdAmperRestPattern* IdAmperRestPattern::create(TupleExpr* te) {
 void IdAmperRestPattern::stuffKeys(Tuple* keys, int offset) {
     int n = expr->numberOfElements();
     ASSIGN(keys, elem(offset + n), expr->rest);
-    while (n--)
+    while (n--) {
         ASSIGN(keys, elem(offset + n), expr->elem(n));
+    }
 }
 
 
@@ -223,9 +228,9 @@ Tuple* IdAmperRestPattern::match(Tuple* argvec, int nargs) {
         Tuple* rest = argvec->makeSlice(need, nargs - need);
         ASSIGN(result, elem(need), rest);
         return result;
-    }
-    else
+    } else {
         return (Tuple*)INVALID;
+    }
 }
 
 
@@ -233,25 +238,29 @@ bool IdAmperRestPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
                                          int nargs) {
     int need = expr->numberOfElements();
 
-    if (!IS_A(val, Tuple))
+    if (!IS_A(val, Tuple)) {
         return fail(val);
+    }
 
     Tuple* valvec = (Tuple*)val;
 
-    if (nargs < 0)
+    if (nargs < 0) {
         nargs = valvec->numberOfElements();
+    }
 
     if (nargs >= need) {
         PROTECT(argvec);
         PROTECT(valvec);
         Tuple* rest = valvec->makeSlice(need, nargs - need);
         ASSIGN(argvec, elem(need + offset), rest);
-        while (need--)
+        while (need--) {
             ASSIGN(argvec, elem(need + offset), valvec->elem(need));
-        return TRUE;
-    }
-    else
+        }
+
+        return true;
+    } else {
         return fail(val);
+    }
 }
 
 
@@ -309,11 +318,14 @@ int ComplexPattern::numberOfKeys(void) {
 
 void ComplexPattern::stuffKeys(Tuple* keys, int offset) {
     int n = patvec->numberOfElements();
-    if (expr->rest != NILexpr)
+    if (expr->rest != NILexpr) {
         ASSIGN(keys, elem(offset + FIXVAL(offsetvec->elem(n))), expr->rest);
-    while (n--)
+    }
+
+    while (n--) {
         ((Pattern*)patvec->elem(n))
             ->stuffKeys(keys, offset + FIXVAL(offsetvec->elem(n)));
+    }
 }
 
 
@@ -333,8 +345,10 @@ Tuple* ComplexPattern::match(Tuple* argvec, int nargs) {
 
     bool success = SELF->matchIntoArgvec(result, 0, argvec, nargs);
 
-    if (!success)
+    if (!success) {
         result = (Tuple*)INVALID;
+    }
+
     return result;
 }
 
@@ -343,15 +357,17 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
                                      int nargs) {
     int need = patvec->numberOfElements();
 
-    if (!IS_A(val, Tuple))
+    if (!IS_A(val, Tuple)) {
         return fail(val);
+    }
 
     Tuple* valvec = (Tuple*)val;
 
-    if (nargs < 0)
+    if (nargs < 0) {
         nargs = valvec->numberOfElements();
+    }
 
-    bool matched = TRUE;
+    bool matched = true;
     PROTECT_THIS(ComplexPattern);
     PROTECT(argvec);
     PROTECT(valvec);
@@ -362,8 +378,7 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             matched = pat->matchIntoArgvec(
                 argvec, offset + SELF->keyExtent(need), valvec->elem(need));
         }
-    }
-    else if (expr->rest != NILexpr && nargs >= need) {
+    } else if (expr->rest != NILexpr && nargs >= need) {
         Tuple* rest = valvec->makeSlice(need, nargs - need);
         ASSIGN(argvec, elem(offset + SELF->keyExtent(need)), rest);
         while (need-- && matched) {
@@ -371,9 +386,9 @@ bool ComplexPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val,
             matched = pat->matchIntoArgvec(
                 argvec, offset + SELF->keyExtent(need), valvec->elem(need));
         }
-    }
-    else
+    } else {
         matched = fail(val);
+    }
 
     return matched;
 }
@@ -400,13 +415,15 @@ Template* Template::create(TupleExpr* te) {
 
     CompoundPattern* pat;
 
-    if (te->allSymbols())
-        if (te->rest == NILexpr)
+    if (te->allSymbols()) {
+        if (te->rest == NILexpr) {
             pat = IdVecPattern::create(te);
-        else
+        } else {
             pat = IdAmperRestPattern::create(te);
-    else
+        }
+    } else {
         pat = ComplexPattern::create(te);
+    }
 
     PROTECT(pat);
     Tuple* keys = Tuple::create(pat->numberOfKeys(), INVALID);
@@ -434,37 +451,45 @@ Ob* Template::fail(Ob*) { return INVALID; }
 
 
 Ob* Template::cloneTo(Ob* new_meta, Ob* new_parent) {
-    return (this == NILtemplate ? (Ob*)this
-                                : Ob::cloneTo(new_meta, new_parent));
+    if (this == NILtemplate) {
+        return (Ob*)this;
+    } else {
+        return Ob::cloneTo(new_meta, new_parent);
+    }
 }
 
 
 Pattern* TupleExpr::makePattern(EMPTY) {
-    if (this == NILexpr)
+    if (this == NILexpr) {
         return NILpattern;
+    }
 
     int n = numberOfElements();
 
-    while (n--)
-        if (!IS_SYM(elem(n)))
+    while (n--) {
+        if (!IS_SYM(elem(n))) {
             return ComplexPattern::create(this);
+        }
+    }
 
-    if (rest == NILexpr)
+    if (rest == NILexpr) {
         return IdVecPattern::create(this);
-    else if (IS_SYM(rest))
+    } else if (IS_SYM(rest)) {
         return IdAmperRestPattern::create(this);
-    else
+    } else {
         return ComplexPattern::create(this);
+    }
 }
 
 
 Template* TupleExpr::makeTemplate(EMPTY) {
-    if (this == NILexpr)
+    if (this == NILexpr) {
         return NILtemplate;
-    else if (rest != NILexpr && !IS_SYM(rest))
+    } else if (rest != NILexpr && !IS_SYM(rest)) {
         return (Template*)INVALID;
-    else
+    } else {
         return Template::create(this);
+    }
 }
 
 

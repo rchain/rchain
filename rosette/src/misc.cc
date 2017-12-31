@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #include <ctype.h>
 #include <errno.h>
 
@@ -85,8 +86,9 @@ const char* plural(int n) { return (n == 1 ? "" : "s"); }
 const char* properPrep(char* s) {
     char c = *s;
     if (c != 0) {
-        if (isupper(c))
+        if (isupper(c)) {
             c = tolower(c);
+        }
 
         switch (c) {
         case 'a':
@@ -102,10 +104,5 @@ const char* properPrep(char* s) {
     }
     return "";
 }
-#ifdef __GNUC__
-extern "C" {
-#include <string.h>
-};
-#endif
 
 const char* sys_errmsg() { return strerror(errno); }

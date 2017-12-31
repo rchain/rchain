@@ -36,8 +36,10 @@ BUILTIN_CLASS(StdExtension) {}
 
 StdExtension::StdExtension(pOb meta, pOb parent, int nslots)
     : Ob(sizeof(StdExtension) + nslots * sizeof(pOb), meta, parent) {
-    while (nslots--)
+    while (nslots--) {
         this->slot(nslots) = INVALID;
+    }
+
     StdExtension::updateCnt();
 }
 
@@ -53,8 +55,10 @@ StdExtension::StdExtension(pOb newmeta, pOb newparent)
 StdExtension::StdExtension(int nslots)
     : Ob(sizeof(StdExtension) + nslots * sizeof(pOb), CLASS_META(StdExtension),
          CLASS_SBO(StdExtension)) {
-    while (nslots--)
+    while (nslots--) {
         this->slot(nslots) = INVALID;
+    }
+
     StdExtension::updateCnt();
 }
 
@@ -90,8 +94,10 @@ BUILTIN_CLASS(Actor) {}
 
 Actor::Actor(pOb meta, pOb parent, pExt ext)
     : MboxOb(sizeof(Actor), meta, parent, lockedMbox), extension(ext) {
-    if (meta != INVALID)
+    if (meta != INVALID) {
         BASE(meta)->addRef();
+    }
+
     Actor::updateCnt();
 }
 
@@ -165,8 +171,8 @@ pOb Actor::update(bool enabled_set_provided, pCtxt ctxt) {
         ASSIGN(SELF, extension, new_extension);
         result = SELF->Ob::update(enabled_set_provided, ctxt);
     }
-    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
 
+    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
     return result;
 }
 
@@ -182,8 +188,8 @@ pOb Actor::updateByLoc(bool enabled_set_provided, pCtxt ctxt) {
         ASSIGN(SELF, extension, new_extension);
         result = SELF->Ob::updateByLoc(enabled_set_provided, ctxt);
     }
-    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
 
+    SELF->mbox->nextMsg(SELF, enabled_set_provided ? ctxt->arg(0) : NIL);
     return result;
 }
 
@@ -222,9 +228,9 @@ pOb Actor::dispatch(pCtxt ctxt) {
 
 
 pOb Actor::lookupAndInvoke(pCtxt ctxt) {
-    if (BASE(ctxt->trgt)->isSynchronousTrgt())
+    if (BASE(ctxt->trgt)->isSynchronousTrgt()) {
         return Ob::lookupAndInvoke(ctxt);
-    else {
+    } else {
         receive(ctxt);
         return SUSPENDED;
     }
@@ -299,8 +305,9 @@ DEF("actor-new", actorNew, 3, 3) {
     pOb sbo = ARG(0);
     PROTECT(sbo);
 
-    if (keyVec->numberOfElements() != vals->numberOfElements())
+    if (keyVec->numberOfElements() != vals->numberOfElements()) {
         return PRIM_ERROR("non-conforming keys and initial values");
+    }
 
     pOb meta = StdMeta::create(keyVec, FIXNUM(0), RBLTRUE);
     PROTECT(meta);
@@ -310,7 +317,7 @@ DEF("actor-new", actorNew, 3, 3) {
 }
 
 
-#define EnabledSetProvided TRUE
+#define EnabledSetProvided true
 
 
 DEF("update!", actorUpdateBang, 0, MaxArgs) {

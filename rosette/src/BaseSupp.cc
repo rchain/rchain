@@ -22,6 +22,7 @@
 
 #include "rosette.h"
 
+#include <algorithm>
 #include <cerrno>
 
 #include <unistd.h>
@@ -82,8 +83,6 @@ extern Prim* obRuntimeError;
 extern Ob* obSBO;
 extern Ob* emptyMbox;
 
-int min(int a, int b) { return (a < b) ? a : b; }
-
 DEF_OPRN(Sync, "kind", oprnKind, obRuntimeError);
 
 Ob* newSBO(Ob* proto_sbo, Ob* id, Ob* prnt, Ob* ctxt) {
@@ -112,16 +111,13 @@ int slashify_char(char c, char buf[], int slash_blank) {
         buf[0] = c;
         buf[1] = c;
         buf[2] = 0;
-    }
-    else if (slash_blank && (c == ' ')) {
+    } else if (slash_blank && (c == ' ')) {
         buf[0] = escapeChar;
         buf[1] = ' ';
-    }
-    else if (isprint(c)) {
+    } else if (isprint(c)) {
         buf[0] = c;
         buf[1] = 0;
-    }
-    else {
+    } else {
         buf[0] = escapeChar;
         switch (c) {
         case '\n':
@@ -142,12 +138,12 @@ int slashify_char(char c, char buf[], int slash_blank) {
         default:
             if (isprint(c)) {
                 buf[1] = c;
-            }
-            else {
+            } else {
                 sprintf(&buf[1], "x%02x", (uint8_t)c);
             }
             break;
         }
+
         switch (c) {
         case '\n':
         case '\b':
@@ -157,13 +153,15 @@ int slashify_char(char c, char buf[], int slash_blank) {
             buf[2] = 0;
             break;
         default:
-            if (isprint(c))
+            if (isprint(c)) {
                 buf[2] = 0;
-            else
+            } else {
                 buf[4] = 0;
+            }
             break;
         }
     }
+
     return strlen((char*)buf);
 }
 
@@ -189,15 +187,17 @@ DEF("str->printString", strToPrintString, 1, 1) {
     int n = 0;
     int i = 0;
 
-    for (; i < sz; i++)
+    for (; i < sz; i++) {
         n += slashify_char(str->byte(i), buf, 0);
+    }
 
     RBLstring* result = RBLstring::create(n + 1, (char)0);
 
     char* x = (char*)&result->byte(0);
 
-    for (i = 0; i < sz; i++)
+    for (i = 0; i < sz; i++) {
         x += slashify_char(str->byte(i), x, 0);
+    }
 
     return result;
 }
@@ -212,15 +212,17 @@ DEF("symb->printString", symbToPrintString, 1, 1) {
     int n = 0;
     int i = 0;
 
-    for (; i < sz; i++)
+    for (; i < sz; i++) {
         n += slashify_char(*(str + i), buf, 1);
+    }
 
     RBLstring* result = RBLstring::create(n + 1, (char)0);
 
     char* x = (char*)&result->byte(0);
 
-    for (i = 0; i < sz; i++)
+    for (i = 0; i < sz; i++) {
         x += slashify_char(*(str + i), x, 1);
+    }
 
     return result;
 }
@@ -268,30 +270,35 @@ uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
 
     switch (span) {
     case 8:
-        if (sign)
+        if (sign) {
             ans = *(int8_t*)((int8_t*)addr + (offset / BITS(int8_t)));
-        else
+        } else {
             ans = *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t)));
+        }
         break;
     case 16:
-        if (sign)
+        if (sign) {
             ans = *(int16_t*)((int16_t*)addr + (offset / BITS(int16_t)));
-        else
+        } else {
             ans = *(uint16_t*)((int16_t*)addr + (offset / BITS(int16_t)));
+        }
         break;
     case 32:
-        if (sign)
+        if (sign) {
             ans = *(int32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
-        else
+        } else {
             ans = *(uint32_t*)((int32_t*)addr + (offset / BITS(int32_t)));
+        }
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
         // this contained some complex and questionable big-endian dependent
         // code.
         ans = 0;
+        break;
     }
     }
+
     return ans;
 }
 
@@ -314,8 +321,10 @@ uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
         // Fields that are not multiples of 8 bits are not expected. Previously,
         // this contained some complex and questionable big-endian dependent
         // code.
+        break;
     }
     }
+
     return addr;
 }
 
@@ -331,21 +340,30 @@ int setSocketAsync(int fd) {
     int result;
 
     SET_SIGNAL_IO_DESIRED(result);
-    if (result == -1)
+    if (result == -1) {
         return -errno;
+    }
 
 #ifndef HPUX
-    if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
+    if ((flags = fcntl(fd, F_GETFL, 0)) == -1) {
         return -errno;
-    if (fcntl(fd, F_SETFL, flags | FCNTL_NONBLOCK) == -1)
+    }
+
+    if (fcntl(fd, F_SETFL, flags | FCNTL_NONBLOCK) == -1) {
         return -errno;
+    }
+
 #else
     flags = desiredState;
-    if (ioctl(fd, FIOSNBIO, &flags) == -1)
+    if (ioctl(fd, FIOSNBIO, &flags) == -1) {
         return -errno;
+    }
+
     flags = desiredState;
-    if (ioctl(fd, FIOASYNC, &flags) == -1)
+    if (ioctl(fd, FIOASYNC, &flags) == -1) {
         return -errno;
+    }
+
 #endif
 
     return fd;
@@ -355,10 +373,11 @@ void deleteIoHandler(int fd) { vm->deleteIoHandler(fd); }
 
 Ob* fdopenOstream(int fd, char* mode) {
     FILE* f = fdopen(fd, mode);
-    if (f)
+    if (f) {
         return Ostream::create(f);
-    else
+    } else {
         return FIXNUM(-errno);
+    }
 }
 
 Ob* fdopenIstream(int fd) {
@@ -366,25 +385,27 @@ Ob* fdopenIstream(int fd) {
     if (f) {
         Reader* rdr = Reader::create(f);
         return Istream::create(rdr);
-    }
-    else
+    } else {
         return FIXNUM(-errno);
+    }
 }
 
 DEF("identity1", obIdentity1, 0, MaxArgs) {
-    if (NARGS == 0)
+    if (NARGS == 0) {
         return NIV;
-    else
+    } else {
         return ARG(0);
+    }
 }
 
 pOb Ob::primitiveInitialize(pCtxt ctxt) {
     int n = ctxt->nargs - 1;
 
-    n = min(n, numberOfSlots());
+    n = std::min(n, numberOfSlots());
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         ASSIGN(self(), slot(i), ctxt->arg(i + 1));
+    }
 
     return self();
 }
@@ -392,10 +413,11 @@ pOb Ob::primitiveInitialize(pCtxt ctxt) {
 pOb RblAtom::primitiveInitialize(pCtxt ctxt) {
     int n = ctxt->nargs - 1;
 
-    if (n >= 1)
+    if (n >= 1) {
         return ctxt->arg(1);
-    else
+    } else {
         return self();
+    }
 }
 
 pOb Actor::primitiveInitialize(pCtxt ctxt) {
@@ -403,10 +425,11 @@ pOb Actor::primitiveInitialize(pCtxt ctxt) {
     PROTECT(ctxt);
     int n = ctxt->nargs - 1;
 
-    n = min(n, extension->numberOfSlots());
+    n = std::min(n, extension->numberOfSlots());
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         ASSIGN(extension, slot(i), ctxt->arg(i + 1));
+    }
 
     mbox->nextMsg(SELF, NIL);
 
@@ -427,16 +450,16 @@ DEF("M-get", addressGetField, 3, 3) {
     int offset = (int)base % 4;
     uint32_t* addr = (uint32_t*)(base - offset);
 
-    if (base < local_page_size)
+    if (base < local_page_size) {
         return PRIM_ERROR("invalid address");
-    else if ((span >= 1) && (span <= 4)) {
+    } else if ((span >= 1) && (span <= 4)) {
         uint32_t rslt =
             mem_get_field(addr, offset * 8, span * 8, BOOLVAL(sign));
 
         return FIXNUM((int)rslt);
     }
-    else
-        return PRIM_ERROR("invalid span");
+
+    return PRIM_ERROR("invalid span");
 }
 
 
@@ -448,25 +471,26 @@ DEF("M-set", addressSetField, 3, 3) {
     int offset = (int)base % 4;
     uint32_t* addr = (uint32_t*)(base - offset);
 
-    if (base < local_page_size)
+    if (base < local_page_size) {
         return PRIM_ERROR("invalid address");
-    else if ((span >= 1) && (span <= 4)) {
+    } else if ((span >= 1) && (span <= 4)) {
         uint32_t* rslt =
             mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
 
         return ADDR_TO_FIXNUM((int)addr);
     }
-    else
-        return PRIM_ERROR("invalid span");
+
+    return PRIM_ERROR("invalid span");
 }
 
 DEF("char*->string", char_star_to_string, 1, 1) {
     CHECK_ADDR(0, addr);
 
-    if (addr >= local_page_size)
+    if (addr >= local_page_size) {
         return RBLstring::create((char*)addr);
-    else
-        return PRIM_ERROR("invalid address");
+    }
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("ob@", ob_address, 1, 1) { return ADDR_TO_FIXNUM((int)BASE(ARG(0))); }
@@ -503,8 +527,8 @@ DEF("u_bzero", unix_bzero, 2, 2) {
         bzero((char*)addr, sz);
         return FIXNUM(0);
     }
-    else
-        return PRIM_ERROR("invalid address");
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("u_free", unix_free, 1, 1) {
@@ -514,8 +538,8 @@ DEF("u_free", unix_free, 1, 1) {
         free((char*)addr);
         return FIXNUM(0);
     }
-    else
-        return PRIM_ERROR("invalid address");
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("memcpy", unix_memcpy, 3, 3) {
@@ -523,11 +547,12 @@ DEF("memcpy", unix_memcpy, 3, 3) {
     CHECK_ADDR(1, src_addr);
     CHECK_FIXNUM(2, n_bytes);
 
-    if ((dest_addr >= local_page_size) && (src_addr >= local_page_size))
+    if ((dest_addr >= local_page_size) && (src_addr >= local_page_size)) {
         return ADDR_TO_FIXNUM(
             memcpy((char*)dest_addr, (char*)src_addr, n_bytes));
-    else
-        return PRIM_ERROR("invalid address");
+    }
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("fcntl", unix_fcntl, 3, 3) {
@@ -537,10 +562,11 @@ DEF("fcntl", unix_fcntl, 3, 3) {
 
     int rslt = fcntl(fd, mode, flags);
 
-    if (rslt < 0)
+    if (rslt < 0) {
         return FIXNUM(-errno);
-    else
-        return FIXNUM(rslt);
+    }
+
+    return FIXNUM(rslt);
 }
 
 DEF("sh", unix_system, 1, 1) {
@@ -551,10 +577,11 @@ DEF("sh", unix_system, 1, 1) {
 
     int rslt = system(cmd);
 
-    if (rslt < 0)
+    if (rslt < 0) {
         return FIXNUM(-errno);
-    else
-        return FIXNUM(rslt);
+    }
+
+    return FIXNUM(rslt);
 }
 
 DEF("sbrk", unix_sbrk, 1, 1) {
@@ -562,17 +589,19 @@ DEF("sbrk", unix_sbrk, 1, 1) {
 
     int rslt = (int)sbrk(addr);
 
-    if (rslt < 0)
+    if (rslt < 0) {
         return FIXNUM(-errno);
-    else
-        return FIXNUM(rslt);
+    }
+
+    return FIXNUM(rslt);
 }
 
 DEF("exit", unix_exit, 0, 1) {
     int r = 0;
 
-    if (NARGS == 1)
+    if (NARGS == 1) {
         r = FIXVAL(ARG(0));
+    }
 
     exit(r);
     return INVALID;
@@ -586,10 +615,10 @@ DEF("unlink", unix_unlink, 1, 1) {
 
     int rslt = unlink(fnm);
 
-    if (rslt < 0)
+    if (rslt < 0) {
         return FIXNUM(-errno);
-    else
-        return FIXNUM(rslt);
+    }
+    return FIXNUM(rslt);
 }
 
 DEF("_c2bv", _c_struct_to_byte_vec, 3, 3) {
@@ -600,8 +629,8 @@ DEF("_c2bv", _c_struct_to_byte_vec, 3, 3) {
         memcpy((char*)&BASE(ARG(0))->slot(0), (char*)src_addr, n_bytes);
         return ARG(0);
     }
-    else
-        return PRIM_ERROR("invalid address");
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("c2bv", c_struct_to_byte_vec, 2, 2) {
@@ -612,8 +641,8 @@ DEF("c2bv", c_struct_to_byte_vec, 2, 2) {
         memcpy(&dest_bv->byte(0), (void*)src_addr, dest_bv->numberOfBytes());
         return dest_bv;
     }
-    else
-        return PRIM_ERROR("invalid address");
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("c2str", cpy_char_star_to_string, 2, 2) {
@@ -621,12 +650,13 @@ DEF("c2str", cpy_char_star_to_string, 2, 2) {
     CHECK_ADDR(1, src_addr);
 
     if (src_addr >= local_page_size) {
-        int len = min(strlen((char*)src_addr), dest_str->numberOfBytes());
+        int len =
+            std::min((int)strlen((char*)src_addr), dest_str->numberOfBytes());
         memcpy(&dest_str->byte(0), (void*)src_addr, len);
         return dest_str;
     }
-    else
-        return PRIM_ERROR("invalid address");
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("string->fx", string_to_fx, 1, 1) {
@@ -647,10 +677,11 @@ DEF("fx->string", fx_to_string, 1, 1) {
 DEF("strlen", c_strlen, 1, 1) {
     CHECK_ADDR(0, addr);
 
-    if (addr >= local_page_size)
+    if (addr >= local_page_size) {
         return FIXNUM(strlen((char*)addr));
-    else
-        return PRIM_ERROR("invalid address");
+    }
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("prim-string->", cpy_string_char_star, 2, 2) {
@@ -661,23 +692,19 @@ DEF("prim-string->", cpy_string_char_star, 2, 2) {
         strcpy((char*)dest_addr, (char*)&src_str->byte(0));
         return src_str;
     }
-    else
-        return PRIM_ERROR("invalid address");
+
+    return PRIM_ERROR("invalid address");
 }
 
 DEF("set-io-pool", set_io_pool, 1, 1) {
     CHECK_FIXNUM(0, fd);
-
     SetIoPool(fd, ARG(1));
-
     return ARG(1);
 }
 
 DEF("delete-io-handler", delete_io_handler, 1, 1) {
     CHECK_FIXNUM(0, fd);
-
     deleteIoHandler(fd);
-
     return ARG(0);
 }
 
@@ -685,7 +712,6 @@ DEF("uOpen", unix_open, 3, 3) {
     CHECK(0, RBLstring, path);
     CHECK_FIXNUM(1, flags);
     CHECK_FIXNUM(2, mode);
-
     return FIXNUM(open((char*)&path->byte(0), flags, mode));
 }
 
@@ -698,36 +724,36 @@ DEF("uRead", unix_read, 3, 3) {
     CHECK_FIXNUM(0, fd);
     CHECK_FIXNUM(2, len);
 
-    if (IS_A(ARG(1), ByteVec))
+    if (IS_A(ARG(1), ByteVec)) {
         return FIXNUM(read(fd, (char*)&((ByteVec*)ARG(1))->byte(0), len));
-    else if (IS_A(ARG(1), RBLstring))
+    } else if (IS_A(ARG(1), RBLstring)) {
         return FIXNUM(read(fd, (char*)&((RBLstring*)ARG(1))->byte(0), len));
-    else
-        return PRIM_ERROR("unix_read on invalid type");
+    }
+
+    return PRIM_ERROR("unix_read on invalid type");
 }
 
 DEF("uWrite", unix_write, 3, 3) {
     CHECK_FIXNUM(0, fd);
     CHECK_FIXNUM(2, len);
 
-    if (IS_A(ARG(1), ByteVec))
+    if (IS_A(ARG(1), ByteVec)) {
         return FIXNUM(write(fd, (char*)&((ByteVec*)ARG(1))->byte(0), len));
-    else if (IS_A(ARG(1), RBLstring))
+    } else if (IS_A(ARG(1), RBLstring)) {
         return FIXNUM(write(fd, (char*)&((RBLstring*)ARG(1))->byte(0), len));
-    else
-        return PRIM_ERROR("unix_write on invalid type");
+    }
+
+    return PRIM_ERROR("unix_write on invalid type");
 }
 
 DEF("fd-open-ostream", fd_open_ostream, 2, 2) {
     CHECK_FIXNUM(0, fd);
     CHECK(1, RBLstring, mode);
-
     return fdopenOstream(fd, (char*)&mode->byte(0));
 }
 
 DEF("fd-open-istream", fd_open_istream, 1, 1) {
     CHECK_FIXNUM(0, fd);
-
     return fdopenIstream(fd);
 }
 
@@ -742,12 +768,10 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
 
         if (std::regex_match(str_s, r)) {  // See if it matches
             return RBLstring::create(str_s);
-        }
-        else {
+        } else {
             return RBLFALSE;
         }
-    }
-    catch (const std::regex_error& e) {
+    } catch (const std::regex_error& e) {
         warning("Regex expression error: %s code=%d", e.what(), e.code());
         return RBLFALSE;
     }
@@ -756,8 +780,9 @@ DEF("regexpCompare", regexpCompare, 2, 2) {
 DEF("socketpair", sysSocketpair, 0, 0) {
     int sv[2];
 
-    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1)
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == -1) {
         return FIXNUM(-errno);
+    }
 
     PROTECT(__CTXT__);
 
@@ -772,9 +797,11 @@ DEF("socketpair", sysSocketpair, 0, 0) {
 void setup_io(int in, int out, int err) {
     int nfds = getdtablesize();
 
-    for (int fd = 0; fd < nfds; fd++)
-        if ((fd != in) && (fd != out) && (fd != err))
+    for (int fd = 0; fd < nfds; fd++) {
+        if ((fd != in) && (fd != out) && (fd != err)) {
             (void)close(fd);
+        }
+    }
 
     int tmp_in = dup(in);
     int tmp_out = dup(out);
@@ -803,9 +830,9 @@ DEF("prim-execvp", sysExecv, 5, 6) {
     CHECK_FIXNUM(3, out);
     CHECK_FIXNUM(4, err);
     int splitp;
-    if (NARGS == 5)
-        splitp = TRUE;
-    else {
+    if (NARGS == 5) {
+        splitp = true;
+    } else {
         CHECK(5, RblBool, x);
         splitp = BOOLVAL(x);
     }
@@ -817,8 +844,9 @@ DEF("prim-execvp", sysExecv, 5, 6) {
 
         (void)setpgrp();
 
-        if (splitp)
+        if (splitp) {
             setup_io(in, out, err);
+        }
 
         execvp((const char*)&path->byte(0), (char**)argv);
 
@@ -828,8 +856,9 @@ DEF("prim-execvp", sysExecv, 5, 6) {
         _exit(127);
     }
 
-    if (pid == -1)
+    if (pid == -1) {
         return FIXNUM(-errno);
+    }
 
     return FIXNUM(pid);
 }
@@ -837,8 +866,9 @@ DEF("prim-execvp", sysExecv, 5, 6) {
 DEF("ostream-display-join", ostreamDisplayJoin, 2, MaxArgs) {
     CHECK(0, Ostream, strm);
 
-    if (NARGS == 2)
+    if (NARGS == 2) {
         return NIV;
+    }
 
     if (strm->stream) {
         int n = NARGS;
@@ -847,13 +877,15 @@ DEF("ostream-display-join", ostreamDisplayJoin, 2, MaxArgs) {
             BASE(ARG(1))->displayOn(strm->stream);
             BASE(ARG(i))->displayOn(strm->stream);
         }
-        if (errno != 0)
+
+        if (errno != 0) {
             return FIXNUM(-errno);
-        else
+        } else {
             return NIV;
+        }
     }
-    else
-        return PRIM_ERROR("cannot display on closed ostream");
+
+    return PRIM_ERROR("cannot display on closed ostream");
 }
 
 DEF("prim-configuration-parameters", configParams, 0, 0) {
@@ -907,18 +939,21 @@ DEF("tuple-unzip", tupleUnZip, 1, 2) {
 
     int n = 2;
     if (NARGS == 2) {
-        if (IS_FIXNUM(ARG(1)))
+        if (IS_FIXNUM(ARG(1))) {
             n = FIXVAL(ARG(1));
-        else
+        } else {
             return PRIM_ERROR("Fixnum expected for stride");
+        }
     }
 
-    if (n == 1)
+    if (n == 1) {
         return tpl->clone();
+    }
 
     int sz = tpl->numberOfElements();
-    if (n == 0)
+    if (n == 0) {
         n = sz;
+    }
 
     int i = 0;
     int j = 0;
@@ -933,10 +968,12 @@ DEF("tuple-unzip", tupleUnZip, 1, 2) {
     Tuple* tmp;
 
     for (; i < n; i++) {
-        if (i < smn)
+        if (i < smn) {
             j = sdn + 1;
-        else
+        } else {
             j = sdn;
+        }
+
         tmp = Tuple::create(j, NIV);
         ASSIGN(ans, elem(i), tmp);
     }
@@ -945,8 +982,9 @@ DEF("tuple-unzip", tupleUnZip, 1, 2) {
         tmp = (Tuple*)ans->elem(j);
         for (i = 0; i <= sdn; i++) {
             int x = i * n + j;
-            if (x < sz)
+            if (x < sz) {
                 ASSIGN(tmp, elem(i), tpl->elem(x));
+            }
         }
     }
 
@@ -964,22 +1002,25 @@ DEF("tuple-zip", tupleZip, 1, MaxArgs) {
         if (IS_A(ARG(i), Tuple)) {
             j = ((Tuple*)ARG(i))->numberOfElements();
             sz += j;
-            if (mx < j)
+            if (mx < j) {
                 mx = j;
-        }
-        else
+            }
+        } else {
             return PRIM_ERROR("non Tuple");
+        }
     }
     PROTECT(__CTXT__);
     Tuple* ans = Tuple::create(sz, NIV);
 
 
-    for (i = 0; i < mx; i++)
-        for (j = 0; j < n; j++)
+    for (i = 0; i < mx; i++) {
+        for (j = 0; j < n; j++) {
             if (i < ((Tuple*)ARG(j))->numberOfElements()) {
                 ASSIGN(ans, elem(x), ((Tuple*)ARG(j))->elem(i));
                 x++;
             }
+        }
+    }
 
     return ans;
 }
@@ -992,11 +1033,12 @@ DEF("tuple-exclude", tupleExclude, 2, 2) {
     int i = 0;
     int j = 0;
 
-    for (; i < n; i++)
+    for (; i < n; i++) {
         if (tpl->elem(i) != ARG(1)) {
             ASSIGN(ans, elem(j), tpl->elem(i));
             j++;
         }
+    }
 
     return ans->subObject(0, j);
 }
@@ -1009,11 +1051,12 @@ DEF("tuple-include", tupleInclude, 2, 2) {
     int i = 0;
     int j = 0;
 
-    for (; i < n; i++)
+    for (; i < n; i++) {
         if (tpl->elem(i) == ARG(1)) {
             ASSIGN(ans, elem(j), tpl->elem(i));
             j++;
         }
+    }
 
     return ans->subObject(0, j);
 }
@@ -1028,8 +1071,9 @@ DEF("tuple-reverse", tupleReverse, 1, 1) {
 
     int i = 0;
     int j = n - 1;
-    for (; i < n; i++, j--)
+    for (; i < n; i++, j--) {
         ASSIGN(ans, elem(j), tpl->elem(i));
+    }
 
     return ans;
 }
@@ -1043,8 +1087,9 @@ DEF("prim->tuple", prim2Tuple, 1, 1) {
 
     Tuple* ans = Tuple::create(n, NIV);
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++) {
         ASSIGN(ans, elem(i), base->nth(i));
+    }
 
     return ans;
 }

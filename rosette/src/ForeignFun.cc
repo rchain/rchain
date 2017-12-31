@@ -125,8 +125,9 @@ Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
 
     KONST int n = argConverters->numberOfElements();
     for (int argpos = 0; argpos < n; argpos++) {
-        if (RBLTRUE != BASE(argConverters->elem(argpos))->typep(ARG(argpos)))
+        if (RBLTRUE != BASE(argConverters->elem(argpos))->typep(ARG(argpos))) {
             return (PRIM_ERROR("unknown argument type"));
+        }
     }
     return result;
 }
@@ -153,8 +154,9 @@ Ob* ForeignFunction::convertResult(Ctxt* ctxt, long rslt) {
 #define CNVARG(i) this->convertActual(ctxt, i)
 
 Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tforeign fn %s\n", BASE(Cname)->asCstring());
+    }
 
     /*
       * Check all of the arguments for type conformance, and compute how
@@ -173,8 +175,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     int nChars = 0;
     Incantation the_real_fn = (Incantation)(FIXVAL(Caddr));
 
-    if (n != NARGS)
+    if (n != NARGS) {
         return PRIM_MISMATCH(n, n);
+    }
 
     Ob* result = NIV;
 
@@ -188,9 +191,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
                 result = runtimeError(ctxt, "type mismatch ");
                 ctxt->ret(result);
                 return result;
-            }
-            else
+            } else {
                 x[i] = u.val;
+            }
         }
 
 #define CAS(i) \
@@ -452,8 +455,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         sizeof(PTR_ARG),    /* AC_FixnumToVoidStar	     */
     };
 
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tforeign fn %s\n", BASE(Cname)->asCstring());
+    }
 
     /*
       * Check all of the arguments for type conformance, and compute how
@@ -470,8 +474,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     int i = 0;
     int nChars = 0;
 
-    if (n != NARGS)
+    if (n != NARGS) {
         return PRIM_MISMATCH(n, n);
+    }
 
     for (i = 0; i < n; i++) {
         switch ((ArgConverter)FIXVAL(argConverters->elem(i))) {
@@ -513,8 +518,10 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     static int marshallingSize = 0;
 
     if (marshallingSize < nChars) {
-        if (marshallingArea)
+        if (marshallingArea) {
             free(marshallingArea);
+        }
+
         marshallingArea = new char[nChars];
         marshallingSize = nChars;
     }
@@ -639,8 +646,7 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         extern double ff_double_helper(double_fun, char*, int);
         double_fun fn = (double_fun)FIXVAL(Caddr);
         result = Float::create(ff_double_helper(fn, marshallingArea, nChars));
-    }
-    else {
+    } else {
         extern long ff_single_helper(single_fun, char*, int);
         single_fun fn = (single_fun)FIXVAL(Caddr);
         LONG_ARG rslt = ff_single_helper(fn, marshallingArea, nChars);
@@ -677,10 +683,11 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
             break;
 
         case RC_VoidStar:
-            if (rslt & 0xc0000000L)
+            if (rslt & 0xc0000000L) {
                 return PRIM_ERROR("unrepresentable address");
-            else
+            } else {
                 result = FIXNUM(rslt);
+            }
             break;
 
         case RC_ByteVec:
@@ -710,8 +717,9 @@ DEF("unix-load", unixLoad, 1, 3) {
     const char* otherStr = "";
     const char* path = BASE(ARG(0))->asPathname();
 
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     switch (NARGS) {
     case 3:
@@ -727,8 +735,9 @@ DEF("unix-load", unixLoad, 1, 3) {
 
     char buf[BUFSIZ];
 #if defined(DYNAMIC_LOADING)
-    if (loader->load(path, buf, libStr, otherStr))
+    if (loader->load(path, buf, libStr, otherStr)) {
         return PRIM_ERROR(buf);
+    }
 #endif
 
     return NIV;
@@ -751,13 +760,15 @@ DEF("wizard-load", unixWizardLoad, 1, 1) {
      */
 
     const char* cmd = BASE(ARG(0))->asPathname();
-    if (!cmd)
+    if (!cmd) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     char buf[BUFSIZ];
 #if defined(DYNAMIC_LOADING)
-    if (loader->loadhelp(cmd, buf))
+    if (loader->loadhelp(cmd, buf)) {
         return PRIM_ERROR(buf);
+    }
 #endif
 
     return NIV;
@@ -766,8 +777,9 @@ DEF("wizard-load", unixWizardLoad, 1, 1) {
 
 DEF("unix-resolve", unixResolve, 1, 1) {
     const char* name = BASE(ARG(0))->asPathname();
-    if (!name)
+    if (!name) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
 #if defined(DYNAMIC_LOADING)
     void* addr = loader->resolve(name);
@@ -775,8 +787,9 @@ DEF("unix-resolve", unixResolve, 1, 1) {
     void* addr = 0;
 #endif
 
-    if (addr == 0)
+    if (addr == 0) {
         return ABSENT;
+    }
 
     return FIXNUM((int)addr);
 }
@@ -794,9 +807,11 @@ DEF("ff-new", ffNew, 3, 3) {
     void* addr = 0;
 #endif
 
-    return (addr == 0
-                ? PRIM_ERROR(buf)
-                : ForeignFunction::create(Cname, argConverters, ARG(2), addr));
+    if (0 == addr) {
+        return PRIM_ERROR(buf);
+    }
+
+    return ForeignFunction::create(Cname, argConverters, ARG(2), addr);
 }
 
 DEF("ff-create", ffCreate, 4, 4) {
@@ -804,5 +819,5 @@ DEF("ff-create", ffCreate, 4, 4) {
     CHECK_FIXNUM(1, addr);
     CHECK(2, Tuple, argConverters);
 
-    return (ForeignFunction::create(Cname, argConverters, ARG(3), (void*)addr));
+    return ForeignFunction::create(Cname, argConverters, ARG(3), (void*)addr);
 }

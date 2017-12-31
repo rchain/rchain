@@ -144,13 +144,14 @@ DynamicLoader::DynamicLoader(const char* initial_relocFile) {
     uid = geteuid();
     gid = getegid();
 
-    if (findCmd(initial_relocFile, relocFile, getenv("PATH")))
+    if (findCmd(initial_relocFile, relocFile, getenv("PATH"))) {
         fprintf(stderr, "loader cannot find initial relocation file: %s\n",
                 initial_relocFile);
-    else {
+    } else {
         FILE* a_out = fopen(relocFile, "r");
-        if (a_out == 0 || fread((char*)&myHdr, sizeof(myHdr), 1, a_out) != 1)
+        if (a_out == 0 || fread((char*)&myHdr, sizeof(myHdr), 1, a_out) != 1) {
             suicide("%s: %s\n", relocFile, sys_errmsg());
+        }
     }
 }
 
@@ -183,8 +184,9 @@ int DynamicLoader::isExecutable(const char* pathname, short uid, short gid) {
  */
 
 int DynamicLoader::findCmd(const char* name, char* pathBuf, const char* paths) {
-    if (!paths)
+    if (!paths) {
         paths = getenv("PATH");
+    }
 
     /*
      * If name is a path already (relative or absolute), we simply use it
@@ -192,15 +194,15 @@ int DynamicLoader::findCmd(const char* name, char* pathBuf, const char* paths) {
      * /usr/ucb/which.
      */
 
-    if (strchr(name, '/'))
+    if (strchr(name, '/')) {
         if (isExecutable(name, uid, gid)) {
             strcpy(pathBuf, name);
             return 0;
-        }
-        else {
+        } else {
             pathBuf[0] = 0;
             return 1;
         }
+    }
 
     char* buf = new char[strlen(paths) + 1];
     strcpy(buf, paths);
@@ -210,8 +212,9 @@ int DynamicLoader::findCmd(const char* name, char* pathBuf, const char* paths) {
         strcat(pathBuf, "/");
         strcat(pathBuf, name);
 
-        if (isExecutable(pathBuf, uid, gid))
+        if (isExecutable(pathBuf, uid, gid)) {
             return 0;
+        }
     }
 
     delete buf;
@@ -530,10 +533,14 @@ int DynamicLoader::dump(char* outFile, char* msgBuf) {
         goto quit;
     }
 
-    while ((nBytes = fread(buffer, 1, sizeof(buffer), reloc)) == sizeof(buffer))
+    while ((nBytes = fread(buffer, 1, sizeof(buffer), reloc)) ==
+           sizeof(buffer)) {
         fwrite(buffer, 1, sizeof(buffer), out);
-    if (nBytes > 0)
+    }
+
+    if (nBytes > 0) {
         fwrite(buffer, 1, nBytes, out);
+    }
 
     if (!feof(reloc)) {
         sprintf(msgBuf,
@@ -567,12 +574,15 @@ int DynamicLoader::dump(char* outFile, char* msgBuf) {
     }
 
 quit:
-    if (reloc)
+    if (reloc) {
         fclose(reloc);
+    }
+
     if (out) {
         fclose(out);
-        if (rtnCode != 0)
+        if (rtnCode != 0) {
             unlink(outFile);
+        }
     }
 
     return rtnCode;
@@ -604,20 +614,26 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
     }
 
     if ((f = fopen(relocFile, "r")) == NULL) {
-        if (msgBuf)
+        if (msgBuf) {
             strcpy(msgBuf, sys_errmsg());
+        }
+
         QUIT(0);
     }
 
     struct exec hdr;
     if (fread((char*)&hdr, sizeof(hdr), 1, f) != 1) {
-        if (msgBuf)
+        if (msgBuf) {
             strcpy(msgBuf, sys_errmsg());
+        }
+
         QUIT(0);
     }
     if (N_BADMAG(hdr)) {
-        if (msgBuf)
+        if (msgBuf) {
             sprintf(msgBuf, "'%s' is not an object file", relocFile);
+        }
+
         QUIT(0);
     }
 
@@ -625,19 +641,24 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
     off_t stroff = N_STROFF(hdr);
 
     if (fseek(f, symoff, 0)) {
-        if (msgBuf)
+        if (msgBuf) {
             strcpy(msgBuf, sys_errmsg());
+        }
         QUIT(0);
     }
 
     if ((sf = fopen(relocFile, "r")) == NULL) {
-        if (msgBuf)
+        if (msgBuf) {
             strcpy(msgBuf, sys_errmsg());
+        }
+
         QUIT(0);
     }
     if (fseek(sf, stroff, 0)) {
-        if (msgBuf)
+        if (msgBuf) {
             strcpy(msgBuf, sys_errmsg());
+        }
+
         QUIT(0);
     }
 
@@ -652,8 +673,10 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
         n = remaining < NSYMS ? remaining : NSYMS;
         remaining -= n;
         if (fread((char*)&sym[0], sizeof(struct nlist), n, f) != n) {
-            if (msgBuf)
+            if (msgBuf) {
                 strcpy(msgBuf, sys_errmsg());
+            }
+
             QUIT(0);
         }
         for (int i = 0; i < n; i++) {
@@ -664,25 +687,36 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
              */
             KONST unsigned char mask = N_TEXT + N_EXT;
             if (sym[i].n_un.n_strx == 0 || sym[i].n_type & N_STAB ||
-                (sym[i].n_type & mask) != mask)
+                (sym[i].n_type & mask) != mask) {
                 continue;
+            }
+
             if (fseek(sf, stroff + sym[i].n_un.n_strx, 0)) {
-                if (msgBuf)
+                if (msgBuf) {
                     strcpy(msgBuf, sys_errmsg());
+                }
+
                 QUIT(0);
             }
+
             if (fread(namebuf, sizeof(char), NCHARS, sf) == 0) {
-                if (msgBuf)
+                if (msgBuf) {
                     strcpy(msgBuf, sys_errmsg());
+                }
+
                 QUIT(0);
             }
-            if (strcmp(functionName, namebuf) == 0)
+
+            if (strcmp(functionName, namebuf) == 0) {
                 QUIT((void*)sym[i].n_value);
+            }
         }
     }
 
-    if (msgBuf)
+    if (msgBuf) {
         sprintf(msgBuf, "'%s' not found", functionName);
+    }
+
     QUIT(0);
 
 #undef QUIT

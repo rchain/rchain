@@ -53,8 +53,9 @@ StdMthd* StdMthd::create(Code* code, Ob* id, Ob* source) {
 
 
 Ob* StdMthd::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tlocal mthd %s\n", BASE(id)->asCstring());
+    }
 
     /*
      * This is the path followed when invoking a "local" method.  Because

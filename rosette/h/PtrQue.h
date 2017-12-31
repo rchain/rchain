@@ -50,8 +50,10 @@ int PtrQue::empty() { return head == array; }
 
 
 void PtrQue::add(void* p) {
-    if (head >= limit)
+    if (head >= limit) {
         resize();
+    }
+
     *head++ = p;
 }
 

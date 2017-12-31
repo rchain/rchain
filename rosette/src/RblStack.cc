@@ -67,8 +67,7 @@ void RblStack::push(Ob* val) {
         new_elems->elem(N) = val;
         FIXNUM_INC(SELF->nElems);
         ASSIGN(SELF, elems, new_elems);
-    }
-    else {
+    } else {
         FIXNUM_INC(nElems);
         ASSIGN(elems, elem(N), val);
     }
@@ -98,8 +97,9 @@ Ob* RblStack::top() { return elems->elem(depth() - 1); }
 
 void RblStack::reset() {
     nElems = FIXNUM(0);
-    for (int i = elems->numberOfElements(); i--;)
+    for (int i = elems->numberOfElements(); i--;) {
         elems->elem(i) = NIV;
+    }
 }
 
 
@@ -114,8 +114,10 @@ Ob* RblStack::setNth(int n, Ob* val) {
 Ob* RblStack::subObject(int start, int size) {
     PROTECT_THIS(RblStack);
     RblStack* new_stack = RblStack::create();
-    while (size--)
+    while (size--) {
         new_stack->push(SELF->nth(start++));
+    }
+
     return new_stack;
 }
 

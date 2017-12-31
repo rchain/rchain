@@ -50,8 +50,9 @@ Proc* Proc::create(Ob* env, Code* code, Ob* id, Ob* source) {
 
 
 Ob* Proc::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tproc %s\n", BASE(id)->asCstring());
+    }
 
     ctxt->code = this->code;
     ctxt->env = this->env;

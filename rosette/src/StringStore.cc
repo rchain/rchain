@@ -83,15 +83,18 @@ Bucket::Bucket(const char* k, Bucket* n) : key(k), next(n) {}
 
 
 Bucket::~Bucket() {
-    if (next)
+    if (next) {
         delete next;
+    }
 }
 
 
 const char* Bucket::searchFor(const char* k) {
-    for (const Bucket* bp = this; bp; bp = bp->next)
-        if (strcmp(k, bp->key) == 0)
+    for (const Bucket* bp = this; bp; bp = bp->next) {
+        if (strcmp(k, bp->key) == 0) {
             return bp->key;
+        }
+    }
     return 0;
 }
 
@@ -137,8 +140,9 @@ StringChunk::StringChunk(StringChunk* sp, unsigned long size) : next(sp) {
 
 StringChunk::~StringChunk() {
     delete buffer;
-    if (next)
+    if (next) {
         delete next;
+    }
 }
 
 
@@ -155,13 +159,13 @@ char* StringChunk::deposit(const char* sym) {
     char* result = bp;
     char* p = bp;
 
-    do {
+    while (true) {
         char c = *sym++;
         *p++ = c;
         if (0 == c) {
             break;
         }
-    } while (true);
+    }
 
     bp = align(p);
     remaining -= bp - result;
@@ -213,8 +217,9 @@ RosetteStringTable::RosetteStringTable(unsigned long n) {
         bucket = new Bucket*[n];
         nbuckets = n;
 
-        while (n--)
+        while (n--) {
             bucket[n] = 0;
+        }
     }
 }
 
@@ -234,8 +239,10 @@ const char* RosetteStringTable::intern(const char* const sym) {
         return key;
 
     int size = strlen(sym) + 1;
-    if (!chunk->hasRoom(size))
+    if (!chunk->hasRoom(size)) {
         chunk = new StringChunk(chunk, size);
+    }
+
     key = chunk->deposit(sym);
     bucket[i] = new Bucket(key, bucket[i]);
 
