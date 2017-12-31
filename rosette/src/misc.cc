@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #include <ctype.h>
 #include <errno.h>
 
@@ -67,14 +68,14 @@ void printLeading(FILE* f, int cnt, char c) {
 
 const char* numberSuffix(int n) {
     switch (n) {
-    case 1:
-        return "st";
-    case 2:
-        return "nd";
-    case 3:
-        return "rd";
-    default:
-        return "th";
+        case 1:
+            return "st";
+        case 2:
+            return "nd";
+        case 3:
+            return "rd";
+        default:
+            return "th";
     }
 }
 
@@ -85,27 +86,23 @@ const char* plural(int n) { return (n == 1 ? "" : "s"); }
 const char* properPrep(char* s) {
     char c = *s;
     if (c != 0) {
-        if (isupper(c))
+        if (isupper(c)) {
             c = tolower(c);
+        }
 
         switch (c) {
-        case 'a':
-        case 'e':
-        case 'i':
-        case 'o':
-        case 'u':
-            return "an";
+            case 'a':
+            case 'e':
+            case 'i':
+            case 'o':
+            case 'u':
+                return "an";
 
-        default:
-            return "a";
+            default:
+                return "a";
         }
     }
     return "";
 }
-#ifdef __GNUC__
-extern "C" {
-#include <string.h>
-};
-#endif
 
 const char* sys_errmsg() { return strerror(errno); }
