@@ -22,19 +22,13 @@
 #if !defined(__ROSETTE__)
 #define __ROSETTE__
 
-#if !defined(ARCH_INC)
 #include "linux.h"
-#else
-#include ARCH_INC
-#endif
 
 #if !defined(DO_UNGETC)
 #define DO_UNGETC            \
     int c = getc(&_iob[fd]); \
     ungetc(c, &_iob[fd]);
 #endif
-
-#define HAS_BOOL
 
 #include <cassert>
 #include <stdio.h>

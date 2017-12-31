@@ -40,17 +40,8 @@
 #endif
 #endif
 
-#include <stdint.h>
-
-#if !defined(HAS_BOOL)
-typedef int bool;
-#endif
-
-#ifndef MIPS_SGI_SYSV
 #define KONST const
-#else
-#define KONST
-#endif
+#include <stdint.h>
 
 #if (defined(__GNUG__) && !defined(GCC27X)) || defined(sun)
 #include <values.h>
