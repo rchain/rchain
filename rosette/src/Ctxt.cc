@@ -209,8 +209,9 @@ void Ctxt::traversePtrs(V__PSOb f) {
     useIfPtr(parent(), f);
     useIfPtr(mbox, f);
 
-    for (short int i = NumberOfCtxtRegs; i--;)
+    for (short int i = NumberOfCtxtRegs; i--;) {
         useIfPtr(reg(i), f);
+    }
 }
 
 
@@ -218,11 +219,12 @@ extern Code* rtnNxtCode;
 
 
 bool Ctxt::rcv(Ob* result, Location loc) {
-    if (store(loc, this, result))
+    if (store(loc, this, result)) {
         return true;
-    else {
-        if (--outstanding == 0)
+    } else {
+        if (--outstanding == 0) {
             scheduleStrand();
+        }
         return false;
     }
 }
@@ -295,9 +297,9 @@ bool UpcallCtxt::applyK(Ob* val, Location loc) {
     assert(loc == tag);
 #endif
 
-    if (store(loc, ctxt, val))
+    if (store(loc, ctxt, val)) {
         return true;
-    else {
+    } else {
         ctxt->scheduleStrand();
         return false;
     }
@@ -312,8 +314,9 @@ DEF("ctxt-rtn", ctxtRtn, 2, 2) {
 
 DEF("ctxt-resume", ctxtResume, 1, 1) {
     CHECK(0, Ctxt, k);
-    if (k->argvec->numberOfElements() > 0)
+    if (k->argvec->numberOfElements() > 0) {
         return BASE(k->argvec->elem(0))->receive(k);
-    else
-        return INVALID;
+    }
+
+    return INVALID;
 }
