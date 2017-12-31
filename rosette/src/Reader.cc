@@ -1300,7 +1300,7 @@ Ob* Reader::resumeCh() {
 #endif
 
     if (c == EOF) {
-        if (RBL_WOULDBLOCK) {
+        if (EWOULDBLOCK == errno) {
             return suspendReader();
         } else {
             return finish(RBLEOF);
@@ -1352,12 +1352,13 @@ Ob* Reader::resumeExpr() {
         int c = fgetc(my->file);
 #endif
 
-        if (c == EOF && RBL_WOULDBLOCK)
+        if (EOF == c && EWOULDBLOCK == errno) {
             return my->suspendReader();
+        }
 
         switch (nextMode) {
         case START:
-            if (c == EOF) {
+            if (EOF == c) {
                 nextMode = my->ftop()->receiveEof(my);
             } else {
                 nextMode = my->rt->tbl[c]->start(c, my);
@@ -1365,7 +1366,7 @@ Ob* Reader::resumeExpr() {
             break;
 
         case CONTINUE:
-            if (c == EOF) {
+            if (EOF == c) {
                 nextMode = my->ftop()->receiveEof(my);
             } else {
                 nextMode = my->ftop()->process(c, my);

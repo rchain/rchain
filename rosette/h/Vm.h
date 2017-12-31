@@ -131,7 +131,7 @@ class VirtualMachine : public RootSet {
     void mark();
     void check();
 
-    int addSignalHandler(int, SIG_PF, Ob* = INVALID);
+    int addSignalHandler(int, sighandler_t, Ob* = INVALID);
     int deleteSignalHandler(int);
     void acceptSignal(int sig) { sigvec |= sigmask(sig); }
     Ob* initiateRosetteSignal(int);

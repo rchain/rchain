@@ -35,7 +35,7 @@ extern void ignoreInterrupts();
 
 typedef void IO_HANDLER(VM_EVENT, int, void*);
 
-extern void RosetteSignalHandler(int, int);
+extern void RosetteSignalHandler(int);
 
 extern IO_HANDLER RosetteIoHandler;
 
