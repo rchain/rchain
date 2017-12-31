@@ -26,12 +26,6 @@
 #include "linux.h"
 #include "signal.h"
 
-#if !defined(DO_UNGETC)
-#define DO_UNGETC            \
-    int c = getc(&_iob[fd]); \
-    ungetc(c, &_iob[fd]);
-#endif
-
 #include <cassert>
 #include <stdio.h>
 

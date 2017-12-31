@@ -102,7 +102,6 @@ void RosetteIoHandler(VM_EVENT type, int fd, void*) {
 #endif
 
     if (type == VM_READ_EVENT) {
-        DO_UNGETC;
         vm->initiateRosetteIo(fd);
     } else {
         warning("ignoring %s event on file %d", eventName[type], fd);
