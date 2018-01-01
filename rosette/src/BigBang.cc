@@ -415,6 +415,9 @@ static FILE* FindBootFile() {
     int baselen = strlen(path);
     const char** suffixp = StandardExtensions;
 
+    // TODO(leaf): This doesn't work as advertised. If the file can't
+    // be found, the path reported will incorrectly have the suffix
+    // appended.
     for (; access(path, R_OK) && *suffixp; suffixp++) {
         path[baselen] = '\0';
         strcat(path, *suffixp);

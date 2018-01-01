@@ -33,6 +33,7 @@
 #include "ModuleInit.h"
 
 #include <algorithm>
+
 #include <assert.h>
 #include <setjmp.h>
 #include <stdarg.h>
@@ -254,60 +255,60 @@ void AttrNode::emitApplyPrim(unsigned primnum, unsigned nargs, bool unwind,
     if (dest == LocLimbo) {
         SELF->emitF5(opApplyCmd, unwind, next == NoneRemaining, nargs);
         SELF->emitE2(primnum, 0);
-    }
+    } else {
+        switch (rtn) {
+        case ImplicitRtn:
 
-    switch (rtn) {
-    case ImplicitRtn:
-        switch (GET_GENERIC_TYPE(dest)) {
-        case LT_CtxtRegister:
-            opcode = opApplyPrimReg;
-            op = GET_CTXTREG_INDEX(dest);
+            switch (GET_GENERIC_TYPE(dest)) {
+            case LT_CtxtRegister:
+                opcode = opApplyPrimReg;
+                op = GET_CTXTREG_INDEX(dest);
+                break;
+
+            case LT_ArgRegister:
+                opcode = opApplyPrimArg;
+                op = GET_ARGREG_INDEX(dest);
+                break;
+
+            default:
+                opcode = opApplyPrimTag;
+                op = cu->extendLitvec(dest.atom);
+                break;
+            }
+            SELF->emitF5(opcode, unwind, next == NoneRemaining, nargs);
+            SELF->emitE2(primnum, op);
             break;
 
-        case LT_ArgRegister:
-            opcode = opApplyPrimArg;
-            op = GET_ARGREG_INDEX(dest);
+        case UntaggedRtn:
+
+            switch (GET_GENERIC_TYPE(dest)) {
+            case LT_CtxtRegister:
+                opcode = opApplyPrimReg;
+                op = GET_CTXTREG_INDEX(dest);
+                break;
+
+            case LT_ArgRegister:
+                opcode = opApplyPrimArg;
+                op = GET_ARGREG_INDEX(dest);
+                break;
+
+            default:
+                opcode = opApplyPrimTag;
+                op = cu->extendLitvec(dest.atom);
+                break;
+            }
+            SELF->emitF5(opcode, unwind, false, nargs);
+            SELF->emitE2(primnum, op);
+            SELF->emitUntaggedRtn(next);
             break;
 
-        default:
-            opcode = opApplyPrimTag;
-            op = cu->extendLitvec(dest.atom);
+        case TaggedRtn:
+
+            SELF->emitF5(opApplyPrimReg, unwind, false, nargs);
+            SELF->emitE2(primnum, CRN_Rslt);
+            SELF->emitTaggedRtn(next);
             break;
         }
-
-        SELF->emitF5(opcode, unwind, next == NoneRemaining, nargs);
-        SELF->emitE2(primnum, op);
-        break;
-
-    case UntaggedRtn:
-        switch (GET_GENERIC_TYPE(dest)) {
-        case LT_CtxtRegister:
-            opcode = opApplyPrimReg;
-            op = GET_CTXTREG_INDEX(dest);
-            break;
-
-        case LT_ArgRegister:
-            opcode = opApplyPrimArg;
-            op = GET_ARGREG_INDEX(dest);
-            break;
-
-        default:
-            opcode = opApplyPrimTag;
-            op = cu->extendLitvec(dest.atom);
-            break;
-        }
-
-        SELF->emitF5(opcode, unwind, false, nargs);
-        SELF->emitE2(primnum, op);
-        SELF->emitUntaggedRtn(next);
-        break;
-
-    case TaggedRtn:
-
-        SELF->emitF5(opApplyPrimReg, unwind, false, nargs);
-        SELF->emitE2(primnum, CRN_Rslt);
-        SELF->emitTaggedRtn(next);
-        break;
     }
 }
 
@@ -348,57 +349,57 @@ void AttrNode::emitLit(pOb val) {
             return;
         }
         }
+    }
 
-        /*
-         * If we get here, the literal that we need to emit is not one that
-         * is specially recognized in the instruction set, and we need to use
-         * the more general indirect literal instructions.  The exact
-         * instruction (or sequence of instructions) chosen is a function of
-         * size of the index into the litvec and the destination.
-         */
+    /*
+     * If we get here, the literal that we need to emit is not one that
+     * is specially recognized in the instruction set, and we need to use
+     * the more general indirect literal instructions.  The exact
+     * instruction (or sequence of instructions) chosen is a function of
+     * size of the index into the litvec and the destination.
+     */
 
-        PROTECT_THIS(AttrNode);
-        unsigned valOffset = SELF->cu->extendLitvec(val);
+    PROTECT_THIS(AttrNode);
+    unsigned valOffset = SELF->cu->extendLitvec(val);
 
-        if (locType == LT_CtxtRegister && regno == CRN_Rslt) {
-            SELF->emitF0(opIndLitToRslt, valOffset);
-            return;
-        } else if (valOffset < 16) {
-            if (locType == LT_ArgRegister && argno < 16) {
-                SELF->emitF1(opIndLitToArg, argno, valOffset);
-                return;
-            } else if (locType == LT_CtxtRegister) {
-                SELF->emitF1(opIndLitToReg, regno, valOffset);
-                return;
-            }
-        }
-
-        /*
-         * If we get here, one or more of three conditions can hold:
-         *
-         * 	1. the litvec index is too big to fit in a compact
-         * 	   encoding,
-         *
-         * 	2. the destination is an arg register whose index won't
-         * 	   fit in the opIndLitToArg instruction, or
-         *
-         * 	3. the destination is some whacko location.
-         */
-
+    if (locType == LT_CtxtRegister && regno == CRN_Rslt) {
         SELF->emitF0(opIndLitToRslt, valOffset);
-        switch (locType) {
-        case LT_ArgRegister:
-            SELF->emitF0(opXferRsltToArg, argno);
+        return;
+    } else if (valOffset < 16) {
+        if (locType == LT_ArgRegister && argno < 16) {
+            SELF->emitF1(opIndLitToArg, argno, valOffset);
             return;
-        case LT_CtxtRegister:
-            SELF->emitF0(opXferRsltToReg, regno);
-            return;
-        default: {
-            unsigned offset = SELF->getDestOffset();
-            SELF->emitF0(opXferRsltToDest, offset);
+        } else if (locType == LT_CtxtRegister) {
+            SELF->emitF1(opIndLitToReg, regno, valOffset);
             return;
         }
-        }
+    }
+
+    /*
+     * If we get here, one or more of three conditions can hold:
+     *
+     * 	1. the litvec index is too big to fit in a compact
+     * 	   encoding,
+     *
+     * 	2. the destination is an arg register whose index won't
+     * 	   fit in the opIndLitToArg instruction, or
+     *
+     * 	3. the destination is some whacko location.
+     */
+
+    SELF->emitF0(opIndLitToRslt, valOffset);
+    switch (locType) {
+    case LT_ArgRegister:
+        SELF->emitF0(opXferRsltToArg, argno);
+        return;
+    case LT_CtxtRegister:
+        SELF->emitF0(opXferRsltToReg, regno);
+        return;
+    default: {
+        unsigned offset = SELF->getDestOffset();
+        SELF->emitF0(opXferRsltToDest, offset);
+        return;
+    }
     }
 }
 
@@ -424,7 +425,6 @@ void AttrNode::emitLookup(pOb symbol) {
             SELF->emitF2(opLookupToReg, CRN_Rslt, litOffset);
             SELF->emitF0(opXferRsltToArg, argno);
         }
-
         break;
 
     default: {
@@ -529,16 +529,14 @@ void AttrNode::emitUntaggedRtn(Label next) {
 
 
 void AttrNode::emitXfer(Location source) {
-    if (source == dest) {
-        return;
-    }
+    if (source == dest) return;
 
     const LocationType destType = (LocationType)GET_GENERIC_TYPE(dest);
     const LocationType sourceType = (LocationType)GET_GENERIC_TYPE(source);
 
     PROTECT_THIS(AttrNode);
 
-    if (sourceType == LT_GlobalVariable) {
+    if (sourceType == LT_GlobalVariable)
         switch (destType) {
         case LT_CtxtRegister:
             SELF->emitF0(opXferGlobalToReg, GET_CTXTREG_INDEX(dest));
@@ -555,11 +553,20 @@ void AttrNode::emitXfer(Location source) {
             return;
         }
         }
+<<<<<<< HEAD
     } else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
                GET_LEXVAR_OFFSET(source) < 16) {
         const unsigned ind = GET_LEXVAR_IND(source);
         const unsigned level = GET_LEXVAR_LEVEL(source);
         const unsigned offset = GET_LEXVAR_OFFSET(source);
+=======
+
+    else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
+             GET_LEXVAR_OFFSET(source) < 16) {
+        KONST unsigned ind = GET_LEXVAR_IND(source);
+        KONST unsigned level = GET_LEXVAR_LEVEL(source);
+        KONST unsigned offset = GET_LEXVAR_OFFSET(source);
+>>>>>>> dev
 
         switch (destType) {
         case LT_CtxtRegister:
@@ -615,7 +622,6 @@ void AttrNode::emitXfer(Location source) {
             offset = SELF->cu->extendLitvec(source.atom);
             break;
         }
-
         SELF->emitF0(opcode, offset);
         return;
     }
@@ -755,9 +761,9 @@ int SymbolNode::primNumber() {
         pOb globalVal = GlobalEnv->entry(GET_GLOBALVAR_OFFSET(loc));
         Prim* prim = BASE(globalVal)->InlineablePrimP();
         return (prim == INVALID) ? -1 : prim->primNumber();
+    } else {
+        return -1;
     }
-
-    return -1;
 }
 
 
@@ -883,7 +889,6 @@ void CompoundNode::addTo(ExprStack* exprstack, AttrNode* node) {
         exprstack = (ExprStack*)((char*)SELF + offset);
         SELF->checkStore(exprstack->exprs = t);
     }
-
     ASSIGN(exprstack->exprs, elem(n), node);
     FIXNUM_INC(exprstack->top);
 }
@@ -903,9 +908,7 @@ void CompoundNode::analyze(AttrNode* node) {
 
 
 void CompoundNode::rearrangeInlinedExprs() {
-    if (inlined.exprs == NIL) {
-        return;
-    }
+    if (inlined.exprs == NIL) return;
 
     ArgNum freeArgs[MaxArgs];
     int top = determineFree(freeArgs);
@@ -924,9 +927,8 @@ int CompoundNode::determineFree(ArgNum* free) {
         AttrNode* node = (AttrNode*)inlined.exprs->elem(nextNode);
         if (GET_GENERIC_TYPE(node->dest) == LT_ArgRegister) {
             int nextDest = GET_ARGREG_INDEX(node->dest);
-            while (arg < nextDest) {
+            while (arg < nextDest)
                 free[freeTop++] = arg++;
-            }
             arg++;
         }
     }
@@ -987,6 +989,8 @@ void CompoundNode::fixInlinedConflicts(ArgNum* free, int freeTop) {
 
     for (; j < N; j++) {
         nj = (AttrNode*)SELF->inlined.exprs->elem(j);
+        // NB(leaf): Cast the 2nd argument, which is unsigned, to avoid type
+        // error.
         highest_j = std::max(nj->av_size - 1, (int)GET_ARGREG_INDEX(nj->dest));
         if (GET_ARGREG_INDEX(ni->dest) <= highest_j) {
             int tempReg = (freeTop > 0 && free[freeTop - 1] > highest_j)
@@ -1030,22 +1034,14 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     SELF->emitPrefix(ctxtAvailable, argvecAvailable);
 
     if (inlinedCode) {
-        if (simpleCode || nestedCode || willWrapup || needPop) {
+        if (simpleCode || nestedCode || willWrapup || needPop)
             inlinedExit = SELF->cu->newLabel();
-        }
-
         SELF->emitInlinedExprDispatchCode(ImplicitRtn, inlinedExit);
     }
 
     if (simpleCode) {
-        if (inlinedCode) {
-            SELF->cu->setLabel(inlinedExit);
-        }
-
-        if (nestedCode || willWrapup || needPop) {
-            simpleExit = SELF->cu->newLabel();
-        }
-
+        if (inlinedCode) SELF->cu->setLabel(inlinedExit);
+        if (nestedCode || willWrapup || needPop) simpleExit = SELF->cu->newLabel();
         SELF->emitSimpleExprDispatchCode(ImplicitRtn, simpleExit);
     }
 
@@ -1078,7 +1074,9 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
                 SELF->emitWrapup(rtn, finish);
                 SELF->cu->setLabel(finish);
             }
+
             SELF->emitF0(opPop);
+
         } else {
             SELF->emitWrapup(rtn, exit);
         }
@@ -1119,9 +1117,7 @@ void CompoundNode::emitInlinedExprDispatchCode(RtnCode rtn, Label exit) {
             Label next = last ? exit : SELF->cu->newLabel();
             AttrNode* node = (AttrNode*)exprs->elem(i);
             node->emitDispatchCode(CtxtAvailable, ArgvecAvailable, rtn, next);
-            if (!last) {
-                SELF->cu->setLabel(next);
-            }
+            if (!last) SELF->cu->setLabel(next);
         }
     }
 }
@@ -1143,9 +1139,7 @@ void CompoundNode::emitNestedExprDispatchCode(RtnCode rtn, Label exit) {
             AttrNode* node = (AttrNode*)exprs->elem(i);
             node->emitDispatchCode(!CtxtAvailable, !ArgvecAvailable, rtn,
                                    nextExpr);
-            if (!last) {
-                SELF->cu->setLabel(nextExpr);
-            }
+            if (!last) SELF->cu->setLabel(nextExpr);
         }
     }
 }
@@ -1234,10 +1228,8 @@ void BlockNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
             node->initialize(ctEnv, freeEnv, dest, SELF->cu);
             SELF->analyze(node);
         }
-
         case 1:
             break;
-
         default:
             if (!GET_ATTR(*SELF, f_topLevel)) {
                 const char* modifier =
@@ -1295,36 +1287,26 @@ void BlockNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     SELF->emitPrefix(ctxtAvailable, argvecAvailable);
 
     if (inlinedCode) {
-        if (simpleCode || nestedCode || needPop) {
+        if (simpleCode || nestedCode || needPop)
             inlinedExit = SELF->cu->newLabel();
-        }
-
         SELF->emitInlinedExprDispatchCode(rtn, inlinedExit);
     }
 
     if (simpleCode) {
-        if (inlinedCode) {
+        if (inlinedCode)
             SELF->cu->setLabel(inlinedExit);
-        }
-
-        if (nestedCode || needPop) {
+        if (nestedCode || needPop)
             simpleExit = SELF->cu->newLabel();
-        }
-
         SELF->emitSimpleExprDispatchCode(rtn, simpleExit);
     }
 
     if (nestedCode) {
-        if (simpleCode) {
+        if (simpleCode)
             SELF->cu->setLabel(simpleExit);
-        } else if (inlinedCode) {
+        else if (inlinedCode)
             SELF->cu->setLabel(inlinedExit);
-        }
-
-        if (needPop) {
+        if (needPop)
             nestedExit = SELF->cu->newLabel();
-        }
-
         SELF->emitNestedExprDispatchCode(rtn, nestedExit);
     }
 
@@ -1376,9 +1358,8 @@ void BlockNode::emitNestedExprDispatchCode(RtnCode rtn, Label) {
             node->emitDispatchCode(CtxtAvailable,
                                    i == 0 && node->av_size <= SELF->av_size,
                                    rtn, NoneRemaining);
-            if (!last) {
+            if (!last)
                 SELF->cu->setLabel(nextStrand);
-            }
         }
     }
 }
@@ -1448,9 +1429,8 @@ void RequestNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
      * result.
      */
 
-    if (SELF->primTrgt == FIXNUM(-1)) {
+    if (SELF->primTrgt == FIXNUM(-1))
         SELF->analyze(node);
-    }
 
     if (hasRestArg) {
         /*
@@ -1464,10 +1444,8 @@ void RequestNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     }
 
     for (int i = nargs; i--;) {
-        if (i > MaxArgs) {
+        if (i > MaxArgs)
             cu->abort("cannot pass more than %d arguments", MaxArgs);
-        }
-
         node = BASE(SELF->expr->msg->elem(i))->makeAttrNode(true);
         node->initialize(ctEnv, freeEnv, ArgReg(i), SELF->cu);
         SELF->analyze(node);
@@ -1489,11 +1467,10 @@ void RequestNode::emitWrapup(RtnCode rtn, Label next) {
     unsigned nargs = expr->msg->numberOfElements();
     bool unwind = expr->msg->rest != NILexpr;
 
-    if (primTrgt != FIXNUM(-1)) {
+    if (primTrgt != FIXNUM(-1))
         emitApplyPrim(FIXVAL(primTrgt), nargs, unwind, rtn, next);
-    } else {
+    else
         emitXmit(nargs, unwind, rtn, next);
-    }
 }
 
 
@@ -1509,9 +1486,9 @@ void RequestNode::emitXmit(unsigned nargs, bool unwind, RtnCode rtn,
     case TaggedRtn:
         switch (GET_GENERIC_TYPE(dest)) {
         case LT_CtxtRegister:
-            if (nargs < 16) {
+            if (nargs < 16)
                 emitF4(opXmitReg, unwind, nxt, nargs, GET_CTXTREG_INDEX(dest));
-            } else {
+            else {
                 PROTECT_THIS(RequestNode);
                 SELF->emitF5(opXmitRegXtnd, unwind, nxt, nargs);
                 SELF->emitE0(GET_CTXTREG_INDEX(dest), 0);
@@ -1519,9 +1496,9 @@ void RequestNode::emitXmit(unsigned nargs, bool unwind, RtnCode rtn,
             break;
 
         case LT_ArgRegister:
-            if (GET_ARGREG_INDEX(dest) < 16 && nargs < 16) {
+            if (GET_ARGREG_INDEX(dest) < 16 && nargs < 16)
                 emitF4(opXmitArg, unwind, nxt, nargs, GET_ARGREG_INDEX(dest));
-            } else {
+            else {
                 PROTECT_THIS(RequestNode);
                 SELF->emitF5(opXmitArgXtnd, unwind, nxt, nargs);
                 SELF->emitE0(GET_ARGREG_INDEX(dest), 0);
@@ -1535,9 +1512,9 @@ void RequestNode::emitXmit(unsigned nargs, bool unwind, RtnCode rtn,
         default: {
             PROTECT_THIS(RequestNode);
             unsigned destOffset = SELF->getDestOffset();
-            if (destOffset < 16 && nargs < 16) {
+            if (destOffset < 16 && nargs < 16)
                 SELF->emitF4(opXmitTag, unwind, nxt, nargs, destOffset);
-            } else {
+            else {
                 SELF->emitF5(opXmitTagXtnd, unwind, nxt, nargs);
                 SELF->emitE0(destOffset, 0);
             }
@@ -1637,9 +1614,8 @@ void TupleNode::emitWrapup(RtnCode rtn, Label next) {
             SELF->emitApplyPrim(tplConsStar->primNumber(), nelems + 1, false,
                                 rtn, next);
         } else {
-            if (rtn == TaggedRtn) {
+            if (rtn == TaggedRtn)
                 SELF->dest = LocRslt;
-            }
 
             SELF->emitXfer(CtxtReg(CRN_Argvec));
             SELF->dest = temp;
@@ -1695,17 +1671,16 @@ void IfNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
              (condInlineable && GET_ATTR(*(SELF->trueNode), f_inlineableNode) &&
               GET_ATTR(*(SELF->falseNode), f_inlineableNode)));
 
-    if (condInlineable) {
+    if (condInlineable)
         SELF->av_size = std::max(
             SELF->av_size,
             std::max(SELF->trueNode->av_size, SELF->falseNode->av_size));
-    }
 
     SET_ATTR(*SELF, f_producesValue,
              GET_ATTR(*(SELF->trueNode), f_producesValue));
     /* what was this here for ????
-       && GET_ATTR(*(SELF->falseNode),f_producesValue);
-     */
+            && GET_ATTR(*(SELF->falseNode),f_producesValue);
+    */
 
     /*
      * Actually, it is probably the case that
@@ -1753,9 +1728,8 @@ void IfNode::emitWrapup(RtnCode rtn, Label next) {
      * problems like this.  The quick fix is too ugly to include.
      */
 
-    if (next != NoneRemaining) {
+    if (next != NoneRemaining)
         SELF->emitOpAndLabel(opJmp, next);
-    }
 
     SELF->cu->setLabel(startFalseBranch);
     SELF->falseNode->emitDispatchCode(CtxtAvailable, condInlined, rtn, next);
@@ -1799,10 +1773,8 @@ void LetNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     {
         TupleExpr* boundIds = nexprs == 0 ? NILexpr : TupleExpr::create(nexprs);
         PROTECT(boundIds);
-        for (int i = nexprs; i--;) {
+        for (int i = nexprs; i--;)
             boundIds->elem(i) = SELF->expr->boundId(i);
-        }
-
         Template* tmpl = boundIds->makeTemplate();
         ASSIGN(SELF, templat, tmpl);
     }
@@ -1925,10 +1897,8 @@ void MethodNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     SET_FLAG(word, f_inlineableNode);
 
     Code* code = compileBody(ctEnv, freeEnv);
-    if (code == INVALID) {
+    if (code == INVALID)
         SELF->cu->abort();
-    }
-
     ASSIGN(SELF, code, code);
 }
 
@@ -1942,11 +1912,10 @@ void MethodNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
 
     node->initialize(TopEnv, TopEnv, LocRslt, SELF->cu);
 
-    if (!ctxtAvailable) {
+    if (!ctxtAvailable)
         SELF->emitPush(SELF->av_size);
-    } else if (!argvecAvailable) {
+    else if (!argvecAvailable)
         SELF->emitAlloc(SELF->av_size);
-    }
 
     node->dest = ArgReg(0);
     node->emitLit(SELF->code);
@@ -1970,16 +1939,12 @@ Template* MethodNode::adjustFormals() {
      */
     PROTECT_THIS(MethodNode);
     TupleExpr* formals = (TupleExpr*)SELF->expr->formals;
-    if (!IS_A(formals, TupleExpr)) {
+    if (!IS_A(formals, TupleExpr))
         SELF->cu->abort("invalid formal parameter template");
-    }
-
     TupleExpr* adjustedFormals = formals->cons(SYMBOL("#self"));
     Template* templat = adjustedFormals->makeTemplate();
-    if (templat == INVALID) {
+    if (templat == INVALID)
         SELF->cu->abort("invalid formal parameter template");
-    }
-
     return templat;
 }
 
@@ -2019,10 +1984,8 @@ ReflectiveMethodNode* ReflectiveMethodNode::create(ReflectiveMethodExpr* rme,
 Template* ReflectiveMethodNode::adjustFormals() {
     PROTECT_THIS(ReflectiveMethodNode);
     Template* templat = SELF->expr->formals->makeTemplate();
-    if (templat == INVALID) {
+    if (templat == INVALID)
         SELF->cu->abort("invalid formal parameter template");
-    }
-
     return templat;
 }
 
@@ -2053,10 +2016,8 @@ void ProcNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     SET_FLAG(word, f_inlineableNode);
 
     Code* code = compileBody(ctEnv, freeEnv);
-    if (code == INVALID) {
+    if (code == INVALID)
         SELF->cu->abort();
-    }
-
     ASSIGN(SELF, code, code);
 }
 
@@ -2064,10 +2025,8 @@ void ProcNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
 Template* ProcNode::adjustFormals() {
     PROTECT_THIS(ProcNode);
     Template* templat = (BASE(SELF->expr->formals))->makeTemplate();
-    if (templat == INVALID) {
+    if (templat == INVALID)
         SELF->cu->abort("invalid formal parameter template");
-    }
-
     return templat;
 }
 
@@ -2087,11 +2046,10 @@ void ProcNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
 
     node->initialize(TopEnv, TopEnv, LocRslt, SELF->cu);
 
-    if (!ctxtAvailable) {
+    if (!ctxtAvailable)
         SELF->emitPush(SELF->av_size);
-    } else if (!argvecAvailable) {
+    else if (!argvecAvailable)
         SELF->emitAlloc(SELF->av_size);
-    }
 
     node->dest = ArgReg(0);
     node->emitXfer(CtxtReg(CRN_Env));
@@ -2186,9 +2144,8 @@ void SetNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     sym->initialize(ctEnv, freeEnv, ArgReg(0), SELF->cu);
     ASSIGN(SELF, trgtNode, sym);
 
-    if (sym->loc == LocLimbo) {
+    if (sym->loc == LocLimbo)
         cu->abort("can't set! free variables");
-    }
 
     AttrNode* vn = BASE(SELF->expr->val)->makeAttrNode(true);
     ASSIGN(SELF, valNode, vn);
@@ -2218,10 +2175,8 @@ void SetNode::emitWrapup(RtnCode rtn, Label exit) {
     PROTECT_THIS(SetNode);
     Location temp = dest;
 
-    if (rtn == TaggedRtn) {
+    if (rtn == TaggedRtn)
         dest = LocRslt;
-    }
-
     SELF->emitXfer(SELF->valNode->dest);
     SELF->dest = temp;
     SELF->emitRtn(rtn, exit);
@@ -2250,9 +2205,8 @@ void GotoNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
     SET_FLAG(word, f_simpleNode);
     ASSIGN(this, ctEnv, ctEnv);
     ASSIGN(this, labelNode, cu->labels->getLabelNode(labelName));
-    if (labelNode == INVALID) {
+    if (labelNode == INVALID)
         cu->abort("unknown goto label '%s'", SYMPTR(labelName));
-    }
 }
 
 
@@ -2262,23 +2216,20 @@ void GotoNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
 
     pOb env = ctEnv;
     int n = 0;
-    for (; env != labelNode->ctEnv; (n++, env = BASE(env)->parent())) {
-        if (env == TopEnv) {
+    for (; env != labelNode->ctEnv; (n++, env = BASE(env)->parent()))
+        if (env == TopEnv)
             cu->abort("attempt to jump to label '%s' not in an enclosing scope",
                       SYMPTR(labelName));
-        } else if (n > MaximumCut) {
+        else if (n > MaximumCut)
             cu->abort(
                 "attempt to cut back more than %d lexical levels in jump to "
                 "label '%s'",
                 MaximumCut, SYMPTR(labelName));
-        }
-    }
 
     PROTECT_THIS(GotoNode);
 
-    if (!argvecAvailable) {
+    if (!argvecAvailable)
         SELF->emitAlloc(SELF->av_size);
-    }
 
     if (n != 0) {
         SELF->emitOpAndLabel(opJmpCut, SELF->labelName);
@@ -2342,10 +2293,8 @@ int LabelNode::numberOfSubExprs() { return 1; }
 void LabelNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
                                  RtnCode rtn, Label next) {
     PROTECT_THIS(LabelNode);
-    if (!ctxtAvailable) {
+    if (!ctxtAvailable)
         SELF->emitPush(0);
-    }
-
     SELF->cu->setLabel((Label)FIXVAL(SELF->label));
     SELF->bodyNode->emitDispatchCode(CtxtAvailable, argvecAvailable, rtn, next);
 }
@@ -2429,15 +2378,12 @@ unsigned CompilationUnit::extendLitvec(pOb val) {
      * avoid duplication of symbols and large integers, characters, etc.
      */
 
-    for (int i = litOffset; i--;) {
-        if (val == litvec->elem(i)) {
+    for (int i = litOffset; i--;)
+        if (val == litvec->elem(i))
             return i;
-        }
-    }
 
-    if (litOffset > 255) {
+    if (litOffset > 255)
         abort("too many literals for one code object");
-    }
 
     PROTECT_THIS(CompilationUnit);
     Tuple* newlitvec = (Tuple*)SELF->litvec->rcons(val);
@@ -2471,11 +2417,10 @@ Code* CompilationUnit::compileExpr(pOb ctEnv, pOb freeEnv) {
      * the return from the longjump and the exit from the routine.
      */
 
-    if (SETJMP(SELF->abortbuf)) {
+    if (SETJMP(SELF->abortbuf))
         return (Code*)INVALID;
-    } else {
+    else
         SELF->graph->initialize(ctEnv, freeEnv, LocRslt, SELF);
-    }
 
     SELF->graph->emitDispatchCode(CtxtAvailable, !ArgvecAvailable, UntaggedRtn,
                                   NoneRemaining);
@@ -2500,11 +2445,10 @@ Code* CompilationUnit::compileBody(Template* templat, pOb ctEnv, pOb freeEnv) {
      * between PROTECT and setjmp/longjmp.
      */
 
-    if (SETJMP(SELF->abortbuf)) {
+    if (SETJMP(SELF->abortbuf))
         return (Code*)INVALID;
-    } else {
+    else
         SELF->graph->initialize(new_ctEnv, freeEnv, LocRslt, SELF);
-    }
 
     SELF->graph->emitExtend(templat);
     SELF->graph->emitDispatchCode(CtxtAvailable, !ArgvecAvailable, UntaggedRtn,
@@ -2540,10 +2484,8 @@ void CompilationUnit::vwarning(const char* severity, const char* fmt,
                                va_list args) {
     fprintf(stderr, "*** %s: ", severity);
     vfprintf(stderr, fmt, args);
-    if (info != NIV) {
+    if (info != NIV)
         fprintf(stderr, " in %s", BASE(info)->asCstring());
-    }
-
     putc('\n', stderr);
 }
 
@@ -2600,8 +2542,9 @@ AttrNode* SendExpr::makeAttrNode(bool valueCtxt) {
         Tuple* subExprs = Tuple::create(1, this);
         BlockExpr* blockExpr = BlockExpr::create(subExprs, RBLTRUE);
         return blockExpr->makeAttrNode(true);
-    } else
+    } else {
         return SendNode::create(this, false);
+    }
 }
 
 
@@ -2639,12 +2582,15 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
                 TupleExpr* temp = SELF->makeSlice(offset, MaxArgs);
                 ASSIGN(te, elem(i), temp);
             }
+
             if (semislice) {
                 TupleExpr* temp = SELF->makeSlice(nelems - nrest, nrest);
                 ASSIGN(te, elem(nslices), temp);
             }
-            if (tailarg)
+
+            if (tailarg) {
                 ASSIGN(te, elem(nslices + semislice), SELF->rest);
+            }
         } else {
             /*
              * The expression is too big to represent as one concat of
@@ -2666,11 +2612,12 @@ AttrNode* TupleExpr::makeAttrNode(bool valueCtxt) {
                 ASSIGN(te, elem(i), temp);
             }
 
-            if (tailarg)
+            if (tailarg) {
                 ASSIGN(te, elem(nSlices), SELF->rest);
+            }
         }
-        RequestExpr* re = RequestExpr::create(tplConcat, te);
 
+        RequestExpr* re = RequestExpr::create(tplConcat, te);
         return re->makeAttrNode(valueCtxt);
     }
 }
@@ -2729,10 +2676,11 @@ AttrNode* SeqExpr::makeAttrNode(bool valueCtxt) {
 
     switch (nexprs) {
     case 0:
-        if (valueCtxt)
+        if (valueCtxt) {
             return ConstNode::create(NIV, valueCtxt);
-        else
+        } else {
             return NullNode::create(valueCtxt);
+        }
 
     case 1:
         return BASE(subExprs->elem(0))->makeAttrNode(valueCtxt);
@@ -2747,7 +2695,6 @@ AttrNode* SeqExpr::makeAttrNode(bool valueCtxt) {
                 BASE(SELF->subExprs->elem(nexprs))->makeAttrNode(true);
             tail = SeqNode::create(head, tail, valueCtxt);
         }
-
         return tail;
     }
     }
