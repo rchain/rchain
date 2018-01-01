@@ -663,9 +663,9 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
         QUIT(0);
     }
 
-    KONST int NCHARS = strlen(functionName) + 1;
+    const int NCHARS = strlen(functionName) + 1;
     namebuf = new char[NCHARS];
-    KONST int NSYMS = BUFSIZ / sizeof(struct nlist);
+    const int NSYMS = BUFSIZ / sizeof(struct nlist);
     struct nlist sym[NSYMS];
     int n = 0;
     int remaining = (int)(hdr.a_syms / sizeof(struct nlist));
@@ -686,7 +686,7 @@ void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
              * entries.  It should be changed if it becomes necessary to
              * look for static entries, data entries, etc.
              */
-            KONST unsigned char mask = N_TEXT + N_EXT;
+            const unsigned char mask = N_TEXT + N_EXT;
             if (sym[i].n_un.n_strx == 0 || sym[i].n_type & N_STAB ||
                 (sym[i].n_type & mask) != mask) {
                 continue;

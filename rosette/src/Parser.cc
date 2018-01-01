@@ -1310,7 +1310,7 @@ Ob* Parser::resumeExpr() {
          * "receiveWhatever".
          */
 
-        Parser* KONST my = SELF;
+        Parser* const my = SELF;
         my->mode = nextMode;
 
         if (inp >= (inbuf->numberOfBytes() - 1)) {

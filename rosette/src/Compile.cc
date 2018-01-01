@@ -130,7 +130,7 @@ void AttrNode::initialize(pOb, pOb, Location dest, CompilationUnit* cu) {
 int AttrNode::traversePtrs(PSOb__PSOb f) {
     int sum = BinaryOb::traversePtrs(f);
     pOb* p = &slot(SLOT_NUM(AttrNode, cu));
-    KONST pOb* end = endp();
+    const pOb* end = endp();
 
     for (; p < (pOb*)end; p++) {
         sum += useIfPtr(p, f);
@@ -143,7 +143,7 @@ int AttrNode::traversePtrs(PSOb__PSOb f) {
 int AttrNode::traversePtrs(SI__PSOb f) {
     int sum = BinaryOb::traversePtrs(f);
     pOb* p = &slot(SLOT_NUM(AttrNode, cu));
-    KONST pOb* end = endp();
+    const pOb* end = endp();
 
     for (; p < (pOb*)end; p++) {
         sum += useIfPtr(*p, f);
@@ -157,7 +157,7 @@ void AttrNode::traversePtrs(V__PSOb f) {
     BinaryOb::traversePtrs(f);
 
     pOb* p = &slot(SLOT_NUM(AttrNode, cu));
-    KONST pOb* end = endp();
+    const pOb* end = endp();
 
     for (; p < (pOb*)end; p++) {
         useIfPtr(*p, f);
@@ -321,9 +321,9 @@ void AttrNode::emitExtend(Template* templat) {
 
 void AttrNode::emitLit(pOb val) {
     int n = -1;
-    KONST LocationType locType = (LocationType)GET_GENERIC_TYPE(dest);
-    KONST int argno = GET_ARGREG_INDEX(dest);
-    KONST int regno = GET_CTXTREG_INDEX(dest);
+    const LocationType locType = (LocationType)GET_GENERIC_TYPE(dest);
+    const int argno = GET_ARGREG_INDEX(dest);
+    const int regno = GET_CTXTREG_INDEX(dest);
 
 
     for (int i = 0; i < 16; i++) {
@@ -404,9 +404,9 @@ void AttrNode::emitLit(pOb val) {
 
 
 void AttrNode::emitLookup(pOb symbol) {
-    KONST LocationType locType = (LocationType)GET_GENERIC_TYPE(dest);
-    KONST int argno = GET_ARGREG_INDEX(dest);
-    KONST int regno = GET_CTXTREG_INDEX(dest);
+    const LocationType locType = (LocationType)GET_GENERIC_TYPE(dest);
+    const int argno = GET_ARGREG_INDEX(dest);
+    const int regno = GET_CTXTREG_INDEX(dest);
 
     PROTECT_THIS(AttrNode);
 
@@ -533,8 +533,8 @@ void AttrNode::emitXfer(Location source) {
         return;
     }
 
-    KONST LocationType destType = (LocationType)GET_GENERIC_TYPE(dest);
-    KONST LocationType sourceType = (LocationType)GET_GENERIC_TYPE(source);
+    const LocationType destType = (LocationType)GET_GENERIC_TYPE(dest);
+    const LocationType sourceType = (LocationType)GET_GENERIC_TYPE(source);
 
     PROTECT_THIS(AttrNode);
 
@@ -557,9 +557,9 @@ void AttrNode::emitXfer(Location source) {
         }
     } else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
                GET_LEXVAR_OFFSET(source) < 16) {
-        KONST unsigned ind = GET_LEXVAR_IND(source);
-        KONST unsigned level = GET_LEXVAR_LEVEL(source);
-        KONST unsigned offset = GET_LEXVAR_OFFSET(source);
+        const unsigned ind = GET_LEXVAR_IND(source);
+        const unsigned level = GET_LEXVAR_LEVEL(source);
+        const unsigned offset = GET_LEXVAR_OFFSET(source);
 
         switch (destType) {
         case LT_CtxtRegister:

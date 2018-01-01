@@ -67,22 +67,6 @@ AbstractForeignFunction::AbstractForeignFunction(Ob* Cname,
     AbstractForeignFunction::updateCnt();
 }
 
-/*
-AbstractForeignFunction*
-AbstractForeignFunction::create (Ob* Cname,
-                                 Tuple* argConverters,
-                                 Ob* rsltConverter,
-                                 void* Caddr)
-{
-  void* loc =
-    PALLOC3(sizeof(AbstractForeignFunction), Cname, argConverters,
-rsltConverter);
-  return
-    new (loc) AbstractForeignFunction (Cname, argConverters, rsltConverter,
-Caddr);
-}
-*/
-
 int FF_ERRNO = 0;
 
 /****************************************************************************/
@@ -119,12 +103,12 @@ ForeignFunction* ForeignFunction::create(Ob* Cname, Tuple* argConverters,
 }
 
 Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
 
     Ob* result = RBLTRUE;
 
-    KONST int n = argConverters->numberOfElements();
+    const int n = argConverters->numberOfElements();
     for (int argpos = 0; argpos < n; argpos++) {
         if (RBLTRUE != BASE(argConverters->elem(argpos))->typep(ARG(argpos))) {
             return (PRIM_ERROR("unknown argument type"));
@@ -134,8 +118,8 @@ Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
 }
 
 convertArgReturnPair ForeignFunction::convertActual(Ctxt* ctxt, int argpos) {
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
 
     Ob* argCnv = argConverters->elem(argpos);
     Ob* arg = ARG(argpos);
@@ -144,8 +128,8 @@ convertArgReturnPair ForeignFunction::convertActual(Ctxt* ctxt, int argpos) {
 }
 
 Ob* ForeignFunction::convertResult(Ctxt* ctxt, long rslt) {
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
 
     return (rsltConverter == NIV)
                ? NIV
@@ -167,10 +151,10 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
                                                       * happy.)
           */
     PROTECT(ctxt);
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
     uint32_t x[32];
-    KONST int n = argConverters->numberOfElements();
+    const int n = argConverters->numberOfElements();
     int i = 0;
     long res;
     int nChars = 0;
@@ -460,18 +444,16 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         printf("\tforeign fn %s\n", BASE(Cname)->asCstring());
     }
 
-    /*
-      * Check all of the arguments for type conformance, and compute how
-        * much space will be required to pass them.  (We also give
-                                                      * definitions of
-     * "__CTXT__" and "__PRIM__" to keep the CHECK macros
-                                                      * happy.)
-          */
+    /**
+     * Check all of the arguments for type conformance, and compute how much
+     * space will be required to pass them.  (We also give definitions of
+     * "__CTXT__" and "__PRIM__" to keep the CHECK macros happy.)
+     */
 
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
 
-    KONST int n = argConverters->numberOfElements();
+    const int n = argConverters->numberOfElements();
     int i = 0;
     int nChars = 0;
 
@@ -527,11 +509,11 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         marshallingSize = nChars;
     }
 
-    /*
-      * By now, all of the arguments are known to conform, and we know how
-        * much space each argument requires, so we lay them all down in the
-          * marshalling area.
-            */
+    /**
+     * By now, all of the arguments are known to conform, and we know how
+     * much space each argument requires, so we lay them all down in the
+     * marshalling area.
+     */
 
     char* argp = marshallingArea;
 

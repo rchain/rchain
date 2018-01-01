@@ -302,7 +302,7 @@ DEF("string-join", stringJoin, 3, 3) {
     int seplen = strlen(sep);
     CHECK(2, Tuple, strs);
 
-    KONST int N = strs->numberOfElements();
+    const int N = strs->numberOfElements();
     int n = 1;
     if ((code & 1) && (N > 0)) {
         n += seplen;

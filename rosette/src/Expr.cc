@@ -523,7 +523,7 @@ bool TupleExpr::ConstantP() {
 TupleExpr* TupleExpr::cons(Ob* val) {
     PROTECT_THIS(TupleExpr);
     PROTECT(val);
-    KONST int n = SELF->numberOfElements();
+    const int n = SELF->numberOfElements();
     TupleExpr* result = TupleExpr::create(n + 1, SELF->rest);
     result->elem(0) = val;
     memcpy(&result->elem(1), &SELF->elem(0), n * sizeof(Ob*));
@@ -763,7 +763,7 @@ DEF("tupleexpr-split", tplexprSplit, 2, 2) {
         }
     }
 
-    KONST int s = expr->numberOfElements();
+    const int s = expr->numberOfElements();
 
     if (n > s) {
         return PRIM_ERROR("can't split");
@@ -808,7 +808,7 @@ DEF("tupleexpr-tail", tplexprTail, 1, 1) {
         return NILexpr;
     }
 
-    KONST int n = expr->numberOfElements();
+    const int n = expr->numberOfElements();
     if (n > 1) {
         PROTECT(expr);
         TupleExpr* ans = expr->makeSlice(1, n - 1);

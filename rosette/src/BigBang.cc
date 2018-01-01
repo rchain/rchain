@@ -190,8 +190,8 @@ void BuiltinClass::alloc() {
 
 
 void BuiltinClass::init() {
-    KONST pMeta m = *clientMeta;
-    KONST pSBO sbo = *clientSBO;
+    const pMeta m = *clientMeta;
+    const pSBO sbo = *clientSBO;
 
     /*
      * Because we don't know the relative order of allocation of the
@@ -276,7 +276,7 @@ void BuiltinClass::enter() {
     /*
      * Add an entry in the global environment for this sbo.
      */
-    KONST pSBO sbo = *clientSBO;
+    const pSBO sbo = *clientSBO;
     char buf[128];
     sprintf(buf, "%s-SBO", name);
     Define(buf, (pOb)sbo);

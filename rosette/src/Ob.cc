@@ -330,7 +330,7 @@ void useIfPtr(pOb v, V__PSOb f) { inlineUseIfPtr(v, f); }
 
 int Ob::traversePtrs(PSOb__PSOb f) {
     int sum = 0;
-    pOb* KONST end = endp();
+    pOb* const end = endp();
     pOb* p = _slot;
 
     while (p < end) {

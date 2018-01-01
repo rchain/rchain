@@ -60,8 +60,8 @@ pMeta StdMeta::create(pTuple map, pOb ref_count, pOb extensible) {
     if (map != NULL) {
         PROTECT(map);
         tbl = RblTable::create();
-        KONST int n = map->numberOfElements();
-        KONST bool indirect = extensible == RBLTRUE;
+        const int n = map->numberOfElements();
+        const bool indirect = extensible == RBLTRUE;
         for (int i = 0; i < n; i++) {
             tbl->addKey(map->elem(i), LexVar(0, i, indirect).atom);
         }
@@ -160,7 +160,7 @@ pOb StdMeta::add(pOb client, pOb key, pOb val, pCtxt ctxt) {
             PROTECT(key);
             PROTECT(val);
 
-            KONST int offset = client->addSlot(key, val);
+            const int offset = client->addSlot(key, val);
             const int INDIRECT = 1;
 
             pMeta new_meta = SELF;
@@ -319,16 +319,16 @@ pTuple IndexedMeta::locContour(pOb ob) {
     PROTECT_THIS(IndexedMeta);
     PROTECT(pob);
 
-    KONST int nslots = pob->numberOfSlots();
-    KONST int start_slot =
+    const int nslots = pob->numberOfSlots();
+    const int start_slot =
         FIXVAL(extension->slot(INDEXEDMETA_START_INDEXED_PART_SLOT));
     const int N = nslots - start_slot;
 
     pTuple base_contour = StdMeta::locContour(pob);
     PROTECT(base_contour);
 
-    KONST int base_offset = base_contour->numberOfElements();
-    KONST bool indirect = SELF->clientsAreExtensible();
+    const int base_offset = base_contour->numberOfElements();
+    const bool indirect = SELF->clientsAreExtensible();
     pTuple result = Tuple::create(base_offset + 2 * N, NIV);
     memcpy(&result->elem(0), &base_contour->elem(0), base_offset * sizeof(pOb));
     for (int i = 0; i < N; i++) {

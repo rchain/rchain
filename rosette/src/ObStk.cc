@@ -24,7 +24,7 @@ void ObStk::reset() { next = array; }
 
 int ObStk::traversePtrs(PSOb__PSOb f) {
     int sum = 0;
-    pOb* KONST n = (pOb*)next;
+    pOb* const n = (pOb*)next;
     for (pOb* p = (pOb*)array; p < n; p++) {
         sum += useIfPtr(p, f);
     }
@@ -34,7 +34,7 @@ int ObStk::traversePtrs(PSOb__PSOb f) {
 
 int ObStk::traversePtrs(SI__PSOb f) {
     int sum = 0;
-    pOb* KONST n = (pOb*)next;
+    pOb* const n = (pOb*)next;
     for (pOb* p = (pOb*)array; p < n; p++) {
         sum += useIfPtr(*p, f);
     }
@@ -43,7 +43,7 @@ int ObStk::traversePtrs(SI__PSOb f) {
 
 
 void ObStk::traversePtrs(V__PSOb f) {
-    pOb* KONST n = (pOb*)next;
+    pOb* const n = (pOb*)next;
     for (pOb* p = (pOb*)array; p < n; p++) {
         useIfPtr(*p, f);
     }

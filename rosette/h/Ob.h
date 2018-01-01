@@ -40,7 +40,6 @@
 #endif
 #endif
 
-#define KONST const
 #include <stdint.h>
 
 #if (defined(__GNUG__) && !defined(GCC27X)) || defined(sun)

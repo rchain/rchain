@@ -1337,7 +1337,7 @@ Ob* Reader::resumeExpr() {
          * "receiveWhatever".
          */
 
-        Reader* KONST my = SELF;
+        Reader* const my = SELF;
         my->mode = nextMode;
 
         errno = 0;
