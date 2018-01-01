@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -45,7 +46,7 @@ CodeBuf::CodeBuf()
 
 CodeBuf* CodeBuf::create() {
     void* loc = PALLOC(sizeof(CodeBuf));
-    return NEW(loc) CodeBuf();
+    return new (loc) CodeBuf();
 }
 
 
@@ -226,7 +227,7 @@ CodeVec::CodeVec(int numberOfInstrs)
 
 CodeVec* CodeVec::create(int numberOfInstrs) {
     void* loc = PALLOC(sizeof(CodeVec) + align(numberOfInstrs * sizeof(Instr)));
-    return NEW(loc) CodeVec(numberOfInstrs);
+    return new (loc) CodeVec(numberOfInstrs);
 }
 
 
@@ -712,7 +713,7 @@ Code::Code(CodeVec* codevec, Tuple* litvec)
 
 Code* Code::create(CodeVec* codevec, Tuple* litvec) {
     void* loc = PALLOC2(sizeof(Code), codevec, litvec);
-    return NEW(loc) Code(codevec, litvec);
+    return new (loc) Code(codevec, litvec);
 }
 
 
@@ -720,7 +721,7 @@ Code* Code::create(CodeBuf* codebuf, Tuple* litvec) {
     PROTECT(litvec);
     CodeVec* codevec = codebuf->finish();
     void* loc = PALLOC1(sizeof(Code), codevec);
-    return NEW(loc) Code(codevec, litvec);
+    return new (loc) Code(codevec, litvec);
 }
 
 

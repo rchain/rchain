@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -52,14 +53,14 @@ FixupVec::FixupVec(FixupVec* oldvec, int newsize)
 
 FixupVec* FixupVec::create(int n) {
     void* loc = PALLOC(sizeof(FixupVec) + n * sizeof(FixupEntry));
-    return NEW(loc) FixupVec(n);
+    return new (loc) FixupVec(n);
 }
 
 
 FixupVec* FixupVec::create(FixupVec* oldvec, int newsize) {
     void* loc =
         PALLOC1(sizeof(FixupVec) + newsize * sizeof(FixupEntry), oldvec);
-    return NEW(loc) FixupVec(oldvec, newsize);
+    return new (loc) FixupVec(oldvec, newsize);
 }
 
 
@@ -95,7 +96,7 @@ LabelTable* LabelTable::create(int size) {
     PROTECT(fv);
     RblTable* tbl = RblTable::create();
     void* loc = PALLOC1(sizeof(LabelTable), tbl);
-    return NEW(loc) LabelTable(lv, fv, tbl);
+    return new (loc) LabelTable(lv, fv, tbl);
 }
 
 
@@ -104,7 +105,7 @@ static const int EXTERN_LABEL_ENTRY_LABEL = 1;
 static const int EXTERN_LABEL_ENTRIES = 2;
 
 
-Label LabelTable::newLabel(EMPTY) {
+Label LabelTable::newLabel() {
     int n = labelValues->numberOfWords();
     int next = FIXVAL(nextLabel);
 

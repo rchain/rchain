@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -25,12 +26,9 @@
 
 #include "BuiltinClass.h"
 
+#include <algorithm>
 #include <ctype.h>
 #include <math.h>
-
-
-static int min(int m, int n) { return m < n ? m : n; }
-static int max(int m, int n) { return m > n ? m : n; }
 
 
 Ob* checkFxResult(Prim* prim, Ctxt* ctxt, int answer) {
@@ -169,7 +167,7 @@ DEF("fx-min", fxMin, 1, MaxArgs) {
     CHECK_FIXNUM(0, result);
     for (int next = 1; next < NARGS; next++) {
         CHECK_FIXNUM(next, n);
-        result = min(result, n);
+        result = std::min(result, n);
     }
     return FIXNUM(result);
 }
@@ -179,7 +177,7 @@ DEF("fx-max", fxMax, 1, MaxArgs) {
     CHECK_FIXNUM(0, result);
     for (int next = 1; next < NARGS; next++) {
         CHECK_FIXNUM(next, n);
-        result = max(result, n);
+        result = std::max(result, n);
     }
     return FIXNUM(result);
 }
@@ -325,7 +323,7 @@ Float::Float(Rfloat v)
 
 Float* Float::create(Rfloat v) {
     void* loc = PALLOC(sizeof(Float));
-    return NEW(loc) Float(v);
+    return new (loc) Float(v);
 }
 
 

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -25,10 +26,6 @@
 
 #include "BuiltinClass.h"
 
-#include <assert.h>
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 #include <memory.h>
 
 
@@ -65,7 +62,7 @@ RblTable::RblTable(int max, Tuple* tbl)
 RblTable* RblTable::create(int max) {
     Tuple* tmp = Tuple::create(max * (sizeof(Entry) / sizeof(pOb)), ABSENT);
     void* loc = PALLOC1(sizeof(RblTable), tmp);
-    return NEW(loc) RblTable(max, tmp);
+    return new (loc) RblTable(max, tmp);
 }
 
 RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
@@ -94,7 +91,7 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
 RblTable* RblTable::create(RblTableHitFn rtabhfn, int max) {
     Tuple* tmp = Tuple::create(max * (sizeof(Entry) / sizeof(pOb)), ABSENT);
     void* loc = PALLOC1(sizeof(RblTable), tmp);
-    return NEW(loc) RblTable(max, tmp, rtabhfn);
+    return new (loc) RblTable(max, tmp, rtabhfn);
 }
 
 RblTable::Entry& RblTable::entry(int n) {

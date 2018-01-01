@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -62,7 +63,7 @@ BlockExpr::BlockExpr(Tuple* init, Ob* implct)
 
 BlockExpr* BlockExpr::create(Tuple* init, Ob* implicit) {
     void* loc = PALLOC2(sizeof(BlockExpr), init, implicit);
-    return NEW(loc) BlockExpr(init, implicit);
+    return new (loc) BlockExpr(init, implicit);
 }
 
 
@@ -94,7 +95,7 @@ FreeExpr::FreeExpr(TupleExpr* f, Ob* b)
 
 FreeExpr* FreeExpr::create(TupleExpr* freeIds, Ob* body) {
     void* loc = PALLOC2(sizeof(FreeExpr), freeIds, body);
-    return NEW(loc) FreeExpr(freeIds, body);
+    return new (loc) FreeExpr(freeIds, body);
 }
 
 
@@ -110,7 +111,7 @@ GotoExpr::GotoExpr(Ob* name)
 
 GotoExpr* GotoExpr::create(Ob* label_name) {
     void* loc = PALLOC1(sizeof(GotoExpr), label_name);
-    return NEW(loc) GotoExpr(label_name);
+    return new (loc) GotoExpr(label_name);
 }
 
 
@@ -136,7 +137,7 @@ IfExpr* IfExpr::create(Ob* c, Ob* t, Ob* f) {
     }
 
     void* loc = PALLOC3(sizeof(IfExpr), c, t, f);
-    return NEW(loc) IfExpr(c, t, f);
+    return new (loc) IfExpr(c, t, f);
 }
 
 
@@ -156,7 +157,7 @@ LabelExpr::LabelExpr(Ob* l, Ob* b)
 
 LabelExpr* LabelExpr::create(Ob* label, Ob* body) {
     void* loc = PALLOC2(sizeof(LabelExpr), label, body);
-    return NEW(loc) LabelExpr(label, body);
+    return new (loc) LabelExpr(label, body);
 }
 
 
@@ -176,7 +177,7 @@ LetExpr::LetExpr(TupleExpr* te, Ob* b)
 
 LetExpr* LetExpr::create(TupleExpr* te, Ob* b) {
     void* loc = PALLOC2(sizeof(LetExpr), te, b);
-    return NEW(loc) LetExpr(te, b);
+    return new (loc) LetExpr(te, b);
 }
 
 
@@ -202,7 +203,7 @@ LetrecExpr::LetrecExpr(TupleExpr* te, Ob* b)
 
 LetrecExpr* LetrecExpr::create(TupleExpr* te, Ob* b) {
     void* loc = PALLOC2(sizeof(LetrecExpr), te, b);
-    return NEW(loc) LetrecExpr(te, b);
+    return new (loc) LetrecExpr(te, b);
 }
 
 
@@ -224,7 +225,7 @@ MethodExpr::MethodExpr(Ob* i, Ob* f, Ob* b)
 
 MethodExpr* MethodExpr::create(Ob* i, Ob* f, Ob* b) {
     void* loc = PALLOC3(sizeof(MethodExpr), i, f, b);
-    return NEW(loc) MethodExpr(i, f, b);
+    return new (loc) MethodExpr(i, f, b);
 }
 
 
@@ -239,7 +240,7 @@ NullExpr::NullExpr()
 
 NullExpr* NullExpr::create() {
     void* loc = PALLOC(sizeof(NullExpr));
-    return NEW(loc) NullExpr();
+    return new (loc) NullExpr();
 }
 
 
@@ -259,7 +260,7 @@ ProcExpr::ProcExpr(Ob* i, Ob* f, Ob* b)
 
 ProcExpr* ProcExpr::create(Ob* i, Ob* f, Ob* b) {
     void* loc = PALLOC3(sizeof(ProcExpr), i, f, b);
-    return NEW(loc) ProcExpr(i, f, b);
+    return new (loc) ProcExpr(i, f, b);
 }
 
 
@@ -275,7 +276,7 @@ QuoteExpr::QuoteExpr(Ob* e)
 
 QuoteExpr* QuoteExpr::create(Ob* e) {
     void* loc = PALLOC1(sizeof(QuoteExpr), e);
-    return NEW(loc) QuoteExpr(e);
+    return new (loc) QuoteExpr(e);
 }
 
 
@@ -299,7 +300,7 @@ ReflectiveMethodExpr::ReflectiveMethodExpr(Ob* i, Ob* f, Ob* b)
 
 ReflectiveMethodExpr* ReflectiveMethodExpr::create(Ob* i, Ob* f, Ob* b) {
     void* loc = PALLOC3(sizeof(ReflectiveMethodExpr), i, f, b);
-    return NEW(loc) ReflectiveMethodExpr(i, f, b);
+    return new (loc) ReflectiveMethodExpr(i, f, b);
 }
 
 
@@ -324,7 +325,7 @@ RequestExpr::RequestExpr(int sz, Ob* meta, Ob* parent, Ob* t, TupleExpr* te)
 
 RequestExpr* RequestExpr::create(Ob* t, TupleExpr* te) {
     void* loc = PALLOC2(sizeof(RequestExpr), t, te);
-    return NEW(loc) RequestExpr(t, te);
+    return new (loc) RequestExpr(t, te);
 }
 
 
@@ -343,7 +344,7 @@ SendExpr::SendExpr(Ob* t, TupleExpr* m)
 
 SendExpr* SendExpr::create(Ob* t, TupleExpr* m) {
     void* loc = PALLOC2(sizeof(SendExpr), t, m);
-    return NEW(loc) SendExpr(t, m);
+    return new (loc) SendExpr(t, m);
 }
 
 
@@ -359,7 +360,7 @@ SeqExpr::SeqExpr(Tuple* t)
 
 SeqExpr* SeqExpr::create(Tuple* init) {
     void* loc = PALLOC1(sizeof(SeqExpr), init);
-    return NEW(loc) SeqExpr(init);
+    return new (loc) SeqExpr(init);
 }
 
 
@@ -392,7 +393,7 @@ SetExpr::SetExpr(Ob* t, Ob* v)
 
 SetExpr* SetExpr::create(Ob* trgt, Ob* val) {
     void* loc = PALLOC2(sizeof(SetExpr), trgt, val);
-    return NEW(loc) SetExpr(trgt, val);
+    return new (loc) SetExpr(trgt, val);
 }
 
 
@@ -432,7 +433,7 @@ TupleExpr::TupleExpr(int n, Ob* r)
 
 TupleExpr* TupleExpr::create() {
     void* loc = PALLOC(sizeof(TupleExpr));
-    return NEW(loc) TupleExpr();
+    return new (loc) TupleExpr();
 }
 
 
@@ -441,14 +442,14 @@ TupleExpr* TupleExpr::create(Ob** p, int n, Ob* r) {
         return NILexpr;
     } else if (!IS_A(r, TupleExpr) || r == NILexpr) {
         void* loc = PALLOC1(sizeof(TupleExpr) + n * sizeof(Ob*), r);
-        TupleExpr* result = NEW(loc) TupleExpr(n, r);
+        TupleExpr* result = new (loc) TupleExpr(n, r);
         memcpy(&result->elem(0), &p[0], n * sizeof(Ob*));
         return result;
     } else {
         TupleExpr* rp = (TupleExpr*)r;
         int m = rp->numberOfElements();
         void* loc = PALLOC1(sizeof(TupleExpr) + (n + m) * sizeof(Ob*), rp);
-        TupleExpr* result = NEW(loc) TupleExpr(n + m, rp->rest);
+        TupleExpr* result = new (loc) TupleExpr(n + m, rp->rest);
         memcpy(&result->elem(0), &p[0], n * sizeof(Ob*));
         memcpy(&result->elem(n), &rp->elem(0), m * sizeof(Ob*));
         return result;
@@ -461,7 +462,7 @@ TupleExpr* TupleExpr::create(int n, Ob* r) {
         return NILexpr;
     } else if (!IS_A(r, TupleExpr) || r == NILexpr) {
         void* loc = PALLOC1(sizeof(TupleExpr) + n * sizeof(Ob*), r);
-        TupleExpr* result = NEW(loc) TupleExpr(n, r);
+        TupleExpr* result = new (loc) TupleExpr(n, r);
         for (int i = 0; i < n; i++)
             result->elem(i) = INVALID;
         return result;
@@ -469,7 +470,7 @@ TupleExpr* TupleExpr::create(int n, Ob* r) {
         TupleExpr* rp = (TupleExpr*)r;
         int m = rp->numberOfElements();
         void* loc = PALLOC1(sizeof(TupleExpr) + (n + m) * sizeof(Ob*), rp);
-        TupleExpr* result = NEW(loc) TupleExpr(n + m, rp->rest);
+        TupleExpr* result = new (loc) TupleExpr(n + m, rp->rest);
         for (int i = 0; i < n; i++)
             result->elem(i) = INVALID;
         memcpy(&result->elem(n), &rp->elem(0), m * sizeof(Ob*));

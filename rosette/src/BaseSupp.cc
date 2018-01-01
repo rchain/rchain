@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -24,31 +25,20 @@
 
 #include <algorithm>
 #include <cerrno>
-
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/param.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-//#include <varargs.h>
-#include <stdarg.h>
-#include <memory.h>
-#if !defined(GCC27X)
-#include <osfcn.h>
-#endif
-#ifdef WANT_LIBC_H
-#include <libc.h>
-#include <unistd.h>
-#endif
-#ifndef NO_SYSENT_H
-#include <sysent.h>
-#endif
-
-#include <string>
 #include <regex>
+#include <string>
+
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <memory.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdarg.h>
+#include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <unistd.h>
 
 #include "RblAtom.h"
 #include "BinaryOb.h"

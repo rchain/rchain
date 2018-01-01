@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -33,11 +34,6 @@
 #include <assert.h>
 #include <memory.h>
 #include <stdarg.h>
-
-#ifndef NEW
-#define NEW(x) new (x)
-#endif
-
 
 #define OPTIMIZE_ATOMS
 
@@ -541,7 +537,7 @@ ReaderMode SpecialFrame::process(int c, Reader* r) {
             state = SP_EXPECTING_CHAR;
             return CONTINUE;
         } else if (isalpha(c)) {
-            (void)NEW(r->falloc(sizeof(AtomFrame))) AtomFrame(r);
+            new (r->falloc(sizeof(AtomFrame))) AtomFrame(r);
             r->resetBuffer();
             return r->accept(c);
         } else {
@@ -551,7 +547,7 @@ ReaderMode SpecialFrame::process(int c, Reader* r) {
 
     case SP_EXPECTING_CHAR:
         if (c == '\\') {
-            (void)NEW(r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
+            new (r->falloc(sizeof(EscCharFrame))) EscCharFrame(r);
             return CONTINUE;
         } else {
             return r->receiveOb(RBLCHAR(c));
@@ -766,7 +762,7 @@ class CommentReadMacro : public ReadMacro {
 
 
 ReaderMode CommentReadMacro::start(int, Reader* r) {
-    NEW(r->falloc(sizeof(CommentFrame))) CommentFrame(r);
+    new (r->falloc(sizeof(CommentFrame))) CommentFrame(r);
     return CONTINUE;
 }
 
@@ -790,7 +786,7 @@ ReaderMode AtomReadMacro::start(int c, Reader* r) {
      */
     r->mode = GROK_ATOM;
 #else
-    NEW(r->falloc(sizeof(AtomReadMacro))) AtomFrame(r);
+    new (r->falloc(sizeof(AtomReadMacro))) AtomFrame(r);
 #endif
     r->digitSeen = isdigit(c);
     r->resetBuffer();
@@ -808,7 +804,7 @@ class StringReadMacro : public ReadMacro {
 
 
 ReaderMode StringReadMacro::start(int c, Reader* r) {
-    NEW(r->falloc(sizeof(StringFrame))) StringFrame(r, c);
+    new (r->falloc(sizeof(StringFrame))) StringFrame(r, c);
     r->resetBuffer();
     return CONTINUE;
 }
@@ -823,7 +819,7 @@ class _SpecialReadMacro : public ReadMacro {
 
 
 ReaderMode _SpecialReadMacro::start(int, Reader* r) {
-    (void)NEW(r->falloc(sizeof(SpecialFrame))) SpecialFrame(r);
+    new (r->falloc(sizeof(SpecialFrame))) SpecialFrame(r);
     return CONTINUE;
 }
 
@@ -837,7 +833,7 @@ class QuoteReadMacro : public ReadMacro {
 
 
 ReaderMode QuoteReadMacro::start(int, Reader* r) {
-    (void)NEW(r->falloc(sizeof(QuoteFrame))) QuoteFrame(r);
+    new (r->falloc(sizeof(QuoteFrame))) QuoteFrame(r);
     return START;
 }
 
@@ -887,7 +883,7 @@ ListReadMacro::ListReadMacro(int sc, int dc, int cc, FINALIZER f)
 
 
 ReaderMode ListReadMacro::start(int, Reader* r) {
-    (void)NEW(r->falloc(sizeof(ListFrame)))
+    new (r->falloc(sizeof(ListFrame)))
         ListFrame(r, dotChar, closingChar, finalizer);
     return START;
 }
@@ -1243,7 +1239,7 @@ Reader::~Reader() {
 
 Reader* Reader::create(FILE* f) {
     void* loc = PALLOC(align(sizeof(Reader)));
-    return NEW(loc) Reader(&StdReadTable, f);
+    return new (loc) Reader(&StdReadTable, f);
 }
 
 
@@ -1265,7 +1261,7 @@ Ob* Reader::readExpr() {
             error("IO synchronization problem with reader for file %d",
                   fileno(file)));
     } else {
-        (void)NEW(falloc(sizeof(TopFrame))) TopFrame(this);
+        new (falloc(sizeof(TopFrame))) TopFrame(this);
         mode = START;
         waitingOnIO = WAITING_FOR_EXPR;
         return resumeExpr();
@@ -1299,7 +1295,7 @@ Ob* Reader::resumeCh() {
 #endif
 
     if (c == EOF) {
-        if (RBL_WOULDBLOCK) {
+        if (EWOULDBLOCK == errno) {
             return suspendReader();
         } else {
             return finish(RBLEOF);
@@ -1351,12 +1347,13 @@ Ob* Reader::resumeExpr() {
         int c = fgetc(my->file);
 #endif
 
-        if (c == EOF && RBL_WOULDBLOCK)
+        if (EOF == c && EWOULDBLOCK == errno) {
             return my->suspendReader();
+        }
 
         switch (nextMode) {
         case START:
-            if (c == EOF) {
+            if (EOF == c) {
                 nextMode = my->ftop()->receiveEof(my);
             } else {
                 nextMode = my->rt->tbl[c]->start(c, my);
@@ -1364,7 +1361,7 @@ Ob* Reader::resumeExpr() {
             break;
 
         case CONTINUE:
-            if (c == EOF) {
+            if (EOF == c) {
                 nextMode = my->ftop()->receiveEof(my);
             } else {
                 nextMode = my->ftop()->process(c, my);
@@ -1516,10 +1513,10 @@ ReaderMode Reader::acceptEscChar(int c, int gapsPermitted) {
          * Make explicit the AtomFrame that is implicit in the GROK_ATOM
          * state.
          */
-        (void)NEW(falloc(sizeof(AtomFrame))) AtomFrame(this);
+        new (falloc(sizeof(AtomFrame))) AtomFrame(this);
     }
 #endif
-    (void)NEW(falloc(sizeof(EscCharFrame))) EscCharFrame(this, gapsPermitted);
+    new (falloc(sizeof(EscCharFrame))) EscCharFrame(this, gapsPermitted);
     return CONTINUE;
 }
 

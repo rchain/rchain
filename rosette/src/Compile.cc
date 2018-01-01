@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -635,7 +636,7 @@ ConstNode::ConstNode(pOb lit, bool valueCtxt)
 
 ConstNode* ConstNode::create(pOb lit, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(ConstNode), lit);
-    return NEW(loc) ConstNode(lit, valueCtxt);
+    return new (loc) ConstNode(lit, valueCtxt);
 }
 
 
@@ -678,7 +679,7 @@ SymbolNode::SymbolNode(pOb symbol, bool valueCtxt)
 
 SymbolNode* SymbolNode::create(pOb symbol, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(SymbolNode), symbol);
-    return NEW(loc) SymbolNode(symbol, valueCtxt);
+    return new (loc) SymbolNode(symbol, valueCtxt);
 }
 
 
@@ -768,7 +769,7 @@ FreeNode::FreeNode(FreeExpr* expr, bool valueCtxt)
 
 FreeNode* FreeNode::create(FreeExpr* expr, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(FreeNode), expr);
-    return NEW(loc) FreeNode(expr, valueCtxt);
+    return new (loc) FreeNode(expr, valueCtxt);
 }
 
 
@@ -823,7 +824,7 @@ NullNode::NullNode(bool valueCtxt) : AttrNode(sizeof(NullNode), valueCtxt) {
 
 NullNode* NullNode::create(bool valueCtxt) {
     void* loc = PALLOC(sizeof(NullNode));
-    return NEW(loc) NullNode(valueCtxt);
+    return new (loc) NullNode(valueCtxt);
 }
 
 
@@ -842,7 +843,7 @@ XferNode::XferNode(int source)
 
 XferNode* XferNode::create(int source) {
     void* loc = PALLOC(sizeof(XferNode));
-    return NEW(loc) XferNode(source);
+    return new (loc) XferNode(source);
 }
 
 
@@ -1178,7 +1179,7 @@ BlockNode::BlockNode(BlockExpr* be, bool valueCtxt)
 
 BlockNode* BlockNode::create(BlockExpr* be, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(BlockNode), be);
-    return NEW(loc) BlockNode(be, valueCtxt);
+    return new (loc) BlockNode(be, valueCtxt);
 }
 
 
@@ -1386,7 +1387,7 @@ RequestNode::RequestNode(RequestExpr* expr, bool valueCtxt)
 
 RequestNode* RequestNode::create(RequestExpr* expr, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(RequestNode), expr);
-    return NEW(loc) RequestNode(expr, valueCtxt);
+    return new (loc) RequestNode(expr, valueCtxt);
 }
 
 
@@ -1529,7 +1530,7 @@ SendNode::SendNode(SendExpr* se, bool valueCtxt)
 
 SendNode* SendNode::create(SendExpr* se, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(SendNode), se);
-    return NEW(loc) SendNode(se, valueCtxt);
+    return new (loc) SendNode(se, valueCtxt);
 }
 
 
@@ -1547,7 +1548,7 @@ TupleNode::TupleNode(TupleExpr* te, bool valueCtxt)
 
 TupleNode* TupleNode::create(TupleExpr* te, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(TupleNode), te);
-    return NEW(loc) TupleNode(te, valueCtxt);
+    return new (loc) TupleNode(te, valueCtxt);
 }
 
 
@@ -1629,7 +1630,7 @@ IfNode::IfNode(IfExpr* ie, bool valueCtxt)
 
 IfNode* IfNode::create(IfExpr* ie, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(IfNode), ie);
-    return NEW(loc) IfNode(ie, valueCtxt);
+    return new (loc) IfNode(ie, valueCtxt);
 }
 
 
@@ -1745,7 +1746,7 @@ LetNode::LetNode(LetExpr* le, bool valueCtxt)
 
 LetNode* LetNode::create(LetExpr* le, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(LetNode), le);
-    return NEW(loc) LetNode(le, valueCtxt);
+    return new (loc) LetNode(le, valueCtxt);
 }
 
 
@@ -1830,7 +1831,7 @@ LetrecNode::LetrecNode(LetrecExpr* le, bool valueCtxt)
 
 LetrecNode* LetrecNode::create(LetrecExpr* le, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(LetrecNode), le);
-    return NEW(loc) LetrecNode(le, valueCtxt);
+    return new (loc) LetrecNode(le, valueCtxt);
 }
 
 
@@ -1875,7 +1876,7 @@ MethodNode::MethodNode(MethodExpr* me, bool valueCtxt)
 
 MethodNode* MethodNode::create(MethodExpr* me, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(MethodNode), me);
-    return NEW(loc) MethodNode(me, valueCtxt);
+    return new (loc) MethodNode(me, valueCtxt);
 }
 
 
@@ -1968,7 +1969,7 @@ ReflectiveMethodNode::ReflectiveMethodNode(ReflectiveMethodExpr* rme,
 ReflectiveMethodNode* ReflectiveMethodNode::create(ReflectiveMethodExpr* rme,
                                                    bool valueCtxt) {
     void* loc = PALLOC1(sizeof(ReflectiveMethodNode), rme);
-    return NEW(loc) ReflectiveMethodNode(rme, valueCtxt);
+    return new (loc) ReflectiveMethodNode(rme, valueCtxt);
 }
 
 
@@ -1995,7 +1996,7 @@ ProcNode::ProcNode(ProcExpr* pe, bool valueCtxt)
 
 ProcNode* ProcNode::create(ProcExpr* pe, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(ProcNode), pe);
-    return NEW(loc) ProcNode(pe, valueCtxt);
+    return new (loc) ProcNode(pe, valueCtxt);
 }
 
 
@@ -2066,7 +2067,7 @@ SeqNode::SeqNode(AttrNode* first, AttrNode* second, bool valueCtxt)
 
 SeqNode* SeqNode::create(AttrNode* first, AttrNode* second, bool valueCtxt) {
     void* loc = PALLOC2(sizeof(SeqNode), first, second);
-    return NEW(loc) SeqNode(first, second, valueCtxt);
+    return new (loc) SeqNode(first, second, valueCtxt);
 }
 
 
@@ -2118,7 +2119,7 @@ SetNode::SetNode(SetExpr* se, bool valueCtxt)
 
 SetNode* SetNode::create(SetExpr* se, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(SetNode), se);
-    return NEW(loc) SetNode(se, valueCtxt);
+    return new (loc) SetNode(se, valueCtxt);
 }
 
 
@@ -2185,7 +2186,7 @@ GotoNode::GotoNode(GotoExpr* ge, bool valueCtxt)
 
 GotoNode* GotoNode::create(GotoExpr* ge, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(GotoNode), ge);
-    return NEW(loc) GotoNode(ge, valueCtxt);
+    return new (loc) GotoNode(ge, valueCtxt);
 }
 
 
@@ -2243,7 +2244,7 @@ LabelNode::LabelNode(LabelExpr* le, bool valueCtxt)
 
 LabelNode* LabelNode::create(LabelExpr* le, bool valueCtxt) {
     void* loc = PALLOC1(sizeof(LabelNode), le);
-    return NEW(loc) LabelNode(le, valueCtxt);
+    return new (loc) LabelNode(le, valueCtxt);
 }
 
 
@@ -2324,7 +2325,7 @@ CompilationUnit* CompilationUnit::create(pOb expr, pOb info, pOb source) {
     PROTECT(litvec);
     LabelTable* labels = LabelTable::create();
     void* loc = PALLOC1(sizeof(CompilationUnit), labels);
-    return NEW(loc) CompilationUnit(info, graph, codebuf, litvec, labels);
+    return new (loc) CompilationUnit(info, graph, codebuf, litvec, labels);
 }
 
 

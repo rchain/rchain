@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -43,7 +44,7 @@ RblStack::RblStack(Tuple* elems)
 RblStack* RblStack::create() {
     Tuple* elems = Tuple::create(DefaultStackSize, NIV);
     void* loc = PALLOC1(sizeof(RblStack), elems);
-    return NEW(loc) RblStack(elems);
+    return new (loc) RblStack(elems);
 }
 
 

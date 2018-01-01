@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -47,7 +48,7 @@ Timer::Timer() : BinaryOb(sizeof(Timer), CLASS_META(Timer), CLASS_SBO(Timer)) {
 
 Timer* Timer::create() {
     void* loc = PALLOC(sizeof(Timer));
-    return NEW(loc) Timer();
+    return new (loc) Timer();
 }
 
 

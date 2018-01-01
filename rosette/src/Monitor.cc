@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -60,7 +61,7 @@ Monitor* Monitor::create(Ob* id) {
     Word32Vec* obCounts = Word32Vec::create(Base::nClasses);
     PROTECT(obCounts);
     void* loc = PALLOC(sizeof(Monitor));
-    return NEW(loc) Monitor(id, timer, opcodeCounts, obCounts);
+    return new (loc) Monitor(id, timer, opcodeCounts, obCounts);
 }
 
 

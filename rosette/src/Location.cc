@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -27,9 +28,8 @@
 #define SPANSIZE00(n) ((n) == 0 ? (1 << BitField00SpanSize) : (n))
 
 int operator==(Location loc1, Location loc2) { return loc1.atom == loc2.atom; }
-
-
 int operator!=(Location loc1, Location loc2) { return loc1.atom != loc2.atom; }
+
 
 #ifdef MAP_BACK_ADDRESS
 uint32_t nontrivial_pre_fixnum_to_addr(int x) {

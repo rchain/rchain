@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -43,7 +44,7 @@ StdOprn* StdOprn::create(pOb id, pOb sync) {
     ext->slot(STDOPRN_ID_SLOT) = id;
     ext->slot(STDOPRN_SYNC_SLOT) = sync;
     void* loc = PALLOC1(sizeof(StdOprn), ext);
-    return NEW(loc) StdOprn(ext);
+    return new (loc) StdOprn(ext);
 }
 
 

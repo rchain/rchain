@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -306,7 +307,7 @@ RBLtopenv* RBLtopenv::create() {
 
     pMeta m = StdMeta::create(NIL, FIXNUM(1), RBLFALSE);
     void* loc = PALLOC1(sizeof(RBLtopenv), m);
-    return NEW(loc) RBLtopenv(m, INVALID);
+    return new (loc) RBLtopenv(m, INVALID);
 }
 
 
