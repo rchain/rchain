@@ -529,14 +529,16 @@ void AttrNode::emitUntaggedRtn(Label next) {
 
 
 void AttrNode::emitXfer(Location source) {
-    if (source == dest) return;
+    if (source == dest) {
+        return;
+    }
 
     const LocationType destType = (LocationType)GET_GENERIC_TYPE(dest);
     const LocationType sourceType = (LocationType)GET_GENERIC_TYPE(source);
 
     PROTECT_THIS(AttrNode);
 
-    if (sourceType == LT_GlobalVariable)
+    if (sourceType == LT_GlobalVariable) {
         switch (destType) {
         case LT_CtxtRegister:
             SELF->emitF0(opXferGlobalToReg, GET_CTXTREG_INDEX(dest));
@@ -553,20 +555,11 @@ void AttrNode::emitXfer(Location source) {
             return;
         }
         }
-<<<<<<< HEAD
     } else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
                GET_LEXVAR_OFFSET(source) < 16) {
         const unsigned ind = GET_LEXVAR_IND(source);
         const unsigned level = GET_LEXVAR_LEVEL(source);
         const unsigned offset = GET_LEXVAR_OFFSET(source);
-=======
-
-    else if (sourceType == LT_LexVariable && GET_LEXVAR_LEVEL(source) < 8 &&
-             GET_LEXVAR_OFFSET(source) < 16) {
-        KONST unsigned ind = GET_LEXVAR_IND(source);
-        KONST unsigned level = GET_LEXVAR_LEVEL(source);
-        KONST unsigned offset = GET_LEXVAR_OFFSET(source);
->>>>>>> dev
 
         switch (destType) {
         case LT_CtxtRegister:
@@ -908,7 +901,8 @@ void CompoundNode::analyze(AttrNode* node) {
 
 
 void CompoundNode::rearrangeInlinedExprs() {
-    if (inlined.exprs == NIL) return;
+    if (inlined.exprs == NIL)
+        return;
 
     ArgNum freeArgs[MaxArgs];
     int top = determineFree(freeArgs);
@@ -1040,8 +1034,10 @@ void CompoundNode::emitDispatchCode(bool ctxtAvailable, bool argvecAvailable,
     }
 
     if (simpleCode) {
-        if (inlinedCode) SELF->cu->setLabel(inlinedExit);
-        if (nestedCode || willWrapup || needPop) simpleExit = SELF->cu->newLabel();
+        if (inlinedCode)
+            SELF->cu->setLabel(inlinedExit);
+        if (nestedCode || willWrapup || needPop)
+            simpleExit = SELF->cu->newLabel();
         SELF->emitSimpleExprDispatchCode(ImplicitRtn, simpleExit);
     }
 
@@ -1117,7 +1113,9 @@ void CompoundNode::emitInlinedExprDispatchCode(RtnCode rtn, Label exit) {
             Label next = last ? exit : SELF->cu->newLabel();
             AttrNode* node = (AttrNode*)exprs->elem(i);
             node->emitDispatchCode(CtxtAvailable, ArgvecAvailable, rtn, next);
-            if (!last) SELF->cu->setLabel(next);
+            if (!last) {
+                SELF->cu->setLabel(next);
+            }
         }
     }
 }
@@ -1139,7 +1137,9 @@ void CompoundNode::emitNestedExprDispatchCode(RtnCode rtn, Label exit) {
             AttrNode* node = (AttrNode*)exprs->elem(i);
             node->emitDispatchCode(!CtxtAvailable, !ArgvecAvailable, rtn,
                                    nextExpr);
-            if (!last) SELF->cu->setLabel(nextExpr);
+            if (!last) {
+                SELF->cu->setLabel(nextExpr);
+            }
         }
     }
 }

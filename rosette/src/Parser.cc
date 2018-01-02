@@ -881,7 +881,7 @@ ListParseMacro::ListParseMacro(int sc, int dc, int cc, FINALIZER f)
 
 ParserMode ListParseMacro::start(int, Parser* r) {
     new (r->falloc(sizeof(ListFrame)))
-    ListFrame(r, dotChar, closingChar, finalizer);
+        ListFrame(r, dotChar, closingChar, finalizer);
     return START;
 }
 

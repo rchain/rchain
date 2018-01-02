@@ -30,7 +30,6 @@
 #include <memory.h>
 
 
-
 BUILTIN_CLASS(StdExtension) {}
 
 

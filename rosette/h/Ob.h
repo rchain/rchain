@@ -753,8 +753,8 @@ class SlotDescriptor;
     friend class BuiltinClass;           \
                                          \
    public:                               \
-    virtual void updateCnt();       \
-    virtual char* typestring();     \
+    virtual void updateCnt();            \
+    virtual char* typestring();          \
     static pMeta name2(classname, Meta); \
     static pSBO name2(classname, SBO);   \
     static SlotDescriptor* _meta_fields
