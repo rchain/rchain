@@ -59,4 +59,16 @@ case class RblFloat(value: Double, override val slot: Seq[Ob] = Seq(StdMeta()))
   def *(that: RblFloat) = RblFloat(this.value * that.value)
 
   def /(that: RblFloat) = RblFloat(this.value / that.value)
+
+  def <(that: RblFloat) = RblBool(this.value < that.value)
+
+  def <=(that: RblFloat) = RblBool(this.value <= that.value)
+
+  def >(that: RblFloat) = RblBool(this.value > that.value)
+
+  def >=(that: RblFloat) = RblBool(this.value >= that.value)
+
+  def ==(that: RblFloat) = RblBool(this.value == that.value)
+
+  def !=(that: RblFloat) = RblBool(this.value != that.value)
 }
