@@ -45,7 +45,6 @@ int eofError(FILE* f) { return readError(f, "unexpected eof"); }
 
 
 char getEscapedChar(FILE* f) {
-    char buf[4];
     int c;
 
     if ((c = getc(f)) == EOF)

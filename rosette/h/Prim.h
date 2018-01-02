@@ -119,26 +119,44 @@ class BuiltinPrim {
     BUILTIN_PRIM(int_name)
 #endif
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK(n, type, var)                       \
     if (!IS_A(ARG(n), type))                      \
         return PRIM_MISMATCH((n), _STRING(type)); \
     type* var = (type*)ARG(n);
 
+#define CHECK_NOVAR(n, type)                            \
+    do {                                                \
+        decltype(n) __n = (n);                          \
+        if (!IS_A(ARG(__n), type)) {                    \
+            return PRIM_MISMATCH((__n), _STRING(type)); \
+        }                                               \
+    } while (0)
+
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_FIXNUM(n, var)                 \
     if (!IS_FIXNUM(ARG(n)))                  \
         return PRIM_MISMATCH((n), "Fixnum"); \
     int var = FIXVAL(ARG(n));
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_SYM(n, var)                    \
     if (!IS_SYM(ARG(n)))                     \
         return PRIM_MISMATCH((n), "Symbol"); \
     Ob* var = ARG(n);
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
+#define CHECK_SYM_NOVAR(n) \
+    if (!IS_SYM(ARG(n)))   \
+        return PRIM_MISMATCH((n), "Symbol");
+
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_TYPE(n, typ, var)                   \
     if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \
         return PRIM_MISMATCH((n), _STRING(typ));  \
     typ* var = (typ*)(ARG(n));
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_TYPE_BASE(n, typ, var)              \
     if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \
         return PRIM_MISMATCH((n), _STRING(typ));  \

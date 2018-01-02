@@ -538,7 +538,7 @@ uint32_t GenericDescriptor::absoluteAddress(uint32_t base) {
 }
 
 void GenericDescriptor::setAddrContents(uint32_t base, uint32_t val) {
-    uint32_t newbase, offset, *addr;
+    uint32_t newbase, offset;
     newbase = base + _offset;
     offset = newbase % 4;
 
@@ -1267,7 +1267,7 @@ Ob* CRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
         uint32_t msetval;
 
         if (TYPEP(this, val)) {
-            uint32_t msetval = ((GenericDescriptor*)val)->absoluteAddress(0);
+            msetval = ((GenericDescriptor*)val)->absoluteAddress(0);
         } else if (TYPEP(_desc, val)) {
             msetval = ((GenericDescriptor*)val)->_offset;
         } else if ((val == this->nullDescriptor(ctxt)) ||
@@ -1381,7 +1381,6 @@ Ob* CharRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
     if (STRINGP(val)) {
         RBLstring* stmp = (RBLstring*)val;
         char* saddr = new char[stmp->numberOfBytes()];
-        uint32_t prev = SELF->absoluteAddress(base);
 
 #ifdef MEMORYCAUTIOUS
         if (VALID_ADDR(prev)) {
@@ -1568,7 +1567,6 @@ Ob* CharRef0::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
         int valsize = strlen(GET_STRING(val));
         char* tmp = new char[valsize];
 
-        uint32_t addr = absoluteAddress(base);
 #ifdef MEMORYCAUTIOUS
         (void)free((char*)addr);
 #endif

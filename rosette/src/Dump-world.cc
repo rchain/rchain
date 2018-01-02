@@ -27,10 +27,6 @@
 #include "Prim.h"
 #include "Tuple.h"
 
-#if defined(DYNAMIC_LOADING)
-DynamicLoader* loader; /* initialized in BigBang.cc */
-#endif
-
 extern int RestoringImage;
 
 
@@ -41,12 +37,7 @@ DEF("image-dump", imageDump, 1, 1) {
     }
 
     RestoringImage = true;
-    char msg_buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    return (loader->dump(path, msg_buf) ? PRIM_ERROR(msg_buf) : RBLFALSE);
-#else
     return RBLFALSE;
-#endif
 }
 
 

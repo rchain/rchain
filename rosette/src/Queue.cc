@@ -136,7 +136,8 @@ Ob* Queue::setNth(int n, Ob* val) {
 Ob* Queue::subObject(int start, int size) {
     PROTECT_THIS(Queue);
     Queue* new_queue = Queue::create();
-    Tuple* new_elems = Tuple::create(SELF->elems->numberOfElements(), NIV);
+    Tuple::create(SELF->elems->numberOfElements(), NIV);
+
     while (size--) {
         new_queue->enqueue(SELF->nth(start++));
     }

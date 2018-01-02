@@ -539,8 +539,6 @@ pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
 
 
 pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
-    static const int WordSize = BITS(uint32_t);
-
     long ans;
     pOb p = this;
     while (level--) {
@@ -582,8 +580,6 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
 }
 
 pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
-    static const int WordSize = BITS(uint32_t);
-
     pOb p = this;
     while (level--) {
         p = BASE(p->parent());
@@ -1214,8 +1210,8 @@ DEF("object->symbol", objectToSymbol, 1, MaxArgs) {
 DEF("get-field", objectGetField, 5, 5) {
     CHECK_FIXNUM(1, start);
     CHECK_FIXNUM(2, span);
-    CHECK(3, RblBool, indirect);
-    CHECK(4, RblBool, sign);
+    CHECK_NOVAR(3, RblBool);
+    CHECK_NOVAR(4, RblBool);
     pOb rslt = BASE(ARG(0))->getField(ARG(3) == RBLTRUE, 0, start, span,
                                       ARG(4) == RBLTRUE);
 

@@ -29,10 +29,6 @@
 
 #include "BuiltinClass.h"
 
-#if defined(DYNAMIC_LOADING)
-extern DynamicLoader* loader;
-#endif
-
 // abstract class
 
 BUILTIN_CLASS(AbstractForeignFunction) {
@@ -119,22 +115,18 @@ Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
 }
 
 convertArgReturnPair ForeignFunction::convertActual(Ctxt* ctxt, int argpos) {
-    ForeignFunction* const __PRIM__ = this;
     Ctxt* const __CTXT__ = ctxt;
-
     Ob* argCnv = argConverters->elem(argpos);
     Ob* arg = ARG(argpos);
-
     return BASE(argCnv)->convertActualArg(ctxt, arg);
 }
 
 Ob* ForeignFunction::convertResult(Ctxt* ctxt, long rslt) {
-    ForeignFunction* const __PRIM__ = this;
-    Ctxt* const __CTXT__ = ctxt;
+    if (NIV == rsltConverter) {
+        return NIV;
+    }
 
-    return (rsltConverter == NIV)
-               ? NIV
-               : BASE(rsltConverter)->convertActualRslt(ctxt, rslt);
+    return BASE(rsltConverter)->convertActualRslt(ctxt, rslt);
 }
 
 #define CNVARG(i) this->convertActual(ctxt, i)
@@ -145,20 +137,18 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     }
 
     /*
-      * Check all of the arguments for type conformance, and compute how
-        * much space will be required to pass them.  (We also give
-                                                      * definitions of
+     * Check all of the arguments for type conformance, and compute how
+     * much space will be required to pass them.  (We also give
+     * definitions of
      * "__CTXT__" and "__PRIM__" to keep the CHECK macros
-                                                      * happy.)
-          */
+     * happy.)
+     */
     PROTECT(ctxt);
     ForeignFunction* const __PRIM__ = this;
     Ctxt* const __CTXT__ = ctxt;
     uint32_t x[32];
     const int n = argConverters->numberOfElements();
-    int i = 0;
     long res;
-    int nChars = 0;
     Incantation the_real_fn = (Incantation)(FIXVAL(Caddr));
 
     if (n != NARGS) {
@@ -616,9 +606,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         }
         case nArgConverters:
             /*
-              * To silence the compiler while still allowing it to make
-                * sure that we have covered all cases.
-                  */
+             * To silence the compiler while still allowing it to make
+             * sure that we have covered all cases.
+             */
             break;
         }
 
@@ -718,13 +708,6 @@ DEF("unix-load", unixLoad, 1, 3) {
             return PRIM_MISMATCH(1, "String");
     }
 
-    char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    if (loader->load(path, buf, libStr, otherStr)) {
-        return PRIM_ERROR(buf);
-    }
-#endif
-
     return NIV;
 }
 
@@ -749,13 +732,6 @@ DEF("wizard-load", unixWizardLoad, 1, 1) {
         return PRIM_MISMATCH(0, "String or Symbol");
     }
 
-    char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    if (loader->loadhelp(cmd, buf)) {
-        return PRIM_ERROR(buf);
-    }
-#endif
-
     return NIV;
 }
 
@@ -765,38 +741,18 @@ DEF("unix-resolve", unixResolve, 1, 1) {
     if (!name) {
         return PRIM_MISMATCH(0, "String or Symbol");
     }
-
-#if defined(DYNAMIC_LOADING)
-    void* addr = loader->resolve(name);
-#else
-    void* addr = 0;
-#endif
-
-    if (addr == 0) {
-        return ABSENT;
-    }
-
-    return FIXNUM((int)addr);
+    // NB(leaf): No dynamic loading support.
+    return ABSENT;
 }
 
 
 DEF("ff-new", ffNew, 3, 3) {
-    CHECK_SYM(0, Cname);
-    CHECK(1, Tuple, argConverters);
+    CHECK_SYM_NOVAR(0);
+    CHECK_NOVAR(1, Tuple);
 
-    const char* name = BASE(Cname)->asCstring();
     char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    void* addr = loader->resolve(name, buf);
-#else
-    void* addr = 0;
-#endif
-
-    if (0 == addr) {
-        return PRIM_ERROR(buf);
-    }
-
-    return ForeignFunction::create(Cname, argConverters, ARG(2), addr);
+    // NB(leaf): No dynamic loading support.
+    return PRIM_ERROR(buf);
 }
 
 DEF("ff-create", ffCreate, 4, 4) {

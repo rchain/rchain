@@ -366,8 +366,6 @@ void VirtualMachine::check() { traversePtrs(MF_ADDR(Ob::checkOb)); }
 
 
 void VirtualMachine::handleException(Ob* v, Instr instr, Location tag) {
-    static const int XmitFamily = opXmitTag & 0xf0;
-    static const int XmitXtndFamily = opXmitTagXtnd & 0xf0;
     static const int ApplyPrimFamily = opApplyPrimTag & 0xf0;
 
     int family = OP_f0_opcode(instr) & 0xf0;
@@ -703,7 +701,6 @@ Ob* VirtualMachine::vmLiterals[16] = {0};
 void VirtualMachine::execute() {
     Instr instr;
     Location loc;
-    pOb temp = INVALID;
     pOb result = INVALID;
 
 nextop:
@@ -1624,7 +1621,6 @@ void VirtualMachine::initVmTables() {
 
     static const uint16_t StartLabel = 0;
     static const uint16_t ResumeLabel = 8;
-    int dummy = 0;
 
     /*  0 */ cb->emitF6(opOutstanding, ResumeLabel);
     cb->emitE0(1, 0);

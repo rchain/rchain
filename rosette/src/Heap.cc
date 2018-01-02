@@ -884,9 +884,6 @@ int Heap::size() { return newSpace->size() + oldSpace->size(); }
 static void catchMagic() {}
 #endif
 
-static void* magicLoc = 0;
-
-
 void* Heap::alloc(unsigned sz) {
     void* loc = newSpace->alloc(sz);
 #ifdef DEBUG

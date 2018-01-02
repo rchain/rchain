@@ -510,39 +510,28 @@ int malloc_debug(int);
 #endif
 
 extern int restore(const char*, char*);
-#if defined(DYNAMIC_LOADING)
-extern DynamicLoader* loader;
-#endif
-
 
 int InBigBang = 0;
 
 int BigBang(int argc, char** argv, char** envp) {
-    const char* cmdName = argv[0];
-
     argc = ParseCommandLine(argc, argv);
-
     InBigBang = true;
-
     setsid();
 
     if (RestoringImage) {
-/*
- * This stuff must be (re-)initialized *after* the restore, since
- * restore will return them to their values at the time that the
- * image file was created.  This also assumes that the strings in
- * argv actually reside on the stack and are not clobbered by the
- * restore.
- */
+        /**
+         * This stuff must be (re-)initialized *after* the restore, since
+         * restore will return them to their values at the time that the
+         * image file was created.  This also assumes that the strings in
+         * argv actually reside on the stack and are not clobbered by the
+         * restore.
+         */
 
-#if defined(DYNAMIC_LOADING)
-        delete loader;
-#endif
         Define("argv", GetArgv(argc, argv));
         Define("envp", GetEnvp(envp));
         vm->resetSignals();
 
-        /*
+        /**
          * This bit of stream manipulation is necessary to reset the
          * stdin and stdout streams to the values appropriate for this
          * particular run, rather than the ones inherited from the image
@@ -556,7 +545,7 @@ int BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-/*
+/**
  * Always reset the malloc_verify stuff to current settings,
  * regardless of whether we are restoring an image.  This permits us
  * maximum checking while building an image, but allows the built
@@ -568,15 +557,11 @@ int BigBang(int argc, char** argv, char** envp) {
     malloc_debug(ParanoidAboutGC);
 #endif
 
-/*
- * Always rebuild the loader so that it gets the current command
- * path, just in case the image has been moved from its birthplace in
- * the file system.
- */
-
-#if defined(DYNAMIC_LOADING)
-    loader = new DynamicLoader(cmdName);
-#endif
+    /*
+     * Always rebuild the loader so that it gets the current command
+     * path, just in case the image has been moved from its birthplace in
+     * the file system.
+     */
 
     if (!RestoringImage) {
         heap = new Heap(InfantSpaceSize, SurvivorSpaceSize, OldSpaceChunkSize);
@@ -603,9 +588,6 @@ int BigBang(int argc, char** argv, char** envp) {
 void BigCrunch() {
     delete vm;
     delete heap;
-#if defined(DYNAMIC_LOADING)
-    delete loader;
-#endif
 }
 
 
@@ -670,7 +652,7 @@ int asyncHelper(int fd, int desiredState) {
 DEF("async", asyncify, 1, 2) {
     FILE* f = stdin;
 
-    CHECK(NARGS - 1, RblBool, b);
+    CHECK_NOVAR(NARGS - 1, RblBool);
     int desiredState = BOOLVAL(ARG(NARGS - 1));
     if (NARGS == 2) {
         CHECK(0, Istream, stream);
