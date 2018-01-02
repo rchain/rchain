@@ -68,7 +68,7 @@ bool store(Location loc, Ctxt* k, Ob* val) {
         return false;
 
     case LT_ArgRegister:
-        if (GET_ARGREG_INDEX(loc) >= k->argvec->numberOfElements()) {
+        if ((int)GET_ARGREG_INDEX(loc) >= k->argvec->numberOfElements()) {
             return true;
         } else {
             ASSIGN(k->argvec, elem(GET_ARGREG_INDEX(loc)), val);
@@ -117,7 +117,7 @@ Ob* fetch(Location loc, Ctxt* k) {
                     : INVALID);
 
     case LT_ArgRegister:
-        return (GET_ARGREG_INDEX(loc) < k->argvec->numberOfElements()
+        return ((int)GET_ARGREG_INDEX(loc) < k->argvec->numberOfElements()
                     ? k->argvec->elem(GET_ARGREG_INDEX(loc))
                     : INVALID);
 
@@ -132,7 +132,7 @@ Ob* fetch(Location loc, Ctxt* k) {
 
     case LT_GlobalVariable: {
         Ob* p = GlobalEnv->container();
-        return (GET_GLOBALVAR_OFFSET(loc) < p->numberOfSlots()
+        return ((int)GET_GLOBALVAR_OFFSET(loc) < p->numberOfSlots()
                     ? p->slot(GET_GLOBALVAR_OFFSET(loc))
                     : INVALID);
     }
