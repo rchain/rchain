@@ -545,13 +545,13 @@ int BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-    /**
-     * Always reset the malloc_verify stuff to current settings,
-     * regardless of whether we are restoring an image.  This permits us
-     * maximum checking while building an image, but allows the built
-     * image to run with no checking unless specifically overridden with
-     * a command-line option.
-     */
+/**
+ * Always reset the malloc_verify stuff to current settings,
+ * regardless of whether we are restoring an image.  This permits us
+ * maximum checking while building an image, but allows the built
+ * image to run with no checking unless specifically overridden with
+ * a command-line option.
+ */
 
 #if defined(MALLOC_DEBUGGING)
     malloc_debug(ParanoidAboutGC);
@@ -625,7 +625,7 @@ int asyncHelper(int fd, int desiredState) {
     DO_BLOCKING
 #endif
 
-        result = fcntl(fd, F_SETFL, flags);
+    result = fcntl(fd, F_SETFL, flags);
 #else
     flags = (desiredState ? 1 : 0);
     result = ioctl(fd, FIOSNBIO, &flags);
