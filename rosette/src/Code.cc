@@ -681,8 +681,8 @@ noDest:
 
 void CodeVec::dumpOn(FILE* f, Code* code) {
     Instr* pc = absolutize(0);
-    Instr* KONST start = pc;
-    Instr* KONST end = absolutize(numberOfWords());
+    Instr* const start = pc;
+    Instr* const end = absolutize(numberOfWords());
     char outputBuffer[128];
 
     while (pc < end) {

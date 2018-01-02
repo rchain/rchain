@@ -115,7 +115,6 @@ void RBLstring::printOn(FILE* f) {
                 fprintf(f, "x%.2x", (int)c);
                 break;
             }
-
         }
     } while (true);
 
@@ -159,42 +158,60 @@ Ob* RBLstring::subObject(int start, int n) {
 
 DEF("string=", stringEq, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(strcmp((char*)&str1->byte(0), (char*)&str2->byte(0)) == 0);
 }
 
 DEF("string!=", stringNEq, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(strcmp((char*)&str1->byte(0), (char*)&str2->byte(0)) != 0);
 }
 
 DEF("string<", stringLess, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(strcmp((char*)&str1->byte(0), (char*)&str2->byte(0)) < 0);
 }
 
 DEF("string<=", stringLEQ, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(strcmp((char*)&str1->byte(0), (char*)&str2->byte(0)) <= 0);
 }
 
 DEF("string>", stringGtr, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(strcmp((char*)&str1->byte(0), (char*)&str2->byte(0)) > 0);
 }
 
 DEF("string>=", stringGEQ, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(strcmp((char*)&str1->byte(0), (char*)&str2->byte(0)) >= 0);
 }
@@ -208,7 +225,10 @@ DEF("string>=", stringGEQ, 2, 2) {
 
 DEF("string-ci=", string_ciEq, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) ==
                    0);
@@ -216,7 +236,10 @@ DEF("string-ci=", string_ciEq, 2, 2) {
 
 DEF("string-ci!=", string_ciNEq, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) !=
                    0);
@@ -224,7 +247,10 @@ DEF("string-ci!=", string_ciNEq, 2, 2) {
 
 DEF("string-ci<", string_ciLess, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) <
                    0);
@@ -232,7 +258,10 @@ DEF("string-ci<", string_ciLess, 2, 2) {
 
 DEF("string-ci<=", string_ciLEQ, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) <=
                    0);
@@ -240,7 +269,10 @@ DEF("string-ci<=", string_ciLEQ, 2, 2) {
 
 DEF("string-ci>", string_ciGtr, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) >
                    0);
@@ -248,7 +280,10 @@ DEF("string-ci>", string_ciGtr, 2, 2) {
 
 DEF("string-ci>=", string_ciGEQ, 2, 2) {
     CHECK(0, RBLstring, str1);
-    if (!IS_A(ARG(1), RBLstring)) return RBLFALSE;
+    if (!IS_A(ARG(1), RBLstring)) {
+        return RBLFALSE;
+    }
+
     RBLstring* str2 = (RBLstring*)ARG(1);
     return RBLBOOL(STRCASECMP((char*)&str1->byte(0), (char*)&str2->byte(0)) >=
                    0);
@@ -282,7 +317,7 @@ DEF("string-join", stringJoin, 3, 3) {
     int seplen = strlen(sep);
     CHECK(2, Tuple, strs);
 
-    KONST int N = strs->numberOfElements();
+    const int N = strs->numberOfElements();
     int n = 1;
     if ((code & 1) && (N > 0)) {
         n += seplen;
@@ -299,6 +334,7 @@ DEF("string-join", stringJoin, 3, 3) {
             n += seplen;
         }
     }
+
     if ((code & 2) && (N > 0)) {
         n += seplen;
     }
@@ -307,6 +343,7 @@ DEF("string-join", stringJoin, 3, 3) {
     RBLstring* result = RBLstring::create(n);
     char* p = (char*)&result->byte(0);
     *p = 0;
+
     if ((code & 1) && (N > 0)) {
         strcat(p, sep);
     }
@@ -419,7 +456,9 @@ DEF("string-split", stringSplit, 2, 3) {
     char* str = (char*)&string->byte(0);
     int sz = strlen(str);
 
-    if (sz == 0) return NIL;
+    if (sz == 0) {
+        return NIL;
+    }
 
     CHECK(1, RBLstring, separators);
     int nsep = strlen((char*)&separators->byte(0));
@@ -468,7 +507,9 @@ DEF("string-split", stringSplit, 2, 3) {
             }
         }
 
-        if (i == 0) return NIL;
+        if (i == 0) {
+            return NIL;
+        }
 
         Tuple* ans = Tuple::create(i + 1, NIV);
         PROTECT(ans);

@@ -30,7 +30,6 @@
 #include <memory.h>
 
 
-
 BUILTIN_CLASS(StdExtension) {}
 
 
@@ -131,7 +130,7 @@ int Actor::addSlot(pOb, pOb val) {
 
 pOb Actor::dup() {
     PROTECT_THIS(Actor);
-    KONST int sz = SIZE(SELF);
+    const int sz = SIZE(SELF);
     pOb ob = (pOb)PALLOC(sz);
     obcpy(ob, SELF, sz);
     ob->updateCnt();
@@ -271,12 +270,12 @@ TblObject* TblObject::create() {
 int TblObject::addSlot(pOb key, pOb val) {
     PROTECT_THIS(TblObject);
 
-    KONST int n = FIXVAL(validExtent);
+    const int n = FIXVAL(validExtent);
 
     if (n >= extension->numberOfSlots()) {
         PROTECT(key);
         PROTECT(val);
-        KONST int new_size = std::max(2 * n, MinimumTblObjectSlots);
+        const int new_size = std::max(2 * n, MinimumTblObjectSlots);
         StdExtension* ext = StdExtension::create(new_size);
         memcpy(&ext->slot(0), &SELF->extension->slot(0), n * sizeof(pOb));
         ASSIGN(SELF, extension, ext);

@@ -894,7 +894,7 @@ nextop:
         }
 
         ctxt->nargs = OP_f5_op0(instr);
-        Prim* KONST prim = Prim::nthPrim(p_num);
+        Prim* const prim = Prim::nthPrim(p_num);
         loc.atom = code->lit(WORD_OP_e0_op1(ext));
         result = (OP_f5_unwind(instr) ? unwindAndApplyPrim(prim)
                                       : prim->dispatchHelper(ctxt));
@@ -926,7 +926,7 @@ nextop:
         }
 
         ctxt->nargs = OP_f5_op0(instr);
-        Prim* KONST prim = Prim::nthPrim(p_num);
+        Prim* const prim = Prim::nthPrim(p_num);
         const int argno = WORD_OP_e0_op1(ext);
         result = (OP_f5_unwind(instr) ? unwindAndApplyPrim(prim)
                                       : prim->dispatchHelper(ctxt));
@@ -957,8 +957,8 @@ nextop:
         }
 
         ctxt->nargs = OP_f5_op0(instr);
-        Prim* KONST prim = Prim::nthPrim(p_num);
-        KONST int regno = WORD_OP_e0_op1(ext);
+        Prim* const prim = Prim::nthPrim(p_num);
+        const int regno = WORD_OP_e0_op1(ext);
         result = (OP_f5_unwind(instr) ? unwindAndApplyPrim(prim)
                                       : prim->dispatchHelper(ctxt));
         if (result == DEADTHREAD)
@@ -986,7 +986,7 @@ nextop:
         }
 
         ctxt->nargs = OP_f5_op0(instr);
-        Prim* KONST prim = Prim::nthPrim(p_num);
+        Prim* const prim = Prim::nthPrim(p_num);
         result = (OP_f5_unwind(instr) ? unwindAndApplyPrim(prim)
                                       : prim->dispatchHelper(ctxt));
         if (result == DEADTHREAD)
@@ -1100,9 +1100,9 @@ nextop:
     case opLookupToArg | 0xd:
     case opLookupToArg | 0xe:
     case opLookupToArg | 0xf: {
-        KONST int argno = OP_f2_op0(instr);
+        const int argno = OP_f2_op0(instr);
         pOb key = code->lit(OP_f2_op1(instr));
-        pOb KONST val = BASE(BASE(ctxt->selfEnv)->meta())
+        pOb const val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
@@ -1133,9 +1133,9 @@ nextop:
     case opLookupToReg | 0xd:
     case opLookupToReg | 0xe:
     case opLookupToReg | 0xf: {
-        KONST int regno = OP_f2_op0(instr);
+        const int regno = OP_f2_op0(instr);
         pOb key = code->lit(OP_f2_op1(instr));
-        pOb KONST val = BASE(BASE(ctxt->selfEnv)->meta())
+        pOb const val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
