@@ -30,8 +30,6 @@
 #include <string.h>
 
 
-#define TWOS_COMPLEMENT
-
 #if !defined(_STRING) || defined(MIPS_SGI_SYSV)
 #if defined(__STDC__) || defined(MIPS_SGI_SYSV)
 #define _STRING(name) #name
@@ -59,13 +57,6 @@ static const int EscTagSize = 6;
 static const unsigned TagMask = ((unsigned)~0) >> (WordSize - TagSize);
 static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize - EscTagSize);
 
-/* to do fix this  wfs*/
-#ifdef LITTLE_END
-#define BIG_END(x)
-#else
-#define BIG_END(x) x
-#define LITTLE_END(x)
-#endif
 
 #define ESCAPED(n) (((n) << TagSize) + OTesc)
 
@@ -134,14 +125,10 @@ enum ObTag {
 #define SYMBOL(p) MAKETAGGED(OTsym, intern(p))
 #define FIXNUM(v) ((pOb)(((unsigned)(v) << TagSize) | (unsigned)OTfixnum))
 
-#ifdef TWOS_COMPLEMENT
 
 // This sum macro probably only works on two's complement machines.
-
+// NB(leaf): Which is everything, AFAIK.
 #define FIXNUM_SUM(n, i) ((pOb)((int)n + (i << TagSize)))
-#else
-#define FIXNUM_SUM(n, i) FIXNUM(FIXVAL(n) + (i))
-#endif
 
 #define MAX_FIXNUM FIXNUM(LONG_MAX >> TagSize)
 #define MIN_FIXNUM FIXNUM(LONG_MIN >> TagSize)
@@ -445,14 +432,19 @@ struct HeaderLayout {
     uint8_t flags;  // See above
     uint8_t age;    // The number of scavenges the object has survived.
     uint16_t size;  // The total size (in bytes) of the object.
+
+    HeaderLayout() : flags(0), age(0), size(0) {}
 };
 
 union HeaderBits {
     HeaderLayout fields;
     uint32_t all;
 
+    // NB(leaf): The heap allocation routines write information into the header
+    // that need to be preserved, so any default ctor can't initialize any of
+    // our variables. This needs to be fixed.
+    HeaderBits() {};
     HeaderBits(HeaderBits& hb) { all = hb.all; }
-
     HeaderBits(int sz) {
         all = 0;
         fields.size = sz;
@@ -549,9 +541,9 @@ class Ob : public Base {
     static char stringbuf[256];
 
     Ob(InPlace_Constructor*, int);
-    Ob(InPlace_Constructor*) : header(this->header) {}
+    Ob(InPlace_Constructor*) {};
 
-    Ob(InPlace_Constructor*, pOb meta, pOb parent) : header(this->header) {
+    Ob(InPlace_Constructor*, pOb meta, pOb parent) {
         ASSIGN(this, meta(), meta);
         ASSIGN(this, parent(), parent);
     }
