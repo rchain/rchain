@@ -254,8 +254,6 @@ DEF("prim-gen-actor", obGenActor, 3, 3) {
 }
 
 uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
-    static const int WordSize = BITS(uint32_t);
-
     uint32_t ans = 0;
 
     switch (span) {
@@ -293,8 +291,6 @@ uint32_t mem_get_field(uint32_t* addr, int offset, int span, int sign) {
 }
 
 uint32_t* mem_set_field(uint32_t* addr, int offset, int span, uint32_t bits) {
-    static const int WordSize = BITS(uint32_t);
-
     switch (span) {
     case 8:
         *(uint8_t*)((int8_t*)addr + (offset / BITS(int8_t))) = (uint8_t)bits;
@@ -464,9 +460,7 @@ DEF("M-set", addressSetField, 3, 3) {
     if (base < local_page_size) {
         return PRIM_ERROR("invalid address");
     } else if ((span >= 1) && (span <= 4)) {
-        uint32_t* rslt =
-            mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
-
+        mem_set_field(addr, offset * 8, span * 8, (uint32_t)val);
         return ADDR_TO_FIXNUM((int)addr);
     }
 

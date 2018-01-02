@@ -29,10 +29,6 @@
 
 #include "BuiltinClass.h"
 
-#if defined(DYNAMIC_LOADING)
-extern DynamicLoader* loader;
-#endif
-
 // abstract class
 
 BUILTIN_CLASS(AbstractForeignFunction) {
@@ -119,22 +115,18 @@ Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
 }
 
 convertArgReturnPair ForeignFunction::convertActual(Ctxt* ctxt, int argpos) {
-    ForeignFunction* const __PRIM__ = this;
     Ctxt* const __CTXT__ = ctxt;
-
     Ob* argCnv = argConverters->elem(argpos);
     Ob* arg = ARG(argpos);
-
     return BASE(argCnv)->convertActualArg(ctxt, arg);
 }
 
 Ob* ForeignFunction::convertResult(Ctxt* ctxt, long rslt) {
-    ForeignFunction* const __PRIM__ = this;
-    Ctxt* const __CTXT__ = ctxt;
+    if (NIV == rsltConverter) {
+        return NIV; 
+    }
 
-    return (rsltConverter == NIV)
-               ? NIV
-               : BASE(rsltConverter)->convertActualRslt(ctxt, rslt);
+    return BASE(rsltConverter)->convertActualRslt(ctxt, rslt);
 }
 
 #define CNVARG(i) this->convertActual(ctxt, i)
@@ -145,20 +137,18 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     }
 
     /*
-      * Check all of the arguments for type conformance, and compute how
-        * much space will be required to pass them.  (We also give
-                                                      * definitions of
+     * Check all of the arguments for type conformance, and compute how
+     * much space will be required to pass them.  (We also give
+     * definitions of
      * "__CTXT__" and "__PRIM__" to keep the CHECK macros
-                                                      * happy.)
-          */
+     * happy.)
+     */
     PROTECT(ctxt);
     ForeignFunction* const __PRIM__ = this;
     Ctxt* const __CTXT__ = ctxt;
     uint32_t x[32];
     const int n = argConverters->numberOfElements();
-    int i = 0;
     long res;
-    int nChars = 0;
     Incantation the_real_fn = (Incantation)(FIXVAL(Caddr));
 
     if (n != NARGS) {
@@ -183,8 +173,8 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         }
 
 #define CAS(i) \
-    case i:    \
-        res = (*the_real_fn)
+        case i:    \
+                   res = (*the_real_fn)
 #define BR break
         switch (m) {
             CAS(0)();
@@ -210,112 +200,112 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
             CAS(10)(x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9]);
             BR;
             CAS(11)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10]);
             BR;
             CAS(12)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11]);
             BR;
             CAS(13)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12]);
             BR;
             CAS(14)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13]);
             BR;
             CAS(15)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14]);
             BR;
             CAS(16)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15]);
             BR;
             CAS(17)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16]);
             BR;
             CAS(18)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17]);
             BR;
             CAS(19)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18]);
             BR;
             CAS(20)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19]);
             BR;
             CAS(21)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20]);
             BR;
             CAS(22)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21]);
             BR;
             CAS(23)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22]);
             BR;
             CAS(24)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23]);
             BR;
             CAS(25)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24]);
             BR;
             CAS(26)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25]);
             BR;
             CAS(27)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25], x[26]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25], x[26]);
             BR;
             CAS(28)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27]);
             BR;
             CAS(29)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28]);
             BR;
             CAS(30)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28],
-             x[29]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28],
+                 x[29]);
             BR;
             CAS(31)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28],
-             x[29], x[30]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28],
+                 x[29], x[30]);
             BR;
             CAS(32)
-            (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
-             x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
-             x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28],
-             x[29], x[30], x[31]);
+                (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10],
+                 x[11], x[12], x[13], x[14], x[15], x[16], x[17], x[18], x[19],
+                 x[20], x[21], x[22], x[23], x[24], x[25], x[26], x[27], x[28],
+                 x[29], x[30], x[31]);
             BR;
-        default: {
-            runtimeError(ctxt, "Exceeded arg limit");
-            ctxt->ret(result);
-            return result;
-        }
+            default: {
+                         runtimeError(ctxt, "Exceeded arg limit");
+                         ctxt->ret(result);
+                         return result;
+                     }
         }
         result = convertResult(ctxt, res);
         ctxt->ret(result);
@@ -361,17 +351,17 @@ BUILTIN_CLASS(ForeignFunction) {
 }
 
 ForeignFunction::ForeignFunction(Ob* Cname, Tuple* argConverters,
-                                 Ob* rsltConverter, void* Caddr)
+        Ob* rsltConverter, void* Caddr)
     : AbstractForeignFunction(
-          Cname, argConverters, rsltConverter, Caddr, sizeof(ForeignFunction),
-          CLASS_META(ForeignFunction), CLASS_SBO(ForeignFunction)) {
-    // ForeignFunction is already calling it's version of updateCnt.
-    // Should we call this???
-    ForeignFunction::updateCnt();
-}
+            Cname, argConverters, rsltConverter, Caddr, sizeof(ForeignFunction),
+            CLASS_META(ForeignFunction), CLASS_SBO(ForeignFunction)) {
+        // ForeignFunction is already calling it's version of updateCnt.
+        // Should we call this???
+        ForeignFunction::updateCnt();
+    }
 
 ForeignFunction* ForeignFunction::create(Ob* Cname, Tuple* argConverters,
-                                         Ob* rsltConverter, void* Caddr) {
+        Ob* rsltConverter, void* Caddr) {
     void* loc =
         PALLOC3(sizeof(ForeignFunction), Cname, argConverters, rsltConverter);
     return new (loc)
@@ -465,36 +455,36 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
 
     for (i = 0; i < n; i++) {
         switch ((ArgConverter)FIXVAL(argConverters->elem(i))) {
-        case AC_FixnumToUnsignedLong:
-        case AC_FixnumToLong:
-        case AC_FixnumToInt:
-        case AC_FixnumToUnsignedShort:
-        case AC_FixnumToShort:
-        case AC_FixnumToUnsignedChar:
-        case AC_FixnumToChar:
-        case AC_FixnumToFloat:
-        case AC_FixnumToDouble:
-        case AC_FixnumToVoidStar:
-            CHECK_FIXNUM(i, dummyint);
-            break;
-        case AC_FloatToFloat:
-        case AC_FloatToDouble:
-            CHECK(i, Float, dummyfloat);
-            break;
-        case AC_BoolToInt:
-            CHECK(i, RblBool, dummyBool);
-            break;
-        case AC_StringToCharStar:
-            CHECK(i, RBLstring, dummystr);
-            break;
-        case AC_ByteVecToVoidStar:
-            /* pray a lot */
-            break;
-        case AC_Rosette:
-            break;
-        case nArgConverters:
-        default:
-            return runtimeError(ctxt, "unknown argument type");
+            case AC_FixnumToUnsignedLong:
+            case AC_FixnumToLong:
+            case AC_FixnumToInt:
+            case AC_FixnumToUnsignedShort:
+            case AC_FixnumToShort:
+            case AC_FixnumToUnsignedChar:
+            case AC_FixnumToChar:
+            case AC_FixnumToFloat:
+            case AC_FixnumToDouble:
+            case AC_FixnumToVoidStar:
+                CHECK_FIXNUM(i, dummyint);
+                break;
+            case AC_FloatToFloat:
+            case AC_FloatToDouble:
+                CHECK(i, Float, dummyfloat);
+                break;
+            case AC_BoolToInt:
+                CHECK(i, RblBool, dummyBool);
+                break;
+            case AC_StringToCharStar:
+                CHECK(i, RBLstring, dummystr);
+                break;
+            case AC_ByteVecToVoidStar:
+                /* pray a lot */
+                break;
+            case AC_Rosette:
+                break;
+            case nArgConverters:
+            default:
+                return runtimeError(ctxt, "unknown argument type");
         }
         nChars += argsize[FIXVAL(argConverters->elem(i))];
     }
@@ -521,105 +511,105 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
 
     for (i = 0; i < n; i++) {
         switch ((ArgConverter)FIXVAL(argConverters->elem(i))) {
-        case AC_FixnumToUnsignedLong: {
-            LONG_ARG* p = (LONG_ARG*)argp;
-            *p = (LONG_ARG)(unsigned long)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToLong: {
-            LONG_ARG* p = (LONG_ARG*)argp;
-            *p = (LONG_ARG)(long)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToInt: {
-            INT_ARG* p = (INT_ARG*)argp;
-            *p = (INT_ARG)(int)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToUnsignedShort: {
-            SHORT_ARG* p = (SHORT_ARG*)argp;
-            *p = (SHORT_ARG)(unsigned short)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToShort: {
-            SHORT_ARG* p = (SHORT_ARG*)argp;
-            *p = (SHORT_ARG)(short)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToUnsignedChar: {
-            CHAR_ARG* p = (CHAR_ARG*)argp;
-            *p = (CHAR_ARG)(unsigned char)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToChar: {
-            CHAR_ARG* p = (CHAR_ARG*)argp;
-            *p = (CHAR_ARG)(char)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToFloat: {
-            FLOAT_ARG* p = (FLOAT_ARG*)argp;
-            *p = (FLOAT_ARG)(float)FIXVAL(ARG(i));
-            break;
-        }
-        case AC_FixnumToDouble: {
-            /* Watch out for alignment problems here. */
-            LONG_ARG* p = (LONG_ARG*)argp;
-            union {
-                double f;
-                LONG_ARG ul[2];
-            } tmp;
-            tmp.f = (double)FIXVAL(ARG(i));
-            p[0] = tmp.ul[0];
-            p[1] = tmp.ul[1];
-            break;
-        }
-        case AC_FloatToFloat: {
-            FLOAT_ARG* p = (FLOAT_ARG*)argp;
-            *p = (FLOAT_ARG)(float)((Float*)ARG(i))->val;
-            break;
-        }
-        case AC_FloatToDouble: {
-            LONG_ARG* p = (LONG_ARG*)argp;
-            union {
-                double f;
-                LONG_ARG ul[2];
-            } tmp;
-            tmp.f = (double)((Float*)ARG(i))->val;
-            p[0] = tmp.ul[0];
-            p[1] = tmp.ul[1];
-            break;
-        }
-        case AC_BoolToInt: {
-            INT_ARG* p = (INT_ARG*)argp;
-            *p = (INT_ARG)(int)BOOLVAL(ARG(i));
-            break;
-        }
-        case AC_StringToCharStar: {
-            PTR_ARG* p = (PTR_ARG*)argp;
-            *p = (PTR_ARG) & ((RBLstring*)ARG(i))->byte(0);
-            break;
-        }
-        case AC_ByteVecToVoidStar: {
-            PTR_ARG* p = (PTR_ARG*)argp;
-            *p = (PTR_ARG) & ((ByteVec*)ARG(i))->byte(0);
-            break;
-        }
-        case AC_Rosette: {
-            PTR_ARG* p = (PTR_ARG*)argp;
-            *p = (PTR_ARG)ARG(i);
-            break;
-        }
-        case AC_FixnumToVoidStar: {
-            PTR_ARG* p = (PTR_ARG*)argp;
-            *p = (PTR_ARG)(void*)FIXVAL(ARG(i));
-            break;
-        }
-        case nArgConverters:
-            /*
-              * To silence the compiler while still allowing it to make
-                * sure that we have covered all cases.
-                  */
-            break;
+            case AC_FixnumToUnsignedLong: {
+                                              LONG_ARG* p = (LONG_ARG*)argp;
+                                              *p = (LONG_ARG)(unsigned long)FIXVAL(ARG(i));
+                                              break;
+                                          }
+            case AC_FixnumToLong: {
+                                      LONG_ARG* p = (LONG_ARG*)argp;
+                                      *p = (LONG_ARG)(long)FIXVAL(ARG(i));
+                                      break;
+                                  }
+            case AC_FixnumToInt: {
+                                     INT_ARG* p = (INT_ARG*)argp;
+                                     *p = (INT_ARG)(int)FIXVAL(ARG(i));
+                                     break;
+                                 }
+            case AC_FixnumToUnsignedShort: {
+                                               SHORT_ARG* p = (SHORT_ARG*)argp;
+                                               *p = (SHORT_ARG)(unsigned short)FIXVAL(ARG(i));
+                                               break;
+                                           }
+            case AC_FixnumToShort: {
+                                       SHORT_ARG* p = (SHORT_ARG*)argp;
+                                       *p = (SHORT_ARG)(short)FIXVAL(ARG(i));
+                                       break;
+                                   }
+            case AC_FixnumToUnsignedChar: {
+                                              CHAR_ARG* p = (CHAR_ARG*)argp;
+                                              *p = (CHAR_ARG)(unsigned char)FIXVAL(ARG(i));
+                                              break;
+                                          }
+            case AC_FixnumToChar: {
+                                      CHAR_ARG* p = (CHAR_ARG*)argp;
+                                      *p = (CHAR_ARG)(char)FIXVAL(ARG(i));
+                                      break;
+                                  }
+            case AC_FixnumToFloat: {
+                                       FLOAT_ARG* p = (FLOAT_ARG*)argp;
+                                       *p = (FLOAT_ARG)(float)FIXVAL(ARG(i));
+                                       break;
+                                   }
+            case AC_FixnumToDouble: {
+                                        /* Watch out for alignment problems here. */
+                                        LONG_ARG* p = (LONG_ARG*)argp;
+                                        union {
+                                            double f;
+                                            LONG_ARG ul[2];
+                                        } tmp;
+                                        tmp.f = (double)FIXVAL(ARG(i));
+                                        p[0] = tmp.ul[0];
+                                        p[1] = tmp.ul[1];
+                                        break;
+                                    }
+            case AC_FloatToFloat: {
+                                      FLOAT_ARG* p = (FLOAT_ARG*)argp;
+                                      *p = (FLOAT_ARG)(float)((Float*)ARG(i))->val;
+                                      break;
+                                  }
+            case AC_FloatToDouble: {
+                                       LONG_ARG* p = (LONG_ARG*)argp;
+                                       union {
+                                           double f;
+                                           LONG_ARG ul[2];
+                                       } tmp;
+                                       tmp.f = (double)((Float*)ARG(i))->val;
+                                       p[0] = tmp.ul[0];
+                                       p[1] = tmp.ul[1];
+                                       break;
+                                   }
+            case AC_BoolToInt: {
+                                   INT_ARG* p = (INT_ARG*)argp;
+                                   *p = (INT_ARG)(int)BOOLVAL(ARG(i));
+                                   break;
+                               }
+            case AC_StringToCharStar: {
+                                          PTR_ARG* p = (PTR_ARG*)argp;
+                                          *p = (PTR_ARG) & ((RBLstring*)ARG(i))->byte(0);
+                                          break;
+                                      }
+            case AC_ByteVecToVoidStar: {
+                                           PTR_ARG* p = (PTR_ARG*)argp;
+                                           *p = (PTR_ARG) & ((ByteVec*)ARG(i))->byte(0);
+                                           break;
+                                       }
+            case AC_Rosette: {
+                                 PTR_ARG* p = (PTR_ARG*)argp;
+                                 *p = (PTR_ARG)ARG(i);
+                                 break;
+                             }
+            case AC_FixnumToVoidStar: {
+                                          PTR_ARG* p = (PTR_ARG*)argp;
+                                          *p = (PTR_ARG)(void*)FIXVAL(ARG(i));
+                                          break;
+                                      }
+            case nArgConverters:
+                                      /*
+                                       * To silence the compiler while still allowing it to make
+                                       * sure that we have covered all cases.
+                                       */
+                                      break;
         }
 
         argp += argsize[FIXVAL(argConverters->elem(i))];
@@ -637,48 +627,48 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         LONG_ARG rslt = ff_single_helper(fn, marshallingArea, nChars);
 
         switch ((RsltConverter)FIXVAL(rsltConverter)) {
-        case RC_Void:
-            result = NIV;
-            break;
+            case RC_Void:
+                result = NIV;
+                break;
 
-        case RC_UnsignedLong:
-        case RC_Long:
-        case RC_Int:
-        case RC_UnsignedShort:
-        case RC_Short:
-        case RC_UnsignedChar:
-        case RC_Char:
-            result = FIXNUM(rslt);
-            break;
-
-        case RC_Float:
-            result = Float::create((double)rslt);
-            break;
-
-        case RC_Double:
-            suicide("unreachable case in ForeignFunction::dispatch");
-            break;
-
-        case RC_CharStar:
-            result = RBLstring::create((char*)rslt);
-            break;
-
-        case RC_Rosette:
-            result = (Ob*)rslt;
-            break;
-
-        case RC_VoidStar:
-            if (rslt & 0xc0000000L) {
-                return PRIM_ERROR("unrepresentable address");
-            } else {
+            case RC_UnsignedLong:
+            case RC_Long:
+            case RC_Int:
+            case RC_UnsignedShort:
+            case RC_Short:
+            case RC_UnsignedChar:
+            case RC_Char:
                 result = FIXNUM(rslt);
-            }
-            break;
+                break;
 
-        case RC_ByteVec:
-        case nRsltConverters:
-        default:
-            return PRIM_ERROR("unknown result type");
+            case RC_Float:
+                result = Float::create((double)rslt);
+                break;
+
+            case RC_Double:
+                suicide("unreachable case in ForeignFunction::dispatch");
+                break;
+
+            case RC_CharStar:
+                result = RBLstring::create((char*)rslt);
+                break;
+
+            case RC_Rosette:
+                result = (Ob*)rslt;
+                break;
+
+            case RC_VoidStar:
+                if (rslt & 0xc0000000L) {
+                    return PRIM_ERROR("unrepresentable address");
+                } else {
+                    result = FIXNUM(rslt);
+                }
+                break;
+
+            case RC_ByteVec:
+            case nRsltConverters:
+            default:
+                return PRIM_ERROR("unknown result type");
         }
     }
 
@@ -707,23 +697,16 @@ DEF("unix-load", unixLoad, 1, 3) {
     }
 
     switch (NARGS) {
-    case 3:
-        otherStr = BASE(ARG(2))->asPathname();
-        if (!otherStr)
-            return PRIM_MISMATCH(2, "String or Symbol");
+        case 3:
+            otherStr = BASE(ARG(2))->asPathname();
+            if (!otherStr)
+                return PRIM_MISMATCH(2, "String or Symbol");
 
-    case 2:
-        libStr = BASE(ARG(1))->asPathname();
-        if (!libStr)
-            return PRIM_MISMATCH(1, "String");
+        case 2:
+            libStr = BASE(ARG(1))->asPathname();
+            if (!libStr)
+                return PRIM_MISMATCH(1, "String");
     }
-
-    char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    if (loader->load(path, buf, libStr, otherStr)) {
-        return PRIM_ERROR(buf);
-    }
-#endif
 
     return NIV;
 }
@@ -749,13 +732,6 @@ DEF("wizard-load", unixWizardLoad, 1, 1) {
         return PRIM_MISMATCH(0, "String or Symbol");
     }
 
-    char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    if (loader->loadhelp(cmd, buf)) {
-        return PRIM_ERROR(buf);
-    }
-#endif
-
     return NIV;
 }
 
@@ -765,38 +741,18 @@ DEF("unix-resolve", unixResolve, 1, 1) {
     if (!name) {
         return PRIM_MISMATCH(0, "String or Symbol");
     }
-
-#if defined(DYNAMIC_LOADING)
-    void* addr = loader->resolve(name);
-#else
-    void* addr = 0;
-#endif
-
-    if (addr == 0) {
-        return ABSENT;
-    }
-
-    return FIXNUM((int)addr);
+    // NB(leaf): No dynamic loading support.
+    return ABSENT;
 }
 
 
 DEF("ff-new", ffNew, 3, 3) {
-    CHECK_SYM(0, Cname);
-    CHECK(1, Tuple, argConverters);
+    CHECK_SYM_NOVAR(0);
+    CHECK_NOVAR(1, Tuple);
 
-    const char* name = BASE(Cname)->asCstring();
     char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    void* addr = loader->resolve(name, buf);
-#else
-    void* addr = 0;
-#endif
-
-    if (0 == addr) {
-        return PRIM_ERROR(buf);
-    }
-
-    return ForeignFunction::create(Cname, argConverters, ARG(2), addr);
+    // NB(leaf): No dynamic loading support.
+    return PRIM_ERROR(buf);
 }
 
 DEF("ff-create", ffCreate, 4, 4) {

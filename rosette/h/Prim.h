@@ -124,6 +124,10 @@ class BuiltinPrim {
         return PRIM_MISMATCH((n), _STRING(type)); \
     type* var = (type*)ARG(n);
 
+#define CHECK_NOVAR(n, type)                      \
+    if (!IS_A(ARG(n), type))                      \
+        return PRIM_MISMATCH((n), _STRING(type)); \
+
 #define CHECK_FIXNUM(n, var)                 \
     if (!IS_FIXNUM(ARG(n)))                  \
         return PRIM_MISMATCH((n), "Fixnum"); \
@@ -133,6 +137,10 @@ class BuiltinPrim {
     if (!IS_SYM(ARG(n)))                     \
         return PRIM_MISMATCH((n), "Symbol"); \
     Ob* var = ARG(n);
+
+#define CHECK_SYM_NOVAR(n)                   \
+    if (!IS_SYM(ARG(n)))                     \
+        return PRIM_MISMATCH((n), "Symbol"); \
 
 #define CHECK_TYPE(n, typ, var)                   \
     if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \

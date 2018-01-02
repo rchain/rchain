@@ -393,7 +393,7 @@ DEF("set-obo", metaSetOBO, 4, 4) {
 DEF("lexvar", locLexvar, 3, 3) {
     CHECK_FIXNUM(0, level);
     CHECK_FIXNUM(1, offset);
-    CHECK(2, RblBool, indirect);
+    CHECK_NOVAR(2, RblBool);
     return LexVar(level, offset, ARG(2) == RBLTRUE).atom;
 }
 
@@ -402,8 +402,8 @@ DEF("bitfield", locBitfield, 5, 5) {
     CHECK_FIXNUM(0, level);
     CHECK_FIXNUM(1, offset);
     CHECK_FIXNUM(2, span);
-    CHECK(3, RblBool, indirect);
-    CHECK(4, RblBool, sign);
+    CHECK_NOVAR(3, RblBool);
+    CHECK_NOVAR(4, RblBool);
     return BitField(level, offset, span, ARG(3) == RBLTRUE, ARG(4) == RBLTRUE)
         .atom;
 }

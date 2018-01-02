@@ -201,7 +201,7 @@ DEF("istream-clear", istreamClear, 1, 2) {
 
 
 DEF("istream-rdstate", istreamRdState, 1, 1) {
-    CHECK(0, Istream, stream);
+    CHECK_NOVAR(0, Istream);
     return PRIM_ERROR("de-implemented");
 }
 
@@ -223,7 +223,6 @@ DEF("istream-close", istreamClose, 1, 1) {
 
 DEF("ostream-new", makeOstream, 1, 2) {
     char* path = BASE(ARG(0))->asPathname();
-    char* reason = "problem opening ostream";
     const char* mode = "a";
 
     if (!path) {

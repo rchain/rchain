@@ -686,8 +686,6 @@ SymbolNode* SymbolNode::create(pOb symbol, bool valueCtxt) {
 
 void SymbolNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
                             CompilationUnit* cu) {
-    extern pOb Qid;
-
     AttrNode::initialize(ctEnv, freeEnv, dest, cu);
     SET_FLAG(word, f_inlineableNode);
     SET_FLAG(word, f_simpleNode);
