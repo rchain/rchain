@@ -443,7 +443,7 @@ union HeaderBits {
     // NB(leaf): The heap allocation routines write information into the header
     // that need to be preserved, so any default ctor can't initialize any of
     // our variables. This needs to be fixed.
-    HeaderBits(){};
+    HeaderBits() {}
     HeaderBits(HeaderBits& hb) { all = hb.all; }
     HeaderBits(int sz) {
         all = 0;
@@ -541,7 +541,7 @@ class Ob : public Base {
     static char stringbuf[256];
 
     Ob(InPlace_Constructor*, int);
-    Ob(InPlace_Constructor*){};
+    Ob(InPlace_Constructor*) {}
 
     Ob(InPlace_Constructor*, pOb meta, pOb parent) {
         ASSIGN(this, meta(), meta);
