@@ -983,8 +983,11 @@ void CompoundNode::fixInlinedConflicts(ArgNum* free, int freeTop) {
         nj = (AttrNode*)SELF->inlined.exprs->elem(j);
         // NB(leaf): Cast the 2nd argument, which is unsigned, to avoid type
         // error.
-        highest_j = std::max(nj->av_size - 1, (int)GET_ARGREG_INDEX(nj->dest));
-        if (GET_ARGREG_INDEX(ni->dest) <= highest_j) {
+        int argreg_index_nj = (int)GET_ARGREG_INDEX(nj->dest);
+        int argreg_index_ni = (int)GET_ARGREG_INDEX(ni->dest);
+        highest_j = std::max(nj->av_size - 1, argreg_index_nj);
+
+        if (argreg_index_ni <= highest_j) {
             int tempReg = (freeTop > 0 && free[freeTop - 1] > highest_j)
                               ? free[--freeTop]
                               : nextTemp++;

@@ -78,7 +78,8 @@ extern uint32_t* mem_set_field(uint32_t* addr, int offset, int span,
 
 // some useful defines so i don't have to remember the accessors
 
-static int local_page_size = getpagesize();
+// NB(leaf): From BaseSupp.cc.
+extern uint32_t local_page_size;
 
 #define TUPLE_HEAD(a_tup, index) (a_tup->elem(index))
 #define TUPLE_TAIL(a_tup, index) (index++)
@@ -90,7 +91,6 @@ static int local_page_size = getpagesize();
 #define TYPEP(obj1, obj2) (obj1->typep(obj2) == RBLTRUE)
 #define TYPEGTRP(obj1, obj2) (typeGreaterEq(obj1, obj2))
 #define ISNULLP(obj) (obj->isNullP() == RBLTRUE)
-#define VALID_ADDR(addr) (addr >= ::local_page_size)
 #define GET_STRING(rstr) ((const char*)&(((RBLstring*)rstr)->byte(0)))
 
 /************************************************************/
@@ -1040,7 +1040,7 @@ Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
                     int pindex) {
     if (STRINGP(val)) {
         uint32_t addr = base + _offset;
-        if (VALID_ADDR(addr)) {
+        if (addr >= local_page_size) {
             char* tmp = (char*)GET_STRING(val);
             (void)strncpy((char*)addr, tmp, _numElems);
             return NIV;
@@ -1063,7 +1063,7 @@ Ob* CharArray::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
 
     if ((chck = occtxt->getKey(selfTag)) == ABSENT) {
         uint32_t addr = base + _offset;
-        if (VALID_ADDR(addr)) {
+        if (addr >= local_page_size) {
             Ob* rslt = RBLstring::create((int)_size, (char*)addr);
             PROTECT(rslt);
             occtxt->addKey(selfTag, rslt);
@@ -1125,7 +1125,7 @@ Ob* CharArray0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
 
     if ((chck = occtxt->getKey(selfTag)) == ABSENT) {
         uint32_t addr = base + _offset;
-        if (VALID_ADDR(addr)) {
+        if (addr >= local_page_size) {
             Ob* rslt = RBLstring::create((char*)addr);
             PROTECT(rslt);
             occtxt->addKey(selfTag, rslt);
@@ -1202,9 +1202,9 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
 
     GenericDescriptor* gobj = (GenericDescriptor*)obj;
     if (TYPEP(SELF, obj)) {
-        if (VALID_ADDR(gobj->_offset)) {
+        if (gobj->_offset >= local_page_size) {
             uint32_t addr = gobj->absoluteAddress(0);
-            if (VALID_ADDR(addr)) {
+            if (addr >= local_page_size) {
                 cnvArgRetPair.val = addr;
             } else {
                 cnvArgRetPair.val = (uint32_t)-1;
@@ -1215,7 +1215,7 @@ convertArgReturnPair CRef::convertActualArg(Ctxt* ctxt, Ob* obj) {
             cnvArgRetPair.failp = 1;
         }
     } else if (TYPEP(SELF->_desc, obj)) {
-        if (VALID_ADDR(gobj->_offset)) {
+        if (gobj->_offset >= local_page_size) {
             cnvArgRetPair.val = gobj->_offset;
         } else {
             cnvArgRetPair.val = (uint32_t)-1;
@@ -1383,7 +1383,7 @@ Ob* CharRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
         char* saddr = new char[stmp->numberOfBytes()];
 
 #ifdef MEMORYCAUTIOUS
-        if (VALID_ADDR(prev)) {
+        if (prev >= local_page_size) {
             (void)free((char*)prev);
         }
 #endif
@@ -1404,7 +1404,7 @@ convertArgReturnPair CharRef::convertActualArg(Ctxt* ctxt, Ob* arg) {
         // What goes here?
         cnvArgRetPair.val = absoluteAddress(0);
     } else if (TYPEGTRP(obCharArray, obj)) {
-        if (VALID_ADDR(obj->_offset)) {
+        if (obj->_offset >= local_page_size) {
             cnvArgRetPair.val = obj->_offset;
         } else {
             cnvArgRetPair.val = (uint32_t)-1;
@@ -1553,7 +1553,7 @@ Ob* CharRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
     if (addr == 0) {
         return (obChar->nullDescriptor(ctxt));
     } else {
-        if (VALID_ADDR(addr)) {
+        if (addr >= local_page_size) {
             return (RBLstring::create((char*)addr));
         } else {
             return runtimeError(ctxt, "invalid address");
