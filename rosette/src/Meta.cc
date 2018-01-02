@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -72,7 +73,7 @@ pMeta StdMeta::create(pTuple map, pOb ref_count, pOb extensible) {
     ext->slot(STDMETA_EXTENSIBLE_SLOT) = extensible;
 
     void* loc = PALLOC1(sizeof(StdMeta), ext);
-    return NEW(loc) StdMeta(ext);
+    return new (loc) StdMeta(ext);
 }
 
 
@@ -247,7 +248,7 @@ void StdMeta::allocateMap() {
 
 
 void StdMeta::becomeIndexed(int start_indexed_part) {
-    NEW(this) IndexedMeta(this, start_indexed_part);
+    new (this) IndexedMeta(this, start_indexed_part);
 }
 
 

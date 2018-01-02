@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -62,7 +63,7 @@ IdPattern::IdPattern(Ob* sym)
 
 IdPattern* IdPattern::create(Ob* sym) {
     void* loc = PALLOC1(sizeof(IdPattern), sym);
-    return NEW(loc) IdPattern(sym);
+    return new (loc) IdPattern(sym);
 }
 
 
@@ -93,7 +94,7 @@ ConstPattern::ConstPattern(Ob* val)
 
 ConstPattern* ConstPattern::create(Ob* val) {
     void* loc = PALLOC1(sizeof(ConstPattern), val);
-    return NEW(loc) ConstPattern(val);
+    return new (loc) ConstPattern(val);
 }
 
 
@@ -141,7 +142,7 @@ IdVecPattern::IdVecPattern(TupleExpr* te)
 
 IdVecPattern* IdVecPattern::create(TupleExpr* te) {
     void* loc = PALLOC1(sizeof(IdVecPattern), te);
-    return NEW(loc) IdVecPattern(te);
+    return new (loc) IdVecPattern(te);
 }
 
 
@@ -205,7 +206,7 @@ IdAmperRestPattern::IdAmperRestPattern(TupleExpr* te)
 
 IdAmperRestPattern* IdAmperRestPattern::create(TupleExpr* te) {
     void* loc = PALLOC1(sizeof(IdAmperRestPattern), te);
-    return NEW(loc) IdAmperRestPattern(te);
+    return new (loc) IdAmperRestPattern(te);
 }
 
 
@@ -306,7 +307,7 @@ ComplexPattern* ComplexPattern::create(TupleExpr* te) {
     }
 
     void* loc = PALLOC(sizeof(ComplexPattern));
-    return NEW(loc) ComplexPattern(te, pv, ov);
+    return new (loc) ComplexPattern(te, pv, ov);
 }
 
 
@@ -432,7 +433,7 @@ Template* Template::create(TupleExpr* te) {
     StdMeta* keymeta = StdMeta::create(keys, FIXNUM(1), RBLFALSE);
 
     void* loc = PALLOC1(sizeof(Template), keymeta);
-    return NEW(loc) Template(keys, keymeta, pat);
+    return new (loc) Template(keys, keymeta, pat);
 }
 
 
@@ -443,7 +444,7 @@ Template* Template::create(Tuple* keys, Ob* keymeta, CompoundPattern* pat) {
      */
 
     void* loc = PALLOC3(sizeof(Template), keys, keymeta, pat);
-    return NEW(loc) Template(keys, keymeta, pat);
+    return new (loc) Template(keys, keymeta, pat);
 }
 
 
@@ -459,7 +460,7 @@ Ob* Template::cloneTo(Ob* new_meta, Ob* new_parent) {
 }
 
 
-Pattern* TupleExpr::makePattern(EMPTY) {
+Pattern* TupleExpr::makePattern() {
     if (this == NILexpr) {
         return NILpattern;
     }
@@ -482,7 +483,7 @@ Pattern* TupleExpr::makePattern(EMPTY) {
 }
 
 
-Template* TupleExpr::makeTemplate(EMPTY) {
+Template* TupleExpr::makeTemplate() {
     if (this == NILexpr) {
         return NILtemplate;
     } else if (rest != NILexpr && !IS_SYM(rest)) {

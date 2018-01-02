@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -19,13 +20,8 @@
 #include "Ctxt.h"
 
 #include <unistd.h>
-#include <osfcn.h>
-#ifndef NO_SYSENT_H
-#include <sysent.h>
-#endif
 
 #include "Cstruct.h"
-
 #include "RblAtom.h"
 #include "BinaryOb.h"
 #include "Heap.h"
@@ -304,7 +300,7 @@ GenericDescriptor::~GenericDescriptor() {
 GenericDescriptor* GenericDescriptor::create() {
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(GenericDescriptor), ext);
-    return NEW(loc) GenericDescriptor(ext);
+    return new (loc) GenericDescriptor(ext);
 }
 
 int GenericDescriptor::traversePtrs(PSOb__PSOb f) {
@@ -567,7 +563,7 @@ NullDescriptor::NullDescriptor(pExt ext)
 NullDescriptor* NullDescriptor::create() {
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(NullDescriptor), ext);
-    return NEW(loc) NullDescriptor(ext);
+    return new (loc) NullDescriptor(ext);
 }
 
 Ob* NullDescriptor::sGet(Ctxt*, uint32_t, Tuple*, int) {
@@ -639,13 +635,13 @@ AtomicDescriptor* AtomicDescriptor::create(RblBool* b) {
     PROTECT(b);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(AtomicDescriptor), ext);
-    return NEW(loc) AtomicDescriptor(b, ext);
+    return new (loc) AtomicDescriptor(b, ext);
 }
 
 AtomicDescriptor* AtomicDescriptor::create() {
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(AtomicDescriptor), ext);
-    return NEW(loc) AtomicDescriptor((RblBool*)RBLFALSE, ext);
+    return new (loc) AtomicDescriptor((RblBool*)RBLFALSE, ext);
 }
 
 int AtomicDescriptor::traversePtrs(PSOb__PSOb f) {
@@ -756,7 +752,7 @@ CStructure* CStructure::create(RblTable* tbl, Tuple* tup) {
     PROTECT(tup);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CStructure), ext);
-    return NEW(loc) CStructure(tbl, tup, ext);
+    return new (loc) CStructure(tbl, tup, ext);
 }
 
 CStructure* CStructure::create() {
@@ -764,7 +760,7 @@ CStructure* CStructure::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CStructure), ext);
-    return NEW(loc) CStructure(tmp, NIL, ext);
+    return new (loc) CStructure(tmp, NIL, ext);
 }
 
 int CStructure::traversePtrs(PSOb__PSOb f) {
@@ -922,7 +918,7 @@ CArray* CArray::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CArray), ext);
-    return NEW(loc) CArray(cnt, elmd, ext);
+    return new (loc) CArray(cnt, elmd, ext);
 }
 
 CArray* CArray::create() {
@@ -930,7 +926,7 @@ CArray* CArray::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CArray), ext);
-    return NEW(loc) CArray(0, tmp, ext);
+    return new (loc) CArray(0, tmp, ext);
 }
 
 int CArray::traversePtrs(PSOb__PSOb f) {
@@ -1029,7 +1025,7 @@ CharArray* CharArray::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharArray), ext);
-    return NEW(loc) CharArray(cnt, elmd, ext);
+    return new (loc) CharArray(cnt, elmd, ext);
 }
 
 CharArray* CharArray::create() {
@@ -1037,7 +1033,7 @@ CharArray* CharArray::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharArray), ext);
-    return NEW(loc) CharArray(0, tmp, ext);
+    return new (loc) CharArray(0, tmp, ext);
 }
 
 Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
@@ -1107,7 +1103,7 @@ CharArray0* CharArray0::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharArray0), ext);
-    return NEW(loc) CharArray0(cnt, elmd, ext);
+    return new (loc) CharArray0(cnt, elmd, ext);
 }
 
 CharArray0* CharArray0::create() {
@@ -1115,7 +1111,7 @@ CharArray0* CharArray0::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharArray0), ext);
-    return NEW(loc) CharArray0(0, tmp, ext);
+    return new (loc) CharArray0(0, tmp, ext);
 }
 
 Ob* CharArray0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1174,7 +1170,7 @@ CRef* CRef::create(GenericDescriptor* elemd) {
     PROTECT(elemd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CRef), ext);
-    return NEW(loc) CRef(elemd, ext);
+    return new (loc) CRef(elemd, ext);
 }
 
 CRef* CRef::create() {
@@ -1182,7 +1178,7 @@ CRef* CRef::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CRef), ext);
-    return NEW(loc) CRef(tmp, ext);
+    return new (loc) CRef(tmp, ext);
 }
 
 int CRef::traversePtrs(PSOb__PSOb f) {
@@ -1366,7 +1362,7 @@ CharRef* CharRef::create(GenericDescriptor* elemd) {
     PROTECT(elemd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharRef), ext);
-    return NEW(loc) CharRef(elemd, ext);
+    return new (loc) CharRef(elemd, ext);
 }
 
 CharRef* CharRef::create() {
@@ -1374,7 +1370,7 @@ CharRef* CharRef::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharRef), ext);
-    return NEW(loc) CharRef(tmp, ext);
+    return new (loc) CharRef(tmp, ext);
 }
 
 Ob* CharRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
@@ -1464,7 +1460,7 @@ CRef0* CRef0::create(GenericDescriptor* elemd) {
     PROTECT(elemd);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CRef0), ext);
-    return NEW(loc) CRef0(elemd, ext);
+    return new (loc) CRef0(elemd, ext);
 }
 
 CRef0* CRef0::create() {
@@ -1472,7 +1468,7 @@ CRef0* CRef0::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CRef0), ext);
-    return NEW(loc) CRef0(tmp, ext);
+    return new (loc) CRef0(tmp, ext);
 }
 
 Ob* CRef0::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
@@ -1546,7 +1542,7 @@ CharRef0::CharRef0(pExt ext)
 CharRef0* CharRef0::create() {
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CharRef0), ext);
-    return NEW(loc) CharRef0(ext);
+    return new (loc) CharRef0(ext);
 }
 
 Ob* CharRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1630,7 +1626,7 @@ CUnion* CUnion::create(RblTable* tbl, Tuple* tup) {
     PROTECT(tup);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CUnion), ext);
-    return NEW(loc) CUnion(tbl, tup, ext);
+    return new (loc) CUnion(tbl, tup, ext);
 }
 
 CUnion* CUnion::create() {
@@ -1638,7 +1634,7 @@ CUnion* CUnion::create() {
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(CUnion), ext);
-    return NEW(loc) CUnion(tmp, NIL, ext);
+    return new (loc) CUnion(tmp, NIL, ext);
 }
 
 int CUnion::traversePtrs(PSOb__PSOb f) {

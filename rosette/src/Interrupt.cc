@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -28,28 +29,26 @@ int interruptPending = 0;
 int arithmeticException = 0;
 
 
-#define FORMALS int sig, int code
-
-void interruptHandler(FORMALS) {
+void interruptHandler(int signal) {
     interruptPending++;
     vm->acceptSignal(SIGINT);
 
 #ifdef REINSTALL_SIGNALS
-    (SIG_PF) signal(SIGINT, (SIG_PF)&interruptHandler);
+    signal(SIGINT, &interruptHandler);
 #endif
 }
 
 
-void exceptionHandler(FORMALS) {
+void exceptionHandler(int signal) {
     arithmeticException++;
 
 #ifdef REINSTALL_SIGNALS
-    (SIG_PF) signal(SIGFPE, (SIG_PF)&exceptionHandler);
+    signal(SIGFPE, &exceptionHandler);
 #endif
 }
 
 
-void RosetteSignalHandler(FORMALS) {
+void RosetteSignalHandler(int signal) {
 #ifdef DEBUG_SIGNALS
     printf("*** rosette signal: sig %d\n", sig);
 #endif
@@ -61,35 +60,35 @@ void RosetteSignalHandler(FORMALS) {
     }
 #endif
 
-    vm->acceptSignal(sig);
+    vm->acceptSignal(signal);
 
 #ifdef REINSTALL_SIGNALS
-    (SIG_PF) signal(SIGIO, (SIG_PF)&RosetteSignalHandler);
+    signal(SIGIO, &RosetteSignalHandler);
 #ifdef HANDLE_POLL_WITH_IO
-    (SIG_PF) signal(SIGPOLL, (SIG_PF)&RosetteSignalHandler);
+    signal(SIGPOLL, &RosetteSignalHandler);
 #endif
 #ifdef NEED_ALARM
-    (SIG_PF) signal(SIGALRM, (SIG_PF)&RosetteSignalHandler);
+    signal(SIGALRM, &RosetteSignalHandler);
 #endif
 #endif
 }
 
 
 void handleInterrupts() {
-    SIG_PF oldHandler = (SIG_PF)signal(SIGINT, (SIG_PF)&interruptHandler);
-    SIG_PF oldExcpt = (SIG_PF)signal(SIGFPE, (SIG_PF)&exceptionHandler);
+    auto oldHandler = signal(SIGINT, &interruptHandler);
+    auto oldExcpt = signal(SIGFPE, &exceptionHandler);
 
-    if (oldHandler == (SIG_PF)SIG_ERR || oldExcpt == (SIG_PF)SIG_ERR) {
+    if (oldHandler == SIG_ERR || oldExcpt == SIG_ERR) {
         suicide(sys_errmsg());
     }
 }
 
 
 void ignoreInterrupts() {
-    SIG_PF oldHandler = (SIG_PF)signal(SIGINT, (SIG_PF)SIG_DFL);
-    SIG_PF oldExcpt = (SIG_PF)signal(SIGFPE, (SIG_PF)SIG_DFL);
+    auto oldHandler = signal(SIGINT, SIG_DFL);
+    auto oldExcpt = signal(SIGFPE, SIG_DFL);
 
-    if (oldHandler == (SIG_PF)SIG_ERR || oldExcpt == (SIG_PF)SIG_ERR) {
+    if (oldHandler == SIG_ERR || oldExcpt == SIG_ERR) {
         suicide(sys_errmsg());
     }
 }
@@ -103,7 +102,6 @@ void RosetteIoHandler(VM_EVENT type, int fd, void*) {
 #endif
 
     if (type == VM_READ_EVENT) {
-        DO_UNGETC;
         vm->initiateRosetteIo(fd);
     } else {
         warning("ignoring %s event on file %d", eventName[type], fd);
@@ -122,9 +120,8 @@ DEF("sig-catch", sigCatch, 2, 2) {
             return PRIM_ERROR(sys_errmsg());
         }
     } else {
-        void (*fn)(FORMALS);
-        fn = &RosetteSignalHandler;
-        if (vm->addSignalHandler(sig, (SIG_PF)fn, ARG(1)) == -1) {
+        sighandler_t fn = &RosetteSignalHandler;
+        if (vm->addSignalHandler(sig, fn, ARG(1)) == -1) {
             return PRIM_ERROR(sys_errmsg());
         }
     }
@@ -159,7 +156,7 @@ DEF("prim-handle-alarm", obHandleAlarm, 2, 2) {
 
 DEF_OPRN(Std, "handle-alarm", oprnHandleAlarm, obHandleAlarm);
 
-void timeServiceHandler(FORMALS) {
+void timeServiceHandler(int signal) {
 #if defined(sparc)
     Tuple* tshinfo = (Tuple*)(vm->sigPool[sig]);
     PROTECT(tshinfo);
@@ -271,8 +268,7 @@ else install handler and add etc. */
     Tuple* sleeper;
     if (vm->sigPool[SIGALRM] == INVALID) {
         Tuple* coccoon;
-        void (*fn)(FORMALS);
-        fn = &timeServiceHandler;
+        auto fn = &timeServiceHandler;
 
         /* See timeServiceHandler for Data Structure setup.
            0th entry is the min interval.
@@ -299,7 +295,7 @@ else install handler and add etc. */
             coccoon->setNth(1, sleeper);
         }
 
-        if (vm->addSignalHandler(SIGALRM, (SIG_PF)fn, coccoon) == -1) {
+        if (vm->addSignalHandler(SIGALRM, fn, coccoon) == -1) {
             return PRIM_ERROR(sys_errmsg());
         }
 

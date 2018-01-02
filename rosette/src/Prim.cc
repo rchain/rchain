@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -43,7 +44,7 @@ Prim::Prim(char* s, PRIMFN* f, int min, int max)
 
 Prim* Prim::create(char* s, PRIMFN* f, int min, int max) {
     void* loc = PALLOC(sizeof(Prim));
-    return NEW(loc) Prim(s, f, min, max);
+    return new (loc) Prim(s, f, min, max);
 }
 
 

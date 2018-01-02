@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -1347,15 +1348,15 @@ Ob* VirtualMachine::upcall(Ctxt* k) {
 void VirtualMachine::scheduleStrand(pCtxt strand) { strandPool->enq(strand); }
 
 
-int VirtualMachine::addSignalHandler(int sig, SIG_PF fn, Ob* ob) {
-    SIG_PF oldFn = (SIG_PF)signal(sig, fn);
-    if (oldFn == (SIG_PF)SIG_ERR) {
+int VirtualMachine::addSignalHandler(int sig, sighandler_t fn, Ob* ob) {
+    auto oldFn = signal(sig, fn);
+    if (SIG_ERR == oldFn) {
         return -1;
     } else {
-        if (oldFn == (SIG_PF)SIG_DFL) {
-            nsigs += (fn != (SIG_PF)SIG_DFL);
+        if (SIG_DFL == oldFn) {
+            nsigs += (SIG_DFL != fn);
         } else {
-            nsigs -= (fn == (SIG_PF)SIG_DFL);
+            nsigs -= (SIG_DFL == fn);
         }
         sigPool[sig] = ob;
         return 0;
@@ -1364,7 +1365,7 @@ int VirtualMachine::addSignalHandler(int sig, SIG_PF fn, Ob* ob) {
 
 
 int VirtualMachine::deleteSignalHandler(int sig) {
-    return addSignalHandler(sig, (SIG_PF)SIG_DFL);
+    return addSignalHandler(sig, SIG_DFL);
 }
 
 
@@ -1483,12 +1484,12 @@ void VirtualMachine::addIoHandler(int fd, IO_HANDLER* fn, void* ob, int rbl) {
      */
 
     if (nfds == 0) {
-        addSignalHandler(SIGIO, (SIG_PF)&RosetteSignalHandler);
+        addSignalHandler(SIGIO, &RosetteSignalHandler);
 #ifdef HANDLE_POLL_WITH_IO
-        addSignalHandler(SIGPOLL, (SIG_PF)&RosetteSignalHandler);
+        addSignalHandler(SIGPOLL, &RosetteSignalHandler);
 #endif
 #ifdef NEED_ALARM
-        addSignalHandler(SIGALRM, (SIG_PF)&RosetteSignalHandler);
+        addSignalHandler(SIGALRM, &RosetteSignalHandler);
 #endif
     }
     /*
