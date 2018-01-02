@@ -245,6 +245,7 @@ void* Space::alloc(unsigned sz) {
         next = temp;
         return current;
     }
+
     return 0;
 }
 
