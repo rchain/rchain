@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,21 +17,9 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Queue.h"
-
 #include "Prim.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 BUILTIN_CLASS(Queue) {
@@ -65,7 +54,7 @@ Queue::Queue(int sz, Ob* meta, Ob* parent, Tuple* elems)
 Queue* Queue::create() {
     Tuple* elems = Tuple::create(DefaultQueueSize, NIV);
     void* loc = PALLOC1(sizeof(Queue), elems);
-    return NEW(loc) Queue(elems);
+    return new (loc) Queue(elems);
 }
 
 
@@ -89,14 +78,15 @@ void Queue::enqueue(Ob* val) {
         qTail = FIXNUM((qt + 1) % qcapacity);
         FIXNUM_INC(nElems);
         ASSIGN(elems, elem(qt), val);
-    }
-    else {
+    } else {
         PROTECT_THIS(Queue);
         PROTECT(val);
         Tuple* new_elems = Tuple::create(2 * qcapacity, NIV);
         int i = 0;
-        for (; i < qsize; (i++, qh = (qh + 1) % qcapacity))
+        for (; i < qsize; (i++, qh = (qh + 1) % qcapacity)) {
             new_elems->elem(i) = SELF->elems->elem(qh);
+        }
+
         new_elems->elem(qsize) = val;
         SELF->qHead = FIXNUM(0);
         SELF->qTail = FIXNUM(qsize + 1);
@@ -121,8 +111,9 @@ void Queue::reset() {
     qHead = FIXNUM(0);
     qTail = FIXNUM(0);
     nElems = FIXNUM(0);
-    for (int i = elems->numberOfElements(); i--;)
+    for (int i = elems->numberOfElements(); i--;) {
         elems->elem(i) = NIV;
+    }
 }
 
 
@@ -145,9 +136,12 @@ Ob* Queue::setNth(int n, Ob* val) {
 Ob* Queue::subObject(int start, int size) {
     PROTECT_THIS(Queue);
     Queue* new_queue = Queue::create();
-    Tuple* new_elems = Tuple::create(SELF->elems->numberOfElements(), NIV);
-    while (size--)
+    Tuple::create(SELF->elems->numberOfElements(), NIV);
+
+    while (size--) {
         new_queue->enqueue(SELF->nth(start++));
+    }
+
     return new_queue;
 }
 
@@ -165,11 +159,13 @@ Ob* Queue::patternDequeue(Tuple* pat) {
                 elems->elem(qh) = elems->elem(new_qh);
                 qh = new_qh;
             }
+
             elems->elem(qh) = NIV;
             qTail = FIXNUM(qt == 0 ? qcapacity - 1 : qt - 1);
             FIXNUM_DEC(nElems);
             return msg;
         }
+
         qh = (qh + 1) % qcapacity;
     }
 
@@ -183,8 +179,10 @@ Ob* Queue::patternRead(Tuple* pat) {
 
     while (qsize--) {
         Ob* msg = elems->elem(qh);
-        if ((IS_A(msg, Tuple)) && (pat->matches((Tuple*)msg)))
+        if ((IS_A(msg, Tuple)) && (pat->matches((Tuple*)msg))) {
             return msg;
+        }
+
         qh = (qh + 1) % qcapacity;
     }
 
@@ -194,8 +192,9 @@ Ob* Queue::dequeueNth(int n) {
     int qcapacity = elems->numberOfElements();
     int qsize = FIXVAL(nElems);
 
-    if ((n < 0) || (n >= qsize))
+    if ((n < 0) || (n >= qsize)) {
         return ABSENT;
+    }
 
     int qh = (FIXVAL(qHead) + n) % qcapacity;
     int qt = FIXVAL(qTail);
@@ -208,6 +207,7 @@ Ob* Queue::dequeueNth(int n) {
         elems->elem(qh) = elems->elem(new_qh);
         qh = new_qh;
     }
+
     elems->elem(qh) = NIV;
     qTail = FIXNUM(qt == 0 ? qcapacity - 1 : qt - 1);
     FIXNUM_DEC(nElems);
@@ -233,7 +233,7 @@ MboxQueue::MboxQueue(Tuple* elems)
 MboxQueue* MboxQueue::create() {
     Tuple* elems = Tuple::create(DefaultQueueSize, NIV);
     void* loc = PALLOC1(sizeof(MboxQueue), elems);
-    return NEW(loc) MboxQueue(elems);
+    return new (loc) MboxQueue(elems);
 }
 
 
@@ -252,11 +252,13 @@ Ob* MboxQueue::maybeDequeue(Ob* enabledSet) {
                 elems->elem(qh) = elems->elem(new_qh);
                 qh = new_qh;
             }
+
             elems->elem(qh) = NIV;
             qTail = FIXNUM(qt == 0 ? qcapacity - 1 : qt - 1);
             FIXNUM_DEC(nElems);
             return msg;
         }
+
         qh = (qh + 1) % qcapacity;
     }
 
@@ -301,23 +303,25 @@ DEF("queue-read", queueRead, 1, 1) {
 DEF("queue-pat-dequeue", queuePDequeue, 2, 2) {
     CHECK(0, Queue, queue);
     CHECK(1, Tuple, pat);
-    if (queue->isEmpty())
+    if (queue->isEmpty()) {
         return ABSENT;
-    else if (pat == NIL)
+    } else if (pat == NIL) {
         return queue->dequeue();
-    else
+    } else {
         return queue->patternDequeue(pat);
+    }
 }
 
 DEF("queue-pat-read", queuePRead, 2, 2) {
     CHECK(0, Queue, queue);
     CHECK(1, Tuple, pat);
-    if (queue->isEmpty())
+    if (queue->isEmpty()) {
         return ABSENT;
-    else if (pat == NIL)
+    } else if (pat == NIL) {
         return queue->elems->elem(FIXVAL(queue->qHead));
-    else
+    } else {
         return queue->patternRead(pat);
+    }
 }
 
 DEF("queue-read-nth", queueReadNth, 2, 2) {
@@ -325,8 +329,9 @@ DEF("queue-read-nth", queueReadNth, 2, 2) {
     CHECK_FIXNUM(1, n);
     int qsize = FIXVAL(queue->nElems);
 
-    if ((n < 0) || (n >= qsize))
+    if ((n < 0) || (n >= qsize)) {
         return ABSENT;
+    }
 
     int i = (FIXVAL(queue->qHead) + n) % queue->elems->numberOfElements();
 

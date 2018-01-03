@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,19 +17,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Cstruct_h)
 #define _RBL_Cstruct_h 1
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "rosette.h"
 
@@ -59,7 +49,7 @@ class GenericDescriptor : public Actor {
      */
 
     uint32_t _offset, _align_to, _size; /* memory map */
-    Ob* mnemonic;                     /* was consed up from rosette heap */
+    Ob* mnemonic;                       /* was consed up from rosette heap */
     Ob* imported;
     /* was returned by a foreign function or is a */
     /* substructure of a critter returned by a ff */
@@ -89,22 +79,22 @@ class GenericDescriptor : public Actor {
 
     virtual Ob* oprnSwitch(Ctxt* ctxt, uint32_t base, Tuple* path,
                            int pindex = 0);
-    Ob* sBox(uint32_t);
+
+    Ob* sBox(uint32_t off) {
+        GenericDescriptor* rslt = (GenericDescriptor*)cloneTo(meta(), parent());
+        rslt->mbox = emptyMbox;
+        rslt->_offset = off;
+        rslt->imported = imported;
+        rslt->freeStructOnGC = freeStructOnGC;
+
+        /* should rslt be registered as a foreign ob? */
+        return (rslt);
+    }
 
     virtual uint32_t absoluteAddress(uint32_t base);
     void setAddrContents(uint32_t base, uint32_t val);
 };
 
-inline Ob* GenericDescriptor::sBox(uint32_t off) {
-    GenericDescriptor* rslt = (GenericDescriptor*)cloneTo(meta(), parent());
-    rslt->mbox = emptyMbox;
-    rslt->_offset = off;
-    rslt->imported = imported;
-    rslt->freeStructOnGC = freeStructOnGC;
-
-    /* should rslt be registered as a foreign ob? */
-    return (rslt);
-}
 
 class NullDescriptor : public GenericDescriptor {
     STD_DECLS(NullDescriptor);
@@ -129,6 +119,7 @@ class NullDescriptor : public GenericDescriptor {
 
     virtual uint32_t absoluteAddress(uint32_t base);
 };
+
 
 class AtomicDescriptor : public GenericDescriptor {
     STD_DECLS(AtomicDescriptor);
@@ -157,6 +148,7 @@ class AtomicDescriptor : public GenericDescriptor {
     virtual uint32_t absoluteAddress(uint32_t base);
 };
 
+
 class CStructure : public GenericDescriptor {
     STD_DECLS(CStructure);
 
@@ -179,6 +171,7 @@ class CStructure : public GenericDescriptor {
                           int pindex = 0);
     virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
+
 
 class CArray : public GenericDescriptor {
     STD_DECLS(CArray);
@@ -206,6 +199,7 @@ class CArray : public GenericDescriptor {
     virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
+
 class CharArray : public CArray {
     STD_DECLS(CharArray);
 
@@ -222,6 +216,7 @@ class CharArray : public CArray {
     virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
 
+
 class CharArray0 : public CharArray {
     STD_DECLS(CharArray0);
 
@@ -234,6 +229,7 @@ class CharArray0 : public CharArray {
 
     virtual Ob* flatten(Ctxt* ctxt, uint32_t base, RblTable*);
 };
+
 
 class CRef : public GenericDescriptor {
     STD_DECLS(CRef);
@@ -262,6 +258,7 @@ class CRef : public GenericDescriptor {
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
     virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 };
+
 
 class CharRef : public CRef {
     STD_DECLS(CharRef);
@@ -310,6 +307,7 @@ class CharRef0 : public CRef0 {
                      int pindex = 0);
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
 };
+
 
 class CUnion : public GenericDescriptor {
     STD_DECLS(CUnion);

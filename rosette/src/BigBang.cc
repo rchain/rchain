@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,35 +17,16 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 
 #include <stdarg.h>
+#include <cerrno>
 
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/file.h>
 #include <sys/types.h>
 #include <fcntl.h>
-
-#ifndef __GNUG__
-#ifndef SYSV4
-#include <osfcn.h>
-#endif
-#endif
-
-#ifdef SYSV4
-#include <stropts.h>
-#endif
 
 #include "RblAtom.h"
 #include "CommandLine.h"
@@ -72,9 +54,7 @@
 #include "ModuleInit.h"
 
 
-extern "C" {
 int access(const char*, int);
-}
 
 convertArgReturnPair cnvArgRetPair;
 
@@ -135,8 +115,9 @@ void BuiltinClass::allocBuiltinClasses() {
     Base::classNames = names;
     Base::obCounts = counts;
 
-    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link)
+    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link) {
         p->alloc();
+    }
 }
 
 
@@ -145,14 +126,16 @@ void BuiltinClass::initBuiltinClasses() {
     assert(emptyMbox != INVALID);
     assert(lockedMbox != INVALID);
 
-    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link)
+    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link) {
         p->init();
+    }
 }
 
 
 void BuiltinClass::enterBuiltinClasses() {
-    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link)
+    for (BuiltinClass* p = BuiltinClass::root; p; p = p->link) {
         p->enter();
+    }
 }
 
 
@@ -186,9 +169,10 @@ void BuiltinClass::alloc() {
      * properly initialized later.
      */
 
-    if (*clientMeta == INVALID)
+    if (*clientMeta == INVALID) {
         *clientMeta = (pMeta)heap->tenure(
             StdMeta::create(NULL, MAX_FIXNUM, RBLBOOL(extensible)));
+    }
 
     /*
      * Pass INVALIDs for the meta, parents, and extensions of the sbo
@@ -198,15 +182,16 @@ void BuiltinClass::alloc() {
      * initialized).
      */
 
-    if (*clientSBO == INVALID)
+    if (*clientSBO == INVALID) {
         *clientSBO =
             (pSBO)heap->tenure(Actor::create(INVALID, INVALID, (pExt)INVALID));
+    }
 }
 
 
 void BuiltinClass::init() {
-    KONST pMeta m = *clientMeta;
-    KONST pSBO sbo = *clientSBO;
+    const pMeta m = *clientMeta;
+    const pSBO sbo = *clientSBO;
 
     /*
      * Because we don't know the relative order of allocation of the
@@ -291,7 +276,7 @@ void BuiltinClass::enter() {
     /*
      * Add an entry in the global environment for this sbo.
      */
-    KONST pSBO sbo = *clientSBO;
+    const pSBO sbo = *clientSBO;
     char buf[128];
     sprintf(buf, "%s-SBO", name);
     Define(buf, (pOb)sbo);
@@ -322,7 +307,7 @@ RBLtopenv* RBLtopenv::create() {
 
     pMeta m = StdMeta::create(NIL, FIXNUM(1), RBLFALSE);
     void* loc = PALLOC1(sizeof(RBLtopenv), m);
-    return NEW(loc) RBLtopenv(m, INVALID);
+    return new (loc) RBLtopenv(m, INVALID);
 }
 
 
@@ -401,9 +386,9 @@ static void get_path_prefix(char* path, char* dir) {
         int n = p - path;
         strncpy(dir, path, n);
         dir[n] = 0;
-    }
-    else
+    } else {
         strcpy(dir, ".");
+    }
 }
 
 
@@ -415,13 +400,14 @@ static FILE* FindBootFile() {
     char* RosetteLib = getenv("ROSETTE_LIB");
 
     if (strcmp(BootFile, "") == 0) {
-        if (RosetteLib)
+        if (RosetteLib) {
             strcpy(BootDirectory, RosetteLib);
+        }
+
         strcpy(path, BootDirectory);
         strcat(path, "/");
         strcat(path, "boot.rbl");
-    }
-    else {
+    } else {
         get_path_prefix(BootFile, BootDirectory);
         strcpy(path, BootFile);
     }
@@ -429,13 +415,17 @@ static FILE* FindBootFile() {
     int baselen = strlen(path);
     const char** suffixp = StandardExtensions;
 
+    // TODO(leaf): This doesn't work as advertised. If the file can't
+    // be found, the path reported will incorrectly have the suffix
+    // appended.
     for (; access(path, R_OK) && *suffixp; suffixp++) {
         path[baselen] = '\0';
         strcat(path, *suffixp);
     }
 
-    if (!(*suffixp))
+    if (!(*suffixp)) {
         suicide("can't find boot file '%s'", path);
+    }
 
     Tuple* loadPaths = Tuple::create(1, RBLstring::create(BootDirectory));
     if (RosetteLib && strcmp(RosetteLib, BootDirectory)) {
@@ -443,8 +433,8 @@ static FILE* FindBootFile() {
         RBLstring* temp = RBLstring::create(RosetteLib);
         loadPaths = rcons(loadPaths, temp);
     }
-    Define("load-paths", loadPaths);
 
+    Define("load-paths", loadPaths);
     return fopen(path, "r");
 }
 
@@ -469,7 +459,7 @@ static RblTable* GetEnvp(char** envp) {
     PROTECT(RosetteEnvp);
     for (int i = 0; i < n; i++) {
         char* cstr = envp[i];
-        for (; *cstr != 0; cstr++)
+        for (; *cstr != 0; cstr++) {
             if (*cstr == '=') {
                 *cstr = '\x00';
                 Ob* k = SYMBOL(envp[i]);
@@ -479,6 +469,7 @@ static RblTable* GetEnvp(char** envp) {
                 RosetteEnvp->addKey(k, v);
                 break;
             }
+        }
     }
 
     return RosetteEnvp;
@@ -489,10 +480,28 @@ static void LoadBootFiles() {
     PROTECT(reader);
 
     Ob* expr = INVALID;
-    while ((expr = reader->readExpr()) != RBLEOF)
+    while ((expr = reader->readExpr()) != RBLEOF) {
         vm->load(expr);
+    }
 }
 
+static void LoadRunFile() {
+    if (strcmp(RunFile, "") != 0) {
+        FILE* run = fopen(RunFile, "r");
+        if (run) {
+            Reader* reader = Reader::create(run);
+            PROTECT(reader);
+
+            Ob* expr = INVALID;
+            while ((expr = reader->readExpr()) != RBLEOF) {
+                vm->load(expr);
+            }
+        } else {
+            suicide("Unable to open RunFile \"%s\": %s", RunFile,
+                    strerror(errno));
+        }
+    }
+}
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
@@ -501,39 +510,28 @@ int malloc_debug(int);
 #endif
 
 extern int restore(const char*, char*);
-#if defined(DYNAMIC_LOADING)
-extern DynamicLoader* loader;
-#endif
-
 
 int InBigBang = 0;
 
 int BigBang(int argc, char** argv, char** envp) {
-    const char* cmdName = argv[0];
-
     argc = ParseCommandLine(argc, argv);
-
-    InBigBang = TRUE;
-
+    InBigBang = true;
     setsid();
 
     if (RestoringImage) {
-/*
- * This stuff must be (re-)initialized *after* the restore, since
- * restore will return them to their values at the time that the
- * image file was created.  This also assumes that the strings in
- * argv actually reside on the stack and are not clobbered by the
- * restore.
- */
+        /**
+         * This stuff must be (re-)initialized *after* the restore, since
+         * restore will return them to their values at the time that the
+         * image file was created.  This also assumes that the strings in
+         * argv actually reside on the stack and are not clobbered by the
+         * restore.
+         */
 
-#if defined(DYNAMIC_LOADING)
-        delete loader;
-#endif
         Define("argv", GetArgv(argc, argv));
         Define("envp", GetEnvp(envp));
         vm->resetSignals();
 
-        /*
+        /**
          * This bit of stream manipulation is necessary to reset the
          * stdin and stdout streams to the values appropriate for this
          * particular run, rather than the ones inherited from the image
@@ -547,7 +545,7 @@ int BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-/*
+/**
  * Always reset the malloc_verify stuff to current settings,
  * regardless of whether we are restoring an image.  This permits us
  * maximum checking while building an image, but allows the built
@@ -559,15 +557,11 @@ int BigBang(int argc, char** argv, char** envp) {
     malloc_debug(ParanoidAboutGC);
 #endif
 
-/*
- * Always rebuild the loader so that it gets the current command
- * path, just in case the image has been moved from its birthplace in
- * the file system.
- */
-
-#if defined(DYNAMIC_LOADING)
-    loader = new DynamicLoader(cmdName);
-#endif
+    /*
+     * Always rebuild the loader so that it gets the current command
+     * path, just in case the image has been moved from its birthplace in
+     * the file system.
+     */
 
     if (!RestoringImage) {
         heap = new Heap(InfantSpaceSize, SurvivorSpaceSize, OldSpaceChunkSize);
@@ -579,12 +573,13 @@ int BigBang(int argc, char** argv, char** envp) {
         Define("argv", GetArgv(argc, argv));
         Define("envp", GetEnvp(envp));
         LoadBootFiles();
+        LoadRunFile();
 
         heap->tenureEverything();
     }
 
     handleInterrupts();
-    InBigBang = FALSE;
+    InBigBang = false;
 
     return RestoringImage;
 }
@@ -593,9 +588,6 @@ int BigBang(int argc, char** argv, char** envp) {
 void BigCrunch() {
     delete vm;
     delete heap;
-#if defined(DYNAMIC_LOADING)
-    delete loader;
-#endif
 }
 
 
@@ -618,14 +610,17 @@ int asyncHelper(int fd, int desiredState) {
     SET_SIGNAL_IO_DESIRED(result);
 
 #ifndef HPUX
-    if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
+    if ((flags = fcntl(fd, F_GETFL, 0)) == -1) {
         return -1;
+    }
 
 #ifdef FCNTL_NONBLOCK
-    if (desiredState)
+    if (desiredState) {
         flags |= FCNTL_NONBLOCK;
-    else
+    } else {
         flags &= ~(FCNTL_NONBLOCK);
+    }
+
 #else
     DO_BLOCKING
 #endif
@@ -648,26 +643,27 @@ int asyncHelper(int fd, int desiredState) {
 #else
         return -1;
 #endif
-    }
-    else
+    } else {
         return 0;
+    }
 }
 
 
 DEF("async", asyncify, 1, 2) {
     FILE* f = stdin;
 
-    CHECK(NARGS - 1, RblBool, b);
+    CHECK_NOVAR(NARGS - 1, RblBool);
     int desiredState = BOOLVAL(ARG(NARGS - 1));
     if (NARGS == 2) {
         CHECK(0, Istream, stream);
         f = stream->reader->file;
     }
 
-    if (asyncHelper(fileno(f), desiredState))
+    if (asyncHelper(fileno(f), desiredState)) {
         return RBLstring::create((char*)sys_errmsg());
-    else
-        return NIV;
+    }
+
+    return NIV;
 }
 
 
@@ -676,8 +672,9 @@ DEF("fdAsync", asyncify_fd, 2, 2) {
     CHECK(1, RblBool, b);
     int desiredState = BOOLVAL(b);
 
-    if (asyncHelper(fd, desiredState))
+    if (asyncHelper(fd, desiredState)) {
         return RBLstring::create((char*)sys_errmsg());
-    else
-        return NIV;
+    }
+
+    return NIV;
 }

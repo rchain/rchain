@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,25 +17,15 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_MI_h)
 #define _RBL_MI_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 #include "Tuple.h"
 
+static const int MI_CPL_SLOT = 0;
+static const int BUILTIN_MI_SLOTS = 1;
 
 class MIActor : public Actor {
     STD_DECLS(MIActor);
@@ -44,21 +35,19 @@ class MIActor : public Actor {
 
    public:
     static MIActor* create(Tuple*);
-    Tuple* classPrecedenceList();
+    Tuple* classPrecedenceList() {
+        return (Tuple*)extension->slot(MI_CPL_SLOT);
+    }
+
     virtual Ob* lookup(Ob*, Ctxt*);
     virtual bool hasParentp(pOb);
     virtual pOb typeLub(pOb);
 };
 
 
-static const int MI_CPL_SLOT = 0;
-
-static const int BUILTIN_MI_SLOTS = 1;
-
-inline Tuple* MIActor::classPrecedenceList() {
-    return (Tuple*)extension->slot(MI_CPL_SLOT);
-}
-
+static const int PROD_TYPE_TEMPLATE_SLOT = 0;
+static const int PROD_REST_TYPE_SLOT = 1;
+static const int BUILTIN_ProductType_SLOTS = 2;
 
 class ProductType : public Actor {
     STD_DECLS(ProductType);
@@ -70,38 +59,30 @@ class ProductType : public Actor {
     static ProductType* create(Tuple*, pOb);
     virtual bool isCoveredByp(pOb);
     virtual pOb typeLub(pOb);
-    pOb star();
-    Tuple* definite();
-    int numberOfElements();
-    pOb elem(int);
-    pOb elemR(int);
+
+    pOb star() { return extension->slot(PROD_REST_TYPE_SLOT); }
+
+    Tuple* definite() {
+        return (Tuple*)(extension->slot(PROD_TYPE_TEMPLATE_SLOT));
+    }
+
     virtual bool typeMatchesp(pOb);
+
+    int numberOfElements() { return definite()->numberOfElements(); }
+    pOb elem(int i) { return definite()->elem(i); }
+
+    pOb elemR(int i) {
+        if (i < definite()->numberOfElements()) {
+            return elem(i);
+        } else {
+            return star();
+        }
+    }
 };
 
 
-static const int PROD_TYPE_TEMPLATE_SLOT = 0;
-static const int PROD_REST_TYPE_SLOT = 1;
-
-static const int BUILTIN_ProductType_SLOTS = 2;
-
-inline pOb ProductType::star() { return extension->slot(PROD_REST_TYPE_SLOT); }
-
-inline Tuple* ProductType::definite() {
-    return (Tuple*)(extension->slot(PROD_TYPE_TEMPLATE_SLOT));
-}
-
-inline int ProductType::numberOfElements() {
-    return definite()->numberOfElements();
-}
-
-inline pOb ProductType::elem(int i) { return definite()->elem(i); }
-
-inline pOb ProductType::elemR(int i) {
-    if (i < definite()->numberOfElements())
-        return elem(i);
-    else
-        return star();
-}
+static const int SUM_TYPE_TYPES_SLOT = 0;
+static const int BUILTIN_SumType_SLOTS = 1;
 
 
 class SumType : public Actor {
@@ -112,29 +93,21 @@ class SumType : public Actor {
 
    public:
     static SumType* create(Tuple*);
-    Tuple* types();
-    pOb elem(int);
-    int numberOfElements();
     virtual bool compositeCoversp(pOb);
     virtual bool isCoveredByp(pOb);
     pOb dominator();
     virtual pOb typeLub(pOb);
     pOb normalize();
+
+    Tuple* types() { return (Tuple*)extension->slot(SUM_TYPE_TYPES_SLOT); }
+
+    pOb elem(int i) { return types()->elem(i); }
+    int numberOfElements() { return types()->numberOfElements(); }
 };
 
 
-static const int SUM_TYPE_TYPES_SLOT = 0;
-
-static const int BUILTIN_SumType_SLOTS = 1;
-
-inline Tuple* SumType::types() {
-    return (Tuple*)extension->slot(SUM_TYPE_TYPES_SLOT);
-}
-
-inline pOb SumType::elem(int i) { return types()->elem(i); }
-
-inline int SumType::numberOfElements() { return types()->numberOfElements(); }
-
+static const int MM_PROC_LIST_SLOT = 0;
+static const int BUILTIN_MultiMethod_SLOTS = 1;
 
 class MultiMethod : public Actor {
     STD_DECLS(MultiMethod);
@@ -144,41 +117,19 @@ class MultiMethod : public Actor {
 
    public:
     static MultiMethod* create();
-    Tuple* procList();
-    pOb elem(int);
-    int numberOfElements();
     pOb matchAndDispatch(pCtxt);
+
+    Tuple* procList() { return (Tuple*)extension->slot(MM_PROC_LIST_SLOT); }
+
+    pOb elem(int i) { return procList()->elem(i); }
+
+    int numberOfElements() { return procList()->numberOfElements(); }
 };
 
-
-static const int MM_PROC_LIST_SLOT = 0;
-
-static const int BUILTIN_MultiMethod_SLOTS = 1;
-
-inline Tuple* MultiMethod::procList() {
-    return (Tuple*)extension->slot(MM_PROC_LIST_SLOT);
-}
-
-inline pOb MultiMethod::elem(int i) { return procList()->elem(i); }
-
-inline int MultiMethod::numberOfElements() {
-    return procList()->numberOfElements();
-}
-
-inline bool typeLessEq(pOb x, pOb y) { return BASE(y)->coversp(x); }
-
-inline bool typeGreaterEq(pOb x, pOb y) { return BASE(x)->coversp(y); }
-
-inline bool typeEq(pOb x, pOb y) {
-    return (BASE(x)->coversp(y) && BASE(y)->coversp(x));
-}
-
-inline bool typeLess(pOb x, pOb y) {
-    return (typeLessEq(x, y) && !typeEq(x, y));
-}
-
-inline bool typeGreater(pOb x, pOb y) {
-    return (typeGreaterEq(x, y) && !typeEq(x, y));
-}
+bool typeLessEq(pOb x, pOb y);
+bool typeGreaterEq(pOb x, pOb y);
+bool typeEq(pOb x, pOb y);
+bool typeLess(pOb x, pOb y);
+bool typeGreater(pOb x, pOb y);
 
 #endif

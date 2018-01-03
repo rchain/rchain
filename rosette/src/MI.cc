@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -15,16 +16,6 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
 
 #include "MI.h"
 
@@ -50,43 +41,47 @@ pOb Ob::typep(pOb x) {
 }
 
 bool Ob::hasParentp(pOb X) {
-    if ((X == TopSBO) || (BASE(X) == this))
-        return TRUE;
-    else if (this == TopSBO)
-        return FALSE;
-    else
-        return BASE(parent())->hasParentp(X);
+    if ((X == TopSBO) || (BASE(X) == this)) {
+        return true;
+    } else if (this == TopSBO) {
+        return false;
+    }
+
+    return BASE(parent())->hasParentp(X);
 }
 
 bool Ob::compositeCoversp(pOb y) {
-    if (this->typep(y) == RBLTRUE)
-        return TRUE;
-    else
-        return BASE(y)->hasParentp(this);
+    if (this->typep(y) == RBLTRUE) {
+        return true;
+    }
+
+    return BASE(y)->hasParentp(this);
 }
 
 bool Ob::isCoveredByp(pOb x) { return BASE(x)->compositeCoversp(this->self()); }
 
 bool Ob::coversp(pOb y) {
-    if ((this == BASE(y)) || (this == TopSBO))
-        return TRUE;
-    else if (y == TopSBO)
-        return FALSE;
-    else
-        return BASE(y)->isCoveredByp(this);
+    if ((this == BASE(y)) || (this == TopSBO)) {
+        return true;
+    } else if (y == TopSBO) {
+        return false;
+    }
+
+    return BASE(y)->isCoveredByp(this);
 }
 
 bool RblAtom::coversp(pOb y) { return ((atom == y) && (y != NIV)); }
 
 pOb Ob::typeLub(pOb x) {
-    if (this->coversp(x))
+    if (this->coversp(x)) {
         return this->self();
-    else {
+    } else {
         pOb y = this->self();
-        if (BASE(x)->coversp(y))
+        if (BASE(x)->coversp(y)) {
             return x;
-        else
+        } else {
             return (BASE(this->parent()))->typeLub(x);
+        }
     }
 }
 
@@ -103,14 +98,17 @@ bool Tuple::typeMatcher(Tuple* type_template, pOb rest_type) {
     int N = numberOfElements();
     int M = typT->numberOfElements();
 
-    if (N < M)
-        return FALSE;
+    if (N < M) {
+        return false;
+    }
 
     int i = 0;
 
-    for (; i < min(N, M); i++)
-        if (!(BASE(typT->elem(i)))->typeMatchesp(elem(i)))
-            return FALSE;
+    for (; i < min(N, M); i++) {
+        if (!(BASE(typT->elem(i)))->typeMatchesp(elem(i))) {
+            return false;
+        }
+    }
 
     return elemsCoveredByp(rest_type, i);
 }
@@ -118,11 +116,13 @@ bool Tuple::typeMatcher(Tuple* type_template, pOb rest_type) {
 bool Tuple::elemsCoveredByp(pOb typ, int i) {
     int N = numberOfElements();
 
-    for (; i < N; i++)
-        if (!BASE(typ)->coversp(elem(i)))
-            return FALSE;
+    for (; i < N; i++) {
+        if (!BASE(typ)->coversp(elem(i))) {
+            return false;
+        }
+    }
 
-    return TRUE;
+    return true;
 }
 
 pOb tupleLub(Tuple* obs) {
@@ -132,8 +132,9 @@ pOb tupleLub(Tuple* obs) {
     pOb u = obs->elem(0);
     PROTECT(obs);
 
-    for (int i = 1; i < obs->numberOfElements(); i++)
+    for (int i = 1; i < obs->numberOfElements(); i++) {
         u = BASE(u)->typeLub(obs->elem(i));
+    }
 
     return u;
 }
@@ -155,7 +156,7 @@ MIActor* MIActor::create(Tuple* class_precedence_list) {
     StdExtension* ext = StdExtension::create(BUILTIN_MI_SLOTS);
     ext->slot(MI_CPL_SLOT) = class_precedence_list;
     void* loc = PALLOC1(sizeof(MIActor), ext);
-    return NEW(loc) MIActor(ext);
+    return new (loc) MIActor(ext);
 }
 
 
@@ -165,76 +166,88 @@ Ob* MIActor::lookup(Ob* key, Ctxt* ctxt) {
 
     Tuple* cpl = classPrecedenceList();
 
-    if (!IS_A(cpl, Tuple))
+    if (!IS_A(cpl, Tuple)) {
         return BASE(cpl)->lookup(key, ctxt);
+    }
 
     int N = cpl->numberOfElements();
 
-    if (N == 0)
+    if (N == 0) {
         return ABSENT;
+    }
 
     for (int i = 0; i < N - 1; i++) {
         Ob* effective_base = BASE(cpl->elem(i));
         Ob* result =
             BASE(effective_base->meta())->get(effective_base, key, ctxt);
-        if (result != ABSENT)
+        if (result != ABSENT) {
             return result;
+        }
     }
 
     return BASE(cpl->elem(N - 1))->lookup(key, ctxt);
 }
 
 bool MIActor::hasParentp(pOb typ) {
-    if ((this == typ) || (typ == TopSBO))
-        return TRUE;
+    if ((this == typ) || (typ == TopSBO)) {
+        return true;
+    }
 
-    if (interruptPending)
-        return FALSE;
+    if (interruptPending) {
+        return false;
+    }
 
     Tuple* cpl = classPrecedenceList();
 
-    if (!IS_A(cpl, Tuple))
+    if (!IS_A(cpl, Tuple)) {
         return BASE(typ)->coversp(cpl); /* assume: cpl is a type */
+    }
 
     int N = cpl->numberOfElements();
 
-    if (N == 0)
-        return FALSE;
+    if (N == 0) {
+        return false;
+    }
 
-    for (int i = 0; i < N; i++)
-        if (BASE(cpl->elem(i))->hasParentp(typ))
-            return TRUE;
+    for (int i = 0; i < N; i++) {
+        if (BASE(cpl->elem(i))->hasParentp(typ)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 pOb MIActor::typeLub(pOb x) {
-    if (this->coversp(x))
+    if (this->coversp(x)) {
         return this;
-    else if (BASE(x)->coversp(this))
+    } else if (BASE(x)->coversp(this)) {
         return x;
-    else {
+    } else {
         Tuple* cpl = classPrecedenceList();
-        if (!IS_A(cpl, Tuple))
+        if (!IS_A(cpl, Tuple)) {
             return BASE(x)->typeLub(cpl);
-        else {
+        } else {
             int N = cpl->numberOfElements();
-            if (N == 0)
+            if (N == 0) {
                 return NIV; /* there is no LUB! */
-            else {
+            } else {
                 PROTECT(cpl);
                 PROTECT(x);
                 pOb u = BASE(x)->typeLub(cpl->elem(0));
                 PROTECT(u);
                 for (int i = 1; i < N; i++) {
                     pOb v = BASE(x)->typeLub(cpl->elem(i));
-                    if (BASE(u)->coversp(
-                            v)) /* does coversp ever do a typeLub ?? */
+
+                    /* does coversp ever do a typeLub ?? */
+                    if (BASE(u)->coversp(v)) {
                         u = v;
-                    else if (BASE(v)->coversp(u)) {
-                    } /* disambiguates u and v non comparable */
-                    else
+                    } else if (BASE(v)->coversp(u)) {
+                        continue;
+                    } else {
+                        /* disambiguates u and v non comparable */
                         u = BASE(u)->typeLub(v);
+                    }
                 }
                 return u;
             }
@@ -263,14 +276,15 @@ ProductType* ProductType::create(Tuple* type_template, pOb rest_type) {
     ext->slot(PROD_TYPE_TEMPLATE_SLOT) = type_template;
     ext->slot(PROD_REST_TYPE_SLOT) = rest_type;
     void* loc = PALLOC1(sizeof(ProductType), ext);
-    return NEW(loc) ProductType(ext);
+    return new (loc) ProductType(ext);
 }
 
 bool ProductType::typeMatchesp(pOb actuals) {
-    if (IS_A(actuals, Tuple))
+    if (IS_A(actuals, Tuple)) {
         return ((Tuple*)actuals)->typeMatcher(definite(), star());
-    else
-        return FALSE;
+    } else {
+        return false;
+    }
 }
 
 bool ProductType::isCoveredByp(pOb x) {
@@ -280,29 +294,33 @@ bool ProductType::isCoveredByp(pOb x) {
     if (IS_A(x, ProductType)) {
         ProductType* w = (ProductType*)x;
         if ((this->star() != w->star()) &&
-            (!typeLessEq(this->star(), w->star())))
-            return FALSE;
+            (!typeLessEq(this->star(), w->star()))) {
+            return false;
+        }
 
         int N = this->numberOfElements();
         int M = w->numberOfElements();
 
-        if (N < M)
-            return FALSE;
+        if (N < M) {
+            return false;
+        }
 
-        for (int i = 0; i < N; i++)
-            if (!typeLessEq(this->elem(i), w->elemR(i)))
-                return FALSE;
+        for (int i = 0; i < N; i++) {
+            if (!typeLessEq(this->elem(i), w->elemR(i))) {
+                return false;
+            }
+        }
 
-        return TRUE;
-    }
-    else
+        return true;
+    } else {
         return BASE(x)->compositeCoversp(this);
+    }
 }
 
 pOb ProductType::typeLub(pOb x) {
-    if (!IS_A(x, ProductType))
+    if (!IS_A(x, ProductType)) {
         return TopSBO; /* except when x is a SumType !! */
-    else {
+    } else {
         ProductType* v = this;
         ProductType* w = (ProductType*)x;
         int N = v->numberOfElements();
@@ -322,12 +340,14 @@ pOb ProductType::typeLub(pOb x) {
         Tuple* tT = Tuple::create(N, NIV);
 
         int i = 0;
-        for (; i < N; i++)
+        for (; i < N; i++) {
             ASSIGN(tT, elem(i), BASE(v->elem(i))->typeLub(w->elem(i)));
+        }
 
         /* maybe more elements in definite(w) to consider for newRest */
-        for (i = N; i < M; i++)
+        for (i = N; i < M; i++) {
             newRest = BASE(newRest)->typeLub(w->elem(i));
+        }
 
         return ProductType::create(tT, newRest);
     }
@@ -351,37 +371,41 @@ SumType* SumType::create(Tuple* sum_types) {
     StdExtension* ext = StdExtension::create(BUILTIN_SumType_SLOTS);
     ext->slot(SUM_TYPE_TYPES_SLOT) = sum_types;
     void* loc = PALLOC1(sizeof(SumType), ext);
-    return NEW(loc) SumType(ext);
+    return new (loc) SumType(ext);
 }
 
 bool SumType::isCoveredByp(pOb X) {
     /* a sum is covered by X iff EVERY elem of types is covered by X */
-    for (int i = 0; i < numberOfElements(); i++)
-        if (!BASE(X)->coversp(elem(i)))
-            return FALSE;
+    for (int i = 0; i < numberOfElements(); i++) {
+        if (!BASE(X)->coversp(elem(i))) {
+            return false;
+        }
+    }
 
-    return TRUE;
+    return true;
 }
 
 bool SumType::compositeCoversp(pOb X) {
     /* a SumType covers X iff SOME elem of types covers X */
-    for (int i = 0; i < numberOfElements(); i++)
-        if (BASE(elem(i))->coversp(X))
-            return TRUE;
+    for (int i = 0; i < numberOfElements(); i++) {
+        if (BASE(elem(i))->coversp(X)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 pOb SumType::dominator() { return tupleLub(types()); }
 
 pOb SumType::typeLub(pOb x) {
-    if (this->coversp(x))
+    if (this->coversp(x)) {
         return this;
-    else if (BASE(x)->coversp(this))
+    } else if (BASE(x)->coversp(this)) {
         return x;
-    else if (!IS_A(x, SumType))
+    } else if (!IS_A(x, SumType)) {
         return SumType::create(cons(x, types()))->normalize();
-    else {
+    } else {
         Tuple* els = Tuple::create(this->types(), ((SumType*)x)->types());
         return SumType::create(els)->normalize();
     }
@@ -405,7 +429,7 @@ MultiMethod* MultiMethod::create() {
     StdExtension* ext = StdExtension::create(BUILTIN_MultiMethod_SLOTS);
     ext->slot(MM_PROC_LIST_SLOT) = NIL;
     void* loc = PALLOC1(sizeof(MultiMethod), ext);
-    return NEW(loc) MultiMethod(ext);
+    return new (loc) MultiMethod(ext);
 }
 
 /* the procList contains procs, each of which contains a tuple of at least
@@ -423,29 +447,43 @@ pOb MultiMethod::matchAndDispatch(pCtxt ctxt) {
 
     for (int i = 0; i < numberOfElements(); i++) {
         p = (Proc*)elem(i);
-        if (!IS_A(p, Proc))
+        if (!IS_A(p, Proc)) {
             return this->runtimeError(ctxt, "non proc in proc list");
+        }
 
         pid = (Tuple*)(p->id);
 
-        if (!IS_A(pid, Tuple) || (pid->numberOfElements() < 1))
+        if (!IS_A(pid, Tuple) || (pid->numberOfElements() < 1)) {
             return this->runtimeError(ctxt, "badly formed proc id");
+        }
 
         typ = pid->elem(0);
 
-        if (BASE(typ)->typeMatchesp(ctxt->argvec))
+        if (BASE(typ)->typeMatchesp(ctxt->argvec)) {
             return p->dispatch(ctxt);
+        }
     }
 
     return this->runtimeError(ctxt, "type mismatch - no matching proc");
+}
+
+bool typeLessEq(pOb x, pOb y) { return BASE(y)->coversp(x); }
+bool typeGreaterEq(pOb x, pOb y) { return BASE(x)->coversp(y); }
+bool typeEq(pOb x, pOb y) {
+    return (BASE(x)->coversp(y) && BASE(y)->coversp(x));
+}
+bool typeLess(pOb x, pOb y) { return (typeLessEq(x, y) && !typeEq(x, y)); }
+bool typeGreater(pOb x, pOb y) {
+    return (typeGreaterEq(x, y) && !typeEq(x, y));
 }
 
 DEF("multiMethod-lookup-and-invoke", multiMethodLookupAndInvoke, 2, 2) {
     CHECK(0, MultiMethod, mm)
     CHECK(1, Ctxt, ctxt);
 
-    if (debugging_level)
+    if (debugging_level) {
         printf("\t%s\n", mm->asCstring());
+    }
 
     return mm->matchAndDispatch(ctxt);
 }
@@ -493,10 +531,11 @@ DEF("typeMatches?", obTypeMatchesp, 2, 2) {
 DEF("typeLub", obsTypeLub, 1, MaxArgs) { return tupleLub(ARGS); }
 
 pOb typeDominator(pOb x) {
-    if (IS_A(x, SumType))
+    if (IS_A(x, SumType)) {
         return ((SumType*)x)->dominator();
-    else
+    } else {
         return x;
+    }
 }
 
 DEF("typeDominator", obTypeDominator, 1, 1) { return typeDominator(ARG(0)); }

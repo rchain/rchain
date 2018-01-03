@@ -9,7 +9,6 @@
 package coop.rchain.rho2rose
 
 import coop.rchain.lib.term._
-import coop.rchain.lib.zipper._
 import coop.rchain.rho2rose.StrTermCtorAbbrevs.StrTermCtxt
 import coop.rchain.syntax.rholang._
 import coop.rchain.syntax.rholang.Absyn._
@@ -17,47 +16,31 @@ import coop.rchain.syntax.rholang.Absyn._
 import scala.language.implicitConversions
 import scala.language.postfixOps
 
-// TODO: Check if we can move these to a specific file like "RoselangNavigation.scala"
-// and see if we need change some of the new TermCtxtBranch[L,V,T] calls to more specific classes
-trait StrTermNavigation extends TermNavigation[String,String,String]
-trait StrTermMutation extends TermMutation [String,String,String]
-trait StrTermZipperComposition extends TermZipperComposition[String,String,String]
-
 // V for variable
 // G for "ground" value
 object StrTermCtorAbbrevs {
-  type StrTermCtxt = TermCtxt[String,String,String] with Factual with RosetteSerialization[String,String,String]
+  type StrTermCtxt = TermCtxt[String,String,String] with RosetteSerialization[String,String,String]
   def V( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Var( v ) )
   def G( v : String ) : StrTermCtxt = StrTermPtdCtxtLf( Tag( v ) )
-  def B( v : String )( terms : StrTermCtxt* ) = StrTermPtdCtxtBr( v, terms.toList )
+  def B( v : String )( terms : StrTermCtxt* ) : StrTermCtxt = StrTermPtdCtxtBr( v, terms.toList )
+  def BL( v : String )( terms : List[StrTermCtxt] ) : StrTermCtxt = StrTermPtdCtxtBr( v, terms )
 }
 
 object StrZipAbbrevs {
   type ValOrVar = TagOrVar[String,String]
-  type LocVorV = Location[ValOrVar]
-  def L( term : StrTermCtorAbbrevs.StrTermCtxt, ctxt : Context[ValOrVar] ) : LocVorV = Location( term, ctxt )   
-  def T() : Context[ValOrVar] = Top()
 }
 
 object VisitorTypes {
   // Arg Type
-  type A = Option[StrZipAbbrevs.LocVorV]
+  type A = Option[StrZipAbbrevs.ValOrVar]
   // Return Type
-  type R = Option[StrZipAbbrevs.LocVorV]    
+  type R = Option[StrTermCtorAbbrevs.StrTermCtxt]
 }
 
 object S2SImplicits {
-  // A term may implicitly be converted to a location by placing it at the top
-  // context.
-  implicit def asLoc( 
-    term : StrTermCtorAbbrevs.StrTermCtxt
-  ) : StrZipAbbrevs.LocVorV = StrZipAbbrevs.L( term, StrZipAbbrevs.T() )
   implicit def asR( 
-    loc : StrZipAbbrevs.LocVorV
-  ) : VisitorTypes.R = Some( loc )
-  implicit def asR(
-    term : StrTermCtorAbbrevs.StrTermCtxt
-  ) : VisitorTypes.R = asR( asLoc( term ) )
+    term : StrTermCtxt
+  ) : VisitorTypes.R = Some( term )
 }
 
 object CompilerExceptions {
@@ -89,6 +72,10 @@ object CompilerExceptions {
     b : AnyRef
   ) extends Exception( s"$b found in unexpected context" )
       with CompilerException with SyntaxException
+  case class InternalCompilerError(
+    b : AnyRef
+  ) extends Exception( s"internal compiler error: $b" )
+      with CompilerException
 }
 
 object ComprehensionOps {
@@ -114,19 +101,12 @@ object RosetteOps {
   var _list = "list" // TODO: Extract into "temporary operations" set
 }
 
-trait StrFoldCtxtVisitor
-extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
-  def zipr : StrTermNavigation with StrTermMutation with StrTermZipperComposition
-}
-
 trait RholangASTToTerm 
-extends StrFoldCtxtVisitor {
+extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
   import VisitorTypes._
-  import StrZipAbbrevs._
   import StrTermCtorAbbrevs._
   import S2SImplicits._
   import CompilerExceptions._
-  import ComprehensionOps._
   import RosetteOps._
 
   def TS() = V("t") // TODO: Replace with V( theTupleSpaceVar ) ?
@@ -143,22 +123,22 @@ extends StrFoldCtxtVisitor {
 
   /* TODO : rewrite this to be amenable to tail recursion elimination */
   def doQuote( rexpr : R ) : R = {
-    for( Location( expr : StrTermCtxt @unchecked, _ ) <- rexpr )
+    for( expr : StrTermCtxt <- rexpr )
     yield {
       expr match {
         case leaf : StrTermPtdCtxtLf => {
-          L( B( _quote )( leaf ), Top() )
+          B( _quote )( leaf )
         }
         case StrTermPtdCtxtBr( op, subterms ) => {
           val qterms = subterms.map( 
             { 
               ( term ) => { 
-                (for( Location( qterm : StrTermCtxt @unchecked, _ ) <- doQuote( term ) )
+                (for( qterm : StrTermCtxt <- doQuote( term ) )
                 yield { qterm }).getOrElse( throw new FailedQuotation( term ) )
               }
             }
           )
-          L( B( _rx )( (List( ( V( op ) ) ) ++ qterms):_* ), Top() )
+          BL( _rx )( V( op ) :: qterms )
         }
       }
     }
@@ -183,7 +163,7 @@ extends StrFoldCtxtVisitor {
      * )
      *
      */
-    (for( Location( pTerm : StrTermCtxt @unchecked, _ ) <- p.proc_.accept(this, arg) )
+    (for( pTerm : StrTermCtxt <- p.proc_.accept(this, arg) )
     yield {
 
       def toListOfTuples(bindingsComponents: List[Option[List[StrTermCtxt]]]) = {
@@ -198,10 +178,10 @@ extends StrFoldCtxtVisitor {
       val bindingsComponents = ptrnTermList map {
         case ptrn: CPattern => {
           for (
-            Location(ptrnTerm: StrTermCtxt @unchecked, _) <- ptrn.accept(this, arg)
+            ptrnTerm: StrTermCtxt <- ptrn.accept(this, arg)
           ) yield {
             val productFresh = V(Fresh())
-            val quotedPtrnTerm = (for (Location(q: StrTermCtxt @unchecked, _) <- doQuote(ptrnTerm)) yield {
+            val quotedPtrnTerm = (for (q: StrTermCtxt <- doQuote(ptrnTerm)) yield {
               q
             }).getOrElse(throw new FailedQuotation(ptrnTerm))
             List(ptrnTerm, quotedPtrnTerm, productFresh)
@@ -218,28 +198,28 @@ extends StrFoldCtxtVisitor {
           }
         } else {
           val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsComponents)
-          (B(_list)(formalsUnwrapped: _*), B(_list)(quotedFormalsUnwrapped: _*), B(_list)(productFreshesUnwrapped: _*))
+          (BL(_list)(formalsUnwrapped), BL(_list)(quotedFormalsUnwrapped), BL(_list)(productFreshesUnwrapped))
         }
 
       val consumeTerm = B("consume")(TS, B(_list)( G(p.var_) ), B(_list)(wildcard), B(_list)(quotedFormals), G("#t"))
       val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFresh), B(_list)(productFreshes)), consumeTerm)
       val bodyTerm = B("")(B("proc")(B(_list)(formals), pTerm), productFreshes)
-      L(B("")(B(_abs)(B(_list)(G("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm))))), T())
+      B("")(B(_abs)(B(_list)(G("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm)))))
     })
   }
 
   /* Proc */
   override def visit(  p : PPrint, arg : A ) : R = {
     for(
-      Location( pTerm : StrTermCtxt @unchecked, _ ) <- p.proc_.accept(this, arg )
+      pTerm : StrTermCtxt <- p.proc_.accept(this, arg)
     ) yield {
       val printTerm = B("print")(pTerm)
       val displayTerm = B("display")(G( "#\\\\n"))
-      L( B( "seq" )( printTerm, displayTerm ), Top() )
+      B( "seq" )( printTerm, displayTerm )
     }
   }
   override def visit(  p : PNil, arg : A ) : R = {    
-    Some( L( G( "#niv" ), T() ) )
+    G( "#niv" )
   }
   override def visit(  p : PValue, arg : A ) : R = {
     p.value_.accept(this, arg )
@@ -264,7 +244,7 @@ extends StrFoldCtxtVisitor {
         quote.proc_.accept(this, arg )
       }
       case v : CVar => {
-        Some( L( B( _run )( B( _compile )( V( v.var_ ) ) ), Top() ) )
+        B( _run )( B( _compile )( V( v.var_ ) ) )
       }
     } )
   }
@@ -282,17 +262,17 @@ extends StrFoldCtxtVisitor {
         {
           ( acc, e ) => {
             e.accept(this, arg ) match {
-              case Some( Location( pTerm : StrTermCtxt @unchecked, _ ) ) => {
+              case Some( pTerm : StrTermCtxt @unchecked ) => {
                 acc ++ List( pTerm )
               }
               case None => acc
             }
           }
         }
-      )        
+      )
 
-    for( Location( cTerm : StrTermCtxt @unchecked, _ ) <- p.chan_.accept(this, arg ) ) yield {
-      L( B( _produce )( (List( TS ) ++ List(cTerm) ++ List(V("**wildcard**")) ++ actls):_* ), Top() )
+    for( cTerm : StrTermCtxt <- p.chan_.accept(this, arg ) ) yield {
+      BL( _produce )( TS :: cTerm :: V("**wildcard**") :: actls )
     }
   }
 
@@ -309,19 +289,19 @@ extends StrFoldCtxtVisitor {
       }
 
       for (
-        Location(procTerm: StrTermCtxt @unchecked, _) <- p.proc_.accept(this, arg)
+        procTerm: StrTermCtxt <- p.proc_.accept(this, arg)
       ) yield {
         val bindingsComponents = bindings map {
           case inBind: InputBind => {
             for (
-              Location(chanTerm: StrTermCtxt @unchecked, _) <- inBind.chan_.accept(this, arg);
-              Location(ptrnTerm: StrTermCtxt @unchecked, _) <- inBind.cpattern_.accept(this, arg)
+              chanTerm: StrTermCtxt <- inBind.chan_.accept(this, arg);
+              ptrnTerm: StrTermCtxt <- inBind.cpattern_.accept(this, arg)
             ) yield {
               val productFresh = V(Fresh())
               val unificationBindingFresh = V(Fresh())
               val wildcard = V("**wildcard**")
               val quotedPtrnTerm = inBind.cpattern_ match {
-                case _ => (for (Location(q: StrTermCtxt @unchecked, _) <- doQuote(ptrnTerm)) yield {
+                case _ => (for (q: StrTermCtxt <- doQuote(ptrnTerm)) yield {
                   q
                 }).getOrElse(throw new FailedQuotation(ptrnTerm))
               }
@@ -332,10 +312,10 @@ extends StrFoldCtxtVisitor {
           case bind => throw new UnexpectedBindingType(bind)
         }
         val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsComponents)
-        val consumeTerm = B("consume")(TS, B(_list)(chanTerms: _*), B(_list)(wildcards: _*), B(_list)(quotedPtrnTerms: _*), G("#f")) // #f for persistent
-        val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFreshes: _*), B(_list)(productFreshes: _*)), consumeTerm)
-        val bodyTerm = B("")(B("proc")(B(_list)(B(_list)(ptrnTerms: _*)), procTerm), B(_list)(productFreshes: _*))
-        L(B("let")(B(_list)(letBindingsTerm), bodyTerm), T())
+        val consumeTerm = B("consume")(TS, BL(_list)(chanTerms), BL(_list)(wildcards), BL(_list)(quotedPtrnTerms), G("#f")) // #f for persistent
+        val letBindingsTerm = B(_list)(B(_list)(BL(_list)(unificationFreshes), BL(_list)(productFreshes)), consumeTerm)
+        val bodyTerm = B("")(B("proc")(B(_list)(BL(_list)(ptrnTerms)), procTerm), BL(_list)(productFreshes))
+        B("let")(B(_list)(letBindingsTerm), bodyTerm)
       }
     }
 
@@ -369,13 +349,13 @@ extends StrFoldCtxtVisitor {
   override def visit(  p : PNew, arg : A ) : R = {
     import scala.collection.JavaConverters._
     val newVars = p.listvar_.asScala.toList
-    (for( Location( pTerm : StrTermCtxt @unchecked, _ ) <- p.proc_.accept(this, arg ) )
+    (for( pTerm : StrTermCtxt <- p.proc_.accept( this, arg ) )
     yield {
       val newBindings = newVars.map( { ( v ) => {
         val fresh = V(FreshSymbol(v))
         B(_list)(V( v ), fresh)
       } } )
-      L( B( "let" )( ( List(B(_list)(newBindings:_*)) ++ List( pTerm )):_* ), Top() )
+      B( "let" )( (BL(_list)(newBindings)), pTerm )
     })
   }
   override def visit(  p : PChoice, arg : A ) : R = {
@@ -453,7 +433,7 @@ extends StrFoldCtxtVisitor {
     p.listcbranch_.asScala.toList match {
       // select {} = Nil
       case Nil => {
-        Some( L( G( "#niv" ), T() ) )
+        G( "#niv" )
       }
       // select { case bindings => P } = for( bindings )P
       case ( branch : Choice ) :: Nil => {
@@ -506,19 +486,19 @@ extends StrFoldCtxtVisitor {
      *  )
      */
 
-    def nonExhaustiveMatch: R = L(G("#niv"), Top())
+    def nonExhaustiveMatch: R = G("#niv")
 
     def patternMatchVisitAux: R = {
-      val result = for (Location(pTerm: StrTermCtxt @unchecked, _) <- p.proc_.accept(this, arg)) yield {
+      val result = for (pTerm: StrTermCtxt <- p.proc_.accept(this, arg)) yield {
         val reverseListPMBranch = p.listpmbranch_.asScala.toList.reverse
         (nonExhaustiveMatch /: reverseListPMBranch) {
           (acc, e) => {
             e match {
               case pm: PatternMatch => {
                 for (
-                  Location(pattern: StrTermCtxt @unchecked, _) <- pm.ppattern_.accept(this, arg);
-                  Location(continuation: StrTermCtxt @unchecked, _) <- pm.proc_.accept(this, arg);
-                  Location(remainder: StrTermCtxt @unchecked, _) <- acc
+                  pattern: StrTermCtxt <- pm.ppattern_.accept(this, arg);
+                  continuation: StrTermCtxt <- pm.proc_.accept(this, arg);
+                  remainder: StrTermCtxt <- acc
                 ) yield {
                   if (isWild(pm.ppattern_)) {
                     // Assumes VarPtWild comes at the end of a list of case statements
@@ -535,8 +515,7 @@ extends StrFoldCtxtVisitor {
                     } else {
                       continuation
                     }
-                    val ifTerm = B(_if)(matchTerm, matchTrueTerm, remainder)
-                    L(ifTerm, Top())
+                    B(_if)(matchTerm, matchTrueTerm, remainder)
                   }
                 }
               }
@@ -596,14 +575,14 @@ extends StrFoldCtxtVisitor {
         {
           ( acc, e ) => {
             e.accept(this, arg ) match {
-              case Some( Location( pTerm : StrTermCtxt @unchecked, _ ) ) => acc ++ List( pTerm )
+              case Some( pTerm : StrTermCtxt @unchecked ) => acc ++ List( pTerm )
               case None => acc
             }
           }
         }
       )        
 
-    Some( L( B( p.var_ )( actls:_* ), Top() ) )
+    BL( p.var_ )( actls )
   }
   override def visit(  p : PPar, arg : A ) : R = {
     /*
@@ -612,16 +591,16 @@ extends StrFoldCtxtVisitor {
      * ( block [| P1 |]( t ) [| P2 |]( t ) )
      */
     for( 
-      Location( pTerm1 : StrTermCtxt @unchecked, _ ) <- p.proc_1.accept(this, arg );
-      Location( pTerm2 : StrTermCtxt @unchecked, _ ) <- p.proc_2.accept(this, arg )
+      pTerm1 : StrTermCtxt <- p.proc_1.accept(this, arg );
+      pTerm2 : StrTermCtxt <- p.proc_2.accept(this, arg )
     ) yield {
-      L( B( _block )( pTerm1, pTerm2 ), Top() )
+      B( _block )( pTerm1, pTerm2 )
     }
   }
 
   /* Chan */
   override def visit(  p : CVar, arg : A ) : R = {
-    Some( L( V( p.var_ ), T() ) )
+    V( p.var_ )
   }
   override def visit(  p : CQuote, arg : A ) : R = {
     // TODO: Handle quoting and unquoting
@@ -630,33 +609,7 @@ extends StrFoldCtxtVisitor {
   /* Bind */
   // def visit( b : Bind, arg : A ) : R
   override def visit(  p : InputBind, arg : A ) : R = {
-    arg match {
-      // [[ P ]] is proc
-      case Some( Location( proc : StrTermCtxt @unchecked, Top() ) ) => {
-        for(
-          // [[ chan ]] is chanTerm
-          Location( chanTerm : StrTermCtxt @unchecked, _ ) <- p.chan_.accept(this, arg );
-          // [[ ptrn ]] is ptrnTerm
-          Location( ptrnTerm : StrTermCtxt @unchecked, _ ) <- p.cpattern_.accept(this, arg )
-        ) yield {
-          // ( map [[ chan ]] proc [[ ptrn ]] [[ P ]] )
-          L( B( _map )( chanTerm, B( _abs )( B(_list)(ptrnTerm), proc ) ), T() )
-        }
-      }
-      case _ => { // this is a little too optimistic or forgiving
-        // should ensure that arg is a reasonable context to be really safe
-        for(
-          // [[ chan ]] is chanTerm
-          Location( chanTerm : StrTermCtxt @unchecked, _ ) <- p.chan_.accept(this, arg );
-          // [[ ptrn ]] is ptrnTerm
-          Location( ptrnTerm : StrTermCtxt @unchecked, _ ) <- p.cpattern_.accept(this, arg );
-          Location( rbindingsTerm : StrTermCtxt @unchecked, _ ) <- arg
-        ) yield {
-          // ( flatMap [[ chan ]] proc [[ ptrn ]] [[ for( bindings )P ]] )
-          L( B( _join )( chanTerm, B( _abs )( B(_list)(ptrnTerm), rbindingsTerm ) ), T() )
-        }
-      }
-    }
+    throw new InternalCompilerError("Input bindings should not be visited directly.")
   }
   /* CBranch */
 
@@ -666,28 +619,28 @@ extends StrFoldCtxtVisitor {
   }
   /* Quantity */
   override def visit(  p : QVar, arg : A ) : R = {
-    L(V(p.var_), Top())
+    V(p.var_)
   }
   override def visit(  p : QInt, arg : A ) : R = {
-    L( G( s"""${p.integer_}"""), Top() )
+    G( s"""${p.integer_}""")
   }
   override def visit(  p : QDouble, arg : A ) : R = {
-    L( G( s"""${p.double_}"""), Top() )
+    G( s"""${p.double_}""")
   }
   override def visit( p : QBool, arg : A) : R = {
     p.rhobool_.accept(this, arg)
   }
   override def visit( p : QTrue, arg : A) : R = {
-    L( G( s"""#t"""), Top() )
+    G( s"""#t""")
   }
   override def visit( p : QFalse, arg : A) : R = {
-    L(G( s"""#f"""), Top())
+    G( s"""#f""")
   }
   override def visit(  p : QString, arg : A ) : R = {
-    L( G( s""""${p.string_}"""" ), Top() )
+    G( s""""${p.string_}"""" )
   }
   override def visit( p : QMap, arg : A) : R = {
-    L(G( s"""(new RblTable)"""), Top())
+    G( s"""(new RblTable)""")
   }
   override def visit( p : QDot, arg : A) : R = {
     import scala.collection.JavaConverters._
@@ -696,13 +649,13 @@ extends StrFoldCtxtVisitor {
      * =
      * (method_name quantity quantity_arg1 quantity_arg2)
      */
-    for (Location( q : StrTermCtxt @unchecked, _ ) <- p.quantity_.accept(this, arg )) yield {
+    for (q : StrTermCtxt <- p.quantity_.accept(this, arg )) yield {
       val qArgs =
         ( List[StrTermCtxt]() /: p.listquantity_.asScala.toList )(
           {
             ( acc, e ) => {
               e.accept(this, arg ) match {
-                case Some( Location( frml : StrTermCtxt @unchecked, _ ) ) => {
+                case Some( frml : StrTermCtxt @unchecked ) => {
                   acc ++ List( frml )
                 }
                 case None => {
@@ -712,100 +665,100 @@ extends StrFoldCtxtVisitor {
             }
           }
         )
-      L( B("")( (List(V(s"""${p.var_}""")) ++ List(q) ++ qArgs):_* ), Top() )
+      BL("")( V(s"""${p.var_}""") :: q :: qArgs )
     }
   }
   override def visit( p : QNeg, arg : A) : R = {
-    for( Location( q : StrTermCtxt @unchecked, _ ) <- p.quantity_.accept(this, arg ) ) yield {
-      L( B("-")(q), Top() )
+    for( q : StrTermCtxt <- p.quantity_.accept(this, arg ) ) yield {
+      B("-")(q)
     }
   }
   override def visit( p : QMult, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("*")(q1,q2), Top() )
+      B("*")(q1,q2)
     }
   }
   override def visit( p : QDiv, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("/")(q1,q2), Top() )
+      B("/")(q1,q2)
     }
   }
   override def visit( p : QAdd, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("+")(q1,q2), Top() )
+      B("+")(q1,q2)
     }
   }
   override def visit( p : QLt, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("<")(q1,q2), Top() )
+      B("<")(q1,q2)
     }
   }
   override def visit( p : QLte, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("<=")(q1,q2), Top() )
+      B("<=")(q1,q2)
     }
   }
   override def visit( p : QGt, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B(">")(q1,q2), Top() )
+      B(">")(q1,q2)
     }
   }
   override def visit( p : QGte, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B(">=")(q1,q2), Top() )
+      B(">=")(q1,q2)
     }
   }
   override def visit( p : QEq, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("==")(q1,q2), Top() )
+      B("=")(q1,q2)
     }
   }
   override def visit( p : QNeq, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("!=")(q1,q2), Top() )
+      B("!=")(q1,q2)
     }
   }
 
 
   override def visit( p : QMinus, arg : A) : R = {
     for(
-      Location( q1 : StrTermCtxt @unchecked, _ ) <- p.quantity_1.accept(this, arg );
-      Location( q2 : StrTermCtxt @unchecked, _ ) <- p.quantity_2.accept(this, arg )
+      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
+      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
     ) yield {
-      L( B("-")(q1,q2), Top() )
+      B("-")(q1,q2)
     }
   }
 
   /* Entity */
   override def visit(  p : EChar, arg : A ) : R = {
-    L( G( s"""'${p.char_}'"""), Top() )
+    G( s"""'${p.char_}'""")
   }
   override def visit(  p : ETuple, arg : A ) : R = {
     import scala.collection.JavaConverters._
@@ -814,7 +767,7 @@ extends StrFoldCtxtVisitor {
         {
           ( acc, e ) => {
             e.accept(this, arg ) match {
-              case Some( Location( frml : StrTermCtxt @unchecked, _ ) ) => {
+              case Some( frml : StrTermCtxt @unchecked ) => {
                 acc ++ List( frml )
               }
               case None => {
@@ -824,15 +777,15 @@ extends StrFoldCtxtVisitor {
           }
         }
       )
-    L( B(_list)( procTerms:_* ), Top() )
+    BL(_list)( procTerms )
   }
 
   /* Pattern */
   override def visit(p: VarPtVar, arg: A): R = {
-    L(V(p.var_), Top())
+    V(p.var_)
   }
   override def visit(  p : VarPtWild, arg : A ) : R = {
-    L(V("**wildcard**"), Top())
+    V("**wildcard**")
   }
 
   /* PPattern */
@@ -856,7 +809,7 @@ extends StrFoldCtxtVisitor {
         {
           ( acc, e ) => {
             e.accept(this, arg ) match {
-              case Some( Location( frml : StrTermCtxt @unchecked, _ ) ) => {
+              case Some( frml : StrTermCtxt @unchecked ) => {
                 acc ++ List( frml )
               }
               case None => {
@@ -867,7 +820,7 @@ extends StrFoldCtxtVisitor {
         }
       )
 
-    L( B(p.var_)( structContents:_* ), Top() )
+    BL(p.var_)( structContents )
   }
   override def visit(  p : VPtTuple, arg : A ) : R = {
     import scala.collection.JavaConverters._
@@ -877,7 +830,7 @@ extends StrFoldCtxtVisitor {
         {
           ( acc, e ) => {
             e.accept(this, arg ) match {
-              case Some( Location( frml : StrTermCtxt @unchecked, _ ) ) => {
+              case Some( frml : StrTermCtxt @unchecked ) => {
                 acc ++ List( frml )
               }
               case None => {
@@ -888,25 +841,25 @@ extends StrFoldCtxtVisitor {
         }
       )
 
-    L( B(_list)( tupleContents:_* ), Top() )
+    BL(_list)( tupleContents )
   }
   override def visit(  p : VPtTrue, arg: A ): R = {
-    L( G( s"""#t"""), Top() )
+    G( s"""#t""")
   }
   override def visit(  p : VPtFalse, arg: A ): R = {
-    L( G( s"""#f"""), Top() )
+    G( s"""#f""")
   }
   override def visit(  p : VPtInt, arg: A ): R = {
-    L( G( s"""${p.integer_}"""), Top() )
+    G( s"""${p.integer_}""")
   }
   override def visit(  p : VPtDbl, arg: A ): R = {
-    L( G( s"""${p.double_}"""), Top() )
+    G( s"""${p.double_}""")
   }
   override def visit(  p : VPtNegInt, arg: A ): R = {
-    L( G( s"""-${p.integer_}"""), Top() )
+    G( s"""-${p.integer_}""")
   }
   override def visit(  p : VPtNegDbl, arg: A ): R = {
-    L( G( s"""-${p.double_}"""), Top() )
+    G( s"""-${p.double_}""")
   }
 
   override def visit( p: PtBranch, arg: A ): R = ???

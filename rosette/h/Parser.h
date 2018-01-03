@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Parser_h)
 #define _RBL_Parser_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 #include "ObStk.h"
 
@@ -129,7 +118,7 @@ class Parser : public BinaryOb {
     ParserFrame* ftop();
     void fpop();
 
-    ParserMode accept(int, int = FALSE);
+    ParserMode accept(int, int = false);
     ParserMode receiveOb(Ob*);
     ParserMode receiveChar(int);
     ParserMode receiveTerminator(int);

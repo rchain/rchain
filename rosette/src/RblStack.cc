@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "RblStack.h"
-
 #include "Ctxt.h"
 #include "Prim.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 
@@ -55,7 +44,7 @@ RblStack::RblStack(Tuple* elems)
 RblStack* RblStack::create() {
     Tuple* elems = Tuple::create(DefaultStackSize, NIV);
     void* loc = PALLOC1(sizeof(RblStack), elems);
-    return NEW(loc) RblStack(elems);
+    return new (loc) RblStack(elems);
 }
 
 
@@ -79,8 +68,7 @@ void RblStack::push(Ob* val) {
         new_elems->elem(N) = val;
         FIXNUM_INC(SELF->nElems);
         ASSIGN(SELF, elems, new_elems);
-    }
-    else {
+    } else {
         FIXNUM_INC(nElems);
         ASSIGN(elems, elem(N), val);
     }
@@ -110,8 +98,9 @@ Ob* RblStack::top() { return elems->elem(depth() - 1); }
 
 void RblStack::reset() {
     nElems = FIXNUM(0);
-    for (int i = elems->numberOfElements(); i--;)
+    for (int i = elems->numberOfElements(); i--;) {
         elems->elem(i) = NIV;
+    }
 }
 
 
@@ -126,8 +115,10 @@ Ob* RblStack::setNth(int n, Ob* val) {
 Ob* RblStack::subObject(int start, int size) {
     PROTECT_THIS(RblStack);
     RblStack* new_stack = RblStack::create();
-    while (size--)
+    while (size--) {
         new_stack->push(SELF->nth(start++));
+    }
+
     return new_stack;
 }
 
