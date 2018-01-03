@@ -385,25 +385,15 @@ DEF("prim-flush", obFlush, 0, 1) {
     return NIV;
 }
 
-#if !defined(LINUX)
 DEF("getFd", obGetFd, 1, 1) {
     if (IS_A(ARG(0), Istream)) {
-#ifdef HPUX
-        return FIXNUM(((Istream*)ARG(0))->reader->file->__fileL);
-#else
-        return FIXNUM(((Istream*)ARG(0))->reader->file->_file);
-#endif
+        return FIXNUM(fileno(((Istream*)ARG(0))->reader->file));
     } else if (IS_A(ARG(0), Ostream)) {
-#ifdef HPUX
-        return FIXNUM(((Ostream*)ARG(0))->stream->__fileL);
-#else
-        return FIXNUM(((Ostream*)ARG(0))->stream->_file);
-#endif
+        return FIXNUM(fileno(((Ostream*)ARG(0))->stream));
     } else {
         return FIXNUM(-1);
     }
 }
-#endif /* ! LINUX */
 
 DEF_OPRN(Sync, "print", oprnPrint, obPrint);
 DEF_OPRN(Sync, "display", oprnDisplay, obDisplay);
