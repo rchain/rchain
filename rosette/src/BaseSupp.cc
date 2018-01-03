@@ -65,7 +65,8 @@ extern uint32_t nontrivial_pre_fixnum_to_addr(int);
 extern int nontrivial_addr_to_pre_fixnum(Ob*);
 #endif
 
-/*  */
+// NB(leaf): Gets the page size at program startup.
+extern const uint32_t local_page_size = (uint32_t)sysconf(_SC_PAGESIZE);
 
 extern StdOprn* oprnResumeIO;
 extern Prim* obRuntimeError;
@@ -425,8 +426,6 @@ pOb Actor::primitiveInitialize(pCtxt ctxt) {
 DEF("prim-init", obInitialize, 1, MaxArgs) {
     return BASE(ARG(0))->primitiveInitialize(__CTXT__);
 }
-
-static int local_page_size = getpagesize();
 
 DEF("M-get", addressGetField, 3, 3) {
     CHECK_ADDR(0, base);
