@@ -66,7 +66,7 @@ extern int nontrivial_addr_to_pre_fixnum(Ob*);
 #endif
 
 // NB(leaf): Gets the page size at program startup.
-extern const uint32_t local_page_size = (uint32_t)getpagesize();
+extern const uint32_t local_page_size = (uint32_t)sysconf(_SC_PAGESIZE);
 
 extern StdOprn* oprnResumeIO;
 extern Prim* obRuntimeError;
