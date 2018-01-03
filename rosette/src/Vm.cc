@@ -40,12 +40,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#ifdef HANDLE_POLL_WITH_IO
-#define IO_MASK (sigmask(SIGPOLL) | sigmask(SIGIO))
-#else
-#define IO_MASK (sigmask(SIGIO))
-#endif
-
 #ifndef c_plusplus
 extern "C" {
 int select(int, fd_set*, fd_set*, fd_set*, struct timeval*);
@@ -503,7 +497,16 @@ void VirtualMachine::handleSleep() {
 }
 
 void VirtualMachine::handleSignal() {
-    int oldmask = sigblock(IO_MASK);
+    sigset_t oldmask;
+    sigset_t blockmask;
+
+    sigemptyset(&blockmask);
+    sigaddset(&blockmask, SIGIO);
+    if (sigprocmask(SIG_BLOCK, &blockmask, &oldmask) < 0) {
+        printf("aborting...\n");
+        reset();                   /* clears sigvec */
+        return;
+    }
 
     /*
      * Can't override the SIGINT and SIGIO signals with a Rosette handler.
@@ -512,7 +515,7 @@ void VirtualMachine::handleSignal() {
     if (sigvec & sigmask(SIGINT)) {
         printf("aborting...\n");
         reset();                   /* clears sigvec */
-        (void)sigsetmask(oldmask); /* enable interrupts */
+        (void)sigprocmask(SIG_SETMASK, &oldmask, NULL); /* enable interrupts */
         return;
     }
 
@@ -531,12 +534,7 @@ void VirtualMachine::handleSignal() {
 
         sigvec &= ~IO_MASK;
 
-
-#ifndef SELECT
-#define SELECT select
-#endif
-
-        int n = SELECT(nfds, &rfds, &wfds, &efds, &timeout);
+        int n = select(nfds, &rfds, &wfds, &efds, &timeout);
 
         if (n > 0) {
             int i = 0;
@@ -568,7 +566,7 @@ void VirtualMachine::handleSignal() {
                 for (int i = 0; i < nfds; i++) {
                     if (FD_ISSET(i, &fds)) {
                         FD_SET(i, &tfds);
-                        if (SELECT(nfds, &tfds, &wfds, &wfds, &timeout) < 0 &&
+                        if (select(nfds, &tfds, &wfds, &wfds, &timeout) < 0 &&
                             errno == EBADF) {
                             warning("clearing file descriptor %d", i);
                             FD_CLR(i, &fds);
@@ -594,7 +592,9 @@ void VirtualMachine::handleSignal() {
         }
     }
 
-    sigsetmask(oldmask); /* enable interrupts */
+    if (sigprocmask(SIG_SETMASK, &oldmask, NULL) < 0) {  // enable interrupts
+        warning("Restoring blocked IO signal mask");
+    }
 }
 
 
