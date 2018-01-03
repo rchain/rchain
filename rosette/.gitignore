@@ -4,4 +4,6 @@ src/CMakeFiles/
 Makefile
 build.out
 rbl/rosette/results.txt
+html/
+latex/
 
