@@ -1,4 +1,5 @@
 package coop.rchain.storage.regex
+
 import org.scalatest._
 
 class FsmUnitTests extends FlatSpec with Matchers {

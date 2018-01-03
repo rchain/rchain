@@ -4,6 +4,7 @@
 **  / /  / /__/ / / / /_/ / / / / /     (c) http://rchain.coop          **
 ** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
 \*                                                                      */
+
 package coop.rchain.storage.regex
 
 import scala.collection.GenMap
@@ -59,7 +60,11 @@ object Fsm {
     * This is a pretty powerful procedure which could potentially go on
 		* forever if you supply an evil version of follow().
     */
+<<<<<<< HEAD
   private[regex] def crawl[T](alphabet: Set[Char],
+=======
+  private[greenery] def crawl[T](alphabet: Set[Char],
+>>>>>>> 775d3812abedaa3f58e45f13858bd8c6652da4d2
                                  initial: T,
                                  isFinal: T => Boolean,
                                  follow: (T, Char) => Option[T]): Fsm = {
