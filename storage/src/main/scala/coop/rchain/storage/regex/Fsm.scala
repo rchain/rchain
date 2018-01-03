@@ -1,10 +1,3 @@
-/*               __          __                                         *\
-**    __________/ /_  ____ _/_/___                                      **
-**   / ___/ ___/ __ \/ __ `/ / __ \     RChain                          **
-**  / /  / /__/ / / / /_/ / / / / /     (c) http://rchain.coop          **
-** /_/   \___/_/ /_/\____/_/_/ /_/                                      **
-\*                                                                      */
-
 package coop.rchain.storage.regex
 
 import scala.collection.GenMap
@@ -16,7 +9,7 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 object Fsm {
 
   /**
-    * An FSM accepting nothing (not even the empty string). This is
+    * An FSM accepting nothing (not even the empty string). This
     * demonstrates that this is possible, and is also extremely useful
     * in some situations
     */
@@ -35,9 +28,9 @@ object Fsm {
   /**
     * This is a surrogate symbol which you can use in your finite state machines
     * to represent "any symbol not in the official alphabet". For example, if your
-    * state machine's alphabet is {"a", "b", "c", "d", fsm.anything_else}, then
+    * state machine's alphabet is {"a", "b", "c", "d", Fsm.AnythingElse}, then
     * you can pass "e" in as a symbol and it will be converted to
-    * fsm.anything_else, then follow the appropriate transition.
+    * Fsm.AnythingElse, then follow the appropriate transition.
     * Currently char code 0xE000 is used. This is a private-use-character, allowed for internal usages,
     * as stated in the Unicode standard: http://www.unicode.org/versions/Unicode5.2.0/ch16.pdf#G19635
     */
@@ -56,14 +49,15 @@ object Fsm {
 
   /**
     * Given the above conditions and instructions, crawl a new unknown FSM,
-		* mapping its states, final states and transitions. Return the new FSM.
+    * mapping its states, final states and transitions. Return the new FSM.
     * This is a pretty powerful procedure which could potentially go on
-		* forever if you supply an evil version of follow().
+    * forever if you supply an evil version of follow().
     */
   private[regex] def crawl[T](alphabet: Set[Char],
                                  initial: T,
                                  isFinal: T => Boolean,
                                  follow: (T, Char) => Option[T]): Fsm = {
+    //actual type of the 'states' is deducted from 'initial' => ArrayBuffer[T]
     val states = ArrayBuffer(initial)
 
     val finals = HashSet[Int]()
@@ -73,15 +67,17 @@ object Fsm {
 
     //iterate over a growing list
     var currentStateIdx = 0
-    while (currentStateIdx < states.size) { //we can't use any kind of range loop or iterators here, since collection is growing
-      val currentStates = states(currentStateIdx)
-      if (isFinal(currentStates)) {
-        finals += currentStateIdx //add to finals if needed
+    //we can't use any kind of range loop or iterators here, since collection is growing
+    while (currentStateIdx < states.size) {
+      val currentState = states(currentStateIdx)
+      //add to finals if needed
+      if (isFinal(currentState)) {
+        finals += currentStateIdx
       }
 
       val currentStateMap = sortedAlphabet
         .flatMap(symbol =>
-          follow(currentStates, symbol) match {
+          follow(currentState, symbol) match {
             case None => None
             case Some(nextState) => {
               var nextStateIdx = states.indexOf(nextState)
@@ -284,12 +280,13 @@ case class Fsm(alphabet: Set[Char],
     */
   def IsLive(state: Int): Boolean = {
     val reachable = Queue(state)
-    val checked = HashSet(state) //regexes usually have quite small number of states, sorted set should be faster in most cases
-
+    val checked = HashSet(state)
+    //can't use any functional iterator here (like reachable.exists), since queue is modified
     while (reachable.nonEmpty) {
       val reachableState = reachable.dequeue()
 
       if (finalStates.contains(reachableState)) {
+        //we got the result, no more iterations needed, return immediately
         return true
       }
 
@@ -315,8 +312,8 @@ case class Fsm(alphabet: Set[Char],
     * Equivalently, consider `self` as a possibly-infinite set of
     * strings and test whether `string` is a member of it.
     * This is actually mainly used for unit testing purposes.
-    * If `fsm.anything_else` is in your alphabet, then any symbol not in your
-    * alphabet will be converted to `fsm.anything_else`
+    * If `Fsm.AnythingElse` is in your alphabet, then any symbol not in your
+    * alphabet will be converted to `Fsm.AnythingElse`
     */
   def Accepts(input: String): Boolean = {
     var currentState = initialState
@@ -328,12 +325,14 @@ case class Fsm(alphabet: Set[Char],
 
       transitions.get(currentState) match {
         case None =>
-          return false //Current state doesn't exist, FSM is Null or similar
+          //Current state doesn't exist, FSM is Null or similar
+          return false
         case Some(charToStateMap) => {
           charToStateMap.get(sym) match {
             case Some(nextState) => currentState = nextState
             case None =>
-              return false //Missing transition = transition to dead state
+              //Missing transition = transition to dead state
+              return false
           }
         }
       }
@@ -463,7 +462,8 @@ case class Fsm(alphabet: Set[Char],
       if (pendingFinals.nonEmpty) {
         Some(pendingFinals.dequeue())
       } else {
-        if (needInitial) { //Initial entry (or possibly not, in which case this is a short one)
+        //Initial entry (or possibly not, in which case this is a short one)
+        if (needInitial) {
           needInitial = false
           val cstate = this.initialState
           if (livestates.contains(cstate)) {
@@ -516,8 +516,8 @@ case class Fsm(alphabet: Set[Char],
     */
   def Times(multiplier: Int): Fsm = {
     require(multiplier >= 0, "Can't multiply an FSM by " + multiplier)
-
-    def initial = HashSet(this.initialState -> 0) //currentState -> iteration
+    //here we always work with "currentState -> iteration" pairs
+    def initial = HashSet(this.initialState -> 0)
 
     def follow(crawlState: HashSet[(Int, Int)],
                symbol: Char): Option[HashSet[(Int, Int)]] = {
@@ -613,11 +613,14 @@ case class Fsm(alphabet: Set[Char],
         val stateCount = stateToCount.get(state)
 
         if (stateCount.nonEmpty) {
-          if (stateCount.get.isEmpty)
-            return None //fail fast = we trapped into infinite recursion
+          if (stateCount.get.isEmpty) {
+            //fail fast = we trapped into infinite recursion
+            return None
+          }
           stateCount.get
         } else {
-          stateToCount += state -> None //None means "computing right now..."
+          //None means "computing right now..."
+          stateToCount += state -> None
           var n = 0
           if (finalStates.contains(state)) {
             n += 1
@@ -626,11 +629,13 @@ case class Fsm(alphabet: Set[Char],
           var transition = transitions.get(state)
           if (transition.isDefined) {
             for ((_, nextState) <- transition.get) {
+              //yup, recursion here
               val countForNextState = getNumStrings(nextState)
               if (countForNextState.isEmpty) {
-                return None //fail fast - we trapped into infinite recursion there
+                //fail fast - we trapped into infinite recursion
+                return None
               }
-              n += countForNextState.get //yup, recursion here
+              n += countForNextState.get
             }
           }
 

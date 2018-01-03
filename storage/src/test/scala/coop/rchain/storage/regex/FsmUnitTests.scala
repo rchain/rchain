@@ -360,7 +360,7 @@ class FsmUnitTests extends FlatSpec with Matchers {
   }
 
   /** This is (a*ba)*. Naively connecting the final states to the initial state
-	gives the incorrect result here. */
+  gives the incorrect result here. */
   "Star" should "pass advanced check" in {
     val fsmS = Fsm(Set('a', 'b'),
       Set(0, 1, 2, _ob),
