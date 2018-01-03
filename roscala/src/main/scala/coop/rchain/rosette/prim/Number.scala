@@ -503,8 +503,8 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] =
       ctxt.nargs match {
         case 1 =>
-          val mVal = ctxt.argvec.elem.head.asInstanceOf[RblFloat].value
-          Right(RblFloat(-mVal))
+          val n = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
+          Right(RblFloat(-n.value))
 
         case 2 =>
           val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
@@ -560,12 +560,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(m < n)
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(m < n)
     }
   }
 
@@ -580,12 +575,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(m <= n)
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(m <= n)
     }
   }
 
@@ -600,12 +590,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(m > n)
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(m > n)
     }
   }
 
@@ -620,12 +605,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(m >= n)
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(m >= n)
     }
   }
 
@@ -640,12 +620,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(m == n)
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(m == n)
     }
   }
 
@@ -660,12 +635,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(m != n)
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(m != n)
     }
   }
 
@@ -727,12 +697,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.exp(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.exp(m.value)))
     }
   }
 
@@ -747,12 +712,7 @@ object Number {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.pow(m.value, n.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.pow(m.value, n.value)))
     }
   }
 
@@ -766,12 +726,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.log(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.log(m.value)))
     }
   }
 
@@ -785,12 +740,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.log10(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.log10(m.value)))
     }
   }
 
@@ -804,12 +754,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.floor(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.floor(m.value)))
     }
   }
 
@@ -823,12 +768,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.ceil(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.ceil(m.value)))
     }
   }
 
@@ -842,12 +782,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.atan(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.atan(m.value)))
     }
   }
 
@@ -861,12 +796,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.cos(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.cos(m.value)))
     }
   }
 
@@ -880,12 +810,7 @@ object Number {
     override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
-      try {
-        Right(RblFloat(Math.sin(m.value)))
-      } catch {
-        case _: ArithmeticException =>
-          Left(ArithmeticError)
-      }
+      Right(RblFloat(Math.sin(m.value)))
     }
   }
 
@@ -902,5 +827,4 @@ object Number {
       Right(Fixnum(math.floor(m.value).toInt))
     }
   }
-
 }
