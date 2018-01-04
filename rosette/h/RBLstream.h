@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,60 +17,42 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_stream_h)
 #define _RBL_stream_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 class Reader;
 
-class Istream : public Actor
-{
+class Istream : public Actor {
     STD_DECLS(Istream);
 
-  protected:
+   protected:
+    Istream(Ob*, pExt, Reader*);
 
-    Istream (Ob*, pExt, Reader*);
+   public:
+    Ob* client;
+    Reader* reader;
 
-  public:
-
-    Ob*		client;
-    Reader*	reader;
-
-    static Istream*	create (Reader*);
-    virtual Ob*		cloneTo (Ob*, Ob*);
+    static Istream* create(Reader*);
+    virtual Ob* cloneTo(Ob*, Ob*);
 };
 
 
-class Ostream : public BinaryOb
-{
+class Ostream : public BinaryOb {
     STD_DECLS(Ostream);
 
-  protected:
+   protected:
+    Ostream(FILE*);
 
-    Ostream (FILE*);
+   public:
+    FILE* stream;
 
-  public:
+    virtual ~Ostream();
 
-    FILE*	stream;
-
-    virtual ~Ostream ();
-
-    static Ostream*	create (FILE*);
-    virtual Ob*		cloneTo (Ob*, Ob*);
+    static Ostream* create(FILE*);
+    virtual Ob* cloneTo(Ob*, Ob*);
 };
 
 

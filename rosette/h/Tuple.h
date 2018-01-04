@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,89 +17,63 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Tuple_h)
 #define _RBL_Tuple_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class Tuple : public Ob
-{
+class Tuple : public Ob {
     STD_DECLS(Tuple);
 
-  protected:
+   protected:
+    Tuple(int, Ob*);
+    Tuple(Ob**, int);
+    Tuple(int, Tuple*, int, int, Ob* = INVALID);
+    Tuple(int, int, Tuple*);
+    Tuple(Tuple*, Tuple*);
+    Tuple(Tuple*, int, Tuple*);
+    Tuple(Tuple*);
 
-    Tuple (int, Ob*);
-    Tuple (Ob**, int);
-    Tuple (int, Tuple*, int, int, Ob* = INVALID);
-    Tuple (int, int, Tuple*);
-    Tuple (Tuple*, Tuple*);
-    Tuple (Tuple*, int, Tuple*);
-    Tuple (Tuple*);
+   public:
+    static Tuple* create();
+    static Tuple* create(int, Ob*);
+    static Tuple* create(Ob**, int);
+    static Tuple* create(int, Tuple*, int, int, Ob* = INVALID);
+    static Tuple* create(int, int, Tuple*);
+    static Tuple* create(Tuple*, Tuple*);
+    static Tuple* create(Tuple*, int);
+    static Tuple* create(Tuple*);
 
-  public:
+    StdExtension* becomeExtension(Ob*, Ob*);
 
-    static Tuple*	create ();
-    static Tuple*	create (int, Ob*);
-    static Tuple*	create (Ob**, int);
-    static Tuple*	create (int, Tuple*, int, int, Ob* = INVALID);
-    static Tuple*	create (int, int, Tuple*);
-    static Tuple*	create (Tuple*, Tuple*);
-    static Tuple*	create (Tuple*, int);
-    static Tuple*	create (Tuple*);
+    Tuple* makeSlice(int, int);
+    Tuple* makeTail(int);
+    Ob* cloneTo(Ob*, Ob*);
+    Ob* indexedSize();
+    Ob* nth(int);
+    Ob* setNth(int, Ob*);
+    Ob* subObject(int, int);
+    bool accepts(Ctxt*);
+    bool matches(Ctxt*);
+    bool matches(Tuple*);
 
-    Ob*&		elem (int);
+    bool typeMatcher(Tuple*, pOb);
+    bool elemsCoveredByp(pOb, int = 0);
 
-    StdExtension*	becomeExtension (Ob*, Ob*);
+    Ob*& elem(int n) {
+        return _slot[n + 2];  // Skip the meta and parent fields.
+    }
 
-    int		numberOfElements ();
-    Tuple*	makeSlice (int, int);
-    Tuple*	makeTail (int);
-    Ob*		cloneTo (Ob*, Ob*);
-    Ob*		indexedSize ();
-    Ob*		nth (int);
-    Ob*		setNth (int, Ob*);
-    Ob*		subObject (int, int);
-    bool	accepts (Ctxt*);
-    bool	matches (Ctxt*);
-    bool	matches (Tuple*);
-    
-    bool        typeMatcher (Tuple*, pOb);
-    bool        elemsCoveredByp (pOb, int = 0);
+    int numberOfElements() {
+        return ((SIZE(this) - sizeof(Tuple)) / sizeof(Ob*));
+    }
 };
 
 
-inline
-Ob*&
-Tuple::elem (int n)
-{
-    return _slot[n+2];	// Skip the meta and parent fields.
-}
-
-
-inline
-int
-Tuple::numberOfElements ()
-{
-    return( (SIZE(this)-sizeof(Tuple)) / sizeof(Ob*) );
-}
-
-
-extern Tuple* cons (Ob*, Tuple*);
-extern Tuple* consstar (Tuple*, int, Tuple*);
-extern Tuple* rcons (Tuple*, Ob*);
-extern Tuple* concat (Tuple*, Tuple*);
+extern Tuple* cons(Ob*, Tuple*);
+extern Tuple* consstar(Tuple*, int, Tuple*);
+extern Tuple* rcons(Tuple*, Ob*);
+extern Tuple* concat(Tuple*, Tuple*);
 
 #endif

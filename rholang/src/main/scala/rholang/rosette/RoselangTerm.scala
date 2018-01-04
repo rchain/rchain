@@ -6,7 +6,7 @@ package coop.rchain.rho2rose
 
 import coop.rchain.lib.term._
 
-trait RosetteSerialization[Namespace, Var, Tag] {
+trait RosetteSerialization[Namespace, VarType, TagType] {
   def rosetteSerializeOperation: String = {
     this match {
       case leaf: StrTermPtdCtxtLf => ""
@@ -26,24 +26,19 @@ trait RosetteSerialization[Namespace, Var, Tag] {
   }
 }
 
-case class StrTermPtdCtxtLf(override val tag: Either[String, Either[String, String]])
-  extends TermCtxtLeaf[String, Either[String, String], String](tag) with Factual with RosetteSerialization[String, Either[String, String], String] {
+case class StrTermPtdCtxtLf(override val tag: TagOrVar[String, String])
+  extends TermCtxtLeaf[String, String, String](tag) with RosetteSerialization[String, String, String] {
   override def rosetteSerialize: String = {
     tag match {
-      case Left(t) => "" + t
-      case Right(v) => {
-        v match {
-          case Left(language_v) => "" + language_v
-          case _ => "" + v
-        }
-      }
+      case Tag(t) => "" + t
+      case Var(v) => "" + v
     }
   }
 }
 
 case class StrTermPtdCtxtBr(override val nameSpace: String,
-                            override val labels: List[TermCtxt[String, Either[String, String], String] with Factual with RosetteSerialization[String, Either[String, String], String]]
-                           ) extends TermCtxtBranch[String, Either[String, String], String](nameSpace, labels) with Factual with RosetteSerialization[String, Either[String, String], String] {
+                            override val labels: List[TermCtxt[String, String, String] with RosetteSerialization[String, String, String]]
+                           ) extends TermCtxtBranch[String, String, String](nameSpace, labels) with RosetteSerialization[String, String, String] {
   override def rosetteSerializeOperation: String = {
     val result = labels match {
       case (albl: StrTermPtdCtxtBr) :: rlbls => {
@@ -82,7 +77,7 @@ case class StrTermPtdCtxtBr(override val nameSpace: String,
           var acc = ""
 
 
-          def serializeExpr(lbl: TermCtxt[String, Either[String, String], String] with Factual with RosetteSerialization[String, Either[String, String], String], i: Int) = {
+          def serializeExpr(lbl: TermCtxt[String, String, String] with RosetteSerialization[String, String, String], i: Int) = {
             if (i == 0) {
               acc = lbl.rosetteSerialize
             } else {

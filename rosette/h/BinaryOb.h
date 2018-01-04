@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,19 +17,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_BinaryOb_h)
 #define _RBL_BinaryOb_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "Ob.h"
 
@@ -40,37 +30,26 @@
  * information, such as floating-point numbers.
  */
 
-class BinaryOb : public Ob
-{
-  protected:
+class BinaryOb : public Ob {
+   protected:
+    BinaryOb(int sz, pOb meta, pOb parent) : Ob(sz, meta, parent) {}
 
-    BinaryOb (int, pOb, pOb);
-    BinaryOb (InPlace_Constructor*, pOb, pOb);
+    BinaryOb(InPlace_Constructor* ipc, pOb meta, pOb parent)
+        : Ob(ipc, meta, parent) {}
 
-  public:
 
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
+   public:
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
 };
 
-inline BinaryOb::BinaryOb (int sz, pOb meta, pOb parent)
-    : Ob(sz, meta, parent)
-{ }
 
-inline BinaryOb::BinaryOb (InPlace_Constructor* ipc, pOb meta, pOb parent)
-    : Ob(ipc, meta, parent)
-{ }
-
-
-
-class ByteVec : public BinaryOb
-{
+class ByteVec : public BinaryOb {
     STD_DECLS(ByteVec);
 
-  protected:
-
-    int	byteCount;
+   protected:
+    int byteCount;
 
     /*
      * If there are any member variables added after byteCount, be sure
@@ -78,56 +57,41 @@ class ByteVec : public BinaryOb
      * byteCount to determine the end of the fixed part of the bytevec.
      */
 
-    ByteVec (int, pOb, pOb, int);
-    ByteVec (int);
-    ByteVec (ByteVec*, int);
-  
-  public:
+    ByteVec(int);
+    ByteVec(ByteVec*, int);
 
-    static ByteVec* create (int);
-    static ByteVec* create (ByteVec*, int);
+    ByteVec(int sz, pOb meta, pOb parent, int numberOfBytes)
+        : BinaryOb(sz, meta, parent) {
+        byteCount = numberOfBytes;
+    }
 
-    Byte&		byte (int);
-    int			numberOfBytes (EMPTY);
-    void		reset (EMPTY);
-    unsigned long	sum (EMPTY);
+   public:
+    uint8_t& byte(int n) {
+        // NB(leaf): Argh.
+        uint8_t* p = (uint8_t*)(((char*)&byteCount) + sizeof(byteCount));
+        return p[n];
+    }
 
-    virtual Ob*	indexedSize (EMPTY);
-    virtual Ob*	nth (int);
-    virtual Ob*	setNth (int, Ob*);
-    virtual Ob*	subObject (int, int);
+    int numberOfBytes() { return byteCount; }
+
+    static ByteVec* create(int);
+    static ByteVec* create(ByteVec*, int);
+
+    void reset();
+    uint32_t sum();
+
+    virtual Ob* indexedSize();
+    virtual Ob* nth(int);
+    virtual Ob* setNth(int, Ob*);
+    virtual Ob* subObject(int, int);
 };
 
-inline ByteVec::ByteVec (int sz, pOb meta, pOb parent, int numberOfBytes)
-    : BinaryOb(sz, meta, parent)
-{
-    byteCount = numberOfBytes;
-}
 
-inline
-Byte&
-ByteVec::byte (int n)
-{
-    Byte* p = (Byte*) (((char*)&byteCount)+sizeof(byteCount));
-    return p[n];
-}
-
-inline
-int
-ByteVec::numberOfBytes (EMPTY)
-{
-    return byteCount;
-}
-
-
-
-class Word16Vec : public BinaryOb
-{
+class Word16Vec : public BinaryOb {
     STD_DECLS(Word16Vec);
 
-  protected:
-
-    int	wordCount;
+   protected:
+    int wordCount;
 
     /*
      * If there are any member variables added after wordCount, be sure
@@ -135,93 +99,67 @@ class Word16Vec : public BinaryOb
      * wordCount to determine the end of the fixed part of the wordvec.
      */
 
-    Word16Vec (int, pOb, pOb, int);
-    Word16Vec (int);
-    Word16Vec (pOb, pOb, int);
-    Word16Vec (Word16Vec*, int);
+    Word16Vec(int);
+    Word16Vec(pOb, pOb, int);
+    Word16Vec(Word16Vec*, int);
 
-  public:
+    Word16Vec(int sz, pOb meta, pOb parent, int cnt)
+        : BinaryOb(sz, meta, parent) {
+        wordCount = cnt;
+    }
 
-    static Word16Vec* create (int);
-    static Word16Vec* create (pOb, pOb, int);
-    static Word16Vec* create (Word16Vec*, int);
+   public:
+    uint16_t& word(int n) {
+        uint16_t* p = (uint16_t*)(((char*)&wordCount) + sizeof(wordCount));
+        return p[n];
+    }
 
-    Word16&		word (int);
-    int			numberOfWords (EMPTY);
-    void		reset (EMPTY);
-    unsigned long	sum (EMPTY);
+    int numberOfWords() { return wordCount; }
 
-    virtual Ob*	indexedSize (EMPTY);
-    virtual Ob*	nth (int);
-    virtual Ob*	setNth (int, Ob*);
-    virtual Ob*	subObject (int, int);
+    static Word16Vec* create(int);
+    static Word16Vec* create(pOb, pOb, int);
+    static Word16Vec* create(Word16Vec*, int);
+
+    void reset();
+    uint32_t sum();
+
+    virtual Ob* indexedSize();
+    virtual Ob* nth(int);
+    virtual Ob* setNth(int, Ob*);
+    virtual Ob* subObject(int, int);
 };
 
-inline Word16Vec::Word16Vec (int sz, pOb meta, pOb parent, int cnt)
-    : BinaryOb(sz, meta, parent)
-{
-    wordCount = cnt;
-}
 
-inline
-Word16&
-Word16Vec::word (int n)
-{
-    Word16* p = (Word16*) (((char*)&wordCount)+sizeof(wordCount));
-    return p[n];
-}
-
-inline
-int
-Word16Vec::numberOfWords (EMPTY)
-{
-    return wordCount;
-}
-
-
-
-
-class Word32Vec : public BinaryOb
-{
+class Word32Vec : public BinaryOb {
     STD_DECLS(Word32Vec);
 
-  protected:
+   protected:
+    Word32Vec(int sz, pOb meta, pOb parent) : BinaryOb(sz, meta, parent) {}
 
-    Word32Vec (int, pOb, pOb);
-    Word32Vec (int);
-    Word32Vec (Word32Vec*, int);
+    Word32Vec(int);
+    Word32Vec(Word32Vec*, int);
 
-  public:
+   public:
+    static Word32Vec* create(int);
+    static Word32Vec* create(Word32Vec*, int);
 
-    static Word32Vec* create (int);
-    static Word32Vec* create (Word32Vec*, int);
+    uint32_t& word(int n) {
+        uint32_t* p = (uint32_t*)&slot(0);
+        return p[n];
+    }
 
-    Word32&		word (int);
-    int			numberOfWords (EMPTY);
-    void		reset (EMPTY);
-    unsigned long	sum (EMPTY);
+    int numberOfWords() {
+        return (SIZE(this) - sizeof(Word32Vec)) / sizeof(uint32_t);
+    }
 
-    virtual Ob*	indexedSize (EMPTY);
-    virtual Ob*	nth (int);
-    virtual Ob*	setNth (int, Ob*);
-    virtual Ob*	subObject (int, int);
+    void reset();
+    uint32_t sum();
+
+    virtual Ob* indexedSize();
+    virtual Ob* nth(int);
+    virtual Ob* setNth(int, Ob*);
+    virtual Ob* subObject(int, int);
 };
 
-inline Word32Vec::Word32Vec (int sz, pOb meta, pOb parent)
-    : BinaryOb(sz, meta, parent)
-{ }
-
-inline
-Word32&
-Word32Vec::word (int n)
-{
-    Word32* p = (Word32*)&slot(0);
-    return p[n];
-}
-
-inline int Word32Vec::numberOfWords (EMPTY)
-{
-    return (SIZE(this)-sizeof(Word32Vec))/sizeof(Word32);
-}
 
 #endif

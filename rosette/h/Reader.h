@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Reader_h)
 #define _RBL_Reader_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 #include "ObStk.h"
 
@@ -44,27 +33,24 @@ class FrameStk;
 class Reader;
 
 
+class FrameStk {
+    int topframe;
+    int nexttop;
+    char* stk;
+    int stksize;
 
-class FrameStk
-{
-    int		topframe;
-    int		nexttop;
-    char*	stk;
-    int		stksize;
+    FrameStk();
+    ~FrameStk();
 
-    FrameStk ();
-    ~FrameStk ();
-
-    void*		alloc (int);
-    int			link (int);
-    ReaderFrame*	top ();
-    void		pop ();
-    int			empty ();
-    void		reset ();
+    void* alloc(int);
+    int link(int);
+    ReaderFrame* top();
+    void pop();
+    int empty();
+    void reset();
 
     friend class Reader;
 };
-
 
 
 enum ReaderMode {
@@ -79,73 +65,69 @@ enum ReaderMode {
 
 #undef ftop
 
-class Reader : public BinaryOb
-{
+class Reader : public BinaryOb {
     STD_DECLS(Reader);
 
-  protected:
+   protected:
+    char* buf;
+    int bufsize;
+    int bufp;
+    char errorEncountered;
+    enum { NOT_WAITING, WAITING_FOR_EXPR, WAITING_FOR_CHAR } waitingOnIO;
+    uint16_t filler_up_please;
+    FrameStk fstk;
+    ObStk ostk;
 
-    char*	buf;
-    int		bufsize;
-    int		bufp;
-    char	errorEncountered;
-    enum {NOT_WAITING, WAITING_FOR_EXPR, WAITING_FOR_CHAR}
-		waitingOnIO;
-    unsigned short filler_up_please;
-    FrameStk	fstk;
-    ObStk	ostk;
+    Reader(ReadTable*, FILE*);
 
-    Reader (ReadTable*, FILE*);
+    Ob* resumeExpr();
+    Ob* resumeCh();
+    Ob* suspendReader();
+    Ob* finish(Ob*);
+    void growBuffer();
+    ReaderMode acceptEscChar(int, int);
 
-    Ob*		resumeExpr ();
-    Ob*		resumeCh ();
-    Ob*		suspendReader ();
-    Ob*		finish (Ob*);
-    void	growBuffer ();
-    ReaderMode	acceptEscChar (int, int);
+   public:
+    virtual ~Reader();
 
-  public:
+    static Reader* create(FILE*);
 
-    virtual ~Reader ();
+    ReadTable* rt;
+    ReaderMode mode;
+    FILE* file;
+    int digitSeen;
 
-    static Reader*	create (FILE*);
+    void buffer(int);
+    void resetBuffer();
+    char* finalizeBuffer();
+    Ob* finalizeAtom();
 
-    ReadTable*	rt;
-    ReaderMode	mode;
-    FILE*	file;
-    int		digitSeen;
+    Ob* readExpr();
+    Ob* readCh();
+    Ob* resume();
+    Ob* error(const char*, ...);
+    void resetState();
 
-    void	buffer (int);
-    void	resetBuffer ();
-    char* 	finalizeBuffer ();
-    Ob*		finalizeAtom ();
+    void opush(Ob*);
+    Ob*& otop(int);
+    Ob* opop();
+    void odel(int);
 
-    Ob*		readExpr ();
-    Ob*		readCh ();
-    Ob*		resume ();
-    Ob*		error (const char*, ...);
-    void	resetState ();
+    void* falloc(int);
+    int flink(int);
+    ReaderFrame* ftop();
+    void fpop();
 
-    void	opush (Ob*);
-    Ob*&	otop (int);
-    Ob*		opop ();
-    void	odel (int);
+    ReaderMode accept(int, int = false);
+    ReaderMode receiveOb(Ob*);
+    ReaderMode receiveChar(int);
+    ReaderMode receiveTerminator(int);
+    ReaderMode receiveDot(int);
 
-    void*	falloc (int);
-    int		flink (int);
-    ReaderFrame* ftop ();
-    void	fpop ();
-
-    ReaderMode	accept (int, int = FALSE);
-    ReaderMode	receiveOb (Ob*);
-    ReaderMode	receiveChar (int);
-    ReaderMode	receiveTerminator (int);
-    ReaderMode	receiveDot (int);
-
-    virtual Ob*		cloneTo (Ob*, Ob*);
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
 };
 
 

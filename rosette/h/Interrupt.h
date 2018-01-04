@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Interrupt_h)
 #define _RBL_Interrupt_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include <signal.h>
 
 
@@ -41,12 +30,12 @@ enum VM_EVENT { VM_READ_EVENT, VM_WRITE_EVENT, VM_EXCEPTION_EVENT };
 extern int interruptPending;
 extern int arithmeticException;
 
-extern void handleInterrupts ();
-extern void ignoreInterrupts ();
+extern void handleInterrupts();
+extern void ignoreInterrupts();
 
-typedef void IO_HANDLER (VM_EVENT, int, void*);
+typedef void IO_HANDLER(VM_EVENT, int, void*);
 
-extern void RosetteSignalHandler (int, int);
+extern void RosetteSignalHandler(int);
 
 extern IO_HANDLER RosetteIoHandler;
 

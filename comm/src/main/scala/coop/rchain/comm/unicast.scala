@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import java.net.{DatagramPacket, DatagramSocket}
+import java.net.{DatagramPacket, DatagramSocket, SocketAddress}
 import scala.util.control.NonFatal
 
 /**
@@ -18,16 +18,15 @@ import scala.util.control.NonFatal
   * (`local`) be given; this supplies the source data for datagrams it
   * sends.
   */
-case class UnicastComm(local: PeerNode) extends Comm {
-  val receiver = new DatagramSocket(local.endpoint.udpPort)
-  val sender = new DatagramSocket()
+case class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
+  val socket = new DatagramSocket(local.endpoint.udpPort)
 
   /*
    * Timeout for recv() calls; might need to be adjusted lower. This
    * is unrelated to timeout configurable for round-trip messages in a
    * ProtocolHandler.
    */
-  receiver.setSoTimeout(500) // 500 ms
+  socket.setSoTimeout(500) // 500 ms
 
   val recv_buffer = new Array[Byte](65508)
   val recv_dgram = new DatagramPacket(recv_buffer, recv_buffer.size)
@@ -68,10 +67,13 @@ case class UnicastComm(local: PeerNode) extends Comm {
     * Returns `Right` with the bytes read from the socket or Left with
     * an error, if something went wrong.
     */
-  override def recv: Either[CommError, Seq[Byte]] =
+  override def recv: Either[CommError, (SocketAddress, Seq[Byte])] =
     try {
-      receiver.receive(recv_dgram)
-      decode(recv_dgram.getData)
+      socket.receive(recv_dgram)
+      decode(recv_dgram.getData) match {
+        case Right(data) => Right((recv_dgram.getSocketAddress, data))
+        case Left(err) => Left(err)
+      }
     } catch {
       case NonFatal(ex: Exception) => Left(DatagramException(ex))
     }
@@ -84,10 +86,9 @@ case class UnicastComm(local: PeerNode) extends Comm {
     */
   override def send(data: Seq[Byte], peer: PeerNode): Either[CommError, Unit] =
     encode(data).flatMap { payload =>
-      println(s"COMM Sending to ${peer.endpoint.udpSocketAddress}")
       val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
       try {
-        sender.send(dgram)
+        socket.send(dgram)
         Right(())
       } catch {
         case NonFatal(ex: Exception) => Left(DatagramException(ex))

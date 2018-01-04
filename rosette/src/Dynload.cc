@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,12 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
 #if defined(USE_DYNLOAD)
 /*
  * The code for DynamicLoader::loadhelp is adapted from the code
@@ -30,7 +25,7 @@
  */
 
 /*
- *			D Y N L O A D . C 
+ *			D Y N L O A D . C
  *
  * This file contains functions to help dynamically load foreign UNIX files
  * into a running T process.
@@ -85,7 +80,7 @@
 //
  * Revision 1.1  86/12/24  18:20:44  dorab
  * Initial Revision
- * 
+ *
  */
 #include "rosette.h"
 #include "Ob.h"
@@ -104,32 +99,15 @@
  * will be a standard...
  */
 
-#if defined(__GNUG__)
 typedef void* sbrk_t;
-#else
-typedef caddr_t sbrk_t;
-#endif
 
-extern "C" {
 #include <a.out.h>
-    int getegid (void);
-    int geteuid (void);
-    sbrk_t sbrk (int);
-/*    
-#ifndef c_plusplus    
-    int chmod (const char*, int);
-    int umask (int);
-    int setbuffer (FILE*, char*, int);
-#endif
-*/
-    int getpagesize ();
-#if defined(__GNUG__)
-    int unlink (const char*);
-#else
-    int unlink (char*);
-#endif
- 
-}
+int getegid(void);
+int geteuid(void);
+sbrk_t sbrk(int);
+
+int getpagesize();
+int unlink(const char*);
 
 #include "misc.h"
 #include "Dynload.h"
@@ -143,19 +121,17 @@ extern "C" {
 static const int PAGESIZE = 8192;
 #endif
 
-
 
 #ifndef LOADER
 #define LOADER "/bin/ld"
 #endif
 
 #if defined(__GNUG__)
-typedef char * caddr_t;
+typedef char* caddr_t;
 #endif
 
 
-DynamicLoader::DynamicLoader (const char* initial_relocFile)
-{
+DynamicLoader::DynamicLoader(const char* initial_relocFile) {
     /*
      * If LdTemplate changes, particularly if any more interpreted fields
      * (e.g., %s) are added to it, the computation of ldCmdSpace in
@@ -169,34 +145,31 @@ DynamicLoader::DynamicLoader (const char* initial_relocFile)
     uid = geteuid();
     gid = getegid();
 
-    if (findCmd(initial_relocFile, relocFile, getenv("PATH")))
-	fprintf (stderr, "loader cannot find initial relocation file: %s\n",
-		 initial_relocFile);
-    else {
-	FILE* a_out = fopen(relocFile, "r");
-	if (a_out == 0 || fread ((char*)&myHdr, sizeof(myHdr), 1, a_out) != 1)
-	    suicide("%s: %s\n", relocFile, sys_errmsg());
+    if (findCmd(initial_relocFile, relocFile, getenv("PATH"))) {
+        fprintf(stderr, "loader cannot find initial relocation file: %s\n",
+                initial_relocFile);
+    } else {
+        FILE* a_out = fopen(relocFile, "r");
+        if (a_out == 0 || fread((char*)&myHdr, sizeof(myHdr), 1, a_out) != 1) {
+            suicide("%s: %s\n", relocFile, sys_errmsg());
+        }
     }
 }
 
 
-DynamicLoader::~DynamicLoader ()
-{
+DynamicLoader::~DynamicLoader() {
     if (modified)
-	unlink(relocFile);
+        unlink(relocFile);
 }
 
 
-int
-DynamicLoader::isExecutable (const char* pathname, short uid, short gid)
-{
+int DynamicLoader::isExecutable(const char* pathname, short uid, short gid) {
     struct stat sbuf;
 
-    return (stat(pathname, &sbuf) == 0
-	    && !(sbuf.st_mode & S_IFDIR)
-	    && (sbuf.st_uid == uid && (sbuf.st_mode & S_IEXEC)
-		|| sbuf.st_gid == gid && (sbuf.st_mode & 010)
-		|| (sbuf.st_mode & 001)));
+    return (stat(pathname, &sbuf) == 0 && !(sbuf.st_mode & S_IFDIR) &&
+            (sbuf.st_uid == uid && (sbuf.st_mode & S_IEXEC) ||
+             sbuf.st_gid == gid && (sbuf.st_mode & 010) ||
+             (sbuf.st_mode & 001)));
 }
 
 
@@ -211,11 +184,10 @@ DynamicLoader::isExecutable (const char* pathname, short uid, short gid)
  * faster.)
  */
 
-int
-DynamicLoader::findCmd (const char* name, char* pathBuf, const char* paths)
-{
-    if (!paths)
-	paths = getenv ("PATH");
+int DynamicLoader::findCmd(const char* name, char* pathBuf, const char* paths) {
+    if (!paths) {
+        paths = getenv("PATH");
+    }
 
     /*
      * If name is a path already (relative or absolute), we simply use it
@@ -223,26 +195,27 @@ DynamicLoader::findCmd (const char* name, char* pathBuf, const char* paths)
      * /usr/ucb/which.
      */
 
-    if (strchr (name, '/'))
-	if (isExecutable (name, uid, gid)) {
-	    strcpy (pathBuf, name);
-	    return 0;
-	}
-	else {
-	    pathBuf[0] = 0;
-	    return 1;
-	}
+    if (strchr(name, '/')) {
+        if (isExecutable(name, uid, gid)) {
+            strcpy(pathBuf, name);
+            return 0;
+        } else {
+            pathBuf[0] = 0;
+            return 1;
+        }
+    }
 
-    char* buf = new char [strlen(paths) + 1];
-    strcpy (buf, paths);
+    char* buf = new char[strlen(paths) + 1];
+    strcpy(buf, paths);
 
     for (const char* p = strtok(buf, ":"); p; p = strtok(NULL, ":")) {
-	strcpy (pathBuf, p);
-	strcat (pathBuf, "/");
-	strcat (pathBuf, name);
+        strcpy(pathBuf, p);
+        strcat(pathBuf, "/");
+        strcat(pathBuf, name);
 
-	if (isExecutable (pathBuf, uid, gid))
-	    return 0;
+        if (isExecutable(pathBuf, uid, gid)) {
+            return 0;
+        }
     }
 
     delete buf;
@@ -251,11 +224,9 @@ DynamicLoader::findCmd (const char* name, char* pathBuf, const char* paths)
 }
 
 
-DynamicLoader::operator void* ()
-{
+DynamicLoader::operator void*() {
     return (strcmp(relocFile, "") == 0 ? 0 : this);
 }
-
 
 
 /*
@@ -273,36 +244,28 @@ DynamicLoader::operator void* ()
  */
 
 
-int
-DynamicLoader::load (const char* objFile,
-		     char* msgBuf,
-		     const char* libStr,
-		     const char* otherStr)
-{
+int DynamicLoader::load(const char* objFile, char* msgBuf, const char* libStr,
+                        const char* otherStr) {
     /*
      * Calculate the length of the ld command and allocate memory for it.
      * This code needs to be changed if LdCmdTemplate is changed.
      */
 
-    int ldCmdSpace = strlen(loaderFile) + strlen (LdTemplate)
-	+ strlen (objFile) + /* strlen (relocFile) + strlen (tmpName) */
-	    + strlen (libStr) + strlen (otherStr)
-		+ 16;	/* 10 for loadPoint + 1 for null + fudge of 5 */
+    int ldCmdSpace =
+        strlen(loaderFile) + strlen(LdTemplate) +
+        strlen(objFile) + /* strlen (relocFile) + strlen (tmpName) */
+        +strlen(libStr) + strlen(otherStr) +
+        16; /* 10 for loadPoint + 1 for null + fudge of 5 */
 
-    char* ldCmd = new char [ldCmdSpace];
-    sprintf (ldCmd, LdTemplate,
-	     loaderFile, otherStr, objFile, libStr);
+    char* ldCmd = new char[ldCmdSpace];
+    sprintf(ldCmd, LdTemplate, loaderFile, otherStr, objFile, libStr);
     int result = loadhelp(ldCmd, msgBuf);
     delete ldCmd;
     return result;
 }
-    
 
 
-int
-DynamicLoader::loadhelp (const char* ldTemplate,
-			 char* msgBuf)
-{
+int DynamicLoader::loadhelp(const char* ldTemplate, char* msgBuf) {
     sbrk_t endOfMem, loadPoint, loadCheck;
     long bytesToRead, bytesToExtend;
     char buffer[PAGESIZE];
@@ -318,10 +281,10 @@ DynamicLoader::loadhelp (const char* ldTemplate,
      */
 
     char* tmpName = tempnam(".", "rbl");
-    int ldCmdSpace = strlen(ldTemplate) + strlen(relocFile) + strlen(tmpName)
-			+ 16;	/* 10 for loadPoint + 1 for null + fudge of 5 */
-    
-    char* ldCmd = new char [ldCmdSpace];
+    int ldCmdSpace = strlen(ldTemplate) + strlen(relocFile) + strlen(tmpName) +
+                     16; /* 10 for loadPoint + 1 for null + fudge of 5 */
+
+    char* ldCmd = new char[ldCmdSpace];
     FILE* tmpFile = 0;
     struct exec hdr;
 
@@ -329,9 +292,9 @@ DynamicLoader::loadhelp (const char* ldTemplate,
 
 
     if ((endOfMem = sbrk(0)) == (sbrk_t)-1) {
-	sprintf(msgBuf, "load: sbrk (0) failed");
-	rtnCode = 1;
-	goto quit;
+        sprintf(msgBuf, "load: sbrk (0) failed");
+        rtnCode = 1;
+        goto quit;
     }
 
 #ifdef LOAD_ON_PAGE_BOUNDARIES
@@ -344,18 +307,19 @@ DynamicLoader::loadhelp (const char* ldTemplate,
      * round up to the next higher pageSize
      */
     assert(PAGESIZE = getpagesize());
-    if ((loadPoint = sbrk ((int)(PAGESIZE - (endOfMem & (PAGESIZE - 1L))))) == (sbrk_t) -1) {
-	sprintf(msgBuf, "load: could not bump upto pagesize");
-	rtnCode = 2;
-	goto quit;
+    if ((loadPoint = sbrk((int)(PAGESIZE - (endOfMem & (PAGESIZE - 1L))))) ==
+        (sbrk_t)-1) {
+        sprintf(msgBuf, "load: could not bump upto pagesize");
+        rtnCode = 2;
+        goto quit;
     }
-    loadPoint = sbrk (0);
+    loadPoint = sbrk(0);
 
     /* sanity check */
     if (loadPoint == (sbrk_t)-1 || ((loadPoint & (PAGESIZE - 1L)) != 0L)) {
-	sprintf(msgBuf, "load: not page aligned");
-	rtnCode = 3;
-	goto quit;
+        sprintf(msgBuf, "load: not page aligned");
+        rtnCode = 3;
+        goto quit;
     }
 #else
     loadPoint = endOfMem;
@@ -367,16 +331,16 @@ DynamicLoader::loadhelp (const char* ldTemplate,
      * run the ld comand to do relocation
      */
     errno = 0;
-    if (system (ldCmd) != 0) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 4;
-	goto quit;
+    if (system(ldCmd) != 0) {
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 4;
+        goto quit;
     }
 
     if ((tmpFile = fopen(tmpName, "r")) == 0) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 5;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 5;
+        goto quit;
     }
 
     /*
@@ -385,82 +349,81 @@ DynamicLoader::loadhelp (const char* ldTemplate,
     setbuffer(tmpFile, buffer, sizeof(buffer));
 
     if (fread((char*)&hdr, sizeof(hdr), 1, tmpFile) != 1) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 6;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 6;
+        goto quit;
     }
 
     if (N_BADMAG(hdr)) {
-	sprintf(msgBuf, "bad magic number %o in %s", hdr.a_magic, tmpName);
-	rtnCode = 7;
-	goto quit;
+        sprintf(msgBuf, "bad magic number %o in %s", hdr.a_magic, tmpName);
+        rtnCode = 7;
+        goto quit;
     }
 
     bytesToRead = hdr.a_text + hdr.a_data;
     bytesToExtend = bytesToRead + hdr.a_bss;
 
     /*
-     * Get the required memory 
+     * Get the required memory
      */
-    loadCheck = sbrk ((int)bytesToExtend);
+    loadCheck = sbrk((int)bytesToExtend);
     if (loadCheck == (sbrk_t)-1) {
-	sprintf(msgBuf, "not enough memory");
-	rtnCode = 8;
-	goto quit;
+        sprintf(msgBuf, "not enough memory");
+        rtnCode = 8;
+        goto quit;
     }
 
     /*
-     * Some last sanity checks 
+     * Some last sanity checks
      */
     if (loadCheck != loadPoint) {
-	sprintf(msgBuf, "load point is 0x%lx but sbrk(0) is 0x%lx",
-		(unsigned long)loadPoint, (unsigned long)loadCheck);
-	rtnCode = 9;
-	goto quit;
+        sprintf(msgBuf, "load point is 0x%lx but sbrk(0) is 0x%lx",
+                (uint32_t)loadPoint, (uint32_t)loadCheck);
+        rtnCode = 9;
+        goto quit;
     }
 
 #ifdef LOAD_ON_PAGE_BOUNDARIES
     if (loadCheck & (PAGESIZE - 1L)) {
-	sprintf(msgBuf, "allocated memory at 0x%lx - not page aligned",
-		(unsigned long)loadCheck);
-	rtnCode = 10;
-	goto quit;
+        sprintf(msgBuf, "allocated memory at 0x%lx - not page aligned",
+                (uint32_t)loadCheck);
+        rtnCode = 10;
+        goto quit;
     }
 #endif
 
     /*
-     * Go to beginning of text 
+     * Go to beginning of text
      */
     if (fseek(tmpFile, (long)N_TXTOFF(hdr), 0)) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 11;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 11;
+        goto quit;
     }
 
     /*
-     * Read the text and data segments in 
+     * Read the text and data segments in
      */
     if (fread((char*)loadPoint, 1, (int)bytesToRead, tmpFile) != bytesToRead) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 12;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 12;
+        goto quit;
     }
 
-  quit:
+quit:
 
     delete ldCmd;
     fclose(tmpFile);
     if (rtnCode == 0) {
-	if (modified)
-	    unlink(relocFile);
-	strcpy(relocFile, tmpName);
-	modified = 1;
+        if (modified)
+            unlink(relocFile);
+        strcpy(relocFile, tmpName);
+        modified = 1;
     }
     free(tmpName);
 
     return rtnCode;
 }
-
 
 
 /*
@@ -478,15 +441,12 @@ DynamicLoader::loadhelp (const char* ldTemplate,
  */
 
 
-int
-DynamicLoader::dump (char* outFile,
-		     char* msgBuf)
-{
+int DynamicLoader::dump(char* outFile, char* msgBuf) {
     int rtnCode = 0;
     FILE* reloc = 0;
     FILE* out = 0;
     struct exec relocHdr, outHdr;
-    unsigned long textStart, dataStart, endOfMem;
+    uint32_t textStart, dataStart, endOfMem;
     int textSpan, dataSpan, nBytes;
     int usermask;
     struct stat sbuf;
@@ -501,9 +461,9 @@ DynamicLoader::dump (char* outFile,
     char buffer[PAGESIZE];
 
     if ((reloc = fopen(relocFile, "r")) == 0) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 1;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 1;
+        goto quit;
     }
 
     /*
@@ -513,15 +473,14 @@ DynamicLoader::dump (char* outFile,
     setbuffer(reloc, relocBuffer, sizeof(relocBuffer));
 
     if (fread((char*)&relocHdr, sizeof(relocHdr), 1, reloc) != 1) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 2;
-
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 2;
     }
 
     if ((out = fopen(outFile, "w")) == 0) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 3;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 3;
+        goto quit;
     }
 
     /*
@@ -530,7 +489,7 @@ DynamicLoader::dump (char* outFile,
      */
     setbuffer(out, outBuffer, sizeof(outBuffer));
 
-    endOfMem = (unsigned long) sbrk (0);
+    endOfMem = (unsigned long)sbrk(0);
 
     outHdr = myHdr;
     outHdr.a_data = endOfMem - N_DATADDR(myHdr);
@@ -540,9 +499,9 @@ DynamicLoader::dump (char* outFile,
     outHdr.a_drsize = relocHdr.a_drsize;
 
     if (fwrite((char*)&outHdr, sizeof(outHdr), 1, out) != 1) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 4;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 4;
+        goto quit;
     }
 
     /*
@@ -551,44 +510,50 @@ DynamicLoader::dump (char* outFile,
      */
 
     textStart = N_TXTADDR(outHdr) + sizeof(outHdr);
-    textSpan = (int) (outHdr.a_text - sizeof(outHdr));
+    textSpan = (int)(outHdr.a_text - sizeof(outHdr));
 
     if (fwrite((char*)textStart, sizeof(char), textSpan, out) != textSpan) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 5;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 5;
+        goto quit;
     }
 
     dataStart = N_DATADDR(outHdr);
-    dataSpan = (int) outHdr.a_data;
+    dataSpan = (int)outHdr.a_data;
 
     if (fwrite((char*)dataStart, sizeof(char), dataSpan, out) != dataSpan) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 6;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 6;
+        goto quit;
     }
 
-    if (fseek(reloc, N_TXTOFF(relocHdr)+relocHdr.a_text+relocHdr.a_data, L_SET)) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 7;
-	goto quit;
+    if (fseek(reloc, N_TXTOFF(relocHdr) + relocHdr.a_text + relocHdr.a_data,
+              L_SET)) {
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 7;
+        goto quit;
     }
 
-    while ((nBytes = fread(buffer, 1, sizeof(buffer), reloc)) == sizeof(buffer))
-	fwrite(buffer, 1, sizeof(buffer), out);
-    if (nBytes > 0)
-	fwrite(buffer, 1, nBytes, out);
+    while ((nBytes = fread(buffer, 1, sizeof(buffer), reloc)) ==
+           sizeof(buffer)) {
+        fwrite(buffer, 1, sizeof(buffer), out);
+    }
+
+    if (nBytes > 0) {
+        fwrite(buffer, 1, nBytes, out);
+    }
 
     if (!feof(reloc)) {
-	sprintf(msgBuf, "not at end of reloc file after dumping string table\n");
-	rtnCode = 8;
-	goto quit;
+        sprintf(msgBuf,
+                "not at end of reloc file after dumping string table\n");
+        rtnCode = 8;
+        goto quit;
     }
 
     if (ferror(out)) {
-	sprintf(msgBuf, "problem writing symbol table");
-	rtnCode = 9;
-	goto quit;
+        sprintf(msgBuf, "problem writing symbol table");
+        rtnCode = 9;
+        goto quit;
     }
 
     /*
@@ -597,30 +562,32 @@ DynamicLoader::dump (char* outFile,
     usermask = umask(777);
     umask(usermask);
 
-    if (stat (outFile, &sbuf) == -1) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 10;
-	goto quit;
+    if (stat(outFile, &sbuf) == -1) {
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 10;
+        goto quit;
     }
 
     if (chmod(outFile, (sbuf.st_mode | (0111 & ~usermask))) == -1) {
-	strcpy(msgBuf, sys_errmsg());
-	rtnCode = 11;
-	goto quit;
+        strcpy(msgBuf, sys_errmsg());
+        rtnCode = 11;
+        goto quit;
     }
 
-  quit:
-    if (reloc)
-	fclose(reloc);
+quit:
+    if (reloc) {
+        fclose(reloc);
+    }
+
     if (out) {
-	fclose(out);
-	if (rtnCode != 0)
-	    unlink(outFile);
+        fclose(out);
+        if (rtnCode != 0) {
+            unlink(outFile);
+        }
     }
 
     return rtnCode;
 }
-
 
 
 /*
@@ -630,107 +597,131 @@ DynamicLoader::dump (char* outFile,
  */
 
 
-void*
-DynamicLoader::resolve (const char* functionName, char* msgBuf)
-{
+void* DynamicLoader::resolve(const char* functionName, char* msgBuf) {
     void* result = 0;
     FILE* f = 0;
     FILE* sf = 0;
     char* namebuf = 0;
 
-#define QUIT(v)								      \
-    {									      \
-	if (f) fclose(f);						      \
-	if (sf) fclose(sf);						      \
-	if (namebuf) delete namebuf;					      \
-	return v;							      \
+#define QUIT(v)             \
+    {                       \
+        if (f)              \
+            fclose(f);      \
+        if (sf)             \
+            fclose(sf);     \
+        if (namebuf)        \
+            delete namebuf; \
+        return v;           \
     }
-    
+
     if ((f = fopen(relocFile, "r")) == NULL) {
-	if (msgBuf)
-	    strcpy(msgBuf, sys_errmsg());
-	QUIT(0);
+        if (msgBuf) {
+            strcpy(msgBuf, sys_errmsg());
+        }
+
+        QUIT(0);
     }
 
     struct exec hdr;
     if (fread((char*)&hdr, sizeof(hdr), 1, f) != 1) {
-	if (msgBuf)
-	    strcpy(msgBuf, sys_errmsg());
-	QUIT(0);
+        if (msgBuf) {
+            strcpy(msgBuf, sys_errmsg());
+        }
+
+        QUIT(0);
     }
     if (N_BADMAG(hdr)) {
-	if (msgBuf)
-	    sprintf(msgBuf, "'%s' is not an object file", relocFile);
-	QUIT(0);
+        if (msgBuf) {
+            sprintf(msgBuf, "'%s' is not an object file", relocFile);
+        }
+
+        QUIT(0);
     }
 
     off_t symoff = N_SYMOFF(hdr);
     off_t stroff = N_STROFF(hdr);
 
     if (fseek(f, symoff, 0)) {
-	if (msgBuf)
-	    strcpy(msgBuf, sys_errmsg());
-	QUIT(0);
+        if (msgBuf) {
+            strcpy(msgBuf, sys_errmsg());
+        }
+        QUIT(0);
     }
-	
+
     if ((sf = fopen(relocFile, "r")) == NULL) {
-	if (msgBuf)
-	    strcpy(msgBuf, sys_errmsg());
-	QUIT(0);
+        if (msgBuf) {
+            strcpy(msgBuf, sys_errmsg());
+        }
+
+        QUIT(0);
     }
     if (fseek(sf, stroff, 0)) {
-	if (msgBuf)
-	    strcpy(msgBuf, sys_errmsg());
-	QUIT(0);
+        if (msgBuf) {
+            strcpy(msgBuf, sys_errmsg());
+        }
+
+        QUIT(0);
     }
 
-    KONST int NCHARS = strlen(functionName)+1;
-    namebuf = new char [NCHARS];
-    KONST int NSYMS = BUFSIZ / sizeof(struct nlist);
+    const int NCHARS = strlen(functionName) + 1;
+    namebuf = new char[NCHARS];
+    const int NSYMS = BUFSIZ / sizeof(struct nlist);
     struct nlist sym[NSYMS];
     int n = 0;
-    int remaining = (int) (hdr.a_syms/sizeof(struct nlist));
+    int remaining = (int)(hdr.a_syms / sizeof(struct nlist));
 
     while (remaining > 0) {
-	n = remaining < NSYMS ? remaining : NSYMS;
-	remaining -= n;
-	if (fread((char*)&sym[0], sizeof(struct nlist), n, f) != n) {
-	    if (msgBuf)
-		strcpy(msgBuf, sys_errmsg());
-	    QUIT(0);
-	}
-	for (int i = 0; i < n; i++) {
-	    /*
-	     * This mask ensures that we find only extern'ed text
-	     * entries.  It should be changed if it becomes necessary to
-	     * look for static entries, data entries, etc.
-	     */
-	    KONST unsigned char mask = N_TEXT+N_EXT;
-	    if (sym[i].n_un.n_strx == 0
-		|| sym[i].n_type & N_STAB
-		|| (sym[i].n_type & mask) != mask)
-		continue;
-	    if (fseek(sf, stroff+sym[i].n_un.n_strx, 0)) {
-		if (msgBuf)
-		    strcpy(msgBuf, sys_errmsg());
-		QUIT(0);
-	    }
-	    if (fread(namebuf, sizeof(char), NCHARS, sf) == 0) {
-		if (msgBuf)
-		    strcpy(msgBuf, sys_errmsg());
-		QUIT(0);
-	    }
-	    if (strcmp(functionName, namebuf) == 0)
-		QUIT((void*) sym[i].n_value);
-	}
+        n = remaining < NSYMS ? remaining : NSYMS;
+        remaining -= n;
+        if (fread((char*)&sym[0], sizeof(struct nlist), n, f) != n) {
+            if (msgBuf) {
+                strcpy(msgBuf, sys_errmsg());
+            }
+
+            QUIT(0);
+        }
+        for (int i = 0; i < n; i++) {
+            /*
+             * This mask ensures that we find only extern'ed text
+             * entries.  It should be changed if it becomes necessary to
+             * look for static entries, data entries, etc.
+             */
+            const unsigned char mask = N_TEXT + N_EXT;
+            if (sym[i].n_un.n_strx == 0 || sym[i].n_type & N_STAB ||
+                (sym[i].n_type & mask) != mask) {
+                continue;
+            }
+
+            if (fseek(sf, stroff + sym[i].n_un.n_strx, 0)) {
+                if (msgBuf) {
+                    strcpy(msgBuf, sys_errmsg());
+                }
+
+                QUIT(0);
+            }
+
+            if (fread(namebuf, sizeof(char), NCHARS, sf) == 0) {
+                if (msgBuf) {
+                    strcpy(msgBuf, sys_errmsg());
+                }
+
+                QUIT(0);
+            }
+
+            if (strcmp(functionName, namebuf) == 0) {
+                QUIT((void*)sym[i].n_value);
+            }
+        }
     }
 
-    if (msgBuf)
-	sprintf(msgBuf, "'%s' not found", functionName);
+    if (msgBuf) {
+        sprintf(msgBuf, "'%s' not found", functionName);
+    }
+
     QUIT(0);
 
 #undef QUIT
 }
 
-#endif 
+#endif
 #endif

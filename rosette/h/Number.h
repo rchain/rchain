@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Numbers_h)
 #define _RBL_Numbers_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 #ifdef USE_SHORT_FLOAT
@@ -43,25 +32,22 @@ typedef double Rfloat;
 
 static const int FloatFormatSize = 16;
 
-class Float : public BinaryOb
-{
+class Float : public BinaryOb {
     STD_DECLS(Float);
 
-  protected:
-
-    static char format [FloatFormatSize];
+   protected:
+    static char format[FloatFormatSize];
     friend BUILTIN_PRIM(flFormat);
 
-    Float (Rfloat);
+    Float(Rfloat);
 
-    Ob*	checkResult (Prim*, Ctxt*, Rfloat);
+    Ob* checkResult(Prim*, Ctxt*, Rfloat);
 
-  public:
+   public:
+    Rfloat val;
 
-    Rfloat  val;
-
-    static Float*	create (Rfloat);
-    char*		asCstring ();
+    static Float* create(Rfloat);
+    const char* asCstring();
 };
 
 #endif

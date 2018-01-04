@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,77 +17,55 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Queue_h)
 #define _RBL_Queue_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class Queue : public Ob
-{
+class Queue : public Ob {
     STD_DECLS(Queue);
 
-  protected:
+   protected:
+    Queue(Tuple*);
+    Queue(int, Ob*, Ob*, Tuple*);
 
-    Queue (Tuple*);
-    Queue (int, Ob*, Ob*, Tuple*);
+   public:
+    Ob* qHead;
+    Ob* qTail;
+    Ob* nElems;
+    Tuple* elems;
 
-  public:
+    static Queue* create();
+    virtual Ob* cloneTo(Ob* meta, Ob* parent);
 
-    Ob*		qHead;
-    Ob*		qTail;
-    Ob*		nElems;
-    Tuple*	elems;
+    int depth() { return FIXVAL(nElems); }
+    bool isEmpty() { return nElems == FIXNUM(0); }
 
-    static Queue*	create ();
+    void enqueue(Ob*);
+    Ob* dequeue();
+    void reset();
 
-    virtual Ob*	cloneTo (Ob* meta, Ob* parent);
+    Ob* indexedSize();
+    Ob* nth(int);
+    Ob* setNth(int, Ob*);
+    Ob* subObject(int, int);
 
-    int		depth ();
-    bool	isEmpty ();
-    void	enqueue (Ob*);
-    Ob*		dequeue ();
-    void	reset ();
-
-    Ob*		indexedSize ();
-    Ob*		nth (int);
-    Ob*		setNth (int, Ob*);
-    Ob*		subObject (int, int);
-
-    Ob*		patternDequeue(Tuple*);
-    Ob*		patternRead(Tuple*);
-    Ob*		dequeueNth(int);
+    Ob* patternDequeue(Tuple*);
+    Ob* patternRead(Tuple*);
+    Ob* dequeueNth(int);
 };
 
 
-inline int	Queue::depth ()		{ return FIXVAL(nElems); }
-inline bool	Queue::isEmpty ()	{ return nElems == FIXNUM(0); }
-
-
-class MboxQueue : public Queue
-{
+class MboxQueue : public Queue {
     STD_DECLS(MboxQueue);
 
-  protected:
+   protected:
+    MboxQueue(Tuple*);
 
-    MboxQueue (Tuple*);
-
-  public:
-
-    static MboxQueue*	create ();
-    virtual Ob*		maybeDequeue (Ob*);
+   public:
+    static MboxQueue* create();
+    virtual Ob* maybeDequeue(Ob*);
 };
 
 #endif

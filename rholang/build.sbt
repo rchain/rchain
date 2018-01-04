@@ -16,7 +16,7 @@ lazy val commonOptions = Seq(
   "-feature",
   "-unchecked")
 
-lazy val consoleOptions = commonOptions diff Seq("-Ywarn-unused-import")
+lazy val consoleOptions = commonOptions diff Seq("-Xlint", "-Ywarn-unused-import")
 
 lazy val commonSettings = Seq(
   name := "rholang",

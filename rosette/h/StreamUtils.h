@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,38 +17,26 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_StreamUtils_h)
 #define _StreamUtils_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include <ctype.h>
 
-inline int isoctal (char c) {return (isdigit(c) && (c < '8'));}
+int isoctal(char c);
 
 typedef int (*errfn)(FILE*);
 
-extern int readError (FILE*, const char*, ...);
-extern int eofError (FILE*);
+extern int readError(FILE*, const char*, ...);
+extern int eofError(FILE*);
 
-extern char getEscapedChar (FILE*);
-extern char getSafeChar (FILE*, char = '\\');
+extern char getEscapedChar(FILE*);
+extern char getSafeChar(FILE*, char = '\\');
 
-extern int putEscapedChar (char, FILE*);
-extern int putSafeChar (char, FILE*, char = '\\');
+extern int putEscapedChar(char, FILE*);
+extern int putSafeChar(char, FILE*, char = '\\');
 
-extern char*	safeStrcpy (char*, char*, char = '\\');
-extern int	safeStrlen (char*, char = '\\');
+extern char* safeStrcpy(char*, char*, char = '\\');
+extern int safeStrlen(char*, char = '\\');
 
 #endif

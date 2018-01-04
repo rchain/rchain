@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,37 +17,23 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_ModuleInit_h)
 #define _RBL_ModuleInit_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
 
-class Module
-{
-  protected:
+class Module {
+   protected:
+    static Module* root;
 
-    static Module*	root;
+    const char* name;
+    Module* link;
+    void (*initFn)();
 
-    const char*		name;
-    Module*		link;
-    void		(*initFn) ();
+   public:
+    Module(const char*, void (*)());
 
-  public:
-
-    Module (const char*, void (*) ());
-
-    static void		initModules ();
+    static void initModules();
 };
 
 /*
@@ -68,13 +55,13 @@ class Module
  * on things that are initialized by another MODULE_INIT.
  */
 
-#define MODULE_INIT_FN(name) name3(_mi_,name,_initFn)
+#define MODULE_INIT_FN(name) name3(_mi_, name, _initFn)
 
-#define MODULE_INIT(name)						      \
-static void MODULE_INIT_FN(name) ();					      \
-static Module name3(_mi_,name,_Module_Instance)				      \
-    (_STRING(name), &MODULE_INIT_FN(name));				      \
-static void MODULE_INIT_FN(name) ()
+#define MODULE_INIT(name)                                                     \
+    static void MODULE_INIT_FN(name)();                                       \
+    static Module name3(_mi_, name, _Module_Instance)(_STRING(name),          \
+                                                      &MODULE_INIT_FN(name)); \
+    static void MODULE_INIT_FN(name)()
 
 
 #endif

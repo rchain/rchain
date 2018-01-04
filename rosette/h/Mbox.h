@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,91 +17,63 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Mbox_h)
 #define _RBL_Mbox
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class EmptyMbox : public Ob
-{
+class EmptyMbox : public Ob {
     STD_DECLS(EmptyMbox);
 
-  protected:
+   protected:
+    EmptyMbox();
 
-    EmptyMbox ();
-
-  public:
-
-    static EmptyMbox*	create ();
-    virtual Ob*		cloneTo (Ob*, Ob*);
-    virtual Ob*		receiveMsg (MboxOb*, Ctxt*);
-    virtual Ob*		nextMsg (MboxOb*, Ob*);
+   public:
+    static EmptyMbox* create();
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual Ob* receiveMsg(MboxOb*, Ctxt*);
+    virtual Ob* nextMsg(MboxOb*, Ob*);
 };
 
 
-
-class LockedMbox : public Ob
-{
+class LockedMbox : public Ob {
     STD_DECLS(LockedMbox);
 
-  protected:
+   protected:
+    LockedMbox();
 
-    LockedMbox ();
-
-  public:
-
-    static LockedMbox*	create ();
-    virtual Ob*		cloneTo (Ob*, Ob*);
-    virtual Ob*		receiveMsg (MboxOb*, Ctxt*);
-    virtual Ob*		nextMsg (MboxOb*, Ob*);
+   public:
+    static LockedMbox* create();
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual Ob* receiveMsg(MboxOb*, Ctxt*);
+    virtual Ob* nextMsg(MboxOb*, Ob*);
 };
 
 
-
-class QueueMbox : public Ob
-{
+class QueueMbox : public Ob {
     STD_DECLS(QueueMbox);
 
-  protected:
+   protected:
+    QueueMbox(Ob*, MboxQueue*);
 
-    QueueMbox (Ob*, MboxQueue*);
+   public:
+    Ob* lockVal;
+    Ob* enabledSet;
+    MboxQueue* queue;
 
-  public:
+    static QueueMbox* create(Ob*);
 
-    Ob*		lockVal;
-    Ob*		enabledSet;
-    MboxQueue*	queue;
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual Ob* receiveMsg(MboxOb*, Ctxt*);
+    virtual Ob* nextMsg(MboxOb*, Ob*);
 
-    static QueueMbox*	create (Ob*);
-
-    virtual Ob*	cloneTo (Ob*, Ob*);
-    virtual Ob*	receiveMsg (MboxOb*, Ctxt*);
-    virtual Ob*	nextMsg (MboxOb*, Ob*);
-
-    bool	isLocked ();
-    void	lock ();
-    void	unlock ();
-    void	enqueue (Ob*);
-    Ob*		dequeue ();
+    bool isLocked() { return BOOLVAL(lockVal); }
+    void lock() { lockVal = RBLTRUE; }
+    void unlock() { lockVal = RBLFALSE; }
+    void enqueue(Ob*);
+    Ob* dequeue();
 };
-
-
-inline bool	QueueMbox::isLocked ()	{ return BOOLVAL(lockVal); }
-inline void	QueueMbox::lock ()	{ lockVal = RBLTRUE; }
-inline void	QueueMbox::unlock ()	{ lockVal = RBLFALSE; }
 
 
 extern Ob* emptyMbox;

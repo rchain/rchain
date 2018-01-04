@@ -3,7 +3,6 @@ package coop.rchain.rosette
 import coop.rchain.rosette.Location.StoreCtxt
 import coop.rchain.rosette.VirtualMachine.loggerStrand
 import Location._
-import scala.collection.mutable
 
 case class Ctxt(tag: Location,
                 nargs: Int,
@@ -18,8 +17,7 @@ case class Ctxt(tag: Location,
                 self2: Ob, // reg[6]
                 selfEnv: Ob, // reg[7]
                 rcvr: Ob, // reg[8]
-                monitor: Monitor, // reg[9]
-                override val _slot: mutable.Seq[Ob])
+                monitor: Monitor) // reg[9]
     extends Ob {
   private val regs =
     Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
@@ -94,7 +92,25 @@ case class Ctxt(tag: Location,
 }
 
 object Ctxt {
-  def apply(tuple: Option[Tuple], ctxt: Ctxt): Ctxt = PLACEHOLDER
+  def apply(tuple: Option[Tuple], ctxt: Ctxt): Ctxt = {
+    val t = tuple.getOrElse(Tuple.Placeholder)
+    Ctxt(
+      tag = LocRslt,
+      nargs = t.elem.size,
+      outstanding = 0,
+      pc = PC(0),
+      rslt = Ob.NIV,
+      trgt = Ob.NIV,
+      argvec = t,
+      env = ctxt.env,
+      code = ctxt.code,
+      ctxt = ctxt,
+      self2 = ctxt.self2,
+      selfEnv = ctxt.selfEnv,
+      rcvr = ctxt.rcvr,
+      monitor = ctxt.monitor
+    )
+  }
 
   def apply(trgt: Ob, argvec: Tuple): Ctxt = PLACEHOLDER
 
@@ -112,14 +128,12 @@ object Ctxt {
                    null,
                    null,
                    null,
-                   null,
                    null)
 
   object PLACEHOLDER
       extends Ctxt(null,
                    0,
                    0,
-                   null,
                    null,
                    null,
                    null,

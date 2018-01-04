@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Labels_h)
 #define _RBL_Labels_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 #include "Ob.h"
 
@@ -42,20 +31,17 @@ static const Label NoParticularLabel = -2;
 static const Label MissingLabel = -3;
 
 
-struct FixupEntry
-{
-    int		loc;
-    Label	label;
+struct FixupEntry {
+    int loc;
+    Label label;
 };
 
 
-class FixupVec : public BinaryOb
-{
+class FixupVec : public BinaryOb {
     STD_DECLS(FixupVec);
 
-  protected:
-
-    int		count;
+   protected:
+    int count;
 
     /*
      * If more member variables are added after count, be sure to modify
@@ -63,42 +49,26 @@ class FixupVec : public BinaryOb
      * of the object ends.
      */
 
-    FixupVec (int);
-    FixupVec (FixupVec*, int);
+    FixupVec(int);
+    FixupVec(FixupVec*, int);
 
-    static FixupVec* create (int);
-    static FixupVec* create (FixupVec*, int);
+    static FixupVec* create(int);
+    static FixupVec* create(FixupVec*, int);
 
-    FixupEntry&	entry (int);
+    FixupEntry& entry(int n) {
+        FixupEntry* p = (FixupEntry*)(((char*)&count) + sizeof(count));
+        return p[n];
+    }
 
     friend class LabelTable;
 
-  public:
-
-    int		numberOfEntries ();
-    int		capacity ();
-    void	addEntry (int, Label);
+   public:
+    int numberOfEntries() { return (count); }
+    void addEntry(int, Label);
+    int capacity() {
+        return ((SIZE(this) - sizeof(FixupVec)) / sizeof(FixupEntry));
+    }
 };
-
-inline
-FixupEntry& FixupVec::entry (int n)
-{
-    FixupEntry* p = (FixupEntry*) (((char*)&count)+sizeof(count));
-    return p[n];
-}
-
-inline int
-FixupVec::numberOfEntries ()
-{
-  return( count );
-}
-
-inline int
-FixupVec::capacity ()
-{
-  return( (SIZE(this)-sizeof(FixupVec)) / sizeof(FixupEntry) );
-}
-
 
 
 static const int DefaultLabelTableSize = 32;
@@ -107,31 +77,28 @@ static const int DefaultLabelTableSize = 32;
 class LabelNode;
 
 
-class LabelTable : public Ob
-{
+class LabelTable : public Ob {
     STD_DECLS(LabelTable);
 
-  protected:
-  
-    LabelTable (Word16Vec*, FixupVec*, RblTable*);
+   protected:
+    LabelTable(Word16Vec*, FixupVec*, RblTable*);
 
-  public:
+   public:
+    Ob* nextLabel;
+    Word16Vec* labelValues;
+    FixupVec* fixupValues;
+    RblTable* externalLabels;
 
-    Ob*		nextLabel;
-    Word16Vec*	labelValues;
-    FixupVec*	fixupValues;
-    RblTable*	externalLabels;
-  
-    static LabelTable* create (int = DefaultLabelTableSize);
+    static LabelTable* create(int = DefaultLabelTableSize);
 
-    Label	newLabel ();
-    Label 	newExternalLabel (LabelNode*);
-    void	addFixup (int, Label);
-    void	bindLabel (Label, int);
-    Label	getLabel (Ob*);
-    LabelNode*	getLabelNode (Ob*);
-    int		resolveLabel (Label);
-    void	resolveLabels (CodeBuf*);
+    Label newLabel();
+    Label newExternalLabel(LabelNode*);
+    void addFixup(int, Label);
+    void bindLabel(Label, int);
+    Label getLabel(Ob*);
+    LabelNode* getLabelNode(Ob*);
+    int resolveLabel(Label);
+    void resolveLabels(CodeBuf*);
 };
 
 #endif

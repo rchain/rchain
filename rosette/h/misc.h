@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,34 +17,22 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_misc_h)
 #define _misc_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include <stdio.h>
 
 extern "C" {
-void suicide (const char* fmt ...);
-void warning (const char* fmt ...);
-void warningx (const char* fmt ...);
+void suicide(const char* fmt...);
+void warning(const char* fmt...);
+void warningx(const char* fmt...);
 };
 
-extern void printLeading (FILE*, int, char = ' ');
-extern const char* numberSuffix (int);
-extern const char* plural (int);
-extern const char* properPrep (char*);
-extern const char* sys_errmsg ();
+extern void printLeading(FILE*, int, char = ' ');
+extern const char* numberSuffix(int);
+extern const char* plural(int);
+extern const char* properPrep(char*);
+extern const char* sys_errmsg();
 
 #endif

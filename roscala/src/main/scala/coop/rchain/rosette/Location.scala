@@ -5,7 +5,6 @@ case class LocationAtom(atom: Ob) extends Location
 case class LocationGT(genericType: Location.GenericType) extends Location
 
 object Location {
-  import utils.Instances.lgenTbl
   import Ob.Lenses._
 
   val AddrLevelSize = 5
@@ -321,7 +320,6 @@ object Location {
   def ArgReg(n: Int): Location = {
     if (n > MaxArgs) {
       suicide(s"Location.ArgReg: invalid arg register index ($n)")
-      null
     }
 
     LocationGT(LTArgRegister(n))

@@ -1,7 +1,5 @@
 package coop.rchain.rosette
 
-import scala.collection.mutable
-
 /** Tuple
   *
   *  Tuples are used to represent messages that convey information
@@ -13,8 +11,7 @@ sealed trait TupleError
 case object AbsentRest extends TupleError
 case object InvalidRest extends TupleError
 
-case class Tuple(elem: mutable.Seq[Ob], override val _slot: mutable.Seq[Ob])
-    extends Ob {
+case class Tuple(elem: Seq[Ob]) extends Ob {
 
   def accepts(msg: Ctxt): Boolean =
     if (this == Tuple.NIL) {
@@ -22,6 +19,10 @@ case class Tuple(elem: mutable.Seq[Ob], override val _slot: mutable.Seq[Ob])
     } else {
       this.elem.exists(_.matches(msg))
     }
+
+  /** Transforms a Tuple into a StdExtension */
+  def becomeExtension(newMeta: Ob, newParent: Ob): StdExtension =
+    StdExtension(newMeta, newParent, elem)
 
   def flattenRest(): Either[TupleError, Tuple] =
     this.elem.lastOption match {
@@ -105,7 +106,7 @@ case class Tuple(elem: mutable.Seq[Ob], override val _slot: mutable.Seq[Ob])
 
   override def setNth(n: Int, ob: Ob): Option[Tuple] =
     try {
-      Some(Tuple(this.elem.updated(n, ob), this._slot))
+      Some(Tuple(this.elem.updated(n, ob)))
     } catch {
       case _: IndexOutOfBoundsException => None
     }
@@ -116,14 +117,15 @@ case class Tuple(elem: mutable.Seq[Ob], override val _slot: mutable.Seq[Ob])
 
 object Tuple {
 
-  object NIL extends Tuple(null, null)
+  object NIL extends Tuple(Seq.empty)
 
-  val PLACEHOLDER = new Tuple(mutable.Seq(), null)
+  val Placeholder = Tuple(Seq.empty)
 
-  def apply(init: Ob) = new Tuple(mutable.Seq(init), null)
+  def apply(init: Ob): Tuple =
+    Tuple(Seq(init))
 
   def apply(t1: Tuple, t2: Tuple): Tuple =
-    new Tuple(t1.elem ++ t2.elem, null)
+    new Tuple(t1.elem ++ t2.elem)
 
   def apply(size: Int,
             master: Tuple,
@@ -138,19 +140,19 @@ object Tuple {
       Seq.empty
     }
 
-    new Tuple(slice ++ filling, null)
+    new Tuple(slice ++ filling)
   }
 
-  def apply(a: Int, b: Ob): Tuple = new Tuple(mutable.Seq.fill(a)(b), null)
+  def apply(a: Int, b: Ob): Tuple = new Tuple(Seq.fill(a)(b))
 
   def apply(a: Int, b: Option[Ob]): Tuple =
-    new Tuple(null, null)
+    Tuple(Seq.fill(a)(b getOrElse Ob.INVALID))
 
   def cons(ob: Ob, t: Tuple): Tuple =
-    new Tuple(ob +: t.elem, null)
+    new Tuple(ob +: t.elem)
 
   def rcons(t: Tuple, ob: Ob): Tuple =
-    new Tuple(t.elem :+ ob, null)
+    new Tuple(t.elem :+ ob)
 
   def concat(t1: Tuple, t2: Tuple): Tuple = apply(t1, t2)
 }

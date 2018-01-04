@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,38 +17,20 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "ResizeAry.h"
-
-extern "C" {
 #include <stdlib.h>
-};
 
-ResizeablePtrArray::~ResizeablePtrArray()
-{
-    delete array;
-}
+ResizeablePtrArray::~ResizeablePtrArray() { delete array; }
 
 
-void
-ResizeablePtrArray::resize (int newsize)
-{
+void ResizeablePtrArray::resize(int newsize) {
     if (newsize == 0) {
-	delete array;
-	array = 0;
-	size = 0;
-	return;
+        delete array;
+        array = 0;
+        size = 0;
+        return;
     }
 
-    array = (void**) realloc((char*)array, newsize*sizeof(void*));
+    array = (void**)realloc((char*)array, newsize * sizeof(void*));
     size = newsize;
 }

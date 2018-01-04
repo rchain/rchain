@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,66 +17,42 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- */
-
 #if !defined(_RBL_Dynload_h)
 #define _RBL_Dynload_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #ifdef A_OUT_HDR
 #include A_OUT_HDR
 #endif
 
-class DynamicLoader
-{
-    const char*	loaderFile;
-    const char*	LdTemplate;
+class DynamicLoader {
+    const char* loaderFile;
+    const char* LdTemplate;
 
 #ifdef A_OUT_HDR
-    exec	myHdr;
-#endif    
+    exec myHdr;
+#endif
 
-    char	relocFile[BUFSIZ];
+    char relocFile[BUFSIZ];
 
-    int		modified;
-    short	uid;
-    short 	gid;
+    int modified;
+    short uid;
+    short gid;
 
-    int	isExecutable	(const char* name,
-			 short uid,
-			 short gid);
-    int	findCmd		(const char* name,
-			 char* pathBuf,
-			 const char* paths = NULL);
-    void rmTmp		(FILE*,
-			 const char*);
+    int isExecutable(const char* name, short uid, short gid);
+    int findCmd(const char* name, char* pathBuf, const char* paths = NULL);
+    void rmTmp(FILE*, const char*);
 
-  public:
+   public:
+    DynamicLoader(const char* initial_relocFile);
+    ~DynamicLoader();
 
-    DynamicLoader	(const char* initial_relocFile);
-    ~DynamicLoader	();
+    int loadhelp(const char* ldString, char* msgBuf);
+    int load(const char* objFile, char* msgBuf, const char* libString = "",
+             const char* otherString = "");
+    int dump(char* outFile, char* msgBuf);
+    void* resolve(const char* functionName, char* msgBuf = NULL);
 
-    int	loadhelp	(const char* ldString,
-			 char* msgBuf);
-    int	load		(const char* objFile,
-			 char* msgBuf,
-			 const char* libString = "",
-			 const char* otherString = "");
-    int	dump		(char* outFile,
-			 char* msgBuf);
-    void* resolve	(const char* functionName,
-			 char* msgBuf = NULL);
-
-    operator void*	();
+    operator void*();
 };
 
 #endif
-
-

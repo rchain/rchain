@@ -9,7 +9,6 @@
 
 package coop.rchain.rho2rose
 
-import coop.rchain.lib.zipper._
 import coop.rchain.syntax.rholang._
 import coop.rchain.syntax.rholang.Absyn._
 
@@ -25,9 +24,6 @@ trait Rholang2RosetteCompilerT {
   def compile( fileName : String ) : VisitorTypes.R
 }
 
-object StrTermZipr extends StrTermNavigation
-    with StrTermMutation with StrTermZipperComposition
-
 object Rholang2RosetteCompiler extends RholangASTToTerm
     with Rholang2RosetteCompilerT
 {
@@ -39,17 +35,12 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   def visit(p: Chan,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
   def visit(p: Proc,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
    
-   // Members declared in coop.rchain.rho2rose.StrFoldCtxtVisitor
-  def theCtxtVar: String = s"""ContextVar${Fresh()}"""
-  def zipr: StrTermNavigation with StrTermMutation with StrTermZipperComposition = 
-    StrTermZipr
-
   override def reader( fileName : String ) : FileReader = { new FileReader( fileName ) }
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
     ast match {
-      case Some(Location(term: StrTermCtorAbbrevs.StrTermCtxt @unchecked, _)) =>
+      case Some(term: StrTermCtorAbbrevs.StrTermCtxt @unchecked) =>
         term.rosetteSerializeOperation + term.rosetteSerialize
       case _ => "Not a StrTermCtxt"
     }
@@ -65,8 +56,12 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
+<<<<<<< HEAD
       typecheck(ast)
       visit( ast, Here() )
+=======
+      visit( ast, null )
+>>>>>>> dev
     }
     catch {
       case e : FileNotFoundException => {

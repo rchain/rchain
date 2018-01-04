@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,18 +17,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Proc.h"
-
 #include "Code.h"
 #include "Ctxt.h"
 #include "Prim.h"
@@ -36,39 +26,34 @@
 #include "BuiltinClass.h"
 
 
-BUILTIN_CLASS(Proc)
-{
-    OB_FIELD("env",	Proc, env);
-    OB_FIELD("code",	Proc, code);
-    OB_FIELD("id",	Proc, id);
-    OB_FIELD("source",	Proc, source);
+BUILTIN_CLASS(Proc) {
+    OB_FIELD("env", Proc, env);
+    OB_FIELD("code", Proc, code);
+    OB_FIELD("id", Proc, id);
+    OB_FIELD("source", Proc, source);
 }
 
 
-Proc::Proc (Ob* env, Code* code, Ob* id, Ob* source)
+Proc::Proc(Ob* env, Code* code, Ob* id, Ob* source)
     : Ob(sizeof(Proc), CLASS_META(Proc), CLASS_SBO(Proc)),
       env(env),
       code(code),
       id(id),
-      source(source)
-{
+      source(source) {
     Proc::updateCnt();
 }
 
 
-Proc*
-Proc::create (Ob* env, Code* code, Ob* id, Ob* source)
-{
+Proc* Proc::create(Ob* env, Code* code, Ob* id, Ob* source) {
     void* loc = PALLOC4(sizeof(Proc), env, code, id, source);
-    return NEW(loc) Proc (env, code, id, source);
+    return new (loc) Proc(env, code, id, source);
 }
 
 
-Ob*
-Proc::dispatch (Ctxt* ctxt)
-{
-    if (debugging_level)
-	printf("\tproc %s\n", BASE(id)->asCstring());
+Ob* Proc::dispatch(Ctxt* ctxt) {
+    if (debugging_level) {
+        printf("\tproc %s\n", BASE(id)->asCstring());
+    }
 
     ctxt->code = this->code;
     ctxt->env = this->env;
@@ -80,26 +65,20 @@ Proc::dispatch (Ctxt* ctxt)
 }
 
 
-Ob*
-Proc::invoke (Ctxt* ctxt)
-{
-    return dispatch(ctxt);
-}
+Ob* Proc::invoke(Ctxt* ctxt) { return dispatch(ctxt); }
 
-
 
-DEF("proc-new",makeProc, 2, 4)
-{
+DEF("proc-new", makeProc, 2, 4) {
     CHECK(1, Code, code);
     Ob* sp = NIV;
     Ob* id = Qanon;
 
     switch (NARGS) {
-      case 4:
-	sp = ARG(3);
-      case 3:
-	id = ARG(2);
+    case 4:
+        sp = ARG(3);
+    case 3:
+        id = ARG(2);
     }
 
-    return Proc::create (ARG(0), code, id, sp);
+    return Proc::create(ARG(0), code, id, sp);
 }

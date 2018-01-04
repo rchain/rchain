@@ -16,7 +16,7 @@ object Main extends App {
   Parser.parse(bytes) match {
     case Right(opCodes) =>
       val initState = VMState(Map(),
-                              Code(null, null, null),
+                              Code(null, null),
                               Ctxt.PLACEHOLDER,
                               Location.PLACEHOLDER,
                               PC(0))

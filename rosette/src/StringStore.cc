@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,34 +17,16 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
-
 #include <string.h>
 
 
-static
-inline
-unsigned long
-max (unsigned long m, unsigned long n)
-{
+static inline unsigned long max(unsigned long m, unsigned long n) {
     return (m > n) ? m : n;
 }
 
 
-static
-unsigned long
-hash (const char* key)
-{
+static unsigned long hash(const char* key) {
     /*
      * This is the hashpjw function described in Aho, Sethi, and Ullman
      * (Red Dragon) on p. 436.
@@ -51,11 +34,12 @@ hash (const char* key)
     const char* p;
     unsigned h = 0, g;
     for (p = key; *p != '\0'; p++) {
-	h = (h << 4) + *p;
-	if (g = h & 0xf0000000) {
-	    h = h ^ (g >> 24);
-	    h = h ^ g;
-	}
+        h = (h << 4) + *p;
+        g = h & 0xf0000000;
+        if (0 != g) {
+            h = h ^ (g >> 24);
+            h = h ^ g;
+        }
     }
     return h;
 }
@@ -83,42 +67,37 @@ hash (const char* key)
  */
 
 
-class Bucket
-{
+class Bucket {
     friend class RosetteStringTable;
 
-    const char*		key;
-    Bucket*		next;
+    const char* key;
+    Bucket* next;
 
-    Bucket (const char*, Bucket*);
-    ~Bucket ();
+    Bucket(const char*, Bucket*);
+    ~Bucket();
 
-    const char*		searchFor (const char*);
+    const char* searchFor(const char*);
 };
 
 
-Bucket::Bucket (const char* k, Bucket* n)
-    : key(k), next(n)
-{ }
+Bucket::Bucket(const char* k, Bucket* n) : key(k), next(n) {}
 
 
-Bucket::~Bucket ()
-{
-    if (next)
-	delete next;
+Bucket::~Bucket() {
+    if (next) {
+        delete next;
+    }
 }
 
 
-const char*
-Bucket::searchFor (const char* k)
-{
-    for (const Bucket* bp = this; bp; bp = bp->next)
-	if (strcmp(k, bp->key) == 0)
-	    return bp->key;
+const char* Bucket::searchFor(const char* k) {
+    for (const Bucket* bp = this; bp; bp = bp->next) {
+        if (strcmp(k, bp->key) == 0) {
+            return bp->key;
+        }
+    }
     return 0;
 }
-
-
 
 
 /*
@@ -131,76 +110,71 @@ Bucket::searchFor (const char* k)
 static const unsigned long DefaultChunkSize = 8192;
 
 
-class StringChunk
-{
+class StringChunk {
     friend class RosetteStringTable;
 
-    StringChunk*	next;
-    char*		bp;
-    char*		buffer;
-    unsigned long	remaining;
+    StringChunk* next;
+    char* bp;
+    char* buffer;
+    unsigned long remaining;
 
-    StringChunk (StringChunk*, unsigned long);
-    ~StringChunk ();
+    StringChunk(StringChunk*, unsigned long);
+    ~StringChunk();
 
-    char*	align (char*);
-    char*	deposit (const char*);
-    int		hasRoom (unsigned long);
+    char* align(char*);
+    char* deposit(const char*);
+    int hasRoom(unsigned long);
 };
 
 
-StringChunk::StringChunk (StringChunk* sp, unsigned long size)
-    : next(sp)
-{
+StringChunk::StringChunk(StringChunk* sp, unsigned long size) : next(sp) {
     unsigned long n = max(DefaultChunkSize, size);
-    buffer = new char [n];
+    buffer = new char[n];
     /*
      * This is probably unnecessary, since new should return pointers
      * that are "maximally" aligned.  Nonetheless, it won't hurt.
      */
     bp = align(buffer);
-    remaining = n-(bp-buffer);
+    remaining = n - (bp - buffer);
 }
 
 
-StringChunk::~StringChunk ()
-{
+StringChunk::~StringChunk() {
     delete buffer;
-    if (next)
-	delete next;
+    if (next) {
+        delete next;
+    }
 }
 
 
-char*
-StringChunk::align (char* p)
-{
+char* StringChunk::align(char* p) {
     /*
      * Return a pointer that is aligned on the nearest 4-byte boundary
      * that is greater than or equal to the argument.
      */
-    return (char*) (((unsigned long)p + 3) & ~3);
+    return (char*)(((unsigned long)p + 3) & ~3);
 }
 
 
-char*
-StringChunk::deposit (const char* sym)
-{
+char* StringChunk::deposit(const char* sym) {
     char* result = bp;
     char* p = bp;
-    while (*p++ = *sym++) ;
+
+    while (true) {
+        char c = *sym++;
+        *p++ = c;
+        if (0 == c) {
+            break;
+        }
+    }
+
     bp = align(p);
-    remaining -= bp-result;
+    remaining -= bp - result;
     return result;
 }
 
 
-int
-StringChunk::hasRoom (unsigned long size)
-{
-    return remaining >= size;
-}
-
-
+int StringChunk::hasRoom(unsigned long size) { return remaining >= size; }
 
 
 /*
@@ -217,23 +191,20 @@ StringChunk::hasRoom (unsigned long size)
 static const unsigned long DefaultRosetteStringTableSize = 513;
 
 
-class RosetteStringTable
-{
-    StringChunk*	chunk;
-    Bucket**		bucket;
-    unsigned long	nbuckets;
+class RosetteStringTable {
+    StringChunk* chunk;
+    Bucket** bucket;
+    unsigned long nbuckets;
 
-  public:
+   public:
+    RosetteStringTable(unsigned long = DefaultRosetteStringTableSize);
+    ~RosetteStringTable();
 
-    RosetteStringTable (unsigned long = DefaultRosetteStringTableSize);
-    ~RosetteStringTable ();
-
-    const char*		intern (const char* const);
+    const char* intern(const char* const);
 };
 
 
-RosetteStringTable::RosetteStringTable (unsigned long n)
-{
+RosetteStringTable::RosetteStringTable(unsigned long n) {
     /*
      * This is a rather hideous trick to avoid reinitializing
      * statically-allocated RosetteStringTable's during the restart of a
@@ -243,49 +214,44 @@ RosetteStringTable::RosetteStringTable (unsigned long n)
      */
 
     if (!chunk) {
-	chunk = new StringChunk (0, 0);
-	bucket = new Bucket* [n];
-	nbuckets = n;
+        chunk = new StringChunk(0, 0);
+        bucket = new Bucket*[n];
+        nbuckets = n;
 
-	while (n--)
-	    bucket[n] = 0;
+        while (n--) {
+            bucket[n] = 0;
+        }
     }
 }
 
 
-RosetteStringTable::~RosetteStringTable ()
-{
+RosetteStringTable::~RosetteStringTable() {
     delete bucket;
     delete chunk;
 }
 
 
-const char*
-RosetteStringTable::intern (const char* const sym)
-{  unsigned long j = hash(sym);
+const char* RosetteStringTable::intern(const char* const sym) {
+    unsigned long j = hash(sym);
     unsigned long i = j % nbuckets;
     const char* key = bucket[i] ? bucket[i]->searchFor(sym) : 0;
 
     if (key)
-	return key;
+        return key;
 
-    int size = strlen(sym)+1;
-    if (! chunk->hasRoom(size))
-	chunk = new StringChunk (chunk, size);
+    int size = strlen(sym) + 1;
+    if (!chunk->hasRoom(size)) {
+        chunk = new StringChunk(chunk, size);
+    }
+
     key = chunk->deposit(sym);
-    bucket[i] = new Bucket (key, bucket[i]);
+    bucket[i] = new Bucket(key, bucket[i]);
 
     return key;
 };
 
 
-
-
 RosetteStringTable symtab;
 
 
-const char*
-intern (const char* sym)
-{
-    return symtab.intern(sym);
-}
+const char* intern(const char* sym) { return symtab.intern(sym); }

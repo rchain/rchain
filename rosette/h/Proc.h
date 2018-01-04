@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,42 +17,27 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Proc_h)
 #define _RBL_Proc_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class Proc : public Ob
-{
+class Proc : public Ob {
     STD_DECLS(Proc);
 
-  protected:
+   protected:
+    Proc(Ob*, Code*, Ob*, Ob*);
 
-    Proc (Ob*, Code*, Ob*, Ob*);
+   public:
+    Ob* env;
+    Code* code;
+    Ob* id;
+    Ob* source;
 
-  public:
-
-    Ob*		env;
-    Code*	code;
-    Ob*		id;
-    Ob*		source;
-
-    static Proc*	create (Ob*, Code*, Ob* = Qanon, Ob* = NIV);
-    virtual Ob*		dispatch (Ctxt*);
-    virtual Ob*		invoke (Ctxt*);
+    static Proc* create(Ob*, Code*, Ob* = Qanon, Ob* = NIV);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
 #endif

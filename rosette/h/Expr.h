@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,397 +17,304 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Expr_h)
 #define _RBL_Expr_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 
-class Expr : public Ob
-{
-  protected:
+class Expr : public Ob {
+   protected:
+    Expr(int, Ob* = INVALID, Ob* = INVALID);
 
-    Expr (int, Ob* = INVALID, Ob* = INVALID);
-
-    virtual bool	ConstantP ();
-    virtual Ob*	unquote ();
+    virtual bool ConstantP();
+    virtual Ob* unquote();
 };
 
 
-
-class BlockExpr : public Expr
-{
+class BlockExpr : public Expr {
     STD_DECLS(BlockExpr);
 
-  protected:
+   protected:
+    BlockExpr(Tuple*, Ob* = RBLFALSE);
 
-    BlockExpr (Tuple*, Ob* = RBLFALSE);
+   public:
+    Tuple* subExprs;
+    Ob* implicit;
 
-  public:
+    static BlockExpr* create(Tuple*, Ob* = RBLFALSE);
 
-    Tuple*	subExprs;
-    Ob*		implicit;
+    int numberOfSubExprs();
 
-    static BlockExpr* create (Tuple*, Ob* = RBLFALSE);
-
-    int			numberOfSubExprs ();
-
-    virtual AttrNode*	makeAttrNode (bool);
-    virtual Ob*		indexedSize ();
-    virtual Ob*		nth (int);
-    virtual Ob*		setNth (int, Ob*);
-    virtual Ob*		subObject (int, int);
+    virtual AttrNode* makeAttrNode(bool);
+    virtual Ob* indexedSize();
+    virtual Ob* nth(int);
+    virtual Ob* setNth(int, Ob*);
+    virtual Ob* subObject(int, int);
 };
 
 
-
-class FreeExpr : public Expr
-{
+class FreeExpr : public Expr {
     STD_DECLS(FreeExpr);
 
-  protected:
+   protected:
+    FreeExpr(TupleExpr*, Ob*);
 
-    FreeExpr (TupleExpr*, Ob*);
+   public:
+    TupleExpr* freeIds;
+    Ob* body;
 
-  public:
-
-    TupleExpr*	freeIds;
-    Ob*		body;
-
-    static FreeExpr*	create (TupleExpr*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static FreeExpr* create(TupleExpr*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class GotoExpr : public Expr
-{
+class GotoExpr : public Expr {
     STD_DECLS(GotoExpr);
 
-  protected:
+   protected:
+    GotoExpr(Ob*);
 
-    GotoExpr (Ob*);
+   public:
+    Ob* label;
 
-  public:
-
-    Ob*	label;
-
-    static GotoExpr*	create (Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static GotoExpr* create(Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class IfExpr : public Expr
-{
+class IfExpr : public Expr {
     STD_DECLS(IfExpr);
 
-  protected:
+   protected:
+    IfExpr(Ob*, Ob*, Ob*);
 
-    IfExpr (Ob*, Ob*, Ob*);
+   public:
+    Ob* condition;
+    Ob* trueBranch;
+    Ob* falseBranch;
 
-  public:
-
-    Ob*	condition;
-    Ob*	trueBranch;
-    Ob*	falseBranch;
-
-    static IfExpr*	create (Ob*, Ob*, Ob* = INVALID);
-    virtual AttrNode*	makeAttrNode (bool);
+    static IfExpr* create(Ob*, Ob*, Ob* = INVALID);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class LabelExpr : public Expr
-{
+class LabelExpr : public Expr {
     STD_DECLS(LabelExpr);
 
-  protected:
+   protected:
+    LabelExpr(Ob*, Ob*);
 
-    LabelExpr (Ob*, Ob*);
+   public:
+    Ob* label;
+    Ob* body;
 
-  public:
-
-    Ob*	label;
-    Ob*	body;
-
-    static LabelExpr*	create (Ob*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static LabelExpr* create(Ob*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class LetExpr : public Expr
-{
+class LetExpr : public Expr {
     STD_DECLS(LetExpr);
 
-  protected:
+   protected:
+    LetExpr(TupleExpr*, Ob*);
+    LetExpr(int, Ob*, Ob*, TupleExpr*, Ob*);
 
-    LetExpr (TupleExpr*, Ob*);
-    LetExpr (int, Ob*, Ob*, TupleExpr*, Ob*);
+   public:
+    TupleExpr* bindings;
+    Ob* body;
 
-  public:
+    Ob* boundId(int);
+    Ob* boundExpr(int);
 
-    TupleExpr*	bindings;
-    Ob*		body;
-
-    Ob*	boundId (int);
-    Ob*	boundExpr (int);
-
-    static LetExpr*	create (TupleExpr*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static LetExpr* create(TupleExpr*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class LetrecExpr : public LetExpr
-{
+class LetrecExpr : public LetExpr {
     STD_DECLS(LetrecExpr);
 
-  protected:
+   protected:
+    LetrecExpr(TupleExpr*, Ob*);
 
-    LetrecExpr (TupleExpr*, Ob*);
-
-  public:
-
-    static LetrecExpr*	create (TupleExpr*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+   public:
+    static LetrecExpr* create(TupleExpr*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class MethodExpr : public Expr
-{
+class MethodExpr : public Expr {
     STD_DECLS(MethodExpr);
 
-  protected:
+   protected:
+    MethodExpr(Ob*, Ob*, Ob*);
+    MethodExpr(int, Ob*, Ob*, Ob*, Ob*, Ob*);
 
-    MethodExpr (Ob*, Ob*, Ob*);
-    MethodExpr (int, Ob*, Ob*, Ob*, Ob*, Ob*);
+   public:
+    Ob* identity;
+    Ob* formals;
+    Ob* body;
 
-  public:
-
-    Ob*	identity;
-    Ob*	formals;
-    Ob*	body;
-
-    static MethodExpr*	create (Ob*, Ob*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static MethodExpr* create(Ob*, Ob*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class NullExpr : public Expr
-{
+class NullExpr : public Expr {
     STD_DECLS(NullExpr);
 
-  protected:
+   protected:
+    NullExpr();
 
-    NullExpr ();
-
-  public:
-
-    static NullExpr*	create ();
-    virtual AttrNode*	makeAttrNode (bool);
+   public:
+    static NullExpr* create();
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class ProcExpr : public MethodExpr
-{
+class ProcExpr : public MethodExpr {
     STD_DECLS(ProcExpr);
 
-  protected:
+   protected:
+    ProcExpr(Ob*, Ob*, Ob*);
 
-    ProcExpr (Ob*, Ob*, Ob*);
-
-  public:
-
-    static ProcExpr*	create (Ob*, Ob*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+   public:
+    static ProcExpr* create(Ob*, Ob*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class QuoteExpr : public Expr
-{
+class QuoteExpr : public Expr {
     STD_DECLS(QuoteExpr);
 
-  protected:
+   protected:
+    QuoteExpr(Ob*);
 
-    QuoteExpr (Ob*);
+   public:
+    Ob* expr;
 
-  public:
-
-    Ob*	expr;
-
-    static QuoteExpr*	create (Ob*);
-    virtual bool	ConstantP ();
-    virtual AttrNode*	makeAttrNode (bool);
-    virtual Ob*		unquote ();
+    static QuoteExpr* create(Ob*);
+    virtual bool ConstantP();
+    virtual AttrNode* makeAttrNode(bool);
+    virtual Ob* unquote();
 };
 
 
-
-class ReflectiveMethodExpr : public MethodExpr
-{
+class ReflectiveMethodExpr : public MethodExpr {
     STD_DECLS(ReflectiveMethodExpr);
 
-  protected:
+   protected:
+    ReflectiveMethodExpr(Ob*, Ob*, Ob*);
 
-    ReflectiveMethodExpr (Ob*, Ob*, Ob*);
-
-  public:
-
-    static ReflectiveMethodExpr*	create (Ob*, Ob*, Ob*);
-    virtual AttrNode*			makeAttrNode (bool);
+   public:
+    static ReflectiveMethodExpr* create(Ob*, Ob*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class RequestExpr : public Expr
-{
+class RequestExpr : public Expr {
     STD_DECLS(RequestExpr);
 
-  protected:
+   protected:
+    RequestExpr(Ob*, TupleExpr*);
+    RequestExpr(int, Ob*, Ob*, Ob*, TupleExpr*);
 
-    RequestExpr (Ob*, TupleExpr*);
-    RequestExpr (int, Ob*, Ob*, Ob*, TupleExpr*);
+   public:
+    Ob* target;
+    TupleExpr* msg;
 
-  public:
-
-    Ob*		target;
-    TupleExpr*	msg;
-
-    static RequestExpr*	create (Ob*, TupleExpr*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static RequestExpr* create(Ob*, TupleExpr*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class SendExpr : public RequestExpr
-{
+class SendExpr : public RequestExpr {
     STD_DECLS(SendExpr);
 
-  protected:
+   protected:
+    SendExpr(Ob*, TupleExpr*);
 
-    SendExpr (Ob*, TupleExpr*);
-
-  public:
-
-    static SendExpr*	create (Ob*, TupleExpr*);
-    virtual AttrNode*	makeAttrNode (bool);
+   public:
+    static SendExpr* create(Ob*, TupleExpr*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class SeqExpr : public Expr
-{
-
+class SeqExpr : public Expr {
     STD_DECLS(SeqExpr);
 
-  protected:
+   protected:
+    SeqExpr(Tuple*);
 
-    SeqExpr (Tuple*);
+   public:
+    Tuple* subExprs;
 
-  public:
-
-    Tuple*	subExprs;
-
-    static SeqExpr*	create (Tuple*);
-    int			numberOfSubExprs ();
-    virtual AttrNode*	makeAttrNode (bool);
-    virtual Ob*		indexedSize ();
-    virtual Ob*		nth (int);
-    virtual Ob*		setNth (int, Ob*);
-    virtual Ob*		subObject (int, int);
+    static SeqExpr* create(Tuple*);
+    int numberOfSubExprs();
+    virtual AttrNode* makeAttrNode(bool);
+    virtual Ob* indexedSize();
+    virtual Ob* nth(int);
+    virtual Ob* setNth(int, Ob*);
+    virtual Ob* subObject(int, int);
 };
 
 
-
-class SetExpr : public Expr
-{
+class SetExpr : public Expr {
     STD_DECLS(SetExpr);
 
-  protected:
+   protected:
+    SetExpr(Ob*, Ob*);
 
-    SetExpr (Ob*, Ob*);
+   public:
+    Ob* trgt;
+    Ob* val;
 
-  public:
-
-    Ob*	trgt;
-    Ob*	val;
-
-    static SetExpr*	create (Ob*, Ob*);
-    virtual AttrNode*	makeAttrNode (bool);
+    static SetExpr* create(Ob*, Ob*);
+    virtual AttrNode* makeAttrNode(bool);
 };
 
 
-
-class TupleExpr : public Expr
-{
+class TupleExpr : public Expr {
     STD_DECLS(TupleExpr);
 
-  protected:
+   protected:
+    TupleExpr();
+    TupleExpr(int, Ob* = NILexpr);
 
-    TupleExpr ();
-    TupleExpr (int, Ob* = NILexpr);
+   public:
+    Ob* rest;
 
-  public:
+    static TupleExpr* create();
+    static TupleExpr* create(Ob**, int, Ob* = NILexpr);
+    static TupleExpr* create(int, Ob* = NILexpr);
 
-    Ob*	rest;
+    Ob*& elem(int n) {
+        return _slot[n + 3];  // skip the meta, parent, and rest fields
+    }
 
-    static TupleExpr*	create ();
-    static TupleExpr*	create (Ob**, int, Ob* = NILexpr);
-    static TupleExpr*	create (int, Ob* = NILexpr);
+    int numberOfElements() {
+        return (SIZE(this) - sizeof(TupleExpr)) / sizeof(Ob*);
+    }
 
-    Ob*&	elem (int);
+    bool allPairs();
+    bool allSymbols();
 
-    int		numberOfElements ();
-    bool	allPairs ();
-    bool	allSymbols ();
-
-    bool	ConstantP ();
-    TupleExpr*	cons (Ob*);
-    TupleExpr*	makeSlice (int, int);
-    Pattern*	makePattern ();
-    Template*	makeTemplate ();
-    Ob*		cloneTo (Ob*, Ob*);
-    AttrNode*	makeAttrNode (bool);
-    Ob*		unquote ();
-    Ob*		indexedSize ();
-    Ob*		nth (int);
-    Ob*		setNth (int, Ob*);
-    Ob*		subObject (int, int);
+    bool ConstantP();
+    TupleExpr* cons(Ob*);
+    TupleExpr* makeSlice(int, int);
+    Pattern* makePattern();
+    Template* makeTemplate();
+    Ob* cloneTo(Ob*, Ob*);
+    AttrNode* makeAttrNode(bool);
+    Ob* unquote();
+    Ob* indexedSize();
+    Ob* nth(int);
+    Ob* setNth(int, Ob*);
+    Ob* subObject(int, int);
 };
 
-
-inline
-Ob*&
-TupleExpr::elem (int n)
-{
-    return _slot[n+3]; // skip the meta, parent, and rest fields
-}
-
-
-inline
-int
-TupleExpr::numberOfElements ()
-{
-    return (SIZE(this)-sizeof(TupleExpr)) / sizeof(Ob*);
-}
 
 #endif

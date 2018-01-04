@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Timer_h)
 #define _RBL_Timer_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 #include <sys/time.h>
@@ -41,36 +30,32 @@
 enum TimerMode { tmUser, tmGC, tmSys, nModes };
 
 
-class Timer : public BinaryOb
-{
+class Timer : public BinaryOb {
     STD_DECLS(Timer);
 
-  protected:
+   protected:
+    Timer();
 
-    Timer ();
+   private:
+    int running;
+    TimerMode mode;
+    timeval tv[nModes];
+    struct rusage checkpoint;
 
-  private:
+    void updateTimer();
+    void inc(timeval&, long, long);
+    float fastTime(TimerMode);
 
-    int			running;
-    TimerMode		mode;
-    timeval		tv[nModes];
-    struct rusage	checkpoint;
+   public:
+    static Timer* create();
 
-    void	updateTimer ();
-    void	inc (timeval&, long, long);
-    float	fastTime (TimerMode);
-
-  public:
-
-    static Timer*	create ();
-
-    void	reset ();
-    void	start ();
-    void	stop ();
-    TimerMode	setMode (TimerMode);
-    float	time (TimerMode);
-    void	printStats (FILE*);
+    void reset();
+    void start();
+    void stop();
+    TimerMode setMode(TimerMode);
+    float time(TimerMode);
+    void printStats(FILE*);
 };
-  
+
 
 #endif

@@ -34,8 +34,8 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'strandPool on OpFork(n)) {
-      val newCtxt = testState.ctxt.copy(pc = PC.fromInt(n)) +: testState.strandPool
-      _ shouldBe newCtxt
+      val newCtxt = testState.ctxt.copy(pc = PC(n))
+      _ shouldBe newCtxt +: testState.strandPool
     }
 
     (theState >> 'exitFlag on OpHalt()) {
@@ -47,8 +47,8 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpImmediateLitToArg(
-      v = m,
-      a = someObsInd)) {
+      value = m,
+      arg = someObsInd)) {
       val updatedElem =
         testState.ctxt.argvec.elem
           .updated(someObsInd, VirtualMachine.vmLiterals(m))
@@ -80,7 +80,7 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'pc on OpOutstanding(m, n)) {
-      _ shouldBe PC.fromInt(m)
+      _ shouldBe PC(m)
     }
 
     (theState >> 'ctxt >> 'outstanding on OpOutstanding(m, n)) {
@@ -129,8 +129,9 @@ class VirtualMachineSpec extends WordSpec with Matchers {
       _ shouldBe 1
     }
 
-    (theState >> 'ctxt >> 'argvec >> 'elem on OpXferArgToArg(d = someObsInd,
-                                                             s = someObsInd)) {
+    (theState >> 'ctxt >> 'argvec >> 'elem on OpXferArgToArg(
+      dest = someObsInd,
+      src = someObsInd)) {
       val elem = testState.ctxt.argvec.elem(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
@@ -142,14 +143,14 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpXferGlobalToArg(
-      a = someObsInd,
-      g = someObsInd)) {
+      arg = someObsInd,
+      global = someObsInd)) {
       val elem = testState.globalEnv.entry(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
     }
 
-    (theState >> 'ctxt >> 'rslt on OpXferRegToRslt(r = someObsInd)) {
+    (theState >> 'ctxt >> 'rslt on OpXferRegToRslt(reg = someObsInd)) {
       val elem = testState.ctxt.getReg(someObsInd)
       Some(_) shouldBe elem
     }
