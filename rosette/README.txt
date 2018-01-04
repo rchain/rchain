@@ -40,6 +40,10 @@ Dependencies
     particular, Rosette requires CMake and GFlags. For more details, see the
     CMakelists.txt.
 
+    As of Ubuntu Trusty, the correct GFlags package is:
+
+        https://packages.ubuntu.com/trusty/libgflags2
+
     
 Notes on development.
 
