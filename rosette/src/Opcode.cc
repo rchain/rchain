@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1996
  *	                      by Rosette WebWorks Inc.
@@ -15,15 +16,5 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
 
 #include "Opcode.h"

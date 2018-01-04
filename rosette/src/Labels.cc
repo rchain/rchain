@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,31 +17,18 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Labels.h"
-
 #include "Code.h"
 #include "Compile.h"
 #include "Expr.h"
 #include "Table.h"
-
 #include "BuiltinClass.h"
-
 
 #include <assert.h>
 #include <memory.h>
 
 
-inline static int min(int m, int n) { return m < n ? m : n; }
+static int min(int m, int n) { return m < n ? m : n; }
 
 
 BUILTIN_CLASS(FixupVec) {}
@@ -65,14 +53,14 @@ FixupVec::FixupVec(FixupVec* oldvec, int newsize)
 
 FixupVec* FixupVec::create(int n) {
     void* loc = PALLOC(sizeof(FixupVec) + n * sizeof(FixupEntry));
-    return NEW(loc) FixupVec(n);
+    return new (loc) FixupVec(n);
 }
 
 
 FixupVec* FixupVec::create(FixupVec* oldvec, int newsize) {
     void* loc =
         PALLOC1(sizeof(FixupVec) + newsize * sizeof(FixupEntry), oldvec);
-    return NEW(loc) FixupVec(oldvec, newsize);
+    return new (loc) FixupVec(oldvec, newsize);
 }
 
 
@@ -108,7 +96,7 @@ LabelTable* LabelTable::create(int size) {
     PROTECT(fv);
     RblTable* tbl = RblTable::create();
     void* loc = PALLOC1(sizeof(LabelTable), tbl);
-    return NEW(loc) LabelTable(lv, fv, tbl);
+    return new (loc) LabelTable(lv, fv, tbl);
 }
 
 
@@ -117,7 +105,7 @@ static const int EXTERN_LABEL_ENTRY_LABEL = 1;
 static const int EXTERN_LABEL_ENTRIES = 2;
 
 
-Label LabelTable::newLabel(EMPTY) {
+Label LabelTable::newLabel() {
     int n = labelValues->numberOfWords();
     int next = FIXVAL(nextLabel);
 
@@ -126,9 +114,9 @@ Label LabelTable::newLabel(EMPTY) {
         Word16Vec* newvec = Word16Vec::create(labelValues, 2 * n);
         ASSIGN(SELF, labelValues, newvec);
         FIXNUM_INC(SELF->nextLabel);
-    }
-    else
+    } else {
         FIXNUM_INC(nextLabel);
+    }
 
     return (Label)next;
 }
@@ -155,9 +143,9 @@ void LabelTable::addFixup(int loc, Label label) {
         FixupVec* newvec = FixupVec::create(fixupValues, 2 * n);
         ASSIGN(SELF, fixupValues, newvec);
         SELF->fixupValues->addEntry(loc, label);
-    }
-    else
+    } else {
         fixupValues->addEntry(loc, label);
+    }
 }
 
 
@@ -169,20 +157,22 @@ void LabelTable::bindLabel(Label label, int loc) {
 Label LabelTable::getLabel(Ob* label_name) {
     Tuple* pair = (Tuple*)externalLabels->getKey(label_name);
 
-    if (pair == ABSENT)
+    if (pair == ABSENT) {
         return MissingLabel;
-    else
+    } else {
         return (Label)FIXVAL(pair->elem(EXTERN_LABEL_ENTRY_LABEL));
+    }
 }
 
 
 LabelNode* LabelTable::getLabelNode(Ob* label_name) {
     Tuple* pair = (Tuple*)externalLabels->getKey(label_name);
 
-    if (pair == ABSENT)
+    if (pair == ABSENT) {
         return (LabelNode*)INVALID;
-    else
+    } else {
         return (LabelNode*)pair->elem(EXTERN_LABEL_ENTRY_NODE);
+    }
 }
 
 

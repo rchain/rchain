@@ -16,3 +16,10 @@ cache:
   directories:
     - "$HOME/.ivy2/cache"
     - "$HOME/.sbt"
+notifications:
+  email:
+    recipients:
+      - rchain-makers@pyrofex.net
+    on_success: never
+    on_failure: always
+

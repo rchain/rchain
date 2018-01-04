@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_PtrCollection_h)
 #define _PtrCollection_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "ResizeAry.h"
 
 class PtrCollection : public ResizeablePtrArray {
@@ -45,32 +34,27 @@ class PtrCollection : public ResizeablePtrArray {
     PtrCollection();
     PtrCollection(int);
 
-    void init();
     void resize();
     void resize(int);
-    int empty();
-    void add(void*);
-    void del(int = 1);
     void compact();
+    void init() {
+        next = array;
+        limit = array + size;
+    }
+
+    int empty() { return next == array; }
+
+
+    void add(void* p) {
+        if (next >= limit) {
+            resize();
+        }
+
+        *next++ = p;
+    }
+
+    void del(int n) { next -= n; }
 };
-
-
-inline void PtrCollection::init() {
-    next = array;
-    limit = array + size;
-}
-
-inline int PtrCollection::empty() { return next == array; }
-
-
-inline void PtrCollection::add(void* p) {
-    if (next >= limit)
-        resize();
-    *next++ = p;
-}
-
-
-inline void PtrCollection::del(int n) { next -= n; }
 
 
 class PtrCollectionTrav {
@@ -87,20 +71,12 @@ class PtrCollectionTrav {
    public:
     PtrCollectionTrav(PtrCollection*);
 
-    int valid();
+    int valid() { return &pc->array[current] < pc->next; }
     void advance();
-    void*& get();
+    void*& get() { return pc->array[current]; }
 
-    operator void*();
+    operator void*() { return valid() ? this : 0; }
 };
 
-
-inline int PtrCollectionTrav::valid() { return &pc->array[current] < pc->next; }
-
-
-inline PtrCollectionTrav::operator void*() { return valid() ? this : 0; }
-
-
-inline void*& PtrCollectionTrav::get() { return pc->array[current]; }
 
 #endif

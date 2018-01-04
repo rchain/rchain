@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -15,24 +16,15 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "StreamUtils.h"
 
-extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
-};
+
+
+int isoctal(char c) { return (isdigit(c) && (c < '8')); }
+
 
 int readError(FILE* f, const char* fmt, ...) {
     va_list args;
@@ -53,7 +45,6 @@ int eofError(FILE* f) { return readError(f, "unexpected eof"); }
 
 
 char getEscapedChar(FILE* f) {
-    char buf[4];
     int c;
 
     if ((c = getc(f)) == EOF)
@@ -134,8 +125,7 @@ int putSafeChar(char c, FILE* f, char escapeChar) {
     if (c == escapeChar) {
         putc(c, f);
         putc(c, f);
-    }
-    else if (isprint(c))
+    } else if (isprint(c))
         putc(c, f);
     else {
         putc(escapeChar, f);
@@ -172,8 +162,7 @@ char* safeStrcpy(char* dest, char* src, char escapeChar) {
         if (c == escapeChar) {
             *dest++ = c;
             *dest++ = c;
-        }
-        else if (isprint(c))
+        } else if (isprint(c))
             *dest++ = c;
         else {
             *dest++ = escapeChar;

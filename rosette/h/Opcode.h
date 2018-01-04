@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Opcode_h)
 #define _RBL_Opcode_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 /*
@@ -312,15 +301,11 @@ enum Opcode {
 #define SET_OP_e1_op0(x, val) SET_FW(x, 0, 16, val)
 
 class Instr {
-    public:
-
+   public:
     Instr() : word(0) {}
-
+    operator int() { return (int)word; }
     uint16_t word;
-    operator int();
 };
-
-inline Instr::operator int() { return (int)word; }
 
 extern char* opcodeStrings[];
 

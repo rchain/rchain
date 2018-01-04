@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,27 +17,12 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Tuple.h"
-
 #include "Ctxt.h"
 #include "MI.h"
 #include "Prim.h"
-
 #include "BuiltinClass.h"
 
-#if !defined(GCC27X)
-#include <new.h>
-#endif
 #include <memory.h>
 
 
@@ -52,10 +38,14 @@ Tuple::Tuple(int size, Tuple* master, int offset, int n, Ob* init)
     Ob** p = &elem(0);
     Ob** q = &master->elem(offset);
     int i = n;
-    for (; i--;)
+    for (; i--;) {
         *p++ = *q++;
-    for (i = size - n; i--;)
+    }
+
+    for (i = size - n; i--;) {
         *p++ = init;
+    }
+
     Tuple::updateCnt();
 }
 
@@ -64,8 +54,10 @@ Tuple::Tuple(int n, Ob* init)
     : Ob(sizeof(Tuple) + n * sizeof(Ob*), CLASS_META(Tuple), CLASS_SBO(Tuple)) {
     short int m = n;
     Ob** p = &elem(0);
-    while (m--)
+    while (m--) {
         *p++ = init;
+    }
+
     Tuple::updateCnt();
 }
 
@@ -73,8 +65,10 @@ Tuple::Tuple(int n, Ob* init)
 Tuple::Tuple(Ob** p, int n)
     : Ob(sizeof(Tuple) + n * sizeof(Ob*), CLASS_META(Tuple), CLASS_SBO(Tuple)) {
     Ob** s = &elem(0);
-    for (short int i = n; i--;)
+    for (short int i = n; i--;) {
         *s++ = *p++;
+    }
+
     Tuple::updateCnt();
 }
 
@@ -85,10 +79,14 @@ Tuple::Tuple(int size, int offset, Tuple* rest)
     Ob** newp = &elem(0);
     Ob** oldp = &rest->elem(0);
     int i = offset;
-    for (; i--;)
+    for (; i--;) {
         *newp++ = INVALID;
-    for (i = rest->numberOfElements(); i--;)
+    }
+
+    for (i = rest->numberOfElements(); i--;) {
         *newp++ = *oldp++;
+    }
+
     Tuple::updateCnt();
 }
 
@@ -101,11 +99,15 @@ Tuple::Tuple(Tuple* t1, Tuple* t2)
     short int n2 = t2->numberOfElements();
     Ob** newp = &elem(0);
     Ob** oldp = &t1->elem(0);
-    while (n1--)
+    while (n1--) {
         *newp++ = *oldp++;
+    }
+
     oldp = &t2->elem(0);
-    while (n2--)
+    while (n2--) {
         *newp++ = *oldp++;
+    }
+
     Tuple::updateCnt();
 }
 
@@ -115,8 +117,10 @@ Tuple::Tuple(Tuple* t, int n, Tuple* rest)
          CLASS_SBO(Tuple)) {
     Ob** newp = &elem(0);
     Ob** oldp = &t->elem(0);
-    for (short int i = n; i--;)
+    for (short int i = n; i--;) {
         *newp++ = *oldp++;
+    }
+
     *newp = rest;
     Tuple::updateCnt();
 }
@@ -125,8 +129,10 @@ Tuple::Tuple(Tuple* t, int n, Tuple* rest)
 Tuple::Tuple(Tuple* t) : Ob(SIZE(t), t->meta(), t->parent()) {
     Ob** newp = &elem(0);
     Ob** oldp = &t->elem(0);
-    for (short int i = t->numberOfElements(); i--;)
+    for (short int i = t->numberOfElements(); i--;) {
         *newp++ = *oldp++;
+    }
+
     Tuple::updateCnt();
 }
 
@@ -138,55 +144,60 @@ Tuple* Tuple::create() {
      */
     if (NIL == INVALID) {
         void* loc = PALLOC(sizeof(Tuple));
-        return NEW(loc) Tuple(0, INVALID);
-    }
-    else
+        return new (loc) Tuple(0, INVALID);
+    } else {
         return NIL;
+    }
 }
 
 
 Tuple* Tuple::create(int size, Tuple* master, int offset, int n, Ob* init) {
-    if (size == 0)
+    if (size == 0) {
         return NIL;
+    }
 
     void* loc = PALLOC2(sizeof(Tuple) + size * sizeof(Ob*), master, init);
-    return NEW(loc) Tuple(size, master, offset, n, init);
+    return new (loc) Tuple(size, master, offset, n, init);
 }
 
 
 Tuple* Tuple::create(int n, Ob* init) {
-    if (n == 0)
+    if (n == 0) {
         return NIL;
+    }
 
     void* loc = PALLOC1(sizeof(Tuple) + n * sizeof(Ob*), init);
-    return NEW(loc) Tuple(n, init);
+    return new (loc) Tuple(n, init);
 }
 
 
 Tuple* Tuple::create(Ob** p, int n) {
     void* loc = PALLOC(sizeof(Tuple) + n * sizeof(Ob*));
-    return NEW(loc) Tuple(p, n);
+    return new (loc) Tuple(p, n);
 }
 
 
 Tuple* Tuple::create(int size, int offset, Tuple* rest) {
-    if (size == 0)
+    if (size == 0) {
         return NIL;
+    }
 
     void* loc = PALLOC1(sizeof(Tuple) + size * sizeof(Ob*), rest);
-    return NEW(loc) Tuple(size, offset, rest);
+    return new (loc) Tuple(size, offset, rest);
 }
 
 
 Tuple* Tuple::create(Tuple* t1, Tuple* t2) {
-    if (t1 == NIL)
+    if (t1 == NIL) {
         return t2;
+    }
 
-    if (t2 == NIL)
+    if (t2 == NIL) {
         return t1;
+    }
 
     void* loc = PALLOC2(SIZE(t1) + SIZE(t2) - sizeof(Tuple), t1, t2);
-    return NEW(loc) Tuple(t1, t2);
+    return new (loc) Tuple(t1, t2);
 }
 
 
@@ -194,21 +205,22 @@ Tuple* Tuple::create(Tuple* t, int n) {
     PROTECT(t);
     Tuple* rest = t->makeTail(n);
     void* loc = PALLOC1(sizeof(Tuple) + (n + 1) * sizeof(Ob*), rest);
-    return NEW(loc) Tuple(t, n, rest);
+    return new (loc) Tuple(t, n, rest);
 }
 
 
 Tuple* Tuple::create(Tuple* t) {
-    if (t == NIL)
+    if (t == NIL) {
         return NIL;
+    }
 
     void* loc = PALLOC1(SIZE(t), t);
-    return NEW(loc) Tuple(t);
+    return new (loc) Tuple(t);
 }
 
 
 StdExtension* Tuple::becomeExtension(Ob* new_meta, Ob* new_parent) {
-    return NEW(this) StdExtension(new_meta, new_parent);
+    return new (this) StdExtension(new_meta, new_parent);
 }
 
 
@@ -224,7 +236,7 @@ Tuple* Tuple::makeTail(int entriesToSkip) {
 }
 
 
-Ob* Tuple::indexedSize(EMPTY) { return FIXNUM(numberOfElements()); }
+Ob* Tuple::indexedSize() { return FIXNUM(numberOfElements()); }
 
 
 Ob* Tuple::nth(int n) { return elem(n); }
@@ -245,14 +257,17 @@ Ob* Tuple::subObject(int i, int n) { return makeSlice(i, n); }
 
 
 bool Tuple::accepts(Ctxt* msg) {
-    if (this == NIL)
-        return TRUE;
-    else {
+    if (this == NIL) {
+        return true;
+    } else {
         int n = numberOfElements();
-        for (int i = 0; i < n; i++)
-            if (BASE(elem(i))->matches(msg))
-                return TRUE;
-        return FALSE;
+        for (int i = 0; i < n; i++) {
+            if (BASE(elem(i))->matches(msg)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -260,8 +275,9 @@ bool Tuple::accepts(Ctxt* msg) {
 bool Tuple::matches(Ctxt* msg) {
     int n = numberOfElements();
     if (n > 0 && n <= msg->nargs) {
-        if (elem(0) != msg->trgt)
-            return FALSE;
+        if (elem(0) != msg->trgt) {
+            return false;
+        }
 
         /*
          * Skip msg->arg(0), since it is actually the receiver of the
@@ -274,19 +290,22 @@ bool Tuple::matches(Ctxt* msg) {
          * 	[rcvr arg1 arg2 ...]
          */
 
-        for (int i = 1; i < n; i++)
-            if (elem(i) != msg->arg(i))
-                return FALSE;
+        for (int i = 1; i < n; i++) {
+            if (elem(i) != msg->arg(i)) {
+                return false;
+            }
+        }
 
-        return TRUE;
+        return true;
+    } else {
+        return false;
     }
-    else
-        return FALSE;
 }
 
 bool Tuple::matches(Tuple* msg) {
-    if (this == NIL)
-        return TRUE;
+    if (this == NIL) {
+        return true;
+    }
 
     int n = numberOfElements();
     if (n > 0 && n <= msg->numberOfElements()) {
@@ -295,25 +314,23 @@ bool Tuple::matches(Tuple* msg) {
                 if (IS_A(elem(i), Tuple)) {
                     if (IS_A(msg->elem(i), Tuple)) {
                         if (!((Tuple*)elem(i))->matches((Tuple*)msg->elem(i))) {
-                            return FALSE;
+                            return false;
+                        } else {
+                            continue;
                         }
-                        else {
-                        }
+                    } else {
+                        return false;
                     }
-                    else {
-                        return FALSE;
-                    }
-                }
-                else {
-                    return FALSE;
+                } else {
+                    return false;
                 }
             }
         }
 
-        return TRUE;
+        return true;
     }
-    else
-        return FALSE;
+
+    return false;
 }
 
 
@@ -331,15 +348,19 @@ Tuple* cons(Ob* o, Tuple* t) {
 Tuple* consstar(Tuple* prefix, int prefixsize, Tuple* suffix) {
     PROTECT(prefix);
     PROTECT(suffix);
-    if (prefixsize == 0)
+    if (prefixsize == 0) {
         return suffix;
+    }
+
     int suffixsize = suffix->numberOfElements();
     int resultsize = prefixsize + suffixsize;
     Tuple* result = Tuple::create(resultsize, prefixsize, suffix);
     Ob** prefixp = &prefix->elem(0);
     Ob** resultp = &result->elem(0);
-    for (short int i = prefixsize; i--;)
+    for (short int i = prefixsize; i--;) {
         *resultp++ = *prefixp++;
+    }
+
     return result;
 }
 
@@ -401,9 +422,9 @@ DEF("tuple-concat", tplConcat, 0, MaxArgs) {
         break;
 
     default:
-        if (resultsize == 0)
+        if (resultsize == 0) {
             result = NIL;
-        else {
+        } else {
             result = Tuple::create(resultsize, NIV);
             Ob** resultp = &result->elem(0);
             for (i = 0; i < NARGS; i++) {
@@ -413,6 +434,7 @@ DEF("tuple-concat", tplConcat, 0, MaxArgs) {
                 resultp += n;
             }
         }
+
         break;
     }
 
@@ -424,12 +446,13 @@ DEF("tuple-safe-nth", tplSafeNth, 2, 2) {
     CHECK(0, Tuple, t);
     CHECK_FIXNUM(1, n);
 
-    if (n < 0)
+    if (n < 0) {
         return MIN_FIXNUM;
-    else if (n < t->numberOfElements())
+    } else if (n < t->numberOfElements()) {
         return t->elem(n);
-    else
+    } else {
         return MAX_FIXNUM;
+    }
 }
 
 
@@ -480,7 +503,6 @@ DEF("tuple-new", tplNew, 1, MaxArgs) {
      *
      * Since we want to produce [a b c], we need to ignore the first arg.
      */
-
     return ARGS->makeSlice(1, NARGS - 1);
 }
 
@@ -506,9 +528,11 @@ DEF("tuple-new-n", tplNewN, 3, 3) {
 
 DEF("tuple-mem?", tplMemQ, 2, 2) {
     CHECK(0, Tuple, t);
-    for (int i = 0; i < t->numberOfElements(); i++)
-        if (t->elem(i) == ARG(1))
+    for (int i = 0; i < t->numberOfElements(); i++) {
+        if (t->elem(i) == ARG(1)) {
             return RBLTRUE;
+        }
+    }
     return RBLFALSE;
 }
 

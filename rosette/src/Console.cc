@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,16 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #define IN_CONSOLE
 
 #include "rosette.h"
@@ -33,6 +24,7 @@
 #ifndef NO_SYSENT_H
 #include <sysent.h>
 #endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -40,50 +32,38 @@
 #include <errno.h>
 #include <osfcn.h>
 
-#ifdef HPUX
+#include <sys/socket.h>
 #include <unistd.h>
-#endif
 
 #ifdef MIPS_SGI_SYSV
 #include <sys/param.h>
 #include <sys/types.h>
 #endif
 
-#include <sys/socket.h>
 
 #ifdef MIPS_SGI_SYSV
 #include <unistd.h>
-extern "C" {
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
 int setpgrp();
 int setsid();
-}
-#endif
 
-extern int errno;
-extern int sys_nerr;
-extern char* sys_errlist[];
+#endif
 
 #define OK 0
 #define NOTOK (-1)
 
 static int image;
-
-//
-
 static void finish() { exit(0); }
-
 static void passthru(int sig) { (void)kill(image, sig); }
-
 static void terminate() {
     (void)kill(image, SIGTERM);
     exit(0);
 }
 
-//
 
 main(int, char** argv) {
     char buffer[BUFSIZ];
@@ -92,10 +72,10 @@ main(int, char** argv) {
 
     // Basic signal handling
 
-    (void)signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
-    (void)signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
-    (void)signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
-    (void)signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
+    signal(SIGCHLD, (SIG_PF)finish);     // exit on death of child
+    signal(SIGPIPE, (SIG_PF)terminate);  // kill image on losing pipe
+    signal(SIGTERM, (SIG_PF)terminate);  // kill image on terminate
+    signal(SIGINT, (SIG_PF)passthru);    // pass thru to child
 
     // Create pipe used to feed our syncrhonous stdin to rosette image
     // which handles its end of the pipe as an asynchronous stdin.
@@ -120,31 +100,29 @@ main(int, char** argv) {
             _exit(1);
         }
 
-        (void)setsid();  // here ye here ye do not mess with this without
-        // seeing Christine or Greg Lavender!!!
+        // NB(orig).
+        setsid();
 
         sprintf(bp, "%s.image", *argv);
         *argv = bp;
 
         // Note: execve resets caught signals to their defaults
-
         execvp(bp, argv);
 
         perror("Unable to exec rosette image");
         _exit(1);
 
     default:  // Stuff input into pipe until EOF
-
         // Only the image will do the writing to stdout/stderr
-
-        (void)fclose(stdout);
-        (void)fclose(stderr);
+        fclose(stdout);
+        fclose(stderr);
 
         for (;;) {
-            if (fgets(bp, sizeof(buffer), stdin))
+            if (fgets(bp, sizeof(buffer), stdin)) {
                 write(fds[1], bp, strlen(bp));
-            else
+            } else {
                 terminate();
+            }
         }
     }
 }

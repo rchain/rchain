@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,29 +17,19 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- */
-
 #if !defined(_RBL_Prim_h)
 #define _RBL_Prim_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "BinaryOb.h"
 #include "Ctxt.h"
 
+void debug_builtinprim(char*);
 
 /*
  * The encoding for opApplyPrim assumes that the prim offset fits in one
  * byte.  If MaxPrims is made larger than 256, changes will be required
  * Code.h, Code.cc, and Vm.cc to change the encoding of opApplyPrim.
  */
-
 
 static const int MaxPrims = 1024;
 
@@ -66,7 +57,7 @@ class Prim : public BinaryOb {
     uint16_t primnum;
 
     static Prim* create(char*, PRIMFN*, int, int);
-    static Prim* nthPrim(int);
+    static Prim* nthPrim(int n) { return Prim::inlineTbl[n]; }
 
     int primNumber();
     virtual Prim* InlineablePrimP();
@@ -74,8 +65,6 @@ class Prim : public BinaryOb {
     virtual Ob* dispatch(Ctxt*);
     virtual Ob* invoke(Ctxt*);
 };
-
-inline Prim* Prim::nthPrim(int n) { return Prim::inlineTbl[n]; }
 
 
 struct BuiltinPrimRecord {
@@ -97,17 +86,14 @@ class BuiltinPrim {
     void init() const;
 
    public:
-    BuiltinPrim(const BuiltinPrimRecord*);
+    BuiltinPrim(const BuiltinPrimRecord* bpr)
+        : record(bpr), link(BuiltinPrim::root) {
+        debug_builtinprim(this->record->name);
+        BuiltinPrim::root = this;
+    }
 
     static void initBuiltinPrims();
 };
-
-void debug_builtinprim(char*);
-inline BuiltinPrim::BuiltinPrim(const BuiltinPrimRecord* bpr)
-    : record(bpr), link(BuiltinPrim::root) {
-    debug_builtinprim(this->record->name);
-    BuiltinPrim::root = this;
-}
 
 
 #define INTERNAL_PRIM_NAME(pname) name2(_i_, pname)
@@ -133,26 +119,44 @@ inline BuiltinPrim::BuiltinPrim(const BuiltinPrimRecord* bpr)
     BUILTIN_PRIM(int_name)
 #endif
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK(n, type, var)                       \
     if (!IS_A(ARG(n), type))                      \
         return PRIM_MISMATCH((n), _STRING(type)); \
     type* var = (type*)ARG(n);
 
+#define CHECK_NOVAR(n, type)                            \
+    do {                                                \
+        decltype(n) __n = (n);                          \
+        if (!IS_A(ARG(__n), type)) {                    \
+            return PRIM_MISMATCH((__n), _STRING(type)); \
+        }                                               \
+    } while (0)
+
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_FIXNUM(n, var)                 \
     if (!IS_FIXNUM(ARG(n)))                  \
         return PRIM_MISMATCH((n), "Fixnum"); \
     int var = FIXVAL(ARG(n));
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_SYM(n, var)                    \
     if (!IS_SYM(ARG(n)))                     \
         return PRIM_MISMATCH((n), "Symbol"); \
     Ob* var = ARG(n);
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
+#define CHECK_SYM_NOVAR(n) \
+    if (!IS_SYM(ARG(n)))   \
+        return PRIM_MISMATCH((n), "Symbol");
+
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_TYPE(n, typ, var)                   \
     if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \
         return PRIM_MISMATCH((n), _STRING(typ));  \
     typ* var = (typ*)(ARG(n));
 
+// TODO(leaf): Someone should rewrite this similarly to CHECK_NOVAR.
 #define CHECK_TYPE_BASE(n, typ, var)              \
     if (!(typeGreaterEq(CLASS_SBO(typ), ARG(n)))) \
         return PRIM_MISMATCH((n), _STRING(typ));  \

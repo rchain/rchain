@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,19 +17,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Compile_h)
 #define _RBL_Compile_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "rosette.h"
 
@@ -52,7 +42,6 @@
  * Consequently, I am forced to make these members public.  The protected
  * label is kept as a reminder.
  */
-
 #define protected public
 
 class CompilationUnit : public BinaryOb {
@@ -96,8 +85,8 @@ class CompilationUnit : public BinaryOb {
 
 
 enum RtnCode { ImplicitRtn, TaggedRtn, UntaggedRtn };
-static const bool CtxtAvailable = TRUE;
-static const bool ArgvecAvailable = TRUE;
+static const bool CtxtAvailable = true;
+static const bool ArgvecAvailable = true;
 
 #include "Bits.h"
 #define GET_ATTR(x, flag) GET_FLAG((x).word, flag)

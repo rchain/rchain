@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,19 +17,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
-
 #include "rosette.h"
-
 #include "Code.h"
 #include "Ctxt.h"
 #include "Location.h"
@@ -38,22 +27,34 @@
 #define SPANSIZE(n) ((n) == 0 ? (1 << BitFieldSpanSize) : (n))
 #define SPANSIZE00(n) ((n) == 0 ? (1 << BitField00SpanSize) : (n))
 
+int operator==(Location loc1, Location loc2) { return loc1.atom == loc2.atom; }
+int operator!=(Location loc1, Location loc2) { return loc1.atom != loc2.atom; }
+
+
 #ifdef MAP_BACK_ADDRESS
 uint32_t nontrivial_pre_fixnum_to_addr(int x) {
     uint32_t y = x;
-    if (x < END_SMALL_ADDR)
+    if (x < END_SMALL_ADDR) {
         return y;
-    if (x >= END_SMALL_ADDR)
+    }
+
+    if (x >= END_SMALL_ADDR) {
         return (y + DBEGIN - END_SMALL_ADDR);
+    }
+
     printf("error");
     return 0;
 }
 
 int nontrivial_addr_to_pre_fixnum(Ob* x) {
-    if (x < (void*)END_SMALL_ADDR)
+    if (x < (void*)END_SMALL_ADDR) {
         return (int)x;
-    if (x >= (void*)DBEGIN)
+    }
+
+    if (x >= (void*)DBEGIN) {
         return (int)((unsigned int)x - DBEGIN + END_SMALL_ADDR);
+    }
+
     printf("error");
     return 0;
 }
@@ -64,14 +65,14 @@ bool store(Location loc, Ctxt* k, Ob* val) {
     switch (GET_GENERIC_TYPE(loc)) {
     case LT_CtxtRegister:
         ASSIGN(k, reg(GET_CTXTREG_INDEX(loc)), val);
-        return FALSE;
+        return false;
 
     case LT_ArgRegister:
-        if (GET_ARGREG_INDEX(loc) >= k->argvec->numberOfElements())
-            return TRUE;
-        else {
+        if ((int)GET_ARGREG_INDEX(loc) >= k->argvec->numberOfElements()) {
+            return true;
+        } else {
             ASSIGN(k->argvec, elem(GET_ARGREG_INDEX(loc)), val);
-            return FALSE;
+            return false;
         }
 
     case LT_LexVariable:
@@ -86,7 +87,7 @@ bool store(Location loc, Ctxt* k, Ob* val) {
     case LT_GlobalVariable: {
         Ob* p = GlobalEnv->container();
         int n = GET_GLOBALVAR_OFFSET(loc);
-        return n < p->numberOfSlots() && (ASSIGN(p, slot(n), val), TRUE);
+        return n < p->numberOfSlots() && (ASSIGN(p, slot(n), val), true);
     }
 
     case LT_BitField:
@@ -103,7 +104,7 @@ bool store(Location loc, Ctxt* k, Ob* val) {
                                       (unsigned long)(FIXVAL(val))) == INVALID;
     case LT_Limbo:
     default:
-        return TRUE;
+        return true;
     }
 }
 
@@ -116,7 +117,7 @@ Ob* fetch(Location loc, Ctxt* k) {
                     : INVALID);
 
     case LT_ArgRegister:
-        return (GET_ARGREG_INDEX(loc) < k->argvec->numberOfElements()
+        return ((int)GET_ARGREG_INDEX(loc) < k->argvec->numberOfElements()
                     ? k->argvec->elem(GET_ARGREG_INDEX(loc))
                     : INVALID);
 
@@ -131,7 +132,7 @@ Ob* fetch(Location loc, Ctxt* k) {
 
     case LT_GlobalVariable: {
         Ob* p = GlobalEnv->container();
-        return (GET_GLOBALVAR_OFFSET(loc) < p->numberOfSlots()
+        return ((int)GET_GLOBALVAR_OFFSET(loc) < p->numberOfSlots()
                     ? p->slot(GET_GLOBALVAR_OFFSET(loc))
                     : INVALID);
     }
@@ -233,7 +234,7 @@ Ob* valWrt(Location loc, Ob* v) {
                                  SPANSIZE(GET_BITFIELD00_SPAN(loc)),
                                  GET_BITFIELD00_SIGN(loc));
     case LT_GlobalVariable:
-        return BASE(GlobalEnv)->getLex(TRUE, 0, GET_GLOBALVAR_OFFSET(loc));
+        return BASE(GlobalEnv)->getLex(true, 0, GET_GLOBALVAR_OFFSET(loc));
     case LT_Limbo:
         return ABSENT;
     default:
@@ -258,8 +259,7 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
                                      GET_BITFIELD_LEVEL(loc),
                                      GET_BITFIELD_OFFSET(loc),
                                      SPANSIZE(GET_BITFIELD_SPAN(loc)), bits);
-        }
-        else {
+        } else {
             warning("Location::setValWrt arg not fixnum");
             return INVALID;
         }
@@ -268,13 +268,12 @@ Ob* setValWrt(Location loc, Ob* v, Ob* val) {
             uint32_t bits = (uint32_t)FIXVAL(val);
             return BASE(v)->setField(0, 0, GET_BITFIELD00_OFFSET(loc),
                                      SPANSIZE(GET_BITFIELD00_SPAN(loc)), bits);
-        }
-        else {
+        } else {
             warning("Location::setValWrt arg not fixnum");
             return INVALID;
         }
     case LT_GlobalVariable:
-        return BASE(GlobalEnv)->setLex(TRUE, 0, GET_GLOBALVAR_OFFSET(loc), val);
+        return BASE(GlobalEnv)->setLex(true, 0, GET_GLOBALVAR_OFFSET(loc), val);
     default:
         suicide("Location::setValWrt");
     }
@@ -304,8 +303,10 @@ void adjustLevel(Location loc, int adjustment) {
 
 
 Location CtxtReg(CtxtRegName n) {
-    if (n >= NumberOfCtxtRegs)
+    if (n >= NumberOfCtxtRegs) {
         suicide("invalid ctxt register (%d)", (int)n);
+    }
+
     Location loc;
     loc.locfields = 0;
     SET_CTXTREG_INDEX(loc, n);
@@ -316,8 +317,10 @@ Location CtxtReg(CtxtRegName n) {
 
 
 Location ArgReg(int n) {
-    if (n > MaxArgs)
+    if (n > MaxArgs) {
         suicide("invalid arg register index (%d)", n);
+    }
+
     Location loc;
     loc.locfields = 0;
     SET_ARGREG_INDEX(loc, n);
@@ -328,9 +331,10 @@ Location ArgReg(int n) {
 
 
 Location LexVar(int level, int offset, int indirect) {
-    if (level >= (1 << LexLevelSize) || offset >= (1 << LexOffsetSize))
+    if (level >= (1 << LexLevelSize) || offset >= (1 << LexOffsetSize)) {
         suicide(indirect ? "%s (lex[%d,(%d)])" : "%s (lex[%d,%d])",
                 "unrepresentable location", level, offset);
+    }
 
     Location loc;
     loc.locfields = 0;
@@ -344,9 +348,10 @@ Location LexVar(int level, int offset, int indirect) {
 
 
 Location AddrVar(int level, int offset, int indirect) {
-    if (level >= (1 << AddrLevelSize) || offset >= (1 << AddrOffsetSize))
+    if (level >= (1 << AddrLevelSize) || offset >= (1 << AddrOffsetSize)) {
         suicide(indirect ? "%s (addr[%d,(%d)])" : "%s (addr[%d,%d])",
                 "unrepresentable location", level, offset);
+    }
 
     Location loc;
     loc.locfields = 0;
@@ -360,8 +365,10 @@ Location AddrVar(int level, int offset, int indirect) {
 
 
 Location GlobalVar(int n) {
-    if (n >= (1 << GlobalOffsetSize))
+    if (n >= (1 << GlobalOffsetSize)) {
         suicide("unrepresentable location (global[%d])", n);
+    }
+
     Location loc;
     loc.locfields = 0;
     SET_GLOBALVAR_OFFSET(loc, n);
@@ -373,10 +380,12 @@ Location GlobalVar(int n) {
 
 Location BitField(int level, int offset, int span, int indirect, int sign) {
     if (level >= (1 << BitFieldLevelSize) ||
-        offset >= (1 << BitFieldOffsetSize) || span > (1 << BitFieldSpanSize))
+        offset >= (1 << BitFieldOffsetSize) || span > (1 << BitFieldSpanSize)) {
         suicide(indirect ? "%s (%sfld[%d,(%d),%d])" : "%s (%sfld[%d,%d,%d])",
                 "unrepresentable location", sign ? "s" : "u", level, offset,
                 span);
+    }
+
     Location loc;
     loc.locfields = 0;
     SET_BITFIELD_IND(loc, (indirect != 0));
@@ -391,9 +400,11 @@ Location BitField(int level, int offset, int span, int indirect, int sign) {
 
 Location BitField00(int offset, int span, int sign) {
     if (offset >= (1 << BitField00OffsetSize) ||
-        span > (1 << BitField00SpanSize))
+        span > (1 << BitField00SpanSize)) {
         suicide("%s (%sfld[%d,%d])", "unrepresentable location",
                 sign ? "s" : "u", offset, span);
+    }
+
     Location loc;
     loc.locfields = 0;
     SET_BITFIELD00_SIGN(loc, (sign != 0));

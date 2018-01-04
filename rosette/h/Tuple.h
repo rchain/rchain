@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Tuple_h)
 #define _RBL_Tuple_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 class Tuple : public Ob {
@@ -56,11 +45,8 @@ class Tuple : public Ob {
     static Tuple* create(Tuple*, int);
     static Tuple* create(Tuple*);
 
-    Ob*& elem(int);
-
     StdExtension* becomeExtension(Ob*, Ob*);
 
-    int numberOfElements();
     Tuple* makeSlice(int, int);
     Tuple* makeTail(int);
     Ob* cloneTo(Ob*, Ob*);
@@ -74,17 +60,15 @@ class Tuple : public Ob {
 
     bool typeMatcher(Tuple*, pOb);
     bool elemsCoveredByp(pOb, int = 0);
+
+    Ob*& elem(int n) {
+        return _slot[n + 2];  // Skip the meta and parent fields.
+    }
+
+    int numberOfElements() {
+        return ((SIZE(this) - sizeof(Tuple)) / sizeof(Ob*));
+    }
 };
-
-
-inline Ob*& Tuple::elem(int n) {
-    return _slot[n + 2];  // Skip the meta and parent fields.
-}
-
-
-inline int Tuple::numberOfElements() {
-    return ((SIZE(this) - sizeof(Tuple)) / sizeof(Ob*));
-}
 
 
 extern Tuple* cons(Ob*, Tuple*);

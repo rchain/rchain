@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Operation.h"
-
 #include "Ctxt.h"
 #include "Prim.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 
@@ -55,7 +44,7 @@ StdOprn* StdOprn::create(pOb id, pOb sync) {
     ext->slot(STDOPRN_ID_SLOT) = id;
     ext->slot(STDOPRN_SYNC_SLOT) = sync;
     void* loc = PALLOC1(sizeof(StdOprn), ext);
-    return NEW(loc) StdOprn(ext);
+    return new (loc) StdOprn(ext);
 }
 
 
@@ -65,12 +54,16 @@ bool StdOprn::isSynchronousTrgt() {
 
 
 pOb StdOprn::dispatch(pCtxt ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\toprn %s\n",
                BASE(extension->slot(STDOPRN_ID_SLOT))->asCstring());
+    }
 
-    return (ctxt->nargs > 0 ? BASE(ctxt->arg(0))->lookupAndInvoke(ctxt)
-                            : runtimeError(ctxt, "no argument for dispatch"));
+    if (0 < ctxt->nargs) {
+        return BASE(ctxt->arg(0))->lookupAndInvoke(ctxt);
+    } else {
+        return runtimeError(ctxt, "no argument for dispatch");
+    }
 }
 
 
@@ -95,8 +88,9 @@ void BuiltinOprn::init() {
 
 
 void BuiltinOprn::initBuiltinOprns() {
-    for (BuiltinOprn* bop = BuiltinOprn::root; bop; bop = bop->link)
+    for (BuiltinOprn* bop = BuiltinOprn::root; bop; bop = bop->link) {
         bop->init();
+    }
 }
 
 

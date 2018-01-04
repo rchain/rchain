@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Ctxt_h)
 #define _RBL_Ctxt_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 #include "Location.h"
 #include "Tuple.h"
@@ -75,28 +64,25 @@ class Ctxt : public MboxOb {
     static Ctxt* create(Code*, Tuple*, Ctxt*, int = 0);
     static Ctxt* create(Ob*, Tuple*);
 
-    pOb& reg(int);  // for indirect access to the registers
-    pOb& arg(int);
+    pOb& reg(int n) {
+        pOb* p = (pOb*)&rslt;
+        return p[n];
+    }
+
+    pOb& arg(int n) { return argvec->elem(n); }
 
     virtual bool applyK(Ob*, Location);
     bool rcv(Ob*, Location);
-    bool ret(Ob*);
+
+    bool ret(Ob* result) {
+        return (this->tag != LocLimbo && applyK(result, this->tag));
+    }
+
     void scheduleStrand();
     void prepare();
     Ob* missingBindingError(Ob*);
     Ob* vmError();
 };
-
-inline pOb& Ctxt::reg(int n) {
-    pOb* p = (pOb*)&rslt;
-    return p[n];
-}
-
-inline pOb& Ctxt::arg(int n) { return argvec->elem(n); }
-
-inline bool Ctxt::ret(Ob* result) {
-    return (this->tag != LocLimbo && applyK(result, this->tag));
-}
 
 
 class UpcallCtxt : public Ctxt {
