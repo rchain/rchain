@@ -34,7 +34,26 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   def visit(b: Bind,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
   def visit(p: Chan,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
   def visit(p: Proc,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-   
+
+  // Members declared in coop.rchain.syntax.rholang.Absyn.TPatternBind.Visitor
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPBind,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  // Members declared in coop.rchain.syntax.rholang.Absyn.TPattern.Visitor
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPMixture,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPActivity,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPElevation,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPDescent,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPDisjunction,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPConjuction,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPNegation,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPNullity,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPVerity,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  // Members declared in coop.rchain.syntax.rholang.Absyn.TPIndicator.Visitor
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPIChan,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TPIQuotFormula,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  // Members declared in coop.rchain.syntax.rholang.Absyn.TAnnotation.Visitor
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TAPattern,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+  def visit(x$1: coop.rchain.syntax.rholang.Absyn.TAEmpty,x$2: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
+
   override def reader( fileName : String ) : FileReader = { new FileReader( fileName ) }
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
@@ -56,12 +75,8 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
-<<<<<<< HEAD
       typecheck(ast)
-      visit( ast, Here() )
-=======
       visit( ast, null )
->>>>>>> dev
     }
     catch {
       case e : FileNotFoundException => {
