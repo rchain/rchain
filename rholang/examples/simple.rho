@@ -1,0 +1,7 @@
+// '0'('0'){ 0 }|'0'{| 0 |} |= ~0 | ~0;
+
+new simple in {
+    contract simple(channel) = {
+       for(@Nil <- @Nil){ Nil } | @Nil!(Nil)
+    }
+}
