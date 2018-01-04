@@ -503,7 +503,7 @@ void VirtualMachine::handleSignal() {
     sigemptyset(&blockmask);
     sigaddset(&blockmask, SIGIO);
     if (sigprocmask(SIG_BLOCK, &blockmask, &oldmask) < 0) {
-        printf("aborting...\n");
+        warning("Unable to block SIGIO...\n");
         reset();                   /* clears sigvec */
         return;
     }
@@ -513,18 +513,18 @@ void VirtualMachine::handleSignal() {
      */
 
     if (sigvec & sigmask(SIGINT)) {
-        printf("aborting...\n");
+        warning("Can't override the SIGINT and SIGIO signals\n");
         reset();                   /* clears sigvec */
         (void)sigprocmask(SIG_SETMASK, &oldmask, NULL); /* enable interrupts */
         return;
     }
 
-    if (sigvec & IO_MASK) {
+    if (sigvec & sigmask(SIGIO)) {
     /*
      * For each channel ready for io, call its handler.
      */
 
-    retry_select:
+    retry_select:   // TODO: Get rid of the evil goto!!
         fd_set rfds = fds;
         FD_CLR(1, &rfds);
         FD_CLR(2, &rfds);  // remove stdout & stderr
@@ -532,7 +532,7 @@ void VirtualMachine::handleSignal() {
         FD_ZERO(&wfds);  // don't look for writes
         fd_set efds = fds;
 
-        sigvec &= ~IO_MASK;
+        sigvec &= ~sigmask(SIGIO);
 
         int n = select(nfds, &rfds, &wfds, &efds, &timeout);
 
@@ -552,7 +552,7 @@ void VirtualMachine::handleSignal() {
         } else if (n < 0) {
             switch (errno) {
             case EINTR:
-                goto retry_select;
+                goto retry_select;  // TODO: Get rid of the evil goto!!
 
             case EINVAL:
             case EFAULT:
