@@ -1,8 +1,8 @@
 package coop.rchain.rosette
 
-import coop.rchain.rosette
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr.{LetExpr, RequestExpr, TupleExpr}
+import coop.rchain.rosette.prim.{Fixnum, RblFloat}
 import org.scalatest._
 
 /**

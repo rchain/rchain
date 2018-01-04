@@ -1,5 +1,6 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.prim.Fixnum
 import org.scalacheck.Gen
 import org.scalatest._
 import org.scalatest.prop.PropertyChecks

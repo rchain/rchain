@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.prim.Number._
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, RblFloat, Tuple}
+import coop.rchain.rosette.prim.Fixnum._
+import coop.rchain.rosette.{Ctxt, Ob, PC, RblBool, Tuple}
 import org.scalatest._
 
 class FixnumSpec extends FlatSpec with Matchers {

@@ -1,7 +1,8 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.prim.Number._
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, RblFloat, Tuple}
+import coop.rchain.rosette.prim.Fixnum._
+import coop.rchain.rosette.prim.RblFloat._
+import coop.rchain.rosette.{Ctxt, Ob, PC, RblBool, Tuple}
 import org.scalatest._
 
 class RblFloatSpec extends FlatSpec with Matchers {
@@ -163,7 +164,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flAbs.fn(newCtxt) should be('left)
   }
 
-  "flExp" should "Returns Euler's number e raised to the power of input value." in {
+  "flExp" should "correctly return e to the power of the input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RblFloat(2.5)))
     flExp.fn(newCtxt) should be(Right(RblFloat(math.exp(2.5))))
   }
@@ -173,7 +174,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flExp.fn(newCtxt) should be('left)
   }
 
-  "flExpt" should "correctly return e to the power of the input value" in {
+  "flExpt" should "correctly return base-number raised to the power power-number" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RblFloat(2)), Tuple(RblFloat(.5))))
     flExpt.fn(newCtxt) should be(Right(RblFloat(math.pow(2, .5))))
   }
@@ -203,7 +204,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flLog10.fn(newCtxt) should be('left)
   }
 
-  "flCeil" should "correctly return ceiling of input_value" in {
+  "flCeil" should "correctly return ceiling of input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RblFloat(2.1)))
     flCeil.fn(newCtxt) should be(Right(RblFloat(3.0)))
   }

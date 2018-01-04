@@ -1,5 +1,7 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.prim.RblFloat
+
 object Meta {
   case class StdMeta(override val extension: StdExtension = null)
       extends Actor {
