@@ -31,10 +31,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-offsetof")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-delete-incomplete")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
-find_package(GFLAGS REQUIRED)
-include_directories(${GFLAGS_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${GFLAGS_LIBRARIES})
-
 include_directories("${PROJECT_SOURCE_DIR}/h")
 include_directories("${PROJECT_SOURCE_DIR}/h/sys")
 add_subdirectory (src)
