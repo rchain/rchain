@@ -3,6 +3,7 @@ package coop.rchain.comm
 import coop.rchain.kademlia
 import coop.rchain.comm.protocol.routing._
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
 
@@ -250,24 +251,28 @@ object ProtocolMessage {
       .withReturnHeader(returnHeader(h))
       .withUpstream(upstream)
 
-  def parse(bytes: Seq[Byte]): Option[ProtocolMessage] =
-    Protocol.parseFrom(bytes.toArray) match {
-      case msg: Protocol =>
-        msg.message match {
-          case Protocol.Message.Ping(_)   => Some(PingMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Pong(_)   => Some(PongMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Lookup(_) => Some(LookupMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.LookupResponse(_) =>
-            Some(LookupResponseMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Disconnect(_) =>
-            Some(DisconnectMessage(msg, System.currentTimeMillis))
-          case Protocol.Message.Upstream(_) =>
-            msg.returnHeader match {
-              case Some(_) => Some(UpstreamResponse(msg, System.currentTimeMillis))
-              case None    => Some(UpstreamMessage(msg, System.currentTimeMillis))
-            }
+  def parse(bytes: Seq[Byte]): Either[CommError, ProtocolMessage] =
+    try {
+      Protocol.parseFrom(bytes.toArray) match {
+        case msg: Protocol =>
+          msg.message match {
+            case Protocol.Message.Ping(_)   => Right(PingMessage(msg, System.currentTimeMillis))
+            case Protocol.Message.Pong(_)   => Right(PongMessage(msg, System.currentTimeMillis))
+            case Protocol.Message.Lookup(_) => Right(LookupMessage(msg, System.currentTimeMillis))
+            case Protocol.Message.LookupResponse(_) =>
+              Right(LookupResponseMessage(msg, System.currentTimeMillis))
+            case Protocol.Message.Disconnect(_) =>
+              Right(DisconnectMessage(msg, System.currentTimeMillis))
+            case Protocol.Message.Upstream(_) =>
+              msg.returnHeader match {
+                case Some(_) => Right(UpstreamResponse(msg, System.currentTimeMillis))
+                case None    => Right(UpstreamMessage(msg, System.currentTimeMillis))
+              }
 
-          case _ => None
-        }
+            case _ => Left(UnknownProtocolError("unable to unmarshal protocol buffer"))
+          }
+      }
+    } catch {
+      case NonFatal(ex: Exception) => Left(ProtocolException(ex))
     }
 }
