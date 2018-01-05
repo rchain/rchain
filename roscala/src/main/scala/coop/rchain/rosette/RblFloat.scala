@@ -1,9 +1,9 @@
-package coop.rchain.rosette.prim
+package coop.rchain.rosette
 
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.{Ctxt, Ob, RblAtom, RblBool}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
+import coop.rchain.rosette.prim.{ArithmeticError, Prim, PrimError}
 
 case class RblFloat(value: Double, override val slot: Seq[Ob] = Seq(StdMeta()))
     extends RblAtom {

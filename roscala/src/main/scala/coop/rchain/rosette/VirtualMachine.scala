@@ -2,7 +2,7 @@ package coop.rchain.rosette
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rosette.Ob._
-import coop.rchain.rosette.prim.{Fixnum, Prim}
+import coop.rchain.rosette.prim.Prim
 
 sealed trait Work
 case object NoWorkLeft extends Work

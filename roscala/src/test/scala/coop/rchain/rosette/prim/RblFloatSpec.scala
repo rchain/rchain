@@ -1,8 +1,7 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.prim.Fixnum._
-import coop.rchain.rosette.prim.RblFloat._
-import coop.rchain.rosette.{Ctxt, Ob, PC, RblBool, Tuple}
+import coop.rchain.rosette.RblFloat._
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, RblFloat, Tuple}
 import org.scalatest._
 
 class RblFloatSpec extends FlatSpec with Matchers {
@@ -131,7 +130,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RblFloat(2)), Tuple(Ob.NIV)))
-    fxNe.fn(newCtxt) should be('left)
+    flNe.fn(newCtxt) should be('left)
   }
 
   "flMin" should "correctly return the smallest one" in {

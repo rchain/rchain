@@ -1,9 +1,9 @@
-package coop.rchain.rosette.prim
+package coop.rchain.rosette
 
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
-import coop.rchain.rosette.{Ctxt, Ob, RblAtom, RblBool}
 import coop.rchain.rosette.prim.Prim._
+import coop.rchain.rosette.prim._
 
 case class Fixnum(value: Int, override val slot: Seq[Ob] = Seq(StdMeta()))
     extends RblAtom {
