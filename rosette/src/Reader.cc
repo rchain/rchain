@@ -82,7 +82,7 @@ class ReadMacro {
 };
 
 
-static const int NCHARS = 128;
+static const int NCHARS = 256;
 static const int _DELIMITER = 0x1;
 
 
