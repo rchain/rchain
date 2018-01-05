@@ -2,7 +2,7 @@
 
 ## AbstractInterpreter
 A type-class for evaluating Rho-Calculus expressions based on a definition of a concrete state space (StateSpace). Also contains an initial complete lattice implementation.
-##ADT
+## ADT
 An ADT for Rho-Calculus
 ## Lib
 Within the lib are the zipper and term libraries. These libraries are used
