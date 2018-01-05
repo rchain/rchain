@@ -68,6 +68,7 @@
 
 (load "equiv.ros" 'silent)
 (load "reader-iso-8859-1.ros" 'silent)
+(load "reader-utf-8.ros" 'silent)
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
