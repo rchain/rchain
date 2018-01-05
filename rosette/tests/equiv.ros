@@ -66,11 +66,8 @@
           ;; Return #niv to declutter the output.
           '#niv))))
 
-(display 'hello #\\n)
 (test-form 1 1)
-(display 'here #\\n)
 (test-form 0x41 65)
-(display 'here #\\n)
 
 (test-form (+ 1 2) 3)
 (test-form (+ 1 2) (- 5 2))
