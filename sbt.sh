@@ -4,11 +4,11 @@ RWORK=/Users/kent/Documents/
 RHOLANG_DIR=$RWORK/Rholang
 RHOLANG_WEB_DIR=$RWORK/RholangREPL
 
-cd $RHOLANG_DIR
-sbt "run-main coop.rchain.rho2rose.Rholang2RosetteCompiler ${RHOLANG_WEB_DIR}/test.rho" > $RHOLANG_WEB_DIR/output.txt
-cp $RHOLANG_WEB_DIR/output.txt $RHOLANG_WEB_DIR/original_output.txt
-sed -n '/\[0m\[[32msuccess[0m\]/!p' $RHOLANG_WEB_DIR/output.txt > $RHOLANG_WEB_DIR/output2.txt
-sed -n '/\[0m\[[0minfo[0m\]/!p' $RHOLANG_WEB_DIR/output2.txt > $RHOLANG_WEB_DIR/output3.txt
-cat $RHOLANG_WEB_DIR/output3.txt
+# Be sure to build the jar first:
+# ln -s .../rchain; cd rchain/rholang; sbt assembly
+JAR=rchain/rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar
+
+java -jar $JAR test.rho
+
 
 

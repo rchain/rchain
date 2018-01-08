@@ -12,8 +12,11 @@ def home(request):
             input = compilerForm.cleaned_data.get('rho')
             with open('test.rho', 'w') as f:
                 f.write("%s\n" % str(input))
-            sbt_output = subprocess.check_output("bash sbt.sh", shell=True)
-            rbl_output = subprocess.check_output("bash rosette.sh", shell=True)
+            subprocess.check_output("rm test.rbl; bash sbt.sh || true",
+                                    shell=True)
+            sbt_output = open('test.rbl').read()
+            rbl_output = subprocess.check_output(
+                "bash rosette.sh || true", stderr=subprocess.STDOUT, shell=True)
     else:
         compilerForm = CompilerForm()
         sbt_output = "Please enter a valid Rholang program"
