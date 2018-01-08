@@ -28,7 +28,6 @@ ehthumbs.db
 Icon?
 Thumbs.db
 *.swp
-*.cmake
 
 # SBT
 #####

@@ -26,7 +26,5 @@ cd ${BUILD}
 cmake -B${BUILD} -H${SRCDIR}
 make ${PROCS_ARG}
 make test
-# TODO(leaf): We need a package command. Not integrated yet, but
-# leaving this breadcrumb to remind ourselves.
-# make package
+make package
 

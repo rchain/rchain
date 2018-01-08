@@ -29,7 +29,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-offsetof")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-delete-incomplete")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
 include_directories("${PROJECT_SOURCE_DIR}/h")
 include_directories("${PROJECT_SOURCE_DIR}/h/sys")
@@ -37,4 +36,37 @@ add_subdirectory (src)
 add_subdirectory (rbl/rosette)
 
 include_directories("${PROJECT_BINARY_DIR}")
+
+INCLUDE(InstallRequiredSystemLibraries)
+
+SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "The Rosette Virtual Machine")
+SET(CPACK_PACKAGE_VENDOR "RChain Cooperative")
+SET(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README.txt")
+SET(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/Copyright.txt")
+SET(CPACK_PACKAGE_VERSION_MAJOR ${pyr8_VERSION_MAJOR})
+SET(CPACK_PACKAGE_VERSION_MINOR ${pyr8_VERSION_MINOR})
+SET(CPACK_PACKAGE_VERSION_PATCH ${pyr8_VERSION_PATCH})
+SET(CPACK_PACKAGE_INSTALL_DIRECTORY "CMake ${CMake_VERSION_MAJOR}.${CMake_VERSION_MINOR}")
+
+# Just Unix so far.
+SET(CPACK_STRIP_FILES "build.out/src/rosette")
+SET(CPACK_SOURCE_STRIP_FILES "")
+
+SET(CPACK_PACKAGE_EXECUTABLES "build.out/src/rosette" "rosette")
+
+SET(CPACK_GENERATOR "DEB")
+SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Nash Foster")
+SET(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
+SET(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "build-essential (>= 12.2), \
+    cmake (>= 3.5.1-1), \
+    doxygen (>= 1.8.12-1), \
+    g++-6-multilib (>= 6.1.1-11), \
+    g++-multilib (>= 4:6.1.1-1), \
+    libgflags-dev (>= 2.1.2-3), \
+    libstdc++6-6-dbg:amd64 (>= 6.1.1-11), \
+    pkg-config (>= 0.29-4), \
+    texinfo (>= 6.3.0.dfsg.1-1+b1)")
+
+INCLUDE(CPack)
 

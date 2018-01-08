@@ -40,12 +40,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#ifdef HANDLE_POLL_WITH_IO
-#define IO_MASK (sigmask(SIGPOLL) | sigmask(SIGIO))
-#else
-#define IO_MASK (sigmask(SIGIO))
-#endif
-
 #ifndef c_plusplus
 extern "C" {
 int select(int, fd_set*, fd_set*, fd_set*, struct timeval*);
@@ -503,25 +497,34 @@ void VirtualMachine::handleSleep() {
 }
 
 void VirtualMachine::handleSignal() {
-    int oldmask = sigblock(IO_MASK);
+    sigset_t oldmask;
+    sigset_t blockmask;
+
+    sigemptyset(&blockmask);
+    sigaddset(&blockmask, SIGIO);
+    if (sigprocmask(SIG_BLOCK, &blockmask, &oldmask) < 0) {
+        warning("Unable to block SIGIO...\n");
+        reset();                   /* clears sigvec */
+        return;
+    }
 
     /*
      * Can't override the SIGINT and SIGIO signals with a Rosette handler.
      */
 
     if (sigvec & sigmask(SIGINT)) {
-        printf("aborting...\n");
+        warning("Can't override the SIGINT and SIGIO signals\n");
         reset();                   /* clears sigvec */
-        (void)sigsetmask(oldmask); /* enable interrupts */
+        (void)sigprocmask(SIG_SETMASK, &oldmask, NULL); /* enable interrupts */
         return;
     }
 
-    if (sigvec & IO_MASK) {
+    if (sigvec & sigmask(SIGIO)) {
     /*
      * For each channel ready for io, call its handler.
      */
 
-    retry_select:
+    retry_select:   // TODO: Get rid of the evil goto!!
         fd_set rfds = fds;
         FD_CLR(1, &rfds);
         FD_CLR(2, &rfds);  // remove stdout & stderr
@@ -529,14 +532,9 @@ void VirtualMachine::handleSignal() {
         FD_ZERO(&wfds);  // don't look for writes
         fd_set efds = fds;
 
-        sigvec &= ~IO_MASK;
+        sigvec &= ~sigmask(SIGIO);
 
-
-#ifndef SELECT
-#define SELECT select
-#endif
-
-        int n = SELECT(nfds, &rfds, &wfds, &efds, &timeout);
+        int n = select(nfds, &rfds, &wfds, &efds, &timeout);
 
         if (n > 0) {
             int i = 0;
@@ -554,7 +552,7 @@ void VirtualMachine::handleSignal() {
         } else if (n < 0) {
             switch (errno) {
             case EINTR:
-                goto retry_select;
+                goto retry_select;  // TODO: Get rid of the evil goto!!
 
             case EINVAL:
             case EFAULT:
@@ -568,7 +566,7 @@ void VirtualMachine::handleSignal() {
                 for (int i = 0; i < nfds; i++) {
                     if (FD_ISSET(i, &fds)) {
                         FD_SET(i, &tfds);
-                        if (SELECT(nfds, &tfds, &wfds, &wfds, &timeout) < 0 &&
+                        if (select(nfds, &tfds, &wfds, &wfds, &timeout) < 0 &&
                             errno == EBADF) {
                             warning("clearing file descriptor %d", i);
                             FD_CLR(i, &fds);
@@ -594,7 +592,9 @@ void VirtualMachine::handleSignal() {
         }
     }
 
-    sigsetmask(oldmask); /* enable interrupts */
+    if (sigprocmask(SIG_SETMASK, &oldmask, NULL) < 0) {  // enable interrupts
+        warning("Restoring blocked IO signal mask");
+    }
 }
 
 
