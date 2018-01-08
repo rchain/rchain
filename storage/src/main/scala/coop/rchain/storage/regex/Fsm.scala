@@ -451,11 +451,9 @@ case class Fsm(alphabet: Set[Char],
         while (pendingFinals.isEmpty && pending.nonEmpty) {
           val (pendingString, pendingState) = pending.dequeue()
 
-          val transition = transitions.get(pendingState)
-          if (transition.isDefined) {
-            for ((nextSymbol, nextState) <- transition.get) {
+          transitions.getOrElse(pendingState, Nil).foreach({
+            case (nextSymbol, nextState) => {
               val nextString = pendingString + nextSymbol
-
               if (livestates.contains(nextState)) {
                 pending += nextString -> nextState
                 if (finalStates.contains(nextState)) {
@@ -463,7 +461,7 @@ case class Fsm(alphabet: Set[Char],
                 }
               }
             }
-          }
+          })
         }
 
         if (pendingFinals.nonEmpty) {
