@@ -566,36 +566,27 @@ case class Fsm(alphabet: Set[Char],
       if (isLive(state)) {
         val stateCount = stateToCount.get(state)
 
-        if (stateCount.nonEmpty) {
-          if (stateCount.get.isEmpty) {
-            //fail fast = we trapped into infinite recursion
-            return None
-          }
-          stateCount.get
-        } else {
+        Some(stateCount.getOrElse({
           //None means "computing right now..."
           stateToCount += state -> None
-          var n = 0
-          if (finalStates.contains(state)) {
-            n += 1
-          }
-
-          val transition = transitions.get(state)
-          if (transition.isDefined) {
-            for ((_, nextState) <- transition.get) {
-              //yup, recursion here
-              val countForNextState = getNumStrings(nextState)
-              if (countForNextState.isEmpty) {
-                //fail fast - we trapped into infinite recursion
-                return None
-              }
-              n += countForNextState.get
-            }
-          }
+          val n = (if (finalStates.contains(state)) {
+            1
+          } else
+          {
+            0
+          }) + transitions.get(state).map(transition => transition.values).getOrElse(Nil).map(nextState =>
+            //yup, recursion here
+            getNumStrings(nextState).getOrElse({
+              //fail fast - we trapped into infinite recursion
+              return None
+            })).sum
 
           stateToCount += state -> Some(n)
           Some(n)
-        }
+        }).getOrElse({
+          //fail fast = we trapped into infinite recursion
+          return None
+        }))
       } else {
         stateToCount += state -> Some(0)
         Some(0)
