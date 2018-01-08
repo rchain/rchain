@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.prim.RblFloat._
-import coop.rchain.rosette.{Ctxt, Fixnum=>RFixnum, Ob, PC, RblBool, RblFloat=>RFloat, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum => RFixnum, Ob, PC, RblBool, RblFloat => RFloat, Tuple}
 import org.scalatest._
 
 class RblFloatSpec extends FlatSpec with Matchers {
@@ -133,7 +133,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flNe.fn(newCtxt) should be('left)
   }
 
-  "flMin" should "correctly return the smallest one" in {
+  "flMin" should "correctly return the smallest input value" in {
     val newCtxt = ctxt.copy(nargs = 4, argvec = Tuple(Tuple(3, RFloat(2.1)), Tuple(RFloat(2.2))))
     flMin.fn(newCtxt) should be(Right(RFloat(2.1)))
   }
@@ -143,7 +143,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flMin.fn(newCtxt) should be('left)
   }
 
-  "flMax" should "correctly return the greatest one" in {
+  "flMax" should "correctly return the greatest input value" in {
     val newCtxt = ctxt.copy(nargs = 4, argvec = Tuple(Tuple(3, RFloat(2.1)), Tuple(RFloat(2.2))))
     flMax.fn(newCtxt) should be(Right(RFloat(2.2)))
   }
@@ -173,7 +173,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flExp.fn(newCtxt) should be('left)
   }
 
-  "flExpt" should "correctly return base-number raised to the power power-number" in {
+  "flExpt" should "correctly return first argument to the power of second argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2)), Tuple(RFloat(.5))))
     flExpt.fn(newCtxt) should be(Right(RFloat(math.pow(2, .5))))
   }
@@ -198,7 +198,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flLog10.fn(newCtxt) should be(Right(RFloat(2.0)))
   }
 
-  it should "fail for  non-RblFloat arguments" in {
+  it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
     flLog10.fn(newCtxt) should be('left)
   }
@@ -208,7 +208,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flCeil.fn(newCtxt) should be(Right(RFloat(3.0)))
   }
 
-  it should "fail for  non-RblFloat arguments" in {
+  it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
     flCeil.fn(newCtxt) should be('left)
   }
@@ -218,7 +218,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flFloor.fn(newCtxt) should be(Right(RFloat(2.0)))
   }
 
-  it should "fail for  non-RblFloat arguments" in {
+  it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
     flFloor.fn(newCtxt) should be('left)
   }
@@ -229,7 +229,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flAtan.fn(newCtxt) should be(Right(RFloat(Math.PI / 4)))
   }
 
-  it should "fail for  non-RblFloat arguments" in {
+  it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
     flAtan.fn(newCtxt) should be('left)
   }
@@ -254,7 +254,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     flFloor.fn(newCtxt) should be('left)
   }
 
-  "flToFx" should "correctly convert the RblFloat value to RFixnum" in {
+  "flToFx" should "correctly convert the RblFloat value to Fixnum" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(2.1)))
     flToFx.fn(newCtxt) should be(Right(RFixnum(2)))
   }
