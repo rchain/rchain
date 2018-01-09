@@ -4,9 +4,10 @@
 from contextlib import contextmanager
 from io import StringIO
 from os.path import relpath
+from threading import Timer
 
 from pathlib import Path
-from subprocess import PIPE, SubprocessError
+from subprocess import PIPE, SubprocessError, CalledProcessError
 from sys import stderr
 import logging
 
@@ -34,6 +35,9 @@ class CompileError(UserError):
 class RunError(UserError):
     pass
 
+
+class SubprocessTimeoutError(SubprocessError):
+    pass
 
 class Compiler(object):
 
@@ -95,11 +99,20 @@ class VM(object):
 
     @classmethod
     def make(cls, program, library, Popen):
+        # Adapted from http://www.ostricher.com/2015/01/python-subprocess-with-timeout/
+        def run_command_with_timeout(cmd, input, timeout_sec):
+            proc = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            timer = Timer(timeout_sec, proc.kill)
+            timer.start()
+            return_value = proc.communicate(input.encode('utf-8'))
+            if timer.is_alive():
+                timer.cancel()
+                return return_value
+            raise SubprocessTimeoutError('Process #%d killed after %d seconds. Try checking for infinite loops.' % (proc.pid, timeout_sec))
+
         def runVM(rbl):
             library_rel_path = relpath(os.path.join(library, "boot.rbl"), os.path.dirname(program))
-            proc = Popen([program, "-boot", library_rel_path], stdin=PIPE,
-                         stdout=PIPE, stderr=PIPE)
-            return proc.communicate(rbl.encode('utf-8'))
+            return run_command_with_timeout([program, "-boot", library_rel_path], rbl, 1)
         return cls(runVM)
 
     def run_repl(self, rbl):
@@ -107,6 +120,9 @@ class VM(object):
             out, err = self.__runVM(rbl)
         except CalledProcessError as oops:
             raise RunError(oops) from oops
+        except SubprocessTimeoutError as oops:
+            # TODO: Clean up quick hack to print subprocess timeout error
+            return '','',oops.args[0]
         return self._cleanup(out.decode('utf-8'))
 
     @classmethod
