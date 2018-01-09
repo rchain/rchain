@@ -1,4 +1,3 @@
-import subprocess
 from subprocess import Popen
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -48,10 +47,10 @@ def home(request):
         run_error = None
     return render(request, "index.html", {
         "form": compilerForm,
-        "sbt_output": rbl,
-        "compile_error": compile_error,  # TODO: update template
-        "rbl_output": session,
-        "run_error": run_error,
+        "rbl_code": rbl or '',
+        "compile_error": compile_error or '',
+        "repl_session": session or '',
+        "run_error": run_error or '',
     })
 
 

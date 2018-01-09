@@ -61,7 +61,7 @@ class Compiler(object):
             proc = Popen(argv, stdout=PIPE, stderr=PIPE)
             out, err = proc.communicate()
             if proc.returncode != 0:
-                raise CompileError(err)
+                raise CompileError(err.decode('utf-8'))
             return out, err
         return run_jar
 

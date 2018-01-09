@@ -18,80 +18,75 @@
     <![endif]-->
 </head>
 <body>
+  <div class="container">
     <form action="" method="POST">
         {% csrf_token %}
         <input id="hdnView" type="hidden" name="view" />
-        <div class="container">
-            <div class="page-header">
-                <h1>Rholang</h1>
-            </div>
-            <div class="row">
-                <div class="col-xs-6 col-md-4">
-                    <div class="panel panel-primary">
-                        <div class="panel-heading">
-                            <h3 class="panel-title">Rholang Source</h3>
-                        </div>
-                        <div class="panel-body">
-                            {% render_field form.rho class="form-control" rows="20" cols="100" style="font-family: monospace;" placeholder='print(5)' %}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xs-6 col-md-4">
-                    <div class="panel panel-primary">
-                        <div class="panel-heading">
-                            <h3 class="panel-title">Output</h3>
-                        </div>
-                        <div class="panel-body">
-                            <p>
-                                <button id="btnCompiler" type="button" class="btn btn-primary btn-sm">Compiler Output</button>
-                                <button id="btnProgram" type="button" class="btn btn-primary btn-sm">Program Output</button>
-                            </p>
-                            <p id="compiler_output"class="hidden" style="font-family: monospace;">{{ sbt_output }}</p>
-                            <p id="program_output" class="show" style="font-family: monospace;">{{ rbl_output }}</p>
-                        </div>
-                    </div>
-                </div><!-- /.col-sm-2 -->
-            </div>
+        <div class="page-header">
+          <h1>Rholang Playground</h1>
+
+          <p>
+            <a href="https://rholang.rchain.coop/">Rholang</a> is a
+            language for writing smart contracts that run on the
+            RChain virtual machine.
+          </p>
+        </div>
+        <div class="panel panel-primary">
+          <div class="panel-heading">
+            <h3 class="panel-title">Rholang Source</h3>
+          </div>
+          <div class="panel-body">
+            {% render_field form.rho class="form-control" rows="16" cols="80" style="font-family: monospace;" placeholder='print(5)' %}
             <button type="submit" class="btn btn-default">Submit</button>
+          </div>
+        </div>
+
+        <div class="panel panel-primary" id="output">
+          <div class="panel-heading">
+            <h3 class="panel-title">Output</h3>
+          </div>
+          {% if compile_error %}
+          <pre class="alert alert-warning"
+               >{{ compile_error }}</pre>
+          {% elif run_error %}
+          <pre class="alert alert-warning"
+               >{{ run_error }}</pre>
+          {% else %}
+          <div class="panel-body">
+            <ul class="nav nav-tabs" role="tablist">
+              <li rol="presentation">
+                <a href="#rbl"
+                   aria-controls="home" role="tab"
+                   data-toggle="tab">RBL Code</a>
+              </li>
+              <li rol="presentation" class="active">
+                <a href="#repl"
+                   aria-controls="home" role="tab"
+                   data-toggle="tab">REPL Session</a>
+              </li>
+            </ul>
+            <div class="tab-content">
+              <pre role="tabpanel" class="tab-pane" id="rbl"
+                   >{{ rbl_code }}</pre>
+              <pre role="tabpanel" class="tab-pane active" id="repl"
+                   >{{ repl_session }}</pre>
+            </div>
+          </div>
+          {% endif %}
         </div>
     </form>
+  </div>
+
         <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
         <!-- Include all compiled plugins (below), or include individual files as needed -->
         <script src="{% static 'js/bootstrap.min.js' %}"></script>
     <script>
-        $(document).ready(function () {
-            if ($('#hdnView').val() != "c") {
-                $("#compiler_output").removeClass('show');
-                $("#compiler_output").addClass('hidden');
-
-                $("#program_output").removeClass('hidden');
-                $("#program_output").addClass('show');
-            } else {
-                $("#program_output").removeClass('show');
-                $("#program_output").addClass('hidden');
-
-                $("#compiler_output").removeClass('hidden');
-                $("#compiler_output").addClass('show');
-            }
-        });
-
-        $('#btnCompiler').click(function () {
-            $('#hdnView').val("c")
-            $("#program_output").removeClass('show');
-            $("#program_output").addClass('hidden');
-
-            $("#compiler_output").removeClass('hidden');
-            $("#compiler_output").addClass('show');
-        });
-        $('#btnProgram').click(function () {
-            $('#hdnView').val("p")
-            $("#program_output").removeClass('hidden');
-            $("#program_output").addClass('show');
-
-            $("#compiler_output").removeClass('show');
-            $("#compiler_output").addClass('hidden');
-        });
+      $(document).ready(function () {
+        $('#output a').click(function (e) {
+        e.preventDefault()
+        $(this).tab('show')
+      });
     </script>
 </body>
 </html>
