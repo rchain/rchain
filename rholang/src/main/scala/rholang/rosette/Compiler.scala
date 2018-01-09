@@ -33,7 +33,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
-    val term = ast
+    val term = ast._1
     term.rosetteSerializeOperation + term.rosetteSerialize
   }
 
@@ -43,7 +43,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
-      Some(visit(ast, null))
+      Some(visit(ast, Set[String]()))
     }
     catch {
       case e : FileNotFoundException => {
@@ -55,7 +55,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
         None
       }
       case t : Throwable => {
-        System.err.println(s"""Unexpected error compiling: ${fileName}""")
+        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
         None
       }
     }
