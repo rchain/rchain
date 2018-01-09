@@ -10,7 +10,6 @@
 package coop.rchain.rho2rose
 
 import coop.rchain.syntax.rholang._
-import coop.rchain.syntax.rholang.Absyn._
 
 import java.io._
 
@@ -30,11 +29,6 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
      // Members declared in coop.rchain.rho2rose.RholangASTToTerm
   def theTupleSpaceVar : String = s"""TupleSpaceVar${Fresh()}"""
 
-  def visit(p: CPattern,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-  def visit(b: Bind,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-  def visit(p: Chan,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-  def visit(p: Proc,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-   
   override def reader( fileName : String ) : FileReader = { new FileReader( fileName ) }
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
