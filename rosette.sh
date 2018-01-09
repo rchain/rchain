@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-docker run -i rosette-repl <test.rbl
+./rchain/rosette/build.out/src/rosette <test.rbl
