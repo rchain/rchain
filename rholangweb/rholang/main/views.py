@@ -1,5 +1,5 @@
 import subprocess
-from subprocess import run
+from subprocess import Popen
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
@@ -10,7 +10,8 @@ from django.shortcuts import render
 from . import runner
 
 # TODO: get jar from django config
-JAR = 'rchain/rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar'
+COMPILER_JAR = 'rchain/rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar'
+VM_PROGRAM = 'rchain/rosette/build.out/src/rosette'
 
 
 def home(request):
@@ -21,37 +22,35 @@ def home(request):
 
             try:
                 compiler = runner.Compiler.make(
-                    Path(JAR), Path, TemporaryDirectory, run)
+                    Path(COMPILER_JAR), Path, TemporaryDirectory, Popen)
             except runner.ConfigurationError as oops:
                 raise  # TODO: HTTP 500
 
             try:
-                compile_output = compiler.compile_text(rho)
+                rbl = compiler.compile_text(rho)
                 compile_error = None
             except runner.UserError as oops:
-                compile_output = None
+                rbl = None
                 compile_error = str(oops)
 
-            run_output = None
+            session = None
             run_error = None
 
-            if compile_output is not None:
-                with open('test.rbl', 'w') as f:
-                    f.write("%s\n" % str(compile_output))
-                run_output = subprocess.check_output(
-                    "bash rosette.sh || true", stderr=subprocess.STDOUT, shell=True)
+            if rbl is not None:
+                vm = runner.VM.make(Path(VM_PROGRAM), Popen)
+                _warnings, _preamble, session = vm.run_repl(rbl)
                 run_error = None  # TODO
     else:
         compilerForm = CompilerForm()
-        compile_output = "Compiler standing by..."
+        rbl = "Compiler standing by..."
         compile_error = None
-        run_output = "VM standing by..."
+        session = "VM standing by..."
         run_error = None
     return render(request, "index.html", {
         "form": compilerForm,
-        "sbt_output": compile_output,
+        "sbt_output": rbl,
         "compile_error": compile_error,  # TODO: update template
-        "rbl_output": run_output,
+        "rbl_output": session,
         "run_error": run_error,
     })
 
