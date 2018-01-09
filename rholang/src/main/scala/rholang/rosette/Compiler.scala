@@ -20,7 +20,7 @@ trait Rholang2RosetteCompilerT {
   def parser( lexer : Yylex ) : parser
   def serialize( ast : VisitorTypes.R ) : String
 
-  def compile( fileName : String ) : VisitorTypes.R
+  def compile( fileName : String ) : Option[VisitorTypes.R]
 }
 
 object Rholang2RosetteCompiler extends RholangASTToTerm
@@ -33,28 +33,29 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
-    ast match {
-      case Some(term: StrTermCtorAbbrevs.StrTermCtxt @unchecked) =>
-        term.rosetteSerializeOperation + term.rosetteSerialize
-      case _ => "Not a StrTermCtxt"
-    }
+    val term = ast
+    term.rosetteSerializeOperation + term.rosetteSerialize
   }
 
-  override def compile( fileName : String ) : VisitorTypes.R = {
+  override def compile( fileName : String ) : Option[VisitorTypes.R] = {
     try {
       val rdr = reader( fileName )
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
-      visit( ast, null )
+      Some(visit(ast, null))
     }
     catch {
       case e : FileNotFoundException => {
         System.err.println(s"""Error: File not found: ${fileName}""")
         None
       }
+      case e : CompilerExceptions.CompilerException => {
+        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
+        None
+      }
       case t : Throwable => {
-        System.err.println(s"""Unexpect error compiling: ${fileName}""")
+        System.err.println(s"""Unexpected error compiling: ${fileName}""")
         None
       }
     }
@@ -64,8 +65,8 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
     args match {
       case Array(fileName) => {
         compile(fileName) match {
-          case result@Some(_) => {
-            val rbl: String = serialize(result)
+          case Some(term) => {
+            val rbl: String = serialize(term)
             val rblFileName = fileName.replaceAll(".rho$", "") + ".rbl"
             new java.io.PrintWriter(rblFileName) { write(rbl); close }
             System.err.println(s"compiled $fileName to $rblFileName")
