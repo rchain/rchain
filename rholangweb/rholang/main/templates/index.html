@@ -35,6 +35,9 @@
           <div class="panel-heading">
             <h3 class="panel-title">Rholang Source</h3>
           </div>
+          <select id="examples">
+            <option>...</option>
+          </select>
           <div class="panel-body">
             {% render_field form.rho class="form-control" rows="16" cols="80" style="font-family: monospace;" placeholder='print(5)' %}
             <button type="submit" class="btn btn-default">Submit</button>
@@ -84,8 +87,23 @@
     <script>
       $(document).ready(function () {
         $('#output a').click(function (e) {
-        e.preventDefault()
-        $(this).tab('show')
+          e.preventDefault()
+          $(this).tab('show')
+        });
+        var examples = {{ examples|safe }};
+        var exElt = $('#examples');
+        exElt.html('<option>Examples:<' + '/option>');
+        $.each(examples,
+          (ix, ex) => exElt.append($("<option/>")
+            .attr("value", ex.name).text(ex.name)));
+        var exByName = {};
+        $.each(examples, (ix, ex) => { exByName[ex.name] = ex.src; });
+        exElt.change(() => {
+          var name;
+          $('#examples option:selected').each(
+            (_ix, opt) => { name = $(opt).attr('value') });
+          $('#id_rho').text(exByName[name]);
+        });
       });
     </script>
 </body>

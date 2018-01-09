@@ -9,11 +9,17 @@ from django.shortcuts import render
 from . import runner
 
 # TODO: get jar from django config
+EXAMPLES = 'rchain/rholang/examples'
 COMPILER_JAR = 'rchain/rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar'
 VM_PROGRAM = 'rchain/rosette/build.out/src/rosette'
 
 
 def home(request):
+    examples = [
+        dict(name=ex.name, src=ex.open().read())
+        for ex in Path(EXAMPLES).glob('*.rho')
+    ]
+
     if request.POST:
         compilerForm = CompilerForm(request.POST)
         if compilerForm.is_valid():
@@ -47,6 +53,7 @@ def home(request):
         run_error = None
     return render(request, "index.html", {
         "form": compilerForm,
+        "examples": examples,
         "rbl_code": rbl or '',
         "compile_error": compile_error or '',
         "repl_session": session or '',
