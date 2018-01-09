@@ -6,7 +6,7 @@ run apt update && apt dist-upgrade -y && apt install -y sbt
 
 copy . /src
 workdir /src
-run rm ensime.sbt
+run rm -f ensime.sbt
 
 env JAVA_TOOL_OPTIONS -Dfile.encoding=UTF8
 
