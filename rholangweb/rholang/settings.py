@@ -108,3 +108,8 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
 CORS_ORIGIN_ALLOW_ALL = True
+
+EXAMPLES =  os.path.join(BASE_DIR, 'examples')
+COMPILER_JAR = os.path.join(BASE_DIR, 'rholang-assembly-0.1-SNAPSHOT.jar')
+VM_PROGRAM = os.path.join(BASE_DIR, 'rosette')
+VM_LIBRARY = os.path.join(BASE_DIR, 'rbl/rosette')

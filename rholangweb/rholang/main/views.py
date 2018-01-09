@@ -6,13 +6,8 @@ from django import forms
 from django.forms import Form
 from django.shortcuts import render
 
+from rholang.settings import *
 from . import runner
-
-# TODO: get jar from django config
-EXAMPLES = 'rchain/rholang/examples'
-COMPILER_JAR = 'rchain/rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar'
-VM_PROGRAM = 'rchain/rosette/build.out/src/rosette'
-
 
 def home(request):
     examples = [
@@ -42,7 +37,7 @@ def home(request):
             run_error = None
 
             if rbl is not None:
-                vm = runner.VM.make(Path(VM_PROGRAM), Popen)
+                vm = runner.VM.make(VM_PROGRAM, VM_LIBRARY, Popen)
                 _warnings, _preamble, session = vm.run_repl(rbl)
                 run_error = None  # TODO
     else:

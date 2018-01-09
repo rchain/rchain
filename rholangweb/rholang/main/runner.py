@@ -3,10 +3,14 @@
 
 from contextlib import contextmanager
 from io import StringIO
+from os.path import relpath
+
 from pathlib import Path
 from subprocess import PIPE, SubprocessError
 from sys import stderr
 import logging
+
+from rholang.settings import *
 
 log = logging.getLogger(__name__)
 
@@ -90,9 +94,10 @@ class VM(object):
         self.__runVM = runVM
 
     @classmethod
-    def make(cls, program, Popen):
+    def make(cls, program, library, Popen):
         def runVM(rbl):
-            proc = Popen([str(program)], stdin=PIPE,
+            library_rel_path = relpath(os.path.join(library, "boot.rbl"), os.path.dirname(program))
+            proc = Popen([program, "-boot", library_rel_path], stdin=PIPE,
                          stdout=PIPE, stderr=PIPE)
             return proc.communicate(rbl.encode('utf-8'))
         return cls(runVM)
