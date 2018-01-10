@@ -119,13 +119,13 @@ CPSha256. ByteString ::= "sha256(" ByteString ")" ;
 CPKeccak256. ByteString ::= "keccak256(" ByteString ")" ;
 CPBlake2b256. ByteString ::= "blake2b256(" ByteString ")" ;
 -- binary to text encoding
-CPBase16encode. Text ::= "base16encode(" ByteString ")" ;
-CPBase58encode. Text ::= "base58encode(" ByteString ")" ;
-CPBase64encode. Text ::= "base64encode(" ByteString ")" ;
+CPBase16encode. Text ::= "base16.encode(" ByteString ")" ;
+CPBase58encode. Text ::= "base58.encode(" ByteString ")" ;
+CPBase64encode. Text ::= "base64.encode(" ByteString ")" ;
 -- text to binary decoding
-CPBase16decode. ByteString ::= "base16decode(" Text ")" ;
-CPBase58decode. ByteString ::= "base58decode(" Text ")" ;
-CPBase64decode. ByteString ::= "base64decode(" Text ")" ;
+CPBase16decode. ByteString ::= "base16.decode(" Text ")" ;
+CPBase58decode. ByteString ::= "base58.decode(" Text ")" ;
+CPBase64decode. ByteString ::= "base64.decode(" Text ")" ;
 
 -- Values
 VQuant.   Value   ::= Quantity ;
