@@ -149,11 +149,15 @@ pOb StdMeta::get(pOb client, pOb key, pCtxt) {
 //       The comparison agains 0x100 is because, while the pointer is "NULL", it really
 //       isn't zero because of the additional "Tag" data that in this implementation gets
 //       overlayed on pOb pointers.
-//       Here I arbitrarily use a value that is smaller than any normal pointer, and greater
+//       Here I arbitrarily used a value that is smaller than any normal pointer, and greater
 //       than tag bit stuff.
+//
+//       See the use of TAG, TagExtract, TagSize, EscTagSize, WordSize, GET_*Tagged_*, GET_LF
+//       in Ob.h, Ob.cc, Bits.h and elsewhere for additional clues.
+
             TagExtract te;
             te.ptr = container;
-            if (te.locfields < 0x100){
+            if (te.locfields < 0x100) {
                 warning("Malformed Meta. Actor has NULL extension");
                 return ABSENT;
             }
