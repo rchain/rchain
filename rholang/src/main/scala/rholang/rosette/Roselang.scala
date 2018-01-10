@@ -27,22 +27,24 @@ object StrTermCtorAbbrevs {
 
 object VisitorTypes {
   // Arg Type
-  type A = Option[StrTermCtorAbbrevs.ValOrVar]
+  // Set of bound names.
+  type BoundSet = Set[String]
+  type A = Set[String]
   // Return Type
-  type R = Option[StrTermCtorAbbrevs.StrTermCtxt]
+  type R = (StrTermCtorAbbrevs.StrTermCtxt, A)
 }
 
 object S2SImplicits {
   import StrTermCtorAbbrevs._
-  implicit def asR( 
+  implicit def asR(
     term : StrTermCtxt
-  ) : VisitorTypes.R = Some( term )
+  ) : VisitorTypes.R = (term, Set[String]())
   implicit def asTerm(
     item : ValOrVar
   ) : StrTermCtxt = StrTermPtdCtxtLf( item )
   implicit def asR(
     item : ValOrVar
-  ) : VisitorTypes.R = Some( StrTermPtdCtxtLf( item ) )
+  ) : VisitorTypes.R = (StrTermPtdCtxtLf( item ), Set[String]())
 }
 
 object CompilerExceptions {
@@ -77,6 +79,10 @@ object CompilerExceptions {
   case class InternalCompilerError(
     b : AnyRef
   ) extends Exception( s"internal compiler error: $b" )
+      with CompilerException
+  case class UnboundVariable(
+    varName: String
+  ) extends Exception( s"Unbound variable: $varName" )
       with CompilerException
 }
 
@@ -124,24 +130,14 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
   }
 
   /* TODO : rewrite this to be amenable to tail recursion elimination */
-  def doQuote( rexpr : R ) : R = {
-    for( expr : StrTermCtxt <- rexpr )
-    yield {
-      expr match {
-        case leaf : StrTermPtdCtxtLf => {
-          B( _quote )( leaf )
-        }
-        case StrTermPtdCtxtBr( op, subterms ) => {
-          val qterms = subterms.map( 
-            { 
-              ( term ) => { 
-                (for( qterm : StrTermCtxt <- doQuote( term ) )
-                yield { qterm }).getOrElse( throw new FailedQuotation( term ) )
-              }
-            }
-          )
-          B( _rx, Var( op ) :: qterms )
-        }
+  def doQuote( expr : StrTermCtxt ) : StrTermCtxt = {
+    expr match {
+      case leaf : StrTermPtdCtxtLf => {
+        B( _quote )( leaf )
+      }
+      case StrTermPtdCtxtBr( op, subterms ) => {
+        val qterms = subterms.map(( term ) => doQuote( term ))
+        B( _rx, Var( op ) :: qterms )
       }
     }
   }
@@ -154,7 +150,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     }
   }
   // TODO: Handle case no arguments to contract
-  override def visit( p : PContr, arg : A ) : R = {
+  override def visit( p : PContr, bound : A ) : R = {
     import scala.collection.JavaConverters._
 
     /*
@@ -165,69 +161,65 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
      * )
      *
      */
-    (for( pTerm : StrTermCtxt <- p.proc_.accept(this, arg) )
-    yield {
+    def toListOfTuples(bindingsResults: List[(List[StrTermCtxt], A)]) = {
+      (bindingsResults map (x => x._1)) transpose match {
+        case List(a, b, c) => (a, b, c)
+      }
+    }
 
-      def toListOfTuples(bindingsComponents: List[Option[List[StrTermCtxt]]]) = {
-        bindingsComponents map {
-          case Some(channelGroup) => channelGroup
-        } transpose match {
-          case List(a, b, c) => (a, b, c)
+    def collectBindings(bindingsResults: List[(List[StrTermCtxt], A)]) : A = {
+      (bound /: (bindingsResults map (x => x._2)))(
+          (acc : A, binding : A) => acc ++ binding )
+    }
+
+    val ptrnTermList = p.listcpattern_.asScala.toList
+    val bindingsResults : List[(List[StrTermCtxt], Set[String])] = ptrnTermList map {
+      case ptrn: CPattern => {
+        val ptrnResult = ptrn.accept(this, bound)
+        // an explicit call to Leaf is necessary here, because rather than
+        // apply an implicit, instead scala simply infers a useless type for
+        // the list, and then fails to compile.
+        val ptrnTerm = ptrnResult._1
+        val newlyBound = ptrnResult._2
+        val productFresh = Leaf(Var(Fresh()))
+        val quotedPtrnTerm = doQuote(ptrnTerm)._1
+        (List(ptrnTerm, quotedPtrnTerm, productFresh), newlyBound)
+      }
+    }
+
+    val pTerm : StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
+    val wildcard = Var("**wildcard**")
+    val unificationFresh = Var(Fresh())
+    val (formals, quotedFormals, productFreshes) =
+      if (ptrnTermList.length == 1) {
+        toListOfTuples(bindingsResults) match {
+          case (List(a), List(b), List(c)) => (a, b, c)
         }
+      } else {
+        val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsResults)
+        (B(_list, formalsUnwrapped), B(_list, quotedFormalsUnwrapped), B(_list, productFreshesUnwrapped))
       }
 
-      val ptrnTermList = p.listcpattern_.asScala.toList
-      val bindingsComponents : List[Option[List[StrTermCtxt]]] = ptrnTermList map {
-        case ptrn: CPattern => {
-          for (
-            ptrnTerm: StrTermCtxt <- ptrn.accept(this, arg)
-          ) yield {
-            // an explicit call to Leaf is necessary here, because rather than
-            // apply an implicit, instead scala simply infers a useless type for
-            // the list, and then fails to compile.
-            val productFresh = Leaf(Var(Fresh()))
-            val quotedPtrnTerm = doQuote(ptrnTerm).getOrElse(throw new FailedQuotation(ptrnTerm))
-            List(ptrnTerm, quotedPtrnTerm, productFresh)
-          }
-        }
-      }
-
-      val wildcard = Var("**wildcard**")
-      val unificationFresh = Var(Fresh())
-      val (formals, quotedFormals, productFreshes) =
-        if (ptrnTermList.length == 1) {
-          toListOfTuples(bindingsComponents) match {
-            case (List(a), List(b), List(c)) => (a, b, c)
-          }
-        } else {
-          val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsComponents)
-          (B(_list, formalsUnwrapped), B(_list, quotedFormalsUnwrapped), B(_list, productFreshesUnwrapped))
-        }
-
-      val consumeTerm = B("consume")(TS, B(_list)( Tag(p.var_) ), B(_list)(wildcard), B(_list)(quotedFormals), Tag("#t"))
-      val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFresh), B(_list)(productFreshes)), consumeTerm)
-      val bodyTerm = B("")(B("proc")(B(_list)(formals), pTerm), productFreshes)
-      B("")(B(_abs)(B(_list)(Tag("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm)))))
-    })
+    val consumeTerm = B("consume")(TS, B(_list)( Tag(p.var_) ), B(_list)(wildcard), B(_list)(quotedFormals), Tag("#t"))
+    val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFresh), B(_list)(productFreshes)), consumeTerm)
+    val bodyTerm = B("")(B("proc")(B(_list)(formals), pTerm), productFreshes)
+    B("")(B(_abs)(B(_list)(Tag("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm)))))
   }
 
   /* Proc */
-  override def visit(  p : PPrint, arg : A ) : R = {
-    for(
-      pTerm : StrTermCtxt <- p.proc_.accept(this, arg)
-    ) yield {
-      val printTerm = B("print")(pTerm)
-      val displayTerm = B("display")(Tag( "#\\\\n"))
-      B( "seq" )( printTerm, displayTerm )
-    }
+  override def visit( p : PPrint, arg : A ) : R = {
+    val pTerm : StrTermCtxt = p.proc_.accept(this, arg)._1
+    val printTerm = B("print")(pTerm)
+    val displayTerm = B("display")(Tag( "#\\\\n"))
+    B( "seq" )( printTerm, displayTerm )
   }
-  override def visit(  p : PNil, arg : A ) : R = {    
+  override def visit( p : PNil, arg : A ) : R = {    
     Tag( "#niv" )
   }
-  override def visit(  p : PValue, arg : A ) : R = {
+  override def visit( p : PValue, arg : A ) : R = {
     p.value_.accept(this, arg )
   }
-  override def visit(  p : PDrop, arg : A ) : R = {
+  override def visit( p : PDrop, boundVars : A ) : R = {
     /*
      *  Note that there are at least two different approaches to the
      *  lift/drop semantics. One is to compile the actuals supplied to
@@ -244,15 +236,19 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
      */
     ( p.chan_ match {
       case quote : CQuote => {
-        quote.proc_.accept(this, arg )
+        quote.proc_.accept( this, boundVars )
       }
       case v : CVar => {
-        B( _run )( B( _compile )( Var( v.var_ ) ) )
+        if (boundVars(v.var_)) {
+          B( _run )( B( _compile )( Var( v.var_ ) ) )
+        } else {
+          throw new UnboundVariable(v.var_)
+        }
       }
     } )
   }
 
-  override def visit(  p : PLift, arg : A ) : R = {
+  override def visit( p : PLift, arg : A ) : R = {
     import scala.collection.JavaConverters._
     /*
      *  [| x!( P1, ..., PN ) |]( t )
@@ -261,85 +257,61 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
      */
 
     val actls =
-      ( List[StrTermCtxt]() /: p.listproc_.asScala.toList )(
-        {
-          ( acc, e ) => {
-            e.accept(this, arg ) match {
-              case Some( pTerm : StrTermCtxt @unchecked ) => {
-                acc ++ List( pTerm )
-              }
-              case None => acc
-            }
-          }
-        }
+      ( List[StrTermCtxt]() /: p.listproc_.asScala.toList.reverse )(
+        ( acc, e ) => e.accept( this, arg )._1 :: acc
       )
 
-    for( cTerm : StrTermCtxt <- p.chan_.accept(this, arg ) ) yield {
-      // an explicit call to Leaf is necessary here, because rather than
-      // apply an implicit, instead scala simply infers a useless type for
-      // the list, and then fails to compile.
-      B( _produce, TS :: cTerm :: Leaf(Var("**wildcard**")) :: actls )
-    }
+    val cTerm : StrTermCtxt = p.chan_.accept(this, arg )._1
+    // an explicit call to Leaf is necessary here, because rather than
+    // apply an implicit, instead scala simply infers a useless type for
+    // the list, and then fails to compile.
+    B( _produce, TS :: cTerm :: Leaf(Var("**wildcard**")) :: actls )
   }
 
-  override def visit(  p : PInput, arg : A ) : R = {
+  override def visit( p : PInput, bound : A ) : R = {
     import scala.collection.JavaConverters._
 
     def forToConsume(bindings: List[Bind]) = {
-      def toListOfTuples(bindingsComponents: List[Option[List[StrTermCtxt]]]) = {
-        bindingsComponents map {
-          case Some(channelGroup) => channelGroup
-        } transpose match {
+      def toListOfTuples(bindingsResults: List[(List[StrTermCtxt], A)]) = {
+        (bindingsResults map (x => x._1)) transpose match {
           case List(a, b, c, d, e, f) => (a, b, c, d, e, f)
         }
       }
 
-      for (
-        procTerm: StrTermCtxt <- p.proc_.accept(this, arg)
-      ) yield {
-        val bindingsComponents = bindings map {
-          case inBind: InputBind => {
-            for (
-              chanTerm: StrTermCtxt <- inBind.chan_.accept(this, arg);
-              ptrnTerm: StrTermCtxt <- inBind.cpattern_.accept(this, arg)
-            ) yield {
-              // explicit calls to Leaf is necessary here, because rather than
-              // apply an implicit, instead scala simply infers a useless type for
-              // the list, and then fails to compile.
-              val productFresh = Leaf(Var(Fresh()))
-              val unificationBindingFresh = Leaf(Var(Fresh()))
-              val wildcard = Leaf(Var("**wildcard**"))
-              val quotedPtrnTerm = inBind.cpattern_ match {
-                case _ => (for (q: StrTermCtxt <- doQuote(ptrnTerm)) yield {
-                  q
-                }).getOrElse(throw new FailedQuotation(ptrnTerm))
-              }
-              List(chanTerm, ptrnTerm, quotedPtrnTerm, productFresh, unificationBindingFresh, wildcard)
-            }
-          }
-          case condBind: CondInputBind => throw new NotImplementedError("TODO: Handle condBind inside consume")
-          case bind => throw new UnexpectedBindingType(bind)
-        }
-        val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsComponents)
-        val consumeTerm = B("consume")(TS, B(_list, chanTerms), B(_list, wildcards), B(_list, quotedPtrnTerms), Tag("#f")) // #f for persistent
-        val letBindingsTerm = B(_list)(B(_list)(B(_list, unificationFreshes), B(_list, productFreshes)), consumeTerm)
-        val bodyTerm = B("")(B("proc")(B(_list)(B(_list, ptrnTerms)), procTerm), B(_list, productFreshes))
-        B("let")(B(_list)(letBindingsTerm), bodyTerm)
+      def collectBindings(bindingsResults: List[(List[StrTermCtxt], A)]) : A = {
+        (bound /: (bindingsResults map (x => x._2)))(
+            (acc : A, binding : A) => acc ++ binding )
       }
+
+      val bindingsResults : List[(List[StrTermCtxt], BoundSet)] = bindings map {
+        case inBind: InputBind => {
+          val chanTerm: StrTermCtxt = inBind.chan_.accept(this, bound)._1
+          val ptrnResult = inBind.cpattern_.accept(this, bound)
+          val ptrnTerm: StrTermCtxt = ptrnResult._1
+          val newlyBound = ptrnResult._2
+          // explicit calls to Leaf are necessary here, because rather than
+          // apply an implicit, instead scala simply infers a useless type for
+          // the list, and then fails to compile.
+          val productFresh = Leaf(Var(Fresh()))
+          val unificationBindingFresh = Leaf(Var(Fresh()))
+          val wildcard = Leaf(Var("**wildcard**"))
+          val quotedPtrnTerm = doQuote(ptrnTerm)._1
+          (List(chanTerm, ptrnTerm, quotedPtrnTerm, productFresh, unificationBindingFresh, wildcard), newlyBound)
+        }
+        case condBind: CondInputBind => throw new NotImplementedError("TODO: Handle condBind inside consume")
+        case bind => throw new UnexpectedBindingType(bind)
+      }
+      val procTerm: StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
+      val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsResults)
+      val consumeTerm = B("consume")(TS, B(_list, chanTerms), B(_list, wildcards), B(_list, quotedPtrnTerms), Tag("#f")) // #f for persistent
+      val letBindingsTerm = B(_list)(B(_list)(B(_list, unificationFreshes), B(_list, productFreshes)), consumeTerm)
+      val bodyTerm = B("")(B("proc")(B(_list)(B(_list, ptrnTerms)), procTerm), B(_list, productFreshes))
+      B("let")(B(_list)(letBindingsTerm), bodyTerm)
     }
 
     p.listbind_.asScala.toList match {
       case Nil => {
         throw new NoComprehensionBindings( p )
-      }
-      case binding :: Nil => {
-        /*
-         *  [[ for( ptrn <- chan )P ]]
-         *  =
-         *  (let [[[[unification_binding] [product]] (consume t [chanTerm] [**wildcard**] [ptrnTerm])]]
-         *    ((proc [[ptrnTerm]] bodyTerm) [product]))
-         */
-        forToConsume(List(binding))
       }
       case bindings => {
         /*
@@ -355,19 +327,18 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     }
   }
 
-  override def visit(  p : PNew, arg : A ) : R = {
+  override def visit( p : PNew, arg : A ) : R = {
     import scala.collection.JavaConverters._
     val newVars = p.listvar_.asScala.toList
-    (for( pTerm : StrTermCtxt <- p.proc_.accept( this, arg ) )
-    yield {
-      val newBindings = newVars.map( { ( v ) => {
-        val fresh = Var(FreshSymbol(v))
-        B(_list)(Var( v ), fresh)
-      } } )
-      B( "let" )( (B(_list, newBindings)), pTerm )
-    })
+    val newlyBound : A = arg ++ newVars.toSet
+    val pTerm : StrTermCtxt = p.proc_.accept( this, newlyBound )._1
+    val newBindings = newVars.map( { ( v ) => {
+      val fresh = Var(FreshSymbol(v))
+      B(_list)(Var( v ), fresh)
+    } } )
+    B( "let" )( (B(_list, newBindings)), pTerm )
   }
-  override def visit(  p : PChoice, arg : A ) : R = {
+  override def visit( p : PChoice, arg : A ) : R = {
     import scala.collection.JavaConverters._
 
     def cBranchToParPair( b : CBranch ) = {
@@ -478,7 +449,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     }
   }
 
-  override def visit(  p : PMatch, arg : A ) : R = {
+  override def visit( p : PMatch, arg : A ) : R = {
     import scala.collection.JavaConverters._
     /*
      *  match <var> with
@@ -495,47 +466,42 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
      *  )
      */
 
-    def nonExhaustiveMatch: R = Tag("#niv")
+    def nonExhaustiveMatch: StrTermCtxt = Tag("#niv")
 
+    val pTerm: StrTermCtxt = p.proc_.accept(this, arg)._1
     def patternMatchVisitAux: R = {
-      val result = for (pTerm: StrTermCtxt <- p.proc_.accept(this, arg)) yield {
-        val reverseListPMBranch = p.listpmbranch_.asScala.toList.reverse
-        (nonExhaustiveMatch /: reverseListPMBranch) {
-          (acc, e) => {
-            e match {
-              case pm: PatternMatch => {
-                for (
-                  pattern: StrTermCtxt <- pm.ppattern_.accept(this, arg);
-                  continuation: StrTermCtxt <- pm.proc_.accept(this, arg);
-                  remainder: StrTermCtxt <- acc
-                ) yield {
-                  if (isWild(pm.ppattern_)) {
-                    // Assumes VarPtWild comes at the end of a list of case statements
-                    continuation
-                  } else {
-                    def createProcForPatternBindings = {
-                      val procTerm = B(_abs)(B(_list)(pattern), continuation)
-                      B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
-                    }
-
-                    val matchTerm = B(_match)(pTerm, pattern)
-                    val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
-                      createProcForPatternBindings
-                    } else {
-                      continuation
-                    }
-                    B(_if)(matchTerm, matchTrueTerm, remainder)
-                  }
+      val reverseListPMBranch = p.listpmbranch_.asScala.toList.reverse
+      // We return the result of this fold
+      (nonExhaustiveMatch /: reverseListPMBranch) {
+        (acc, e) => {
+          e match {
+            case pm: PatternMatch => {
+              val patternResult: R = pm.ppattern_.accept(this, arg)
+              val pattern: StrTermCtxt = patternResult._1
+              val patternBindings: BoundSet = patternResult._2
+              val continuation: StrTermCtxt = pm.proc_.accept(this, patternBindings)._1
+              val remainder: StrTermCtxt = acc
+              if (isWild(pm.ppattern_)) {
+                // Assumes VarPtWild comes at the end of a list of case statements
+                continuation
+              } else {
+                def createProcForPatternBindings = {
+                  val procTerm = B(_abs)(B(_list)(pattern), continuation)
+                  B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
                 }
+
+                val matchTerm = B(_match)(pTerm, pattern)
+                val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
+                  createProcForPatternBindings
+                } else {
+                  continuation
+                }
+                B(_if)(matchTerm, matchTrueTerm, remainder)
               }
-              case _ => throw new UnexpectedPMBranchType(e)
             }
+            case _ => throw new UnexpectedPMBranchType(e)
           }
         }
-      }
-      result match {
-        case Some(r) => r
-        case _ => throw new Exception()
       }
     }
 
@@ -572,7 +538,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     }
   }
 
-  override def visit(  p : PConstr, arg : A ) : R = {
+  override def visit( p : PConstr, arg : A ) : R = {
     import scala.collection.JavaConverters._
     /*
      *  [| <Name>( P1, ..., PN ) |]( t )
@@ -580,60 +546,60 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
      *  ( <Name> [| P1 |]( t ) ... [| PN |]( t ) )
      */
     val actls =
-      ( List[StrTermCtxt]() /: p.listproc_.asScala.toList )(
-        {
-          ( acc, e ) => {
-            e.accept(this, arg ) match {
-              case Some( pTerm : StrTermCtxt @unchecked ) => acc ++ List( pTerm )
-              case None => acc
-            }
-          }
-        }
-      )        
+      ( List[StrTermCtxt]() /: p.listproc_.asScala.toList.reverse )(
+        ( acc, e ) => e.accept( this, arg )._1 :: acc
+      )
 
     B( p.var_, actls )
   }
-  override def visit(  p : PPar, arg : A ) : R = {
+
+  override def visit( p : PPar, arg : A ) : R = {
+    // TODO: Collect all processes at the same level and place them in a single block.
     /*
      * [| P1 | P2 |]( t ) 
      * =
      * ( block [| P1 |]( t ) [| P2 |]( t ) )
      */
-    for( 
-      pTerm1 : StrTermCtxt <- p.proc_1.accept(this, arg );
-      pTerm2 : StrTermCtxt <- p.proc_2.accept(this, arg )
-    ) yield {
-      B( _block )( pTerm1, pTerm2 )
-    }
+    val pTerm1 : StrTermCtxt = p.proc_1.accept(this, arg)._1
+    val pTerm2 : StrTermCtxt = p.proc_2.accept(this, arg)._1
+    B( _block )( pTerm1, pTerm2 )
   }
 
   /* Chan */
-  override def visit(  p : CVar, arg : A ) : R = {
-    Var( p.var_ )
+  override def visit( p : CVar, boundVars : A ) : R = {
+    if (boundVars(p.var_)) {
+      Var(p.var_)
+    } else {
+      throw new UnboundVariable(p.var_)
+    }
   }
-  override def visit(  p : CQuote, arg : A ) : R = {
+  override def visit( p : CQuote, arg : A ) : R = {
     // TODO: Handle quoting and unquoting
-    p.proc_.accept(this, arg )
+    p.proc_.accept(this, arg)
   }
   /* Bind */
   // def visit( b : Bind, arg : A ) : R
-  override def visit(  p : InputBind, arg : A ) : R = {
+  override def visit( p : InputBind, arg : A ) : R = {
     throw new InternalCompilerError("Input bindings should not be visited directly.")
   }
   /* CBranch */
 
   /* Value */
-  override def visit(  p : VQuant, arg : A ) : R = {
+  override def visit( p : VQuant, arg : A ) : R = {
     p.quantity_.accept(this, arg )
   }
   /* Quantity */
-  override def visit(  p : QVar, arg : A ) : R = {
-    Var(p.var_)
+  override def visit( p : QVar, boundVars : A ) : R = {
+    if (boundVars(p.var_)) {
+      Var(p.var_)
+    } else {
+      throw new UnboundVariable(p.var_)
+    }
   }
-  override def visit(  p : QInt, arg : A ) : R = {
+  override def visit( p : QInt, arg : A ) : R = {
     Tag( s"""${p.integer_}""")
   }
-  override def visit(  p : QDouble, arg : A ) : R = {
+  override def visit( p : QDouble, arg : A ) : R = {
     Tag( s"""${p.double_}""")
   }
   override def visit( p : QBool, arg : A) : R = {
@@ -645,7 +611,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
   override def visit( p : QFalse, arg : A) : R = {
     Tag( s"""#f""")
   }
-  override def visit(  p : QString, arg : A ) : R = {
+  override def visit( p : QString, arg : A ) : R = {
     Tag( s""""${p.string_}"""" )
   }
   override def visit( p : QMap, arg : A) : R = {
@@ -658,150 +624,95 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
      * =
      * (method_name quantity quantity_arg1 quantity_arg2)
      */
-    for (q : StrTermCtxt <- p.quantity_.accept(this, arg )) yield {
-      val qArgs =
-        ( List[StrTermCtxt]() /: p.listquantity_.asScala.toList )(
-          {
-            ( acc, e ) => {
-              e.accept(this, arg ) match {
-                case Some( frml : StrTermCtxt @unchecked ) => {
-                  acc ++ List( frml )
-                }
-                case None => {
-                  acc
-                }
-              }
-            }
-          }
-        )
-      B("", Var(s"""${p.var_}""") :: q :: qArgs )
-    }
+    val q : StrTermCtxt = p.quantity_.accept(this, arg)._1
+    val qArgs =
+      ( List[StrTermCtxt]() /: p.listquantity_.asScala.toList.reverse )(
+        ( acc, e ) => e.accept(this, arg)._1 :: acc
+      )
+    B("", Var(s"""${p.var_}""") :: q :: qArgs )
   }
   override def visit( p : QNeg, arg : A) : R = {
-    for( q : StrTermCtxt <- p.quantity_.accept(this, arg ) ) yield {
-      B("-")(q)
-    }
+    val q : StrTermCtxt = p.quantity_.accept(this, arg)._1
+    B("-")(q)
   }
   override def visit( p : QMult, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("*")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("*")(q1,q2)
   }
   override def visit( p : QDiv, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("/")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("/")(q1,q2)
   }
   override def visit( p : QAdd, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("+")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("+")(q1,q2)
   }
   override def visit( p : QLt, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("<")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("<")(q1,q2)
   }
   override def visit( p : QLte, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("<=")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("<=")(q1,q2)
   }
   override def visit( p : QGt, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B(">")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B(">")(q1,q2)
   }
   override def visit( p : QGte, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B(">=")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B(">=")(q1,q2)
   }
   override def visit( p : QEq, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("=")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("=")(q1,q2)
   }
   override def visit( p : QNeq, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("!=")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("!=")(q1,q2)
   }
-
-
   override def visit( p : QMinus, arg : A) : R = {
-    for(
-      q1 : StrTermCtxt <- p.quantity_1.accept(this, arg );
-      q2 : StrTermCtxt <- p.quantity_2.accept(this, arg )
-    ) yield {
-      B("-")(q1,q2)
-    }
+    val q1 : StrTermCtxt = p.quantity_1.accept(this, arg)._1
+    val q2 : StrTermCtxt = p.quantity_2.accept(this, arg)._1
+    B("-")(q1,q2)
   }
 
   /* Entity */
-  override def visit(  p : EChar, arg : A ) : R = {
+  override def visit( p : EChar, arg : A ) : R = {
     Tag( s"""'${p.char_}'""")
   }
-  override def visit(  p : ETuple, arg : A ) : R = {
+  override def visit( p : ETuple, arg : A ) : R = {
     import scala.collection.JavaConverters._
     val procTerms =
-      ( List[StrTermCtxt]() /: p.listproc_.asScala.toList )(
-        {
-          ( acc, e ) => {
-            e.accept(this, arg ) match {
-              case Some( frml : StrTermCtxt @unchecked ) => {
-                acc ++ List( frml )
-              }
-              case None => {
-                acc
-              }
-            }
-          }
-        }
+      ( List[StrTermCtxt]() /: p.listproc_.asScala.toList.reverse )(
+        ( acc, e ) => e.accept(this, arg)._1 :: acc
       )
     B( _list, procTerms )
   }
 
   /* Pattern */
   override def visit(p: VarPtVar, arg: A): R = {
-    Var(p.var_)
+    // A variable in a pattern produces a new binding.
+    (Var(p.var_), arg + p.var_)
   }
-  override def visit(  p : VarPtWild, arg : A ) : R = {
-    Var("**wildcard**")
+  override def visit( p : VarPtWild, arg : A ) : R = {
+    (Var("**wildcard**"), arg)
   }
 
   /* PPattern */
-  override def visit(  p : PPtVar, arg : A ) : R = {
+  override def visit( p : PPtVar, arg : A ) : R = {
     p.varpattern_.accept(this, arg)
   }
-  override def visit(  p : PPtVal, arg : A ) : R = {
+  override def visit( p : PPtVal, arg : A ) : R = {
     p.valpattern_.accept(this, arg)
   }
 
@@ -810,65 +721,48 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     p.varpattern_.accept(this, arg)
   }
   /* ValPattern */
-  override def visit(  p : VPtStruct, arg : A ) : R = {
+  override def visit( p : VPtStruct, arg : A ) : R = {
     import scala.collection.JavaConverters._
     
-    val structContents =
-      ( List[StrTermCtxt]() /: p.listppattern_.asScala.toList )(
-        {
-          ( acc, e ) => {
-            e.accept(this, arg ) match {
-              case Some( frml : StrTermCtxt @unchecked ) => {
-                acc ++ List( frml )
-              }
-              case None => {
-                acc
-              }
-            }
-          }
+    val structContents : (List[StrTermCtxt], BoundSet) =
+      ( (List[StrTermCtxt](), Set[String]()) /: p.listppattern_.asScala.toList.reverse )(
+        ( acc, e ) => {
+          val result = e.accept(this, arg)
+          (result._1 :: acc._1, result._2 ++ acc._2)
         }
       )
-
-    B( p.var_, structContents )
+    // All patterns must pass back up the variables bound at their leaves.
+    (B( p.var_, structContents._1 ), structContents._2)
   }
-  override def visit(  p : VPtTuple, arg : A ) : R = {
+  override def visit( p : VPtTuple, arg : A ) : R = {
     import scala.collection.JavaConverters._
 
-    val tupleContents =
-      ( List[StrTermCtxt]() /: p.listppattern_.asScala.toList )(
-        {
-          ( acc, e ) => {
-            e.accept(this, arg ) match {
-              case Some( frml : StrTermCtxt @unchecked ) => {
-                acc ++ List( frml )
-              }
-              case None => {
-                acc
-              }
-            }
-          }
+    val tupleContents : (List[StrTermCtxt], BoundSet) =
+      ( (List[StrTermCtxt](), Set[String]()) /: p.listppattern_.asScala.toList.reverse )(
+        ( acc, e ) => {
+          val result = e.accept(this, arg)
+          (result._1 :: acc._1, result._2 ++ acc._2)
         }
       )
-
-    B(_list, tupleContents )
+    (B( _list, tupleContents._1 ), tupleContents._2)
   }
-  override def visit(  p : VPtTrue, arg: A ): R = {
-    Tag( s"""#t""")
+  override def visit( p : VPtTrue, arg: A ): R = {
+    (Tag( s"""#t"""), arg)
   }
-  override def visit(  p : VPtFalse, arg: A ): R = {
-    Tag( s"""#f""")
+  override def visit( p : VPtFalse, arg: A ): R = {
+    (Tag( s"""#f"""), arg)
   }
-  override def visit(  p : VPtInt, arg: A ): R = {
-    Tag( s"""${p.integer_}""")
+  override def visit( p : VPtInt, arg: A ): R = {
+    (Tag( s"""${p.integer_}"""), arg)
   }
-  override def visit(  p : VPtDbl, arg: A ): R = {
-    Tag( s"""${p.double_}""")
+  override def visit( p : VPtDbl, arg: A ): R = {
+    (Tag( s"""${p.double_}"""), arg)
   }
-  override def visit(  p : VPtNegInt, arg: A ): R = {
-    Tag( s"""-${p.integer_}""")
+  override def visit( p : VPtNegInt, arg: A ): R = {
+    (Tag( s"""-${p.integer_}"""), arg)
   }
-  override def visit(  p : VPtNegDbl, arg: A ): R = {
-    Tag( s"""-${p.double_}""")
+  override def visit( p : VPtNegDbl, arg: A ): R = {
+    (Tag( s"""-${p.double_}"""), arg)
   }
 
   override def visit( p: PtBranch, arg: A ): R = ???
