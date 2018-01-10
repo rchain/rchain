@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 # Create/clear file for printing results
 RESULTS=rbl/rosette/results.txt
 cat > "${RESULTS}" < /dev/null
@@ -7,11 +9,6 @@ cat > "${RESULTS}" < /dev/null
 # Build Rosette
 ./clean.sh
 ./build.sh
-if [ $? -ne 0 ]
-then
-    echo Build failed. >&2
-    exit 1
-fi
 
 {
     # Increase stack limit so that Rosette can load all files
