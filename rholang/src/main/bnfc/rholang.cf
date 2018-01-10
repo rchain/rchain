@@ -42,30 +42,27 @@ Choice. CBranch ::= "case" [Bind] "=>" "{" Proc "}" ;
 separator nonempty CBranch "" ;
 
 -- Quantity
-QTrue.       RhoBool   ::= "true" ;
-QFalse.      RhoBool   ::= "false" ;
-QBool.       Quantity7 ::= RhoBool ;
-QInt.        Quantity7 ::= Integer ;
-QDouble.     Quantity7 ::= Double ;
-QString.     Quantity7 ::= String;
--- QByteString. Quantity7 ::= ByteString ;
-QVar.        Quantity7 ::= Var;
-QMap.        Quantity7 ::= "Map()" ;
-QDot.        Quantity6 ::= Quantity7 "." Var "(" [Quantity] ")" ;
-QNeg.        Quantity5 ::= "-" Quantity6 ;
-QMult.       Quantity4 ::= Quantity4 "*" Quantity5 ;
-QDiv.        Quantity4 ::= Quantity4 "/" Quantity5 ;
-QAdd.        Quantity3 ::= Quantity3 "+" Quantity4 ;
-QMinus.      Quantity3 ::= Quantity3 "-" Quantity4 ;
-QLt.         Quantity2 ::= Quantity2 "<" Quantity3 ;
-QLte.        Quantity2 ::= Quantity2 "<=" Quantity3 ;
-QGt.         Quantity2 ::= Quantity2 ">" Quantity3 ;
-QGte.        Quantity2 ::= Quantity2 ">=" Quantity3 ;
-QEq.         Quantity1 ::= Quantity1 "==" Quantity2 ;
-QNeq.        Quantity1 ::= Quantity1 "!=" Quantity2 ;
-QSha256.     Quantity0 ::= "sha256(" Quantity1 ")" ;
-QKeccak256.  Quantity0 ::= "keccak256(" Quantity1 ")";
-QBlake2b256. Quantity0 ::= "blake2b256(" Quantity1 ")";
+QTrue.   RhoBool   ::= "true" ;
+QFalse.  RhoBool   ::= "false" ;
+QBool.   Quantity7 ::= RhoBool ;
+QInt.    Quantity7 ::= Integer ;
+QDouble. Quantity7 ::= Double ;
+-- QString. Quantity7 ::= String ;
+QCPrim.  Quantity7 ::= CPrim ;
+QVar.    Quantity7 ::= Var;
+QMap.    Quantity7 ::= "Map()" ;
+QDot.    Quantity6 ::= Quantity7 "." Var "(" [Quantity] ")" ;
+QNeg.    Quantity5 ::= "-" Quantity6 ;
+QMult.   Quantity4 ::= Quantity4 "*" Quantity5 ;
+QDiv.    Quantity4 ::= Quantity4 "/" Quantity5 ;
+QAdd.    Quantity3 ::= Quantity3 "+" Quantity4 ;
+QMinus.  Quantity3 ::= Quantity3 "-" Quantity4 ;
+QLt.     Quantity2 ::= Quantity2 "<" Quantity3 ;
+QLte.    Quantity2 ::= Quantity2 "<=" Quantity3 ;
+QGt.     Quantity2 ::= Quantity2 ">" Quantity3 ;
+QGte.    Quantity2 ::= Quantity2 ">=" Quantity3 ;
+QEq.     Quantity1 ::= Quantity1 "==" Quantity2 ;
+QNeq.    Quantity1 ::= Quantity1 "!=" Quantity2 ;
 _. Quantity  ::= Quantity1 ;
 _. Quantity1 ::= Quantity2 ;
 _. Quantity2 ::= Quantity3 ;
@@ -75,6 +72,60 @@ _. Quantity5 ::= Quantity6 ;
 _. Quantity6 ::= Quantity7 ;
 _. Quantity7 ::= "(" Quantity ")" ;
 separator Quantity "," ;
+
+-- Cryptographic primitives
+QByteString. CPrim ::= ByteString ;
+QText. CPrim ::= Text ;
+CPQ. CPQuantity ::= "{" Quantity "}";
+CPV. CPVar ::= Var ;
+-- Literal values for cryptographic primitives
+ByteStringLiteral. ByteString ::= Hex ; -- bytestring literal in base16 encoding
+TextLiteral. Text ::= String ; -- text literal
+-- Secp256k1 signature primitives
+CPNewKeyPairSecp256k1. Quantity ::= "secp256k1.new_key_pair" Var "in" CPQuantity ;
+CPPubKeySecp256k1. Secp256k1PubKey ::= CPVar ".secp256k1.public_key" ;
+CPPrvKeySecp256k1. Secp256k1PrvKey ::= CPVar ".secp256k1.private_key" ;
+CPSignSecp256k1. ByteString ::= "secp256k1.sign(" Secp256k1PubKey "," ByteString ")" ;
+CPVerifySecp256k1. RhoBool ::= "secp256k1.verify(" ByteString "," ByteString "," Secp256k1PrvKey ")" ;
+CPBytesFromPubKeySecp256k1. ByteString ::= Secp256k1PubKey ".bytes";
+CPBytesFromPrvKeySecp256k1. ByteString ::= Secp256k1PrvKey ".bytes";
+CPBytesToPubKeySecp256k1. Secp256k1PubKey ::= "secp256k1.public_key(" ByteString ")" ;
+CPBytesToPrvKeySecp256k1. Secp256k1PrvKey ::= "secp256k1.private_key(" ByteString ")" ;
+-- DJB Ed25519 signature primitives
+CPNewKeyPairEd25519. Quantity ::= "ed25519.new_key_pair" Var "in" CPQuantity;
+CPPubKeyEd25519. Ed25519PubKey ::= CPVar ".ed25519.public_key" ;
+CPPrvKeyEd25519. Ed25519PrvKey ::= CPVar ".ed25519.private_key" ;
+CPSignEd25519. ByteString ::= "ed25519.sign(" Ed25519PubKey "," ByteString ")" ;
+CPVerifyEd25519. RhoBool ::= "ed25519.verify(" ByteString "," ByteString "," Ed25519PrvKey ")" ;
+CPBytesFromPubKeyEd25519. ByteString ::= Ed25519PubKey ".bytes";
+CPBytesFromPrvKeyEd25519. ByteString ::= Ed25519PrvKey ".bytes";
+CPBytesToPubKeyEd25519. Ed25519PubKey ::= "ed25519.public_key(" ByteString ")" ;
+CPBytesToPrvKeyEd25519. Ed25519PrvKey ::= "ed25519.private_key(" ByteString ")" ;
+-- DJB Curve25519 encryption primitives
+CPNewKeyPairCurve25519. Quantity ::= "curve25519.new_key_pair" Var "in" CPQuantity ;
+CPNewNonce. Quantity ::= "curve25519.new_nonce" Var "in" CPQuantity ;
+CPPubKeyCurve25519. Curve25519PubKey ::= CPVar ".curve25519.public_key" ;
+CPPrvKeyCurve25519. Curve25519PrvKey ::= CPVar ".curve25519.private_key" ;
+CPEncryptCurve25519. ByteString ::= "curve25519.encrypt(" Curve25519PubKey "," Curve25519PrvKey "," Var "," ByteString ")" ;
+CPDecryptCurve25519. ByteString ::= "curve25519.decrypt(" Curve25519PubKey "," Curve25519PrvKey "," Var "," ByteString ")" ;
+CPBytesFromPubKeyCurve25519. ByteString ::= Curve25519PubKey ".bytes";
+CPBytesFromPrvKeyCurve25519. ByteString ::= Curve25519PrvKey ".bytes";
+CPBytesFromNonceCurve25519. ByteString ::= CPVar ".bytes";
+CPBytesToPubKeyCurve25519. Curve25519PubKey ::= "curve25519.public_key(" ByteString ")" ;
+CPBytesToPrvKeyCurve25519. Curve25519PrvKey ::= "curve25519.private_key(" ByteString ")" ;
+CPBytesToNonceCurve25519. Curve25519Nonce ::= "curve25519.nonce(" ByteString ")" ;
+-- hash functions
+CPSha256. ByteString ::= "sha256(" ByteString ")" ;
+CPKeccak256. ByteString ::= "keccak256(" ByteString ")" ;
+CPBlake2b256. ByteString ::= "blake2b256(" ByteString ")" ;
+-- binary to text encoding
+CPBase16encode. Text ::= "base16encode(" ByteString ")" ;
+CPBase58encode. Text ::= "base58encode(" ByteString ")" ;
+CPBase64encode. Text ::= "base64encode(" ByteString ")" ;
+-- text to binary decoding
+CPBase16decode. ByteString ::= "base16decode(" Text ")" ;
+CPBase58decode. ByteString ::= "base58decode(" Text ")" ;
+CPBase64decode. ByteString ::= "base64decode(" Text ")" ;
 
 -- Values
 VQuant.   Value   ::= Quantity ;
@@ -144,6 +195,7 @@ separator nonempty ValPattern "," ;
 -- Names and variables
 token Name (upper (letter | digit | '_' | '\'' | '-' )*) ;
 token Var (lower (letter | digit | '_' | '\'' | '-')*) ;
+token Hex (('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f')*) ;
 
 separator nonempty Var "," ;
 separator nonempty Name "," ;
