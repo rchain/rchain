@@ -21,7 +21,7 @@ EOF
 ./build.out/src/rosette -boot rbl/rosette/boot.rbl <<EOF
 (seq
   (display "\n")		; (terpri)
-  (load "tests/equiv.ros" 'silent))
+  (load "tests/run-tests.ros" 'silent))
 EOF
 
 # Check if any tests have failed
