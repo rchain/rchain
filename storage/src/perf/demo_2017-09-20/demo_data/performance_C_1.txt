@@ -1,0 +1,85 @@
+
+number of keys: 500000
+duration: 619 milli
+put: 316 milli, 1582 puts per millisecond
+get: 302 milli, 1655 gets per millisecond
+
+number of keys: 1000000
+duration: 1783 milli
+put: 912 milli, 1096 puts per millisecond
+get: 869 milli, 1150 gets per millisecond
+
+number of keys: 2000000
+duration: 3823 milli
+put: 2025 milli, 987 puts per millisecond
+get: 1794 milli, 1114 gets per millisecond
+
+number of keys: 3000000
+duration: 6349 milli
+put: 3337 milli, 899 puts per millisecond
+get: 3006 milli, 998 gets per millisecond
+
+number of keys: 4000000
+duration: 8888 milli
+put: 4744 milli, 843 puts per millisecond
+get: 4136 milli, 967 gets per millisecond
+
+number of keys: 5000000
+duration: 11363 milli
+put: 5821 milli, 858 puts per millisecond
+get: 5532 milli, 903 gets per millisecond
+
+number of keys: 6000000
+duration: 13221 milli
+put: 6866 milli, 873 puts per millisecond
+get: 6343 milli, 945 gets per millisecond
+
+number of keys: 7000000
+duration: 16539 milli
+put: 8706 milli, 804 puts per millisecond
+get: 7820 milli, 895 gets per millisecond
+
+number of keys: 8000000
+duration: 19062 milli
+put: 9766 milli, 819 puts per millisecond
+get: 9281 milli, 861 gets per millisecond
+
+number of keys: 8388607
+duration: 19532 milli
+put: 9906 milli, 846 puts per millisecond
+get: 9610 milli, 872 gets per millisecond
+
+number of keys: 9000000
+duration: 21485 milli
+put: 10907 milli, 825 puts per millisecond
+get: 10561 milli, 852 gets per millisecond
+
+number of keys: 10000000
+duration: 23700 milli
+put: 12286 milli, 813 puts per millisecond
+get: 11394 milli, 877 gets per millisecond
+
+number of keys: 15000000
+duration: 38053 milli
+put: 20122 milli, 745 puts per millisecond
+get: 17901 milli, 837 gets per millisecond
+
+number of keys: 20000000
+duration: 51342 milli
+put: 26428 milli, 756 puts per millisecond
+get: 24875 milli, 804 gets per millisecond
+
+number of keys: 25000000
+duration: 67694 milli
+put: 34503 milli, 724 puts per millisecond
+get: 33143 milli, 754 gets per millisecond
+
+number of keys: 30000000
+duration: 96175 milli
+put: 54044 milli, 555 puts per millisecond
+get: 42072 milli, 713 gets per millisecond
+
+
+
+
+

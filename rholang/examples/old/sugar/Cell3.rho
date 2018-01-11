@@ -1,0 +1,20 @@
+/*
+ * A Cell contract that uses match expressions
+ * expression to handle get and set.
+ * Unlike the other two Cell examples,
+ * the get or set request is sent through as a struct
+ * only requiring one channel for both types of requests
+ * to be passed through.
+ */
+
+contract Cell( client, state ) = {
+  for( request <- client; v <- state ) {
+	  match request with
+      get{ rtn } => {
+        rtn!( v ) | state!( v ) | Cell( client, state )
+      }
+      set{ newValue } => {
+        state!( newValue ) | Cell( client, state )
+      }
+  }
+}

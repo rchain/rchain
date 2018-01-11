@@ -1,0 +1,152 @@
+# Mode: -*- TEXT -*-
+# @BC
+#		                Copyright (c) 1993
+#	    by Microelectronics and Computer Technology Corporation (MCC)
+#				All Rights Reserved
+#
+#	Permission to use, copy, modify, and distribute this software and its
+#	documentation for any purpose and without fee is hereby granted,
+#	provided that this notice be retained unaltered, and that the name of
+#	MCC and its shareholders and participants shall not be used in
+#	advertising or publicity pertaining to distribution of the software
+#	without specific written prior permission.
+#
+#	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+#	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+#	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+#
+
+#
+# %Header%
+#
+# %Log%
+# @EC
+
+Overview:
+
+The software contained herein is an implementation of a byte-code
+interpreter and compiler for an actor language called Rosette.  By
+actor we mean what is described in Gul Agha's dissertation: "Actors"
+(MIT Press 1986).  Rosette significantly extends the basic language
+model presented by Agha to make it more friendly.
+
+This software should be of value to those who are interested in
+experimenting with concurrent object-oriented languages based on the
+actor semantics.
+
+The system includes a fairly well developed set of facilities implemented
+in the Rosette language, including: a macro facility; printing system (that
+could use a pretty printer); a pleasant interface to C language data
+structures and foreign functions; convenient interfaces to Unix socket
+facilities and other system calls such as execvp; a rich set of
+"builtin" types: tuples, strings, queues, stacks, and so forth
+together with a variety of more or less useful primitives such as:
+regexpCompare, string-split, and string-join on strings; reflective
+facilities; a prototype-based inheritance system; a nascent
+multi-method facility; a distributed blackboarding type system similar
+in some respects to Linda tuple spaces; and a lot of other things too
+numerous to mention.
+
+The documentation is really in rather poor shape but there is a
+"reference" report in the 'docs' directory.
+
+The system runs (for us anyway) on sun3 and sun4 under sunos4,
+HP700/800s, Silicon Graphics MIPS/IRIX, and DEC 5100.  It has worked
+in the past on 386/486 platforms running ATT System V rel 4, but you
+will certainly have to fiddle with it to get that to work.
+
+Directories:
+
+The 'bin' directory initially contains a bunch of shell scripts that
+control the make process and so forth.  It will contain the binaries
+for rosette, rosh, and ess.
+
+The 'defs' directory contains a few make variables for each platform
+type that is supported.  In principal it would be nice if this were
+the only set of make files that had to be modified in order to set
+things up to build.
+
+The 'deocs' directory contains the PostScript for the (somewhat
+incomplete and a little out-of-date) Rosette reference report.
+
+The 'h' directory contains the various includes for the system.  There
+is a sub-directory 'sys' that contains platform specific definitions.
+
+The 'include/mk' and 'defs' directories contain the makefile pieces
+that build and install (see below) the software.  These makefile
+pieces are processable so far as we know only by gnu make 3.62 or
+higher - certainly not by mere make or bsd pmake.
+
+The 'isode' directory provides some modified components that are
+needed to interface the isode 7.0 (or later) osi development system to
+the "ess".  If you know what isode is and are facile with working with
+it you can probably deal with this directory.  There is a single gnu
+make variable that you have to fiddle with to get isode included into
+the "ess" after you have the requisite library (see below).
+
+The 'man' directory contains man pages for rosette, rosh, and ess.
+
+The 'rbl' directory contains all of the system software that is
+written in the Rosette (Base) Language.  Things are factored into
+three basic levels of functionality: "rosette", "rosh", and "ess".
+The "rosette" level is sort of the basic core of things without a lot
+of system interfaces and no communications support.  The "rosh"
+configuration adds in access to a lot of the chapter 2 system calls.
+The "ess" adds in a variety of communication facilties.  These are not
+documented and you will just have to puruse the code.
+
+The 'src' directory contains the C++ implementation.  We use a variety
+of C++ compilers depending on the platform and so forth.  On a good
+day you should be able to use gcc 2.2.2 (maybe higher).
+
+
+Installation:
+
+There are two environment variables that you need to be aware of:
+
+	1) ESS_SYSDIR - controls where various things are installed
+	   and where the make file directories are expected to be
+
+	2) IsodeInterface - if defined causes the ess to include
+	   the ISODE interface.  This permits upper layer OSI
+	   operation of the ess.
+
+You will need GNU make 3.62 or greater (earlier may work?).
+
+You will need at least cpmake and carch to be available in your search
+path.  Either put ${ESS_SYSDIR}/bin in the path or copy these two
+scripts to some place that is in the path.
+
+The compilers that are used on the various platforms are:
+
+	Sun3/4 - Sun's CC2.1
+
+	Dec5100 - gcc 2.2.2 or higher
+
+	Silicon Graphics - their own C++ product
+
+	HP700/800 - HP's C++
+
+at various times we have used gcc on the platforms other than Dec and
+with appropriate modifications of the $(ARCH)-src.defs file in the
+$(ESS_SYSDIR)/include/mk directory gcc should work on any of the
+platforms.
+
+After setup of the environment you should be able to incant:
+
+	cpmake all install
+
+this will build rosette, rosh, and ess.  There is a program 'console'
+that is used to isolate an ess from various wacky things that we have
+observed with the 'wall' program.   Part of the process involves
+linking console to rosette, rosh and ess.  The actual code for each is
+in the corresponding *.image which is exec'd from the console.
+
+You should be aware that there are some aspects of the overall process
+that will seem strange.  This is perhaps due to the fact that rosette
+is actually a sub-system of a much larger technology suite.
+
+
+Complaint Department:
+
+tomlic@mcc.com

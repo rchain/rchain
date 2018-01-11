@@ -1,0 +1,95 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; Fixups to accommodate changes in the underlying system's initialization
+;;; code.  These fixups restore the global namespace to (pretty much) the
+;;; same state that held in version 1.4.
+
+
+(add 'EmptyExpr-SBO NullExpr-SBO)
+(add 'RMethodExpr-SBO ReflectiveMethodExpr-SBO)
+
+(add 'Atom-SBO (new Actor-SBO))
+
+(add 'Mbox-SBO (new Actor-SBO))
+(parent: EmptyMbox-SBO Mbox-SBO)
+(parent: LockedMbox-SBO Mbox-SBO)
+(parent: QueueMbox-SBO Mbox-SBO)
+(parent: MboxQueue-SBO Queue-SBO)
+
+(add 'Expr-SBO (new Actor-SBO))
+(parent: BlockExpr-SBO Expr-SBO)
+(parent: EmptyExpr-SBO Expr-SBO)
+(parent: FreeExpr-SBO Expr-SBO)
+(parent: GotoExpr-SBO Expr-SBO)
+(parent: IfExpr-SBO Expr-SBO)
+(parent: LabelExpr-SBO Expr-SBO)
+(parent: LetExpr-SBO Expr-SBO)
+(parent: LetrecExpr-SBO Expr-SBO)
+(parent: MethodExpr-SBO Expr-SBO)
+(parent: RMethodExpr-SBO MethodExpr-SBO)
+(parent: ProcExpr-SBO Expr-SBO)
+(parent: QuoteExpr-SBO Expr-SBO)
+(parent: RequestExpr-SBO Expr-SBO)
+(parent: SendExpr-SBO Expr-SBO)
+(parent: SeqExpr-SBO Expr-SBO)
+(parent: SetExpr-SBO Expr-SBO)
+(parent: TupleExpr-SBO Expr-SBO)
+
+(add 'Number-SBO (init (actor-new Atom-SBO [] [])))
+(parent: Fixnum-SBO Number-SBO)
+(parent: Float-SBO Number-SBO)
+
+(add 'Stream-SBO (new Actor-SBO))
+(parent: Istream-SBO Stream-SBO)
+(parent: Ostream-SBO Stream-SBO)
+
+(add 'TopEnv-SBO (new Actor-SBO))
+(prim-parent: (parent Top-SBO) TopEnv-SBO)
+
+(add 'Pattern-SBO (new Actor-SBO))
+(add 'CompoundPattern-SBO (init (actor-new Pattern-SBO [] [])))
+(parent: IdPattern-SBO Pattern-SBO)
+(parent: ConstPattern-SBO Pattern-SBO)
+(parent: IdVecPattern-SBO CompoundPattern-SBO)
+(parent: IdAmperRestPattern-SBO CompoundPattern-SBO)
+(parent: ComplexPattern-SBO CompoundPattern-SBO)
+
+
+(add 'Location-SBO ExpandedLocation-SBO)
+(parent: Location-SBO Top-SBO)
+
+(parent: CodeVec-SBO Word16Vec-SBO)
+
+
+(add 'Eof-SBO (new Actor-SBO))
+(parent: eof Eof-SBO)
+
+(add 'Absent-SBO (new Actor-SBO))
+(parent: #absent Absent-SBO)
+
+(add 'Incomplete-IO-SBO (new Actor-SBO))
+(parent: incomplete-io Incomplete-IO-SBO)
+
+(add 'ReadError-SBO (new Actor-SBO))
+(parent: read-error ReadError-SBO)

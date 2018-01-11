@@ -1,0 +1,43 @@
+# Mode: -*- MAKEFILE -*-
+# @BC
+#		                Copyright (c) 1993
+#	    by Microelectronics and Computer Technology Corporation (MCC)
+#				All Rights Reserved
+#
+#	Permission to use, copy, modify, and distribute this software and its
+#	documentation for any purpose and without fee is hereby granted,
+#	provided that this notice be retained unaltered, and that the name of
+#	MCC and its shareholders and participants shall not be used in
+#	advertising or publicity pertaining to distribution of the software
+#	without specific written prior permission.
+#
+#	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+#	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+#	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+#
+
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/include/mk/sgi-src.defs,v 1.1.1.1 1993/02/12 01:25:59 tomlic Exp $
+#
+# $Log: sgi-src.defs,v $
+# Revision 1.1.1.1  1993/02/12  01:25:59  tomlic
+# pub release of rosette
+#
+# @EC
+
+
+# SGI src defs
+include default.defs
+
+CFLAGS	       := $(CFLAGS) -cckr #-Wf,-XNg1500 -Olimit 3000 -O1
+C++FLAGS       := $(C++FLAGS) -O -xansi -g -G 4 -signed -D_BSD_SIGNALS -DMIPS_SGI_SYSV
+LDFLAGS        := $(LDFLAGS) -G 4
+_LIBS.Arch_    := $(_LIBS.Arch_) C sun c m mld PW
+_LIBS.Others_	=
+W_STATIC	= 
+RANLIB		=
+_ESS.Extras_	= unexec.o
+
+MAKE-LIB-OPTS	= -l -sys5
+
+include generic-src.defs

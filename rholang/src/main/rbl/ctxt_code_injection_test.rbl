@@ -1,0 +1,43 @@
+;;; Test to see if injecting the corresponding code object of the ctxt from the C++ source
+;;; in an RMethod works as intended
+
+;;; Should output
+;;; "Hello"5
+;;; "Foo"5
+;;; "Bar"5
+
+(defActor Tester (slots& tbl (new RblTable)))
+(defOprn consumeTest)
+(defOprn produceTest)
+
+(defRMethod Tester (consumeTest ctxt-tuple) ;;; I've injected the corresponding code object to the ctxt from the C++ source
+    (tbl-add tbl 'key ctxt-tuple)
+    (update!)
+)
+(defRMethod Tester (produceTest _ctxt-tuple argOne) ;;; I've injected the corresponding code object to the ctxt from the C++ source
+    (let [[[consumeCtxt consumeCode] (tbl-get tbl 'key)]]
+        (ctxt-rtn consumeCtxt argOne)
+        (update!)
+        (run consumeCode) ;;; Re-post consume
+    )
+)
+
+(define x (new Tester))
+(let [[outer 5]]
+    (seq
+        (print outer) ;;; This only prints once as we desire
+        (run (compile
+            (new LetExpr (TX (TX 'y (RX 'consumeTest x)))
+                (SqX
+                    (RX 'print 'y)
+                    (RX 'print outer)
+                    (RX 'display #\\n)
+                )
+            )
+        ))
+    )
+)
+
+(produceTest x "Hello")
+(produceTest x "Foo")
+(produceTest x "Bar")

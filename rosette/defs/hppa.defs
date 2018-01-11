@@ -1,0 +1,84 @@
+# Mode: -*- MAKEFILE -*-
+# @BC
+#		                Copyright (c) 1993
+#	    by Microelectronics and Computer Technology Corporation (MCC)
+#				All Rights Reserved
+#
+#	Permission to use, copy, modify, and distribute this software and its
+#	documentation for any purpose and without fee is hereby granted,
+#	provided that this notice be retained unaltered, and that the name of
+#	MCC and its shareholders and participants shall not be used in
+#	advertising or publicity pertaining to distribution of the software
+#	without specific written prior permission.
+#
+#	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+#	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+#	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+#
+
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/defs/hppa.defs,v 1.1.1.1 1993/02/12 01:26:01 tomlic Exp $
+#
+# $Log: hppa.defs,v $
+# Revision 1.1.1.1  1993/02/12  01:26:01  tomlic
+# pub release of rosette
+#
+# @EC
+
+
+#
+#		Copyright 1985,1986,1987,1988,1989,1990,1991,1992,1993
+#	    by Microelectronics and Computer Technology Corporation (MCC)
+#				All Rights Reserved
+#
+#			MCC/CARNOT CONFIDENTIAL AND PROPRIETARY
+#
+#	Members of the MCC Carnot Project may reproduce and distribute this
+#	material, in accordance with their licensing rights, by retaining 
+# 	MCC's copyright notice, proprietary legends, and markings on all 
+#	complete and partial copies. Non-Government use by other than 
+#	MCC/Carnot members is restricted by terms of a license agreement.
+#
+# 	The entire contents hereof constitute Confidential Information to 
+#	be protected by the Participant pursuant to Article 4 of the 
+#	Participant Master License and Technical Assistance Agreement.
+#
+# 	Use, duplication, or disclosure by the Government is subject to	
+#	restrictions as set forth in subparagraph (c)(1)(ii) of the Rights 
+#	in Technical Data and Computer Software clause at 52.227-7013.
+#
+#	NOTICE: Legends designating material to be "MCC/Carnot Confidential 
+#	and Proprietary" are affixed by MCC to documents submitted to the 
+#	Maryland Procurement Office under Contract #MDA904-92-C-D034, and 
+#	are intended to reflect MCC's internal categorization of the 
+#	information contained therein.
+#
+
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/defs/hppa.defs,v 1.1.1.1 1993/02/12 01:26:01 tomlic Exp $
+#
+# $Log: hppa.defs,v $
+# Revision 1.1.1.1  1993/02/12  01:26:01  tomlic
+# pub release of rosette
+#
+# Revision 1.7  1993/01/22  19:55:38  wshen
+# Add Ingres stuff.
+#
+# Revision 1.6  1993/01/19  02:17:37  carnot
+# Added Carnot Copyright Notice
+#
+#
+
+# hppa.defs
+
+ARCH	= hppa
+MACH	= pa
+OS	= hpux
+
+C++		=	/usr/bin/CC
+LEX++		=	/usr/bin/lex++
+YACC++		=	/usr/bin/yacc++
+C++_LIBDIR	=	/usr/lib
+C++_INCDIR	=	/usr/include/CC
+
+include ess_sys.defs

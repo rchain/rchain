@@ -1,0 +1,83 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; queue operations
+
+(defOprn clear  queue-reset   (sbo& (sbo Queue)))
+(defOprn enq    queue-enqueue (sbo& (sbo Queue)))
+(defOprn empty? queue-empty?  (sbo& (sbo Queue)))
+(defOprn deq    queue-dequeue (sbo& (sbo Queue)))
+(defOprn size   queue-depth   (sbo& (sbo Queue)))
+(defOprn head	queue-read    (sbo& (sbo Queue)))
+
+
+;;; stack operations
+
+(defOprn top    stack-top     (sbo& (sbo RblStack)))
+(defOprn pop    stack-pop     (sbo& (sbo RblStack)))
+(defOprn clear  stack-reset   (sbo& (sbo RblStack)))
+(defOprn push   stack-push    (sbo& (sbo RblStack)))
+(defOprn empty? stack-empty?  (sbo& (sbo RblStack)))
+(defOprn size   stack-depth   (sbo& (sbo RblStack)))
+
+;;; stuff to help browse around mailboxes
+
+(defSync (messages) (messages (mbox (self))))
+
+(defSync (messages) [] (sbo& (sbo EmptyMbox)))
+(defSync (messages) [] (sbo& (sbo LockedMbox)))
+
+(defMethod QueueMbox (messages) (messages queue))
+
+(defMethod Queue (messages)
+  (if (fx> nelems 0)
+      (let [[sz (prim-size elems)]]
+	(do* [[r []   (rcons r (prim-nth elems i))]
+	      [i head (fx% (inc i) sz)]
+	      [n 0    (inc n)]]
+	     [((fx= n nelems) r)]))
+      []))
+
+(defOprn insert)
+(defOprn delete)
+(defOprn get)
+
+(defOprn headN)
+
+(defActor Relation
+  (slots& keySz 1 default #absent rows (new Queue))
+  (method (init ks & r)
+    (update! 'keySz ks
+	     'default (if (null? r) default (head r))
+	     'rows (new rows)))
+  (method (insert x)
+    (if (and (type? x Tuple) (fx>= (prim-size x) keySz))
+	(seq (queue-pat-dequeue rows (headN x keySz))
+	     (queue-enqueue rows x) (update!))
+	(RuntimeError (self) "insert: argument not a tuple or too short " x)))
+  (pure (delete x)
+    (queue-pat-dequeue rows x))
+  (pure (get x)
+    (let [[x (queue-pat-read rows x)]]
+      (if (absent? x) default x)))
+  )

@@ -1,0 +1,6 @@
+// Test to see if lists of Procs compile
+
+contract ListProcTest() = {
+ { [ Nil , Nil , Nil ] } |
+ { [ { 5 + 6 } , 7 ] }
+}

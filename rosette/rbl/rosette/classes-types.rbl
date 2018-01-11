@@ -1,0 +1,138 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; some predicates for test types
+
+(let [[p (proc [x] (oprn? (lookup x)))]]
+  (defProc (oprns)
+    (filter (keys (meta Global) Global) p)))
+
+(defSync symb? #f (sbo& Top))
+(defSync symb? #t (sbo& (sbo Symbol)))
+
+(defSync prim? #f (sbo& Top))
+(defSync prim? #t (sbo& (sbo Prim)))
+(let [[p (proc [x] (prim? (lookup x)))]]
+  (defProc (prims)
+    (filter (keys (meta Global) Global) p)))
+
+(defSync proc? #f (sbo& Top))
+(defSync proc? #t (sbo& (sbo Proc)))
+(let [[p (proc [x] (proc? (lookup x)))]]
+  (defProc (procs)
+    (filter (keys (meta Global) Global) p)))
+
+(defProc (sbos)
+  (filter (keys (meta Global) Global)
+	  (proc [x] (sbo? (meta (lookup x)) (lookup x)))))
+
+(defSync fx? #f (sbo& Top))
+(defSync fx? #t (sbo& (sbo Fixnum)))
+
+;;; The following verifies whether ob is the same type as the target of
+;;; the operation.  We declare that a common direct parent constitutes
+;;; such a test.  It is of course possible to consider more `sophisticated'
+;;; concepts of type but this should be adequate for now.
+
+;;; (defSync (typep ob)
+;;;   (and (same? (parent (self)) (parent ob))
+;;;        (same? (meta (self)) (meta ob))))
+
+;;; it is actually implemented as a prim
+;;; we define the following synonym to pave the way for cleaning up the
+;;; nomenclature to be consistent on predicates
+
+(define typep type?)
+
+;;; This operation tests whether `ob' is a sub-type of the target of the
+;;; operation.
+
+(defSync (sub-typep ob) (type<= (parent (ob)) (parent (self))))
+
+;;; The following operation tests whether `ob' is a sub-type of the target
+;;; of request, and if not ensures that `ob' IS a descendant of root.
+;;; The intention is to provide a means of making sure that the `ob' has
+;;; some vague relation to the current computational context.
+;;;
+;;; (sub-typep/wrt <T> Top <value>)  == (sub-typep <T> <value>)
+
+
+(defSync (sub-typep/wrt root ob)
+  (cond ((sub-typep (self) ob) #t)
+	((sub-typep root ob)   #f)
+	(else
+	 (RuntimeError (self) "Not strict sub-type " [root ob]))))
+
+(defSync (parents & x)
+  (if (same? (self) Top)
+      (tuple-rcons (tuple-head x) Top)
+      (parents (parent (self)) (tuple-rcons (tuple-head x) (self)))))
+
+(defMethod MIActor (parents & x)
+  (parents (tuple-last cpl) (tuple-rcons (tuple-head x) cpl)))
+
+(defSync (metas)
+  (iterate loop [[ans [(self)]][x (meta (self))] [lst (self)]]
+    (if (tuple-mem? ans x)
+	(if (same? x lst) ans (rcons ans x))
+	(loop (rcons ans x) (meta x) x))))
+
+(defSync (sbo& Top) (children)
+  (if (sbo? (meta (self)) #niv)
+      (let [[cos (get-obo (meta (self)) (self) **ChildObjects**)]]
+	(if (absent? cos)
+	    (if ('extensible (meta (self)))
+		[]
+		['non-extensible])
+	    cos))
+      (children (sbo (self)))))
+
+(defSync (sbo& Top) (allChildren)
+  (let [[cs (get-obo (meta (self)) (self)  **ChildObjects**)]]
+    (if (absent? cs)
+	(self)
+	[(self) (mapx cs allChildren)])))
+
+(letrec [[dc1 (proc [cs level]
+		(if (sub-typep Tuple cs)
+		    (cond ((null? cs) (display [] #\\n))
+			  ((fx= (size cs) 1)
+			   (seq (display (string-new level #\\ ))
+				(display (head cs))
+				(display #\\n)))
+			  ((fx= (size cs) 2)
+			   (dc2 cs level))
+			  (else
+			   (display "dc2 ????????" #\\n)))
+		    (seq (display (string-new level #\\ ))
+			 (display cs)
+			 (display #\\n))))]
+	 [dc2 (proc [[h cs] level]
+		(seq (display #\\n (string-new level #\\ ))
+		     (display h)
+		     (display " ==>\n")
+		     (mapx cs dc1 (fx+ level 2))
+		     #niv))]]
+  (defProc (dispChildren x)
+    (let [[cs (allChildren (sbo x))]]
+      (dc1 cs 0))))

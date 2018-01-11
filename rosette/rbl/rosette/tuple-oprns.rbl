@@ -1,0 +1,388 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; test for not null?
+
+(defOprn null!? #t)
+(defOprn (sbo& (sbo [])) null!? #f)
+
+;;; operations for collecting elements of tuples
+
+(defOprn fold)
+
+(defPure [] (fold p unit) unit)
+
+(defMethod Tuple (fold p unit)
+  (let [[[hd & tl] (self)]]
+    (letrec [[iter (proc [acc]
+		     (seq
+		      (set! hd (head tl))
+		      (set! tl (tail tl))
+		      (if (and (null? hd) (null? tl))
+			  acc
+			  (p hd acc iter))))]]
+      (p hd unit iter))))
+
+(defOprn mapNx)
+(defOprn mapN)
+(defOprn mapNx&)
+(defOprn mapN&)
+
+(defOprn any)
+(defOprn all)
+(defOprn mem?)
+(defOprn insert)
+(defOprn position)
+(defOprn delete)
+(defOprn count)
+(defOprn filter)
+
+(defOprn (sbo& (sbo Tuple)) (mem= p item) pure&
+  (tuple-mem? (mapx (self) p item) #t))
+
+(defOprn (sbo& (sbo [])) (< y) (null!? y))
+
+(defOprn (sbo& (sbo Tuple)) (< y) pure&
+  (if (null? y)
+      #f
+      (if (type? Tuple y)
+	  (let [[hx (tuple-head (self))]
+		[hy (tuple-head y)]]
+	    (if (> hx hy)
+		#f
+		(if (< hx hy)
+		    #t
+		    (let [[tx (tuple-tail (self))]
+			  [ty (tuple-tail y)]]
+		      (if (null? tx)
+			  (null!? ty)
+			  (if (null? ty)
+			      #f
+			      (< tx ty)))))))
+	  #f)))
+
+(defOprn (sbo& (sbo [])) (<= y) #t)
+
+(defOprn (sbo& (sbo Tuple)) (<= y) pure&
+  (if (null? y)
+      #f
+      (if (type? Tuple y)
+	  (let [[hx (tuple-head (self))]
+		[hy (tuple-head y)]]
+	    (if (> hx hy)
+		#f
+		(if (< hx hy)
+		    #t
+		    (let [[tx (tuple-tail (self))]
+			  [ty (tuple-tail y)]]
+		      (if (null? tx)
+			  #t
+			  (if (null? ty)
+			      #f
+			      (<= tx ty)))))))
+	  #f)))
+
+(defOprn (sbo& (sbo [])) (= y) (null? y))
+
+(defOprn (sbo& (sbo Tuple)) (= y) pure&
+  (if (type? Tuple y)
+      (if (fx= (prim-size (self)) (prim-size y))
+	  (not (tuple-mem? (mapNx& (tuple-zip (self) y) 2 =) #f))
+	  #f)
+      #f))
+
+(defOprn (sbo& (sbo [])) (>= y) (null? y))
+
+(defOprn (sbo& (sbo Tuple)) (>= y) pure&
+  (if (null? y)
+      #t
+      (if (type? Tuple y)
+	  (let [[hx (tuple-head (self))]
+		[hy (tuple-head y)]]
+	    (if (< hx hy)
+		#f
+		(if (> hx hy)
+		    #t
+		    (let [[tx (tuple-tail (self))]
+			  [ty (tuple-tail y)]]
+		      (if (null? ty)
+			  #t
+			  (if (null? tx)
+			      #f
+			      (>= tx ty)))))))
+	  #f)))
+
+(defOprn (sbo& (sbo [])) (> y) #f)
+
+(defOprn (sbo& (sbo Tuple)) (> y) pure&
+  (if (null? y)
+      #t
+      (if (type? Tuple y)
+	  (let [[hx (tuple-head (self))]
+		[hy (tuple-head y)]]
+	    (if (> hx hy)
+		#t
+		(if (< hx hy)
+		    #f
+		    (let [[tx (tuple-tail (self))]
+			  [ty (tuple-tail y)]]
+		      (if (null? ty)
+			  (null!? tx)
+			  (if (null? tx)
+			      #f
+			      (> tx ty)))))))
+	  #f)))
+
+(defOprn sort)
+
+(defMethod Tuple (sort op< op>=)
+  (if (fx<= (prim-size (self)) 1)
+      (self)
+      (let [[L 0] [R (dec (prim-size (self)))]
+	    [i 0] [j (dec (prim-size (self)))]
+	    [s []] [K (tuple-head (self))]]
+	(label q0
+	  (seq
+	   ;; partition
+	   (label q1
+	     (if (fx<= i j)
+		 (seq (label q3 (if (fx<= i j)
+				    (if (op<  (prim-nth (self) i) K)
+					(seq (set! i (inc i)) (goto q3)))))
+		      (label q2 (if (fx>= j i)
+				    (if (op>= (prim-nth (self) j) K)
+					(seq (set! j (dec j)) (goto q2)))))
+		      
+		      (if (fx< i j)
+			  (seq (xchg (self) i j)
+			       (set! i (inc i))
+			       (set! j (dec j))
+			       (goto q1))))))
+	   ;; recur
+	   (if (fx< L j) (set! s [[L j] & s]))
+	   (if (fx<= L j)
+	       (if (fx< i R)
+		   (seq (set! L i)
+			(set! j R)
+			(set! K (prim-nth (self) i))
+			(goto q0)))
+	       (if (fx< (inc i) R)
+		   (seq (set! L (inc i)) (set! i L) (set! j R)
+			(set! K (prim-nth (self) i)) (goto q0))))
+	   
+	   (if (null? s)
+	       (self)
+	       (let [[[[L' R'] & s'] s]]
+		 (seq (set! L L') (set! i L') (set! j R') (set! R R')
+		      (set! s s') (set! K (prim-nth (self) L'))
+		      (goto q0)))))))))
+
+(defPure Tuple (any pred)
+  (fold (self) (proc [v f iter] (if (pred v) #t (iter f))) #f))
+
+(defPure Tuple (all pred)
+  (fold (self) (proc [v t iter] (if (pred v) (iter t) #f)) #t))
+
+(defPure Tuple (insert item)
+  (if (tuple-mem? (self) item)
+      (self)
+      [item & (self)]))
+
+(defPure Tuple (position item)
+  (if (tuple-mem? (self) item)
+      (let [[i (fx- (prim-size (self)) 1)]]
+	(label loop
+	  (if (same? item (prim-nth (self) i))
+	      i
+	      (seq (set! i (fx- i 1))
+		   (goto loop)))))
+      #absent))
+
+(defPure Tuple (delete item)
+  (if (tuple-mem? (self) item)
+      (let [[p (position (self) item)]]
+	(concat (prim-sub-object (self) 0 p)
+		(prim-sub-object (self) (fx+ p 1)
+				 (fx- (prim-size (self)) (fx+ p 1)))))
+      (self)))
+
+(defMethod Tuple (count p?)
+  (let [[n (dec (prim-size (self)))]
+	[x 0]]
+    (label loop
+      (if (fx< n 0)
+	  x
+	  (seq (if (p? (prim-nth (self) n))
+		   (set! x (inc x)))
+	       (set! n (dec n))
+	       (goto loop))))))
+
+(defMethod Tuple (filter p?)
+  (let [[tpl (tuple-new-n [] (prim-size (self)) #niv)]
+	[m 0][n 0][sz (prim-size (self))]]
+    (label loop
+      (if (fx= n sz)
+	  (prim-sub-object tpl 0 m)
+	  (seq (if (p? (prim-nth (self) n))
+		   (seq (prim-set-nth tpl m (prim-nth (self) n))
+			(set! m (inc m))))
+	       (set! n (inc n))
+	       (goto loop))))))
+
+(defOprn total)
+(defPure Tuple (total)
+  (fold (self) (proc [n acc iter] (iter (fx+ n acc))) 0))
+
+;;; utilities for splitting a tuple into evens and odds
+
+(defOprn even?)
+(defPure Fixnum (even?)
+  (fx= (fx-logand (self) 1) 0))
+
+(defOprn odd?)
+(defPure Fixnum (odd?)
+  (fx!= (fx-logand (self) 1) 0))
+
+(defOprn niv!?)
+(defSlot Top niv!? #t)
+(defSlot (sbo #niv) niv!? #f)
+
+(defOprn map-even)
+(defPure Fixnum (map-even x) (if (even? (self)) x #niv))
+
+(defOprn map-odd)
+(defPure Fixnum (map-odd x) (if (even? (self)) #niv x))
+
+(defOprn fold-linear)
+(defPure Tuple (fold-linear a i)
+  (i (tuple-concat a (self))))
+
+(defOprn mapf)
+
+(defSlots Indexable-SBO
+  (method (mapf f & args)
+    (let [[n 0]
+	  [N (prim-size (self))]
+	  [tmp #niv]
+	  [count 0]
+	  [tpl (tuple-new-n [] (prim-size (self)) #niv)]]
+      (label loop
+	(if (fx= n N)
+	    (block (update) (prim-sub-object tpl 0 count))
+	    (seq
+	     (set! tmp (f n (prim-nth (self) n) & args))
+	     (if (absent? tmp)
+		 #niv
+		 (seq (prim-set-nth tpl count tmp)
+		      (set! count (fx+ count 1))))
+	     (set! n (fx+ n 1))
+	     (goto loop)))))))
+
+(defOprn mapf-even)
+(defPure Fixnum (mapf-even x) (if (even? (self)) x #absent))
+
+(defOprn mapf-odd)
+(defPure Fixnum (mapf-odd x) (if (even? (self)) #absent x))
+
+(defOprn (sbo& (sbo Tuple)) ->tuple identity1)
+
+(defOprn (sbo& (sbo Tuple)) unzip   tuple-unzip)
+
+(defOprn (sbo& (sbo Tuple)) zip     tuple-zip)
+
+(defOprn (sbo& (sbo Tuple)) reverse tuple-reverse)
+
+(defOprn (headN n) (sbo& Indexable-SBO) pure&
+  (prim-sub-object (self) 0 n))
+
+(defOprn (tailN n) (sbo& Indexable-SBO) pure&
+  (prim-sub-object (self) n (fx- (prim-size (self)) n)))
+
+(defOprn (cut n) (sbo& Indexable-SBO) pure&
+  [(headN (self) n) (tailN (self) n)])
+
+(defOprn (split n) (sbo& Indexable-SBO) pure&
+  (rcons (->tuple (sub-obj (self) 0 n))
+	 (sub-obj (self) n (fx- (size (self)) n))))
+
+(defPure Tuple (mapNx n fn & args)
+  (if (fx= (fx% (prim-size (self)) n) 0)
+      (iterate loop [[[x r] (cut (self) n)] [ans []]]
+	(let [[ans (rcons ans (fn x & args))]]
+	  (if (null? r) ans (loop (cut r n) ans))))
+      (RuntimeError (self) "size != 0 modulo " n)))
+
+(defPure Tuple (mapN n fn & args)
+  (if (fx= (fx% (prim-size (self)) n) 0)
+      (iterate loop [[[x r] (cut (self) n)] [i 0] [ans []]]
+	(let [[ans (rcons ans (fn i x & args))]
+	      [i (inc i)]]
+	  (if (null? r) ans (loop (cut r n) i ans))))
+      (RuntimeError (self) "size != 0 modulo " n)))
+
+(defPure Tuple (mapNx& n fn & args)
+  (if (fx= (fx% (prim-size (self)) n) 0)
+      (iterate loop [[[x r] (cut (self) n)] [ans []]]
+	(let [[ans (rcons ans (fn & (tuple-concat x args)))]]
+	  (if (null? r) ans (loop (cut r n) ans))))
+      (RuntimeError (self) "size != 0 modulo " n)))
+
+(defPure Tuple (mapN& n fn & args)
+  (if (fx= (fx% (prim-size (self)) n) 0)
+      (iterate loop [[[x r] (cut (self) n)] [i 0] [ans []]]
+	(let [[ans (rcons ans (fn i & (tuple-concat x args)))]
+	      [i (inc i)]]
+	  (if (null? r) ans (loop (cut r n) i ans))))
+      (RuntimeError (self) "size != 0 modulo " n)))
+
+(defOprn mapS)
+
+(defPure [] (mapS & ?) #niv)
+
+(defPure Tuple (mapS fn & args)
+  (iterate loop [[[x & r] (self)]]
+    (send fn x & args)
+    (if (null? r) #niv (loop r))))
+
+(defOprn (zip b) (sbo& (sbo [])) pure& [])
+
+(defOprn (zip b) (sbo& (sbo Tuple)) pure&
+  (if (fx= (prim-size (self)) (prim-size b))
+      (concat & (map (self) (proc [i x] [x (nth b i)])))
+      (RuntimeError (self) "cannot zip unequal size tuples: " b)))
+
+(defOprn (sbo& (sbo [])) (remove-duplicates) pure& [])
+
+(defOprn (sbo& (sbo Tuple)) (remove-duplicates) pure&
+  (iterate loop [[[h & t] (sort (self) < >=)] [ans []]]
+    (if (null? t)
+	(rcons ans h)
+	(if (= h (tuple-head t))
+	    (loop t ans)
+	    (loop t (rcons ans h))))))
+
+;;; utility to obtain the tuple of slot values of any object
+;;; - should be a prim
+
+(defProc (slots x)
+  (mapf (contour (meta x) x) mapf-odd))

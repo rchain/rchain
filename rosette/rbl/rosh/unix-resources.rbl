@@ -1,0 +1,84 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; RESOURCE commands
+
+(defForeign (getpagesize) int)
+(defForeign (getdtablesize) int)
+
+(defStructure Rusage
+  Timeval  utime		;; user time
+  Timeval  stime		;; system time
+  int  maxrss			;; resident set size
+  int  ixrss			;; currently 0
+  int  idrss			;; integral resident set size
+  int  isrss			;; currently 0
+  int  minflt			;; page faults not requiring phys i/o
+  int  majflt			;; page faults requiring phys i/o
+  int  nswap			;; number of swaps
+  int  inblock			;; number of block input operations
+  int  oublock			;; number of block output operations
+  int  msgsnd			;; messages sent
+  int  msgrcv			;; messages received
+  int  nsignals			;; signals received
+  int  nvcsw			;; voluntary context switches
+  int  nivcsw			;; involuntary context switches
+  )
+
+(define RUSAGE_SELF 0)
+(define RUSAGE_CHILDREN -1)
+
+(defForeign (getrusage int (ref Rusage)) int)
+
+;;; Resource limits
+
+(define	RLIMIT_CPU	0)		;; cpu time in milliseconds
+(define	RLIMIT_FSIZE	1)		;; maximum file size
+(define	RLIMIT_DATA	2)		;; data size
+(define	RLIMIT_STACK	3)		;; stack size
+(define	RLIMIT_CORE	4)		;; core file size
+(define	RLIMIT_RSS	5)		;; resident set size
+
+(define	RLIM_NLIMITS	6)		;; number of resource limits
+
+(define	RLIM_INFINITY	0x7fffffff)
+
+(defStructure Rlimit
+  int	rlim_cur		;; current (soft) limit
+  int	rlim_max		;; hard limit
+  )
+
+(defForeign (getrlimit int (ref Rlimit)) int)
+
+(defForeign (setrlimit int (ref Rlimit)) int)
+
+
+(if (not (same? (o/s-type *config*) 'hpux))
+    (seq (defForeign (getpriority int int) int)
+	 (defForeign (setpriority int int int) int)
+	 (define	PRIO_MIN       -20)
+	 (define	PRIO_MAX	20)
+	 (define	PRIO_PROCESS	0)
+	 (define	PRIO_PGRP	1)
+	 (define	PRIO_USER	2)
+	 ))

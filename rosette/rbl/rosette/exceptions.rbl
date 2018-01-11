@@ -1,0 +1,241 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; the exception system handles propagation of error handling across
+;;; remote connections and uses the full io-system
+
+;;; define a simple routine to issue warnings
+
+(defSync (warn & why_args)
+  (let [[line (concat
+	       ["warning ***: " (self)
+		& (if (null!? why_args)
+		      [#\  (tuple-head why_args) #\  ]
+		      [#\  ])]
+	       (rcons (tuple-tail why_args) nl))]]
+    (sdisplay Printer & line)))
+
+;;; The following definitions build up some support for access the stream
+;;; over which a remote evaluation was requested.  The basic entry is:
+;;;
+;;; 	(current-stream)
+;;;
+;;; 
+
+(defOprn the-ctxt)
+
+(defActor Reflector
+  (rmethod (the-ctxt c)
+    (update)
+    (ctxt-rtn c c))
+  )
+
+(defProc (eval/w expr attributes)
+  (run (compile (expand expr))
+       (new Monitor (insert (new RblTable) attributes))))
+
+(defProc (current-stream)
+  (let* [[c (the-ctxt Reflector)]
+	 [tbl ('id ('monitor c))]]
+    (if (type? RblTable tbl)
+	(ifabs? (tbl-get tbl 'stream) Printer)
+	Printer)))
+
+;;; define c-unlock to conditionally unlock an object involved in an error
+;;; if the object does in fact have a locked mailbox.  To do this an
+;;; operation is needed to findout whether a mailbox is in fact locked
+;;; or not.
+
+(defSync   locked?)
+(defSync   (sbo& (sbo EmptyMbox))  locked?   #f)
+(defSync   (sbo& (sbo LockedMbox)) locked?   #t)
+(defMethod QueueMbox               (locked?) locked)
+
+(defSync (c-unlock)
+  (if (locked? (mbox (self)))
+      (update!)
+      (self)))
+
+(defExpander (cupdate e)
+  (SX 'c-unlock '(self)))
+
+(defOprn (lock) (self)) ;; leaves the actor locked if possible
+
+;;; recover attempts to get all actors that may be locked waiting on a result
+;;; from the errorful thread to be unlocked by walking the context chain.
+;;; this is not safe in general since actors may be locked due to other
+;;; independent threads!!!
+
+(defOprn recover)
+
+(defMethod #niv (recover) #niv)
+
+(defMethod Ctxt (recover)
+  (seq ;; unlock the receiver for this Ctxt
+       (c-unlock self!)
+       ;; unlock the trgt if needed
+       (c-unlock trgt)
+       ;; walk up the ctxt chain
+       (recover ctxt)))
+
+;;; A method of determining if error handling is in progress for a
+;;; thread.  Register each monitor that is processing an error on the
+;;; ActiveErrorHandlers table.  A new monitor is instantiated for each
+;;; exception.  This permits multiple exceptions to be detected against
+;;; a single initial message, e.g.:
+;;;
+;;; [(/ 1 0) (/ 2 0)]
+;;;
+;;; will generate two arithmetic exceptions.  The previous implementation
+;;; would report an erroneous recursive exception and just one of the
+;;; actual exceptions
+
+(defValue Global ActiveErrorHandlers (new RblTable))
+
+;;; handle is used to introduce flexibility into how exceptions are actually
+;;; resolved.  The meat is handle on Monitors which is designed to examine
+;;; the 'id slot of the monitor for an actor containing an id and an actor
+;;; that will further handle the error.  The intended usage is with comm
+;;; stuff such as remote eval in which the actor will be a gadget that
+;;; ensures that errors are reported back to the client of the remote eval
+
+;;; handle on Symbols is the default for processing that is not under control
+;;; of remote evaluation.  It just performs an sdisplay to the Printer of
+;;; the msg so as to ensure that exception messages will not be interleaved
+;;; with themselves or other output on the same stream.
+
+(defSync (handle ctxt focus msg)
+  (sdisplay Printer & msg))
+
+;;; The oprn handle-dispatch is part of the control structure internal to the
+;;; exception handling system.  Its purpose is to handoff control first to
+;;; an appropriate Ctxt and then to a Monitor.  It is used to harmonize
+;;; different exception reporting mechanisms in the Vm and in Rosette proper.
+
+(defSync handle-dispatch)
+
+;;; handle-d on Ctxts just passes control on to the associated monitor.  This
+;;; is simply to obey the encapsulation of Ctxts which know how to find the
+;;; monitor, and to Quote the focus object since in handle-d on Monitor/s the
+;;; focus object is subject to compilation and if not quoted most times will
+;;; generate an error on top of an error.  This means that non-trivial
+;;; handlers (the one on Symbol is trivial) that need to do something with
+;;; the focus object will have to be aware that it is "protected" in a level
+;;; of quoting.
+
+(defMethod Ctxt (handle-dispatch focus msg)
+  (handle-dispatch monitor (self) (Q focus) msg))
+
+;;; the operation handler is used to retrieve an actor that can resolve
+;;; the exception
+
+(defSync (handler) (self))
+
+(defMethod RblTable (handler)
+  (ifabs? (tbl-get (self) 'exceptionHandler) 'no-handler))
+
+;;; handle-d on Monitors passes control on to the 'id binding which is
+;;; either a Symbol or an Actor designed to handle errors.  It also
+;;; guards against recursive exceptions and finally uses a simple
+;;; strategy to provide some limited recovery in terms of unlocking
+;;; actors that may be waiting for results that are not going to happen
+;;; due to the exception
+
+(defMethod Monitor (handle-dispatch ctxt focus msg)
+  (let [[mon (if (absent? (tbl-get ActiveErrorHandlers (self)))
+		 (new Monitor id)
+		 (self))]
+	[hndlr (handler id)]]
+    (seq (if (same? mon (self))
+	     (display "*** recursive exception... aborting\n")
+	     (seq (tbl-add ActiveErrorHandlers mon #niv)
+		  (run (compile
+			(RX 'handle
+			    (RX 'handler (RX 'tuple-head [id]))
+			    ctxt focus msg))
+		       mon)))
+	 (recover ctxt)
+	 (tbl-del ActiveErrorHandlers mon)
+	 (suicide))))
+
+;;; oprns for handing-off control from whatever object the kernel sent the
+;;; exception to to the associated Ctxt.  The kernel really should have
+;;; always sent exceptions to the Ctxt in question
+
+(defSync handle-runtime-error)
+(defSync handle-missing-method)
+(defSync handle-formals-mismatch)
+
+;;; the following are defined in the kernel machine implementation and
+;;; signalled from the virtual machine
+
+(defMethod Ctxt (handle-runtime-error focus msg)
+  (handle-dispatch
+   (self)
+   self!
+   ["*** " msg ": " (RX focus & argvec) & (bindings-message code)]))
+
+(defSync (runtime-error msg ctxt)
+  (handle-runtime-error ctxt (self) msg))
+
+(defMethod Ctxt (handle-missing-method oprn)
+  (handle-dispatch
+   (self)
+   (prim-nth argvec 0)
+   ["*** missing method: " (RX oprn & argvec) & (bindings-message code)]))
+   
+(defSync (missing-method ctxt)
+  (handle-missing-method ctxt (self)))
+
+(defMethod Ctxt (handle-formals-mismatch fmls)
+  (handle-dispatch
+   (self)
+   self!
+   ["*** formals mismatch:\n formals = " (formals@ (pattern@ fmls))
+    "\n actuals = " argvec
+    & (bindings-message code)]))
+
+(defSync (formals-mismatch ctxt)
+  (handle-formals-mismatch ctxt (self)))
+
+(defMethod Ctxt (vm-error)
+  (handle-dispatch
+   (self)
+   self!
+   ["*** vm error: " (RX trgt & argvec) & (bindings-message code)]))
+
+(defMethod Ctxt (missing-binding symbol)
+  (handle-dispatch
+   (self)
+   self!
+   ["*** no binding for " symbol & (bindings-message code)]))
+
+;;; rosette level error signalled by rosette level code
+
+(defRMethod Top (RuntimeError ctxt-tuple & msg)
+  (let [[[ctxt _code] ctxt-tuple]]
+  (handle-dispatch
+   ctxt
+   (lookup 'self! ctxt)
+   ["*** " & (tuple-concat msg [" in: " (self) nl])])))
+

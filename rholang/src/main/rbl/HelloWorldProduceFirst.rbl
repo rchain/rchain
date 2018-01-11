@@ -1,0 +1,28 @@
+;;; This demonstrates a HelloWorld pseudo contract that
+;;; produces (stores) the data first and then has the
+;;; contract invoked, calling consume.
+;;;
+;;; The space.rbl must be loaded into the Rosette REPL context
+;;; before this file is executed.
+;;;
+;;; Expected output of this script:
+;;; "Hello World!"
+
+(define t (new NameSpace))
+
+(defOprn HelloWorld)
+(defActor HelloWorldContract
+    (method (HelloWorld world1 world2)
+        (let [[[[rholang5c4b13f58751] [rholangdf656748b6d1]] (consume t [world1] [**wildcard**] ['msg])]]
+            ( (proc [[msg]] (print msg)) [rholangdf656748b6d1]))))
+
+(define contract (new HelloWorldContract))
+
+
+;;; Silently discard result of produce
+;;; Otherwise it would misleadingly two copies of "Hello World!"
+(let [[result1 (produce t 'world1 'msg "Hello World!")]] #niv)
+
+;;; Invoke contract
+(let [[result2 (HelloWorld contract 'world1 'world2)]] #niv)
+

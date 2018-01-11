@@ -1,0 +1,132 @@
+.TH ESS 1 "20 January 1993"
+.SH NAME
+ess \- Extensible Services Switch configuration of Rosette
+.SH SYNOPSIS
+.in +.5i
+.ti -.5i
+.B ess
+\%[\-help\0{\fIflag\fR}]
+\%[\-nodocs]
+\%[\-load\0\fIfilename\fR]
+\%[\-prompt\0\fIstring\fR]
+\%[\-comm]
+\%[\-client]
+\%[\-tcpport\0\fIport\fR]
+\%[\-rosetteport\0\fIport\fR]
+\%[\-dblient]
+\%[\-dbclientport\0\fIport\fR]
+\%[\-SSoff]
+\%[\-SSon]
+\%[\-remote\0\fIinitiator\fR]
+\%[\-tid\0\fIinteger\fR]
+\%[\-tss]
+\%[\-tssport\0\fIport\fR]
+\%[\-tsclient]
+\%[\-tsclientport\0\fIport\fR]
+\%[\-isodetailor\0\fIpath\fR]
+\%[\-acse]
+\%[\-osionly]
+\%[\-tcponly]
+.SH DESCRIPTION
+The \fIess\fR program is a configuration of \fIrosette\fR that provides
+interfaces to many different communication facilities.
+.PP
+The \fIess\fR runs on Sun3, Sun4, HP700/800, Dec5100, Silicon
+Graphics, and 386/486 System V Release 4 platforms with Isode 7.0 or later.
+To terminate \fIess\fR enter \fB(quit)\fR or \fB(exit)\fR.
+.PP
+The `\-help' flags lists the available flags.  If an optional flag is
+mentioned then a brief explanation of the flag is reported.
+.PP
+The `\-nodocs' flag suppresses the retention of on-line documentation.
+.PP
+The `\-load' flag directs \fIess\fR to load a \fB.rbl\fR file before
+performing any restart processing.
+.PP
+The `\-prompt' flag takes a \fIstring\fR which becomes the prompt for the
+\fIess\fR console listener.  It is usually used when building a
+new configuration to set the default prompt for the configuration.
+.PP
+The `\-comm' flag is used to enable asynchronous communications.  Without
+this flag not even stdin will be asynchronous
+.PP
+The `\-client' flag enables listening on both TcpStreams and
+RosetteStreams.
+.PP
+The `\-tcpport' flag is used to listen on \fIport\fR for tcpStreams if
+`\-client' is present on the command line.
+.PP
+The `\-rosetteport' flag is used to listen on \fIport\fR for RosetteStreams
+if `\-client' is present on the command line.
+.PP
+The `\-dbclient' flag enables listening for DbClients of the \fIess\fR.
+DbClients contact an \fIess\fR via the SQL Access Group Call Level
+Interface.
+.PP
+The `\-dbclientport' flag is used to listen on \fIport\fR for DbClients
+if `\-client' is present on the command line.
+.PP
+The `\-SSoff' and `\-SSon' flags disable and enable Synchronize Store
+points during network interactions.  This is a debugging facility used
+by the developers.
+.PP
+The `\-remote' flag is used to specify the \fIinitiator\fR which is a host
+supporting an \fIess\fR to which this \fIess\fR should establish a tree space
+connection after restart initialization is complete.
+.PP
+The `\-tid' flag supplies an \fIinteger\fR that is used by the `\-remote'
+\fIinitiator\fR to distinguish which remote \fIess\fR instance is connecting.
+.PP
+The `\-tss' flag causes the \fIess\fR to listen for incoming tree space
+connections.
+.PP
+The `\-tssport' flag causes the \fIess\fR to listen on \fIport\fR for
+TreeSpace Service connections from other \fIess\fRs if `\-tss' is present
+on the command line.
+.PP
+The `\-tsclient' flag enables listening for incoming connections to tree
+space from external client processes.
+.PP
+The `\-tsclientport' flag directs the \fIess\fR to listen on \fIport\fR for
+TreeSpace clients if `\-tsclient' is present on the command line.
+.PP
+The `\-isodetailor' flag identifies the \fIpath\fR where to load the
+isodetailor file from.  The default is $ESS_SYSDIR/`carch`/etc/isodetailor.
+.PP
+The `\-acse' flag, if present, requests the \fIess\fR to establish listeners
+for incoming \fBA-Associate.rqsts\fR on defined TCP and ISO TP\fIx\fR
+ports/tsels.
+.PP
+The `\-osionly' flag, if present, together with `\-acse' listens only on
+the defined tsel for TP\fIx\fR.
+.PP
+The `\-tcponly' flag, if present, together with `\-acse' listens only on
+the defined port for TCP.
+.SH FILES
+.nf
+.ta \w'\fImodule\fR.rbl  'u
+\fIfile\fR.rbl	external program definitions
+\fIfile\fR.module	module definition of other modules and files
+.re
+.fi
+.SH "SEE ALSO"
+rosette(1), rosh(1),
+.br
+\fIThe Rosette Chronicles: A User's Manual\fR: Dallas Webster,
+.br
+\fIThe Rosette 1.1 Report\fR
+.SH AUTHORS
+Christine Tomlinson, Greg Meredith, Darrell Woelk, Greg Lavender:
+.br
+Projet Carnot - MCC
+.br
+
+.br
+Mark Scheevel:
+.br
+UNISQL
+.SH BUGS
+Occasionally Rosette demonstrates its untoward independence by
+producing a seg fault or bus error if provoked through the foreign
+language interface or a very rare garbage collection error.
+

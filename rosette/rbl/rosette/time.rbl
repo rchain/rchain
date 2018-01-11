@@ -1,0 +1,56 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(add 'basic-time
+     ;;; helper is necessary to make sure that the code runs
+     ;;; in its own ctxt; otherwise the compiler will try to
+     ;;; inline the call to run.
+     (let [[helper (named-proc basic-time-helper [code monitor]
+		     (run code monitor))]]
+       (named-proc basic-time [expr]
+	 (let [[monitor (monitor-new 'timer\ monitor)]
+	       [code    (compile expr)]]
+	   (let [[result (helper code monitor)]]
+	     (seq
+	      (sleep)
+	      [result monitor]))))))
+
+(add 'time
+     (named-proc time [expr]
+       (let [[[result monitor] (basic-time expr)]]
+	 [result & (monitor-convert monitor)])))
+
+(add 'detailed-time
+     (named-proc detailed-time [expr]
+       (let [[[result monitor] (basic-time expr)]]
+	 (seq
+	  (print result)
+	  (display #\\n)
+	  (monitor-dump monitor)))))
+
+(defProc (log-time x)
+    (seq
+        (ostream-log-time x)
+        (prim-flush x)
+    )
+)

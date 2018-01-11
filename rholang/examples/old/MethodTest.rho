@@ -1,0 +1,14 @@
+// Test to see if value updating methods compile
+
+contract MethodTest() = {
+    { 5.add(5,5) } |
+        // 15
+    { 5.subtract(5) } |
+        // 0
+    { balances.get(5) } |
+        // get key 5 from balances map
+    { balances.update("random", 5) } |
+        // update key "random" in balances with 5
+    { balances.update("key1", "key2", "value") }
+        // update key "key1" in balances with a new map with "key2" = "value"
+}

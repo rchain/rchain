@@ -1,0 +1,195 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; This module prototypes the new interface to foreign functions.
+;;;
+;;; The principal goal is to integrate foreign function interfacing
+;;; with the c-structure facility so that calls to foreign functions
+;;; will be type checked in terms of full standard C signatures and
+;;; so that conversions can be performed implicitly by the call
+;;; machinery for both arguments and results.  We continue to duck
+;;; support for passing structures as opposed to pointers to structures.
+;;;
+;;; The syntax for the interface is achieved via expanders that process
+;;; the following syntax:
+;;;
+;;; 	(defForeign {(name& <ID_1>)} (<ID_2> {<TYPE_i>}) <TYPE_r>)
+;;;
+;;; The optional ``name&'' clause permits explicit mention of the
+;;; mangled name of a procedure that is to be attached.  This is
+;;; intended mostly to handle C++ generated names which are almost
+;;; always of perverse structure and not fit for human consumption.
+;;; If the clause is omitted then the internal name of the procedure
+;;; is assumed to be:
+;;;
+;;; 	(concat '_ <ID_2>)
+;;;
+;;; <ID_2> is the name that will be bound in the Global environment to
+;;; the foreign function object that results from the definition.  The
+;;; <TYPE_i> are used to 1) determine argument conversions and 2) fix
+;;; type checking.  Typically these types will be descriptors, Fixnum,
+;;; Bool, or Top.  Similarly the <TYPE_r> is the result type and is
+;;; used to control conversion of the result of an invocation to the
+;;; desired form in Rosette.
+;;;
+;;; The default is to simply return the arg which handles the case of
+;;; Rosette ob* and certain other situations.
+
+;(defOprn (-A-> arg) pure& arg)
+
+;;; In the case of Generic Descriptors, they are treated as references and
+;;; it is assumed that the address is desired.  We type check and attempt
+;;; to validate the offset! slot as containing a valid memory address.
+;;; Note that in order to pass a char, short, or long it is required to
+;;; obtain the value through an access expression and then send it as a
+;;; Fixnum which will be converted as necessary.  It is the case that while
+;;; a descriptor is treated as a reference it is necessary in the type
+;;; specification to use the form ``(ref <TYPE_i>)'' when intending to
+;;; pass an object of <TYPE_i>.
+
+;(defPure GenericDescriptor (-A-> arg)
+;  (RuntimeError (self) "Foreign function argument specification \
+;                       \not supported " arg))
+
+;(defPure AtomicDescriptor (-A-> arg)
+;  (cond ((typep Fixnum arg) arg)
+;	((typep (self) arg) (S-get arg 0 []))
+;	(else
+;	 (RuntimeError (self) "Foreign function arg mismatch " arg))))
+
+;(defPure CRef (-A-> arg)
+;  (cond ((typep (self) arg)
+;	 (if (valid-addr? (offset arg))
+;	     (let [[addr (M-get ('offset! arg) size! #f)]]
+;	       (if (valid-addr? addr)
+;		   addr
+;		   (RuntimeError
+;		    (self) "Invalid address in deref -A-> " addr)))
+;	     (RuntimeError (self) "Invalid address " (offset arg))))
+;	((typep desc arg)
+;	 (if (valid-addr? (offset arg))
+;	     (offset arg)
+;	     (RuntimeError
+;	      (self) "Invalid address in deref -A-> " (offset arg))))
+;	(else
+;	 (RuntimeError (self) "Type mismatch " arg))))
+
+;;; It is desirable to treat String, (ref char), (ref uchar),
+;;; (array char ?) and (array uchar ?) all uniformly so that a single
+;;; argument specification can be used and any of the above will be
+;;; acceptable actuals.  In this case a speciftication of (ref char)
+;;; or (ref uchar) is to be used in the foreign function argument list.
+
+    ;;; NOTE: good example of use of type checked multi-methods to
+    ;;; remove extranenous conditional tests within a method
+
+(defPure (ref U_Char) (-A-> arg)
+  (cond ((typep (ref U_Char) arg)
+	 (s! CRef -A-> arg))
+	((typep (array U_Char 0) arg)
+	 (if (valid-addr? (offset arg))
+	     (offset arg)
+	     (RuntimeError (self) "Invalid address " (offset arg))))
+	((typep String arg)
+	 (saddr arg))
+	((typep (null (self)) arg)
+	 0)
+	(else
+	 (RuntimeError (self) "Foreign function arg mismatch " arg))))
+
+;;; On the other hand in those cases where for some reason it is desired
+;;; to only accept a Rosette String as an actual the following is used.
+;;; Note that this is the only case in which string/char* is used.  The
+;;; above is simpyl fx/void*.
+
+;(defPure String (-A-> arg)
+;  (if (typep (self) arg)
+;      arg
+;      (RuntimeError (self) "Type mismatch " arg)))
+
+;(defPure Bool (-A-> arg)
+;  (if (typep (self) arg)
+;      arg
+;      (RuntimeError (self) "Type mismatch " arg)))
+
+;;; The following define the various conversion codes used in the current
+;;; internal implementation of foreign functions.  The following set is
+;;; based on the assumption that the actual argument in the invocation
+;;; will be a Fixnum and we are just using various AtomicDescriptor
+;;; prototypes as mnemonic devices for directing the choice of conversion
+;;; code.
+
+;;; Now how is the above to be used?
+;;;
+;;; The ``defForeign'' syntax will expand schematically as follows.
+;;; Given:
+;;;
+;;; 	(defForeign (sprintoid (ref ObjectID)) Int)
+;;;
+;;; expands to:
+;;;
+;;; 	(let [[ff (ff-new (concat '_ 'sprintoid)
+;;; 			  [(-F-> (ref ObjectID))]
+;;; 			  (>-F-  Int))]]
+;;; 	  (defProc (sprintoid arg_1)
+;;; 	     (>-A- Int (ff (-A-> (ref ObjectID) arg_1)))))
+;;;
+;;; where ``ObjectID'' is of the form:
+;;;
+;;; 	(defStructure ObjectID int nelems (ref int) elems)
+;;;
+;;; An alternative definition might be:
+;;;
+;;; 	(defForeign (oid->string (ref ObjectID)) Int (name& _sprintoid))
+;;;
+;;; which allows use of a name more in line with Rosette naming conventions
+;;; than Isode's oft times inconsistent naming.
+
+;;; It is sometimes useful to have an ``anonymous'' foreign function:
+;;;
+;;; 	(foreign-proc (_sprintoid (ref ObjectID)) int)
+;;;
+;;; expands to:
+;;;
+;;; 	(let [[ff (ff-new (concat '_ 'sprintoid)
+;;; 	                  [(-F-> (ref ObjectID))]
+;;; 	                  (>-F-  int))]]
+;;; 	  (proc [arg_1] (>-A- int (ff (-A-> (ref ObjectID) arg_1)))))
+;;;
+;;; the ``name&'' clause is not used since the ff is anonymous and so
+;;; never needs another (more pleasant) name.
+
+(defExpander (defForeign e)
+  (let* [[[inm [a rtn]] (find-keyword1 'name& #niv (->tuple msg))]
+	 [[rnm & args]    (->tuple a)]]
+    (e (RX 'add (Q rnm)
+	   (RX 'ff-new
+	       (if (niv? inm) (Q (concat '_ rnm)) (Q inm))
+	       (TX & args)
+	       rtn))
+       e)))
+
+(defExpander (foreign-proc e)
+  (let* [[[a rtn]      (->tuple msg)]
+	 [[nm & args] (->tuple a)]]
+    (e (RX 'ff-new (Q nm) (TX & args) rtn) e)))

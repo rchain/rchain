@@ -1,0 +1,39 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+(defActor WakeUpService (slots& clients [] period 1000))
+
+(defOprn periodicallyProd)
+(defOprn (sbo& Top) (wakeUp) pure& (self))
+
+(defOprn (sbo& Top) (wakeEverySoOften) pure&
+  (periodicallyProd WakeUpService (self)))
+
+(defMethod WakeUpService (periodicallyProd a)
+  ;; if i've got no clients register myself with the alarm service
+  ;; else add client to list
+  (seq (if (null? clients) (prim-alarm-register (self) period #t)) 
+       (update! clients (concat clients [a]))))
+
+(defPure WakeUpService (handle-alarm) (mapx clients (proc [x] (wakeUp x))))
+  

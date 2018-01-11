@@ -1,0 +1,16 @@
+/*
+ * A Cell contract that uses select expressions
+ * expression to handle get and set. This allows for
+ * the case that is not used to be destroyed.
+ */
+
+contract Cell( get, set, state ) = {
+  select {
+    case rtn <- get; v <- state => {
+     rtn!( v ) | state!( v ) | Cell( get, set, state )
+    }
+    case newValue <- set; v <- state => {
+      state!( newValue ) | Cell( get, set, state )
+    }
+  }
+}

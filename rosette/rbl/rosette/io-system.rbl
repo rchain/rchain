@@ -1,0 +1,393 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; Operations to convert actors to strings
+
+(defSync stringify)	;; the meta converts an actor to a string
+(defSync stringSz)	;; the meta reports the size of string
+(defSync traverse)	;; the meta performs an operation, e.g., stringify
+
+(defSync printify)
+(defSync displify)
+(defSync embedify)
+
+;;; I/O Operations
+
+(defOprn in)
+(defOprn out)
+(defOprn step)
+
+(defOprn read!)
+(defOprn display!)
+(defOprn print!)
+(defOprn flush!)
+(defOprn examine!)
+
+(defExpander (Blank e) " ")
+(defExpander (StrQ e) "\"")
+
+;;; define the Printer as an actor that serializes output requests to avoid
+;;; gratuitous interleaving of output in asynchronous contexts
+
+(defOprn sdisplay)
+(defOprn sprint)
+
+(defActor Printer (slots& out_stream stdout)
+  (method (sdisplay & r)
+    (free [itemTraverse]
+      (seq (display! out_stream
+		     (concat & (mapx r itemTraverse displify)))
+	   (update!))))
+  (method (sprint & r)
+    (free [itemTraverse]
+      (seq (display! out_stream
+		     (concat & (mapx r itemTraverse printify)))
+	   (update!))))
+  )
+
+;;; stream methods
+
+(defValue Istream-SBO read! istream-read)
+
+(defProc (read & r)
+  (if (null? r)
+      (istream-read stdin)
+      (istream-read & r)))
+
+(defSync (sbo& (sbo Istream)) (new fid & how) (istream-new fid & how))
+
+(defSync (sbo& (sbo Ostream)) (new fid & how) (ostream-new fid & how))
+
+(defOprn (sbo& (sbo Ostream)) display! ostream-display)
+
+(defOprn (sbo& (sbo Ostream)) print! ostream-print)
+
+(defOprn (sbo& (sbo Ostream)) flush! prim-flush)
+
+(defProc (flush & strm)
+  (if (null? strm)
+      (flush! stdout)
+      (flush! & strm)))
+
+(defOprn state (sbo& (sbo Istream)) istream-rdstate)
+
+(defOprn (failed?) (sbo& (sbo Istream))
+  ;;
+  ;; The reader sets the _IOERR flag of an istream's state
+  ;; when a read error (syntax error) occurs on that stream.
+  ;; 
+  ;; _IOERR == 040 (that's octal)
+  ;; 
+  (fx= (logand 040 (state (self))) 040)
+  )
+
+(defOprn clear (sbo& (sbo Istream)) istream-clear)
+
+(define describe-loc? #t)
+
+(defSync (sbo& Top) (loc-string x)
+  (if describe-loc? (object->string (Blank) (ob@ x)) ""))
+
+(defSync (sbo& Objs-w-IdMeta-SBO) (loc-string x) "")
+
+(defSync (sbo& Objs-w-IdMeta-SBO) (role-string x)
+   (let [[x ('id x)]]
+     (if (niv? x)
+	 " UNKNOWN"
+	 (concat (Blank) (displify (meta x) x)) )))
+
+(defProc (sbo& Top) (itemTraverse x op)
+  (op (meta x) x))
+
+(defSync (sbo& Meta-SBO) (stringifyBody x)
+  (object->string
+   (kind x) (role-string (self) x) (loc-string (self) x)))
+
+(defSync (sbo& Meta-SBO) (stringifyEmbed x)
+  (displify (self) x))
+
+(defSync (sbo& (meta Tuple)) (stringifyEmbed x)
+  (stringifyBody (self) x))
+
+(defSync (sbo& Meta-SBO) (displify x)
+  (concat "(FO " (stringifyBody (self) x) ")"))
+
+(defSync (sbo& Meta-SBO) (embedify x)
+  (displify (self) x))
+
+(defSync (sbo& Meta-SBO) (printify x)
+  (displify (self) x))
+
+
+;;; stringifcation for non expression actors
+(defSync (sbo& (meta FauxObj)) (stringifyBody x)
+  (let [[x (lookup 'info x)]] (displify (meta x) x)))
+
+(defSync (sbo& (meta FauxOprn)) (stringifyBody x)
+  (let [[nm ('nm x)]] (displify (meta nm) nm)))
+
+(defSync (sbo& (meta Oprn)) (displify x)
+  (concat "(FOp " (stringifyBody (self) x) ")"))
+
+(defSync (sbo& (meta Oprn)) (stringifyBody op)
+  (object->string (Blank) ('id op)))
+
+(defSync (sbo& (meta Template)) (displify t)
+  (let [[fmls (formals@ (pattern@ t))]]
+    (displify (meta fmls) fmls)))
+
+(defSync (sbo& (meta Template)) (printify t)
+  (let [[fmls (formals@ (pattern@ t))]]
+    (concat "(FO Template " (displify (meta fmls) fmls) ")")))
+
+(defSync (sbo& (meta Template)) (embedify t)
+  (printify (self) t))
+
+;(defSync (sbo& (meta ForeignFunction)) (stringifyBody ff)
+;  (object->string (kind ff) (Blank) ('native-name ff)))
+
+(defSync (sbo& (meta #absent)) (displify & r) "#absent")
+
+(defSync (sbo& (meta (parent Global))) (displify & r) "(parent Global)")
+
+(defSync (sbo& (meta (parent Top))) (displify & r) "(parent Top)")
+
+(defSync (sbo& (meta Top)) (displify & r) "Top")
+
+(defSync (sbo& (meta Global)) (displify & r) "Global")
+
+(defSync (sbo& (meta stdin)) (displify s)
+  (if (same? s stdin)
+      "stdin"
+      (concat "(FO Istream " (loc-string (self) s) ")")))
+
+(defSync (sbo& (meta stdout)) (displify s)
+  (cond ((same? s stdout) "stdout")
+	((same? s stderr) "stderr")
+	(else (concat "(FO Ostream " (loc-string (self) s) ")"))))
+
+(defSync (sbo& (meta EmptyMbox))  (displify x) "EmptyMbox")
+
+(defSync (sbo& (meta LockedMbox)) (displify x) "LockedMbox")
+
+(defSync (sbo& (meta QueueMbox)) (stringifyBody m)
+  (object->string
+   (kind m) (loc-string (self) m) ": "
+   (if (lookup 'locked m) "L/" "U/")
+   (lookup 'nelems (lookup 'queue m))))
+
+;;; stringification of (lexical) atoms
+(defSync (sbo& AtomMeta-SBO) (displify x)
+  (object->string x))
+
+(defSync (sbo& (meta Symbol)) (printify x)
+  (concat "'" x))
+
+(defSync (sbo& (meta Character)) (printify x)
+  (ch->printString x))
+
+(defSync (sbo& (meta Character)) (embedify x)
+  (ch->printString x))
+
+(defSync (sbo& (meta String)) (displify x) x)
+
+(defSync (sbo& (meta String)) (printify x)
+  (concat (StrQ) (str->printString x) (StrQ)))
+
+(defSync (sbo& (meta String)) (embedify x)
+  (concat (StrQ) (str->printString x) (StrQ)))
+
+(defSync (sbo& ExprMeta-SBO) (displify x)
+  (stringifyBody (self) x))
+
+(defSync (sbo& ExprMeta-SBO) (printify x)
+  (concat "'" (displify (self) x)))
+
+(defSync (sbo& (meta TupleExpr)) (stringifyEmbed x)
+  (stringifyBody (self) x))
+
+(defSync (sbo& (meta BlockExpr)) (stringifyEmbed x)
+  (stringifyBody (self) x))
+
+(defSync (sbo& (meta Tuple)) (displify x)
+  (concat "[" (stringifyBody (self) x) "]"))
+
+(defSync (sbo& (meta Tuple)) (stringifyBody x)
+  (free [itemTraverse]
+    (string-join 0 (Blank) (mapx x itemTraverse printify))))
+
+(defSync (sbo& (meta TupleExpr)) (displify x)
+  (concat "[" (stringifyBody (self) x) "]"))
+
+(defSync (sbo& (meta TupleExpr)) (restStringify r d)
+  (if (same? r '[])
+      d
+      (concat d
+	      (if (fx> (prim-size d) 0) " " "")
+	      "& "
+	      (embedify (meta r) r))))
+
+(defSync (sbo& (meta TupleExpr)) (stringifyBody x)
+  (free [itemTraverse]
+    (restStringify
+     (self) ('rest x)
+     (string-join 0 (Blank) (mapx x itemTraverse embedify)))))
+
+(defSync (sbo& (meta BlockExpr)) (displify x)
+  (concat "(block " (stringifyBody (self) x) ")"))
+
+(defSync (sbo& (meta BlockExpr)) (stringifyBody x)
+  (let [[xs ('sub-exprs x)]] (stringifyEmbed (meta xs) xs)))
+
+(defSync (sbo& (meta SeqExpr)) (displify x)
+  (concat "(seq " (stringifyBody (self) x) ")"))
+
+(defSync (sbo& (meta SeqExpr)) (stringifyBody x)
+  (let [[xs ('sub-exprs x)]] (stringifyEmbed (meta xs) xs)))
+
+(defSync (sbo& ExprMeta-SBO) (stringifyXmsn pfx tgt msg)
+  (concat pfx
+	  (displify (meta tgt) tgt)
+	    & (if (same? msg '[])
+		  [")"]
+		  [" " (stringifyEmbed (meta msg) msg) ")"])))
+
+(defSync (sbo& (meta RequestExpr)) (stringifyBody x)
+  (stringifyXmsn (self) "(" (lookup 'trgt x) ('msg x)))
+
+(defSync (sbo& (meta SendExpr)) (stringifyBody x)
+  (stringifyXmsn (self) "(send " (lookup 'trgt x) ('msg x)))
+
+(defSync (sbo& (meta IfExpr)) (stringifyBody x)
+  (let [[cnd ('condition x)]
+	[t-b ('true-branch x)]
+	[f-b ('false-branch x)]]
+    (concat "(if "
+	    (displify (meta cnd) cnd)
+	    (Blank)
+	    (displify (meta t-b) t-b)
+	    & (if (same? (meta EmptyExpr) (meta f-b))
+		  [")"]
+		  [" "
+		   (displify (meta f-b) f-b)
+		   ")"]))))
+
+(defSync (sbo& (meta QuoteExpr)) (stringifyBody x)
+  (let [[xpr ('expr x)]]
+    (printify (meta xpr) xpr)))
+
+(defSync (sbo& (meta SetExpr)) (stringifyBody x)
+  (let [[tgt (lookup 'trgt x)]
+	[val ('val x)]]
+    (concat "(set! "
+	    (displify (meta tgt) tgt)
+	    (Blank)
+	    (displify (meta val) val)
+	    ")")))
+
+(defSync (sbo& (meta GotoExpr)) (stringifyBody x)
+  (let [[lbl ('label x)]]
+    (concat "(goto " (displify (meta lbl) lbl) ")")))
+
+(defSync (sbo& ExprMeta-SBO) (stringifyForm pfx x y)
+  (concat pfx
+	  (displify (meta x) x)
+	  (Blank)
+	  (stringifyEmbed (meta y) y)
+	  ")"))
+
+(defSync (sbo& (meta FreeExpr)) (stringifyBody x)
+  (stringifyForm (self) "(free " ('id-list x) ('body x)))
+
+(defSync (sbo& (meta LabelExpr)) (stringifyBody x)
+  (stringifyForm (self) "(label " ('label x) ('body x)))
+
+(defSync (sbo& (meta LetExpr)) (stringifyBody x)
+  (stringifyForm (self) "(let " ('bindings x) ('body x)))
+
+(defSync (sbo& (meta LetrecExpr)) (stringifyBody x)
+  (stringifyForm (self) "(letrec " ('bindings x) ('body x)))
+
+(defSync (sbo& (meta MethodExpr)) (stringifyBody x)
+  (stringifyForm (self) "(method " ('formals x) ('body x)))
+
+(defSync (sbo& (meta ProcExpr)) (stringifyBody x)
+  (stringifyForm (self) "(proc " ('formals x) ('body x)))
+
+(defSync (sbo& (meta RMethodExpr)) (stringifyBody x)
+  (stringifyForm (self) "(rmethod " ('formals x) ('body x)))
+
+;;; DISPLAY
+(defSync (sbo& Meta-SBO) (display! x strm)
+  (display! strm (displify (self) x)))
+
+(seq
+ (defSync (display & items);; use current-stream
+   (sdisplay Printer (self) & items))
+
+ (defSync (sbo& (sbo Ostream)) (display & items)
+   (free [itemTraverse]
+     (display! (self)
+	       (concat & (mapx items itemTraverse displify))))))
+
+;;; PRINT
+(defSync (sbo& Meta-SBO) (print! x strm)
+  (display! strm (printify (self) x)))
+
+(seq
+ (defSync (print & items);; use current-stream
+   (sprint Printer (self) & items))
+
+ (defSync (sbo& (sbo Ostream)) (print & items)
+   (if (null? items)
+     (display! (self) "")
+     (free [itemTraverse]
+       (display! (self)
+	     (concat & (mapx items itemTraverse printify)))))))
+
+;;; EXAMINE
+(defOprn (sbo& AtomMeta-SBO) (examine! client strm) pure&
+  (display strm
+    "[" (kind client) ": Parent=" (parent client) ", value=" client "]\n"))
+
+(defOprn (sbo& Meta-SBO) (examine! client strm) pure&
+  (display strm
+    "[" (kind client) ": Parent=" (parent client)
+    ", Slots=" (contour (self) client) "]\n"))
+
+(defOprn (sbo& SBOMeta-SBO) (examine! client strm) pure&
+  (display strm
+    "[" (kind client) " SBO: Parent=" (parent client)
+    ", Slots=" (contour (self) client) "]\n"))
+
+(defOprn (sbo& ActorMeta-SBO) (examine! client strm) pure&
+  (display strm
+    "[" (kind client)
+    ": Parent=" (parent client) ", Mbox=" (mbox client)
+    ", Slots=" (contour (self) client) "]\n"))
+
+(defSync (examine)
+  (examine! (meta (self)) (self) stdout))
+
+(defSync (examine item) (sbo& (sbo Ostream))
+  (examine! (meta item) item (self)))

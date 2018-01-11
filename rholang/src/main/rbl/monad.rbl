@@ -1,0 +1,19 @@
+;; -*- mode: Lisp;-*- 
+;; Filename:    monad.rbl 
+;; Authors:     luciusmeredith                                                    
+;; Creation:    Thu Feb 23 18:16:25 2017 
+;; Copyright:   See site license 
+;; Description: Basic monads in Rosette
+;; ------------------------------------------------------------------------
+
+;; The monadic API
+(defOprn fmap)
+(defOprn unit)
+(defOprn mult)
+(defOprn flatMap)
+
+;; Tuples are monads
+(defPure Tuple (fmap f) (proc [ta] (mapx ta f)))
+(defPure Tuple (unit a) [a])
+(defPure Tuple (mult) (fold (self) (proc [e acc f] (concat acc (f e))) []))
+(defPure Tuple (flatMap f) (mult ((fmap (self) f) (self))))

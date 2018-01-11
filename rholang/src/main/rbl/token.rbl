@@ -1,0 +1,117 @@
+;;; Hand-compilation of token.rho with only the balance_of and translate method
+
+(define t (new NameSpace))
+
+(defOprn Token)
+(defOprn balance_of)
+(defOprn transfer)
+(defActor TokenContract (slots& allowed_channel 'allowed_channel balances_channel 'balances_channel owner_channel 'owner_channel)
+    (method (Token message_sender total_supply)
+        (seq
+            (block
+                (produce t allowed_channel **wildcard** (new RblTable))
+                (produce t owner_channel **wildcard** message_sender)
+                (let [[[bindings [rholang90300]] (consume t [balances_channel] [**wildcard**] ['balances])]]
+                    ((proc [balances]
+                        (produce t balances_channel **wildcard**
+                            (seq
+                                (tbl-add balances message_sender total_supply)
+                                balances
+                            )
+                        )
+                    ) rholang90300)
+                )
+                (produce t balances_channel **wildcard** (new RblTable))
+            )
+            (update!)
+        )
+    )
+    (method (balance_of _owner rtn)
+        (seq
+            (let [[[bindings [rholang28400]] (consume t [balances_channel] [**wildcard**] ['balances])]]
+                ((proc [balances]
+                    (block
+                        (produce t 'x **wildcard**
+                            (let [[balance (tbl-get balances _owner)]]
+                                balance
+                            )
+                        )
+                        (let [[[bindings [rholang239042]] (consume t ['x] [**wildcard**] ['balance])]]
+                            ((proc [balance]
+                                (produce t rtn **wildcard** balance)
+                                (produce t balances_channel **wildcard** balances)
+                            ) rholang239042)
+                        )
+                    )
+                ) rholang28400)
+            )
+            (update!)
+        )
+    )
+    (method (transfer message_sender to amount rtn)
+        (seq
+        (let [[[[rholangce98f5db024a] [rholange4b716992362]]
+                (consume t [balances_channel] [**wildcard**] ['balances])]]
+            ( (proc [[balances]]
+                (block
+                    (block
+                        (produce t 'x **wildcard** (get balances message_sender))
+                        (produce t 'y **wildcard**
+                            (let [[to_balance (get balances to)]] (if (= #absent to_balance) 0 to_balance))
+                        )
+                    )
+                    (let [[[[rholang0a44c6a74378 rholang0411cf5ddd15] [rholangdd2f96ef5fa0 rholangcf1541a304ae]]
+                            (consume t ['x 'y] [**wildcard** **wildcard**] ['balance_of_sender 'balances_of_receiver])]]
+                        ( (proc [[balance_of_sender balance_of_receiver]]
+                                (if (= [(>= balance_of_sender amount) (> amount 0) (> (+ balance_of_receiver amount) balance_of_receiver)] [#t #t #t])
+                                    (block (produce t balances_channel **wildcard** (insert (insert balances message_sender (- balance_of_sender amount)) to (+ balance_of_receiver amount))) (produce t rtn **wildcard** #t))
+                                    (block (produce t balances_channel **wildcard** balances) (produce t rtn **wildcard** #f))
+                                )) [rholangdd2f96ef5fa0 rholangcf1541a304ae])
+                    )
+                )) [rholange4b716992362]))
+        (update!)
+        )
+    )
+)
+
+(let [[[bindings [[rholang31 rholang32 rholang33]]] (consume t ['token] [**wildcard**] [['sender 'total_supply 'rtn]])]]
+    ((proc [[sender total_supply rtn]]
+        (let [[contract (new TokenContract)]]
+            (seq
+                (Token contract sender total_supply)
+                (produce t rtn **wildcard** contract)
+            )
+        )
+    ) [rholang31 rholang32 rholang33])
+)
+
+(produce t 'token **wildcard** ['me 100 'rtn])
+
+(let [[[bindings [rholang82380]] (consume t ['rtn] [**wildcard**] ['token_contract])]]
+    ((proc [token_contract]
+        (seq
+            (balance_of token_contract 'me 'balance_of_rtn)
+            (let [[[bindings [rholang5]] (consume t ['balance_of_rtn] [**wildcard**] ['balance])]]
+                ((proc [balance]
+                    (seq
+                        (p "Printing balance for 'me")
+                        (p balance)
+                        (display #\\n)
+                    )
+                ) rholang5)
+            )
+            (transfer token_contract 'me 'they 50 'unused)
+            (p "Transfering 50 from me to they")
+            (balance_of token_contract 'they 'balance_of_rtn)
+            (let [[[bindings [rholang7878778]] (consume t ['balance_of_rtn] [**wildcard**] ['balance])]]
+                ((proc [balance]
+                    (seq
+                        (p "Printing balance for 'they")
+                        (p balance)
+                        (display #\\n)
+                    )
+                ) rholang7878778)
+            )
+        )
+    ) rholang82380)
+)

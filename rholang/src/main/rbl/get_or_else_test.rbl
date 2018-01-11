@@ -1,0 +1,15 @@
+;;; Tests getOrElse in space.rbl
+
+;;; Output should be
+;;; 1
+;;; 0
+;;; 1
+
+(define x (new RblTable))
+(define y (new RblTable))
+(tbl-add x 'hi 1)
+(getOrElse x 'hi 0)
+(getOrElse x 'hi 'hello 0)
+(tbl-add x 'foo y)
+(tbl-add y 'bar 1)
+(getOrElse x 'foo 'bar 0)

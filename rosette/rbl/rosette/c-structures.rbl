@@ -1,0 +1,687 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+;;; general interface to support a tracing protocol
+
+(defProc (dipl & r)
+  (seq (mapx r (proc [x] (display x #\ )))
+       (display #\\n)))
+
+(defOprn Trace)
+(defOprn unTrace)
+
+;;; #########
+
+;;; C-structures.rbl
+
+;;; To Do:
+;;;
+;;; 	2) Integrate w/ foreign functions
+;;; 	3) Bitfields
+;;; 	4) Anonymous unions
+
+;;; This is version 2.0 of a package to support Rosette access to structures
+;;; (primarily) defined in libraries written in C on Unix systems.  The main
+;;; differences between this version and the previous are 1) this version
+;;; provides support for directly manipulating structures that have been
+;;; "malloc'ed"; and 2) full expressibility including embedded and arrays of
+;;; embedded structures are supported without having to flatten by hand.
+
+;;; The basic elements of this design are a tree of structure-descriptor
+;;; classes.  Descriptors are similar to C++ refs in behavior.
+;;; 
+;;; The basic operations are '. and ':=.  Each of these take a descriptor
+;;; and 0 or more selectors.  There are two distinguished selectors:
+;;; '^ and '@.  The denote respectively, de-referencing and referencing.
+;;; The '. operation denotes selection and ':= denotes assignment to a
+;;; field or entire object.  In C terms a structure copy is performed
+;;; when the LHS of an assignment is a structure descriptor.  The 's_free
+;;; operation performs a "shallow" free of a "top level" structure
+;;; and 's_free! performs a 's_free on each of its fields and then frees the
+;;; top-level structure.
+
+(defOprn (sbo& (sbo GenericDescriptor))
+  (F-access [access-oprn & r]) pure&
+  (access-oprn (self) 0 r))
+
+;;; the following expander just defines a comon pattern for deciding whether
+;;; to return a new instance of a descriptor or (self) based on whether
+;;; (self) is a top-level structure or not
+
+(defExpander (returnSelf e)
+  (e '(block (cupdate)
+	     (if (fx= base 0)
+		 (self)
+		 (new (self) (fx+ base (lookup 'offset! (self))))))
+     e))
+
+;;; declare the various operations that comprise the api.
+
+(defOprn ->value)
+
+(defSync isNull?)
+(defSlot Top isNull? #f)
+
+(defSync bnew)	;; used to request allocation of a structure in rosette heap
+		;; use with EXTREME caution until further notice.
+(defSync bnewN)
+
+(defOprn s_free)
+(defOprn s_free!)
+(defOprn s_free!!)
+
+(defOprn array)
+(defOprn array0)
+(defOprn ref)
+(defOprn ref0)
+
+;;; operations related to build new kinds of descriptors
+
+(defOprn align)
+(defSync gen-init)
+
+;;; operations for accessing descriptors
+
+(defOprn align-to)
+(defOprn nextOff)
+(defOprn offset)
+
+(define GD_Proto-SBO (new SBO 'GD_Proto-SBO (parent ByteVec)))
+
+(defOprn (sbo& GD_Proto-SBO) (->desc)
+  (let [[D (lookup 'protoOf (self))]]
+    (if (absent? D)
+	(RuntimeError (self) "no proto on ByteVec?" ->desc)
+	(let [[d (new D (saddr (self)))]]
+	  (seq (set mnemonic (self) d)
+	       (update!)
+	       d)))))
+
+;;; The descriptor class hierarchy is rooted at GenericDescriptor.
+
+;;; For any descriptor, align-to! reflects what the base address of
+;;; the describe entity must be = 0 modulo align-to!
+
+;;; For any descriptor, offset! is the beginning byte of the area allocated
+;;; to the described entity from the base of the top-most containing
+;;; entity.
+
+;;; For any descriptor, size! is the number of bytes that are consumed by
+;;; the described entity exclusive of any padding.
+
+;;; align is the external interface to invoke the method for computing
+;;; the padding needed from the given offset to the actual start
+;;; of the described entity.
+
+;;; The offset for the next (if any) entity is the given offset plus the
+;;; the "native" size of the described entity.
+
+(defSlot (sbo GenericDescriptor) 'tracing? #f)
+
+(defMethod GenericDescriptor (gen id & args)
+  (let [[n-sbo (new SBO id (sbo (self)))]]
+    (seq (bindings: kind n-sbo)
+	 (add-child (sbo (self)) n-sbo)
+	 (gen-init (parent: (clone (self)) n-sbo) & args))))
+
+(defMethod GenericDescriptor (new & off?)
+  (init (clone (self))
+	(if (null? off?)
+	    ;; then malloc a memory area use the address as the offset! in
+	    ;; a clone of (self)
+	    (let [[base (malloc (lookup 'size! (self)))]]
+	      (if (fx= base 0)
+		  (RuntimeError (self) "malloc failed ...")
+		  base))
+	    ;; off? is the offset! within a containing structure
+	    (head off?))))
+
+(defMethod GenericDescriptor (newN n)
+  (init (clone (self))
+	;; malloc a memory area for n instances of (self)
+	;; and clone (self)
+	(let [[base (malloc (fx* n (lookup 'size! (self))))]]
+	  (if (fx= base 0)
+	      (RuntimeError (self) "malloc failed in newN")
+	      base))))
+
+(defSync (sbo& (sbo GenericDescriptor)) (bvSbo)
+  (let [[sbo (new SBO (concat (kind (self)) 'Proto) GD_Proto-SBO)]]
+    (seq (add bvSbo sbo (parent (self)))
+	 (add 'protoOf (self) sbo)
+	 sbo)))
+
+(defMethod GenericDescriptor (bnew)
+  (let* [[bv (tenured-bytevec-new ByteVec (lookup 'size! (self)))]
+	 [sbo    (bvSbo (self))]]
+    (seq (parent: bv sbo)
+	 bv)))
+
+(defMethod GenericDescriptor (bnewN n)
+  (let* [[bv (tenured-bytevec-new ByteVec (fx* n (lookup 'size! (self))))]
+	 [sbo    (bvSbo (self))]]
+    (seq (parent: bv sbo)
+	 bv)))
+
+(defOprn (sbo& (sbo GenericDescriptor)) (cast what)
+  (if (type? ByteVec what)
+      (let* [[sbo (bvSbo (self))]]
+	(seq (parent: what sbo)
+	     (update!)
+	     what))
+      (RuntimeError (self) "not a ByteVec in cast" what)))
+
+(defMethod GenericDescriptor (init o)
+  (free [align! tracing?]
+    (seq (if tracing?
+	     (display (self) " initing at offset: " o #\\n))
+	 (update! 'offset! (fx+ o (align! o)))
+	 (self))))
+
+(defMethod GenericDescriptor (s_free)
+    (free [tracing?]
+      (seq (if tracing? ("freeing " (self) #\\n))
+	   (if (niv? mnemonic)
+	       (u_free (lookup 'offset! (self))))
+	   (update! 'offset! 0))))
+
+(defMethod GenericDescriptor (= base [v & r])
+    (and (sub-typep GenericDescriptor v)
+	 (same? (lookup 'offset! (self)) (offset v))))
+
+(defLocal GenericDescriptor (align! o)
+    (let [[p (fx- (lookup 'align-to! (self)) (fx% o (lookup 'align-to! (self))))]]
+      (if (fx= p (lookup 'align-to! (self))) 0 p)))
+(defPure GenericDescriptor (align x)
+    (free [align!] (align! x)))
+(defPure GenericDescriptor (align-to) (lookup 'align-to! (self)))
+
+(defPure GenericDescriptor (offset)   (lookup 'offset! (self)))
+(defPure GenericDescriptor (size)     (lookup 'size! (self)))
+(defPure GenericDescriptor (nextOff)
+  (fx+ (lookup 'offset! (self)) (lookup 'size! (self))))
+
+(defOprn (sbo& (sbo GenericDescriptor)) (zero) pure&
+  (u_bzero (offset (self)) (size (self))))
+
+(defOprn (sbo& (sbo GenericDescriptor)) flatten prim-flatten)
+
+(defMethod GenericDescriptor (->value)
+  (seq (update!) (flatten (self) 0)))	 	 	 
+
+(defPure GenericDescriptor (Trace)
+  (free [tracing?]
+    (set tracing? (not tracing?) (sbo GenericDescriptor))))
+
+;;; The NullDescriptor class represents the root of the hierarchy of
+;;; objects representing null instances of the various types rooted
+;;; at GenericDescriptor.  The primary use of these types is to
+;;; represent occurrences of null pointers to various types.
+;;;
+;;; An expression of the form:
+;;;
+;;; 	(null <descriptor>)
+;;;
+;;; will return the unique null descriptor for <descriptor>.  Null
+;;; descriptors are created in a lazy manner so if the null descriptor
+;;; for a type is never referenced it is never created.  Once referenced
+;;; it is created and cached for all future references.
+
+(defMethod NullDescriptor (new o) (self));; ensures a unique null for each type
+(defPure NullDescriptor (->value) (self))  
+(defPure NullDescriptor (nth & r) (RuntimeError (self) "Cannot index " r))
+    
+
+(defSlot (sbo GenericDescriptor) isNull? #f)
+(defSlot (sbo NullDescriptor) isNull? #t)
+
+(defMethod GenericDescriptor (null)
+  (let [[[s p] (gen Actor
+		    (concat 'Null (kind (self)))
+		    (sbo NullDescriptor))]]
+    (seq (add null p (sbo (self)))
+;;	 (update!)
+	 p)))
+
+;;; the subclass AtomicDescriptor applies to all basic machine entities.
+;;; It includes the basic alignment requirements for the various archs
+
+(defMethod AtomicDescriptor (gen-init sz a2 sg)
+  (update size! sz signed! sg align-to! a2)
+  (self))
+
+(defExpander (defAtomic e)
+  (let [[[id vals] (split msg 1)]]
+    (RX 'add
+	(Q id)
+	(RX 'gen 'AtomicDescriptor (Q id) & (->tuple vals)))))
+
+;;; CStructure descriptors have a table of fieldName descriptor pairs
+
+(defOprn insert-descs)
+
+(defLocal CStructure (insert-descs! tbl dFn-pairs)
+  (free [align!]
+    (iterate loop [[sz 0] [fNs []] [[d fN & r] dFn-pairs]]
+      (let* [[fNs (rcons fNs fN)]
+	     [dd  (new d sz)]
+	     [sz  (fx+ (offset dd) (size dd))]]
+	(if (absent? (tbl-get tbl fN))
+	    (seq (tbl-add tbl fN dd)
+		 (if (null? r)
+		     [tbl fNs (fx+ sz (align! sz))]
+		     (loop sz fNs r)))
+	    (RuntimeError (self) "duplicate field name " (Q fN)))))))
+
+(defMethod CStructure (insert-descs dFn-pairs)
+  (free [insert-descs!]
+    (seq (if (null? dFn-pairs)
+	     (update! 'descs #niv)
+	     (let [[[tbl fNs sz] (insert-descs! (new RblTable) dFn-pairs)]]
+	       (update! 'descs tbl 'fieldNames fNs 'size! sz)))
+	 (self))))
+
+(defMethod CStructure (gen-init)
+  (update)
+  (self))
+
+(set align-to! (long-align *config*) CStructure)
+
+;;; Expanders for defining new CStructures.  The 'structure expander is used
+;;; to define "anonymous" structure descriptors.  The 'defStructure
+;;; expander is used to create a global binding for a structure descriptor.
+;;;
+;;; The general form of a structure construction is:
+;;;
+;;; 	(structure <structure id> {<descriptor> <field id>}*)
+;;;
+;;; where <descriptor> is any expression evaluating to an object that is
+;;; descended from GenericDescriptor.  The above form permits self
+;;; reference in structure descriptions via the 'ref class of descriptors:
+;;;
+;;; 	(structure LinkNode long elem (ref LinkNode) next)
+;;;
+;;; The form of 'defStructure is:
+;;;
+;;; 	(defStructure <structure id> {<descriptor> <field id>}*)
+;;;
+;;; which expands to:
+;;;
+;;; 	(define <structure id> (structure <structure id> ...))
+;;;
+;;; so that <structure id> is bound in the global environment to the
+;;; result of evaluating the (structure ...).
+;;;
+;;; Mutually recursive structure definitions are permitted via forward
+;;; declarations:
+;;;
+;;; 	(defStructure Foo) (defStructure Bar)
+;;; 	(defStructure Foo (ref Bar) b)
+;;;	(defStructure Bar (ref Foo) f)
+
+(defExpander (structure e)
+  (let* [[[id d/ks] (split msg 1)]
+	 [[ds ks]   (unzip (->tuple d/ks))]
+	 [dFn-pairs (zip ds (mapx ks Q))]]
+    (e (new LetExpr
+	    (TX (TX id (new LetExpr
+			    (TX (TX 'ob (RX 'lookup (Q id))))
+			    (new IfExpr
+				 (RX 'or
+				     '(absent? ob)
+				     ;; really should check that ob is
+				     ;; a descendant of CStructure !!
+				     (RX 'not (RX 'same? (Q id) '(kind ob)))
+				     '(not (niv? ('descs ob))))
+				 (RX 'gen 'CStructure (Q id))
+				 'ob))))
+	    (RX 'insert-descs id (TX & dFn-pairs)))
+       e)))
+
+(defExpander (defStructure e)
+  (let [[[id d/ks] (split msg 1)]]
+    (e (RX 'define id (new RequestExpr 'structure msg)) e)))
+
+;;; Expanders for expressing selections over CStructures (and CArrays).
+;;; These expanders handle `.', `@', `^', and `:='.  The general strategy is
+;;; to flatten sequences of selection for the purposes of taking addresses,
+;;; accessing values, and setting fields (or whole CStructures or CArrays),
+;;; into a single tuple of selectors so that they maybe handed to S-desc,
+;;; S-get, or S-set as a single argument.  This will permit the entire
+;;; sequence of selection to be performed "atomically" within the various
+;;; S-<op>s so that intermediate structure will not be generated and so
+;;; that the entire process can take place within a single C++ instruction
+;;; stream invoked via a Rosette "prim".
+
+(defOprn (Q-Symb e) (sbo& Top) pure&
+  [(e (self) e)])
+
+(defOprn (Q-Symb e) (sbo& (sbo Symbol)) pure&
+  (cond ((same? (self) '.)  ['S-get])
+	((same? (self) '@)  ['S-desc])
+	((same? (self) '^)  ['S-deref])
+	(else		    ['select (Q (self))])))
+
+(defOprn (Q-Symb e) (sbo& (sbo TupleExpr)) pure&
+  (e ['nth (head (self))] e))
+
+(defOprn (select-expand e) [(e (self) e)])
+
+(defPure RequestExpr (select-expand e)
+  (cond ((same? trgt '.)
+	 (let [[[tg r] (split msg 1)]]
+	   (concat (select-expand tg e)
+		   & (mapx (->tuple r) Q-Symb e))))
+	((same? trgt '@)
+	 (let [[[trgt r] (split msg 1)]]
+	   (rcons (concat (select-expand trgt e)
+			  & (mapx (->tuple r) Q-Symb e))
+		  'S-desc)))
+	((same? trgt '^)
+	 (let [[[trgt r] (split msg 1)]]
+	   (rcons (concat (select-expand trgt e)
+			  & (mapx (->tuple r) Q-Symb e))
+		  'S-deref)))
+	((same? trgt ':=)
+	 (let* [[[trgt r] (split msg 1)]
+		[sels     (sub-obj r 0 (fx- (size r) 1))]
+		[val      (nth r (fx- (size r) 1))]]
+	   (concat (concat (select-expand trgt e)
+			   & (mapx sels Q-Symb e))
+		   ['S-set (e val e)])))
+	(else
+	 [(e (self) e)])))
+
+(defExpander (. e)
+  (let* [[[trgt r] (split msg 1)]
+	 [[tg & sels] (concat (select-expand trgt e)
+			      & (mapx (->tuple r) Q-Symb e))]]
+    (RX 'F-access tg (TX & (rcons sels 'S-get)))))
+
+(defExpander (@ e)
+  (let* [[[trgt r] (split msg 1)]
+	 [[tg & sels] (concat (select-expand trgt e)
+			      & (mapx (->tuple r) Q-Symb e))]]
+    (RX 'F-access tg (TX & (rcons sels 'S-desc)))))
+
+(defExpander (^ e)
+  (let* [[[trgt r] (split msg 1)]
+	 [[tg & sels] (concat (select-expand trgt e)
+			      & (mapx (->tuple r) Q-Symb e))]]
+    (RX 'F-access tg (TX & (rcons sels 'S-deref)))))
+
+(defExpander (:= e)
+  (let* [[[trgt r] (split msg 1)]
+	 [sels     (sub-obj r 0 (fx- (size r) 1))]
+	 [val      (nth r (fx- (size r) 1))]
+	 [[tg & s2]  (concat (select-expand trgt e)
+			     & (mapx sels Q-Symb e))]]
+    (RX 'F-access tg (TX & (concat s2 ['S-set (e val e)])))))
+
+;;; A CArray descriptor consists of a number of elements, an element
+;;; descriptor, and an offset for the array from the base of a (potentially)
+;;; containing structure or memory 0.
+;;; 
+;;; The alignment requirement of an AD is that of its elemDesc.
+
+(defMethod CArray (gen-init n)
+  (seq (update! 'size!     (fx* n (size elemDesc))
+		'numElems  n)
+       (self)))
+
+;;; the following ensures there is a unique array sbo for any given
+;;; descriptor.  This is so that the user can put methods specific to,
+;;; for example (array char ?) on the (sbo (array char ?)) and they will
+;;; be accessible across all uses of (array char ?) any where in the system.
+;;;
+;;; The first time that an array descriptor is built for a descriptor,
+;;; the prototype for the array descriptor is cached in the sbo of the
+;;; descriptor for which the array desc is being created.  Subsequent uses
+;;; of the construct (array <desc> ?) simply clone the prototype and call
+;;; gen-init to initialize the number of elements info.
+
+(defPure GenericDescriptor (array n)
+  (let* [[proto1 (lookup 'array-desc (self))]
+	 [proto2 (if (absent? proto1)
+		     (let [[proto3 (gen CArray
+					(concat (kind (self)) 'Array) 0)]]
+		       (seq (add 'array-desc proto3 (sbo (self)))
+			    (set elemDesc (self) proto3)
+			    (set align-to! (lookup 'align-to! (self)) proto3)
+			    proto3))
+		     proto1)]
+	 [answer (gen-init (clone proto2) n)]]
+    answer))
+
+(add 'array-desc CharArray (parent Char))
+(set elemDesc Char CharArray)
+(set align-to! (char-align *config*) CharArray)
+
+(defPure GenericDescriptor (array0 n)
+  (let* [[proto1 (lookup 'array0-desc (self))]
+	 [proto2 (if (absent? proto1)
+		     (let [[proto3 (gen CArray
+					(concat (kind (self)) 'Array) 0)]]
+		       (seq (add 'array0-desc proto3 (sbo (self)))
+			    (set elemDesc (self) proto3)
+			    (set align-to! (lookup 'align-to! (self)) proto3)
+			    proto3))
+		     proto1)]
+	 [answer (gen-init (clone proto2) n)]]
+    answer))
+
+(add 'array0-desc CharArray0 (parent Char))
+(set elemDesc Char CharArray0)
+(set align-to! (char-align *config*) CharArray0)
+
+;;; CRef objects are used to model pointers to pointers.
+;;;
+;;; (fx+ base offset!) is the location of an address that points to an
+;;; object of type 'desc.  It should be noted that other kinds of
+;;; descriptors are references in their own right.  Thus dereferencing a
+;;; (ref Foo) gives a Foo which is represented in Rosette as a descriptor
+;;; with the address of a Foo in it.  The case of null references is
+;;; handled via NullDescriptors.
+;;;
+;;; S-deref returns an instance of desc, which may be (null desc).  S-set
+;;; sets the ref itself to point to the val passed in if it is of type desc,
+;;; or sets the ref to point to the same object as val if val is (ref desc),
+;;; or sets the location of ref to 0 if it is (null desc).
+
+(defMethod CRef (gen-init d)
+  (update desc d)
+  (self))
+
+(set size! (long-sz *config*) CRef)
+(set align-to! (long-align *config*) CRef)
+
+(defMethod GenericDescriptor (ref)
+  (let [[proto1 (lookup 'ref-desc (self))]]
+    (if (absent? proto1)
+	(let [[proto2 (gen CRef (concat (kind (self)) 'Ref) (self))]]
+	  (seq (add 'ref-desc proto2 (sbo (self)))
+	       (update!)
+	       proto2))
+	(block (cupdate) proto1))))
+
+;;; CRef0 objects are intended to model C types of the form:
+;;;
+;;; 	<type>* x;
+;;;
+;;; where the usage is as a null terminated array of instances of <type>
+
+(set size! (long-sz *config*) CRef0)
+(set align-to! (long-align *config*) CRef0)
+
+(defMethod GenericDescriptor (ref0)
+  (let [[proto1 (lookup 'ref0-desc (self))]]
+    (if (absent? proto1)
+	(let [[proto2 (gen CRef0 (concat (kind (self)) 'Ref0) (self))]]
+	  (seq (add 'ref0-desc proto2 (sbo (self)))
+	       (update!)
+	       proto2))
+	(block (cupdate) proto1))))
+
+;;; An instance of CUnion descriptor includes a table of descriptors
+;;; indexed by a union name.
+
+(defLocal CUnion (insert-descs! tbl dFn-pairs)
+  (free [align!]
+    (iterate loop [[sz 0] [fNs []] [[d fN & r] dFn-pairs]]
+      (let* [[fNs (rcons fNs fN)]
+	     [dd  (new d 0)]
+	     [sz  (fx-max sz (size dd))]]
+	(if (absent? (tbl-get tbl fN))
+	    (seq (tbl-add tbl fN dd)
+		 (if (null? r)
+		     [tbl fNs sz]
+		     (loop sz fNs r)))
+	    (RuntimeError
+	     (self) "duplicate field names in CUnion ..." fN))))))
+
+(defMethod CUnion (gen-init dFn-pairs)
+  (free [insert-descs!]
+    (seq (if (null? dFn-pairs)
+	     (RuntimeError (self) "Empty CUnion specification.")
+	     (let [[[tbl fNs sz] (insert-descs! (new RblTable) dFn-pairs)]]
+	       (update! 'descs tbl 'fieldNames fNs 'size! sz)))
+	 (self))))
+
+(set align-to! (long-align *config*) CUnion)
+
+;;; expanders to define new CUnions.  The 'union expander can be used to
+;;; generate a new union descriptor. The 'defUnion expander binds a union
+;;; descriptor in the global environment.
+
+(defExpander (union e)
+  (let* [[[id d/ks] (split msg 1)]
+	 [[ds ks]   (unzip (->tuple d/ks))]
+	 [dFn-pairs (zip ds (mapx ks Q))]]
+    (e (RX 'gen 'CUnion (Q id) (TX & dFn-pairs)) e)))
+
+(defExpander (defUnion e)
+  (let [[[id d/ks] (split msg 1)]]
+    (RX 'add (Q id) (e (new RequestExpr 'union msg) e))))
+
+;;; specializations of AtomicDescriptor and associated typedefs/synonyms
+
+(defAtomic U_Char  (char-sz *config*)  (char-align *config*) #f)
+
+(set size! (char-sz *config*) Char)
+(set align-to! (char-align *config*) Char)
+(set signed! #t Char)
+
+(add 'ref-desc CharRef (parent Char))
+(set size! (long-sz *config*) (ref Char))
+(set align-to! (long-align *config*) (ref Char))
+(set desc Char (ref Char))
+
+(add 'ref0-desc CharRef0 (parent Char))
+(set size! (long-sz *config*) (ref0 Char))
+(set align-to! (long-align *config*) (ref0 Char))
+(set desc Char (ref0 Char))
+
+(defAtomic U_Short  (short-sz *config*)  (short-align *config*) #f)
+(defAtomic Short    (short-sz *config*)  (short-align *config*) #t)
+
+(defAtomic U_Long  (long-sz *config*)  (long-align *config*) #f)
+(defAtomic Long    (long-sz *config*)  (long-align *config*) #t)
+
+;;; we define Int separately from Long since apparently C permits a
+;;; different treatment of size info for Int from Long.
+
+(defAtomic Int     (long-sz *config*)  (long-align *config*) #t)
+
+;;; synonyms for atomic fields for use in transliterating C structure
+;;; definitions
+
+(define char	Char)
+(define uchar	U_Char)
+(define u_char	U_Char)
+(define short	Short)
+(define ushort	U_Short)
+(define u_short U_Short)
+(define int	Int)
+(define long    Long)
+(define ulong   U_Long)
+(define u_long  U_Long)
+(define float   U_Long)
+
+;;; some more useful UNIX typedefs
+
+(define ino_t	u_long)
+(define swblk_t	long)
+(define size_t	int)
+(define time_t	long)
+(define dev_t	short)
+(define off_t	int)
+(define key_t	long)
+
+(defOprn string->)
+(defOprn genSize)
+
+;;; the following assume that the descriptor was generated as an absolute
+;;; descriptor relative to memory 0.
+
+(defMethod char (->string)
+  (char*->string (lookup 'offset! (self)))
+  (cupdate))
+
+(defMethod char (genSize)
+  (cupdate)
+  (strlen (lookup 'offset! (self))))
+
+(defPure char (string-> s)
+  (prim-string-> (lookup 'offset! (self)) s))
+
+(defOprn (sbo& Top) (eqv? x) pure& (same? (self) x))
+
+(defPure GenericDescriptor (eqv? x)
+  (fx= (offset (self)) (offset x)))
+
+;; maybe this should go in io-system.rbl
+(defOprn (sbo& GenericDescriptorMeta-SBO) (examine! client strm) pure&
+  (display strm
+    #\{ (kind client)
+    ": Parent=" (parent client) ", Mbox=" (mbox client)
+    ", Slots=" (contour (self) client) "}\n"))
+
+(defOprn coerce)
+
+(defPure GenericDescriptor (coerce d) (new d (offset (self))))
+
+(defOprn (proto& GenericDescriptor) (sbo& (sbo GenericDescriptor))
+  (->vector tpl) pure&
+  (if (null? tpl)
+      (null (self))
+      (let* [[the-null (null (self))]
+	     [s (size tpl)]
+	     [avn (newN (self) (+ s 1))]
+	     [avr (new (ref (self)))]]
+	(iterate loop [[index 0]]
+	  (if (= index s)
+	      (seq (:= avn [index] the-null)
+		   (:= avr avn)
+		   avr)
+	      (seq (:= avn [index] (nth tpl index))
+		   (loop (+ index 1))))) )))

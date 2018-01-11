@@ -1,0 +1,20 @@
+;;; Rosette output of hello_world_again.rho
+
+(let [[helloworld (generateFresh "helloworld")]]
+    (block
+        ( (proc [] (run (compile
+            (let [[[[Rholang2501393da393] [Rholang247344c1eddc]]
+                    (consume t [helloworld] [**wildcard**] ['world] #t)]]
+                ( (proc [world]
+                    (let [[[[Rholang28b8f56b03ee] [Rholangd82cfb24dc8b]]
+                            (consume t [world] [**wildcard**] ['msg] #f)]]
+                        ( (proc [[msg]]
+                            (seq (print msg) (display #\\n)))
+                    [Rholangd82cfb24dc8b])))
+            Rholang247344c1eddc))))))
+        (let [[world (generateFresh "world")] [world2 (generateFresh "world2")]]
+            (block (block (block
+                (produce t helloworld **wildcard** world)
+                (produce t world **wildcard** "Hello World"))
+                (produce t helloworld **wildcard** world2))
+                (produce t world2 **wildcard** "Hello World again")))))

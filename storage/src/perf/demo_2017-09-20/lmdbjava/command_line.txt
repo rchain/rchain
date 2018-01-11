@@ -1,0 +1,35 @@
+$ ls -l
+total 2552
+-rw-r--r-- 1 griff griff    2056 Sep 11 19:22 command_line_2.txt
+-rw-r--r-- 1 griff griff   13429 Sep 11 18:17 command_line.txt
+-rw-r--r-- 1 griff griff 2575022 Sep  1 11:06 guava-22.0.jar
+-rw-r--r-- 1 griff griff    4254 Sep 11 19:22 KeyValueStore.scala
+-rw-r--r-- 1 griff griff    7883 Sep 11 18:27 KvsLmdbTest.scala
+
+$ scalac -classpath /home/griff/.ivy2/cache/org.lmdbjava/lmdbjava/jars/lmdbjava-0.0.2.jar KeyValueStore.scala
+
+$ ls -l
+total 2556
+-rw-r--r-- 1 griff griff    2393 Sep 11 19:22 command_line_2.txt
+-rw-r--r-- 1 griff griff   13429 Sep 11 18:17 command_line.txt
+-rw-r--r-- 1 griff griff 2575022 Sep  1 11:06 guava-22.0.jar
+drwxr-xr-x 2 griff griff    4096 Sep 11 19:23 KeyValueStore
+-rw-r--r-- 1 griff griff    4254 Sep 11 19:22 KeyValueStore.scala
+-rw-r--r-- 1 griff griff    7883 Sep 11 18:27 KvsLmdbTest.scala
+
+$ scalac -classpath /home/griff/.ivy2/cache/org.lmdbjava/lmdbjava/jars/lmdbjava-0.0.2.jar:/home/griff/Documents/kvs/2017-09-11_1_lmdbjava_perf -sourcepath /home/griff/Documents/kvs/2017-09-11_1_lmdbjava_perf KvsLmdbTest.scala
+
+$ ls -l
+total 2568
+-rw-r--r-- 1 griff griff    2902 Sep 11 19:23 command_line_2.txt
+-rw-r--r-- 1 griff griff   13429 Sep 11 18:17 command_line.txt
+-rw-r--r-- 1 griff griff 2575022 Sep  1 11:06 guava-22.0.jar
+drwxr-xr-x 2 griff griff    4096 Sep 11 19:23 KeyValueStore
+-rw-r--r-- 1 griff griff    4254 Sep 11 19:22 KeyValueStore.scala
+-rw-r--r-- 1 griff griff    2043 Sep 11 19:35 KvsLmdbTest.class
+-rw-r--r-- 1 griff griff    7763 Sep 11 19:35 KvsLmdbTest$.class
+-rw-r--r-- 1 griff griff    7883 Sep 11 18:27 KvsLmdbTest.scala
+
+
+$ scala -classpath /home/griff/Documents/kvs/2017-09-11_1_lmdbjava_perf/target/scala-2.12/classes:/home/griff/.ivy2/cache/org.lmdbjava/lmdbjava/jars/lmdbjava-0.0.2.jar:/home/griff/.ivy2/cache/com.github.jnr/jnr-ffi/jars/jnr-ffi-2.0.9.jar:/home/griff/.ivy2/cache/com.github.jnr/jffi/jars/jffi-1.2.11.jar:/home/griff/.ivy2/cache/com.github.jnr/jffi/jars/jffi-1.2.11-native.jar:/home/griff/.ivy2/cache/org.ow2.asm/asm/jars/asm-5.0.3.jar:/home/griff/.ivy2/cache/org.ow2.asm/asm-commons/jars/asm-commons-5.0.3.jar:/home/griff/.ivy2/cache/org.ow2.asm/asm-tree/jars/asm-tree-5.0.3.jar:/home/griff/.ivy2/cache/org.ow2.asm/asm-analysis/jars/asm-analysis-5.0.3.jar:/home/griff/.ivy2/cache/org.ow2.asm/asm-util/jars/asm-util-5.0.3.jar:/home/griff/.ivy2/cache/com.github.jnr/jnr-x86asm/jars/jnr-x86asm-1.0.2.jar:/home/griff/.ivy2/cache/com.github.jnr/jnr-constants/jars/jnr-constants-0.9.2.jar:/home/griff/.ivy2/cache/com.jakewharton.byteunits/byteunits/jars/byteunits-0.9.1.jar:/home/griff/.ivy2/cache/org.deephacks.lmdbjni/lmdbjni-linux64/jars/lmdbjni-linux64-0.4.7.jar:/home/griff/.ivy2/cache/org.deephacks.lmdbjni/lmdbjni/jars/lmdbjni-0.4.7.jar:. KvsLmdbTest
+

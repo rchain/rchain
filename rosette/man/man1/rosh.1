@@ -1,0 +1,60 @@
+.TH ROSH 1 "20 January 1993"
+.SH NAME
+rosh \- Shell configuration of Rosette
+.SH SYNOPSIS
+.in +.5i
+.ti -.5i
+.B rosh
+\%[\-help\0{\fIflag\fR}]
+\%[\-nodocs]
+\%[\-load\0\fIfilename\fR]
+\%[\-prompt\0\fIstring\fR]
+.SH DESCRIPTION
+The \fIrosh\fR program is a configuration of \fIrosette\fR that provides
+interfaces to many common Unix system calls.
+.PP
+The \fIrosh\fR runs on Sun3, Sun4, HP700/800, Dec5100, Silicon
+Graphics, and 386/486 System V Release 4 platforms.
+To terminate \fIrosh\fR enter \fB(quit)\fR or \fB(exit)\fR.
+.PP
+The `\-help' flags lists the available flags.  If an optional \fIflag\fR is
+mentioned then a brief explanation of the \fIflag\fR is displayed.
+.PP
+The `\-nodocs' flag suppresses the retention of on-line documentation.
+.PP
+The `\-load' flag directs \fIrosh\fR to load a \fB.rbl\fR before
+performing any restart processing.
+.PP
+The `\-prompt' flag takes a \fIstring\fR which becomes the prompt for the
+\fIrosh\fR console listener.  It is usually used when building a
+new configuration to set the default prompt for the configuration.
+.SH FILES
+.nf
+.ta \w'\fImodule\fR.rbl  'u
+\fIfile\fR.rbl	external program definitions
+\fIfile\fR.module	module definition of other modules and files
+.re
+.fi
+.SH "SEE ALSO"
+rosette(1), ess(1),
+.br
+\fIThe Rosette Chronicles: A User's Manual\fR: Dallas Webster,
+.br
+\fIThe Rosette 1.1 Report\fR
+.SH AUTHORS
+Christine Tomlinson, Greg Meredith, Darrell Woelk, Greg Lavender:
+.br
+Projet Carnot - MCC
+.br
+
+.br
+Mark Scheevel:
+.br
+UNISQL
+.SH BUGS
+Occasionally Rosette demonstrates its untoward independence by
+producing a seg fault or bus error if provoked through the foreign
+language interface or a very rare garbage collection error.
+.PP
+Eventually Rosh should use POSIX compliant definitions for its shell
+interface.

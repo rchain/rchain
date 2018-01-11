@@ -1,0 +1,12 @@
+// A contract that logs the current time to two files
+// This demonstrates the ability to instantiate
+// two contract instances in the same session
+// and the use of a primitive (log-time) in Rholang.
+
+new time_contract in {
+	contract time_contract(stream) = {
+        log-time(stream)
+	} |
+	time_contract!(ostream-new("test.txt")) |
+	time_contract!(ostream-new("test2.txt"))
+}

@@ -1,0 +1,55 @@
+###############################################################################
+#
+# $Header: /mcc/project/carnot/root/master/pub-ess/isode/config/entities.local,v 1.1.1.1 1993/02/12 01:26:06 tomlic Exp $
+#
+#
+# $Log: entities.local,v $
+# Revision 1.1.1.1  1993/02/12  01:26:06  tomlic
+# pub release of rosette
+#
+# Revision 1.2  1993/01/19  21:01:29  carnot
+# Touch up for release 2.0
+#
+# Revision 9.0  1992/06/16  12:11:35  isode
+# Release 8.0
+#
+# 
+###############################################################################
+
+
+# templates for local services: 1.17.4.1
+#	local additions go here...
+
+# Rosette Virtual Machine listens on TSEL 1025 and TCP Port 17050
+# by default
+
+default		"sag rda called"	1.3.9999.9579.1.6	#1025/
+
+default		"sag dec called"	1.3.9999.9579.1.6	#1/
+
+default		"sag ncr called"	1.3.9999.9579.1.6	'5301'H/
+
+default		"rosette miscellany"	1.17.4.1.0.1	#1025/
+default		"rosette passwdstore"	1.17.4.1.0.2	#1025/
+
+#
+# Host addresses
+#
+
+# Example OSI host entry
+
+your-osi-host	default		NULL \
+		NS+4900010000c085291cfe01
+
+# Example TCP host entry
+
+your-tcp-host	default		NULL \
+		Internet=your-tcp-host.com+17050
+
+#	local additions end here (do not remove this line)
+
+
+# examples of specific services: 1.17.4.2
+#	this section is empty
+
+

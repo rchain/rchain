@@ -1,0 +1,59 @@
+# /etc/init.d/quipu - start/stop Quipu (X.500)
+#
+# /etc/init.d/quipu is linked (ln) to the following files
+#
+# 	/etc/rc0.d/K30quipu
+#	/etc/rc2.d/S70quipu
+#
+# Revision History:
+# 11/30/90	G. Lavender, Networks One	Initial coding
+# 11/21/91	G. Lavender, MCC		separated from isode
+#
+
+USAGE="Usage: $0 {start | stop}"
+PATH=/bin:/usr/bin
+SBIN=/usr/local/sbin
+AWK=awk
+GREP=egrep
+
+TAILOR=/usr/isode/etc/quipu/caracara/quiputailor
+
+case "$1" in
+start)
+	echo "Starting X.500 services:\c"
+
+	# start QUIPU service
+
+	if [ -x $SBIN/ros.quipu -a -z "`ps -e | $GREP 'ros.quip'`" ]
+	then
+		$SBIN/ros.quipu -t $TAILOR >/dev/null 2>&1
+		echo " quipu\c"
+	fi
+
+	if [ -x $SBIN/dased -a -z "`ps -e | $GREP 'dased'`" ]
+	then
+		$SBIN/dased >/dev/null 2>&1
+		echo " dased\c"
+	fi
+
+	echo "."	# echo newline
+	;;
+
+stop)
+	# kill services
+
+	pids=`ps -e | $GREP 'dased|ros.quip' | $AWK '{print $1}'`
+	if [ ! -z "${pids}" ]
+	then
+		kill ${pids}
+	fi
+
+	echo "X.500 services stopped."
+	;;
+*)
+	echo $USAGE
+	exit 1
+	;;
+esac
+
+

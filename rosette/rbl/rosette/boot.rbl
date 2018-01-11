@@ -1,0 +1,719 @@
+;;; Mode: -*- RBL -*-
+;;; @BC
+;;;		                Copyright (c) 1993
+;;;	    by Microelectronics and Computer Technology Corporation (MCC)
+;;;				All Rights Reserved
+;;;
+;;;	Permission to use, copy, modify, and distribute this software and its
+;;;	documentation for any purpose and without fee is hereby granted,
+;;;	provided that this notice be retained unaltered, and that the name of
+;;;	MCC and its shareholders and participants shall not be used in
+;;;	advertising or publicity pertaining to distribution of the software
+;;;	without specific written prior permission.
+;;;
+;;;	THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+;;;	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+;;;	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+;;;
+
+;;; $Header$
+;;;
+;;; $Log$
+;;; @EC
+
+
+
+(add '**SOURCE-FILE** "./boot.rbl")
+(add 'dump-name       #niv)
+
+;;; argv interface
+;;; arg-flag returns #t if x occurs in the argv somewhere; and #f otherwise
+;;; arg-val returns the arg following an occurrence of x in the argv or
+;;; #niv, if either argv is null? or x occurs at the end of argv
+
+(add 'arg-flag
+     (named-proc arg-flag [x]
+       (if (null? argv)
+	   #f
+	   (letrec [[loop (proc [[k & r]]
+			    (if (string= k x)
+				#t
+				(if (null? r)
+				    #f
+				    (loop r))))]]
+	     (loop argv)))))
+
+(add 'arg-val
+     (named-proc arg-val [x]
+       (if (null? argv)
+	   #niv
+	   (letrec [[loop (proc [[k & r]]
+			    (if (string= k x)
+				(if (null? r)
+				    #niv
+				    (tuple-head r))
+				(if (null? r)
+				    #niv
+				    (loop r))))]]
+	     (loop argv)))))
+
+(add 'DOCS-ON-LINE? (arg-flag "-docs"))
+ 
+(if (arg-flag "-ess_sysdir")
+    (tbl-add envp 'ESS_SYSDIR (arg-val "-ess_sysdir")))
+ 
+(if (absent? (tbl-get envp 'ESS_SYSDIR))
+    (seq (tbl-add envp 'ESS_SYSDIR ".")
+ 	 (prim-display "***warning: ESS_SYSDIR not set in environment\n")
+ 	 (prim-display "setting ESS_SYSDIR to \".\" in rosette\n"))
+    #niv)
+
+
+;;; rename 'add and define as a sync operation
+(add 'prim-add add)
+(prim-add 'add (syncoprn-new 'add) GlobalEnv)
+(prim-add add prim-add Top-SBO)
+
+;;; some initial prototypes needed just below and sbo renamings
+(add 'Actor-SBO (actor-new Top-SBO [] []))
+(add 'Code        (lookup 'code (run (compile '(proc [x] x)))))
+(add 'Global GlobalEnv)
+(add 'Meta-SBO (actor-new Top-SBO [] []))
+ (parent: StdMeta-SBO Meta-SBO)
+ (parent: IndexedMeta-SBO Meta-SBO)
+(add 'Method      (run (compile (method [x] x))))
+(add 'Method-SBO  StdMthd-SBO)
+(add 'Operation-SBO StdOprn-SBO)
+(add 'Proc        (run (compile (proc [x] x))))
+(add 'RMethod     (run (compile (reflectivemethodexpr-basic-new '[c] 'c))))
+(add 'RMethod-SBO ReflectiveMthd-SBO)
+(add 'RblTable    (clone (lookup 'map (meta 1))))
+(add 'Symbol 'Symbol)
+(add 'Top Top-SBO)
+
+(add 'init (syncoprn-new 'init))
+(add init prim-init Top-SBO)
+
+(add 'new (syncoprn-new 'new))
+(add new (method [& args] (init (clone (self)) & args)) Top-SBO)
+
+(let* [[m (let [[op (oprn-new 'dummy)]]
+	    (seq (add 'bindings [] op) (meta op)))]
+       [p (proc [op] (seq (add 'bindings [] (init op)) (meta: op m)))]]
+  (seq ;;built in operations
+       (p display)
+       (p print)
+       (p kind)
+       (p expand)
+       (p nth)
+       (p null) (set-obo (meta null) null 'sync #t)
+       (p -A->)
+       (p >-A-)
+       (p read-expr)
+       (p resume-io)
+       (p signal)
+       
+       (p select)
+       (p flatten)
+       (p S-get)
+       (p S-desc)
+       (p S-deref)
+       (p S-set)
+       (p S-tupleSet)
+       
+       (p handle-alarm)
+       (p runtime-error)
+       (p formals-mismatch)
+       (p missing-method)
+       (p missing-binding)
+       (p vm-error)
+       (p lookupAndInvoke)
+       
+       (p add)
+       (p init)
+       (p new)
+
+       (init Actor-SBO)
+       (init Meta-SBO)
+       'inits
+       ))
+
+(add 'Actor       (init (actor-new  Actor-SBO [] [])))
+
+(add 'Oprn-SBO
+     (init (clone-to Actor (init (clone (meta Actor))) Operation-SBO)))
+(add    'Oprn     (init (oprn-new 'Oprn)))
+(parent: Oprn     Oprn-SBO)
+(add 'bindings [] Oprn)
+(meta: Oprn (meta kind))
+
+(add 'Sync-SBO
+     (init (clone-to Actor (init (clone (meta Actor))) Operation-SBO)))
+(add    'Sync (init (syncoprn-new 'Sync)))
+(parent: Sync Sync-SBO)
+(add 'bindings [] Sync)
+(meta: Sync (meta kind))
+(parent: add	  Sync-SBO)
+(parent: init     Sync-SBO)
+(parent: new      Sync-SBO)
+
+(add 'Procedural-SBO
+     (init (clone-to Actor (init (clone (meta Actor))) Top-SBO)))
+(parent: Method-SBO  Procedural-SBO)
+(parent: RMethod-SBO Procedural-SBO)
+(parent: Proc-SBO    Procedural-SBO)
+
+;;; >>>>>>>>>>>>>>
+;;; from this point on NO operation should be created except via new.
+;;; This will ensure that every operation is initialized with a
+;;; 'bindings slot bound to [], an id in the 'id slot, and unlocked.
+;;; <<<<<<<<<<<<<<
+
+(add 'oprn? (new Sync 'oprn?))
+(add oprn? #f Top-SBO)
+(add oprn? #t Operation-SBO)
+
+(add 'add-unique (new Sync 'add-unique))
+(add add-unique
+     (method [key]
+       (let [[ob (lookup key)]]
+	 (if (if (absent? ob) #t (if (oprn? ob) #f #t))
+	     (let [[op (new (self) key)]]
+	       (seq (add key op)
+		    op))
+	     ob)))
+     Operation-SBO)
+
+;;; operations and methods for setting up cross indexing among
+;;; 	operations, procs, methods, and code objects
+
+(add-unique Oprn 'slot-attr!:)
+(add-unique Sync 'binding:)
+(add-unique Oprn 'binding!:)
+(add-unique Oprn 'bindings:)
+
+(add slot-attr!:
+     (method [slot attr val]
+       (let [[loc (tbl-get (lookup 'map (self)) slot)]]
+	 (if (absent? loc)
+	     (block #absent (send update!))
+	     (let [[tbl (let [[tbl (get-obo (meta (self)) (self) loc)]]
+			  (if (absent? tbl)
+			      (let [[tbl (new RblTable)]]
+				(seq (add-obo (meta (self)) (self) loc tbl)
+				     tbl))
+			      tbl))]]
+	       (seq (tbl-add tbl attr val)
+		    (update!))) )))
+     Meta-SBO)
+
+;; local method on Meta-SBO for adding multiple slot attributes at once
+
+(add 'slot-attrs!!:
+     (method [slot & k/v]
+       (let [[loc (tbl-get (lookup 'map (self)) slot)]]
+	 (if (absent? loc)
+	     (block #absent (send update!))
+	     (let [[tbl (let [[tbl (get-obo (meta (self)) (self) loc)]]
+			  (if (absent? tbl)
+			      (let [[tbl (new RblTable)]]
+				(seq (add-obo (meta (self)) (self) loc tbl)
+				     tbl))
+			      tbl))]]
+	       (seq (if (null? k/v)
+			#niv
+			(letrec [[loop (proc [k v & r]
+					 (seq (tbl-add tbl k v)
+					      (if (null? r)
+						  #niv
+						  (loop & r))))]]
+			  (loop & k/v)))
+		    (update!))))))
+     Meta-SBO)
+
+(add binding: identity1 Top-SBO)
+
+(add binding:
+     (method [in_obj] (binding!: (self) in_obj))
+     Code-SBO)
+
+(add binding!:
+     (run
+      (compile
+       '(method [in_obj]
+	  (seq (prim-set-nth litvec 0 in_obj)
+	       (update!)))
+       Code))
+     Code-SBO)
+
+(add binding:
+     (method [key obj] (binding!: (self) key obj))
+     Procedural-SBO)
+       
+(add binding!:
+     (method [key obj]
+       (seq (set-obo (meta (self)) (self) 'id [key obj])
+	    (binding: ('code (self)) (self))
+	    (if DOCS-ON-LINE?
+		(slot-attr!: (meta obj) key 'defining-file **SOURCE-FILE**)
+		#niv)
+	    (update!)))
+     Procedural-SBO)
+
+(add bindings:
+     (run
+      (compile
+       '(method [obj]
+	  (update! 'bindings (tuple-rcons bindings obj)))
+       Oprn))
+     Operation-SBO)
+
+;;; setup add (and any others?!) as oprns that will establish bindings etc.
+
+(prim-add add
+	  (method [val & r]
+	    (let [[in_obj (if (null? r) GlobalEnv (tuple-head r))]]
+	      (seq (prim-add (self) val in_obj)
+		   (binding: val (self) in_obj)
+		   (self))))
+	  Top-SBO)
+
+(add add
+     (method [val & r]
+       (let [[in_obj (if (null? r) GlobalEnv (tuple-head r))]]
+	 (seq (prim-add (self) val in_obj)
+	      (bindings: (self) in_obj)
+	      (binding: val (self) in_obj)
+	      (self))))
+     Operation-SBO)
+
+;;; fixup binding info for previous oprns, methods, etc.
+
+(binding: arg-flag 'arg-flag Global)
+(binding: arg-val  'arg-val  Global)
+
+(bindings: init Top-SBO)
+
+(bindings: new Top-SBO)
+(binding: (lookup new Top-SBO) new Top-SBO)
+
+(bindings: oprn? Top-SBO)
+(bindings: oprn? Operation-SBO)
+
+(bindings: add-unique Operation-SBO)
+(binding: (lookup add-unique Operation-SBO) add-unique Operation-SBO)
+
+(bindings: slot-attr!: Meta-SBO)
+(binding: (lookup slot-attr!: Meta-SBO) slot-attr!: Meta-SBO)
+(binding: (lookup 'slot-attrs!!: Meta-SBO) 'slot-attrs!!: Meta-SBO)
+
+(bindings: binding: Top-SBO)
+(bindings: binding: Code-SBO)
+(bindings: binding: Procedural-SBO)
+
+(binding: (lookup binding: Top-SBO) binding: Top-SBO)
+(binding: (lookup binding: Code-SBO) binding: Code-SBO)
+(binding: (lookup binding: Procedural-SBO) binding: Procedural-SBO)
+
+(bindings: binding!: Code-SBO)
+(bindings: binding!: Procedural-SBO)
+(binding: (lookup binding!: Code-SBO) binding!: Code-SBO)
+(binding: (lookup binding!: Procedural-SBO) binding!: Procedural-SBO)
+
+(bindings: bindings: Operation-SBO)
+(binding: (lookup bindings: Operation-SBO) bindings: Operation-SBO)
+
+(bindings: add Top-SBO)
+(binding: (lookup add Top-SBO) add Top-SBO)
+
+(add-unique Oprn 'procedural?)
+(add procedural? #f Top)
+(add procedural? #t Procedural-SBO)
+
+;;; operations for installing documentation
+(add-unique Oprn 'pDocs!:)
+(add pDocs!:
+     (method [k s d u]
+       (free [slot-attrs!!:]
+	 (if DOCS-ON-LINE?
+	     (if (absent? s d u)
+		 (update!)
+		 (slot-attrs!!: k 'summary s 'details d 'usage u))
+	     (update!))))
+     Meta-SBO)
+	 
+(add-unique Oprn 'docs!:)
+(add docs!:
+     (method [k s d]
+       (free [slot-attrs!!:]
+	 (if DOCS-ON-LINE?
+	     (if (absent? s d)
+		 (update!)
+		 (slot-attrs!!: k 'summary s 'details d))
+	     (update!))))
+     Meta-SBO)
+	 
+(add-unique Sync 'addPD)
+(add addPD
+     (method [val obj sum det usg]
+       (seq (add (self) val obj)
+	    (pDocs!: (meta obj) (self) sum det usg)
+	    (self)))
+     Top)
+
+(add-unique Sync 'addD)
+(add addD
+     (method [val obj sum det]
+       (seq (add (self) val obj)
+	    (docs!: (meta obj) (self) sum det)
+	    (self)))
+     Top)
+
+(add-unique Sync 'pDocs:)
+(add pDocs:
+     (method [& r] (pDocs!: (meta (self)) & r))
+     Top)
+
+(add-unique Sync 'docs:)
+(add docs:
+     (method [& r] (docs!: (meta (self)) & r))
+     Top)
+
+;;; at this point the basic support for recording procedural xrefs
+;;; is done and now the support for class xrefs is defined
+
+(add 'String-SBO RBLstring-SBO)
+
+;;; ensure that the parent of GlobalEnv is Top-SBO so that we can apply
+;;; operations to GlobalEnv without spinning on missing-method error
+
+(parent: GlobalEnv Top-SBO)
+
+;;; SETUP parent:
+
+(prim-add 'TopEnv      (parent Top-SBO))
+
+;;; the aim is to provide pointers from a ``class'' to each of its
+;;; ``subclasses'' and its distinguished ``prototype''.
+
+;;; since we have a fair amount of code already using the primitive
+;;; parent: to link up sbos etc., we want a means of substituting
+;;; behavior for its use so that we can record the children as they
+;;; are linked in.  We rename the primitive parent:
+
+(add 'prim-parent: parent:)
+(set-obo (meta prim-parent:) prim-parent: 'id 'prim-parent:)
+;;; and make it a sync oprn
+(add-unique Sync 'parent:)
+;;; do the same for clone-to
+(add 'prim-clone-to clone-to)
+(set-obo (meta prim-clone-to) prim-clone-to 'id 'prim-clone-to)
+(add-unique Sync 'clone-to)
+
+(add-unique Sync 'child:)
+(add-unique Sync '**ChildObjects**)
+(add-unique Sync 'add-child)
+
+(seq (run
+      (compile
+       '(add add-child
+	     (run
+	      (compile
+	       '(method [c]
+		  (let [[cos (get-obo (meta (self)) (self) **ChildObjects**)]]
+		    (seq (if (absent? cos)
+			     (if ('extensible (meta (self)))
+				 (add **ChildObjects** [c] (self))
+				 #niv)
+			     (if (tuple-mem? cos c)
+				 #niv
+				 (add **ChildObjects**
+				      (tuple-rcons cos c) (self))))
+			 c)))
+	       TopEnv))
+	     Top-SBO)))
+     'add-child)
+
+;;; adjust parent: and clone-to so that we record a tuple of all sbo and
+;;; prototypical children for each sbo
+
+(add parent:
+     (run (compile '(method [p]
+		      (add-child p (prim-parent: (self) p)))
+		   TopEnv))
+     Top-SBO)
+
+(add clone-to
+     (run (compile '(method [m p]
+		      (add-child p (prim-clone-to (self) m p)))
+		   TopEnv))
+     Top-SBO)
+
+(add child:
+     (run (compile
+	   '(method []
+	      (add-child (parent (self)) (self)))
+	   TopEnv))
+     Top-SBO)
+;;; END PRE-BOOT
+
+(send prim-display
+      "Rosette System, "
+      (version)
+      " - Copyright 1989, 1990, 1991, 1992 MCC\n")
+
+;;; define eval to do the three basic things to an expression to get a result
+
+
+(let [[ev (add-unique Sync 'eval)]]
+  (add ev
+       (run (compile
+	     '(method []
+		(run (compile (expand (self)))))
+	     TopEnv))
+       Top-SBO))
+
+;;;(add 'eval (named-proc eval [<expr>] (run (compile (expand <expr>)))))
+
+;;; primitive i/o stuff
+
+(add-unique Sync 'warn)
+(add warn (named-proc warn [& msg] (prim-display (prim-nth msg 0))))
+
+
+(add 'blank #\ )
+(add 'nl #\\n)
+
+(add 'eof? (named-proc eof? [x] (same? x eof)))
+
+;;; coercions to generate strings.  These get used in twiddling with file
+;;; names
+
+(add-unique Sync '->string)
+(add ->string object->string Top-SBO)
+
+;;; setup things for a Rosette level RuntimeError
+
+(add-unique Sync 'RuntimeError)
+(add RuntimeError "RuntimeError not implemented yet\n")
+
+
+;;; is-in? steps through a tuple of strings looking for a match with
+;;; its string argument.  It returns #t if found else #f
+
+(add 'is-in?
+     (named-proc is-in [tpl str]
+       (label loop
+	 (if (null? tpl)
+	     #f
+	     (if (string= (tuple-head tpl) str)
+		 #t
+		 (seq (set! tpl (tuple-tail tpl)) (goto loop)))))))
+
+;;; push-load-paths adds dir to the front of load-paths if it is not already
+;;; on load-paths
+
+(add 'push-load-paths
+      (named-proc push-load-paths [dir]
+	(if (is-in? load-paths dir)
+	    #niv
+	    (add 'load-paths [dir & load-paths]))))
+
+;;; load-paths is initialized, in BigBang.cc, to a tuple consisting of
+;;; the name of the directory in which this boot file was found.  The
+;;; search order used in FindBootFile in BigBang.cc is first to use the
+;;; filename provided via the -boot switch when rosette was run, if any.
+;;; Then the directory name in the environment variable ROSETTE_LIB, if
+;;; any. Finally, the default value in BootDirectory which is something
+;;; like "/usr/local/lib/rosette/lib".  If the boot file is load via the
+;;; -boot switch then the directory prefix for the filename is used to
+;;; initialize load-paths, the directory name is "." if the provided
+;;; filename is without slashes, indicating that loading is from the
+;;; directory in which rosette was launched.
+;;;
+;;; Note that currently the value of the ROSETTE_LIB environment variable
+;;; will be lost if the boot is forced via -boot.  This is probably not
+;;; desirable.  BigBang.cc should initialize load-paths to the directory
+;;; in which the boot file is found followed by the value in ROSETTE_LIB
+;;; if these are different.
+;;;
+;;; We want to set things up so that the remaining files will be loaded
+;;; with a search path as follows: ["." BootDirectory ROSETTE_LIB] -
+;;; removing duplicates of course.  For the moment we will just get the
+;;; first two.
+
+(push-load-paths ".")
+
+;;; the stream-status primitive returns the file status in a ByteVec
+;;; or #niv if the file is not present.  The name is interpreted
+;;; relative to the cwd or root if the name is absolute
+
+(add 'present?
+      (named-proc present? [nm] (if (niv? (stream-status nm)) #f #t)))
+
+;;; make-nm assumes that it is given a non-slash terminated directory
+;;; name and a name relative to the directory and possibly a suffix
+;;; like .rbl that all need to be mashed together to get an absolute
+;;; file name
+
+(add 'make-nm
+      (named-proc make-nm [dir nm] (string-concat dir "/" nm )))
+
+;;; abs-name? simply checks to see whether the initial character of the
+;;; name is a slash
+
+(add 'abs-name?
+      (named-proc abs-name? [nm] (same? (prim-nth nm 0) #\/)))
+
+;;; get-dir takes a filename and steps from right to left
+;;; until it finds a slash and then returns the prefix of the string
+;;; upto the last slash.  This is the name of the directory in which
+;;; the file would be found.  If no slash is found then "." is
+;;; returned indicating the cwd.
+
+(add 'get-dir
+      (named-proc get-dir [pns]
+	(let [[inx (fx- (prim-size pns) 1)]]
+	  (label gp-loop
+	    (if (fx< inx 0)
+		"." ;; ?(head load-paths)?
+		(if (same? (prim-nth pns inx) #\/)
+		    (prim-sub-object pns 0 inx)
+		    (seq (set! inx (fx- inx 1))
+			 (goto gp-loop))))))))
+
+;;; try-to-open accepts a filename and trys to open it.  If
+;;; it succeeds then a 3-tuple of the open istream, the directory name,
+;;; and the absolute file name are returned.  If unsuccessful then
+;;; the suffix ".rbl" is appended to the file name and the process is
+;;; repeated.  If this fails then [#niv dir fnm] is returned.
+
+(add 'try-to-open
+      (named-proc try-to-open [fnm]
+	(let [[dir (get-dir fnm)]]
+	  (if (present? fnm)	
+	      [(istream-new fnm) dir fnm]
+	      (let [[fnm' (string-concat fnm ".rbl")]]
+		(if (present? fnm')
+		    [(istream-new fnm') dir fnm']
+		    [#niv dir fnm]))))))
+
+;;; search-paths trys to find a named file by searching a list of
+;;; directories.  A three-tuple is returned.  The first element is
+;;; an open input stream or #niv if the named file could not be found.
+;;; The second element is the name of the directory in which the
+;;; file was found or #niv.  The third element is the absolute name
+;;; of the file found or the original name that was passed in.  The
+;;; search proceeds by trying the name in the first directory in the
+;;; list and if that fails then trying the name with ".rbl" as a
+;;; suffix in that directory.  The process is repeated until the
+;;; tuple of paths is exhausted or the file is found.
+
+(letrec [[loop (named-proc search-paths-loop [nm paths]
+		   (if (null? paths)
+		       [#niv #niv nm]  ;; nm not found in paths
+		       (let* [[dir (tuple-head paths)]
+			      [fnm (make-nm (tuple-head paths) nm)]
+			      [[s d f] (try-to-open fnm)]]
+			 (if (niv? s)
+			     (loop nm (tuple-tail paths))
+			     [s d f]))))]]
+    (add 'search-paths (named-proc search-paths [nm paths] (loop nm paths))))
+
+;;; find-file takes a name (possibly absolute), a directory name, and a
+;;; tuple of directory names, and returns a three tuple as with search-path
+;;; above.  Essentially, find-file checks whether the name is absolute or
+;;; not.  If it is then if it is present? then an open input stream, etc. is
+;;; returned.  If not then the name with ".rbl" is tried.  If the name is
+;;; not absolute then search-paths is called with the directory prepended
+;;; to the pathlist.
+
+(add 'find-file
+     (named-proc find-file [nm paths]
+       (if (abs-name? nm)
+	   (try-to-open nm)
+	   (search-paths nm paths))))
+
+;;; eval-file accepts an istream and performs an (eval (read str)) until
+;;; at end-of-stream
+
+(add 'eval-file
+     (named-proc eval-file [str silent?]
+       (let [[expr (istream-read str)]]
+	 (label load-loop
+	   (if (eof? expr)
+	       (seq (istream-close str)
+		    (if (fx> (prim-size silent?) 0) #niv (display nl)))
+	       (seq
+		(if (null? silent?)
+		    (seq (display (eval expr))
+			 (display blank)
+			 (prim-flush))
+		    (eval expr))
+		(set! expr (istream-read str))
+		(goto load-loop)))) )))
+
+(add 'dump-world
+     (named-proc dump-world [fn]
+       (seq
+	(scavenge)
+	(gc)
+	(if (image-dump fn)
+	     ;; make sure to get the current binding
+	     ((lookup 'restart-reset GlobalEnv))
+	     #niv))))
+
+(add-unique Oprn 'insert)
+
+(add insert
+     (method [item]
+       (if (tuple-mem? (self) item) (self) [item & (self)]))
+     (parent [1]))
+
+(add 'get-name
+     (named-proc get-name [pn]
+       (let [[pns (object->string pn)]]
+	 (let [[x (string-split pns "/" 999)]]
+	   (if (null? x)
+	       pns
+	       (prim-nth x (fx- (prim-size x) 2)))))))
+
+(add 'Loaded ['boot])
+
+(add 'load
+      (named-proc load [nm & silent?]
+	(let [[[str dir fnm] (find-file (->string nm) load-paths)]
+	      [saved-load-paths  load-paths]
+	      [saved-source-file **SOURCE-FILE**]
+	      [saved-dump-name   dump-name]]
+	  (if (niv? str)
+	      (seq (display fnm) (display " not found in load\n"))
+	      (seq
+	       (display "loading: ")
+	       (display fnm)
+	       (display (if (null? silent?) nl " silent\n"))
+	       (push-load-paths dir)
+	       (add '**SOURCE-FILE** fnm)
+	       (add 'dump-name #niv)
+	       (eval-file str silent?)
+	       (if (niv? dump-name) #niv (dump-world dump-name))
+	       (add 'dump-name  saved-dump-name)
+	       (add 'load-paths saved-load-paths)
+	       (add '**SOURCE-FILE** saved-source-file)
+	       (add 'Loaded (insert Loaded (object->symbol (get-name nm))))
+	       #niv)))))
+
+(add 'initial-reset reset)
+
+;;; the following flag is used to signal whether the stdin is supposed to be
+;;; operating asynchronously or not:
+
+(add 'ASYNC? #f)
+
+(load 'configuration 'silent)
+
+;; Don't do this except during the boot phase, or you'll spin off into
+;; hyperspace.
+;; Assumes that "initial-reset" is defined in async-repl.rbl
+
+(add 'reset (lookup 'initial-reset GlobalEnv))

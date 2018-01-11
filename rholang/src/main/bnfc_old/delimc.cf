@@ -1,0 +1,36 @@
+-- Will be used as an intermediate representation.
+-- See https://www.cs.indiana.edu/~sabry/papers/monadicDC.pdf
+-- The syntax is partly postfix for simplicity.
+
+
+ETyped.  TypedExpr  ::= Expr ":" Type ;
+
+EVar.         Expr  ::= Var ;
+EVal.         Expr  ::= Value ;
+EAbs.         Expr  ::= "\\" Var ":" Type "." TypedExpr ;
+EApp.         Expr  ::= TypedExpr TypedExpr ;
+EReturn.      Expr  ::= "return" TypedExpr ;
+EBind.        Expr  ::= TypedExpr ">>=" TypedExpr ;
+ENewPrompt.   Expr  ::= "newPrompt" ;
+EPushPrompt.  Expr  ::= TypedExpr TypedExpr "pushPrompt" ;
+EWithSubCont. Expr  ::= TypedExpr TypedExpr "withSubCont" ;
+EPushSubCont. Expr  ::= TypedExpr TypedExpr "pushSubCont" ;
+ETuple.       Expr  ::= Tuple ;
+
+Tuple2.       Tuple ::= "(" TypedExpr "," TypedExpr ")" ;
+Tuple3.       Tuple ::= "(" TypedExpr "," TypedExpr "," TypedExpr ")" ;
+
+VInt.         Value ::= Integer ;
+VString.      Value ::= String ;
+
+TSimple.      Type2 ::= SimpleType ;
+TTuple.       Type1 ::= TType ;
+TMonad.       Type  ::= "CC" Type1 Type1 ;
+TFun.         Type  ::= Type1 "->" Type ;
+coercions Type 2 ;
+
+TType2.       TType ::= "(" Type "," Type ")" ;
+TType3.       TType ::= "(" Type "," Type "," Type ")" ;
+
+token SimpleType (upper (letter | digit | '_' | '\'')*) ;
+token Var (lower (letter | digit | '_' | '\'')*) ;
