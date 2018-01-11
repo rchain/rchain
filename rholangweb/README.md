@@ -4,12 +4,33 @@ This is a web interface to the Rholang compiler, inspired by
 [the crystal playground][cr].
 
 [cr]: https://play.crystal-lang.org/#/cr
-[RHOL-35]: https://rchain.atlassian.net/projects/RHOL/issues/RHOL-35
+
+
+## Security Considerations / Warnings
+
+Code from each HTTP request is given to the compiler via a temporary
+directory created in a reasonably secure manner (using `tmpfile` from
+the python standard library).
+
+We assume the compiler writes to foo.rbl when given foo.rho and is
+otherwise well-behaved.
+
+Settings are used to limit
+
+  - compiler: runtime
+  - VM: stacksize and runtime
+
+**WARNING**: the VM subprocesses is not otherwise constrained.
 
 
 ## Getting Started
 
-This is a typical [django][] app, so once you clone it:
+This is a typical [django][] app.
+
+Be sure you have the rholang compiler jar and the rosette executable
+and `rbl` library; adjust `rholang/settings.py` to say where they are.
+
+Then:
 
 ```
 RholangWeb$ pip install -r requirements.txt 
@@ -33,16 +54,13 @@ Starting development server at http://127.0.0.1:8000/
 [django]: https://www.djangoproject.com/
 
 
-## Development
-
-For context, see [RHOL-35][].
-
 ### To Do
 
   - log programs, results
     - privacy policy
 
-## Troubleshooting
+## Development
 
-If `rosette` dumps core, try relaxing the maximum stack size with
-`ulimit -s unlimited`.
+For context, see [RHOL-35][].
+
+[RHOL-35]: https://rchain.atlassian.net/projects/RHOL/issues/RHOL-35

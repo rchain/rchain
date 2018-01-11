@@ -1,19 +1,5 @@
 """runner -- compile and run rholang programs
 
-Subprocess Capabilities
------------------------
-
-Settings are used to limit
-
-  - VM: stacksize and runtime
-  - compiler: runtime
-
-We assume the compiler writes to foo.rbl when given foo.rho and is
-otherwise well-behaved.
-
-WARNING: the VM subprocesses is not otherwise constrained.
-
-
 Integration Testing
 -------------------
 
