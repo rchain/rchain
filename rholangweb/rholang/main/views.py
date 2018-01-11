@@ -1,18 +1,20 @@
+from pathlib import Path
 from subprocess import Popen
 from tempfile import TemporaryDirectory
-from pathlib import Path
+from threading import Timer
 
 from django import forms
 from django.forms import Form
 from django.shortcuts import render
 
-from rholang.settings import *
+import rholang.settings as cfg
 from . import runner
+
 
 def home(request):
     examples = [
         dict(name=ex.name, src=ex.open().read())
-        for ex in Path(EXAMPLES).glob('*.rho')
+        for ex in Path(cfg.EXAMPLES).glob('*.rho')
     ]
 
     if request.POST:
@@ -21,13 +23,13 @@ def home(request):
             rho = compilerForm.cleaned_data.get('rho')
 
             try:
-                compiler = runner.Compiler.make(
-                    Path(COMPILER_JAR), Path, TemporaryDirectory, Popen)
+                compiler = runner.Compiler.make(Path(cfg.COMPILER_JAR), Popen)
             except runner.ConfigurationError as oops:
                 raise  # TODO: HTTP 500
 
             try:
-                rbl = compiler.compile_text(rho)
+                with TemporaryDirectory(prefix='rholang') as tmp:
+                    rbl = compiler.compile_text(rho, work=Path(tmp))
                 compile_error = None
             except runner.UserError as oops:
                 rbl = None
@@ -37,7 +39,8 @@ def home(request):
             run_error = None
 
             if rbl is not None:
-                vm = runner.VM.make(VM_PROGRAM, VM_LIBRARY, Popen)
+                vm = runner.VM.make(
+                    Path(cfg.VM_PROGRAM), Path(cfg.VM_LIBRARY), Popen, Timer)
                 _warnings, _preamble, session = vm.run_repl(rbl)
                 run_error = None  # TODO
     else:

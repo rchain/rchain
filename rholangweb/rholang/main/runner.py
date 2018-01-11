@@ -1,17 +1,8 @@
 """runner -- compile and run rholang programs
 """
 
-from contextlib import contextmanager
-from io import StringIO
-from os.path import relpath
-from threading import Timer
-
-from pathlib import Path
 from subprocess import PIPE, SubprocessError, CalledProcessError
-from sys import stderr
 import logging
-
-from rholang.settings import *
 
 log = logging.getLogger(__name__)
 
@@ -36,21 +27,20 @@ class RunError(UserError):
     pass
 
 
-class SubprocessTimeoutError(SubprocessError):
+class TimeoutError(UserError):
     pass
+
 
 class Compiler(object):
 
-    def __init__(self, run_jar, mkTempDir):
+    def __init__(self, run_jar):
         self.__run_jar = run_jar
-        self.__mkTempDir = mkTempDir
 
     @classmethod
-    def make(cls, jarRd, Path, TemporaryDirectory, Popen):
+    def make(cls, jarRd, Popen):
         '''Construct from python stdlib powers.
         '''
-        return cls(cls.jar_runner(jarRd, Popen),
-                   _mkTempDirMaker(Path, TemporaryDirectory))
+        return cls(cls.jar_runner(jarRd, Popen))
 
     @classmethod
     def jar_runner(self, jarRd, Popen):
@@ -58,10 +48,15 @@ class Compiler(object):
             proc = Popen(['java', '-version'], stderr=PIPE)
             _, err = proc.communicate()
             if proc.returncode != 0:
-                raise JavaRequired(diagnostics)
+                raise JavaRequired(err)
             log.info('java version:\n%s', err.decode('us-ascii'))
         except OSError as oops:
             raise JavaRequired() from oops
+
+        try:
+            jarRd.open()
+        except OSError as oops:
+            raise ConfigurationError() from oops
 
         def run_jar(argv):
             argv = ['java', '-jar', str(jarRd)] + list(argv)
@@ -83,14 +78,13 @@ class Compiler(object):
             raise CompileError(oops.stderr) from oops
         return output
 
-    def compile_text(self, text,
+    def compile_text(self, text, work,
                      filename='playground.rho'):
-        with self.__mkTempDir(prefix='rholang') as work:
-            input = work / filename
-            with input.open('w') as fp:
-                fp.write(text)
-            output = self.compile_file(input)
-            return output.open().read()
+        input = work / filename
+        with input.open('w') as fp:
+            fp.write(text)
+        output = self.compile_file(input)
+        return output.open().read()
 
 
 class VM(object):
@@ -98,21 +92,25 @@ class VM(object):
         self.__runVM = runVM
 
     @classmethod
-    def make(cls, program, library, Popen):
-        # Adapted from http://www.ostricher.com/2015/01/python-subprocess-with-timeout/
+    def make(cls, program, library, Popen, Timer):
+        # Adapted from http://www.ostricher.com/2015/01/python-subprocess-with-timeout/  # noqa
         def run_command_with_timeout(cmd, input, timeout_sec):
-            proc = Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            proc = Popen(map(str, cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
             timer = Timer(timeout_sec, proc.kill)
             timer.start()
             return_value = proc.communicate(input.encode('utf-8'))
             if timer.is_alive():
                 timer.cancel()
                 return return_value
-            raise SubprocessTimeoutError('Process #%d killed after %d seconds. Try checking for infinite loops.' % (proc.pid, timeout_sec))
+            raise TimeoutError(
+                'Process #%d killed after %d seconds.'
+                ' Try checking for infinite loops.' % (proc.pid, timeout_sec))
 
         def runVM(rbl):
-            library_rel_path = relpath(os.path.join(library, "boot.rbl"), os.path.dirname(program))
-            return run_command_with_timeout([program, "-boot", library_rel_path], rbl, 1)
+            cmd = [program,
+                   "-boot", (library / "boot.rbl").relative_to(program.parent)]
+            # ISSUE: timout setting?
+            return run_command_with_timeout(cmd, rbl, 1)
         return cls(runVM)
 
     def run_repl(self, rbl):
@@ -120,9 +118,6 @@ class VM(object):
             out, err = self.__runVM(rbl)
         except CalledProcessError as oops:
             raise RunError(oops) from oops
-        except SubprocessTimeoutError as oops:
-            # TODO: Clean up quick hack to print subprocess timeout error
-            return '','',oops.args[0]
         return self._cleanup(out.decode('utf-8'))
 
     @classmethod
@@ -141,32 +136,22 @@ class VM(object):
         return warnings, preamble, text
 
 
-def _mkTempDirMaker(Path, TemporaryDirectory):
-    '''Make Path-oriented temp context manager from string-oriented.
-    '''
-    @contextmanager
-    def mkTempDir(**kwargs):
-        with TemporaryDirectory(**kwargs) as tmp:
-            yield Path(tmp)
-    return mkTempDir
-
-
 def _integration_test(argv, Path, TemporaryDirectory, Popen):
-    # ISSUE: get jar from django config?
-    jar = '../../rchain/rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar'
+    import rholang.settings as cfg  # ISSUE: PYTHONPATH?
 
-    c = Compiler.make(Path(jar), Path, TemporaryDirectory, Popen)
+    c = Compiler.make(Path(cfg.COMPILER_JAR), Popen)
 
     log.debug('integration test argv: %s text? %s', argv, '--text' in argv)
     if '--text' in argv:
-        rbl = c.compile_text(argv[-1])
+        with TemporaryDirectory(prefix='rholang') as tmp:
+            rbl = c.compile_text(argv[-1], Path(tmp))
         log.info("compiled text:\n%s", rbl)
     else:
         out = c.compile_file(Path(argv[-1]))
         log.info("compiled file: %s", out)
         rbl = out.open().read()
 
-    program = Path('../../rchain/rosette/build.out/src/rosette')
+    program = Path(cfg.VM_PROGRAM)
     vm = VM.make(program, Popen)
     warnings, preamble, session = vm.run_repl(rbl)
     log.info('vm result:\n%s', session)
