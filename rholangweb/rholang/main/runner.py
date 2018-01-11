@@ -1,52 +1,120 @@
 """runner -- compile and run rholang programs
+
+Subprocess Capabilities
+-----------------------
+
+Settings are used to limit
+
+  - VM: stacksize and runtime
+  - compiler: runtime
+
+We assume the compiler writes to foo.rbl when given foo.rho and is
+otherwise well-behaved.
+
+WARNING: the VM subprocesses is not otherwise constrained.
+
+
+Integration Testing
+-------------------
+
+  $ python runner.py hello.rbl
+
+or
+
+  $ python runner.py --text "print(4)"
+
+
+Make sure the `settings` module is in your PYTHONPATH.
+
+
+Static Type Checking
+--------------------
+
+Static types can be checked using mypy; for example:
+
+  $ MYPYPATH=..:. mypy --strict runner.py
+
 """
 
-from subprocess import PIPE, SubprocessError, CalledProcessError
-import logging
+# To maintain object capability discipline,
+# don't import any powerful objects at module scope.
+# See also `__main__` and `_script` below.
+#
+# Powerful objects are those that do I/O or otherwise
+# depend on ambient authority (such as username or platform)
+# or introduce non-determinism (such as threading or a clock).
+#
+# When a powerful class is used for static type checking,
+# use a `T` suffix to hide its use as a constructor.
+from pathlib import Path as PathT  # not for use as constructor
+from resource import RLIMIT_STACK
+from subprocess import PIPE, Popen as PopenT
+from subprocess import CalledProcessError, SubprocessError, TimeoutExpired
+from tempfile import TemporaryDirectory as TemporaryDirectoryT
+from typing import Any, Callable, List, Optional, Text, Tuple, Union, cast
+
+import logging  # exception to ocap discipline
 
 log = logging.getLogger(__name__)
 
 
 class ConfigurationError(Exception):
-    pass
+    """Server admin fault; e.g. problem with settings.py.
+    """
 
 
 class JavaRequired(ConfigurationError):
-    pass
+    """Ensure `java` is in your $PATH.
+    """
 
 
 class UserError(Exception):
-    pass
+    """Client problem.
+    """
 
 
 class CompileError(UserError):
-    pass
+    """Problem compiling rholang program.
+    """
 
 
 class RunError(UserError):
-    pass
+    """Problem running rbl code on rosette VM.
+    """
 
 
-class TimeoutError(UserError):
-    pass
+ArgT = Union[bytes, Text, PathT]
+OutErr = Tuple[bytes, bytes]
+
+
+RunnerT = Callable[[List[ArgT], Optional[bytes]], OutErr]
 
 
 class Compiler(object):
+    """Access to rholang compiler.
+    """
 
-    def __init__(self, run_jar):
+    out_suffix = '.rbl'
+
+    def __init__(self, run_jar: RunnerT) -> None:
         self.__run_jar = run_jar
 
     @classmethod
-    def make(cls, jarRd, Popen):
-        '''Construct from python stdlib powers.
-        '''
-        return cls(cls.jar_runner(jarRd, Popen))
+    def jar_runner(self,
+                   jarRd: PathT,
+                   timeout: float,
+                   Popen: Callable[..., PopenT]) -> RunnerT:
+        """Attenuate Popen to only run a jar for `timeout` sec.
 
-    @classmethod
-    def jar_runner(self, jarRd, Popen):
+        Ensure that `java -version` works and that the compiler jar is
+        readable.
+
+        In Keeping with the best practice that constructors don't fail,
+        this is separate from the constructor.
+        """
         try:
             proc = Popen(['java', '-version'], stderr=PIPE)
-            _, err = proc.communicate()
+            _, err = proc.communicate(timeout=timeout)
             if proc.returncode != 0:
                 raise JavaRequired(err)
             log.info('java version:\n%s', err.decode('us-ascii'))
@@ -58,70 +126,82 @@ class Compiler(object):
         except OSError as oops:
             raise ConfigurationError() from oops
 
-        def run_jar(argv):
-            argv = ['java', '-jar', str(jarRd)] + list(argv)
+        def run_jar(argv: List[ArgT], input: Optional[bytes]) -> OutErr:
+            argv = [cast(ArgT, 'java'), '-jar', jarRd] + list(argv)
             log.info('running: %s', argv)
-            proc = Popen(argv, stdout=PIPE, stderr=PIPE)
-            out, err = proc.communicate()
+            proc = Popen([str(a) for a in argv], stdout=PIPE, stderr=PIPE)
+            out, err = proc.communicate(input, timeout=timeout)
             if proc.returncode != 0:
                 raise CompileError(err.decode('utf-8'))
             return out, err
         return run_jar
 
-    def compile_file(self, input):
-        output = input.with_suffix('.rbl')
-
-        # ISSUE: we assume the compiler produces foo.rbl from foo.rho
+    def compile_file(self, infile: PathT) -> PathT:
         try:
-            self.__run_jar([str(input)])
+            self.__run_jar([infile], None)
         except SubprocessError as oops:
-            raise CompileError(oops.stderr) from oops
-        return output
+            raise CompileError() from oops
+        return infile.with_suffix(self.out_suffix)
 
-    def compile_text(self, text, work,
-                     filename='playground.rho'):
-        input = work / filename
-        with input.open('w') as fp:
+    def compile_text(self, text: Text, work: PathT,
+                     filename: str='playground.rho') -> Text:
+        # ISSUE: we assume the compiler produces foo.rbl from foo.rho
+        infile = work / filename
+
+        with infile.open('w') as fp:
             fp.write(text)
-        output = self.compile_file(input)
-        return output.open().read()
+        outfile = self.compile_file(infile)
+        outcode = outfile.open().read()  # type: Text
+        log.debug('compiled code: %s ...', outcode[:40])
+        return outcode
 
 
 class VM(object):
-    def __init__(self, runVM):
+    """Access to rhoVM.
+    """
+    def __init__(self, library: PathT, runVM: RunnerT) -> None:
         self.__runVM = runVM
+        self.__library = library
 
     @classmethod
-    def make(cls, program, library, Popen, Timer):
-        # Adapted from http://www.ostricher.com/2015/01/python-subprocess-with-timeout/  # noqa
-        def run_command_with_timeout(cmd, input, timeout_sec):
-            proc = Popen(map(str, cmd), stdin=PIPE, stdout=PIPE, stderr=PIPE)
-            timer = Timer(timeout_sec, proc.kill)
-            timer.start()
-            return_value = proc.communicate(input.encode('utf-8'))
-            if timer.is_alive():
-                timer.cancel()
-                return return_value
-            raise TimeoutError(
-                'Process #%d killed after %d seconds.'
-                ' Try checking for infinite loops.' % (proc.pid, timeout_sec))
+    def program_runner(cls, program: PathT, timeout: float, stack: int,
+                       setrlimit: Callable[[int, Tuple[int, int]], None],
+                       Popen: Callable[..., PopenT]) -> RunnerT:
+        """Attenuate Popen to run `program` for `timeout` sec. with
+        stack limited to `stack` bytes.
+        """
 
-        def runVM(rbl):
-            cmd = [program,
-                   "-boot", (library / "boot.rbl").relative_to(program.parent)]
-            # ISSUE: timout setting?
-            return run_command_with_timeout(cmd, rbl, 1)
-        return cls(runVM)
+        def limit_child_stack() -> None:
+            setrlimit(RLIMIT_STACK, (stack, stack))
 
-    def run_repl(self, rbl):
+        def run_program(argv: List[ArgT], input: Optional[bytes]) -> OutErr:
+            cmd = [cast(ArgT, program)] + argv
+            log.info('cmd: %s', cmd)
+            proc = Popen([str(a) for a in cmd],
+                         preexec_fn=limit_child_stack,
+                         stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            out, err = proc.communicate(input, timeout=timeout)
+            if proc.returncode != 0:
+                raise RunError('%d: %s' % (proc.returncode, err))
+            return out, err
+
+        return run_program
+
+    def run_repl(self, rbl: Text) -> Tuple[Text, Text, Text]:
         try:
-            out, err = self.__runVM(rbl)
+            bootfile = (self.__library / "boot.rbl").resolve()
+            out, err = self.__runVM([cast(ArgT, "-boot"), bootfile],
+                                    rbl.encode('utf-8'))
         except CalledProcessError as oops:
             raise RunError(oops) from oops
+        except TimeoutExpired as oops:
+            raise RunError(
+                'Timeout Expired: %s\n'
+                'Try checking for infinite loops.' % (oops))
         return self._cleanup(out.decode('utf-8'))
 
     @classmethod
-    def _cleanup(cls, text):
+    def _cleanup(cls, text: Text) -> Tuple[Text, Text, Text]:
         warnings = ''
         preamble = ''
         if text.startswith('**warning'):
@@ -129,17 +209,25 @@ class VM(object):
             warnings += line + '\n'
             if text.startswith('setting ESS_SYSDIR'):
                 line, text = text.split('\n', 1)
-                warnings.append(line)
+                warnings += line + '\n'
         while text and not text.startswith('rosette>'):
             line, text = text.split('\n', 1)
             preamble += line + '\n'
         return warnings, preamble, text
 
 
-def _integration_test(argv, Path, TemporaryDirectory, Popen):
-    import rholang.settings as cfg  # ISSUE: PYTHONPATH?
+def _integration_test(argv: List[str],
+                      cfg: Any,
+                      Path: Callable[..., PathT],
+                      TemporaryDirectory: Callable[..., TemporaryDirectoryT],
+                      setrlimit: Callable[[int, Tuple[int, int]], None],
+                      Popen: Callable[..., PopenT]) -> None:
+    """Compile and run a rholang program.
 
-    c = Compiler.make(Path(cfg.COMPILER_JAR), Popen)
+    See module docstring for usage.
+    """
+    runj = Compiler.jar_runner(Path(cfg.COMPILER_JAR), cfg.TIMEOUT, Popen)
+    c = Compiler(runj)
 
     log.debug('integration test argv: %s text? %s', argv, '--text' in argv)
     if '--text' in argv:
@@ -151,22 +239,33 @@ def _integration_test(argv, Path, TemporaryDirectory, Popen):
         log.info("compiled file: %s", out)
         rbl = out.open().read()
 
-    program = Path(cfg.VM_PROGRAM)
-    vm = VM.make(program, Popen)
+    vm = VM(Path(cfg.VM_LIBRARY),
+            VM.program_runner(Path(cfg.VM_PROGRAM),
+                              cfg.TIMEOUT, cfg.STACKLIMIT,
+                              setrlimit, Popen))
+
     warnings, preamble, session = vm.run_repl(rbl)
     log.info('vm result:\n%s', session)
 
 
 if __name__ == '__main__':
-    def _script():
-        """Use explicit authority for powerful objects.
+    def _script() -> None:
+        """Exercise authority granted by use as a top-level script.
+
+        See module docstring for usage.
         """
+        # Note that these names don't become available at module scope.
+        from resource import setrlimit
         from subprocess import Popen
         from sys import argv
         from tempfile import TemporaryDirectory
         from pathlib import Path
 
+        import settings as cfg
+
         logging.basicConfig(level=logging.DEBUG)
-        _integration_test(argv, Path, TemporaryDirectory, Popen)
+        _integration_test(argv, cfg,
+                          Path, TemporaryDirectory,
+                          setrlimit, Popen)
 
     _script()

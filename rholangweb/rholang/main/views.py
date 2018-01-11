@@ -1,14 +1,14 @@
 from pathlib import Path
+from resource import setrlimit
 from subprocess import Popen
 from tempfile import TemporaryDirectory
-from threading import Timer
 
 from django import forms
 from django.forms import Form
 from django.shortcuts import render
 
 import rholang.settings as cfg
-from . import runner
+from .runner import Compiler, VM, ConfigurationError, UserError
 
 
 def home(request):
@@ -23,15 +23,17 @@ def home(request):
             rho = compilerForm.cleaned_data.get('rho')
 
             try:
-                compiler = runner.Compiler.make(Path(cfg.COMPILER_JAR), Popen)
-            except runner.ConfigurationError as oops:
+                runj = Compiler.jar_runner(Path(cfg.COMPILER_JAR), cfg.TIMEOUT,
+                                           Popen)
+                compiler = Compiler(runj)
+            except ConfigurationError as oops:
                 raise  # TODO: HTTP 500
 
             try:
                 with TemporaryDirectory(prefix='rholang') as tmp:
                     rbl = compiler.compile_text(rho, work=Path(tmp))
                 compile_error = None
-            except runner.UserError as oops:
+            except UserError as oops:
                 rbl = None
                 compile_error = str(oops)
 
@@ -39,10 +41,16 @@ def home(request):
             run_error = None
 
             if rbl is not None:
-                vm = runner.VM.make(
-                    Path(cfg.VM_PROGRAM), Path(cfg.VM_LIBRARY), Popen, Timer)
-                _warnings, _preamble, session = vm.run_repl(rbl)
-                run_error = None  # TODO
+                vm = VM(Path(cfg.VM_LIBRARY),
+                        VM.program_runner(Path(cfg.VM_PROGRAM),
+                                          cfg.TIMEOUT, cfg.STACKLIMIT,
+                                          setrlimit, Popen))
+                try:
+                    _warnings, _preamble, session = vm.run_repl(rbl)
+                    run_error = None
+                except UserError as oops:
+                    run_error = oops.args[0]
+                    session = None
     else:
         compilerForm = CompilerForm()
         rbl = "Compiler standing by..."

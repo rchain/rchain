@@ -37,6 +37,11 @@ Starting development server at http://127.0.0.1:8000/
 
 For context, see [RHOL-35][].
 
+### To Do
+
+  - log programs, results
+    - privacy policy
+
 ## Troubleshooting
 
 If `rosette` dumps core, try relaxing the maximum stack size with
