@@ -113,3 +113,36 @@ EXAMPLES =  os.path.join(BASE_DIR, 'examples')
 COMPILER_JAR = os.path.join(BASE_DIR, 'rholang-assembly-0.1-SNAPSHOT.jar')
 VM_PROGRAM = os.path.join(BASE_DIR, 'rosette')
 VM_LIBRARY = os.path.join(BASE_DIR, 'rbl/rosette')
+
+# Logging
+LOGGING = {
+    'version': 1,
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+        },
+        'simple': {
+            'format': '%(asctime)s %(levelname)s %(message)s',
+            'datefmt': '%H:%M'
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'rholang': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    }
+}
