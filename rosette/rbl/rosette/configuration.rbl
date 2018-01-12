@@ -44,5 +44,3 @@
 (load 'apropos		'silent)
 (load 'space 'silent)
 (load 'primitives 'silent)
-
-(load 'tests/README 'silent)
