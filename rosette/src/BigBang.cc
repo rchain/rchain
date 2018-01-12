@@ -21,7 +21,7 @@
 
 #include <stdarg.h>
 #include <cerrno>
-
+#include <tuple>
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/file.h>
@@ -492,22 +492,27 @@ static void LoadBootFiles() {
     }
 }
 
-static void LoadRunFile() {
-    if (strcmp(RunFile, "") != 0) {
-        FILE* run = fopen(RunFile, "r");
-        if (run) {
-            Reader* reader = Reader::create(run);
-            PROTECT(reader);
-
-            Ob* expr = INVALID;
-            while ((expr = reader->readExpr()) != RBLEOF) {
-                vm->load(expr);
-            }
-        } else {
-            suicide("Unable to open RunFile \"%s\": %s", RunFile,
-                    strerror(errno));
-        }
+static bool LoadRunFile() {
+    if (0 == strcmp(RunFile, "")) {
+        return false;
     }
+
+    FILE* run = fopen(RunFile, "r");
+    if (run) {
+        Reader* reader = Reader::create(run);
+        PROTECT(reader);
+
+        Ob* expr = INVALID;
+        while ((expr = reader->readExpr()) != RBLEOF) {
+            vm->load(expr);
+        }
+
+        return true;
+    }
+
+    suicide("Unable to open RunFile \"%s\": %s", RunFile,
+            strerror(errno));
+    return false;
 }
 
 #if defined(MALLOC_DEBUGGING)
@@ -520,11 +525,18 @@ extern int restore(const char*, char*);
 
 int InBigBang = 0;
 
-int BigBang(int argc, char** argv, char** envp) {
+/**
+ * The BigBang returns a tuple if indicators with the following
+ * types and meanings:
+ *
+ *   int: Are we restoring an image?
+ *   bool: should we run the repl?
+ */
+std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
+    bool did_run_file = false;
     auto argc_start = ParseCommandLine(argc, argv);
     InBigBang = true;
     setsid();
-
 
     if (RestoringImage) {
         /**
@@ -581,7 +593,7 @@ int BigBang(int argc, char** argv, char** envp) {
         Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
         LoadBootFiles();
-        LoadRunFile();
+        did_run_file = LoadRunFile();
 
         heap->tenureEverything();
     }
@@ -589,7 +601,12 @@ int BigBang(int argc, char** argv, char** envp) {
     handleInterrupts();
     InBigBang = false;
 
-    return RestoringImage;
+    bool repl_enabled = true;
+    if (did_run_file && !ForceEnableRepl) {
+        repl_enabled = false;
+    }
+
+    return std::make_tuple(RestoringImage, repl_enabled);
 }
 
 

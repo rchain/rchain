@@ -39,6 +39,7 @@ char* DefaultBootDirectory = DEFAULT;
 char BootDirectory[MAXPATHLEN] = DEFAULT;
 char BootFile[MAXPATHLEN] = "";
 char RunFile[MAXPATHLEN] = "";
+bool ForceEnableRepl = false;
 
 /*
  * RestoringImage is set to 0 in the initial boot-rosette image, but it
@@ -61,11 +62,13 @@ void usage(const char* name, bool fatal = false, const char* msg = NULL) {
             " -q, --quiet            Disable verbose mode\n"
             " -t, --tenure=NUM_GCS   Number of GCs before tenuring an object\n"
             " -p, --paranoid-gc      Enable paranoid GC\n"
-            " -i, --infant-size=KB   RAM to allocate for infant objects\n"
+            " -I, --infant-size=KB   RAM to allocate for infant objects\n"
             " -s, --survivor-size=KB RAM to allocate for the survivors\n"
             " -o, --old-size=KB      RAM to allocate for the old generation\n"
             " -d, --boot-dir=DIR     BOOT directory\n"
             " -b, --boot=FILE        BOOT file\n"
+            " -i, --interactive-repl Always run the REPL, even if passed a\n"
+            "                        script file to run.\n"
             "\n", name);
 
     if (fatal) { 
@@ -95,18 +98,20 @@ int ParseCommandLine(int argc, char** argv) {
      */
 
     int verbose_flag = 0;
+    int enable_repl = 0;
     int c = 0;
 
     const struct option long_options[] = {
         /* Flags */
         {"verbose", no_argument, &verbose_flag, 1},
         {"quiet", no_argument, &verbose_flag, 0},
+        {"interactive-repl", no_argument, &enable_repl, 'i'},
 
         /* Non-flags */
         {"help", no_argument, 0, 'h'},
         {"tenure", required_argument, 0, 't'},
         {"paranoid-gc", required_argument, 0, 'p'},
-        {"infant-size", required_argument, 0, 'i'},
+        {"infant-size", required_argument, 0, 'I'},
         {"survivor-size", required_argument, 0, 's'},
         {"old-size", required_argument, 0, 'o'},
         {"boot-dir", required_argument, 0, 'd'},
@@ -160,7 +165,7 @@ int ParseCommandLine(int argc, char** argv) {
                 ParanoidAboutGC = std::stoi(optarg);
                 break;
 
-            case 'i':
+            case 'I':
                 InfantSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
                 break;
 
@@ -178,6 +183,10 @@ int ParseCommandLine(int argc, char** argv) {
 
             case 'b':
                 strncpy(BootFile, optarg, MAXPATHLEN);
+                break;
+
+            case 'i':
+                ForceEnableRepl = true;
                 break;
 
             default:
