@@ -11,6 +11,9 @@ cat > "${RESULTS}" < /dev/null
 ./build.sh
 
 {
+    # Continue after errors
+    set +e
+
     # Increase stack limit so that Rosette can load all files
     ulimit -s unlimited
 
