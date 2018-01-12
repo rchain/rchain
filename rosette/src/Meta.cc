@@ -136,11 +136,34 @@ pOb StdMeta::get(pOb client, pOb key, pCtxt) {
      * This unfolding of the valWrt function pays big dividends during
      * method lookup.
      */
+
     switch (GET_GENERIC_TYPE(loc)) {
     case LT_LexVariable:
         if (GET_LEXVAR_IND(loc)) {
             container = ((Actor*)client)->extension;
+
+// TODO: This prevents a crash caused by a malformed expander. See Jira ticket ROS-304.
+//
+//       This is a blatant BANDAID and a HACK, and needs to be fixed in the compiler
+//       to not generate malformed objects.
+//       The comparison agains 0x100 is because, while the pointer is "NULL", it really
+//       isn't zero because of the additional "Tag" data that in this implementation gets
+//       overlayed on pOb pointers.
+//       Here I arbitrarily used a value that is smaller than any normal pointer, and greater
+//       than tag bit stuff.
+//
+//       See the use of TAG, TagExtract, TagSize, EscTagSize, WordSize, GET_*Tagged_*, GET_LF
+//       in Ob.h, Ob.cc, Bits.h and elsewhere for additional clues.
+
+            TagExtract te;
+            te.ptr = container;
+            if (te.locfields < 0x100) {
+                warning("Malformed Meta. Actor has NULL extension");
+                return ABSENT;
+            }
+
         }
+
         return container->slot(GET_LEXVAR_OFFSET(loc));
     case LT_Limbo:
         return ABSENT;
