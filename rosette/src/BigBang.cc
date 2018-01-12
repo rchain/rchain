@@ -438,12 +438,19 @@ static FILE* FindBootFile() {
     return fopen(path, "r");
 }
 
+static Tuple* GetArgv(const int argc, const int start, char** argv) {
+    if (start >= argc || 0 >= argc) {
+        return NIL;
+    }
 
-static Tuple* GetArgv(int argc, char** argv) {
-    Tuple* RosetteArgv = argc == 0 ? NIL : Tuple::create(argc, NIV);
+    auto len = argc - start;
+    Tuple* RosetteArgv = Tuple::create(len, NIV);
+
     PROTECT(RosetteArgv);
-    for (int i = 0; i < argc; i++) {
-        RBLstring* arg = RBLstring::create(argv[i]);
+
+    for (int i = 0; len > i; i++) {
+        auto t = argv[start + i];
+        RBLstring* arg = RBLstring::create(t);
         ASSIGN(RosetteArgv, elem(i), arg);
     }
 
@@ -505,7 +512,7 @@ static void LoadRunFile() {
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
-int malloc_debug(int);
+    int malloc_debug(int);
 }
 #endif
 
@@ -514,9 +521,10 @@ extern int restore(const char*, char*);
 int InBigBang = 0;
 
 int BigBang(int argc, char** argv, char** envp) {
-    argc = ParseCommandLine(argc, argv);
+    auto argc_start = ParseCommandLine(argc, argv);
     InBigBang = true;
     setsid();
+
 
     if (RestoringImage) {
         /**
@@ -527,7 +535,7 @@ int BigBang(int argc, char** argv, char** envp) {
          * restore.
          */
 
-        Define("argv", GetArgv(argc, argv));
+        Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
         vm->resetSignals();
 
@@ -545,13 +553,13 @@ int BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-/**
- * Always reset the malloc_verify stuff to current settings,
- * regardless of whether we are restoring an image.  This permits us
- * maximum checking while building an image, but allows the built
- * image to run with no checking unless specifically overridden with
- * a command-line option.
- */
+    /**
+     * Always reset the malloc_verify stuff to current settings,
+     * regardless of whether we are restoring an image.  This permits us
+     * maximum checking while building an image, but allows the built
+     * image to run with no checking unless specifically overridden with
+     * a command-line option.
+     */
 
 #if defined(MALLOC_DEBUGGING)
     malloc_debug(ParanoidAboutGC);
@@ -570,7 +578,7 @@ int BigBang(int argc, char** argv, char** envp) {
 
         vm = new VirtualMachine;
 
-        Define("argv", GetArgv(argc, argv));
+        Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
         LoadBootFiles();
         LoadRunFile();
@@ -625,7 +633,7 @@ int asyncHelper(int fd, int desiredState) {
     DO_BLOCKING
 #endif
 
-    result = fcntl(fd, F_SETFL, flags);
+        result = fcntl(fd, F_SETFL, flags);
 #else
     flags = (desiredState ? 1 : 0);
     result = ioctl(fd, FIOSNBIO, &flags);

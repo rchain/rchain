@@ -51,8 +51,10 @@ int RestoringImage = 0;
 
 
 void usage(const char* name, bool fatal = false, const char* msg = NULL) {
-    fprintf(stderr, "Usage: %s [OPTION]... [FILE]...\n"
-            "Run FILEs in the rholang VM.\n"
+    fprintf(stderr,
+            "Usage: %s [OPTION]... [FILE]... [-- <program_args> ...]\n"
+            "Run FILEs in the rholang VM, possibly passing <program_args> to \n"
+            "the program as its argv.\n"
             "\n"
             " -h, --help             Prints this message and exits.\n"
             " -v, --verbose          Verbose mode\n"
@@ -121,7 +123,7 @@ int ParseCommandLine(int argc, char** argv) {
 
     while (1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "qt:p:i:s:o:b:",
+        c = getopt_long(argc, argv, "+qt:p:i:s:o:b:",
                 long_options, &option_index);
 
         if (-1 == c) {
@@ -136,10 +138,12 @@ int ParseCommandLine(int argc, char** argv) {
                 if (long_options[option_index].flag != 0) {
                     break;
                 }
+
                 fprintf(stderr, "option %s", long_options[option_index].name);
                 if (optarg) {
                     fprintf (stderr, " with arg %s", optarg);
                 }
+
                 fprintf (stderr, "\n");
                 break;
 
@@ -182,16 +186,19 @@ int ParseCommandLine(int argc, char** argv) {
                 // wrong.
                 usage(argv[0], true, "Invalid argument.");
         }
+    }
 
-        //DeleteArgs(0, argc, argv); /* Delete argv[0] (the command name) */
-
+    // NB(leaf): If we got a '--' before we got a run file, then optind will
+    // be the index of the first argument of the program args and '--' should
+    // just precede it.
+    std::string prev_arg(argv[optind - 1]);
+    if ("--" != prev_arg) {
         if (optind < argc) {
             strncpy(RunFile, argv[optind], MAXPATHLEN);
             optind += 1;
         }
-
-        // TODO(leaf): What to do with remaining args?
     }
 
+    fprintf(stderr, "Returning optind=%d of argc=%d", optind, argc);
     return optind;
 }
