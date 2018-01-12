@@ -128,7 +128,7 @@ int ParseCommandLine(int argc, char** argv) {
 
     while (1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "+qt:p:i:s:o:b:",
+        c = getopt_long(argc, argv, "+qhvdI:t:p:is:o:b:",
                 long_options, &option_index);
 
         if (-1 == c) {
