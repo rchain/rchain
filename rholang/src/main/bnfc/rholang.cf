@@ -78,7 +78,7 @@ QByteString. CPrim ::= ByteString ;
 QText. CPrim ::= Text ;
 CPQ. CPQuantity ::= "{" Quantity "}";
 CPV. CPVar ::= Var ;
-CPByteString. ByteString ::= Hex ; -- bytestring literal in base16 encoding
+CPByteString. ByteString ::= "bytestring(" Quantity ")" ; -- bytestring literal in base16 encoding
 CPText. Text ::= "text(" Quantity ")";
 -- Secp256k1 signature primitives
 CPNewKeyPairSecp256k1. Quantity ::= "secp256k1.new_key_pair" Var "in" CPQuantity ;
@@ -195,7 +195,7 @@ separator nonempty ValPattern "," ;
 -- Names and variables
 token Name (upper (letter | digit | '_' | '\'' | '-' )*) ;
 token Var (lower (letter | digit | '_' | '\'' | '-')*) ;
-token Hex (('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f')*) ;
+-- token Hex (('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f')*) ;
 
 separator nonempty Var "," ;
 separator nonempty Name "," ;
