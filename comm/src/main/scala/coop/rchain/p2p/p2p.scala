@@ -61,6 +61,18 @@ case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.Sock
 
   val net = new UnicastNetwork(local, Some(this))
 
+  private val unresponsive = new scala.collection.mutable.HashMap[String,Long]
+
+  private def checkResponsive(key: String): Option[String] =
+    unresponsive.get(key) match {
+      case Some(timestamp) if timestamp < System.currentTimeMillis => {
+        unresponsive.remove(key)
+        Some(key)
+      }
+      case Some(timestamp) => None
+      case None => Some(key)
+    }
+
   /**
     * Connect to a remote node named by `remoteAddress`.
     *
@@ -70,7 +82,8 @@ case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.Sock
     */
   def connect(remoteAddress: String): Unit =
     for {
-      peer <- NetworkAddress.parse(remoteAddress)
+      address <- checkResponsive(remoteAddress)
+      peer <- NetworkAddress.parse(address)
     } {
       logger.debug(s"connect(): Connecting to $peer")
       val ehs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(net.local),
@@ -88,10 +101,16 @@ case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.Sock
                 s"connect(): Received protocol handshake response from ${resp.sender.get}.")
               net.add(remote)
             }
-            case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
+            case Left(ex) => {
+              logger.warn(s"connect(): No phs response: $ex")
+              unresponsive(remoteAddress) = System.currentTimeMillis + 5*60*1000L
+            }
           }
         }
-        case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
+        case Left(ex) => {
+          logger.warn(s"connect(): No ehs response: $ex")
+          unresponsive(remoteAddress) = System.currentTimeMillis + 5*60*1000L
+        }
       }
     }
 
