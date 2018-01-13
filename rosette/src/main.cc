@@ -47,12 +47,12 @@ extern "C" void configuration_force_load();
 static int _ForceLoadFlag_ = 0;
 
 int main(int argc, char** argv, char** envp) {
-    auto bang_info = BigBang(argc, argv, envp);
+    BigBang(argc, argv, envp);
 
     // If not loading/restoring an image.
-    if (!std::get<0>(bang_info)) {
+    //if (!std::get<0>(bang_info)) {
         vm->reset();
-    }
+    //}
 
     vm->execute();
 

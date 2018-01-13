@@ -380,61 +380,34 @@ void InitBuiltinObs() {
 }
 
 
-static void get_path_prefix(char* path, char* dir) {
-    char* p = strrchr(path, '/');
-    if (p) {
-        int n = p - path;
-        strncpy(dir, path, n);
-        dir[n] = 0;
-    } else {
-        strcpy(dir, ".");
-    }
-}
-
-
 const char* StandardExtensions[] = {".rbl", 0};
 
 
 static FILE* FindBootFile() {
     char path[MAXPATHLEN];
-    char* RosetteLib = getenv("ROSETTE_LIB");
+
+    strcpy(path, BootDirectory);
+    strcat(path, "/");
 
     if (strcmp(BootFile, "") == 0) {
-        if (RosetteLib) {
-            strcpy(BootDirectory, RosetteLib);
-        }
-
-        strcpy(path, BootDirectory);
-        strcat(path, "/");
         strcat(path, "boot.rbl");
     } else {
-        get_path_prefix(BootFile, BootDirectory);
-        strcpy(path, BootFile);
+        strcat(path, BootFile);
     }
 
-    int baselen = strlen(path);
-    const char** suffixp = StandardExtensions;
-
-    // TODO(leaf): This doesn't work as advertised. If the file can't
-    // be found, the path reported will incorrectly have the suffix
-    // appended.
-    for (; access(path, R_OK) && *suffixp; suffixp++) {
-        path[baselen] = '\0';
-        strcat(path, *suffixp);
-    }
-
-    if (!(*suffixp)) {
+    if (0 != access(path, R_OK)) {
         suicide("can't find boot file '%s'", path);
+        return NULL;
     }
 
     Tuple* loadPaths = Tuple::create(1, RBLstring::create(BootDirectory));
-    if (RosetteLib && strcmp(RosetteLib, BootDirectory)) {
-        PROTECT(loadPaths);
-        RBLstring* temp = RBLstring::create(RosetteLib);
-        loadPaths = rcons(loadPaths, temp);
+    PROTECT(loadPaths);
+    Define("load-paths", loadPaths);
+
+    if (VerboseFlag) {
+        fprintf(stderr, "Loading boot file: %s\n", path);
     }
 
-    Define("load-paths", loadPaths);
     return fopen(path, "r");
 }
 
@@ -445,7 +418,6 @@ static Tuple* GetArgv(const int argc, const int start, char** argv) {
 
     auto len = argc - start;
     Tuple* RosetteArgv = Tuple::create(len, NIV);
-
     PROTECT(RosetteArgv);
 
     for (int i = 0; len > i; i++) {

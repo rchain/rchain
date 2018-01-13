@@ -36,7 +36,7 @@ DEF("image-dump", imageDump, 1, 1) {
         return PRIM_MISMATCH(0, "String or Symbol");
     }
 
-    RestoringImage = true;
+    RestoringImage = 1;
     return RBLFALSE;
 }
 
