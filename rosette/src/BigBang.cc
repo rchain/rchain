@@ -524,6 +524,12 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
     InBigBang = true;
     setsid();
 
+    /**
+     * NB(leaf): The RestoringImage value is set by a primitive in
+     * Dump-world.cc when a memory image is restored from a file. After
+     * the image is loaded, the program execve's itself, and we end up
+     * back here.
+     */
     if (RestoringImage) {
         /**
          * This stuff must be (re-)initialized *after* the restore, since
