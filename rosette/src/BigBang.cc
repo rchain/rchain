@@ -413,8 +413,16 @@ static FILE* FindBootFile() {
 
 static Ob* GetReplFlag() {
     auto val = ForceEnableRepl;
-    auto rval = val ? RBLTRUE : RBLFALSE;
-    return rval;
+    if (val) {
+        return RBLTRUE;
+    }
+
+    // If we have no run file, run the repl, otherwise don't.
+    if (0 == strcmp(RunFile, "")) {
+        return RBLTRUE;
+    }
+
+    return RBLFALSE;
 }
 
 static Tuple* GetArgv(const int argc, const int start, char** argv) {

@@ -128,27 +128,28 @@
 	 c)))
 
 (defProc (rosette-repl)
-  (seq
-   (sleep)
-   (display **CurrentPrompt**)
-   (flush)
-   (let [[expr (read-expr stdin)]]
-     (cond ((read-error? expr)
-	    (rosette-repl))
-	   ((same? expr ':exit-repl)
-	    (kernel))
-	   ((eof? expr)
-	    (seq
-	     (c-async stdin #f)
-	     (io-catch 0 #niv)
-	     #niv))
-	   (else
-	    (let [[x (if (same? expr '!!) *last-expr* expr)]]
-	      (send eval-and-print x)
-	      (seq
-	       (define *last-expr* x)
-	       (sleep)
-	       (repl)) ))))))
+  (if flag-enable-repl
+    (seq
+     (sleep)
+     (display **CurrentPrompt**)
+     (flush)
+     (let [[expr (read-expr stdin)]]
+       (cond ((read-error? expr)
+  	    (rosette-repl))
+  	   ((same? expr ':exit-repl)
+  	    (kernel))
+  	   ((eof? expr)
+  	    (seq
+  	     (c-async stdin #f)
+  	     (io-catch 0 #niv)
+  	     #niv))
+  	   (else
+  	    (let [[x (if (same? expr '!!) *last-expr* expr)]]
+  	      (send eval-and-print x)
+  	      (seq
+  	       (define *last-expr* x)
+  	       (sleep)
+  	       (repl)) )))))))
 
 
 (defProc (initial-reset)
