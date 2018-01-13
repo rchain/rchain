@@ -37,7 +37,7 @@ unsigned OldSpaceChunkSize = 32 * 1024;
 int TenuringAge = 10;
 int ParanoidAboutGC = 0;
 char BootDirectory[MAXPATHLEN] = DEFAULT;
-char BootFile[MAXPATHLEN] = "";
+char BootFile[MAXPATHLEN] = "boot.rbl";
 char RunFile[MAXPATHLEN] = "";
 bool ForceEnableRepl = false;
 int VerboseFlag = 0;
@@ -126,17 +126,12 @@ int ParseCommandLine(int argc, char** argv) {
      */
     ParanoidAboutGC = 0;
 
-    /* Set the BootDirectory default, maybe from the environment. */
-    auto boot_dir_env = secure_getenv("ROSETTE_LIB");
+    /* Set the BootDirectory from the environment, if it's there.
+     */
+    auto boot_dir_env = getenv("ROSETTE_LIB");
     if (boot_dir_env) {
-        auto len = std::min(strlen(boot_dir_env), (size_t)MAXPATHLEN);
-        strncpy(BootDirectory, boot_dir_env, len);
-    } else {
-        strcpy(BootDirectory, DEFAULT);
+        strncpy(BootDirectory, boot_dir_env, MAXPATHLEN);
     }
-
-    /* Set the BootFile default. */
-    strcpy(BootFile, "boot.rbl");
 
     while (1) {
         int option_index = 0;

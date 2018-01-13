@@ -386,14 +386,15 @@ const char* StandardExtensions[] = {".rbl", 0};
 static FILE* FindBootFile() {
     char path[MAXPATHLEN];
 
-    strcpy(path, BootDirectory);
-    strcat(path, "/");
-
-    if (strcmp(BootFile, "") == 0) {
-        strcat(path, "boot.rbl");
+    // BootFile can never be null.
+    auto bootfile = BootFile;
+    if ('\0' == *bootfile) {
+        bootfile = "boot.rbl";
     } else {
-        strcat(path, BootFile);
+        bootfile = BootFile;
     }
+
+    snprintf(path, MAXPATHLEN, "%s/%s", BootDirectory, bootfile);
 
     if (0 != access(path, R_OK)) {
         suicide("can't find boot file '%s'", path);
