@@ -411,6 +411,12 @@ static FILE* FindBootFile() {
     return fopen(path, "r");
 }
 
+static Ob* GetReplFlag() {
+    auto val = ForceEnableRepl;
+    auto rval = val ? RBLTRUE : RBLFALSE;
+    return rval;
+}
+
 static Tuple* GetArgv(const int argc, const int start, char** argv) {
     if (start >= argc || 0 >= argc) {
         return NIL;
@@ -521,6 +527,7 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
 
         Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
+        Define("flag-enable-repl", GetReplFlag());
         vm->resetSignals();
 
         /**
@@ -564,6 +571,7 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
 
         Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
+        Define("flag-enable-repl", GetReplFlag());
         LoadBootFiles();
         did_run_file = LoadRunFile();
 
