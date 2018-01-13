@@ -589,8 +589,8 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         Define("flag-enable-repl", GetReplFlag());
         LoadBootFiles();
         did_run_file = LoadRunFile();
-
         heap->tenureEverything();
+
     }
 
     handleInterrupts();
