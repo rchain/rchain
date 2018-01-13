@@ -21,7 +21,7 @@
 
 #include <stdarg.h>
 #include <cerrno>
-
+#include <tuple>
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/file.h>
@@ -438,12 +438,19 @@ static FILE* FindBootFile() {
     return fopen(path, "r");
 }
 
+static Tuple* GetArgv(const int argc, const int start, char** argv) {
+    if (start >= argc || 0 >= argc) {
+        return NIL;
+    }
 
-static Tuple* GetArgv(int argc, char** argv) {
-    Tuple* RosetteArgv = argc == 0 ? NIL : Tuple::create(argc, NIV);
+    auto len = argc - start;
+    Tuple* RosetteArgv = Tuple::create(len, NIV);
+
     PROTECT(RosetteArgv);
-    for (int i = 0; i < argc; i++) {
-        RBLstring* arg = RBLstring::create(argv[i]);
+
+    for (int i = 0; len > i; i++) {
+        auto t = argv[start + i];
+        RBLstring* arg = RBLstring::create(t);
         ASSIGN(RosetteArgv, elem(i), arg);
     }
 
@@ -485,27 +492,32 @@ static void LoadBootFiles() {
     }
 }
 
-static void LoadRunFile() {
-    if (strcmp(RunFile, "") != 0) {
-        FILE* run = fopen(RunFile, "r");
-        if (run) {
-            Reader* reader = Reader::create(run);
-            PROTECT(reader);
-
-            Ob* expr = INVALID;
-            while ((expr = reader->readExpr()) != RBLEOF) {
-                vm->load(expr);
-            }
-        } else {
-            suicide("Unable to open RunFile \"%s\": %s", RunFile,
-                    strerror(errno));
-        }
+static bool LoadRunFile() {
+    if (0 == strcmp(RunFile, "")) {
+        return false;
     }
+
+    FILE* run = fopen(RunFile, "r");
+    if (run) {
+        Reader* reader = Reader::create(run);
+        PROTECT(reader);
+
+        Ob* expr = INVALID;
+        while ((expr = reader->readExpr()) != RBLEOF) {
+            vm->load(expr);
+        }
+
+        return true;
+    }
+
+    suicide("Unable to open RunFile \"%s\": %s", RunFile,
+            strerror(errno));
+    return false;
 }
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
-int malloc_debug(int);
+    int malloc_debug(int);
 }
 #endif
 
@@ -513,8 +525,16 @@ extern int restore(const char*, char*);
 
 int InBigBang = 0;
 
-int BigBang(int argc, char** argv, char** envp) {
-    argc = ParseCommandLine(argc, argv);
+/**
+ * The BigBang returns a tuple if indicators with the following
+ * types and meanings:
+ *
+ *   int: Are we restoring an image?
+ *   bool: should we run the repl?
+ */
+std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
+    bool did_run_file = false;
+    auto argc_start = ParseCommandLine(argc, argv);
     InBigBang = true;
     setsid();
 
@@ -527,7 +547,7 @@ int BigBang(int argc, char** argv, char** envp) {
          * restore.
          */
 
-        Define("argv", GetArgv(argc, argv));
+        Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
         vm->resetSignals();
 
@@ -545,13 +565,13 @@ int BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-/**
- * Always reset the malloc_verify stuff to current settings,
- * regardless of whether we are restoring an image.  This permits us
- * maximum checking while building an image, but allows the built
- * image to run with no checking unless specifically overridden with
- * a command-line option.
- */
+    /**
+     * Always reset the malloc_verify stuff to current settings,
+     * regardless of whether we are restoring an image.  This permits us
+     * maximum checking while building an image, but allows the built
+     * image to run with no checking unless specifically overridden with
+     * a command-line option.
+     */
 
 #if defined(MALLOC_DEBUGGING)
     malloc_debug(ParanoidAboutGC);
@@ -570,10 +590,10 @@ int BigBang(int argc, char** argv, char** envp) {
 
         vm = new VirtualMachine;
 
-        Define("argv", GetArgv(argc, argv));
+        Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
         LoadBootFiles();
-        LoadRunFile();
+        did_run_file = LoadRunFile();
 
         heap->tenureEverything();
     }
@@ -581,7 +601,12 @@ int BigBang(int argc, char** argv, char** envp) {
     handleInterrupts();
     InBigBang = false;
 
-    return RestoringImage;
+    bool repl_enabled = true;
+    if (did_run_file && !ForceEnableRepl) {
+        repl_enabled = false;
+    }
+
+    return std::make_tuple(RestoringImage, repl_enabled);
 }
 
 
@@ -625,7 +650,7 @@ int asyncHelper(int fd, int desiredState) {
     DO_BLOCKING
 #endif
 
-    result = fcntl(fd, F_SETFL, flags);
+        result = fcntl(fd, F_SETFL, flags);
 #else
     flags = (desiredState ? 1 : 0);
     result = ioctl(fd, FIOSNBIO, &flags);
