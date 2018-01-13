@@ -60,31 +60,6 @@ int main(int argc, char** argv, char** envp) {
         configuration_force_load();
     }
 
-    // If repl is enabled.
-    if (std::get<1>(bang_info)) {
-        while (!feof(stdin)) {
-            const char* prompt = "rosette> ";
-            /*
-             * Turn off any async handling that might have been left on by a
-             * crash-and-burn at the higher levels.
-             */
-            heap->gc();
-            StdinReader->resetState();
-
-            printf("%s", prompt);
-            Ob* x = StdinReader->readExpr();
-
-            if (x == RBLEOF) {
-                break;
-            }
-
-            clearerr(stdin);
-            vm->evaluate(x);
-        }
-
-        putchar('\n');
-    }
-
     BigCrunch();
     exit(0);
 }

@@ -98,14 +98,13 @@ int ParseCommandLine(int argc, char** argv) {
      */
 
     int verbose_flag = 0;
-    int enable_repl = 0;
     int c = 0;
 
     const struct option long_options[] = {
         /* Flags */
         {"verbose", no_argument, &verbose_flag, 1},
         {"quiet", no_argument, &verbose_flag, 0},
-        {"interactive-repl", no_argument, &enable_repl, 'i'},
+        {"interactive-repl", no_argument, NULL, 'i'},
 
         /* Non-flags */
         {"help", no_argument, 0, 'h'},
