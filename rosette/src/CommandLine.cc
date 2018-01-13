@@ -19,6 +19,7 @@
 
 #include "CommandLine.h"
 
+#include <algorithm>
 #include <string>
 #include <string.h>
 #include <sys/param.h>
@@ -35,11 +36,11 @@ unsigned OldSpaceChunkSize = 32 * 1024;
 
 int TenuringAge = 10;
 int ParanoidAboutGC = 0;
-char* DefaultBootDirectory = DEFAULT;
 char BootDirectory[MAXPATHLEN] = DEFAULT;
-char BootFile[MAXPATHLEN] = "";
+char BootFile[MAXPATHLEN] = "boot.rbl";
 char RunFile[MAXPATHLEN] = "";
 bool ForceEnableRepl = false;
+int VerboseFlag = 0;
 
 /*
  * RestoringImage is set to 0 in the initial boot-rosette image, but it
@@ -125,6 +126,13 @@ int ParseCommandLine(int argc, char** argv) {
      */
     ParanoidAboutGC = 0;
 
+    /* Set the BootDirectory from the environment, if it's there.
+     */
+    auto boot_dir_env = getenv("ROSETTE_LIB");
+    if (boot_dir_env) {
+        strncpy(BootDirectory, boot_dir_env, MAXPATHLEN);
+    }
+
     while (1) {
         int option_index = 0;
         c = getopt_long(argc, argv, "+qhvdI:t:p:is:o:b:",
@@ -207,6 +215,10 @@ int ParseCommandLine(int argc, char** argv) {
         }
     }
 
-    fprintf(stderr, "Returning optind=%d of argc=%d", optind, argc);
+    if (VerboseFlag) {
+        fprintf(stderr, "ParseCommandLine: Returning optind=%d of argc=%d\n",
+                optind, argc);
+    }
+
     return optind;
 }

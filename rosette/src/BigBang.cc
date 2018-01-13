@@ -380,62 +380,50 @@ void InitBuiltinObs() {
 }
 
 
-static void get_path_prefix(char* path, char* dir) {
-    char* p = strrchr(path, '/');
-    if (p) {
-        int n = p - path;
-        strncpy(dir, path, n);
-        dir[n] = 0;
-    } else {
-        strcpy(dir, ".");
-    }
-}
-
-
 const char* StandardExtensions[] = {".rbl", 0};
 
 
 static FILE* FindBootFile() {
     char path[MAXPATHLEN];
-    char* RosetteLib = getenv("ROSETTE_LIB");
 
-    if (strcmp(BootFile, "") == 0) {
-        if (RosetteLib) {
-            strcpy(BootDirectory, RosetteLib);
-        }
-
-        strcpy(path, BootDirectory);
-        strcat(path, "/");
-        strcat(path, "boot.rbl");
+    // BootFile can never be null.
+    auto bootfile = BootFile;
+    if ('\0' == *bootfile) {
+        bootfile = "boot.rbl";
     } else {
-        get_path_prefix(BootFile, BootDirectory);
-        strcpy(path, BootFile);
+        bootfile = BootFile;
     }
 
-    int baselen = strlen(path);
-    const char** suffixp = StandardExtensions;
+    snprintf(path, MAXPATHLEN, "%s/%s", BootDirectory, bootfile);
 
-    // TODO(leaf): This doesn't work as advertised. If the file can't
-    // be found, the path reported will incorrectly have the suffix
-    // appended.
-    for (; access(path, R_OK) && *suffixp; suffixp++) {
-        path[baselen] = '\0';
-        strcat(path, *suffixp);
-    }
-
-    if (!(*suffixp)) {
+    if (0 != access(path, R_OK)) {
         suicide("can't find boot file '%s'", path);
+        return NULL;
     }
 
     Tuple* loadPaths = Tuple::create(1, RBLstring::create(BootDirectory));
-    if (RosetteLib && strcmp(RosetteLib, BootDirectory)) {
-        PROTECT(loadPaths);
-        RBLstring* temp = RBLstring::create(RosetteLib);
-        loadPaths = rcons(loadPaths, temp);
+    PROTECT(loadPaths);
+    Define("load-paths", loadPaths);
+
+    if (VerboseFlag) {
+        fprintf(stderr, "Loading boot file: %s\n", path);
     }
 
-    Define("load-paths", loadPaths);
     return fopen(path, "r");
+}
+
+static Ob* GetReplFlag() {
+    auto val = ForceEnableRepl;
+    if (val) {
+        return RBLTRUE;
+    }
+
+    // If we have no run file, run the repl, otherwise don't.
+    if (0 == strcmp(RunFile, "")) {
+        return RBLTRUE;
+    }
+
+    return RBLFALSE;
 }
 
 static Tuple* GetArgv(const int argc, const int start, char** argv) {
@@ -445,7 +433,6 @@ static Tuple* GetArgv(const int argc, const int start, char** argv) {
 
     auto len = argc - start;
     Tuple* RosetteArgv = Tuple::create(len, NIV);
-
     PROTECT(RosetteArgv);
 
     for (int i = 0; len > i; i++) {
@@ -538,6 +525,12 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
     InBigBang = true;
     setsid();
 
+    /**
+     * NB(leaf): The RestoringImage value is set by a primitive in
+     * Dump-world.cc when a memory image is restored from a file. After
+     * the image is loaded, the program execve's itself, and we end up
+     * back here.
+     */
     if (RestoringImage) {
         /**
          * This stuff must be (re-)initialized *after* the restore, since
@@ -549,6 +542,7 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
 
         Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
+        Define("flag-enable-repl", GetReplFlag());
         vm->resetSignals();
 
         /**
@@ -592,6 +586,7 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
 
         Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
+        Define("flag-enable-repl", GetReplFlag());
         LoadBootFiles();
         did_run_file = LoadRunFile();
 
