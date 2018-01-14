@@ -1,6 +1,6 @@
-;;; TODO: Implement match? for other data structures
+;;; TODO: Discuss semantics of match?
 (defOprn match?)
-(defPure Tuple (match? other) (= (self) other))
+(defProc (match? this other) (= this other))
 
 (defOprn get)
 (defPure RblTable (get key)
