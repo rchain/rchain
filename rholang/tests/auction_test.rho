@@ -1,12 +1,5 @@
-// Rholang equivalent of the Simple Open Auction http://solidity.readthedocs.io/en/develop/solidity-by-example.html#simple-open-auction
-// The auction contract has three main actions: bid, withdraw, and auction_end (which ends the auction).
-// This contract demonstrates the use of the primitive inject-now,
-// which injects the current system time into the channel.
-// The current time is then used to keep track of when
-// the auction started, when the bid has come in, and when
-// the call to end the auction has been made.
-
-// This contract has not been formally verified!
+// Tests for examples/auction.rho
+// TODO: Remove duplication of contract once we have a contract registry
 
 new auction in {
     contract auction (beneficiary, bidding_time, return_channel) = {
@@ -95,13 +88,31 @@ new auction in {
         }
     } |
 
-    // Example code to
-    // (1) instantiate the auction contract
-    // (2) send in two bids
-    // (3) end the auction
-    // (4) check the beneficiaries' balance
-    //
-    // See tests/auction_tests.rho to see more calls
+    // auction_end fails if bidding time has passed
+    new rtn, me, bidder_one, bidder_two, unused_rtn in {
+        auction!([me, 9999, rtn]) | // Bidding time of 9999 is an arbitrary time that this test shouldn't take
+        for (auction_contract <- rtn) {
+            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            for (_ <- unused_rtn) { // Ensures sequential bid
+                @auction_contract.get("bid")!([bidder_two, 200, unused_rtn]) |
+                for (_ <- unused_rtn) { // Ensures auction end happens after bids
+                    @auction_contract.get("auction_end")!([me, unused_rtn]) |
+                    for (has_ended <- unused_rtn) {
+                        match has_ended with
+                        false => {
+                            print("Pass")
+                        }
+                        _ => {
+                            print("Fail")
+                        }
+                    }
+                }
+            } |
+            rtn!(auction_contract)
+        }
+    } |
+
+    // it ensures bidder_one receives back their bid
     new rtn, me, bidder_one, bidder_two, unused_rtn in {
         auction!([me, 0, rtn]) | // Note bidding time of 0 means anyone can immediately end the auction
         for (auction_contract <- rtn) {
@@ -110,7 +121,40 @@ new auction in {
                 @auction_contract.get("bid")!([bidder_two, 200, unused_rtn]) |
                 for (_ <- unused_rtn) { // Ensures auction end happens after bids
                     @auction_contract.get("auction_end")!([me, unused_rtn]) |
-                    for (me_balance <- me) { print(me_balance) }
+                    @auction_contract.get("withdraw")!([bidder_one, unused_rtn]) |
+                    for (bidder_one_balance <- bidder_one) {
+                        match bidder_one_balance with
+                        100 => {
+                            print("Pass")
+                        }
+                        _ => {
+                            print("Fail")
+                        }
+                    }
+                }
+            } |
+            rtn!(auction_contract)
+        }
+    } |
+
+    // It rejects lower bids
+    new rtn, me, bidder_one, bidder_two, unused_rtn in {
+        auction!([me, 0, rtn]) | // Note bidding time of 0 means anyone can immediately end the auction
+        for (auction_contract <- rtn) {
+            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            for (_ <- unused_rtn) { // Ensures sequential bid
+                @auction_contract.get("bid")!([bidder_two, 50, unused_rtn]) |
+                for (_ <- unused_rtn) { // Ensures auction end happens after bids
+                    @auction_contract.get("auction_end")!([me, unused_rtn]) |
+                    for (me_balance <- me) {
+                        match me_balance with
+                        100 => {
+                            print("Pass")
+                        }
+                        _ => {
+                            print("Fail")
+                        }
+                    }
                 }
             } |
             rtn!(auction_contract)
