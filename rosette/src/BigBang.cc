@@ -480,20 +480,21 @@ static void LoadBootFiles() {
 }
 
 static bool LoadRunFile() {
+    char* enable_runscript = "flag-enable-runscript";
+    char* runscript = "**RUNSCRIPT**";
     if (0 == strcmp(RunFile, "")) {
+        Define(runscript, NIV);
+        Define(enable_runscript, RBLFALSE);
         return false;
     }
 
     FILE* run = fopen(RunFile, "r");
     if (run) {
         Reader* reader = Reader::create(run);
-        PROTECT(reader);
-
-        Ob* expr = INVALID;
-        while ((expr = reader->readExpr()) != RBLEOF) {
-            vm->load(expr);
-        }
-
+        auto i = Istream::create(reader);
+        PROTECT(i);
+        Define(runscript, i);
+        Define(enable_runscript, RBLTRUE);
         return true;
     }
 
@@ -587,10 +588,10 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
         Define("flag-enable-repl", GetReplFlag());
-        LoadBootFiles();
         did_run_file = LoadRunFile();
-
+        LoadBootFiles();
         heap->tenureEverything();
+
     }
 
     handleInterrupts();

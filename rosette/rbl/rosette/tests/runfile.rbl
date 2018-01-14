@@ -1,0 +1,2 @@
+(defProc (foo) 'bar)
+(display (foo) "\n")
