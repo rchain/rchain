@@ -98,13 +98,12 @@ int ParseCommandLine(int argc, char** argv) {
      * BigBang.cc for details.
      */
 
-    int verbose_flag = 0;
     int c = 0;
 
     const struct option long_options[] = {
         /* Flags */
-        {"verbose", no_argument, &verbose_flag, 1},
-        {"quiet", no_argument, &verbose_flag, 0},
+        {"verbose", no_argument, NULL, 'v'},
+        {"quiet", no_argument, NULL, 'q'},
         {"interactive-repl", no_argument, NULL, 'i'},
 
         /* Non-flags */
@@ -146,17 +145,12 @@ int ParseCommandLine(int argc, char** argv) {
         size_t chars = 0;
 
         switch (c) {
-            case 0:
-                if (long_options[option_index].flag != 0) {
-                    break;
-                }
+            case 'v':
+                VerboseFlag = 1;
+                break;
 
-                fprintf(stderr, "option %s", long_options[option_index].name);
-                if (optarg) {
-                    fprintf (stderr, " with arg %s", optarg);
-                }
-
-                fprintf (stderr, "\n");
+            case 'q':
+                VerboseFlag = 0;
                 break;
 
             case 'h':
