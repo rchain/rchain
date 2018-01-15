@@ -1,6 +1,31 @@
 package coop.rchain.storage.regex
 
-object RegexPattern {}
+trait ParsedPattern {
+  def tryParse(str: CharSequence): Option[(RegexPattern, Int)]
+}
+
+/**
+  * A companion object for the RegexPattern class
+  */
+object RegexPattern extends ParsedPattern {
+
+  /**
+    * Turn the supplied finite state machine into a `RegexPattern` object.
+    * This is accomplished using the Brzozowski algebraic method.
+    */
+  def fromFsm(fsm: Fsm): RegexPattern =
+    throw new NotImplementedError("TODO")
+
+  def parse(str: CharSequence): Option[RegexPattern] = tryParse(str).map { case (rx, _) => rx }
+
+  def tryParse(str: CharSequence): Option[(RegexPattern, Int)] = AltPattern.tryParse(str)
+
+  /**
+    * This RegexPattern expresses "no possibilities at all"
+    * and can never match anything.
+    */
+  val nothing: RegexPattern = CharClassPattern(Nil)
+}
 
 /**
   * Parent abstract class for all Regex patterns.
@@ -11,8 +36,8 @@ sealed abstract class RegexPattern {
 
   /**
     * Two RegexPatterns are equivalent if they recognise the same strings. Note
-		*	that in the general case this is actually quite an intensive calculation,
-		*	but far from unsolvable, as we demonstrate here:
+    *	that in the general case this is actually quite an intensive calculation,
+    *	but far from unsolvable, as we demonstrate here:
     */
   def equivalent(that: RegexPattern): Boolean
 
@@ -20,7 +45,7 @@ sealed abstract class RegexPattern {
     * Concatenate a sequence of Regex patterns, regardless of differing classes.
     * Call using "a = b + c"
     */
-  def concatenate(that: RegexPattern): RegexPattern
+  def concatenate(that: RegexPattern): ConcPattern
 
   /**
     * Alternate between any two Regex patterns, regardless of differing classes.
@@ -38,43 +63,41 @@ sealed abstract class RegexPattern {
 
   /**
     * Return a set of all unique characters used in this RegexPattern.
-    * In theory this could be a static property, but in the vast majority of cases
-    * this will never be queried so it's a waste of computation to
-    * calculate it every time a RegexPattern is instantiated.
     * By convention, fsm.anythingElse is always included in this result.
     */
-  def alphabet: Set[Char]
+  lazy val alphabet: Set[Char] = Set(Fsm.anythingElse)
 
   /**
     * Intersection function. Return a RegexPattern that can match any string
-		*	that both self and other can match. Fairly elementary results relating
-		*	to regular languages and finite state machines show that this is
-		* possible, but implementation is a BEAST in many cases. Here, we convert
-		*	both Regex patters to FSMs (see to_fsm(), above) for the intersection, then
-		*	back to RegexPatterns afterwards.
-		*	Call using "a = b & c"
+    *	that both self and other can match. Fairly elementary results relating
+    *	to regular languages and finite state machines show that this is
+    * possible, but implementation is a BEAST in many cases. Here, we convert
+    *	both Regex patters to FSMs (see to_fsm(), above) for the intersection, then
+    *	back to RegexPatterns afterwards.
+    *	Call using "a = b & c"
     */
   def intersection(that: RegexPattern): RegexPattern
 
   /**
-    * Negate the current Pattern
-    * Call using "RegexPattern = ~RegexPattern"
+    * Return a RegexPattern which will match any string which, when reversed,
+    * self would match. E.g. if self matches "beer" then reversed(self) will
+    * match "reeb".
     */
-  def negated: RegexPattern
+  def reversed: RegexPattern
 
   /**
     * Equivalent to repeated concatenation. Multiplier consists of a minimum
     * and a maximum; maximum may be infinite (for Kleene star closure).
     * Call using "a = b * qm"
     */
-  def multiply(multiplier: Multiplier): RegexPattern
+  def multiply(multiplier: Multiplier): MultPattern
 
   /**
     * Equivalent to repeated concatenation. Multiplier consists of a minimum
     * and a maximum; maximum may be infinite (for Kleene star closure).
     * Call using "a = b * qm"
     */
-  def multiply(multiplier: Int): RegexPattern = multiply(new Multiplier(multiplier))
+  final def multiply(multiplier: Int): MultPattern = multiply(Multiplier(multiplier))
 
   /**
     * Return False if there exists a string which the present RegexPattern
@@ -83,7 +106,20 @@ sealed abstract class RegexPattern {
     */
   def isEmpty: Boolean
 
+  /**
+    * Test whether the present RegexPattern accepts the supplied string.
+    * Used only for unit-testing.
+    */
+  private[regex] def accepts(s: String): Boolean = toFsm().accepts(s)
+
   def toFsm(alphabet: Option[Set[Char]] = None): Fsm
+
+  final def toFsm(alphabet: Set[Char]): Fsm = toFsm(Some(alphabet))
+
+  final override def equals(obj: scala.Any): Boolean = obj match {
+    case pattern: RegexPattern => equivalent(pattern)
+    case _                     => false
+  }
 
   //region Operators
 
@@ -100,7 +136,7 @@ sealed abstract class RegexPattern {
   /**
     * Concatenate a sequence of Regex patterns, regardless of differing classes.
     */
-  final def +(that: RegexPattern): RegexPattern = concatenate(that)
+  final def +(that: RegexPattern): ConcPattern = concatenate(that)
 
   /**
     * Alternate between any two Regex patterns, regardless of differing classes.
@@ -113,35 +149,39 @@ sealed abstract class RegexPattern {
   final def &(that: RegexPattern): RegexPattern = intersection(that)
 
   /**
-    * Returns RegexPattern.negated
-    */
-  final def unary_~ : RegexPattern = negated
-
-  /**
     * Returns repeated concatenation of this RegexPattern
     */
-  final def *(multiplier: Int) = multiply(multiplier)
+  final def *(multiplier: Int): MultPattern = multiply(multiplier)
+
+  final def *(multiplier: Multiplier): MultPattern = multiply(multiplier)
+
   //endregion
 }
 
 /**
   * Companion object for the CharClassPattern, used only for easy testing
   */
-object CharClassPattern {
-  def apply(charSet: String) = new CharClassPattern(charSet)
-  def apply(charSet: Seq[Char]) = new CharClassPattern(charSet)
-  def apply(charSet: Set[Char]) = new CharClassPattern(charSet)
-  def apply(charSet: String, negateCharSet : Boolean) = new CharClassPattern(charSet, negateCharSet)
-  def apply(charSet: Seq[Char], negateCharSet : Boolean) = new CharClassPattern(charSet, negateCharSet)
-  def apply(charSet: Set[Char], negateCharSet : Boolean) = new CharClassPattern(charSet, negateCharSet)
+object CharClassPattern extends ParsedPattern {
+  def apply(charSet: String): CharClassPattern = new CharClassPattern(charSet.toSet)
+  def apply(charSet: Seq[Char]): CharClassPattern = new CharClassPattern(charSet.toSet)
+  def apply(charSet: Set[Char]): CharClassPattern = new CharClassPattern(charSet)
+  def apply(charSet: String, negateCharSet: Boolean): CharClassPattern =
+    new CharClassPattern(charSet.toSet, negateCharSet)
+  def apply(charSet: Seq[Char], negateCharSet: Boolean): CharClassPattern =
+    new CharClassPattern(charSet.toSet, negateCharSet)
+  def apply(charSet: Set[Char], negateCharSet: Boolean): CharClassPattern =
+    new CharClassPattern(charSet, negateCharSet)
+
+  def tryParse(str: CharSequence): Option[(CharClassPattern, Int)] =
+    throw new NotImplementedError("TODO")
 }
 
 /**
   * A CharClass is basically a Set of symbols. The reason for the
-  * CharClass object instead of using frozenset directly is to allow us to
+  * CharClass object instead of using Set directly is to allow us to
   * set a "negated" flag. A CharClass with the negation flag set is assumed
   * to contain every symbol that is in the alphabet of all symbols but not
-  * explicitly listed inside the Set. e.g. [ \ ^ a ]. This is very handy
+  * explicitly listed inside the Set. e.g. [{@literal ^}a]. This is very handy
   * if the full alphabet is extremely large, but also requires dedicated
   * combination functions.
   */
@@ -150,10 +190,9 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
   //chars should consist only of chars
   require(!charSet.contains(Fsm.anythingElse), "Charset can't contain Fsm.AnythingElse")
 
-  def this(charSet: Seq[Char], negateCharSet: Boolean) = this(charSet.toSet, negateCharSet)
-  def this(charSet: String, negateCharSet: Boolean) = this(charSet.toSet, negateCharSet)
-  def this(charSet: String) = this(charSet.toSet, false)
-  def this(charSet: Seq[Char]) = this(charSet.toSet, false)
+  override lazy val alphabet: Set[Char] = charSet + Fsm.anythingElse
+
+  override def hashCode(): Int = if (negateCharSet) charSet.hashCode() else -charSet.hashCode()
 
   override def equivalent(that: RegexPattern): Boolean = that match {
     case thatCharClass: CharClassPattern =>
@@ -161,7 +200,7 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
     case _ => false
   }
 
-  override def toFsm(alphabet: Option[Set[Char]] = None) = {
+  override def toFsm(alphabet: Option[Set[Char]] = None): Fsm = {
     val actualAlphabet = alphabet.getOrElse(this.alphabet)
     //0 is initial, 1 is final
     val map = if (negateCharSet) {
@@ -174,30 +213,22 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
     Fsm(actualAlphabet, Set(0, 1), 0, Set(1), map)
   }
 
-  override def alphabet: Set[Char] = charSet + Fsm.anythingElse
-
-  override def hashCode(): Int = if (negateCharSet) charSet.hashCode() else -charSet.hashCode()
-
-  override def reduced: RegexPattern = this //Char classes cannot be reduced
+  override def reduced: CharClassPattern = this //Char classes cannot be reduced
 
   override def isEmpty: Boolean = charSet.isEmpty && !negateCharSet
 
   /**
-    * Negate the current CharClass e.g. [ab] becomes [ \ ^ ab].
+    * Negate the current CharClass e.g. [ab] becomes [{@literal ^}ab].
     */
-  override def negated: RegexPattern = CharClassPattern(charSet, !negateCharSet)
+  def negated: CharClassPattern = CharClassPattern(charSet, !negateCharSet)
 
   /**
     * Concatenate a sequence of Regex patterns, regardless of differing classes.
     * Call using "a = b + c"
     */
-  override def concatenate(that: RegexPattern): RegexPattern = multiply(1) + that
+  override def concatenate(that: RegexPattern): ConcPattern = multiply(1) + that
 
-  override def multiply(that: Multiplier): RegexPattern =
-    if (that.isOne)
-      this
-    else
-      throw new NotImplementedError("TODO")
+  override def multiply(multiplier: Multiplier): MultPattern = MultPattern(this, multiplier)
 
   /**
     * Alternate between any two Regex patterns, regardless of differing classes.
@@ -212,9 +243,12 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
   override def union(that: RegexPattern): RegexPattern = that match {
     case thatCharClass: CharClassPattern =>
       (this.negateCharSet, thatCharClass.negateCharSet) match {
-        case (true, true)   => CharClassPattern(this.charSet & thatCharClass.charSet, true)
-        case (true, false)  => CharClassPattern(this.charSet -- thatCharClass.charSet, true)
-        case (false, true)  => CharClassPattern(thatCharClass.charSet -- this.charSet, true)
+        case (true, true) =>
+          CharClassPattern(this.charSet & thatCharClass.charSet, negateCharSet = true)
+        case (true, false) =>
+          CharClassPattern(this.charSet -- thatCharClass.charSet, negateCharSet = true)
+        case (false, true) =>
+          CharClassPattern(thatCharClass.charSet -- this.charSet, negateCharSet = true)
         case (false, false) => CharClassPattern(this.charSet | thatCharClass.charSet)
       }
     case _ => multiply(1) | that
@@ -232,133 +266,261 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
   override def intersection(that: RegexPattern): RegexPattern = that match {
     case thatCharClass: CharClassPattern =>
       (this.negateCharSet, thatCharClass.negateCharSet) match {
-        case (true, true)   => CharClassPattern(this.charSet | thatCharClass.charSet, true)
+        case (true, true) =>
+          CharClassPattern(this.charSet | thatCharClass.charSet, negateCharSet = true)
         case (true, false)  => CharClassPattern(thatCharClass.charSet -- this.charSet)
         case (false, true)  => CharClassPattern(this.charSet -- thatCharClass.charSet)
         case (false, false) => CharClassPattern(this.charSet & thatCharClass.charSet)
       }
     case _ => multiply(1) & that
   }
+
+  /**
+    * CharClass doesn't change when reversed
+    */
+  override def reversed: CharClassPattern = this
+
+  /**
+    * Returns RegexPattern.negated
+    */
+  def unary_~ : CharClassPattern = negated
+}
+
+object ConcPattern extends ParsedPattern {
+  def apply(pattern: MultPattern): ConcPattern = new ConcPattern(pattern :: Nil)
+
+  def apply(patterns: RegexPattern*): ConcPattern =
+    ConcPattern(patterns.map {
+      case mp: MultPattern => mp
+      case p               => MultPattern(p, Multiplier.presetOne)
+    }.toList)
+
+  val presetEmptyString = ConcPattern(Nil)
+
+  def tryParse(str: CharSequence): Option[(ConcPattern, Int)] =
+    throw new NotImplementedError("TODO")
 }
 
 /**
-  * A min and a max. The vast majority of characters in regular
+  * A ConcatenationPattern is a tuple of mults i.e. an unbroken
+  * string of mults occurring one after the other.
+  * e.g. abcde[{@literal ^}fg]*h{4}[a-z]+(subpattern)(subpattern2)
+  * To express the empty string, use an empty ConcatenationPattern().
+  */
+final case class ConcPattern(mults: List[MultPattern]) extends RegexPattern {
+
+  override lazy val alphabet: Set[Char] = mults.flatMap(_.alphabet).toSet + Fsm.anythingElse
+
+  override def hashCode: Int = mults.hashCode
+
+  override def equivalent(that: RegexPattern): Boolean = that match {
+    case concPattern: ConcPattern =>
+      (mults.size == concPattern.mults.size) && mults.corresponds(concPattern.mults)(
+        _.equivalent(_))
+    case _ => false
+  }
+
+  override def reversed: ConcPattern = ConcPattern(mults.map(_.reversed).reverse)
+
+  override def isEmpty: Boolean = mults.forall(_.isEmpty)
+
+  override def toFsm(alphabet: Option[Set[Char]]): Fsm = {
+    val actualAlphabet = alphabet.getOrElse(this.alphabet)
+    //start with a component accepting only the empty string
+    mults.foldLeft(Fsm.epsilonFsm(actualAlphabet))(_ + _.toFsm(actualAlphabet))
+  }
+
+  override def concatenate(that: RegexPattern): ConcPattern = {
+    val thatConc: ConcPattern = that match {
+      case thatConc: ConcPattern       => thatConc
+      case thatChars: CharClassPattern => ConcPattern(thatChars * 1)
+      case thatMult: MultPattern       => ConcPattern(thatMult)
+      case thatAlt: AltPattern         => ConcPattern(thatAlt * 1)
+    }
+
+    ConcPattern(mults ++ thatConc.mults)
+  }
+
+  override def union(that: RegexPattern): RegexPattern = AltPattern(this) | that
+
+  override def intersection(that: RegexPattern): RegexPattern = AltPattern(this) & that
+
+  override def multiply(multiplier: Multiplier): MultPattern =
+    MultPattern(AltPattern(this), multiplier)
+
+  override def reduced: RegexPattern = throw new NotImplementedError("TODO")
+
+  /**
+    * Return the common prefix of these two ConcPatterns;
+    * that is, the largest ConcPattern which can be safely beheaded()
+    * from the front of both. The result could be emptystring.
+    * "ZYAA, ZYBB" -> "ZY"
+    * "CZ, CZ" -> "CZ"
+    * "YC, ZC" -> ""
+    * With the "suffix" flag set, works from the end. E.g.:
+    * "AAZY, BBZY" -> "ZY"
+    * "CZ, CZ" -> "CZ"
+    * "CY, CZ" -> ""
+    */
+  def common(that: ConcPattern, suffix: Boolean = false): ConcPattern =
+    throw new NotImplementedError("TODO")
+}
+
+object AltPattern extends ParsedPattern {
+  def apply(pattern: ConcPattern): AltPattern = new AltPattern(Set(pattern))
+  def apply(patterns: List[ConcPattern]): AltPattern = new AltPattern(patterns.toSet)
+  def apply(patterns: CharClassPattern*): AltPattern =
+    new AltPattern(patterns.map(cp => ConcPattern(cp)).toSet)
+
+  def tryParse(str: CharSequence): Option[(AltPattern, Int)] =
+    throw new NotImplementedError("TODO")
+}
+
+/**
+  * AltPattern (also known as an "alt", short for "alternation") is a
+  * set of ConcPatterns. A pattern expresses multiple alternate possibilities.
+  * When written out as a regex, these would separated by pipes. A pattern
+  * containing no possibilities is possible and represents a regular expression
+  * matching no strings whatsoever (there is no conventional string form for
+  * this).
+  * e.g. "abc|def(ghi|jkl)" is an alt containing two ConcPatterns: "abc" and
+  * "def(ghi|jkl)". The latter is a ConcPattern containing four MultPatterns: "d", "e", "f"
+  * and "(ghi|jkl)". The latter in turn is a MultPattern consisting of an upper bound
+  * 1, a lower bound 1, and a multiplicand which is a new subpattern, "ghi|jkl".
+  * This new subpattern again consists of two ConcPatterns: "ghi" and "jkl".
+  */
+final case class AltPattern(concs: Set[ConcPattern]) extends RegexPattern {
+
+  override lazy val alphabet: Set[Char] = concs.flatMap(_.alphabet) + Fsm.anythingElse
+
+  override def hashCode: Int = concs.hashCode
+
+  override def equivalent(that: RegexPattern): Boolean = that match {
+    case thatAlt: AltPattern => concs == thatAlt.concs
+    case _                   => false
+  }
+
+  override def multiply(multiplier: Multiplier): MultPattern = MultPattern(this, multiplier)
+
+  override def isEmpty: Boolean = concs.forall(_.isEmpty)
+
+  override def concatenate(that: RegexPattern): ConcPattern =
+    MultPattern(this, Multiplier.presetOne) + that
+
+  override def intersection(that: RegexPattern): RegexPattern = {
+    //A deceptively simple method for an astoundingly difficult operation
+    val unionAlphabet = alphabet ++ that.alphabet
+    //Which means that we can build finite state machines sharing that alphabet
+    val combinedFsm = toFsm(unionAlphabet) & that.toFsm(unionAlphabet)
+    RegexPattern.fromFsm(combinedFsm)
+  }
+
+  override def union(that: RegexPattern): AltPattern = {
+    val thatAlt: AltPattern = that match {
+      case altPattern: AltPattern => altPattern
+      case charsPattern: CharClassPattern =>
+        AltPattern(ConcPattern(MultPattern(charsPattern, Multiplier.presetOne)))
+      case concPattern: ConcPattern => AltPattern(concPattern)
+      case multPattern: MultPattern => AltPattern(ConcPattern(multPattern))
+    }
+
+    AltPattern(concs ++ thatAlt.concs)
+  }
+
+  override def toFsm(alphabet: Option[Set[Char]]): Fsm = {
+    val actualAlphabet = alphabet.getOrElse(this.alphabet)
+    concs.foldLeft(Fsm.nullFsm(actualAlphabet))(_ | _.toFsm(actualAlphabet))
+  }
+
+  override def reduced: RegexPattern = throw new NotImplementedError("TODO")
+
+  override def reversed: AltPattern = AltPattern(concs.map(_.reversed))
+}
+
+object MultPattern extends ParsedPattern {
+  def tryParse(str: CharSequence): Option[(MultPattern, Int)] =
+    throw new NotImplementedError("TODO")
+}
+
+/**
+  * A MultPattern is a combination of a multiplicand with
+  * a multiplier (a min and a max). The vast majority of characters in regular
   * expressions occur without a specific multiplier, which is implicitly
   * equivalent to a min of 1 and a max of 1, but many more have explicit
   * multipliers like "*" (min = 0, max = inf) and so on.
-  * Although it seems odd and can lead to some confusing edge cases, we do
-  * also permit a max of 0 (iff min is 0 too). This allows the multiplier
-  * "zero" to exist, which actually are quite useful in their own special way.
+  * e.g. a, b{2}, c?, d*, [efg]{2,5}, f{2,}, (anysubpattern)+, .*, and so on
   */
-final case class Multiplier(min: Option[Int], max: Option[Int]) {
-  def this(min: Int, max: Int) = this(Some(min), Some(max))
-  def this(multiplier: Int) = this(Some(multiplier), Some(multiplier))
+final case class MultPattern(multiplicand: RegexPattern, multiplier: Multiplier)
+    extends RegexPattern {
 
-  require(
-    (min, max) match {
-      case (Some(x), Some(y)) => (0 <= x) && (x <= y)
-      case (Some(x), None)    => 0 <= x //min valid, max infinite
-      case (None, Some(_))    => false //min is infinite
-      case (None, None)       => true
-    },
-    "Invalid multiplier bounds"
-  )
+  override lazy val alphabet: Set[Char] = multiplicand.alphabet + Fsm.anythingElse
 
-  /**
-    * We need some math operation on Option[Int], assuming that None == infinite
-    */
-  implicit class OptionIntMath(opt: Option[Int]) {
-    def +(that: Option[Int]): Option[Int] = (opt, that) match {
-      case (Some(_), None)    => None
-      case (None, Some(_))    => None
-      case (None, None)       => None
-      case (Some(x), Some(y)) => Some(x + y)
-    }
+  override def hashCode: Int = multiplicand.hashCode ^ multiplier.hashCode
 
-    /**
-      * Subtract another bound from this one.
-      * Caution: this operation is not meaningful for all bounds.
-      */
-    def -(that: Option[Int]): Option[Int] = (opt, that) match {
-      case (Some(_), None) =>
-        throw new IllegalArgumentException("Can't substract infinity") //something - infinity => invalid operation
-      case (None, None)       => Some(0) //Infinity minus infinity is zero.
-      case (None, _)          => None //inf - anything => inf
-      case (Some(x), Some(y)) => Some(x - y)
-    }
-
-    def *(that: Option[Int]): Option[Int] = (opt, that) match {
-      case (None, _)          => None
-      case (_, None)          => None
-      case (Some(x), Some(y)) => Some(x * y)
-    }
-
-    def >=(that: Option[Int]): Boolean = (opt, that) match {
-      case (None, _)          => true
-      case (Some(_), None)    => false
-      case (Some(x), Some(y)) => x >= y
-    }
-
-    def <=(that: Option[Int]): Boolean = (opt, that) match {
-      case (_, None)          => true
-      case (None, Some(_))    => false
-      case (Some(x), Some(y)) => x <= y
-    }
+  override def equivalent(that: RegexPattern): Boolean = that match {
+    case m: MultPattern => (multiplier == m.multiplier) && multiplicand.equivalent(m.multiplicand)
+    case _              => false
   }
 
-  def mandatory: Option[Int] = min
-  def optional: Option[Int] = max - min
-
-  override def toString: String = (min, max) match {
-    case (Some(_), Some(0)) =>
-      throw new ClassFormatError("Can't serialise a multiplier with max bound 0")
-    case (Some(0), Some(1))           => "?"
-    case (Some(1), Some(1))           => ""
-    case (Some(0), None)              => "*"
-    case (Some(1), None)              => "+"
-    case (Some(x), None)              => s"{$x,}"
-    case (Some(x), Some(y)) if x == y => s"{$x}"
-    case (Some(x), Some(y))           => s"{$x,$y}"
-  }
-
-  def isOne: Boolean = min.contains(1) && max.contains(1)
-
-  /**
-    * Multiplication is not well-defined for all pairs of multipliers because
-    * the resulting possibilities do not necessarily form a continuous range.
-    * For example:
-    * {0,x} * {0,y} = {0,x*y}
-    * {2} * {3} = {6}
-    * {2} * {1,2} = ERROR
-    * The proof isn't simple but suffice it to say that {p,p+q} * {r,r+s} is
-    * equal to {pr, (p+q)(r+s)} only if s=0 or qr+1 >= p. If not, then at least
-    * one gap appears in the range. The first inaccessible number is (p+q)r + 1.
-    */
-  def canMultiplyBy(that: Multiplier): Boolean =
-    mandatory.contains(0) || (optional * that.mandatory + Some(1) >= mandatory)
-
-  /**
-    * Multiply this multiplier by another
-    */
-  def *(that: Multiplier): Multiplier =
-    if (canMultiplyBy(that))
-      Multiplier(min * that.min, max * that.max)
+  override def multiply(nextMultiplier: Multiplier): MultPattern =
+    if (nextMultiplier.isOne)
+      this
+    else if (multiplier.canMultiplyBy(nextMultiplier))
+      MultPattern(multiplicand, multiplier * nextMultiplier)
     else
-      throw new IllegalArgumentException(s"Can't multiply $this and $that")
+      MultPattern(AltPattern(ConcPattern(this)), multiplier)
 
-  /**
-    * Add two multipliers together
-    */
-  def +(that: Multiplier): Multiplier = Multiplier(min + that.min, max + that.max)
+  override def concatenate(that: RegexPattern): ConcPattern = ConcPattern(this) + that
 
-  /**
-    * Subtract another multiplier from this one.
-    * Caution: multipliers are not totally ordered.
-    * This operation is not meaningful for all pairs of multipliers.
-    */
-  def -(that: Multiplier): Multiplier = {
-    val diffMandatory = mandatory - that.mandatory
-    val diffOptional = optional - that.optional
-    Multiplier(diffMandatory, diffMandatory + diffOptional)
+  override def union(that: RegexPattern): RegexPattern = ConcPattern(this) | that
+
+  override def intersection(that: RegexPattern): RegexPattern = {
+    val thatMult = that match {
+      case thatMult: MultPattern      => thatMult
+      case otherPattern: RegexPattern => MultPattern(otherPattern, Multiplier.presetOne)
+    }
+
+    if ((thatMult.multiplicand == this.multiplicand) && this.multiplier.canIntersect(
+          thatMult.multiplier)) {
+      MultPattern(this.multiplicand, this.multiplier & thatMult.multiplier)
+    } else {
+      ConcPattern(this) & that
+    }
   }
+
+  override def isEmpty: Boolean = multiplicand.isEmpty || (multiplier.max.getOrElse(1) < 1)
+
+  override def reversed: MultPattern = MultPattern(multiplicand.reversed, multiplier)
+
+  override def toFsm(alphabet: Option[Set[Char]]): Fsm = {
+    val actualAlphabet = alphabet.getOrElse(this.alphabet)
+
+    val startFsm = multiplicand.toFsm(actualAlphabet)
+    //accepts e.g. "ab"
+    val mandatoryFsm = startFsm * multiplier.mandatory.getOrElse(0)
+    //unlimited additional copies
+    val optionalFsm = if (multiplier.optional == Multiplier.Inf) {
+      startFsm.star
+    } else {
+      (Fsm.epsilonFsm(actualAlphabet) | startFsm) * multiplier.optional.get
+    }
+
+    mandatoryFsm + optionalFsm
+  }
+
+  override def reduced: RegexPattern = throw new NotImplementedError("TODO")
+
+  /**
+    * Return the common part of these two MultPatterns. This is the largest MultPattern
+    * which can be safely subtracted from both the originals.
+    * The multiplier on this MultPattern could be zero: this is the case if,
+    * for example, the multiplicands disagree.
+    */
+  def common(that: MultPattern): MultPattern =
+    if (multiplicand == that.multiplicand) {
+      MultPattern(multiplicand, multiplier.common(that.multiplier))
+    } else {
+      //Multiplicands disagree, no common part at all.
+      MultPattern(RegexPattern.nothing, Multiplier.presetZero)
+    }
 }
