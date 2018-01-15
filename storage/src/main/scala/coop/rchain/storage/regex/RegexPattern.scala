@@ -49,8 +49,6 @@ sealed abstract class RegexPattern {
 
   /**
     * Alternate between any two Regex patterns, regardless of differing classes.
-    * This method MUST NOT call the toFsm method, because this method is used
-    * in turn when converting an FSM back to a regex.
     */
   def union(that: RegexPattern): RegexPattern
 
