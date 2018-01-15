@@ -292,7 +292,7 @@ GenericDescriptor::GenericDescriptor(int s, pOb m, pOb sbo, pOb mbx, pExt ext)
 
 GenericDescriptor::~GenericDescriptor() {
     if (freeStructOnGC == RBLTRUE) {
-        delete (void*)_offset;
+        delete (GenericDescriptor*)_offset;
     }
 }
 
