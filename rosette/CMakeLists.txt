@@ -28,7 +28,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-offsetof")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-delete-incomplete")
 
 configure_file("${PROJECT_SOURCE_DIR}/h/config.h.in" "${PROJECT_BINARY_DIR}/include/config.h")
 include_directories("${PROJECT_BINARY_DIR}/include")
