@@ -21,7 +21,7 @@
 
 #include <stdarg.h>
 #include <cerrno>
-
+#include <tuple>
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/file.h>
@@ -380,70 +380,64 @@ void InitBuiltinObs() {
 }
 
 
-static void get_path_prefix(char* path, char* dir) {
-    char* p = strrchr(path, '/');
-    if (p) {
-        int n = p - path;
-        strncpy(dir, path, n);
-        dir[n] = 0;
-    } else {
-        strcpy(dir, ".");
-    }
-}
-
-
 const char* StandardExtensions[] = {".rbl", 0};
 
 
 static FILE* FindBootFile() {
     char path[MAXPATHLEN];
-    char* RosetteLib = getenv("ROSETTE_LIB");
 
-    if (strcmp(BootFile, "") == 0) {
-        if (RosetteLib) {
-            strcpy(BootDirectory, RosetteLib);
-        }
-
-        strcpy(path, BootDirectory);
-        strcat(path, "/");
-        strcat(path, "boot.rbl");
+    // BootFile can never be null.
+    auto bootfile = BootFile;
+    if ('\0' == *bootfile) {
+        bootfile = "boot.rbl";
     } else {
-        get_path_prefix(BootFile, BootDirectory);
-        strcpy(path, BootFile);
+        bootfile = BootFile;
     }
 
-    int baselen = strlen(path);
-    const char** suffixp = StandardExtensions;
+    snprintf(path, MAXPATHLEN, "%s/%s", BootDirectory, bootfile);
 
-    // TODO(leaf): This doesn't work as advertised. If the file can't
-    // be found, the path reported will incorrectly have the suffix
-    // appended.
-    for (; access(path, R_OK) && *suffixp; suffixp++) {
-        path[baselen] = '\0';
-        strcat(path, *suffixp);
-    }
-
-    if (!(*suffixp)) {
+    if (0 != access(path, R_OK)) {
         suicide("can't find boot file '%s'", path);
+        return NULL;
     }
 
     Tuple* loadPaths = Tuple::create(1, RBLstring::create(BootDirectory));
-    if (RosetteLib && strcmp(RosetteLib, BootDirectory)) {
-        PROTECT(loadPaths);
-        RBLstring* temp = RBLstring::create(RosetteLib);
-        loadPaths = rcons(loadPaths, temp);
+    PROTECT(loadPaths);
+    Define("load-paths", loadPaths);
+
+    if (VerboseFlag) {
+        fprintf(stderr, "Loading boot file: %s\n", path);
     }
 
-    Define("load-paths", loadPaths);
     return fopen(path, "r");
 }
 
+static Ob* GetReplFlag() {
+    auto val = ForceEnableRepl;
+    if (val) {
+        return RBLTRUE;
+    }
 
-static Tuple* GetArgv(int argc, char** argv) {
-    Tuple* RosetteArgv = argc == 0 ? NIL : Tuple::create(argc, NIV);
+    // If we have no run file, run the repl, otherwise don't.
+    if (0 == strcmp(RunFile, "")) {
+        return RBLTRUE;
+    }
+
+    return RBLFALSE;
+}
+
+static Tuple* GetArgv(const int argc, const int start, char** argv) {
+    if (start >= argc || 0 >= argc) {
+        return NIL;
+    }
+
+    auto len = argc - start;
+    Tuple* RosetteArgv = Tuple::create(len, NIV);
     PROTECT(RosetteArgv);
-    for (int i = 0; i < argc; i++) {
-        RBLstring* arg = RBLstring::create(argv[i]);
+
+    for (int i = 0; len > i; i++) {
+        auto t = argv[start + i];
+        RBLstring* arg = RBLstring::create(t);
         ASSIGN(RosetteArgv, elem(i), arg);
     }
 
@@ -485,27 +479,33 @@ static void LoadBootFiles() {
     }
 }
 
-static void LoadRunFile() {
-    if (strcmp(RunFile, "") != 0) {
-        FILE* run = fopen(RunFile, "r");
-        if (run) {
-            Reader* reader = Reader::create(run);
-            PROTECT(reader);
-
-            Ob* expr = INVALID;
-            while ((expr = reader->readExpr()) != RBLEOF) {
-                vm->load(expr);
-            }
-        } else {
-            suicide("Unable to open RunFile \"%s\": %s", RunFile,
-                    strerror(errno));
-        }
+static bool LoadRunFile() {
+    char* enable_runscript = "flag-enable-runscript";
+    char* runscript = "**RUNSCRIPT**";
+    if (0 == strcmp(RunFile, "")) {
+        Define(runscript, NIV);
+        Define(enable_runscript, RBLFALSE);
+        return false;
     }
+
+    FILE* run = fopen(RunFile, "r");
+    if (run) {
+        Reader* reader = Reader::create(run);
+        auto i = Istream::create(reader);
+        PROTECT(i);
+        Define(runscript, i);
+        Define(enable_runscript, RBLTRUE);
+        return true;
+    }
+
+    suicide("Unable to open RunFile \"%s\": %s", RunFile,
+            strerror(errno));
+    return false;
 }
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
-int malloc_debug(int);
+    int malloc_debug(int);
 }
 #endif
 
@@ -513,11 +513,25 @@ extern int restore(const char*, char*);
 
 int InBigBang = 0;
 
-int BigBang(int argc, char** argv, char** envp) {
-    argc = ParseCommandLine(argc, argv);
+/**
+ * The BigBang returns a tuple if indicators with the following
+ * types and meanings:
+ *
+ *   int: Are we restoring an image?
+ *   bool: should we run the repl?
+ */
+std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
+    bool did_run_file = false;
+    auto argc_start = ParseCommandLine(argc, argv);
     InBigBang = true;
     setsid();
 
+    /**
+     * NB(leaf): The RestoringImage value is set by a primitive in
+     * Dump-world.cc when a memory image is restored from a file. After
+     * the image is loaded, the program execve's itself, and we end up
+     * back here.
+     */
     if (RestoringImage) {
         /**
          * This stuff must be (re-)initialized *after* the restore, since
@@ -527,8 +541,10 @@ int BigBang(int argc, char** argv, char** envp) {
          * restore.
          */
 
-        Define("argv", GetArgv(argc, argv));
+        Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
+        Define("flag-enable-repl", GetReplFlag());
+        Define("flag-verbose", VerboseFlag ? RBLTRUE : RBLFALSE);
         vm->resetSignals();
 
         /**
@@ -545,13 +561,13 @@ int BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-/**
- * Always reset the malloc_verify stuff to current settings,
- * regardless of whether we are restoring an image.  This permits us
- * maximum checking while building an image, but allows the built
- * image to run with no checking unless specifically overridden with
- * a command-line option.
- */
+    /**
+     * Always reset the malloc_verify stuff to current settings,
+     * regardless of whether we are restoring an image.  This permits us
+     * maximum checking while building an image, but allows the built
+     * image to run with no checking unless specifically overridden with
+     * a command-line option.
+     */
 
 #if defined(MALLOC_DEBUGGING)
     malloc_debug(ParanoidAboutGC);
@@ -570,18 +586,25 @@ int BigBang(int argc, char** argv, char** envp) {
 
         vm = new VirtualMachine;
 
-        Define("argv", GetArgv(argc, argv));
+        Define("argv", GetArgv(argc, argc_start, argv));
         Define("envp", GetEnvp(envp));
+        Define("flag-enable-repl", GetReplFlag());
+        Define("flag-verbose", VerboseFlag ? RBLTRUE : RBLFALSE);
+        did_run_file = LoadRunFile();
         LoadBootFiles();
-        LoadRunFile();
-
         heap->tenureEverything();
+
     }
 
     handleInterrupts();
     InBigBang = false;
 
-    return RestoringImage;
+    bool repl_enabled = true;
+    if (did_run_file && !ForceEnableRepl) {
+        repl_enabled = false;
+    }
+
+    return std::make_tuple(RestoringImage, repl_enabled);
 }
 
 
@@ -625,7 +648,7 @@ int asyncHelper(int fd, int desiredState) {
     DO_BLOCKING
 #endif
 
-    result = fcntl(fd, F_SETFL, flags);
+        result = fcntl(fd, F_SETFL, flags);
 #else
     flags = (desiredState ? 1 : 0);
     result = ioctl(fd, FIOSNBIO, &flags);

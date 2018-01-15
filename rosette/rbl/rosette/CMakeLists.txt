@@ -1,4 +1,3 @@
-#add_test(NAME boot_rbl COMMAND rosette -boot boot.rbl)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/apropos.rbl
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/async-repl.rbl
@@ -55,3 +54,23 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tuple-oprns.rbl
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/vm-heap.rbl
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+
+
+add_test(NAME boot_rbl COMMAND rosette --boot-dir ${CMAKE_CURRENT_BINARY_DIR} /dev/null)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-tests.ros
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/equiv.ros
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/reader-iso-8859-1.ros
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/reader-utf-8.ros
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
+
+add_test(NAME test_scripts COMMAND rosette --boot-dir ${CMAKE_CURRENT_BINARY_DIR} tests/run-tests.ros)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/segfaults/regression-ros-304.rbl
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests/segfaults)
+
+add_test(NAME regression_ros_304 COMMAND rosette --boot-dir ${CMAKE_CURRENT_BINARY_DIR} tests/segfaults/regression-ros-304.rbl)
