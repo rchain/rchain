@@ -36,8 +36,8 @@
 #include "Tuple.h"
 #include "Vm.h"
 #include "Addr.h"
-
 #include "ModuleInit.h"
+#include "config.h"
 
 #include <cstdlib>
 #include <ctime>
@@ -1264,9 +1264,9 @@ DEF("sleep", sysSleep, 0, 0) { return SLEEP; }
 DEF("sys-reset", sysReset, 0, 0) { return NIV; }
 
 DEF("version", sysVersion, 0, 0) {
-#include "Timestamp.h"
     char buf[256];
-    sprintf(buf, "Version %s (%s)", version, timestamp);
+    sprintf(buf, "Version %d.%d.%d", ROSETTE_VERSION_MAJOR,
+            ROSETTE_VERSION_MINOR, ROSETTE_VERSION_PATCH);
     return RBLstring::create(buf);
 }
 

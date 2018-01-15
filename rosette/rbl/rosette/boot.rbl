@@ -68,7 +68,7 @@
  	 (prim-display "setting ESS_SYSDIR to \".\" in rosette\n"))
     #niv)
 
-
+
 ;;; rename 'add and define as a sync operation
 (add 'prim-add add)
 (prim-add 'add (syncoprn-new 'add) GlobalEnv)
@@ -137,7 +137,7 @@
        (init Meta-SBO)
        'inits
        ))
-
+
 (add 'Actor       (init (actor-new  Actor-SBO [] [])))
 
 (add 'Oprn-SBO
@@ -183,7 +183,7 @@
 		    op))
 	     ob)))
      Operation-SBO)
-
+
 ;;; operations and methods for setting up cross indexing among
 ;;; 	operations, procs, methods, and code objects
 
@@ -230,7 +230,7 @@
 			  (loop & k/v)))
 		    (update!))))))
      Meta-SBO)
-
+
 (add binding: identity1 Top-SBO)
 
 (add binding:
@@ -286,7 +286,7 @@
 	      (binding: val (self) in_obj)
 	      (self))))
      Operation-SBO)
-
+
 ;;; fixup binding info for previous oprns, methods, etc.
 
 (binding: arg-flag 'arg-flag Global)
@@ -325,7 +325,7 @@
 
 (bindings: add Top-SBO)
 (binding: (lookup add Top-SBO) add Top-SBO)
-
+
 (add-unique Oprn 'procedural?)
 (add procedural? #f Top)
 (add procedural? #t Procedural-SBO)
@@ -378,7 +378,7 @@
 (add docs:
      (method [& r] (docs!: (meta (self)) & r))
      Top)
-
+
 ;;; at this point the basic support for recording procedural xrefs
 ;;; is done and now the support for class xrefs is defined
 
@@ -460,18 +460,17 @@
 (send prim-display
       "Rosette System, "
       (version)
-      " - Copyright 1989, 1990, 1991, 1992 MCC\n")
+      " - Copyright 1989, 1990, 1991, 1992 MCC\n"
+      " - Copyright 2017, 2018 RChain Cooperative\n")
 
-;;; define eval to do the three basic things to an expression to get a result
+;;; Define eval to do the three basic things to an expression to get a
+;;; result.
 
 
 (let [[ev (add-unique Sync 'eval)]]
-  (add ev
-       (run (compile
-	     '(method []
-		(run (compile (expand (self)))))
-	     TopEnv))
-       Top-SBO))
+    (add ev
+        (run (compile '(method [] (run (compile (expand (self))))) TopEnv))
+        Top-SBO))
 
 ;;;(add 'eval (named-proc eval [<expr>] (run (compile (expand <expr>)))))
 
@@ -582,21 +581,21 @@
 		    (seq (set! inx (fx- inx 1))
 			 (goto gp-loop))))))))
 
-;;; try-to-open accepts a filename and trys to open it.  If
+;;; try-to-open accepts a filename and trys to open it. If
 ;;; it succeeds then a 3-tuple of the open istream, the directory name,
 ;;; and the absolute file name are returned.  If unsuccessful then
 ;;; the suffix ".rbl" is appended to the file name and the process is
 ;;; repeated.  If this fails then [#niv dir fnm] is returned.
 
 (add 'try-to-open
-      (named-proc try-to-open [fnm]
-	(let [[dir (get-dir fnm)]]
-	  (if (present? fnm)	
-	      [(istream-new fnm) dir fnm]
-	      (let [[fnm' (string-concat fnm ".rbl")]]
-		(if (present? fnm')
-		    [(istream-new fnm') dir fnm']
-		    [#niv dir fnm]))))))
+    (named-proc try-to-open [fnm]
+        (let [[dir (get-dir fnm)]]
+            (if (present? fnm)
+                [(istream-new fnm) dir fnm]
+                (let [[fnm' (string-concat fnm ".rbl")]]
+                    (if (present? fnm')
+                        [(istream-new fnm') dir fnm']
+                        [#niv dir fnm]))))))
 
 ;;; search-paths trys to find a named file by searching a list of
 ;;; directories.  A three-tuple is returned.  The first element is
@@ -681,27 +680,34 @@
 (add 'Loaded ['boot])
 
 (add 'load
-      (named-proc load [nm & silent?]
-	(let [[[str dir fnm] (find-file (->string nm) load-paths)]
-	      [saved-load-paths  load-paths]
-	      [saved-source-file **SOURCE-FILE**]
-	      [saved-dump-name   dump-name]]
-	  (if (niv? str)
-	      (seq (display fnm) (display " not found in load\n"))
-	      (seq
-	       (display "loading: ")
-	       (display fnm)
-	       (display (if (null? silent?) nl " silent\n"))
-	       (push-load-paths dir)
-	       (add '**SOURCE-FILE** fnm)
-	       (add 'dump-name #niv)
-	       (eval-file str silent?)
-	       (if (niv? dump-name) #niv (dump-world dump-name))
-	       (add 'dump-name  saved-dump-name)
-	       (add 'load-paths saved-load-paths)
-	       (add '**SOURCE-FILE** saved-source-file)
-	       (add 'Loaded (insert Loaded (object->symbol (get-name nm))))
-	       #niv)))))
+    (named-proc load [nm & silent?]
+        (let [[[str dir fnm] (find-file (->string nm) load-paths)]
+          [saved-load-paths  load-paths]
+          [saved-source-file **SOURCE-FILE**]
+          [saved-dump-name   dump-name]]
+            (if (niv? str)
+                (seq (display fnm)
+                    (display " not found in load\n"))
+                (seq
+                    (if (null? silent?)
+                        (seq
+                            (display "loading: ")
+                            (display fnm)
+                            (display nl))
+                        #t)
+                    (push-load-paths dir)
+                    (add '**SOURCE-FILE** fnm)
+                    (add 'dump-name #niv)
+                    (eval-file str silent?)
+                    (if (niv? dump-name)
+                        #niv
+                        (dump-world dump-name))
+                    (add 'dump-name  saved-dump-name)
+                    (add 'load-paths saved-load-paths)
+                    (add '**SOURCE-FILE** saved-source-file)
+                    (add 'Loaded
+                        (insert Loaded (object->symbol (get-name nm))))
+                    #niv)))))
 
 (add 'initial-reset reset)
 

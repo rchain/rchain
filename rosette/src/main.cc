@@ -33,8 +33,9 @@
 #include "Vm.h"
 #include <ctype.h>
 #include <stdio.h>
+#include <tuple>
 
-extern int BigBang(int, char**, char**);
+extern std::tuple<int, bool> BigBang(int, char**, char**);
 extern void BigCrunch();
 extern int asyncHelper(int, int);
 
@@ -46,37 +47,18 @@ extern "C" void configuration_force_load();
 static int _ForceLoadFlag_ = 0;
 
 int main(int argc, char** argv, char** envp) {
-    if (!BigBang(argc, argv, envp)) {
+    auto bang_info = BigBang(argc, argv, envp);
+
+    // If not restoring an image.
+    if (!std::get<0>(bang_info)) {
         vm->reset();
     }
-
     vm->execute();
 
     if (_ForceLoadFlag_) {
         configuration_force_load();
     }
 
-    while (!feof(stdin)) {
-        const char* prompt = "rosette> ";
-        /*
-         * Turn off any async handling that might have been left on by a
-         * crash-and-burn at the higher levels.
-         */
-        heap->gc();
-        StdinReader->resetState();
-
-        printf("%s", prompt);
-        Ob* x = StdinReader->readExpr();
-
-        if (x == RBLEOF) {
-            break;
-        }
-
-        clearerr(stdin);
-        vm->evaluate(x);
-    }
-
-    putchar('\n');
     BigCrunch();
     exit(0);
 }

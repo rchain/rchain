@@ -32,7 +32,8 @@ extern char BootDirectory[];
 extern char BootFile[];
 extern char RunFile[];
 extern int RestoringImage;
-extern char* DefaultBootDirectory;
+extern bool ForceEnableRepl;
+extern int VerboseFlag;
 
 extern int ParseCommandLine(int, char**);
 
