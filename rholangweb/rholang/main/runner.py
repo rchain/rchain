@@ -175,8 +175,7 @@ class VM(object):
 
     def run_repl(self, rbl: Text) -> Tuple[Text, Text, Text]:
         try:
-            bootfile = (self.__library / "boot.rbl").resolve()
-            out, err = self.__runVM([cast(ArgT, "-boot"), bootfile],
+            out, err = self.__runVM([cast(ArgT, "--boot-dir"), self.__library],
                                     rbl.encode('utf-8'))
         except CalledProcessError as oops:
             raise RunError(oops) from oops
