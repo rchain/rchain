@@ -112,14 +112,14 @@
     [[channels unification_ptrns product_ptrns persistent] location]
         ;;; the channel and the pattern of incoming messages to look for are destructured and bound
     [_ (seq
-        (print (->symbol "DEBUG: Calling consume("))
-        (print channels)
-        (print (->symbol ", "))
-        (print unification_ptrns)
-        (print (->symbol ", "))
-        (print product_ptrns)
-        (print (->symbol ")"))
-        (p "")
+        (if flag-verbose (print (->symbol "DEBUG: Calling consume(")))
+        (if flag-verbose (print channels))
+        (if flag-verbose (print (->symbol ", ")))
+        (if flag-verbose (print unification_ptrns))
+        (if flag-verbose (print (->symbol ", ")))
+        (if flag-verbose (print product_ptrns))
+        (if flag-verbose (print (->symbol ")")))
+        (if flag-verbose (p ""))
         )]
     [channels_concatenated (symbol-list-concat channels)]
     [unification_ptrns_concatenated (symbol-list-concat unification_ptrns)]
@@ -230,9 +230,9 @@
 
     [_
         (seq
-            (print "About to print reductions")
-            (print reductions)
-            (display #\\n)
+            (if flag-verbose (print "About to print reductions"))
+            (if flag-verbose (print reductions))
+            (if flag-verbose (display #\\n))
         )]
 
 
@@ -273,7 +273,7 @@
         (if (null? bindings_and_products)
             ;;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
             (seq
-                (p "DEBUG: Waiting for data")
+                (if flag-verbose (p "DEBUG: Waiting for data"))
                 (let*
                     [
                         [subspace (tuplespace-tbl-get-or-create chart channels_concatenated)]
@@ -291,11 +291,11 @@
                 (update!)
             )
             (seq
-                (p "DEBUG: Consume call got matched")
+                (if flag-verbose (p "DEBUG: Consume call got matched"))
                 (ctxt-rtn ctxt (twoZip bindings_and_products))
                 (if persistent
                     (seq
-                        (p "About to re-post continuation")
+                        (if flag-verbose (p "About to re-post continuation"))
                         (update!)
                         (run-with-env code env)
                     )
@@ -315,14 +315,14 @@
     [[channel unification_ptrn product] production]
     [_
         (seq
-                (print (->symbol "DEBUG: Calling produce("))
-                (print channel)
-                (print (->symbol ", "))
-                (print unification_ptrn)
-                (print (->symbol ", "))
-                (print product)
-                (print (->symbol ")"))
-                (p "")
+                (if flag-verbose (print (->symbol "DEBUG: Calling produce(")))
+                (if flag-verbose (print channel))
+                (if flag-verbose (print (->symbol ", ")))
+                (if flag-verbose (print unification_ptrn))
+                (if flag-verbose (print (->symbol ", ")))
+                (if flag-verbose (print product))
+                (if flag-verbose (print (->symbol ")")))
+                (if flag-verbose (p ""))
 
         )]
 
@@ -342,9 +342,9 @@
     [subspace_group_keys (map subspaces (proc [i subspace] (names subspace)))]
     [_
        (seq
-           (print "About to print subspace_group_keys")
-           (print subspace_group_keys)
-           (display #\\n)
+           (if flag-verbose (print "About to print subspace_group_keys"))
+           (if flag-verbose (print subspace_group_keys))
+           (if flag-verbose (display #\\n))
        )
     ]
     [candidates
@@ -363,9 +363,9 @@
                         ) [[] []])]
                            [_
                                (seq
-                                   (print "About to print extractions")
-                                   (print extractions)
-                                   (display #\\n)
+                                   (if flag-verbose (print "About to print extractions"))
+                                   (if flag-verbose (print extractions))
+                                   (if flag-verbose (display #\\n))
                                )
                            ]
                 [[data_group continuation_group]
@@ -398,9 +398,9 @@
 
    [_
        (seq
-           (print "About to print candidates")
-           (print candidates)
-           (display #\\n)
+           (if flag-verbose (print "About to print candidates"))
+           (if flag-verbose (print candidates))
+           (if flag-verbose (display #\\n))
        )
    ]
 
@@ -434,9 +434,9 @@
     ]
     [_
         (seq
-            (print "About to print reduction")
-            (print reduction)
-            (display #\\n)
+            (if flag-verbose (print "About to print reduction"))
+            (if flag-verbose (print reduction))
+            (if flag-verbose (display #\\n))
         )]
     ]
     (seq
@@ -448,7 +448,7 @@
                     [stored_value (tbl-get subspace unification_ptrn)]
                 ]
                 (seq
-                    (p "DEBUG: No consumes were filled. Storing product.")
+                    (if flag-verbose (p "DEBUG: No consumes were filled. Storing product."))
                     (tbl-add unification_ptrn_lookup_table (->symbol unification_ptrn) [unification_ptrn])
                     (if (= #absent stored_value)
                         (tbl-add subspace unification_ptrn [[product] []])
@@ -471,7 +471,7 @@
                 (if (all updated_product_ptrns_struct (proc [[product_ptrn product]] (not (= product #absent))))
                     (seq
                         ;;; TODO: Replace dummy bindings
-                        (p "DEBUG: A consume was fully filled. Sending all products.")
+                        (if flag-verbose (p "DEBUG: A consume was fully filled. Sending all products."))
                         (ctxt-rtn consume_ctxt [(newN Tuple (length updated_product_ptrns_struct) #t) (map updated_product_ptrns_struct (proc [j [product_ptrn product]] product))])
                         (let [[updated_continuations_struct (delete-i continuations_struct n)]]
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
@@ -479,7 +479,7 @@
                         (ctxt-rtn ctxt [])  ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                         (if consume_persistent
                             (seq
-                                (p "About to re-post continuation")
+                                (if flag-verbose (p "About to re-post continuation"))
                                 (update!)
                                 (run-with-env consume_code consume_env)
                             )
@@ -488,7 +488,7 @@
                     )
                     (let [[updated_continuations_struct (replace-i continuations_struct n [updated_product_ptrns_struct [consume_ctxt [consume_code consume_env] consume_persistent]])]]
                         (seq
-                            (p "DEBUG: A consume was partially filled.")
+                            (if flag-verbose (p "DEBUG: A consume was partially filled."))
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
                             (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
                             (update!)
