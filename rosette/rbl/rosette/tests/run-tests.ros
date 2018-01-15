@@ -66,9 +66,11 @@
           '#niv))))
 
 
-(load "equiv.ros" 'silent)
-(load "reader-iso-8859-1.ros" 'silent)
-(load "reader-utf-8.ros" 'silent)
+(load "tests/equiv.ros" 'silent)
+(load "tests/reader-iso-8859-1.ros" 'silent)
+(load "tests/reader-utf-8.ros" 'silent)
+
+(exit (if (> failures 0) 1 0))
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
