@@ -7,6 +7,7 @@ import coop.rchain.comm.protocol.routing
 import scala.util.control.NonFatal
 import com.google.protobuf.any.{Any => AnyProto}
 import com.typesafe.scalalogging.Logger
+import scala.concurrent.duration._
 
 sealed trait NetworkError
 case class ParseError(msg: String) extends NetworkError
@@ -61,15 +62,22 @@ case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.Sock
 
   val net = new UnicastNetwork(local, Some(this))
 
-  private val unresponsive = new scala.collection.mutable.HashMap[String,Long]
+  /*
+   * TODO: This throttle is a compromise between getting information
+   * about which nodes are reachable for handshaking and community
+   * complaints about crazy debugging informmation. Node
+   * goodness/reputation, maybe even for non-peer nodes, will be
+   * handled differently in the future.
+   */
+  private val unresponsive = new scala.collection.mutable.HashMap[String,Deadline]
 
   private def checkResponsive(key: String): Option[String] =
     unresponsive.get(key) match {
-      case Some(timestamp) if timestamp < System.currentTimeMillis => {
+      case Some(deadline) if deadline.isOverdue => {
         unresponsive.remove(key)
         Some(key)
       }
-      case Some(timestamp) => None
+      case Some(deadline) => None
       case None => Some(key)
     }
 
@@ -103,13 +111,13 @@ case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.Sock
             }
             case Left(ex) => {
               logger.warn(s"connect(): No phs response: $ex")
-              unresponsive(remoteAddress) = System.currentTimeMillis + 5*60*1000L
+              unresponsive(remoteAddress) = 5.minutes.fromNow
             }
           }
         }
         case Left(ex) => {
           logger.warn(s"connect(): No ehs response: $ex")
-          unresponsive(remoteAddress) = System.currentTimeMillis + 5*60*1000L
+          unresponsive(remoteAddress) = 5.minutes.fromNow
         }
       }
     }
