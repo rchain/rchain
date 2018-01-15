@@ -25,6 +25,10 @@ if [ ! -d ${BUILD} ] ; then {
 cd ${BUILD}
 cmake -B${BUILD} -H${SRCDIR}
 make ${PROCS_ARG}
+
+# Make the stack big
+ulimit -s unlimited
 make test
+
 make package
 
