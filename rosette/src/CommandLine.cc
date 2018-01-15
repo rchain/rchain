@@ -32,7 +32,7 @@ unsigned SurvivorSpaceSize = 128 * 1024;
 unsigned InfantSpaceSize = 512 * 1024;
 unsigned OldSpaceChunkSize = 32 * 1024;
 
-#define DEFAULT "/usr/local/lib/rosette/lib"
+#define DEFAULT "/usr/lib/rosette"
 
 int TenuringAge = 10;
 int ParanoidAboutGC = 0;
