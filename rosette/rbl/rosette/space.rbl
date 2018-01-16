@@ -120,9 +120,7 @@
                 (print (->symbol ", "))
                 (print product_ptrns)
                 (print (->symbol ")"))
-                (p "")
-            )
-        )]
+                (p "")))]
     [channels_concatenated (symbol-list-concat channels)]
     [unification_ptrns_concatenated (symbol-list-concat unification_ptrns)]
     [expanded_channel_groups
@@ -235,8 +233,7 @@
             (seq
                 (print "About to print reductions")
                 (print reductions)
-                (display #\\n)
-        ))]
+                (display #\\n)))]
 
 
     ;;; For each channel returned from value function, return the bindings and products and consume/delete it
@@ -326,9 +323,7 @@
                 (print (->symbol ", "))
                 (print product)
                 (print (->symbol ")"))
-                (p "")
-
-        ))]
+                (p "")))]
 
     [expanded_channels
         (seq
@@ -349,10 +344,7 @@
             (seq
                 (print "About to print subspace_group_keys")
                 (print subspace_group_keys)
-                (display #\\n)
-            )
-        )
-    ]
+                (display #\\n)))]
     [candidates
         (map subspace_group_keys (proc [i subspace_keys]
             (let*
@@ -372,10 +364,7 @@
                                     (seq
                                         (print "About to print extractions")
                                         (print extractions)
-                                        (display #\\n)
-                                    )
-                                )
-                           ]
+                                        (display #\\n)))]
                 [[data_group continuation_group]
                     (fold extractions
                         (proc [[unification_ptrn binding] acc k]
@@ -409,10 +398,7 @@
             (seq
                 (print "About to print candidates")
                 (print candidates)
-                (display #\\n)
-            )
-        )
-   ]
+                (display #\\n)))]
 
     ;;; Value function
     ;;;
@@ -447,10 +433,8 @@
             (seq
                 (print "About to print reduction")
                 (print reduction)
-                (display #\\n)
-            )
-        )]
-    ]
+                (display #\\n)))]
+]
     (seq
         (if (null? reduction)
             ;;; If product was not consumed by a matching continuation above, store it directly
