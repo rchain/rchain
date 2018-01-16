@@ -47,7 +47,9 @@
           </select>
           <div class="panel-body">
             {% render_field form.rho class="form-control" rows="16" cols="80" style="font-family: monospace;" placeholder='print(5)' %}
-            <button type="submit" class="btn btn-default">Submit</button>
+            <button type="submit" class="btn btn-default">Compile and Run</button>
+            <br />
+            <label>{{ form.verbose }} Verbose</label>
           </div>
         </div>
 
