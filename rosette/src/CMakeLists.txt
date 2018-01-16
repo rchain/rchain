@@ -9,4 +9,6 @@ add_executable(rosette main.cc Actor.cc RblAtom.cc BigBang.cc BinaryOb.cc Code.c
     rosette-config.cc)
 
 target_link_libraries (rosette ${LIBS})
-
+install(TARGETS rosette RUNTIME DESTINATION bin
+                        LIBRARY DESTINATION lib
+                        ARCHIVE DESTINATION lib)

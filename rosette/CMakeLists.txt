@@ -59,15 +59,7 @@ SET(CPACK_GENERATOR "DEB")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Nash Foster")
 SET(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
 SET(CPACK_DEBIAN_PACKAGE_DEPENDS
-    "build-essential (>= 12.2), \
-    cmake (>= 3.5.1-1), \
-    doxygen (>= 1.8.12-1), \
-    g++-6-multilib (>= 6.1.1-11), \
-    g++-multilib (>= 4:6.1.1-1), \
-    libgflags-dev (>= 2.1.2-3), \
-    libstdc++6-6-dbg:amd64 (>= 6.1.1-11), \
-    pkg-config (>= 0.29-4), \
-    texinfo (>= 6.3.0.dfsg.1-1+b1)")
+    "g++-multilib")
 
 INCLUDE(CPack)
 
