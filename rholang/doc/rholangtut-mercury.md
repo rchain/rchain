@@ -271,9 +271,9 @@ The process above will print "Hi there!" for as long as the virtual machine is r
 
 We can encode the riddle as
 
-	for (@(x && ~5) <- coins; @(y && ~10) <- coins if x+y == 15) {
-		system!("print", (x, y))
-	}
+    for (@(x && ~5) <- coins; @(y && ~10) <- coins if x+y == 15) {
+        system!("print", (x, y))
+    }
 
 The first pattern, `@(x && ~5)`, will match any message on `coins` that is not 5 and bind `x` to it; similarly, the second pattern `@(y && ~10)` will match any message on `coins` that is not 10 and will bind `y` to it.  The `if` clause in a `for` construction only allows the match to proceed if the formula to the right of it evaluates to `true`; in this case, nothing will be printed unless the values sum to 15.  
 
@@ -350,15 +350,15 @@ We can implement revocation by creating a forwarder with a kill switch.
 By combining an attenuating forwarder with a revokable forwarder, we get both features:
 
     new ret in {
-	    MakeGetForwarder(target, *ret) |
-	    for (@getOnly, kill <- ret) {
-		    MakeRevokableForwarder(getOnly, *ret) |
-		    for (@revokableGetOnly <- ret) {
-				// give away revokableGetOnly instead of target
-				// hang onto kill for later revocation
-			}
-		}
-	}
+        MakeGetForwarder(target, *ret) |
+        for (@getOnly, kill <- ret) {
+            MakeRevokableForwarder(getOnly, *ret) |
+            for (@revokableGetOnly <- ret) {
+                // give away revokableGetOnly instead of target
+                // hang onto kill for later revocation
+            }
+        }
+    }
 
 ### Logging forwarder
 
