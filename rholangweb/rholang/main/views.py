@@ -21,6 +21,7 @@ def home(request):
         compilerForm = CompilerForm(request.POST)
         if compilerForm.is_valid():
             rho = compilerForm.cleaned_data.get('rho')
+            verbose = compilerForm.cleaned_data.get('verbose')
 
             try:
                 runj = Compiler.jar_runner(Path(cfg.COMPILER_JAR), cfg.TIMEOUT,
@@ -46,7 +47,7 @@ def home(request):
                                           cfg.TIMEOUT, cfg.STACKLIMIT,
                                           setrlimit, Popen))
                 try:
-                    _warnings, _preamble, session = vm.run_repl(rbl)
+                    _warnings, _preamble, session = vm.run_repl(rbl, verbose)
                     run_error = None
                 except UserError as oops:
                     run_error = oops.args[0]
@@ -69,3 +70,4 @@ def home(request):
 
 class CompilerForm(Form):
     rho = forms.CharField(widget=forms.Textarea)
+    verbose = forms.BooleanField(label="Verbose", required=False)
