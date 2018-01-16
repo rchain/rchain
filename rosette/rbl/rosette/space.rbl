@@ -111,15 +111,17 @@
     [[ctxt [code env]] ctxt-tuple]
     [[channels unification_ptrns product_ptrns persistent] location]
         ;;; the channel and the pattern of incoming messages to look for are destructured and bound
-    [_ (seq
-        (if flag-verbose (print (->symbol "DEBUG: Calling consume(")))
-        (if flag-verbose (print channels))
-        (if flag-verbose (print (->symbol ", ")))
-        (if flag-verbose (print unification_ptrns))
-        (if flag-verbose (print (->symbol ", ")))
-        (if flag-verbose (print product_ptrns))
-        (if flag-verbose (print (->symbol ")")))
-        (if flag-verbose (p ""))
+    [_  (if flag-verbose
+            (seq
+                (print (->symbol "DEBUG: Calling consume("))
+                (print channels)
+                (print (->symbol ", "))
+                (print unification_ptrns)
+                (print (->symbol ", "))
+                (print product_ptrns)
+                (print (->symbol ")"))
+                (p "")
+            )
         )]
     [channels_concatenated (symbol-list-concat channels)]
     [unification_ptrns_concatenated (symbol-list-concat unification_ptrns)]
@@ -229,11 +231,12 @@
     ]
 
     [_
-        (seq
-            (if flag-verbose (print "About to print reductions"))
-            (if flag-verbose (print reductions))
-            (if flag-verbose (display #\\n))
-        )]
+        (if flag-verbose
+            (seq
+                (print "About to print reductions")
+                (print reductions)
+                (display #\\n)
+        ))]
 
 
     ;;; For each channel returned from value function, return the bindings and products and consume/delete it
@@ -314,17 +317,18 @@
     [[ctxt _] ctxt-tuple]
     [[channel unification_ptrn product] production]
     [_
-        (seq
-                (if flag-verbose (print (->symbol "DEBUG: Calling produce(")))
-                (if flag-verbose (print channel))
-                (if flag-verbose (print (->symbol ", ")))
-                (if flag-verbose (print unification_ptrn))
-                (if flag-verbose (print (->symbol ", ")))
-                (if flag-verbose (print product))
-                (if flag-verbose (print (->symbol ")")))
-                (if flag-verbose (p ""))
+        (if flag-verbose
+            (seq
+                (print (->symbol "DEBUG: Calling produce("))
+                (print channel)
+                (print (->symbol ", "))
+                (print unification_ptrn)
+                (print (->symbol ", "))
+                (print product)
+                (print (->symbol ")"))
+                (p "")
 
-        )]
+        ))]
 
     [expanded_channels
         (seq
@@ -341,11 +345,13 @@
     [subspaces (map expanded_channels (proc [i channel] (tuplespace-tbl-get-or-create chart channel)))]
     [subspace_group_keys (map subspaces (proc [i subspace] (names subspace)))]
     [_
-       (seq
-           (if flag-verbose (print "About to print subspace_group_keys"))
-           (if flag-verbose (print subspace_group_keys))
-           (if flag-verbose (display #\\n))
-       )
+        (if flag-verbose
+            (seq
+                (print "About to print subspace_group_keys")
+                (print subspace_group_keys)
+                (display #\\n)
+            )
+        )
     ]
     [candidates
         (map subspace_group_keys (proc [i subspace_keys]
@@ -362,11 +368,13 @@
                             )
                         ) [[] []])]
                            [_
-                               (seq
-                                   (if flag-verbose (print "About to print extractions"))
-                                   (if flag-verbose (print extractions))
-                                   (if flag-verbose (display #\\n))
-                               )
+                                (if flag-verbose
+                                    (seq
+                                        (print "About to print extractions")
+                                        (print extractions)
+                                        (display #\\n)
+                                    )
+                                )
                            ]
                 [[data_group continuation_group]
                     (fold extractions
@@ -397,11 +405,13 @@
                     ))))))))]
 
    [_
-       (seq
-           (if flag-verbose (print "About to print candidates"))
-           (if flag-verbose (print candidates))
-           (if flag-verbose (display #\\n))
-       )
+        (if flag-verbose
+            (seq
+                (print "About to print candidates")
+                (print candidates)
+                (display #\\n)
+            )
+        )
    ]
 
     ;;; Value function
@@ -433,10 +443,12 @@
          )
     ]
     [_
-        (seq
-            (if flag-verbose (print "About to print reduction"))
-            (if flag-verbose (print reduction))
-            (if flag-verbose (display #\\n))
+        (if flag-verbose
+            (seq
+                (print "About to print reduction")
+                (print reduction)
+                (display #\\n)
+            )
         )]
     ]
     (seq
