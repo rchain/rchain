@@ -1,63 +1,23 @@
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/apropos.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/async-repl.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/boot.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/classes-types.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/configuration.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/c-structures.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/document.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/dyn-load.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/exceptions.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/expander.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/foreign-funs.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/hello_world.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/io-system.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/meth-proc-oprns.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/multimethod.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/primitives.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/que-stk-oprns.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/sbo-init.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/space.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/string-oprns.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/system.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/table-oprns.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/time.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/timesvc.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/trace.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tuple-oprns.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/vm-heap.rbl
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY apropos.rbl async-repl.rbl boot.rbl classes-types.rbl
+    config.rbl configuration.rbl c-structures.rbl document.rbl
+    dyn-load.rbl exceptions.rbl expander.rbl foreign-funs.rbl
+    hello_world.rbl io-system.rbl meth-proc-oprns.rbl multimethod.rbl
+    primitives.rbl que-stk-oprns.rbl sbo-init.rbl space.rbl
+    string-oprns.rbl system.rbl table-oprns.rbl time.rbl timesvc.rbl
+    trace.rbl tuple-oprns.rbl vm-heap.rbl
+    DESTINATION lib/rosette)
 
+install(FILES apropos.rbl async-repl.rbl boot.rbl classes-types.rbl
+    config.rbl configuration.rbl c-structures.rbl document.rbl
+    dyn-load.rbl exceptions.rbl expander.rbl foreign-funs.rbl
+    hello_world.rbl io-system.rbl meth-proc-oprns.rbl multimethod.rbl
+    primitives.rbl que-stk-oprns.rbl sbo-init.rbl space.rbl
+    string-oprns.rbl system.rbl table-oprns.rbl time.rbl timesvc.rbl
+    trace.rbl tuple-oprns.rbl vm-heap.rbl
+    DESTINATION lib/rosette)
 
-
-add_test(NAME boot_rbl COMMAND rosette --boot-dir ${CMAKE_CURRENT_BINARY_DIR} /dev/null)
+add_test(NAME boot_rbl
+    COMMAND rosette --boot-dir lib/rosette /dev/null)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/run-tests.ros
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
@@ -68,9 +28,13 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/reader-iso-8859-1.ros
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/reader-utf-8.ros
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
 
-add_test(NAME test_scripts COMMAND rosette --boot-dir ${CMAKE_CURRENT_BINARY_DIR} tests/run-tests.ros)
+add_test(NAME test_scripts
+    COMMAND rosette --boot-dir lib/rosette tests/run-tests.ros)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/segfaults/regression-ros-304.rbl
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests/segfaults)
 
-add_test(NAME regression_ros_304 COMMAND rosette --boot-dir ${CMAKE_CURRENT_BINARY_DIR} tests/segfaults/regression-ros-304.rbl)
+add_test(NAME regression_ros_304
+    COMMAND rosette --boot-dir lib/rosette
+    tests/segfaults/regression-ros-304.rbl)
+
