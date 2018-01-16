@@ -31,7 +31,7 @@ In this case, we're sending a message consisting of two processes, the string `"
 
 3) We listen on the new channel for a message.  The `for` operation blocks until there's a message available on the channel `chan`. 
 
-The language of patterns (also known as "spatial types") includes the language of processes and names.  Every process with free variables is a pattern that matches a process with the same structure; the free variables bind to the subprocesses in that position.  On line 3, we expect a tuple with one element.  That element is the serialization of some process, and therefore starts with an `@`.  Since we sent a string on line 2, the free variable`text` gets bound to that string process.  Finally, line 2 forwards that string to the `system` process to print.
+The language of patterns (also known as "spatial types") includes the language of processes and names.  Every process with free variables is a pattern that matches a process with the same structure; the free variables bind to the subprocesses in that position.  On line 3, we expect a tuple with one element.  That element is the serialization of some process, and therefore starts with an `@`.  Since we sent a string on line 2, the free variable`text` gets bound to that string process.  Finally, line 3 forwards that string to the `system` process to print.
 
 Later, we'll explore some more features of patterns.
 
