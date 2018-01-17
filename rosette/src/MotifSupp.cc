@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -15,12 +16,6 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
 
 #include "rosette.h"
 IS_IMPLEMENTATION
@@ -51,48 +46,48 @@ WidgetClass rbl_xmCascadeButtonWidgetClass = xmCascadeButtonWidgetClass;
 extern "C" {
 void force_motif_load() {
     /* X Window manipulation */
-    (void)XDefaultRootWindow();
-    (void)XRootWindow();
-    (void)XRootWindowOfScreen();
-    (void)XCreateSimpleWindow();
-    (void)XMapWindow();
-    (void)XMoveWindow();
-    (void)XNextEvent();
-    (void)XEventsQueued();
-    (void)XCreateGC();
-    (void)XCheckTypedEvent();
-    (void)XSelectInput();
-    (void)XClearWindow();
-    (void)XResizeWindow();
+    XDefaultRootWindow();
+    XRootWindow();
+    XRootWindowOfScreen();
+    XCreateSimpleWindow();
+    XMapWindow();
+    XMoveWindow();
+    XNextEvent();
+    XEventsQueued();
+    XCreateGC();
+    XCheckTypedEvent();
+    XSelectInput();
+    XClearWindow();
+    XResizeWindow();
 
     /* X Drawing functions */
-    (void)XDrawLine();
-    (void)XDrawLines();
-    (void)XDrawString();
-    (void)XDrawRectangle();
-    (void)XDrawRectangles();
-    (void)XDrawArcs();
-    (void)XDrawText();
+    XDrawLine();
+    XDrawLines();
+    XDrawString();
+    XDrawRectangle();
+    XDrawRectangles();
+    XDrawArcs();
+    XDrawText();
 
 
-    (void)XmStringCreate("A", XmSTRING_DEFAULT_CHARSET);
-    (void)XmStringCreateLtoR("A", XmSTRING_DEFAULT_CHARSET);
-    (void)XmStringCreateSimple("A");
+    XmStringCreate("A", XmSTRING_DEFAULT_CHARSET);
+    XmStringCreateLtoR("A", XmSTRING_DEFAULT_CHARSET);
+    XmStringCreateSimple("A");
 
     /* Xtoolkit functions */
-    (void)XtInitialize();
-    (void)XtToolkitInitialize();
-    (void)XtGetValues();
-    (void)XtSetValues();
-    /*  (void) XtSetArg(); turns out this is a macro? (unni) */
-    (void)XtCreateManagedWidget();
-    (void)XtCreateWidget();
-    (void)XtOpenDisplay();
-    (void)XtAppCreateShell();
-    (void)XtCreateApplicationShell();
-    (void)XtRealizeWidget();
-    (void)XtNextEvent();
-    (void)XtDispatchEvent();
-    (void)XtMainLoop();
+    XtInitialize();
+    XtToolkitInitialize();
+    XtGetValues();
+    XtSetValues();
+    /*   XtSetArg(); turns out this is a macro? (unni) */
+    XtCreateManagedWidget();
+    XtCreateWidget();
+    XtOpenDisplay();
+    XtAppCreateShell();
+    XtCreateApplicationShell();
+    XtRealizeWidget();
+    XtNextEvent();
+    XtDispatchEvent();
+    XtMainLoop();
 }
 }

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Mbox.h"
-
 #include "Ctxt.h"
 #include "Queue.h"
 #include "Tuple.h"
-
 #include "BuiltinClass.h"
 
 #include <assert.h>
@@ -52,7 +41,7 @@ EmptyMbox::EmptyMbox()
 
 EmptyMbox* EmptyMbox::create() {
     void* loc = PALLOC(sizeof(EmptyMbox));
-    return NEW(loc) EmptyMbox();
+    return new (loc) EmptyMbox();
 }
 
 
@@ -89,7 +78,7 @@ LockedMbox::LockedMbox()
 
 LockedMbox* LockedMbox::create() {
     void* loc = PALLOC(sizeof(LockedMbox));
-    return NEW(loc) LockedMbox();
+    return new (loc) LockedMbox();
 }
 
 
@@ -111,9 +100,9 @@ Ob* LockedMbox::receiveMsg(MboxOb* client, Ctxt* task) {
 
 
 Ob* LockedMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
-    if (new_enabledSet == NIL)
+    if (new_enabledSet == NIL) {
         ASSIGN(client, mbox, emptyMbox);
-    else {
+    } else {
         PROTECT(client);
         QueueMbox* new_mbox = QueueMbox::create(new_enabledSet);
         new_mbox->unlock();
@@ -143,7 +132,7 @@ QueueMbox* QueueMbox::create(Ob* enabledSet) {
     PROTECT(enabledSet);
     MboxQueue* queue = MboxQueue::create();
     void* loc = PALLOC1(sizeof(QueueMbox), queue);
-    return NEW(loc) QueueMbox(enabledSet, queue);
+    return new (loc) QueueMbox(enabledSet, queue);
 }
 
 
@@ -151,11 +140,13 @@ Ob* QueueMbox::cloneTo(Ob*, Ob*) { return emptyMbox; }
 
 
 Ob* QueueMbox::receiveMsg(MboxOb* client, Ctxt* task) {
-    if (isLocked() || !enabledSet->accepts(task))
+    if (isLocked() || !enabledSet->accepts(task)) {
         queue->enqueue(task);
-    else {
-        if (enabledSet == NIL)
+    } else {
+        if (enabledSet == NIL) {
             warning("NIL enabled-set on unlocked %s", typestring());
+        }
+
         lock();
         client->schedule(task);
     }
@@ -181,24 +172,24 @@ Ob* QueueMbox::nextMsg(MboxOb* client, Ob* new_enabledSet) {
          * new_enabledSet is non-NIL.
          */
 
-        if (queue->isEmpty() && new_enabledSet == NIL)
+        if (queue->isEmpty() && new_enabledSet == NIL) {
             ASSIGN(client, mbox, emptyMbox);
-        else {
+        } else {
             ASSIGN(this, enabledSet, new_enabledSet);
             unlock();
         }
-    }
-    else {
+    } else {
         /*
          * The mbox is presumably locked at this point, and it should
          * remain so, either by reverting to the (unique) lockedMbox or
          * by keeping lockVal set.
          */
 
-        if (queue->isEmpty() && new_enabledSet == NIL)
+        if (queue->isEmpty() && new_enabledSet == NIL) {
             ASSIGN(client, mbox, lockedMbox);
-        else
+        } else {
             ASSIGN(this, enabledSet, new_enabledSet);
+        }
 
         client->schedule(task);
     }

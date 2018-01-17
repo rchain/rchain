@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,18 +17,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Ob.h"
-
 #include "RblAtom.h"
 #include "Code.h"
 #include "CommandLine.h"
@@ -46,8 +36,8 @@
 #include "Tuple.h"
 #include "Vm.h"
 #include "Addr.h"
-
 #include "ModuleInit.h"
+#include "config.h"
 
 #include <cstdlib>
 #include <ctime>
@@ -68,6 +58,35 @@ char* getcwd(char*);
 #undef NULL
 #endif
 #include <sys/param.h>
+
+
+pMeta META(pOb ob) { return (pMeta)ob->meta(); }
+pSBO SBO(pOb ob) { return (pSBO)ob->parent(); }
+pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
+
+int TAG(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return GET_TAGGED_TAG(te);
+}
+
+int ESCTAG(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return GET_ESCTAGGED_TAG(te);
+}
+
+int TAGVAL(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return SIGN_EXTEND(GET_TAGGED_DATA(te), WordSize - TagSize);
+}
+
+int ESCVAL(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te), WordSize - EscTagSize);
+}
 
 
 char* Base::typestring() { return "unknown type"; }
@@ -112,10 +131,10 @@ void Ob::forwardTo(pOb p) {
 bool Ob::reallyCheckStore(pOb val) {
     if (IS_PTR(val) && IS_NEW(val)) {
         heap->remember(this);
-        return TRUE;
+        return true;
     }
-    else
-        return FALSE;
+
+    return false;
 }
 
 
@@ -132,7 +151,7 @@ bool Ob::reallyCheckStore(pOb val) {
 static const int SuspicionThreshold = sizeof(Ob) + 8192 * sizeof(pOb);
 
 
-inline bool Ob::suspicious() {
+bool Ob::suspicious() {
     return (SIZE(this) < MinObSize || (SIZE(this) > SuspicionThreshold));
 }
 
@@ -156,8 +175,10 @@ extern int nMarked;
 
 
 void Ob::mark() {
-    if (MARKED(this))
+    if (MARKED(this)) {
         return;
+    }
+
     assert(!FORWARDED(this));
     nMarked++;
     SET_FLAG(HDR_FLAGS(this), f_marked);
@@ -170,26 +191,31 @@ void Ob::check() {
 
     char* ts = typestring();
 
-    if (!heap->validPtrAfterScavenge(this))
+    if (!heap->validPtrAfterScavenge(this)) {
         suicide("%s not properly scavenged", ts);
+    }
 
     /*
      * If we're initializing stuff in BigBang, metas and parents are
      * going to be invalid for a while.  Ignore them.
      */
 
-    if (!InBigBang && (meta() == INVALID || parent() == INVALID))
+    if (!InBigBang && (meta() == INVALID || parent() == INVALID)) {
         warning("%s has invalid meta or parent", ts);
+    }
 
-    if (suspicious())
+    if (suspicious()) {
         warning("%s has suspicious size of %d bytes", ts, SIZE(this));
+    }
 
-    if (MARKED(this))
+    if (MARKED(this)) {
         suicide("live %s still marked", ts);
+    }
 
     if (!FREED(this)) {
-        if (FORWARDED(this))
+        if (FORWARDED(this)) {
             suicide("live %s still forwarded", ts);
+        }
 
         // This traversal just makes sure that all of the constituent
         // pOb's are valid.  It doesn't recurse.
@@ -208,22 +234,27 @@ void Ob::checkOb() {
 
     char* ts = typestring();
 
-    if (FREED(this))
+    if (FREED(this)) {
         suicide("live %s has been freed", ts);
-    else if (MARKED(this))
+    } else if (MARKED(this)) {
         suicide("live %s still marked", ts);
+    }
 
-    if (!heap->validPtrAfterScavenge(this))
+    if (!heap->validPtrAfterScavenge(this)) {
         suicide("%s not properly scavenged", ts);
+    }
 
-    if (!InBigBang && (meta() == INVALID || parent() == INVALID))
+    if (!InBigBang && (meta() == INVALID || parent() == INVALID)) {
         warning("%s has invalid meta or parent", ts);
+    }
 
-    if (suspicious())
+    if (suspicious()) {
         warning("%s has suspicious size of %d bytes", ts, SIZE(this));
+    }
 
-    if (FORWARDED(this))
+    if (FORWARDED(this)) {
         suicide("live %s still forwarded", ts);
+    }
 
     if (IS_OLD(this) && !REMEMBERED(this) &&
         traversePtrs(MF_ADDR(Ob::gcSensitive)) != 0) {
@@ -235,9 +266,9 @@ void Ob::checkOb() {
 
 
 int Ob::size() {
-    if (VISITED(this))
+    if (VISITED(this)) {
         return 0;
-    else {
+    } else {
         SET_FLAG(HDR_FLAGS(this), f_visited);
         return SIZE(this) + traversePtrs(MF_ADDR(Ob::size));
     }
@@ -245,9 +276,9 @@ int Ob::size() {
 
 
 int Ob::obCount() {
-    if (VISITED(this))
+    if (VISITED(this)) {
         return 0;
-    else {
+    } else {
         SET_FLAG(HDR_FLAGS(this), f_visited);
         return 1 + traversePtrs(MF_ADDR(Ob::obCount));
     }
@@ -262,7 +293,7 @@ void Ob::unvisit() {
 }
 
 
-inline int inlineUseIfPtr(void* v, PSOb__PSOb f) {
+int inlineUseIfPtr(void* v, PSOb__PSOb f) {
     pOb* pp = (pOb*)v;
     pOb p = *pp;
     if (IS_PTR(p)) {
@@ -270,28 +301,27 @@ inline int inlineUseIfPtr(void* v, PSOb__PSOb f) {
         if (p != q) {
             *pp = q;
             return 1;
-        }
-        else
+        } else {
             return 0;
-    }
-    else
+        }
+    } else {
         return 0;
+    }
 }
 
 
 int useIfPtr(void* v, PSOb__PSOb f) { return inlineUseIfPtr(v, f); }
 
-inline int inlineUseIfPtr(pOb v, SI__PSOb f) {
-    return IS_PTR(v) ? (PTR(v)->*f)() : 0;
-}
+int inlineUseIfPtr(pOb v, SI__PSOb f) { return IS_PTR(v) ? (PTR(v)->*f)() : 0; }
 
 
 int useIfPtr(pOb v, SI__PSOb f) { return inlineUseIfPtr(v, f); }
 
 
-inline void inlineUseIfPtr(pOb v, V__PSOb f) {
-    if (IS_PTR(v))
+void inlineUseIfPtr(pOb v, V__PSOb f) {
+    if (IS_PTR(v)) {
         (PTR(v)->*f)();
+    }
 }
 
 
@@ -300,11 +330,12 @@ void useIfPtr(pOb v, V__PSOb f) { inlineUseIfPtr(v, f); }
 
 int Ob::traversePtrs(PSOb__PSOb f) {
     int sum = 0;
-    pOb* KONST end = endp();
+    pOb* const end = endp();
     pOb* p = _slot;
 
-    while (p < end)
+    while (p < end) {
         sum += inlineUseIfPtr(p++, f);
+    }
 
     return sum;
 }
@@ -315,8 +346,9 @@ int Ob::traversePtrs(SI__PSOb f) {
     pOb* end = endp();
     pOb* p = _slot;
 
-    while (p < end)
+    while (p < end) {
         sum += inlineUseIfPtr(*p++, f);
+    }
 
     return sum;
 }
@@ -326,8 +358,9 @@ void Ob::traversePtrs(V__PSOb f) {
     pOb* end = endp();
     pOb* p = _slot;
 
-    while (p < end)
+    while (p < end) {
         inlineUseIfPtr(*p++, f);
+    }
 }
 
 
@@ -341,8 +374,7 @@ pOb obcpy(pOb dest, pOb src, int sz) {
     dest->header.fields.size = sz;
     if (FOREIGN(src)) {
         SET_FLAG(HDR_FLAGS(dest), f_foreign);
-    }
-    else {
+    } else {
         REMOVE_FLAG(HDR_FLAGS(dest), f_foreign);
     }
     return dest;
@@ -353,7 +385,7 @@ extern pOb emptyMbox;
 
 
 pOb Ob::self() { return this; }
-bool Ob::ConstantP() { return TRUE; }
+bool Ob::ConstantP() { return true; }
 Prim* Ob::InlineablePrimP() { return (Prim*)INVALID; }
 void Ob::printOn(FILE* f) { fputs(asCstring(), f); }
 void Ob::printQuotedOn(FILE* f) { printOn(f); }
@@ -406,8 +438,9 @@ pOb Ob::cloneTo(pOb new_meta, pOb new_parent) {
     ob->parent() = new_parent;
     ob->updateCnt();
     BASE(new_meta)->addRef();
-    if (FOREIGN(SELF))
+    if (FOREIGN(SELF)) {
         heap->registerForeignOb(ob);
+    }
 
     return ob;
 }
@@ -415,31 +448,39 @@ pOb Ob::cloneTo(pOb new_meta, pOb new_parent) {
 
 pOb Ob::getLex(int indirect, int level, int offset) {
     pOb p = this;
-    while (level--)
+    while (level--) {
         p = BASE(p->parent());
-    if (indirect) {
-        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
-            return INVALID;
-        else
-            p = ((Actor*)p)->extension;
     }
+
+    if (indirect) {
+        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
+            return INVALID;
+        } else {
+            p = ((Actor*)p)->extension;
+        }
+    }
+
     return (offset < p->numberOfSlots() ? p->slot(offset) : INVALID);
 }
 
 
 pOb Ob::setLex(int indirect, int level, int offset, pOb val) {
     pOb p = this;
-    while (level--)
+    while (level--) {
         p = BASE(p->parent());
-    if (indirect) {
-        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
-            return INVALID;
-        else
-            p = ((Actor*)p)->extension;
     }
-    if (offset >= p->numberOfSlots())
+
+    if (indirect) {
+        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
+            return INVALID;
+        } else {
+            p = ((Actor*)p)->extension;
+        }
+    }
+
+    if (offset >= p->numberOfSlots()) {
         return INVALID;
-    else {
+    } else {
         ASSIGN(p, slot(offset), val);
         return val;
     }
@@ -448,37 +489,49 @@ pOb Ob::setLex(int indirect, int level, int offset, pOb val) {
 
 pOb Ob::getAddr(int indirect, int level, int offset) {
     pOb p = this;
-    while (level--)
+    while (level--) {
         p = BASE(p->parent());
-    if (indirect) {
-        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
-            return INVALID;
-        else
-            p = ((Actor*)p)->extension;
     }
-    return (offset < p->numberOfSlots()
-                ? FIXNUM(ADDR_TO_PRE_FIXNUM(p->slot(offset)))
-                : INVALID);
+
+    if (indirect) {
+        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
+            return INVALID;
+        } else {
+            p = ((Actor*)p)->extension;
+        }
+    }
+
+    if (offset < p->numberOfSlots()) {
+        return FIXNUM(ADDR_TO_PRE_FIXNUM(p->slot(offset)));
+    } else {
+        return INVALID;
+    }
 }
 
 
 pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
     uint32_t addr;
-    if (!IS_FIXNUM(val))
+    if (!IS_FIXNUM(val)) {
         return INVALID;
+    }
+
     addr = PRE_FIXNUM_TO_ADDR(FIXVAL(val));
     pOb p = this;
-    while (level--)
+    while (level--) {
         p = BASE(p->parent());
-    if (indirect) {
-        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
-            return INVALID;
-        else
-            p = ((Actor*)p)->extension;
     }
-    if (offset >= p->numberOfSlots())
+
+    if (indirect) {
+        if (p->numberOfSlots() <= SLOT_NUM(Actor, extension)) {
+            return INVALID;
+        } else {
+            p = ((Actor*)p)->extension;
+        }
+    }
+
+    if (offset >= p->numberOfSlots()) {
         return INVALID;
-    else {
+    } else {
         ASSIGN(p, slot(offset), (pOb)addr);
         return val;
     }
@@ -486,14 +539,15 @@ pOb Ob::setAddr(int indirect, int level, int offset, pOb val) {
 
 
 pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
-    static const int WordSize = BITS(uint32_t);
-
     long ans;
     pOb p = this;
-    while (level--)
+    while (level--) {
         p = BASE(p->parent());
-    if (indirect)
+    }
+
+    if (indirect) {
         p = ((Actor*)p)->extension;
+    }
 
     switch (span) {
     case 8:
@@ -516,21 +570,24 @@ pOb Ob::getField(int indirect, int level, int offset, int span, int sign) {
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
-        // this contained some complex and questionable big-endian dependent code.
+        // this contained some complex and questionable big-endian dependent
+        // code.
         ans = 0;
     }
     }
+
     return FIXNUM(ans);
 }
 
 pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
-    static const int WordSize = BITS(uint32_t);
-
     pOb p = this;
-    while (level--)
+    while (level--) {
         p = BASE(p->parent());
-    if (indirect)
+    }
+
+    if (indirect) {
         p = ((Actor*)p)->extension;
+    }
 
     switch (span) {
     case 8:
@@ -547,7 +604,8 @@ pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
         break;
     default: {
         // Fields that are not multiples of 8 bits are not expected. Previously,
-        // this contained some complex and questionable big-endian dependent code.
+        // this contained some complex and questionable big-endian dependent
+        // code.
     }
     }
     return this;
@@ -557,18 +615,20 @@ pOb Ob::setField(int indirect, int level, int offset, int span, uint32_t bits) {
 /* Object actions */
 
 
-bool Ob::isSynchronousTrgt() { return TRUE; }
+bool Ob::isSynchronousTrgt() { return true; }
 
 DEF("object-lookup-and-invoke", objectLookupAndInvoke, 2, 2) {
     CHECK(1, Ctxt, ctxt);
 
-    if (debugging_level)
+    if (debugging_level) {
         printf("\t%s\n", BASE(ARG(0))->asCstring());
+    }
 
-    if (ctxt->nargs > 0)
+    if (ctxt->nargs > 0) {
         return BASE(ctxt->arg(0))->lookupAndInvoke(ctxt);
-    else
+    } else {
         return BASE(ctxt->trgt)->runtimeError(ctxt, "no argument for dispatch");
+    }
 }
 
 DEF_OPRN(Sync, "lookupAndInvoke", oprnLookupAndInvoke, objectLookupAndInvoke);
@@ -606,32 +666,39 @@ pOb Ob::invoke(Ctxt* ctxt) {
 
         pOb me = self();
         ctxt->ret(me);
-        if (!BASE(ctxt->trgt)->isSynchronousTrgt())
+        if (!BASE(ctxt->trgt)->isSynchronousTrgt()) {
             BASE(ctxt->arg(0))->updateNoArgs();
+        }
+
         return me;
-    }
-    else
+    } else {
         return BASE(ctxt->trgt)->runtimeError(ctxt, "bad method");
+    }
 }
 
 
 pOb Ob::lookup(pOb key, Ctxt* ctxt) {
-    if (interruptPending)
+    if (interruptPending) {
         return ABSENT;
+    }
+
     pOb me = self();
     pOb result = BASE(meta())->get(me, key, ctxt);
-    if (result == ABSENT)
+    if (result == ABSENT) {
         return BASE(parent())->lookup(key, ctxt);
-    else
+    } else {
         return result;
+    }
 }
 
 
 pOb Ob::lookupAndInvoke(Ctxt* ctxt) {
     pOb fn = BASE(meta())->lookupOBO(self(), ctxt->trgt, ctxt);
 
-    if (interruptPending)
+    if (interruptPending) {
         return ABSENT;
+    }
+
     if (fn == ABSENT) {
         PROTECT_THIS(Ob);
         PROTECT(ctxt);
@@ -643,6 +710,7 @@ pOb Ob::lookupAndInvoke(Ctxt* ctxt) {
         new_ctxt->monitor = vm->systemMonitor;
         return oprnMissingMethod->dispatch(new_ctxt);
     }
+
     return BASE(fn)->invoke(ctxt);
 }
 
@@ -656,10 +724,10 @@ pOb Ob::receive(Ctxt* ctxt) {
 }
 
 
-bool Ob::accepts(Ctxt*) { return FALSE; }
+bool Ob::accepts(Ctxt*) { return false; }
 
 
-bool Ob::matches(Ctxt*) { return FALSE; }
+bool Ob::matches(Ctxt*) { return false; }
 
 
 pOb Ob::updateNoArgs() { return self(); }
@@ -670,14 +738,16 @@ pOb Ob::update(bool enabled_set_provided, Ctxt* ctxt) {
     pOb me = self();
     pOb rslt = me;
 
-    if (ctxt->nargs > key_start)
+    if (ctxt->nargs > key_start) {
         /*
          * We use the (somewhat) funny loop termination condition to make
          * sure that ill-formed argument lists (those that don't have
          * matching pairs of offsets and values) don't cause a bomb.
          */
-        for (int i = key_start; i < ctxt->nargs - 1 && rslt == me; i += 2)
+        for (int i = key_start; i < ctxt->nargs - 1 && rslt == me; i += 2) {
             rslt = BASE(meta())->set(me, ctxt->arg(i), ctxt->arg(i + 1), ctxt);
+        }
+    }
 
     return rslt;
 }
@@ -694,9 +764,11 @@ pOb Ob::updateByLoc(bool enabled_set_provided, Ctxt* ctxt) {
          * matching pairs of offsets and values) don't cause a bomb.
          */
         for (int i = key_start; i < ctxt->nargs - 1; i += 2) {
-            if (!IS(OTlocation, ctxt->arg(i)))
+            if (!IS(OTlocation, ctxt->arg(i))) {
                 return actorUpdateBang->runtimeError(ctxt,
                                                      "bad location descriptor");
+            }
+
             Location loc;
             loc.atom = ctxt->arg(i);
             setValWrt(loc, this, ctxt->arg(i + 1));
@@ -795,9 +867,9 @@ Location Ob::lex(pOb key, int level) {
         return level == 0 ? loc
                           : LexVar(GET_LEXVAR_LEVEL(loc) + level,
                                    GET_LEXVAR_OFFSET(loc), GET_LEXVAR_IND(loc));
-    }
-    else
+    } else {
         return BASE(parent())->lex(key, level + 1);
+    }
 }
 
 
@@ -859,16 +931,18 @@ pOb Ob::mismatch(Ctxt* ctxt, int argnum, char* type_name) {
 
 
 pOb Ob::mismatch(Ctxt* ctxt, int minargs, int maxargs) {
-    if (maxargs == MaxArgs)
+    if (maxargs == MaxArgs) {
         return runtimeError(ctxt, "expected %d or more arguments", minargs);
-    else if (minargs == maxargs)
-        if (minargs == 1)
+    } else if (minargs == maxargs) {
+        if (minargs == 1) {
             return runtimeError(ctxt, "expected 1 argument");
-        else
+        } else {
             return runtimeError(ctxt, "expected %d arguments", minargs);
-    else
+        }
+    } else {
         return runtimeError(ctxt, "expected between %d and %d arguments",
                             minargs, maxargs);
+    }
 }
 
 
@@ -903,10 +977,11 @@ DEF("compile", obCompile, 1, 3) {
 
     pOb result = BASE(ARG(0))->compileWrt(proto, info);
 
-    if (result == INVALID)
+    if (result == INVALID) {
         return PRIM_ERROR("compilation aborted");
-    else
+    } else {
         return result;
+    }
 }
 
 
@@ -957,35 +1032,32 @@ DEF("niv?", obNivQ, 1, 1) { return RBLBOOL(ARG(0) == NIV); }
 
 
 DEF("absent?", obAbsentQ, 1, MaxArgs) {
-    for (int i = 0; i < NARGS; i++)
-        if (ARG(i) != ABSENT)
+    for (int i = 0; i < NARGS; i++) {
+        if (ARG(i) != ABSENT) {
             return RBLFALSE;
+        }
+    }
 
     return RBLTRUE;
 }
 
 
 DEF("absent!?", obNotAbsentQ, 1, MaxArgs) {
-    for (int i = 0; i < NARGS; i++)
-        if (ARG(i) == ABSENT)
+    for (int i = 0; i < NARGS; i++) {
+        if (ARG(i) == ABSENT) {
             return RBLFALSE;
+        }
+    }
 
     return RBLTRUE;
 }
 
 
 DEF("same?", obSameQ, 2, 2) { return RBLBOOL(ARG(0) == ARG(1)); }
-
 DEF("same!?", obSameNQ, 2, 2) { return RBLBOOL(ARG(0) != ARG(1)); }
-
 DEF("self", obSelf, 0, 0) { return __CTXT__->self2; }
-
-
 DEF("home", obHome, 0, 0) { return __CTXT__; }
-
-
 DEF("clone", obClone, 1, 1) { return BASE(ARG(0))->clone(); }
-
 
 DEF("clone-to", obCloneTo, 2, 3) {
     pOb base = BASE(ARG(0));
@@ -1010,8 +1082,9 @@ DEF("add", objectAdd, 2, 3) {
 
 DEF("set", objectSet, 2, 3) {
     pOb env = __CTXT__->self();
-    if (NARGS == 3)
+    if (NARGS == 3) {
         env = ARG(2);
+    }
 
     return BASE(BASE(env)->meta())->set(env, ARG(0), ARG(1), __CTXT__);
 }
@@ -1055,20 +1128,22 @@ DEF("prim-size", objectIndexedSize, 1, 1) {
 DEF("prim-nth", objectNth, 2, 2) {
     CHECK_FIXNUM(1, n);
     pOb base = BASE(ARG(0));
-    if (0 <= n && n < FIXVAL(base->indexedSize()))
+    if (0 <= n && n < FIXVAL(base->indexedSize())) {
         return base->nth(n);
-    else
+    } else {
         return PRIM_ERROR("subscript error");
+    }
 }
 
 
 DEF("prim-set-nth", objectSetNth, 3, 3) {
     CHECK_FIXNUM(1, n);
     pOb base = BASE(ARG(0));
-    if (0 <= n && n < FIXVAL(base->indexedSize()))
+    if (0 <= n && n < FIXVAL(base->indexedSize())) {
         return base->setNth(n, ARG(2));
-    else
+    } else {
         return PRIM_ERROR("subscript error");
+    }
 }
 
 
@@ -1076,10 +1151,11 @@ DEF("prim-sub-object", objectSubObject, 3, 3) {
     CHECK_FIXNUM(1, i);
     CHECK_FIXNUM(2, n);
     pOb base = BASE(ARG(0));
-    if (0 <= i && 0 <= n && (i + n) <= FIXVAL(base->indexedSize()))
+    if (0 <= i && 0 <= n && (i + n) <= FIXVAL(base->indexedSize())) {
         return base->subObject(i, n);
-    else
+    } else {
         return PRIM_ERROR("subscript error");
+    }
 }
 
 
@@ -1088,13 +1164,17 @@ DEF("object->string", objectToString, 1, MaxArgs) {
     int nChars = 1;
     int n = NARGS;
     int i = 0;
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i++) {
         nChars += strlen(BASE(ARG(i))->asCstring());
+    }
+
     RBLstring* str = RBLstring::create(nChars);
     char* buffer = (char*)&str->byte(0);
     buffer[0] = '\0';
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i++) {
         strcat(buffer, BASE(ARG(i))->asCstring());
+    }
+
     return str;
 }
 
@@ -1103,21 +1183,26 @@ DEF("object->symbol", objectToSymbol, 1, MaxArgs) {
     int nChars = 1;
     int n = NARGS;
     int i = 0;
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i++) {
         nChars += strlen(BASE(ARG(i))->asCstring());
+    }
 
     static char* buffer = 0;
     static int bufsize = 0;
     if (nChars > bufsize) {
-        if (buffer)
+        if (buffer) {
             delete buffer;
+        }
+
         bufsize = nChars;
         buffer = new char[bufsize];
     }
 
     buffer[0] = '\0';
-    for (i = 0; i < n; i++)
+    for (i = 0; i < n; i++) {
         strcat(buffer, BASE(ARG(i))->asCstring());
+    }
+
     return SYMBOL(buffer);
 }
 
@@ -1125,12 +1210,16 @@ DEF("object->symbol", objectToSymbol, 1, MaxArgs) {
 DEF("get-field", objectGetField, 5, 5) {
     CHECK_FIXNUM(1, start);
     CHECK_FIXNUM(2, span);
-    CHECK(3, RblBool, indirect);
-    CHECK(4, RblBool, sign);
+    CHECK_NOVAR(3, RblBool);
+    CHECK_NOVAR(4, RblBool);
     pOb rslt = BASE(ARG(0))->getField(ARG(3) == RBLTRUE, 0, start, span,
                                       ARG(4) == RBLTRUE);
 
-    return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
+    if (INVALID == rslt) {
+        return PRIM_ERROR("invalid bit range");
+    } else {
+        return rslt;
+    }
 }
 
 
@@ -1139,19 +1228,24 @@ DEF("set-field", objectSetField, 5, 5) {
     CHECK_FIXNUM(2, span);
     CHECK(3, RblBool, indirect);
     CHECK_FIXNUM(4, bits);
-    pOb rslt =
-        BASE(ARG(0))->setField(BOOLVAL(indirect), 0, start, span, (uint32_t)bits);
+    pOb rslt = BASE(ARG(0))->setField(BOOLVAL(indirect), 0, start, span,
+                                      (uint32_t)bits);
 
-    return (rslt == INVALID ? PRIM_ERROR("invalid bit range") : rslt);
+    if (INVALID == rslt) {
+        return PRIM_ERROR("invalid bit range");
+    } else {
+        return rslt;
+    }
 }
 
 
 DEF("classname", obClassname, 1, 1) {
     CHECK_FIXNUM(0, index);
-    if (0 <= index && index < Base::nClasses)
+    if (0 <= index && index < Base::nClasses) {
         return SYMBOL(Base::classNames[index]);
-    else
+    } else {
         return PRIM_ERROR("bad class index");
+    }
 }
 
 
@@ -1166,27 +1260,24 @@ DEF("scavenge", sysScavenge, 0, 0) {
     return NIV;
 }
 
-
 DEF("sleep", sysSleep, 0, 0) { return SLEEP; }
-
-
 DEF("sys-reset", sysReset, 0, 0) { return NIV; }
 
-
 DEF("version", sysVersion, 0, 0) {
-#include "Timestamp.h"
     char buf[256];
-    sprintf(buf, "Version %s (%s)", version, timestamp);
+    sprintf(buf, "Version %d.%d.%d", ROSETTE_VERSION_MAJOR,
+            ROSETTE_VERSION_MINOR, ROSETTE_VERSION_PATCH);
     return RBLstring::create(buf);
 }
 
 
 DEF("cwd", sysCwd, 0, 0) {
     char buf[MAXPATHLEN];
-    if (getcwd(buf))
+    if (getcwd(buf)) {
         return RBLstring::create(buf);
-    else
+    } else {
         return PRIM_ERROR(buf);
+    }
 }
 
 // TODO: Swap with something crypotgraphically secure and uniform in length
@@ -1194,6 +1285,7 @@ DEF("random-number-init", randomNumberInit, 0, 0) {
     srand(time(NULL));
     return NIV;
 }
+
 DEF("random-number", randomNumber, 0, 0) {
     int random_number = std::rand();
     return FIXNUM(random_number);

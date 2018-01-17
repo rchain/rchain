@@ -27,6 +27,7 @@ Springsprout.iml
 ehthumbs.db
 Icon?
 Thumbs.db
+*.swp
 
 # SBT
 #####

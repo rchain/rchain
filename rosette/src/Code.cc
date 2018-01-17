@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -15,16 +16,6 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
 
 #include "Code.h"
 
@@ -55,7 +46,7 @@ CodeBuf::CodeBuf()
 
 CodeBuf* CodeBuf::create() {
     void* loc = PALLOC(sizeof(CodeBuf));
-    return NEW(loc) CodeBuf();
+    return new (loc) CodeBuf();
 }
 
 
@@ -66,8 +57,7 @@ void CodeBuf::deposit(Instr i) {
     if (codevec != INVALID && codevec->numberOfWords() > int_pc) {
         FIXNUM_INC(pc);
         p = codevec->absolutize(int_pc);
-    }
-    else {
+    } else {
         PROTECT_THIS(CodeBuf);
         SELF->growCodevec(DefaultCodeVecSize);
         FIXNUM_INC(SELF->pc);
@@ -84,8 +74,7 @@ void CodeBuf::growCodevec(int sz) {
     if (codevec == INVALID) {
         CodeVec* newcodevec = CodeVec::create(sz);
         ASSIGN(SELF, codevec, newcodevec);
-    }
-    else {
+    } else {
         CodeVec* newcodevec =
             CodeVec::create(SELF->codevec->numberOfWords() + sz);
         memcpy(&newcodevec->instr(0), &SELF->codevec->instr(0),
@@ -211,8 +200,9 @@ void CodeBuf::clear() { pc = FIXNUM(0); }
 
 
 CodeVec* CodeBuf::finish() {
-    if (codevec == INVALID || pc == 0)
+    if (codevec == INVALID || pc == 0) {
         suicide("trying to finish up an empty code vector");
+    }
 
     int int_pc = FIXVAL(pc);
     PROTECT_THIS(CodeBuf);
@@ -237,7 +227,7 @@ CodeVec::CodeVec(int numberOfInstrs)
 
 CodeVec* CodeVec::create(int numberOfInstrs) {
     void* loc = PALLOC(sizeof(CodeVec) + align(numberOfInstrs * sizeof(Instr)));
-    return NEW(loc) CodeVec(numberOfInstrs);
+    return new (loc) CodeVec(numberOfInstrs);
 }
 
 
@@ -276,7 +266,6 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opExtend:
         sprintf(buf, "extend %d", (int)OP_f0_op0(insn));
         goto noDest;
-
 
     case opOutstanding | 0:
     case opOutstanding | 1:
@@ -365,15 +354,15 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
                 OP_f5_next(insn) ? "/nxt" : "", (int)OP_f5_op0(insn));
         goto noDest;
 
-
     case opApplyPrimTag | NextOff | UnwindOff:
     case opApplyPrimTag | NextOff | UnwindOn:
     case opApplyPrimTag | NextOn | UnwindOff:
     case opApplyPrimTag | NextOn | UnwindOn: {
         uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
+        if (prim_num == 255) {
             prim_num = OP_e1_op0((*pc++));
+        }
 
         sprintf(buf, "%s%s%s %d,", SYMPTR(Prim::nthPrim(prim_num)->id),
                 OP_f5_unwind(insn) ? "/unwind" : "",
@@ -389,8 +378,9 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opApplyPrimArg | NextOn | UnwindOn: {
         uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
+        if (prim_num == 255) {
             prim_num = OP_e1_op0((*pc++));
+        }
 
         sprintf(buf, "%s%s%s %d,arg[%d]", SYMPTR(Prim::nthPrim(prim_num)->id),
                 OP_f5_unwind(insn) ? "/unwind" : "",
@@ -406,8 +396,9 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opApplyPrimReg | NextOn | UnwindOn: {
         uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
+        if (prim_num == 255) {
             prim_num = OP_e1_op0((*pc++));
+        }
 
         sprintf(buf, "%s%s%s %d,", SYMPTR(Prim::nthPrim(prim_num)->id),
                 OP_f5_unwind(insn) ? "/unwind" : "",
@@ -416,15 +407,15 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
         goto formatDest;
     }
 
-
     case opApplyCmd | NextOff | UnwindOff:
     case opApplyCmd | NextOff | UnwindOn:
     case opApplyCmd | NextOn | UnwindOff:
     case opApplyCmd | NextOn | UnwindOn: {
         uint16_t extension = (*pc++).word;
         unsigned prim_num = WORD_OP_e0_op0(extension);
-        if (prim_num == 255)
+        if (prim_num == 255) {
             prim_num = OP_e1_op0((*pc++));
+        }
 
         sprintf(buf, "%s%s%s %d", SYMPTR(Prim::nthPrim(prim_num)->id),
                 OP_f5_unwind(insn) ? "/unwind" : "",
@@ -681,19 +672,17 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     }  // end switch (opcode)
 
 formatDest:
-
     printRep(dest, &buf[strlen(buf)]);
 
 noDest:
-
     return pc;
 }
 
 
 void CodeVec::dumpOn(FILE* f, Code* code) {
     Instr* pc = absolutize(0);
-    Instr* KONST start = pc;
-    Instr* KONST end = absolutize(numberOfWords());
+    Instr* const start = pc;
+    Instr* const end = absolutize(numberOfWords());
     char outputBuffer[128];
 
     while (pc < end) {
@@ -724,7 +713,7 @@ Code::Code(CodeVec* codevec, Tuple* litvec)
 
 Code* Code::create(CodeVec* codevec, Tuple* litvec) {
     void* loc = PALLOC2(sizeof(Code), codevec, litvec);
-    return NEW(loc) Code(codevec, litvec);
+    return new (loc) Code(codevec, litvec);
 }
 
 
@@ -732,7 +721,7 @@ Code* Code::create(CodeBuf* codebuf, Tuple* litvec) {
     PROTECT(litvec);
     CodeVec* codevec = codebuf->finish();
     void* loc = PALLOC1(sizeof(Code), codevec);
-    return NEW(loc) Code(codevec, litvec);
+    return new (loc) Code(codevec, litvec);
 }
 
 
@@ -757,10 +746,11 @@ void Code::dumpOn(FILE* f) {
 
 
 Ob* Code::associatedSource() {
-    if (litvec == NIL)
+    if (litvec == NIL) {
         return SYMBOL("***source unavailable***");
-    else
-        return lit(0);
+    }
+
+    return lit(0);
 }
 
 
@@ -771,8 +761,9 @@ MODULE_INIT(Code) {
     extern int RestoringImage;
 
     if (!RestoringImage) {
-        for (int i = 0; i < MaxOpcodes; i++)
+        for (int i = 0; i < MaxOpcodes; i++) {
             opcodeStrings[i] = NULL;
+        }
 
         opcodeStrings[opHalt] = "halt";
         opcodeStrings[opPush] = "push";
@@ -1005,16 +996,16 @@ DEF("opcode->string", opcodeString, 1, 1) {
 
     if (0 <= opcode && opcode < MaxOpcodes) {
         char* str = opcodeStrings[opcode];
-        if (str)
+        if (str) {
             return RBLstring::create(str);
-        else {
+        } else {
             char buf[32];
             sprintf(buf, "unknown:0x%2x", opcode);
             return RBLstring::create(buf);
         }
-    }
-    else
+    } else {
         return PRIM_ERROR("invalid opcode");
+    }
 }
 
 

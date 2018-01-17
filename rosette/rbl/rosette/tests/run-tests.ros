@@ -1,0 +1,80 @@
+;; -*- Coding: utf-8; Mode: Scheme; -*-
+;;
+;; Simple test harness. This needs improvement.
+
+;; One test is whether macro expansion still works.
+;;
+;; Here's what I'm going for:
+;;
+;; CL-USER> (defmacro test-form (form answer)
+;;            `(let ((result ,form))
+;;               (if (equal result ,answer)
+;;                   (format t "Form ~A = ~A passed.~%" ',form ,answer)
+;;                   (format t "Form ~A = ~A failed (produced ~A).~%" ',form ,answer result))))
+;; TEST-FORM
+;; CL-USER> (test-form (+ 1 2) 3)
+;; Form (+ 1 2) = 3 passed.
+;; NIL
+;; CL-USER> (test-form (+ 1 2) 4)
+;; Form (+ 1 2) = 4 failed (produced 3).
+;; NIL
+
+(define failures 0)
+(defProc (incf-failures)
+  (set! failures (+ failures 1))
+  failures)
+
+(define successes 0)
+(defProc (incf-successes)
+  (set! successes (+ successes 1))
+  successes)
+
+;; From the docs:
+;;
+;;   The method that is built by defExpander is defined in the context of
+;;   the prototypical RequestExpr [. . .]
+;;
+(defExpander (test-form e)
+  (let [[form (head msg)]
+        [answer (nth msg 1)]
+        [color-red "\033[31m"]
+        [color-green "\033[32m"]
+        [color-normal "\033[39m"]]
+    (new LetExpr (TX (TX 'res (e form e))
+                     (TX 'exp (e answer e)))
+         (SqX
+          (new IfExpr
+               (e (new RequestExpr 'or
+                       (TX (new RequestExpr '= (TX 'res 'exp))
+                           (new RequestExpr 'same? (TX 'res 'exp)))) e)
+               (SqX
+                (e (new RequestExpr 'display
+                        (TX (Q color-green)
+                            "Form " (Q form) " = " (Q answer) " passed.\n"
+                            (Q color-normal)))
+                   e)
+                (e (new RequestExpr 'incf-successes '[]) e))
+               (SqX
+                (e (new RequestExpr 'display
+                        (TX (Q color-red)
+                            "Form " (Q form) " = " (Q answer) " failed (expected " 'exp " but got " 'res ").\n"
+                            (Q color-normal)))
+                   e)
+                (e (new RequestExpr 'incf-failures '[]) e)
+                ))
+          ;; Return #niv to declutter the output.
+          '#niv))))
+
+
+(load "tests/equiv.ros" 'silent)
+(load "tests/reader-iso-8859-1.ros" 'silent)
+(load "tests/reader-utf-8.ros" 'silent)
+
+(exit (if (> failures 0) 1 0))
+
+;; Local Variables:
+;; indent-tabs-mode: nil
+;; fill-column: 79
+;; comment-column: 37
+;; End:
+

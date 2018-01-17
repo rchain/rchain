@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,16 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "ModuleInit.h"
 
 Module::Module(const char* modname, void (*fn)())
@@ -35,6 +26,7 @@ Module::Module(const char* modname, void (*fn)())
 Module* Module::root = 0;
 
 void Module::initModules() {
-    for (Module* mp = Module::root; mp; mp = mp->link)
+    for (Module* mp = Module::root; mp; mp = mp->link) {
         (*(mp->initFn))();
+    }
 }

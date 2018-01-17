@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,17 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
-
 #include "BinaryOb.h"
 #include "Ctxt.h"
 #include "Operation.h"
@@ -43,8 +33,10 @@ Prim::Prim(char* s, PRIMFN* f, int min, int max)
       fn(f),
       minargs(min),
       maxargs(max) {
-    if (primcount == MaxPrims)
+    if (primcount == MaxPrims) {
         suicide("too many primitives");
+    }
+
     this->primnum = primcount++;
     Prim::updateCnt();
 }
@@ -52,7 +44,7 @@ Prim::Prim(char* s, PRIMFN* f, int min, int max)
 
 Prim* Prim::create(char* s, PRIMFN* f, int min, int max) {
     void* loc = PALLOC(sizeof(Prim));
-    return NEW(loc) Prim(s, f, min, max);
+    return new (loc) Prim(s, f, min, max);
 }
 
 
@@ -91,8 +83,10 @@ Ob* Prim::dispatch(Ctxt* ctxt) {
 
     PROTECT(ctxt);
     Ob* result = dispatchHelper(ctxt);
-    if (result != INVALID && result != UPCALL && result != DEADTHREAD)
+    if (result != INVALID && result != UPCALL && result != DEADTHREAD) {
         ctxt->ret(result);
+    }
+
     return result;
 }
 
@@ -114,8 +108,10 @@ Ob* Prim::invoke(Ctxt* ctxt) {
      */
     PROTECT(ctxt);
     Ob* result = dispatch(ctxt);
-    if (!BASE(ctxt->trgt)->isSynchronousTrgt())
+    if (!BASE(ctxt->trgt)->isSynchronousTrgt()) {
         BASE(ctxt->arg(0))->updateNoArgs();
+    }
+
     return result;
 }
 
@@ -133,8 +129,9 @@ void BuiltinPrim::init() const {
 
 
 void BuiltinPrim::initBuiltinPrims() {
-    for (const BuiltinPrim* bpp = BuiltinPrim::root; bpp; bpp = bpp->link)
+    for (const BuiltinPrim* bpp = BuiltinPrim::root; bpp; bpp = bpp->link) {
         bpp->init();
+    }
 }
 
 

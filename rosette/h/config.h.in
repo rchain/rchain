@@ -1,0 +1,7 @@
+/* Copyright (c) 2017, RChain Cooperative.
+ * Author: Nash E. Foster
+ * */
+#define ROSETTE_VERSION_MAJOR @rosette_VERSION_MAJOR@
+#define ROSETTE_VERSION_MINOR @rosette_VERSION_MINOR@
+#define ROSETTE_VERSION_PATCH @rosette_VERSION_PATCH@
+

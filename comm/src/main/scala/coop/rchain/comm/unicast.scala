@@ -72,7 +72,7 @@ case class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
       socket.receive(recv_dgram)
       decode(recv_dgram.getData) match {
         case Right(data) => Right((recv_dgram.getSocketAddress, data))
-        case Left(err) => Left(err)
+        case Left(err)   => Left(err)
       }
     } catch {
       case NonFatal(ex: Exception) => Left(DatagramException(ex))

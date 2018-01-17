@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Queue_h)
 #define _RBL_Queue_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 class Queue : public Ob {
@@ -48,11 +37,11 @@ class Queue : public Ob {
     Tuple* elems;
 
     static Queue* create();
-
     virtual Ob* cloneTo(Ob* meta, Ob* parent);
 
-    int depth();
-    bool isEmpty();
+    int depth() { return FIXVAL(nElems); }
+    bool isEmpty() { return nElems == FIXNUM(0); }
+
     void enqueue(Ob*);
     Ob* dequeue();
     void reset();
@@ -66,10 +55,6 @@ class Queue : public Ob {
     Ob* patternRead(Tuple*);
     Ob* dequeueNth(int);
 };
-
-
-inline int Queue::depth() { return FIXVAL(nElems); }
-inline bool Queue::isEmpty() { return nElems == FIXNUM(0); }
 
 
 class MboxQueue : public Queue {
