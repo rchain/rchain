@@ -48,8 +48,7 @@
   (pure (in & r) eof)
   (pure (out & r) eof)
   (pure (resume-io & r) eof)
-  (pure (close) eof)
-  )
+  (pure (close) eof))
 
 ;;; async-repl.rbl
 ;;; asynchronous operation is currently enabled in sockets.rbl.  There is
@@ -128,35 +127,57 @@
 	 c)))
 
 (defProc (rosette-repl)
-  (seq
-   (sleep)
-   (display **CurrentPrompt**)
-   (flush)
-   (let [[expr (read-expr stdin)]]
-     (cond ((read-error? expr)
-	    (rosette-repl))
-	   ((same? expr ':exit-repl)
-	    (kernel))
-	   ((eof? expr)
-	    (seq
-	     (c-async stdin #f)
-	     (io-catch 0 #niv)
-	     #niv))
-	   (else
-	    (let [[x (if (same? expr '!!) *last-expr* expr)]]
-	      (send eval-and-print x)
-	      (seq
-	       (define *last-expr* x)
-	       (sleep)
-	       (repl)) ))))))
+    (if flag-enable-repl
+        (seq
+            (sleep)
+            (display **CurrentPrompt**)
+            (flush)
+            (let [[expr (read-expr stdin)]]
+                (cond
+                    ((read-error? expr) (rosette-repl))
+                    ((same? expr ':exit-repl) (kernel))
+                    ((eof? expr)
+                        (seq
+                            (c-async stdin #f)
+                            (io-catch 0 #niv)
+                            #niv))
+                    (else
+                        (let [[x (if (same? expr '!!) *last-expr* expr)]]
+                            (send eval-and-print x)
+                            (seq
+                                (define *last-expr* x)
+                                (sleep)
+                                (repl)))))))))
 
+(define runscript #niv)
+(defProc (rosette-runscript)
+    (if flag-enable-runscript
+        (seq
+            (sleep)
+            (let [[expr (read-expr **RUNSCRIPT**)]]
+                (cond
+                    ((read-error? expr) (rosette-runscript))
+                    ((same? expr ':exit-repl) (kernel))
+                    ((eof? expr)
+                        (seq
+                            (c-async stdin #f)
+                            (io-catch 0 #niv)
+                            #niv))
+                    (else
+                        (let [[x (if (same? expr '!!) *last-expr* expr)]]
+                            (send eval-and-print x)
+                            (seq
+                                (define *last-expr* x)
+                                (sleep)
+                                (runscript)))))))))
+(define runscript rosette-runscript)
 
 (defProc (initial-reset)
-  (seq
-   (define **SOURCE-FILE** "console")
-   (rosette-repl)
-   (suicide)
-   ))
+    (seq
+        (rosette-runscript)
+        (define **SOURCE-FILE** "console")
+        (rosette-repl)
+        (suicide)))
 
 ;; The following is the general paradigm for setting a FILE* to be asynchronous
 ;; 

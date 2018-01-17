@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,46 +17,31 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Monitor_h)
 #define _RBL_Monitor_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class Monitor : public Ob
-{
+class Monitor : public Ob {
     STD_DECLS(Monitor);
 
-  protected:
+   protected:
+    Monitor(Ob*, Timer*, Word32Vec*, Word32Vec*);
 
-    Monitor (Ob*, Timer*, Word32Vec*, Word32Vec*);
+   public:
+    Ob* id;
+    Timer* timer;
+    Word32Vec* opcodeCounts;
+    Word32Vec* obCounts;
+    Ob* tracing;
 
-  public:
+    static Monitor* create(Ob*);
 
-    Ob*		id;
-    Timer*	timer;
-    Word32Vec*	opcodeCounts;
-    Word32Vec*	obCounts;
-    Ob*		tracing;
-
-    static Monitor*	create (Ob*);
-
-    void	reset ();
-    void	start ();
-    void	stop ();
-    void	printStats (FILE*);
+    void reset();
+    void start();
+    void stop();
+    void printStats(FILE*);
 };
 
 #endif

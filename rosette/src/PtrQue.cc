@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,60 +17,32 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "PtrQue.h"
 
 static const int DefaultPtrQueSize = 32;
 
-PtrQue::PtrQue ()
-    : ResizeablePtrArray(DefaultPtrQueSize)
-{
-    init();
-}
+PtrQue::PtrQue() : ResizeablePtrArray(DefaultPtrQueSize) { init(); }
+PtrQue::PtrQue(int sz) : ResizeablePtrArray(sz) { init(); }
+void PtrQue::resize() { resize(2 * size); }
 
 
-PtrQue::PtrQue (int sz)
-    : ResizeablePtrArray(sz)
-{
-    init();
-}
-
-
-void
-PtrQue::resize ()
-{
-    resize(2*size);
-}
-
-
-void
-PtrQue::resize (int newsize)
-{
-    int offset = head-array;
+void PtrQue::resize(int newsize) {
+    int offset = head - array;
     ResizeablePtrArray::resize(newsize);
-    head = array+offset;
-    limit = array+size;
+    head = array + offset;
+    limit = array + size;
 }
 
 
-void
-PtrQue::compact ()
-{
+void PtrQue::compact() {
     void** end = head;
     void** ptr = array;
 
-    for (void** current = array; current < end; current++)
-	if (*current != 0)
-	    *ptr++ = *current;
+    for (void** current = array; current < end; current++) {
+        if (*current != 0) {
+            *ptr++ = *current;
+        }
+    }
 
     head = ptr;
 }

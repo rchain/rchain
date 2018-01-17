@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Parser_h)
 #define _RBL_Parser_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 #include "ObStk.h"
 
@@ -44,27 +33,24 @@ class PFrameStk;
 class Parser;
 
 
+class PFrameStk {
+    int topframe;
+    int nexttop;
+    char* stk;
+    int stksize;
 
-class PFrameStk
-{
-    int		topframe;
-    int		nexttop;
-    char*	stk;
-    int		stksize;
+    PFrameStk();
+    ~PFrameStk();
 
-    PFrameStk ();
-    ~PFrameStk ();
-
-    void*		alloc (int);
-    int			link (int);
-    ParserFrame*	top ();
-    void		pop ();
-    int			empty ();
-    void		reset ();
+    void* alloc(int);
+    int link(int);
+    ParserFrame* top();
+    void pop();
+    int empty();
+    void reset();
 
     friend class Parser;
 };
-
 
 
 enum ParserMode {
@@ -77,75 +63,71 @@ enum ParserMode {
 };
 
 enum WaitMode {
-  NOT_WAITING,
-  WAITING_FOR_EXPR,
+    NOT_WAITING,
+    WAITING_FOR_EXPR,
 };
 
 
-
-class Parser : public BinaryOb
-{
+class Parser : public BinaryOb {
     STD_DECLS(Parser);
 
-  protected:
+   protected:
+    Parser(ParseTable*);
 
-    Parser 	(ParseTable*);
+    Ob* resumeExpr();
+    Ob* suspendParser();
+    Ob* finish(Ob*);
+    void growBuffer();
+    ParserMode acceptEscChar(int, int);
 
-    Ob*		resumeExpr ();
-    Ob*		suspendParser ();
-    Ob*		finish (Ob*);
-    void	growBuffer ();
-    ParserMode	acceptEscChar (int, int);
+   public:
+    virtual ~Parser();
 
-  public:
+    static Parser* create();
 
-    virtual ~Parser ();
+    RBLstring* inbuf;
+    int inp;
+    char* buf;
+    int bufsize;
+    int bufp;
+    int errorEncountered;
+    WaitMode waitingOnIO;
+    ParseTable* rt;
+    ParserMode mode;
+    int digitSeen;
+    PFrameStk fstk;
+    ObStk ostk;
 
-    static Parser*	create ();
+    void buffer(int);
+    void resetBuffer();
+    char* finalizeBuffer();
+    Ob* finalizeAtom();
 
-    RBLstring*	inbuf;
-    int		inp;
-    char*	buf;
-    int		bufsize;
-    int		bufp;
-    int		errorEncountered;
-    WaitMode	waitingOnIO;
-    ParseTable*	rt;
-    ParserMode	mode;
-    int		digitSeen;
-    PFrameStk	fstk;
-    ObStk	ostk;
+    Ob* readExpr();
+    Ob* resume(RBLstring*);
+    Ob* error(const char*, ...);
+    void resetState();
 
-    void	buffer (int);
-    void	resetBuffer ();
-    char* 	finalizeBuffer ();
-    Ob*		finalizeAtom ();
+    void opush(Ob*);
+    Ob*& otop(int);
+    Ob* opop();
+    void odel(int);
 
-    Ob*		readExpr ();
-    Ob*		resume (RBLstring*);
-    Ob*		error (const char*, ...);
-    void	resetState ();
+    void* falloc(int);
+    int flink(int);
+    ParserFrame* ftop();
+    void fpop();
 
-    void	opush (Ob*);
-    Ob*&	otop (int);
-    Ob*		opop ();
-    void	odel (int);
+    ParserMode accept(int, int = false);
+    ParserMode receiveOb(Ob*);
+    ParserMode receiveChar(int);
+    ParserMode receiveTerminator(int);
+    ParserMode receiveDot(int);
 
-    void*	falloc (int);
-    int		flink (int);
-    ParserFrame* ftop ();
-    void	fpop ();
-
-    ParserMode	accept (int, int = FALSE);
-    ParserMode	receiveOb (Ob*);
-    ParserMode	receiveChar (int);
-    ParserMode	receiveTerminator (int);
-    ParserMode	receiveDot (int);
-
-    virtual Ob*		cloneTo (Ob*, Ob*);
-    virtual int		traversePtrs (PSOb__PSOb);
-    virtual int		traversePtrs (SI__PSOb);
-    virtual void	traversePtrs (V__PSOb);
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual int traversePtrs(PSOb__PSOb);
+    virtual int traversePtrs(SI__PSOb);
+    virtual void traversePtrs(V__PSOb);
 };
 
 

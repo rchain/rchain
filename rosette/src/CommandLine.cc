@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,34 +17,30 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "CommandLine.h"
 
+#include <algorithm>
+#include <string>
 #include <string.h>
 #include <sys/param.h>
+#include <stdlib.h>
+#include <getopt.h>
 
 #include "misc.h"
 
-unsigned	SurvivorSpaceSize	= 128 * 1024;
-unsigned	InfantSpaceSize		= 512 * 1024;
-unsigned	OldSpaceChunkSize	=  32 * 1024;
+unsigned SurvivorSpaceSize = 128 * 1024;
+unsigned InfantSpaceSize = 512 * 1024;
+unsigned OldSpaceChunkSize = 32 * 1024;
 
-#define DEFAULT "/usr/local/lib/rosette/lib"
+#define DEFAULT "/usr/lib/rosette"
 
-int	TenuringAge = 10;
-int	ParanoidAboutGC = 0;
-char*	DefaultBootDirectory = DEFAULT;
-char	BootDirectory[MAXPATHLEN] = DEFAULT;
-char	BootFile[MAXPATHLEN] = "";
+int TenuringAge = 10;
+int ParanoidAboutGC = 0;
+char BootDirectory[MAXPATHLEN] = DEFAULT;
+char BootFile[MAXPATHLEN] = "boot.rbl";
+char RunFile[MAXPATHLEN] = "";
+bool ForceEnableRepl = false;
+int VerboseFlag = 0;
 
 /*
  * RestoringImage is set to 0 in the initial boot-rosette image, but it
@@ -52,30 +49,47 @@ char	BootFile[MAXPATHLEN] = "";
  * value to determine whether they should actually do their work.
  */
 
-int	RestoringImage = 0;
-
-  
+int RestoringImage = 0;
 
 
-void
-usage (const char* name)
-{
-  suicide("Usage: %s [-t num] [-p [num]] [-is num] [-ss num] [-os num] [-boot filename]", name);
+void usage(const char* name, bool fatal = false, const char* msg = NULL) {
+    fprintf(stderr,
+            "Usage: %s [OPTION]... [FILE]... [-- <program_args> ...]\n"
+            "Run FILEs in the rholang VM, possibly passing <program_args> to \n"
+            "the program as its argv.\n"
+            "\n"
+            " -h, --help             Prints this message and exits.\n"
+            " -v, --verbose          Verbose mode\n"
+            " -q, --quiet            Disable verbose mode\n"
+            " -t, --tenure=NUM_GCS   Number of GCs before tenuring an object\n"
+            " -p, --paranoid-gc      Enable paranoid GC\n"
+            " -I, --infant-size=KB   RAM to allocate for infant objects\n"
+            " -s, --survivor-size=KB RAM to allocate for the survivors\n"
+            " -o, --old-size=KB      RAM to allocate for the old generation\n"
+            " -d, --boot-dir=DIR     BOOT directory\n"
+            " -b, --boot=FILE        BOOT file\n"
+            " -i, --interactive-repl Always run the REPL, even if passed a\n"
+            "                        script file to run.\n"
+            "\n", name);
+
+    if (fatal) { 
+        if (msg) {
+            suicide("%s", msg);
+        } else {
+            suicide("Unknown error");
+        }
+    }
 }
 
 
-void
-DeleteArgs (int i, int argc, char** argv, int n = 1)
-{
-    for (; i+n < argc; i++)
-	argv[i] = argv[i+n];
+void DeleteArgs(int i, int argc, char** argv, int n = 1) {
+    for (; i + n < argc; i++)
+        argv[i] = argv[i + n];
     argv[i] = 0;
 }
 
 
-int
-ParseCommandLine (int argc, char** argv)
-{
+int ParseCommandLine(int argc, char** argv) {
     /*
      * ParseCommandLine removes from argv those arguments that are
      * fielded by the Rosette interpreter and returns the adjusted value
@@ -84,95 +98,121 @@ ParseCommandLine (int argc, char** argv)
      * BigBang.cc for details.
      */
 
-    const char* cmd_name = argv[0];
+    int c = 0;
+
+    const struct option long_options[] = {
+        /* Flags */
+        {"verbose", no_argument, NULL, 'v'},
+        {"quiet", no_argument, NULL, 'q'},
+        {"interactive-repl", no_argument, NULL, 'i'},
+
+        /* Non-flags */
+        {"help", no_argument, 0, 'h'},
+        {"tenure", required_argument, 0, 't'},
+        {"paranoid-gc", required_argument, 0, 'p'},
+        {"infant-size", required_argument, 0, 'I'},
+        {"survivor-size", required_argument, 0, 's'},
+        {"old-size", required_argument, 0, 'o'},
+        {"boot-dir", required_argument, 0, 'd'},
+        {"boot", required_argument, 0, 'b'},
+        {0, 0, 0, 0},
+    };
 
     /*
      * We always manually reset ParanoidAboutGC in this routine so that
      * its value starts out at 0 even when we are actually restoring a
      * dumped image.
      */
-
     ParanoidAboutGC = 0;
 
-    DeleteArgs(0, argc, argv);	/* Delete argv[0] (the command name) */
-    argc--;
-
-    int i = 0;
-
-    while (i < argc) {
-
-	if (strcmp(argv[i], "-t") == 0) {
-	    if (i+1 < argc && sscanf(argv[i+1], "%d", &TenuringAge))
-		;
-	    else
-		usage(cmd_name);
-	    DeleteArgs(i, argc, argv, 2);
-	    argc -= 2;
-	    continue;
-	}
-
-	if (strcmp(argv[i], "-p") == 0) {
-	    int temp = 0;
-	    if (i+1 < argc && sscanf(argv[i+1], "%d", &temp)) {
-		ParanoidAboutGC = temp;
-		DeleteArgs(i, argc, argv, 2);
-		argc -= 2;
-	    }
-	    else {
-		ParanoidAboutGC = 1;
-		DeleteArgs(i, argc, argv);
-		argc--;
-	    }
-	    continue;
-	}
-
-	if (strcmp(argv[i], "-is") == 0) {
-	    int temp;
-	    if (i+1 < argc && sscanf(argv[i+1], "%d", &temp))
-		InfantSpaceSize = temp*1024;
-	    else
-		usage(cmd_name);
-	    DeleteArgs(i, argc, argv, 2);
-	    argc -= 2;
-	    continue;
-	}
-
-	if (strcmp(argv[i], "-ss") == 0) {
-	    int temp;
-	    if (i+1 < argc && sscanf(argv[i+1], "%d", &temp))
-		SurvivorSpaceSize = temp*1024;
-	    else
-		usage(cmd_name);
-	    DeleteArgs(i, argc, argv, 2);
-	    argc -= 2;
-	    continue;
-	}
-
-	if (strcmp(argv[i], "-os") == 0) {
-	    int temp;
-	    if (i+1 < argc && sscanf(argv[i+1], "%d", &temp))
-		OldSpaceChunkSize = temp*1024;
-	    else
-		usage(cmd_name);
-	    DeleteArgs(i, argc, argv, 2);
-	    argc -= 2;
-	    continue;
-	}
-
-	if (strcmp(argv[i], "-boot") == 0) {
-	    if (i+1 < argc)
-		strcpy(BootFile, argv[i+1]);
-	    else
-		usage(cmd_name);
-	    DeleteArgs(i, argc, argv, 2);
-	    argc -= 2;
-	    continue;
-	}
-
-	/* Otherwise the argument is passed on to the Rosette program. */
-
-	i++;
+    /* Set the BootDirectory from the environment, if it's there.
+     */
+    auto boot_dir_env = getenv("ROSETTE_LIB");
+    if (boot_dir_env) {
+        strncpy(BootDirectory, boot_dir_env, MAXPATHLEN);
     }
 
-    return argc;
+    while (1) {
+        int option_index = 0;
+        c = getopt_long(argc, argv, "+qhvdI:t:p:is:o:b:",
+                long_options, &option_index);
+
+        if (-1 == c) {
+            break;
+        }
+
+        int age = -1;
+        size_t chars = 0;
+
+        switch (c) {
+            case 'v':
+                VerboseFlag = 1;
+                break;
+
+            case 'q':
+                VerboseFlag = 0;
+                break;
+
+            case 'h':
+                usage(argv[0]);
+                exit(0);
+
+            case 't':
+                age = std::stoi(optarg);
+                TenuringAge = age;
+                break;
+
+            case 'p':
+                ParanoidAboutGC = std::stoi(optarg);
+                break;
+
+            case 'I':
+                InfantSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
+                break;
+
+            case 's':
+                SurvivorSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
+                break;
+
+            case 'o':
+                OldSpaceChunkSize = std::stoul(optarg, &chars, 10) * 1024;
+                break;
+
+            case 'd':
+                strncpy(BootDirectory, optarg, MAXPATHLEN);
+                break;
+
+            case 'b':
+                strncpy(BootFile, optarg, MAXPATHLEN);
+                break;
+
+            case 'i':
+                ForceEnableRepl = true;
+                break;
+
+            default:
+                // TODO(leaf): We should handle this better, since getopt_long
+                // will return '?' or ':' to tell us something about what went
+                // wrong.
+                usage(argv[0], true, "Invalid argument.");
+        }
+    }
+
+    // NB(leaf): If we got a '--' before we got a run file, then optind will
+    // be the index of the first argument of the program args and '--' should
+    // just precede it.
+    std::string prev_arg(argv[optind - 1]);
+    if ("--" != prev_arg) {
+        if (optind < argc) {
+            strncpy(RunFile, argv[optind], MAXPATHLEN);
+            optind += 1;
+        }
+    }
+
+    if (VerboseFlag) {
+        fprintf(stderr, "ParseCommandLine: Returning optind=%d of argc=%d\n",
+                optind, argc);
+    }
+
+    return optind;
 }

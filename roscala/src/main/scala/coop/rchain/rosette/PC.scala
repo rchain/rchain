@@ -6,5 +6,4 @@ case class PC(relative: Int) {
 
 object PC {
   object PLACEHOLDER extends PC(0)
-  def fromInt(i: Int): PC = PLACEHOLDER
 }

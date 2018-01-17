@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -19,63 +20,48 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(__ROSETTE__)
 #define __ROSETTE__
-#include ARCH_INC
 
-#if !defined(DO_UNGETC)
-#define DO_UNGETC  int c = getc(&_iob[fd]); ungetc(c, &_iob[fd]);
-#endif
+#include "signal.h"
 
-#define HAS_BOOL
-
-#include <assert.h>
+#include <cassert>
 #include <stdio.h>
 
+// TODO(leaf): CMake doesn't trivially offer a way to figure this out.
+// However, I can't tell that it's being used for anything. So, for now
+// set this to something reasonable and hope to ignore it until we can
+// get rid of it.
+#define ARCH "x86_64"
+#define MACHINE "x86_64"
+#define OS "linux"
+#define LINUX
+
+
 #ifndef name2
-#define name2(x,y) x ## y
+#define name2(x, y) x##y
 #endif
 
 #ifndef name3
-#define name3(x,y,z) x ## y ## z
+#define name3(x, y, z) x##y##z
 #endif
 
-#ifdef __GNUG__
-/* #define NEW(loc) new{loc} */
-#ifndef MIPS_SGI_SYSV
-typedef void (*SIG_PF) (int);
-#endif
+#define NEW(loc) new (loc)
 
-#else
-#define NEW(loc) new(loc)
-#endif
+/* because of need for alignment on 8 byte boundary of doubles */
+#define USE_SHORT_FLOAT
 
-#ifdef LITTLE_END
-#define ORDER2(a,b) b a
-#define ORDER3(a,b,c) c b a
-#define ORDER4(a,b,c,d) d c b a
-#define ORDER5(a,b,c,d,e) e d c b a
-#else
-#define ORDER2(a,b) a b
-#define ORDER3(a,b,c) a b c
-#define ORDER4(a,b,c,d) a b c d
-#define ORDER5(a,b,c,d,e) a b c d e
-#endif
+/* flag to use with fcntl to give non blocking io
+   the ~ of it should give blocking io
+ */
+#define FCNTL_NONBLOCK (FNDELAY | FASYNC)
+
+/* You must supply something to cause the current process
+   to receive the io signal when input is available on fd.
+   return is < 0 on failure.
+*/
+
+#define SET_SIGNAL_IO_DESIRED(result) \
+    result = (desiredState ? fcntl(fd, F_SETOWN, getpid()) : 0)
 
 #endif
-
-#ifndef RBL_WOULDBLOCK
-#define RBL_WOULDBLOCK (errno == EWOULDBLOCK)
-#endif
-
-#ifndef EMPTY
-#define EMPTY
-#endif
-  

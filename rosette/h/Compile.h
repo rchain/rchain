@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,19 +17,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Compile_h)
 #define _RBL_Compile_h
-
-#ifdef __GNUG__
-#pragma interface
-#endif
 
 #include "rosette.h"
 
@@ -52,76 +42,71 @@
  * Consequently, I am forced to make these members public.  The protected
  * label is kept as a reminder.
  */
-
 #define protected public
 
-class CompilationUnit : public BinaryOb
-{
+class CompilationUnit : public BinaryOb {
     STD_DECLS(CompilationUnit);
 
-  protected:
+   protected:
+    CompilationUnit(Ob*, AttrNode*, CodeBuf*, Tuple*, LabelTable*);
 
-    CompilationUnit (Ob*, AttrNode*, CodeBuf*, Tuple*, LabelTable*);
-
-  public:
-
+   public:
 #ifdef SYSV4
-     /* the bsd compat package may do sigsetjmp which uses more space */
-    sigjmp_buf	abortbuf;
+    /* the bsd compat package may do sigsetjmp which uses more space */
+    sigjmp_buf abortbuf;
 #else
-    jmp_buf	abortbuf;
-#endif    
-    Ob*		info;
-    AttrNode*	graph;
-    CodeBuf*	codebuf;
-    Tuple*	litvec;
-    LabelTable*	labels;
+    jmp_buf abortbuf;
+#endif
+    Ob* info;
+    AttrNode* graph;
+    CodeBuf* codebuf;
+    Tuple* litvec;
+    LabelTable* labels;
 
-    static CompilationUnit* create (Ob*, Ob*, Ob*);
+    static CompilationUnit* create(Ob*, Ob*, Ob*);
 
-    int		traversePtrs (PSOb__PSOb);
-    int		traversePtrs (SI__PSOb);
-    void	traversePtrs (V__PSOb);
+    int traversePtrs(PSOb__PSOb);
+    int traversePtrs(SI__PSOb);
+    void traversePtrs(V__PSOb);
 
-    unsigned	extendLitvec (Ob*);
-    Code*	compileExpr (Ob*, Ob* = TopEnv);
-    Code*	compileBody (Template*, Ob*, Ob* = TopEnv);
-    void 	abort ();
-    void	abort (const char*, ...);
-    void	warning (const char*, ...);
-    void	vwarning (const char*, const char*, va_list);
+    unsigned extendLitvec(Ob*);
+    Code* compileExpr(Ob*, Ob* = TopEnv);
+    Code* compileBody(Template*, Ob*, Ob* = TopEnv);
+    void abort();
+    void abort(const char*, ...);
+    void warning(const char*, ...);
+    void vwarning(const char*, const char*, va_list);
 
-    void	atTopLevel ();
-    Label	newLabel ();
-    void	setLabel (Label);
-    void	registerLabel (Label);
+    void atTopLevel();
+    Label newLabel();
+    void setLabel(Label);
+    void registerLabel(Label);
 };
 
 
 enum RtnCode { ImplicitRtn, TaggedRtn, UntaggedRtn };
-static const bool CtxtAvailable = TRUE;
-static const bool ArgvecAvailable = TRUE;
+static const bool CtxtAvailable = true;
+static const bool ArgvecAvailable = true;
 
 #include "Bits.h"
-#define GET_ATTR(x,flag) GET_FLAG((x).word,flag)
-#define SET_ATTR(x,flag,val) (val ? SET_FLAG((x).word,flag) : REMOVE_FLAG((x).word,flag))
-
-
+#define GET_ATTR(x, flag) GET_FLAG((x).word, flag)
+#define SET_ATTR(x, flag, val) \
+    (val ? SET_FLAG((x).word, flag) : REMOVE_FLAG((x).word, flag))
 
 
 enum NodeFlag {
 
-      /*
-     * topLevel is set if this node is the top node of the attributed
-     * graph.  It is useful for suppressing certain warnings that are a
-     * nuisance for top-level expressions.
-     */
-f_topLevel = BITS(Ob*) - (2*BITS(Byte) + 6)+1,
+    /*
+   * topLevel is set if this node is the top node of the attributed
+   * graph.  It is useful for suppressing certain warnings that are a
+   * nuisance for top-level expressions.
+   */
+    f_topLevel = BITS(Ob*) - (2 * BITS(uint8_t) + 6) + 1,
     /*
      * valueContext is true if the expression represented by this node is
      * in a position where it is expected to produce a value.
      */
-f_valueContext,
+    f_valueContext,
 
     /*
      * producesValue is a flag that indicates whether the expression
@@ -130,12 +115,12 @@ f_valueContext,
      * work correctly in the presence of asynchronous interactions.
      */
 
-f_producesValue,
+    f_producesValue,
     /*
      * simpleNode indicates whether the node describes a symbol or a
      * literal.
      */
-f_simpleNode,
+    f_simpleNode,
     /*
      * inlineableNode is true if the expression can be evaluated in the
      * same ctxt as the enclosing expression, i.e, if it is not a
@@ -144,33 +129,32 @@ f_simpleNode,
      * a primitive function such as fx+.  All simple sub-expressions
      * (i.e., symbols and literals) are by definition inlineable.
      */
-f_inlineableNode};
+    f_inlineableNode
+};
 
-class AttrNode : public BinaryOb
-{
+class AttrNode : public BinaryOb {
     STD_DECLS(AttrNode);
 
-  protected:
-
+   protected:
     /*
      * av_size is the argvec size required for the evaluation of this
      * expression.  It includes the requirements for all inlined
      * subexpressions.
      */
 
-    Byte	av_size;
+    uint8_t av_size;
 
     /*
      * outstanding is a count of the number suspending (not inlineable)
      * sub-expressions contained by this expression.
      */
 
-    Byte	outstanding;
+    uint8_t outstanding;
 
     unsigned short word;
 
-    Location		dest;
-    Label		resume;
+    Location dest;
+    Label resume;
 
     /*
      * The gc routines (traversPtrs and friends) use the address of the
@@ -182,542 +166,461 @@ class AttrNode : public BinaryOb
      * to be examined should be placed after cu.
      */
 
-    CompilationUnit*	cu;
+    CompilationUnit* cu;
 
-    AttrNode (int, bool);
+    AttrNode(int, bool);
 
-    int		traversePtrs (PSOb__PSOb);
-    int		traversePtrs (SI__PSOb);
-    void	traversePtrs (V__PSOb);
+    int traversePtrs(PSOb__PSOb);
+    int traversePtrs(SI__PSOb);
+    void traversePtrs(V__PSOb);
 
-    virtual void	changeDest (Location&);
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitResumeCode (RtnCode);
+    virtual void changeDest(Location&);
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitResumeCode(RtnCode);
 
-    unsigned		getDestOffset ();
-    void		emitAlloc (unsigned);
-    void		emitApplyPrim (unsigned, unsigned, bool, RtnCode, Label);
-    void		emitExtend (Template*);
-    void		emitLit (Ob*);
-    void		emitLookup (Ob*);
-    void		emitOpAndLabel (Opcode, Label);
-    void		emitOpAndLabel (Opcode, Byte, Label);
-    void		emitOpAndLabel (Opcode, Ob*);
-    void		emitOpAndLabel (Opcode, Byte, Ob*);
-    void		emitOutstanding ();
-    void		emitPush (int);
-    void		emitStore (Label);
-    void		emitRtn (RtnCode, Label);
-    void		emitImplicitRtn (Label);
-    void		emitTaggedRtn (Label);
-    void		emitUntaggedRtn (Label);
-    void		emitXfer (Location);
+    unsigned getDestOffset();
+    void emitAlloc(unsigned);
+    void emitApplyPrim(unsigned, unsigned, bool, RtnCode, Label);
+    void emitExtend(Template*);
+    void emitLit(Ob*);
+    void emitLookup(Ob*);
+    void emitOpAndLabel(Opcode, Label);
+    void emitOpAndLabel(Opcode, uint8_t, Label);
+    void emitOpAndLabel(Opcode, Ob*);
+    void emitOpAndLabel(Opcode, uint8_t, Ob*);
+    void emitOutstanding();
+    void emitPush(int);
+    void emitStore(Label);
+    void emitRtn(RtnCode, Label);
+    void emitImplicitRtn(Label);
+    void emitTaggedRtn(Label);
+    void emitUntaggedRtn(Label);
+    void emitXfer(Location);
 
-    virtual int	primNumber ();
+    virtual int primNumber();
 
-    void		emitF0 (Opcode, unsigned = 0);
-    void		emitF1 (Opcode, unsigned, unsigned);
-    void		emitF2 (Opcode, unsigned, unsigned);
-    void		emitF3 (Opcode, unsigned, unsigned, unsigned);
-    void		emitF4 (Opcode, unsigned, unsigned, unsigned, unsigned);
-    void		emitF5 (Opcode, unsigned, unsigned, unsigned = 0);
-    void		emitF6 (Opcode, unsigned);
-    void		emitF7 (Opcode, unsigned, unsigned, unsigned, unsigned);
-    void		emitE0 (unsigned, unsigned);
-    void		emitE1 (unsigned);
-    void		emitE2 (unsigned, unsigned);
+    void emitF0(Opcode, unsigned = 0);
+    void emitF1(Opcode, unsigned, unsigned);
+    void emitF2(Opcode, unsigned, unsigned);
+    void emitF3(Opcode, unsigned, unsigned, unsigned);
+    void emitF4(Opcode, unsigned, unsigned, unsigned, unsigned);
+    void emitF5(Opcode, unsigned, unsigned, unsigned = 0);
+    void emitF6(Opcode, unsigned);
+    void emitF7(Opcode, unsigned, unsigned, unsigned, unsigned);
+    void emitE0(unsigned, unsigned);
+    void emitE1(unsigned);
+    void emitE2(unsigned, unsigned);
 
-    friend class	CompilationUnit;
+    friend class CompilationUnit;
 
-  public:
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+   public:
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
-
 
-class ConstNode : public AttrNode
-{
+class ConstNode : public AttrNode {
     STD_DECLS(ConstNode);
 
-  protected:
+   protected:
+    Ob* val;
 
-    Ob*		val;
+    ConstNode(Ob*, bool);
 
-    ConstNode (Ob*, bool);
+    void emitDispatchCode(bool, bool, RtnCode, Label);
+    int primNumber();
 
-    void	emitDispatchCode (bool, bool, RtnCode, Label);
-    int		primNumber ();
+   public:
+    static ConstNode* create(Ob*, bool);
 
-  public:
-
-    static ConstNode* create (Ob*, bool);
-
-    void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class SymbolNode : public AttrNode
-{
+class SymbolNode : public AttrNode {
     STD_DECLS(SymbolNode);
 
-  protected:
+   protected:
+    Location loc;
+    Ob* sym;
 
-    Location	loc;
-    Ob*		sym;
+    SymbolNode(Ob*, bool);
 
-    SymbolNode (Ob*, bool);
+    void emitDispatchCode(bool, bool, RtnCode, Label);
+    int primNumber();
 
-    void	emitDispatchCode (bool, bool, RtnCode, Label);
-    int		primNumber ();
+    friend class SetNode;
 
-    friend class	SetNode;
+   public:
+    static SymbolNode* create(Ob*, bool);
 
-  public:
-
-    static SymbolNode* create (Ob*, bool);
-
-    void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class FreeNode : public AttrNode
-{
+class FreeNode : public AttrNode {
     STD_DECLS(FreeNode);
 
-  protected:
+   protected:
+    FreeExpr* expr;
+    AttrNode* body;
 
-    FreeExpr*	expr;
-    AttrNode*	body;
+    FreeNode(FreeExpr*, bool);
 
-    FreeNode (FreeExpr*, bool);
+    virtual void changeDest(Location&);
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitResumeCode(RtnCode);
+    virtual int primNumber();
 
-    virtual void	changeDest (Location&);
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitResumeCode (RtnCode);
-    virtual int		primNumber ();
+   public:
+    static FreeNode* create(FreeExpr*, bool);
 
-  public:
-
-    static FreeNode* create (FreeExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class NullNode : public AttrNode
-{
+class NullNode : public AttrNode {
     STD_DECLS(NullNode);
 
-  protected:
+   protected:
+    NullNode(bool);
 
-    NullNode (bool);
+    void emitDispatchCode(bool, bool, RtnCode, Label);
 
-    void emitDispatchCode (bool, bool, RtnCode, Label);
-
-  public:
-
-    static NullNode* create (bool);
+   public:
+    static NullNode* create(bool);
 };
 
 
-
-class XferNode : public AttrNode
-{
+class XferNode : public AttrNode {
     STD_DECLS(XferNode);
 
-  protected:
+   protected:
+    Ob* source;
 
-    Ob*	source;
+    XferNode(int);
 
-    XferNode (int);
+    void emitDispatchCode(bool, bool, RtnCode, Label);
 
-    void	emitDispatchCode (bool, bool, RtnCode, Label);
-
-  public:
-
-    static XferNode* create (int);
+   public:
+    static XferNode* create(int);
 };
 
-
 
-struct ExprStack
-	{
-	    Tuple*	exprs;
-	    Ob*		top;
+struct ExprStack {
+    Tuple* exprs;
+    Ob* top;
 
-	    ExprStack ();
-	};
+    ExprStack();
+};
 
-class CompoundNode : public AttrNode
-{
+class CompoundNode : public AttrNode {
     STD_DECLS(CompoundNode);
 
-  protected:
+   protected:
+    ExprStack simple;
+    ExprStack inlined;
+    ExprStack nested;
 
+    CompoundNode(int, bool);
 
-    ExprStack	simple;
-    ExprStack	inlined;
-    ExprStack	nested;
+    void addTo(ExprStack*, AttrNode*);
+    void analyze(AttrNode*);
+    void rearrangeInlinedExprs();
+    int determineFree(ArgNum*);
+    void sortInlinedExprs();
+    void fixInlinedConflicts(ArgNum*, int);
+    void emitSimpleExprDispatchCode(RtnCode, Label);
+    void emitInlinedExprDispatchCode(RtnCode, Label);
+    virtual void emitNestedExprDispatchCode(RtnCode, Label);
+    void emitNestedExprResumeCode(RtnCode);
 
-    CompoundNode (int, bool);
-
-    void		addTo (ExprStack*, AttrNode*);
-    void		analyze (AttrNode*);
-    void		rearrangeInlinedExprs ();
-    int			determineFree (ArgNum*);
-    void		sortInlinedExprs ();
-    void		fixInlinedConflicts (ArgNum*, int);
-    void		emitSimpleExprDispatchCode (RtnCode, Label);
-    void		emitInlinedExprDispatchCode (RtnCode, Label);
-    virtual void	emitNestedExprDispatchCode (RtnCode, Label);
-    void		emitNestedExprResumeCode (RtnCode);
-
-    virtual int		numberOfSubExprs ();
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitResumeCode (RtnCode);
-    virtual void	emitPrefix (bool, bool);
-    virtual void	emitWrapup (RtnCode, Label);
+    virtual int numberOfSubExprs();
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitResumeCode(RtnCode);
+    virtual void emitPrefix(bool, bool);
+    virtual void emitWrapup(RtnCode, Label);
 };
 
 
-
-class BlockNode : public CompoundNode
-{
+class BlockNode : public CompoundNode {
     STD_DECLS(BlockNode);
 
-  protected:
+   protected:
+    BlockExpr* expr;
 
-    BlockExpr*	expr;
+    BlockNode(BlockExpr*, bool);
 
-    BlockNode (BlockExpr*, bool);
+    virtual void changeDest(Location&);
+    virtual int numberOfSubExprs();
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitNestedExprDispatchCode(RtnCode, Label);
+    virtual void emitResumeCode(RtnCode);
 
-    virtual void	changeDest (Location&);
-    virtual int		numberOfSubExprs ();
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitNestedExprDispatchCode (RtnCode, Label);
-    virtual void	emitResumeCode (RtnCode);
+   public:
+    static BlockNode* create(BlockExpr*, bool);
 
-  public:
-
-    static BlockNode* create (BlockExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class RequestNode : public CompoundNode
-{
+class RequestNode : public CompoundNode {
     STD_DECLS(RequestNode);
 
-  protected:
+   protected:
+    RequestExpr* expr;
+    AttrNode* trgtNode;
+    Ob* primTrgt;
 
-    RequestExpr*	expr;
-    AttrNode*		trgtNode;
-    Ob*			primTrgt;
+    RequestNode(RequestExpr*, bool);
+    RequestNode(int, RequestExpr*, bool);
 
-    RequestNode (RequestExpr*, bool);
-    RequestNode (int, RequestExpr*, bool);
+    virtual int numberOfSubExprs();
+    virtual void emitWrapup(RtnCode, Label);
+    virtual void emitXmit(unsigned, bool, RtnCode, Label);
 
-    virtual int		numberOfSubExprs ();
-    virtual void	emitWrapup (RtnCode, Label);
-    virtual void	emitXmit (unsigned, bool, RtnCode, Label);
+   public:
+    static RequestNode* create(RequestExpr*, bool);
 
-  public:
-
-    static RequestNode* create (RequestExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class SendNode : public RequestNode
-{
+class SendNode : public RequestNode {
     STD_DECLS(SendNode);
 
-  protected:
+   protected:
+    SendNode(SendExpr*, bool);
 
-    SendNode (SendExpr*, bool);
+   public:
+    static SendNode* create(SendExpr*, bool);
 
-  public:
-
-    static SendNode* create (SendExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class TupleNode : public CompoundNode
-{
+class TupleNode : public CompoundNode {
     STD_DECLS(TupleNode);
 
-  protected:
+   protected:
+    TupleExpr* expr;
 
-    TupleExpr*	expr;
+    TupleNode(TupleExpr*, bool);
 
-    TupleNode (TupleExpr*, bool);
+    virtual int numberOfSubExprs();
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitWrapup(RtnCode, Label);
 
-    virtual int		numberOfSubExprs ();
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitWrapup (RtnCode, Label);
+   public:
+    static TupleNode* create(TupleExpr*, bool);
 
-  public:
-
-    static TupleNode* create (TupleExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class IfNode : public CompoundNode
-{
+class IfNode : public CompoundNode {
     STD_DECLS(IfNode);
 
-  protected:
+   protected:
+    IfExpr* expr;
+    AttrNode* trueNode;
+    AttrNode* falseNode;
 
-    IfExpr*	expr;
-    AttrNode*	trueNode;
-    AttrNode*	falseNode;
+    IfNode(IfExpr*, bool);
 
-    IfNode (IfExpr*, bool);
+    virtual void changeDest(Location&);
+    virtual int numberOfSubExprs();
+    virtual void emitResumeCode(RtnCode);
+    virtual void emitWrapup(RtnCode, Label);
 
-    virtual void	changeDest (Location&);
-    virtual int		numberOfSubExprs ();
-    virtual void	emitResumeCode (RtnCode);
-    virtual void	emitWrapup (RtnCode, Label);
+   public:
+    static IfNode* create(IfExpr*, bool);
 
-  public:
-
-    static IfNode* create (IfExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class LetNode : public CompoundNode
-{
+class LetNode : public CompoundNode {
     STD_DECLS(LetNode);
 
-  protected:
+   protected:
+    LetExpr* expr;
+    Template* templat;  // AT&T usurped the id "template".
+    AttrNode* bodyNode;
 
-    LetExpr*	expr;
-    Template*	templat; // AT&T usurped the id "template".
-    AttrNode*	bodyNode;
+    LetNode(LetExpr*, bool);
+    LetNode(int, bool, LetExpr*);
 
-    LetNode (LetExpr*, bool);
-    LetNode (int, bool, LetExpr*);
+    virtual void changeDest(Location&);
 
-    virtual void	changeDest (Location&);
+    virtual Ob* letEnv(Ob*);
+    virtual Location ithLoc(int);
+    virtual int numberOfSubExprs();
+    virtual void emitResumeCode(RtnCode);
+    virtual void emitWrapup(RtnCode, Label);
 
-    virtual Ob*		letEnv (Ob*);
-    virtual Location	ithLoc (int);
-    virtual int		numberOfSubExprs ();
-    virtual void	emitResumeCode (RtnCode);
-    virtual void	emitWrapup (RtnCode, Label);
+   public:
+    static LetNode* create(LetExpr*, bool);
 
-  public:
-
-    static LetNode* create (LetExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class LetrecNode : public LetNode
-{
+class LetrecNode : public LetNode {
     STD_DECLS(LetrecNode);
 
-  protected:
+   protected:
+    LetrecNode(LetrecExpr*, bool);
 
-    LetrecNode (LetrecExpr*, bool);
+    virtual Ob* letEnv(Ob*);
+    virtual Location ithLoc(int);
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitWrapup(RtnCode, Label);
 
-    virtual Ob*		letEnv (Ob*);
-    virtual Location	ithLoc (int);
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitWrapup (RtnCode, Label);
-
-  public:
-
-    static LetrecNode* create (LetrecExpr*, bool);
+   public:
+    static LetrecNode* create(LetrecExpr*, bool);
 };
 
 
-
-class MethodNode : public AttrNode
-{
+class MethodNode : public AttrNode {
     STD_DECLS(MethodNode);
 
-  protected:
+   protected:
+    MethodExpr* expr;
+    Code* code;
 
-    MethodExpr*	expr; Code*	code;
+    MethodNode(MethodExpr*, bool);
+    MethodNode(int, MethodExpr*, bool);
 
-    MethodNode (MethodExpr*, bool);
-    MethodNode (int, MethodExpr*, bool);
+    virtual Template* adjustFormals();
+    virtual int constructor();
+    virtual Code* compileBody(Ob*, Ob*);
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
 
-    virtual Template*	adjustFormals ();
-    virtual int		constructor ();
-    virtual Code*	compileBody (Ob*, Ob*);
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
+   public:
+    static MethodNode* create(MethodExpr*, bool);
 
-  public:
-
-    static MethodNode* create (MethodExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class ReflectiveMethodNode : public MethodNode
-{
+class ReflectiveMethodNode : public MethodNode {
     STD_DECLS(ReflectiveMethodNode);
 
-  protected:  
+   protected:
+    ReflectiveMethodNode(ReflectiveMethodExpr*, bool);
 
-    ReflectiveMethodNode (ReflectiveMethodExpr*, bool);
+    virtual Template* adjustFormals();
+    virtual int constructor();
 
-    virtual Template*	adjustFormals ();
-    virtual int		constructor ();
-
-  public:
-
-    static ReflectiveMethodNode* create (ReflectiveMethodExpr*, bool);
+   public:
+    static ReflectiveMethodNode* create(ReflectiveMethodExpr*, bool);
 };
 
 
-
-class ProcNode : public MethodNode
-{
+class ProcNode : public MethodNode {
     STD_DECLS(ProcNode);
 
-  protected:
+   protected:
+    ProcNode(ProcExpr*, bool);
 
-    ProcNode (ProcExpr*, bool);
+    virtual Template* adjustFormals();
+    virtual int constructor();
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
 
-    virtual Template*	adjustFormals ();
-    virtual int		constructor ();
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
+   public:
+    static ProcNode* create(ProcExpr*, bool);
 
-  public:
-
-    static ProcNode* create (ProcExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class SeqNode : public CompoundNode
-{
+class SeqNode : public CompoundNode {
     STD_DECLS(SeqNode);
 
-  protected:
+   protected:
+    AttrNode* first;
+    AttrNode* second;
 
-    AttrNode*	first;
-    AttrNode*	second;
+    SeqNode(AttrNode*, AttrNode*, bool);
 
-    SeqNode (AttrNode*, AttrNode*, bool);
+    virtual void changeDest(Location&);
+    virtual int numberOfSubExprs();
+    virtual void emitResumeCode(RtnCode);
+    virtual void emitWrapup(RtnCode, Label);
 
-    virtual void	changeDest (Location&);
-    virtual int		numberOfSubExprs ();
-    virtual void	emitResumeCode (RtnCode);
-    virtual void	emitWrapup (RtnCode, Label);
+   public:
+    static SeqNode* create(AttrNode*, AttrNode*, bool);
 
-  public:
-
-    static SeqNode* create (AttrNode*, AttrNode*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class SetNode : public CompoundNode
-{
+class SetNode : public CompoundNode {
     STD_DECLS(SetNode);
 
-  protected:
+   protected:
+    SetExpr* expr;
+    SymbolNode* trgtNode;
+    AttrNode* valNode;
 
-    SetExpr*	expr;
-    SymbolNode*	trgtNode;
-    AttrNode*	valNode;
+    SetNode(SetExpr*, bool);
 
-    SetNode (SetExpr*, bool);
+    virtual int numberOfSubExprs();
+    virtual void emitResumeCode(RtnCode);
+    virtual void emitWrapup(RtnCode, Label);
 
-    virtual int		numberOfSubExprs ();
-    virtual void	emitResumeCode (RtnCode);
-    virtual void	emitWrapup (RtnCode, Label);
+   public:
+    static SetNode* create(SetExpr*, bool);
 
-  public:
-
-    static SetNode* create (SetExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class GotoNode : public AttrNode
-{
+class GotoNode : public AttrNode {
     STD_DECLS(GotoNode);
 
-  protected:
+   protected:
+    enum CompilerFakery { MaximumCut = (1 << BITS(uint8_t)) - 1 };
 
-    enum CompilerFakery { MaximumCut = (1<<BITS(Byte))-1 };
+    Ob* labelName;
+    LabelNode* labelNode;
+    Ob* ctEnv;
 
-    Ob*		labelName;
-    LabelNode*	labelNode;
-    Ob*		ctEnv;
+    GotoNode(GotoExpr*, bool);
 
-    GotoNode (GotoExpr*, bool);
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
 
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
+   public:
+    static GotoNode* create(GotoExpr*, bool);
 
-  public:
-
-    static GotoNode* create (GotoExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 
-
-class LabelNode : public CompoundNode
-{
+class LabelNode : public CompoundNode {
     STD_DECLS(LabelNode);
 
-  protected:
+   protected:
+    LabelExpr* expr;
+    AttrNode* bodyNode;
+    Ob* label;
+    Ob* ctEnv;
 
-    LabelExpr*	expr;
-    AttrNode*	bodyNode;
-    Ob*		label;
-    Ob*		ctEnv;
+    LabelNode(LabelExpr*, bool);
 
-    LabelNode (LabelExpr*, bool);
+    virtual void changeDest(Location&);
+    virtual int numberOfSubExprs();
+    virtual void emitDispatchCode(bool, bool, RtnCode, Label);
+    virtual void emitResumeCode(RtnCode);
+    virtual int primNumber();
 
-    virtual void	changeDest (Location&);
-    virtual int		numberOfSubExprs ();
-    virtual void	emitDispatchCode (bool, bool, RtnCode, Label);
-    virtual void	emitResumeCode (RtnCode);
-    virtual int		primNumber ();
+    friend class LabelTable;
+    friend class GotoNode;
 
-    friend class	LabelTable;
-    friend class	GotoNode;
+   public:
+    static LabelNode* create(LabelExpr*, bool);
 
-  public:
-
-    static LabelNode* create (LabelExpr*, bool);
-
-    virtual void	initialize (Ob*, Ob*, Location, CompilationUnit*);
+    virtual void initialize(Ob*, Ob*, Location, CompilationUnit*);
 };
 
 #undef protected

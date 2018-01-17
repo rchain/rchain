@@ -16,12 +16,12 @@ lazy val commonOptions = Seq(
   "-feature",
   "-unchecked")
 
-lazy val consoleOptions = commonOptions diff Seq("-Ywarn-unused-import")
+lazy val consoleOptions = commonOptions diff Seq("-Xlint", "-Ywarn-unused-import")
 
 lazy val commonSettings = Seq(
   name := "rholang",
   organization := "coop.rchain",
-  scalaVersion := "2.11.8",
+  scalaVersion := "2.12.4",
   crossScalaVersions := Seq("2.10.6", scalaVersion.value),
   scalacOptions := commonOptions,
   scalacOptions in (Compile, console) := consoleOptions,
@@ -32,11 +32,10 @@ lazy val root = (project in file("."))
   .settings(bnfcSettings: _*)
 
 // Scalaz
-libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.2.4"
-// Flex & Cup
-libraryDependencies += "cup" % "java-cup-11a" % "local"
-libraryDependencies += "jlex" % "JLex-local" % "local"
+libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.3.0-M17"
 
 // Kind projector
 resolvers += Resolver.sonatypeRepo("releases")
-addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
+
+mainClass in (Compile, packageBin) := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler")

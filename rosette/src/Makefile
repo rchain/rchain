@@ -24,10 +24,22 @@
 
 ARCH		= linux
 
-CPPFLAGS	= -I ../h -I ../h/sys -DARCH_INC=\"$(ARCH).h\" -m32
+# Using -Wall with some warnings overridden for now:
+#  -Wno-write-strings				Until we can deal with the use of char* n = "FooBar"; type of constructs
+#  -Wno-invalid-offsetof			Until a better understanding of nested macro usage is had
+#  -Wno-delete-incomplete			Until a better understand of the weird use of pointers and memory management in the code is had
+#  -Wno-deprecated-declarations		Until we can refactor to remove the deprecated behaviors
+#  -Wno-unused-variables			Until a better understanding of nested macro usage is had
+#  -Wno-sign-compare				Until a better understanding of nested macro usage is had
+#  -Wno-init-self                      Until I understand why he's doing this and why removing it breaks things
+#
+#  The plan is to eventually compile with -Wall and -Werror
+#
+CPPFLAGS	= -std=c++11 -ggdb -I ../h -I ../h/sys -DARCH_INC=\"$(ARCH).h\" -m32 -Wall -Wno-write-strings -Wno-invalid-offsetof -Wno-delete-incomplete -Wno-deprecated-declarations -Wno-unused-variable -Wno-sign-compare -Wno-init-self
 
 #LDCC		= gcc -g $(W_STATIC) -DGCC27X -lm
-LDCC		= g++ -g $(W_STATIC) -DGCC27X -lm -m32
+#LDCC		= g++ -g $(W_STATIC) -DGCC27X -lm -m32
+LDCC		= g++ -ggdb $(W_STATIC) -DGCC27X -lm -m32
 
 OBJS		= Actor.o RblAtom.o BigBang.o BinaryOb.o Code.o CommandLine.o \
 		Compile.o Cstruct.o ForeignFun.o Ctxt.o Dynload.o Dump-world.o \
@@ -37,7 +49,7 @@ OBJS		= Actor.o RblAtom.o BigBang.o BinaryOb.o Code.o CommandLine.o \
 		Queue.o RBLstring.o RBLstream.o Reader.o Table.o Tuple.o \
 		Vm.o ObQue.o ObStk.o PtrCollect.o ResizeAry.o RblStack.o \
 		StreamUtils.o StringStore.o Timer.o misc.o Timestamp.o \
-		Opcode.o regexp.o main.o $(_ESS.Extras_)
+		Opcode.o main.o $(_ESS.Extras_)
 
 
 PARENT		= $(dir $(cwd))

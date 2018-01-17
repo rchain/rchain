@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,127 +17,66 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_PtrCollection_h)
 #define _PtrCollection_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "ResizeAry.h"
 
-class PtrCollection : public ResizeablePtrArray
-{
-  protected:
-
-    void**	next;
-    void**	limit;
+class PtrCollection : public ResizeablePtrArray {
+   protected:
+    void** next;
+    void** limit;
 
     friend class PtrCollectionTrav;
 
-  public:
+   public:
+    PtrCollection();
+    PtrCollection(int);
 
-    PtrCollection ();
-    PtrCollection (int);
+    void resize();
+    void resize(int);
+    void compact();
+    void init() {
+        next = array;
+        limit = array + size;
+    }
 
-    void	init ();
-    void	resize ();
-    void	resize (int);
-    int		empty ();
-    void	add (void*);
-    void	del (int = 1);
-    void	compact ();
+    int empty() { return next == array; }
+
+
+    void add(void* p) {
+        if (next >= limit) {
+            resize();
+        }
+
+        *next++ = p;
+    }
+
+    void del(int n) { next -= n; }
 };
 
 
-inline
-void
-PtrCollection::init ()
-{
-    next = array;
-    limit = array+size;
-}
-
-inline
-int
-PtrCollection::empty ()
-{
-    return next == array;
-}
-
-
-inline
-void
-PtrCollection::add (void* p)
-{
-    if (next >= limit)
-	resize();
-    *next++ = p;
-}
-
-
-inline
-void
-PtrCollection::del (int n)
-{
-    next -= n;
-}
-
-
-
-
-class PtrCollectionTrav
-{
-  protected:
-
+class PtrCollectionTrav {
+   protected:
     /*
      * We use array indexing here, rather than pointer chasing, to
      * protect ourselves in case the PtrCollection grows and moves while
      * this PtrCollectionTrav still exists.
      */
 
-    int			current;
-    PtrCollection*	pc;
+    int current;
+    PtrCollection* pc;
 
-  public:
-    PtrCollectionTrav (PtrCollection*);
+   public:
+    PtrCollectionTrav(PtrCollection*);
 
-    int		valid ();
-    void	advance ();
-    void*&	get ();
+    int valid() { return &pc->array[current] < pc->next; }
+    void advance();
+    void*& get() { return pc->array[current]; }
 
-    operator void* ();
+    operator void*() { return valid() ? this : 0; }
 };
 
-
-inline
-int
-PtrCollectionTrav::valid ()
-{
-    return &pc->array[current] < pc->next;
-}
-
-
-inline
-PtrCollectionTrav::operator void* ()
-{
-    return valid() ? this : 0;
-}
-
-
-inline void*&
-PtrCollectionTrav::get ()
-{
-    return pc->array[current];
-}
 
 #endif

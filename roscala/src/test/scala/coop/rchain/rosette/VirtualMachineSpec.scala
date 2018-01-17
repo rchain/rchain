@@ -1,12 +1,13 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.Ob.NIV
 import coop.rchain.rosette.utils.opcodes.Dsl._
 import coop.rchain.rosette.utils.opcodes._
 import org.scalatest._
 
 class VirtualMachineSpec extends WordSpec with Matchers {
   val someObsInd = someObs.size - 1
-  val regInd = testState.ctxt.reg.size - 1
+  val regInd = 9
   val bool = true
   val n = 4
   val m = 5
@@ -29,12 +30,12 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     implicit val wordSpec: WordSpec = this
 
     (theState >> 'ctxt >> 'argvec on OpAlloc(n)) {
-      _ shouldBe Tuple(n, None)
+      _ shouldBe Tuple(n, NIV)
     }
 
     (theState >> 'strandPool on OpFork(n)) {
-      val newCtxt = testState.ctxt.copy(pc = PC.fromInt(n)) +: testState.strandPool
-      _ shouldBe newCtxt
+      val newCtxt = testState.ctxt.copy(pc = PC(n))
+      _ shouldBe newCtxt +: testState.strandPool
     }
 
     (theState >> 'exitFlag on OpHalt()) {
@@ -46,18 +47,12 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpImmediateLitToArg(
-      v = m,
-      a = someObsInd)) {
+      value = m,
+      arg = someObsInd)) {
       val updatedElem =
         testState.ctxt.argvec.elem
           .updated(someObsInd, VirtualMachine.vmLiterals(m))
       _ shouldBe updatedElem
-    }
-
-    (theState >> 'ctxt >> 'reg on OpImmediateLitToReg(v = m, r = regInd)) {
-      val updatedReg =
-        testState.ctxt.reg.updated(regInd, VirtualMachine.vmLiterals(m))
-      _ shouldBe updatedReg
     }
 
     (theState >> 'pc >> 'relative on (
@@ -85,7 +80,7 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'pc on OpOutstanding(m, n)) {
-      _ shouldBe PC.fromInt(m)
+      _ shouldBe PC(m)
     }
 
     (theState >> 'ctxt >> 'outstanding on OpOutstanding(m, n)) {
@@ -134,8 +129,9 @@ class VirtualMachineSpec extends WordSpec with Matchers {
       _ shouldBe 1
     }
 
-    (theState >> 'ctxt >> 'argvec >> 'elem on OpXferArgToArg(d = someObsInd,
-                                                             s = someObsInd)) {
+    (theState >> 'ctxt >> 'argvec >> 'elem on OpXferArgToArg(
+      dest = someObsInd,
+      src = someObsInd)) {
       val elem = testState.ctxt.argvec.elem(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
@@ -147,24 +143,16 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpXferGlobalToArg(
-      a = someObsInd,
-      g = someObsInd)) {
+      arg = someObsInd,
+      global = someObsInd)) {
       val elem = testState.globalEnv.entry(someObsInd)
       val updated = testState.ctxt.argvec.elem.updated(someObsInd, elem)
       _ shouldBe updated
     }
 
-    (theState >> 'ctxt >> 'reg on OpXferGlobalToReg(r = someObsInd,
-                                                    g = someObsInd)) {
-      val elem = testState.globalEnv.entry(someObsInd)
-      val updated = testState.ctxt.reg
-        .updated(someObsInd, testState.globalEnv.entry(someObsInd))
-      _ shouldBe updated
-    }
-
-    (theState >> 'ctxt >> 'rslt on OpXferRegToRslt(r = someObsInd)) {
-      val elem = testState.ctxt.reg(someObsInd)
-      _ shouldBe elem
+    (theState >> 'ctxt >> 'rslt on OpXferRegToRslt(reg = someObsInd)) {
+      val elem = testState.ctxt.getReg(someObsInd)
+      Some(_) shouldBe elem
     }
 
     (theState >> 'ctxt >> 'argvec >> 'elem on OpXferRsltToArg(someObsInd)) {
@@ -176,12 +164,6 @@ class VirtualMachineSpec extends WordSpec with Matchers {
     (theState >> 'loc on OpXferRsltToDest(someObsInd)) {
       val atom = LocationAtom(testState.code.lit(someObsInd))
       _ shouldBe atom
-    }
-
-    (theState >> 'ctxt >> 'reg on OpXferRsltToReg(someObsInd)) {
-      val elem = testState.ctxt.rslt
-      val updated = testState.ctxt.reg.updated(someObsInd, elem)
-      _ shouldBe updated
     }
 
     (theState >> 'loc on OpXferSrcToRslt(someObsInd)) {

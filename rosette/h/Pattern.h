@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,194 +17,147 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Pattern_h)
 #define _RBL_Pattern_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class Pattern : public Ob
-{
-  protected:
+class Pattern : public Ob {
+   protected:
+    Pattern(int, Ob*, Ob*);
 
-    Pattern (int, Ob*, Ob*);
+   public:
+    virtual int numberOfKeys(void);
+    virtual void stuffKeys(Tuple*, int);
+    virtual bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
+    virtual bool fail(Ob*);
 
-  public:
-
-    virtual int		numberOfKeys (void);
-    virtual void	stuffKeys (Tuple*, int);
-    virtual bool	matchIntoArgvec (Tuple*, int, Ob*, int = -1);
-    virtual bool	fail (Ob*);
-
-    virtual Ob*		cloneTo (Ob*, Ob*);
+    virtual Ob* cloneTo(Ob*, Ob*);
 };
 
 
-
-class IdPattern : public Pattern
-{
+class IdPattern : public Pattern {
     STD_DECLS(IdPattern);
 
-  protected:
+   protected:
+    IdPattern(Ob*);
 
-    IdPattern (Ob*);
+   public:
+    Ob* symbol;
 
-  public:
+    static IdPattern* create(Ob*);
 
-    Ob*	symbol;
-
-    static IdPattern* create (Ob*);
-
-    int		numberOfKeys (void);
-    void	stuffKeys (Tuple*, int);
-    bool	matchIntoArgvec (Tuple*, int, Ob*, int = -1);
+    int numberOfKeys(void);
+    void stuffKeys(Tuple*, int);
+    bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
 };
 
 
-
-class ConstPattern : public Pattern
-{
+class ConstPattern : public Pattern {
     STD_DECLS(ConstPattern);
 
-  protected:
+   protected:
+    ConstPattern(Ob*);
 
-    ConstPattern (Ob*);
+   public:
+    Ob* val;
 
-  public:
+    static ConstPattern* create(Ob*);
 
-    Ob*	val;
-
-    static ConstPattern* create (Ob*);
-
-    int		numberOfKeys (void);
-    void	stuffKeys (Tuple*, int);
-    bool	matchIntoArgvec (Tuple*, int, Ob*, int = -1);
+    int numberOfKeys(void);
+    void stuffKeys(Tuple*, int);
+    bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
 };
 
 
+class CompoundPattern : public Pattern {
+   protected:
+    CompoundPattern(int, Ob*, Ob*, TupleExpr*);
 
-class CompoundPattern : public Pattern
-{
-  protected:
+   public:
+    TupleExpr* expr;
 
-    CompoundPattern (int, Ob*, Ob*, TupleExpr*);
-
-  public:
-
-    TupleExpr*	expr;
-
-    virtual Tuple*	match (Tuple*, int);
-    virtual int		keyExtent (int);
+    virtual Tuple* match(Tuple*, int);
+    virtual int keyExtent(int);
 };
 
-
 
-class IdVecPattern : public CompoundPattern
-{
+class IdVecPattern : public CompoundPattern {
     STD_DECLS(IdVecPattern);
 
-  protected:
+   protected:
+    IdVecPattern(TupleExpr*);
 
-    IdVecPattern (TupleExpr*);
+   public:
+    static IdVecPattern* create(TupleExpr*);
 
-  public:
-
-    static IdVecPattern* create (TupleExpr*);
-
-    int		numberOfKeys (void);
-    void	stuffKeys (Tuple*, int);
-    int		keyExtent (int);
-    Tuple*	match (Tuple*, int);
-    bool	matchIntoArgvec (Tuple*, int, Ob*, int = -1);
+    int numberOfKeys(void);
+    void stuffKeys(Tuple*, int);
+    int keyExtent(int);
+    Tuple* match(Tuple*, int);
+    bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
 };
 
-
 
-class IdAmperRestPattern : public CompoundPattern
-{
+class IdAmperRestPattern : public CompoundPattern {
     STD_DECLS(IdAmperRestPattern);
 
-  protected:
+   protected:
+    IdAmperRestPattern(TupleExpr*);
 
-    IdAmperRestPattern (TupleExpr*);
+   public:
+    static IdAmperRestPattern* create(TupleExpr*);
 
-  public:
-
-    static IdAmperRestPattern* create (TupleExpr*);
-
-    int		numberOfKeys (void);
-    void	stuffKeys (Tuple*, int);
-    int		keyExtent (int);
-    Tuple*	match (Tuple*, int);
-    bool	matchIntoArgvec (Tuple*, int, Ob*, int = -1);
+    int numberOfKeys(void);
+    void stuffKeys(Tuple*, int);
+    int keyExtent(int);
+    Tuple* match(Tuple*, int);
+    bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
 };
 
-
 
-class ComplexPattern : public CompoundPattern
-{
+class ComplexPattern : public CompoundPattern {
     STD_DECLS(ComplexPattern);
 
-  protected:
+   protected:
+    ComplexPattern(TupleExpr*, Tuple*, Tuple*);
 
-    ComplexPattern (TupleExpr*, Tuple*, Tuple*);
+   public:
+    Tuple* patvec;
+    Tuple* offsetvec;
 
-  public:
+    static ComplexPattern* create(TupleExpr*);
 
-    Tuple*	patvec;
-    Tuple*	offsetvec;
-
-    static ComplexPattern* create (TupleExpr*);
-
-    int		numberOfKeys (void);
-    void	stuffKeys (Tuple*, int);
-    int		keyExtent (int);
-    Tuple*	match (Tuple*, int);
-    bool	matchIntoArgvec (Tuple*, int, Ob*, int = -1);
+    int numberOfKeys(void);
+    void stuffKeys(Tuple*, int);
+    int keyExtent(int);
+    Tuple* match(Tuple*, int);
+    bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
 };
 
-
 
-class Template : public Ob
-{
+class Template : public Ob {
     STD_DECLS(Template);
 
-  protected:
+   protected:
+    Template(Tuple*, Ob*, CompoundPattern*);
 
-    Template (Tuple*, Ob*, CompoundPattern*);
+   public:
+    Tuple* keytuple;
+    CompoundPattern* pat;
+    Ob* keymeta;
 
-  public:
+    static Template* create(TupleExpr*);
+    static Template* create(Tuple*, Ob*, CompoundPattern*);
 
-    Tuple*		keytuple;
-    CompoundPattern*	pat;
-    Ob*			keymeta;
+    Tuple* match(Tuple* argvec, int nargs) {
+        return (pat->match(argvec, nargs));
+    }
 
-    static Template* create (TupleExpr*);
-    static Template* create (Tuple*, Ob*, CompoundPattern*);
-
-    Tuple*	match (Tuple*, int);
-    Ob*		fail (Ob*);
-    Ob*		cloneTo (Ob*, Ob*);
+    Ob* fail(Ob*);
+    Ob* cloneTo(Ob*, Ob*);
 };
 
-
-inline
-Tuple*
-Template::match (Tuple* argvec, int nargs)
-{
-    return( pat->match(argvec, nargs) );
-}
 
 #endif

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,58 +17,40 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Method_h)
 #define _RBL_Method_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class StdMthd : public Ob
-{
+class StdMthd : public Ob {
     STD_DECLS(StdMthd);
 
-  protected:
+   protected:
+    StdMthd(Code*, Ob*, Ob*);
+    StdMthd(int, Ob*, Ob*, Code*, Ob*, Ob*);
 
-    StdMthd (Code*, Ob*, Ob*);
-    StdMthd (int, Ob*, Ob*, Code*, Ob*, Ob*);
+   public:
+    Code* code;
+    Ob* id;
+    Ob* source;
 
-  public:
-
-    Code*	code;
-    Ob*		id;
-    Ob*		source;
-
-    static StdMthd*	create (Code*, Ob* = Qanon, Ob* = NIV);
-    virtual Ob*		dispatch (Ctxt*);
-    virtual Ob*		invoke (Ctxt*);
+    static StdMthd* create(Code*, Ob* = Qanon, Ob* = NIV);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
 
-class ReflectiveMthd : public StdMthd
-{
+class ReflectiveMthd : public StdMthd {
     STD_DECLS(ReflectiveMthd);
 
-  protected:
+   protected:
+    ReflectiveMthd(Code*, Ob* = Qanon, Ob* = NIV);
 
-    ReflectiveMthd (Code*, Ob* = Qanon, Ob* = NIV);
-
-  public:
-
-    static ReflectiveMthd*	create (Code*, Ob* = Qanon, Ob* = NIV);
-    virtual Ob*			dispatch (Ctxt*);
-    virtual Ob*			invoke (Ctxt*);
+   public:
+    static ReflectiveMthd* create(Code*, Ob* = Qanon, Ob* = NIV);
+    virtual Ob* dispatch(Ctxt*);
+    virtual Ob* invoke(Ctxt*);
 };
 
 #endif

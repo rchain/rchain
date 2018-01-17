@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Opcode_h)
 #define _RBL_Opcode_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
 /*
@@ -44,16 +33,19 @@ alloc			     0100 nnnn nnnn		argvec <- new Tuple (n)
 push/alloc		     0101 nnnn nnnn		push; alloc n
 extend			     0110 vvvv vvvv		extend with litvec[v]
 
-outstanding		0000 10pp pppp pppp n:8 x:8	pc <- p; outstanding <- n
+outstanding		0000 10pp pppp pppp n:8 x:8	pc <- p;
+outstanding <- n
 fork			     11pp pppp pppp
 
 
 xmit/tag		0001 00un mmmm vvvv		unwind if u;
-							invoke trgt with m args and tag = litvec[v]
-							nxt if n;
+                                                        invoke trgt with m args
+and tag = litvec[v]
+                                                        nxt if n;
 xmit/arg		     01un mmmm aaaa		same, but tag = arg[a]
 xmit/reg		     10un mmmm rrrr		same, but tag = reg[r]
-xmit			     11un mmmm mmmm		same, but use current tag
+xmit			     11un mmmm mmmm		same, but use
+current tag
 
 xmit/tag/xtnd		0010 00un mmmm mmmm v:8 x:8	tag = litvec[v]
 xmit/arg/xtnd		     01un mmmm mmmm a:8 x:8	tag = arg[a]
@@ -61,13 +53,16 @@ xmit/reg/xtnd		     10un mmmm mmmm r:8 x:8	tag = reg[r]
 send			     11un mmmm mmmm		tag = limbo
 
 
-applyprim/tag		0011 00un mmmm mmmm k:8 v:8	*litvec[v] <- apply prim[k] to m args
+applyprim/tag		0011 00un mmmm mmmm k:8 v:8	*litvec[v] <-
+apply prim[k] to m args
 applyprim/arg		     01un mmmm mmmm k:8 a:8	arg[a] <- ""
 applyprim/reg		     10un mmmm mmmm k:8 r:8	reg[r] <- ""
-applycmd		     11un mmmm mmmm k:8 x:8	apply prim[k] to m args; no result
+applycmd		     11un mmmm mmmm k:8 x:8	apply prim[k] to m
+args; no result
 
 
-rtn/tag			0100 00xn vvvv vvvv		return using litvec[v] as tag
+rtn/tag			0100 00xn vvvv vvvv		return using
+litvec[v] as tag
 rtn/arg			     01xn aaaa aaaa		use arg[a] as tag
 rtn/reg			     10xn rrrr rrrr		use reg[r] as tag
 rtn			     11xn xxxx xxxx		use current tag
@@ -79,12 +74,15 @@ nxt			     0101 xxxx xxxx		invoke next strand
 
 jump			0110 00nn nnnn nnnn		pc <- n
 jump on #f		     01nn nnnn nnnn		if (rslt == #f) pc <- n
-jump/cut		     10nn nnnn nnnn m:8 x:8	pc <- n; cut m levels off env
+jump/cut		     10nn nnnn nnnn m:8 x:8	pc <- n; cut m levels
+off env
 
 
-lookup to arg		0111 aaaa vvvv vvvv		arg[a] <- lookup(litvec[v])
-lookup to reg		1000 rrrr vvvv vvvv		reg[r] <- lookup(litvec[v])
-    
+lookup to arg		0111 aaaa vvvv vvvv		arg[a] <-
+lookup(litvec[v])
+lookup to reg		1000 rrrr vvvv vvvv		reg[r] <-
+lookup(litvec[v])
+
 
 xfer lex to arg		1001 illl oooo aaaa		arg[a] <- lex[i,l,o]
 xfer lex to reg		1010 illl oooo rrrr		reg[r] <- lex[i,l,o]
@@ -104,16 +102,16 @@ xfer ind lit to reg	     1011 rrrr vvvv		reg[r] <- litvec[v]
 xfer ind lit to rslt	     1100 vvvv vvvv		rslt <- litvec[v]
 
 xfer imm lit to arg	1100 0vvv aaaa aaaa		arg[a] <- fixnum(v)
-			     1000 aaaa aaaa		arg[a] <- #t
-			     1001 aaaa aaaa		arg[a] <- #f
-			     1010 aaaa aaaa		arg[a] <- nil
-			     1011 aaaa aaaa		arg[a] <- #niv
+                             1000 aaaa aaaa		arg[a] <- #t
+                             1001 aaaa aaaa		arg[a] <- #f
+                             1010 aaaa aaaa		arg[a] <- nil
+                             1011 aaaa aaaa		arg[a] <- #niv
 
 xfer imm lit to reg	1101 0vvv xxxx rrrr		reg[r] <- fixnum(v)
-			     1000 xxxx rrrr		reg[r] <- #t
-			     1001 xxxx rrrr		reg[r] <- #f
-			     1010 xxxx rrrr		reg[r] <- nil
-			     1011 xxxx rrrr		reg[r] <- #niv
+                             1000 xxxx rrrr		reg[r] <- #t
+                             1001 xxxx rrrr		reg[r] <- #f
+                             1010 xxxx rrrr		reg[r] <- nil
+                             1011 xxxx rrrr		reg[r] <- #niv
 
 */
 
@@ -125,196 +123,190 @@ xfer imm lit to reg	1101 0vvv xxxx rrrr		reg[r] <- fixnum(v)
  * formats 4 and 5 conform to this usage.
  */
 
-enum UnwindCode   { UnwindOff = 0x0, UnwindOn = 0x2 };
-enum NextCode     { NextOff = 0x0, NextOn = 0x1 };
+enum UnwindCode { UnwindOff = 0x0, UnwindOn = 0x2 };
+enum NextCode { NextOff = 0x0, NextOn = 0x1 };
 enum IndirectCode { IndirectOff = 0x0, IndirectOn = 0x8 };
 
 
-enum Opcode
-{
-    opHalt		= 0x00,		/* Format 0 */
-    opPush		= 0x01,		/* Format 0 */
-    opPop		= 0x02,		/* Format 0 */
-    opNargs		= 0x03,		/* Format 0 */
-    opAlloc		= 0x04,		/* Format 0 */
-    opPushAlloc		= 0x05,		/* Format 0 */
-    opExtend		= 0x06,		/* Format 0 */
+enum Opcode {
+    opHalt = 0x00,      /* Format 0 */
+    opPush = 0x01,      /* Format 0 */
+    opPop = 0x02,       /* Format 0 */
+    opNargs = 0x03,     /* Format 0 */
+    opAlloc = 0x04,     /* Format 0 */
+    opPushAlloc = 0x05, /* Format 0 */
+    opExtend = 0x06,    /* Format 0 */
 
-    opOutstanding	= 0x08,		/* Format 6 + 16-bit extension */
-    opFork		= 0x0c,		/* Format 6 */
+    opOutstanding = 0x08, /* Format 6 + 16-bit extension */
+    opFork = 0x0c,        /* Format 6 */
 
-    opXmitTag		= 0x10,		/* Format 4 */
-    opXmitArg		= 0x14,		/* Format 4 */
-    opXmitReg		= 0x18,		/* Format 4 */
-    opXmit		= 0x1c,		/* Format 5 */
-    opXmitTagXtnd	= 0x20,		/* Format 5 + 16-bit extension */
-    opXmitArgXtnd	= 0x24,		/* Format 5 + 16-bit extension */
-    opXmitRegXtnd	= 0x28,		/* Format 5 + 16-bit extension */
+    opXmitTag = 0x10,     /* Format 4 */
+    opXmitArg = 0x14,     /* Format 4 */
+    opXmitReg = 0x18,     /* Format 4 */
+    opXmit = 0x1c,        /* Format 5 */
+    opXmitTagXtnd = 0x20, /* Format 5 + 16-bit extension */
+    opXmitArgXtnd = 0x24, /* Format 5 + 16-bit extension */
+    opXmitRegXtnd = 0x28, /* Format 5 + 16-bit extension */
 
-    opSend		= 0x2c,		/* Format 5 */
+    opSend = 0x2c, /* Format 5 */
 
-    opApplyPrimTag	= 0x30,
-    opApplyPrimArg	= 0x34,
-    opApplyPrimReg	= 0x38,
-    opApplyCmd		= 0x3c,
+    opApplyPrimTag = 0x30,
+    opApplyPrimArg = 0x34,
+    opApplyPrimReg = 0x38,
+    opApplyCmd = 0x3c,
 
-    opRtnTag		= 0x40,
-    opRtnArg		= 0x44,
-    opRtnReg		= 0x48,
-    opRtn		= 0x4c,
+    opRtnTag = 0x40,
+    opRtnArg = 0x44,
+    opRtnReg = 0x48,
+    opRtn = 0x4c,
 
-    opUpcallRtn		= 0x50,
-    opUpcallResume	= 0x54,
-    opNxt		= 0x55,
+    opUpcallRtn = 0x50,
+    opUpcallResume = 0x54,
+    opNxt = 0x55,
 
-    opJmp		= 0x60,
-    opJmpFalse		= 0x64,
-    opJmpCut		= 0x68,
+    opJmp = 0x60,
+    opJmpFalse = 0x64,
+    opJmpCut = 0x68,
 
-    opLookupToArg	= 0x70,
-    opLookupToReg	= 0x80,
+    opLookupToArg = 0x70,
+    opLookupToReg = 0x80,
 
-    opXferLexToArg	= 0x90,
-    opXferLexToReg	= 0xa0,
+    opXferLexToArg = 0x90,
+    opXferLexToReg = 0xa0,
 
-    opXferGlobalToArg	= 0xb0,
-    opXferGlobalToReg	= 0xb1,
-    opXferArgToArg	= 0xb2,
+    opXferGlobalToArg = 0xb0,
+    opXferGlobalToReg = 0xb1,
+    opXferArgToArg = 0xb2,
 
-    opXferRsltToArg	= 0xb4,
-    opXferArgToRslt	= 0xb5,
-    opXferRsltToReg	= 0xb6,
-    opXferRegToRslt	= 0xb7,
-    opXferRsltToDest	= 0xb8,
-    opXferSrcToRslt	= 0xb9,
+    opXferRsltToArg = 0xb4,
+    opXferArgToRslt = 0xb5,
+    opXferRsltToReg = 0xb6,
+    opXferRegToRslt = 0xb7,
+    opXferRsltToDest = 0xb8,
+    opXferSrcToRslt = 0xb9,
 
-    opIndLitToArg	= 0xba,
-    opIndLitToReg	= 0xbb,
-    opIndLitToRslt	= 0xbc,
+    opIndLitToArg = 0xba,
+    opIndLitToReg = 0xbb,
+    opIndLitToRslt = 0xbc,
 
-    opImmediateLitToArg	= 0xc0,
+    opImmediateLitToArg = 0xc0,
 
-    opImmediateLitToReg	= 0xd0,
+    opImmediateLitToReg = 0xd0,
 
     MaxOpcodes = 256
-    };
+};
 
 #ifndef GET_FLAG
 #include "Bits.h"
 #endif
 
-#define GET_FW(x,y,z) GET_FIELD(x.word,y,z)
-#define SET_FW(x,y,z,val) SET_FIELD(x.word,y,z,val)
+#define GET_FW(x, y, z) GET_FIELD(x.word, y, z)
+#define SET_FW(x, y, z, val) SET_FIELD(x.word, y, z, val)
 
 
-#define OP_f0_op0(x) GET_FW(x,0,8) 
-#define OP_f0_opcode(x) GET_FW(x,8,8) 
+#define OP_f0_op0(x) GET_FW(x, 0, 8)
+#define OP_f0_opcode(x) GET_FW(x, 8, 8)
 
-#define OP_f1_op1(x) GET_FW(x,0,4) 
-#define OP_f1_op0(x) GET_FW(x,4,4) 
-#define OP_f1_short(x) GET_FW(x,8,8) 
+#define OP_f1_op1(x) GET_FW(x, 0, 4)
+#define OP_f1_op0(x) GET_FW(x, 4, 4)
+#define OP_f1_short(x) GET_FW(x, 8, 8)
 
-#define OP_f2_op1(x) GET_FW(x,0,8) 
-#define OP_f2_op0(x) GET_FW(x,8,4) 
-#define OP_f2_short(x) GET_FW(x,12,4) 
+#define OP_f2_op1(x) GET_FW(x, 0, 8)
+#define OP_f2_op0(x) GET_FW(x, 8, 4)
+#define OP_f2_short(x) GET_FW(x, 12, 4)
 
-#define OP_f3_op2(x) GET_FW(x,0,4) 
-#define OP_f3_op1(x) GET_FW(x,4,4) 
-#define OP_f3_op0(x) GET_FW(x,8,4) 
-#define OP_f3_short(x) GET_FW(x,12,4) 
-#define OP_f3_op2(x) GET_FW(x,0,4) 
-#define OP_f3_op1(x) GET_FW(x,4,4) 
-#define OP_f3_op0(x) GET_FW(x,8,4) 
-#define OP_f3_short(x) GET_FW(x,12,4) 
+#define OP_f3_op2(x) GET_FW(x, 0, 4)
+#define OP_f3_op1(x) GET_FW(x, 4, 4)
+#define OP_f3_op0(x) GET_FW(x, 8, 4)
+#define OP_f3_short(x) GET_FW(x, 12, 4)
+#define OP_f3_op2(x) GET_FW(x, 0, 4)
+#define OP_f3_op1(x) GET_FW(x, 4, 4)
+#define OP_f3_op0(x) GET_FW(x, 8, 4)
+#define OP_f3_short(x) GET_FW(x, 12, 4)
 
-#define OP_f4_op0(x) GET_FW(x,0,4) 
-#define OP_f4_nargs(x) GET_FW(x,4,4) 
-#define OP_f4_next(x) GET_FW(x,8,1) 
-#define OP_f4_unwind(x) GET_FW(x,9,1) 
-#define OP_f4_nil(x) GET_FW(x,10,6) 
+#define OP_f4_op0(x) GET_FW(x, 0, 4)
+#define OP_f4_nargs(x) GET_FW(x, 4, 4)
+#define OP_f4_next(x) GET_FW(x, 8, 1)
+#define OP_f4_unwind(x) GET_FW(x, 9, 1)
+#define OP_f4_nil(x) GET_FW(x, 10, 6)
 
-#define OP_f5_op0(x) GET_FW(x,0,8) 
-#define OP_f5_next(x) GET_FW(x,8,1) 
-#define OP_f5_unwind(x) GET_FW(x,9,1) 
-#define OP_f5_short(x) GET_FW(x,10,6) 
+#define OP_f5_op0(x) GET_FW(x, 0, 8)
+#define OP_f5_next(x) GET_FW(x, 8, 1)
+#define OP_f5_unwind(x) GET_FW(x, 9, 1)
+#define OP_f5_short(x) GET_FW(x, 10, 6)
 
-#define OP_f6_pc(x) GET_FW(x,0,10) 
-#define OP_f6_short(x) GET_FW(x,10,6) 
+#define OP_f6_pc(x) GET_FW(x, 0, 10)
+#define OP_f6_short(x) GET_FW(x, 10, 6)
 
-#define OP_f7_op0(x) GET_FW(x,0,4) 
-#define OP_f7_offset(x) GET_FW(x,4,4) 
-#define OP_f7_level(x) GET_FW(x,8,3) 
-#define OP_f7_indirect(x) GET_FW(x,11,1) 
-#define OP_f7_short(x) GET_FW(x,12,4) 
+#define OP_f7_op0(x) GET_FW(x, 0, 4)
+#define OP_f7_offset(x) GET_FW(x, 4, 4)
+#define OP_f7_level(x) GET_FW(x, 8, 3)
+#define OP_f7_indirect(x) GET_FW(x, 11, 1)
+#define OP_f7_short(x) GET_FW(x, 12, 4)
 
-#define OP_e0_op1(x) GET_FW(x,0,8) 
-#define OP_e0_op0(x) GET_FW(x,8,8)
+#define OP_e0_op1(x) GET_FW(x, 0, 8)
+#define OP_e0_op0(x) GET_FW(x, 8, 8)
 
-#define WORD_OP_e0_op1(x) GET_FIELD(x,0,8) 
-#define WORD_OP_e0_op0(x) GET_FIELD(x,8,8)
+#define WORD_OP_e0_op1(x) GET_FIELD(x, 0, 8)
+#define WORD_OP_e0_op0(x) GET_FIELD(x, 8, 8)
 
 
-#define OP_e1_op0(x) GET_FW(x,0,16) 
+#define OP_e1_op0(x) GET_FW(x, 0, 16)
 
 /* and now the matching store ops */
 
-#define SET_OP_f0_op0(x,val) SET_FW(x,0,8,val) 
-#define SET_OP_f0_opcode(x,val) SET_FW(x,8,8,val) 
+#define SET_OP_f0_op0(x, val) SET_FW(x, 0, 8, val)
+#define SET_OP_f0_opcode(x, val) SET_FW(x, 8, 8, val)
 
-#define SET_OP_f1_op1(x,val) SET_FW(x,0,4,val) 
-#define SET_OP_f1_op0(x,val) SET_FW(x,4,4,val) 
-#define SET_OP_f1_short(x,val) SET_FW(x,8,8,val) 
+#define SET_OP_f1_op1(x, val) SET_FW(x, 0, 4, val)
+#define SET_OP_f1_op0(x, val) SET_FW(x, 4, 4, val)
+#define SET_OP_f1_short(x, val) SET_FW(x, 8, 8, val)
 
-#define SET_OP_f2_op1(x,val) SET_FW(x,0,8,val) 
-#define SET_OP_f2_op0(x,val) SET_FW(x,8,4,val) 
-#define SET_OP_f2_short(x,val) SET_FW(x,12,4,val) 
+#define SET_OP_f2_op1(x, val) SET_FW(x, 0, 8, val)
+#define SET_OP_f2_op0(x, val) SET_FW(x, 8, 4, val)
+#define SET_OP_f2_short(x, val) SET_FW(x, 12, 4, val)
 
-#define SET_OP_f3_op2(x,val) SET_FW(x,0,4,val) 
-#define SET_OP_f3_op1(x,val) SET_FW(x,4,4,val) 
-#define SET_OP_f3_op0(x,val) SET_FW(x,8,4,val) 
-#define SET_OP_f3_short(x,val) SET_FW(x,12,4,val) 
-#define SET_OP_f3_op2(x,val) SET_FW(x,0,4,val) 
-#define SET_OP_f3_op1(x,val) SET_FW(x,4,4,val) 
-#define SET_OP_f3_op0(x,val) SET_FW(x,8,4,val) 
-#define SET_OP_f3_short(x,val) SET_FW(x,12,4,val) 
+#define SET_OP_f3_op2(x, val) SET_FW(x, 0, 4, val)
+#define SET_OP_f3_op1(x, val) SET_FW(x, 4, 4, val)
+#define SET_OP_f3_op0(x, val) SET_FW(x, 8, 4, val)
+#define SET_OP_f3_short(x, val) SET_FW(x, 12, 4, val)
+#define SET_OP_f3_op2(x, val) SET_FW(x, 0, 4, val)
+#define SET_OP_f3_op1(x, val) SET_FW(x, 4, 4, val)
+#define SET_OP_f3_op0(x, val) SET_FW(x, 8, 4, val)
+#define SET_OP_f3_short(x, val) SET_FW(x, 12, 4, val)
 
-#define SET_OP_f4_op0(x,val) SET_FW(x,0,4,val) 
-#define SET_OP_f4_nargs(x,val) SET_FW(x,4,4,val) 
-#define SET_OP_f4_next(x,val) SET_FW(x,8,1,val) 
-#define SET_OP_f4_unwind(x,val) SET_FW(x,9,1,val) 
-#define SET_OP_f4_nil(x,val) SET_FW(x,10,6,val) 
+#define SET_OP_f4_op0(x, val) SET_FW(x, 0, 4, val)
+#define SET_OP_f4_nargs(x, val) SET_FW(x, 4, 4, val)
+#define SET_OP_f4_next(x, val) SET_FW(x, 8, 1, val)
+#define SET_OP_f4_unwind(x, val) SET_FW(x, 9, 1, val)
+#define SET_OP_f4_nil(x, val) SET_FW(x, 10, 6, val)
 
-#define SET_OP_f5_op0(x,val) SET_FW(x,0,8,val) 
-#define SET_OP_f5_next(x,val) SET_FW(x,8,1,val) 
-#define SET_OP_f5_unwind(x,val) SET_FW(x,9,1,val) 
-#define SET_OP_f5_short(x,val) SET_FW(x,10,6,val) 
+#define SET_OP_f5_op0(x, val) SET_FW(x, 0, 8, val)
+#define SET_OP_f5_next(x, val) SET_FW(x, 8, 1, val)
+#define SET_OP_f5_unwind(x, val) SET_FW(x, 9, 1, val)
+#define SET_OP_f5_short(x, val) SET_FW(x, 10, 6, val)
 
-#define SET_OP_f6_pc(x,val) SET_FW(x,0,10,val) 
-#define SET_OP_f6_short(x,val) SET_FW(x,10,6,val) 
+#define SET_OP_f6_pc(x, val) SET_FW(x, 0, 10, val)
+#define SET_OP_f6_short(x, val) SET_FW(x, 10, 6, val)
 
-#define SET_OP_f7_op0(x,val) SET_FW(x,0,4,val) 
-#define SET_OP_f7_offset(x,val) SET_FW(x,4,4,val) 
-#define SET_OP_f7_level(x,val) SET_FW(x,8,3,val) 
-#define SET_OP_f7_indirect(x,val) SET_FW(x,11,1,val) 
-#define SET_OP_f7_short(x,val) SET_FW(x,12,4,val) 
+#define SET_OP_f7_op0(x, val) SET_FW(x, 0, 4, val)
+#define SET_OP_f7_offset(x, val) SET_FW(x, 4, 4, val)
+#define SET_OP_f7_level(x, val) SET_FW(x, 8, 3, val)
+#define SET_OP_f7_indirect(x, val) SET_FW(x, 11, 1, val)
+#define SET_OP_f7_short(x, val) SET_FW(x, 12, 4, val)
 
-#define SET_OP_e0_op1(x,val) SET_FW(x,0,8,val) 
-#define SET_OP_e0_op0(x,val) SET_FW(x,8,8,val) 
+#define SET_OP_e0_op1(x, val) SET_FW(x, 0, 8, val)
+#define SET_OP_e0_op0(x, val) SET_FW(x, 8, 8, val)
 
-#define SET_OP_e1_op0(x,val) SET_FW(x,0,16,val) 
+#define SET_OP_e1_op0(x, val) SET_FW(x, 0, 16, val)
 
-union Instr
-{
-    Word16  word;
-    operator int ();
+class Instr {
+   public:
+    Instr() : word(0) {}
+    operator int() { return (int)word; }
+    uint16_t word;
 };
 
-inline
-Instr::operator int ()
-{
-    return (int) word;
-}
-
-extern char* opcodeStrings [];
+extern char* opcodeStrings[];
 
 #endif

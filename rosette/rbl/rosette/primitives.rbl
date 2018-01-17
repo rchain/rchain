@@ -1,0 +1,91 @@
+;;; TODO: Implement match? for other data structures
+(defOprn match?)
+(defPure Tuple (match? other) (= (self) other))
+
+(defOprn get)
+(defPure RblTable (get key)
+    (tbl-get (self) (->symbol key))
+)
+
+(defOprn getOrElse)
+(defPure RblTable (getOrElse & keys/elseValue)
+    (let*
+        [
+            ;;; TODO: Find way to deconstruct without reversing
+            [[elseValue & reverse_keys] (reverse keys/elseValue)]
+            [unreversed_keys (reverse reverse_keys)]
+            [final_value
+                (fold unreversed_keys
+                    (proc [key acc k]
+                        ;;; TODO: (null? key) is a proxy for checking if the unreversed_keys have exhausted.
+                        ;;; We need to handle when key is null.
+                        (if (null? key)
+                            acc
+                            (if (type? acc RblTable)
+                                (let [[value (tbl-get acc (->symbol key))]]
+                                    (if (= #absent value) elseValue (k value))
+                                )
+                                elseValue
+                            )
+                        )
+                    )
+                    (self))]
+        ]
+        final_value
+    )
+)
+
+(defOprn insert)
+(defPure RblTable (insert & keys/value)
+    ;;; Inserts (new RblTable) if a lookup is #absent when looping through keys
+    (let*
+        [
+            ;;; TODO: Find way to deconstruct without reversing
+            [[value & reverse_keys] (reverse keys/value)]
+            [[[last_key] remaining_reverse_keys] (if (= (length reverse_keys) 1) [reverse_keys []] [[(head reverse_keys)] (tail reverse_keys)])]
+            [unreversed_keys (reverse remaining_reverse_keys)]
+            [final_tbl
+                (if (null? unreversed_keys)
+                    (self)
+                    (fold
+                        unreversed_keys
+                        (proc [key acc k]
+                            (if (null? key)
+                                acc
+                                (k
+                                    (let
+                                        [[value (tbl-get acc (->symbol key))]]
+                                        (if (= #absent value)
+                                            (let [[newTbl (new RblTable)]]
+                                                (seq
+                                                    (tbl-add acc (->symbol key) newTbl)
+                                                    newTbl
+                                                )
+                                            )
+                                            value
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                        (self)))]
+        ]
+        (seq
+            (tbl-add final_tbl (->symbol last_key) value)
+            final_tbl
+        )
+    )
+)
+
+;;; insertMany takes a list of key value pairs
+;;; and inserts them into a RblTable
+;;;
+;;; (insertMany 1 2 3 4) will create the following map {1: 2, 3: 4}
+(defOprn insertMany)
+(defPure RblTable (insertMany & keys/vals)
+   (iterate loop [[[k v & r] keys/vals]]
+       (seq (tbl-add (self) (->symbol k) v)
+           (if (null? r)
+               (self)
+               (loop r))))
+)

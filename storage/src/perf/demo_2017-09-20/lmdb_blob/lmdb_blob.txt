@@ -1,0 +1,45 @@
+number of keys: 10
+blob length (bytes): 1000
+map size: 320000
+duration: 0
+put: 0
+puts/ms: -1
+get: 0
+gets/ms: -1
+
+number of keys: 1000
+values/key: 1
+blob length: 1048576
+map size: 1572888000
+number of keys: 100
+values/key: 1
+blob length: 1048576
+map size: 157288800
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500
+number of keys: 1000
+values/key: 1
+blob length: 104857
+map size: 157309500

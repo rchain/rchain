@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,19 +17,8 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "Interrupt.h"
-
-#include "RblAtom.h"     
+#include "RblAtom.h"
 #include "Ctxt.h"
 #include "Operation.h"
 #include "Prim.h"
@@ -39,373 +29,376 @@ int interruptPending = 0;
 int arithmeticException = 0;
 
 
-#define FORMALS int sig, int code
-
-void
-interruptHandler (FORMALS)
-{
+void interruptHandler(int signal) {
     interruptPending++;
     vm->acceptSignal(SIGINT);
 
 #ifdef REINSTALL_SIGNALS
-    (SIG_PF) signal(SIGINT, (SIG_PF) &interruptHandler);
+    signal(SIGINT, &interruptHandler);
 #endif
 }
 
 
-void
-exceptionHandler (FORMALS)
-{
+void exceptionHandler(int signal) {
     arithmeticException++;
 
 #ifdef REINSTALL_SIGNALS
-    (SIG_PF) signal(SIGFPE, (SIG_PF) &exceptionHandler);
+    signal(SIGFPE, &exceptionHandler);
 #endif
 }
 
 
-void
-RosetteSignalHandler (FORMALS)
-{
+void RosetteSignalHandler(int signal) {
 #ifdef DEBUG_SIGNALS
     printf("*** rosette signal: sig %d\n", sig);
 #endif
 
 #ifdef NEED_ALARM
-    if(sig == SIGIO || sig == SIGALRM)
-      {  sig = SIGIO;
-	 alarm(1);
-       }
+    if (sig == SIGIO || sig == SIGALRM) {
+        sig = SIGIO;
+        alarm(1);
+    }
 #endif
 
-    vm->acceptSignal(sig);
+    vm->acceptSignal(signal);
 
 #ifdef REINSTALL_SIGNALS
-    (SIG_PF) signal(SIGIO, (SIG_PF) &RosetteSignalHandler);
+    signal(SIGIO, &RosetteSignalHandler);
 #ifdef HANDLE_POLL_WITH_IO
-    (SIG_PF) signal(SIGPOLL, (SIG_PF) &RosetteSignalHandler);
+    signal(SIGPOLL, &RosetteSignalHandler);
 #endif
 #ifdef NEED_ALARM
-    (SIG_PF) signal(SIGALRM, (SIG_PF) &RosetteSignalHandler);
+    signal(SIGALRM, &RosetteSignalHandler);
 #endif
 #endif
 }
 
 
-void
-handleInterrupts ()
-{
-    SIG_PF oldHandler = (SIG_PF) signal(SIGINT,(SIG_PF) &interruptHandler);
-    SIG_PF oldExcpt = (SIG_PF) signal(SIGFPE, (SIG_PF)  &exceptionHandler);
-  
-    if (oldHandler == (SIG_PF)SIG_ERR || oldExcpt == (SIG_PF)SIG_ERR)
-	suicide(sys_errmsg());
+void handleInterrupts() {
+    auto oldHandler = signal(SIGINT, &interruptHandler);
+    auto oldExcpt = signal(SIGFPE, &exceptionHandler);
+
+    if (oldHandler == SIG_ERR || oldExcpt == SIG_ERR) {
+        suicide(sys_errmsg());
+    }
 }
 
 
-void
-ignoreInterrupts ()
-{
-    SIG_PF oldHandler = (SIG_PF) signal(SIGINT, (SIG_PF)SIG_DFL);
-    SIG_PF oldExcpt = (SIG_PF) signal(SIGFPE, (SIG_PF)SIG_DFL);
+void ignoreInterrupts() {
+    auto oldHandler = signal(SIGINT, SIG_DFL);
+    auto oldExcpt = signal(SIGFPE, SIG_DFL);
 
-    if (oldHandler == (SIG_PF)SIG_ERR || oldExcpt == (SIG_PF)SIG_ERR)
-	suicide(sys_errmsg());
+    if (oldHandler == SIG_ERR || oldExcpt == SIG_ERR) {
+        suicide(sys_errmsg());
+    }
 }
 
 
-void
-RosetteIoHandler (VM_EVENT type, int fd, void*)
-{
-    static char* eventName [] = {"read", "write", "exception"};
+void RosetteIoHandler(VM_EVENT type, int fd, void*) {
+    static char* eventName[] = {"read", "write", "exception"};
 
 #ifdef DEBUG_SIGNALS
     printf("*** rosette io: %s event on file %d\n", eventName[type], fd);
 #endif
 
     if (type == VM_READ_EVENT) {
-        DO_UNGETC;
-	vm->initiateRosetteIo(fd);
+        vm->initiateRosetteIo(fd);
+    } else {
+        warning("ignoring %s event on file %d", eventName[type], fd);
     }
-    else
-	warning("ignoring %s event on file %d", eventName[type], fd);
 }
 
 
-DEF("sig-catch",sigCatch, 2, 2)
-{
+DEF("sig-catch", sigCatch, 2, 2) {
     CHECK_FIXNUM(0, sig);
-    if (sig < 0 || sig >= NSIG)
-	return PRIM_ERROR("invalid signal number");
+    if (sig < 0 || sig >= NSIG) {
+        return PRIM_ERROR("invalid signal number");
+    }
 
     if (ARG(1) == NIV) {
-	if (vm->deleteSignalHandler(sig) == -1)
-	    return PRIM_ERROR(sys_errmsg());
-    }
-    else { void (*fn)(FORMALS);
-	   fn = &RosetteSignalHandler;     
-	if (vm->addSignalHandler(sig, (SIG_PF) fn, ARG(1)) == -1)
-	    return PRIM_ERROR(sys_errmsg());
+        if (vm->deleteSignalHandler(sig) == -1) {
+            return PRIM_ERROR(sys_errmsg());
+        }
+    } else {
+        sighandler_t fn = &RosetteSignalHandler;
+        if (vm->addSignalHandler(sig, fn, ARG(1)) == -1) {
+            return PRIM_ERROR(sys_errmsg());
+        }
     }
 
     return NIV;
 }
 
 
-DEF("io-catch",ioCatch, 2, 2)
-{
+DEF("io-catch", ioCatch, 2, 2) {
     CHECK_FIXNUM(0, fd);
-    if (fd < 0 || fd > FD_SETSIZE)
-	return PRIM_ERROR("invalid file descriptor");
+    if (fd < 0 || fd > FD_SETSIZE) {
+        return PRIM_ERROR("invalid file descriptor");
+    }
 
-    if (ARG(1) == NIV)
-	vm->deleteIoHandler(fd);
-    else
-	vm->addIoHandler(fd, &RosetteIoHandler, ARG(1), 1);
+    if (ARG(1) == NIV) {
+        vm->deleteIoHandler(fd);
+    } else {
+        vm->addIoHandler(fd, &RosetteIoHandler, ARG(1), 1);
+    }
 
     return NIV;
 }
 
 
-DEF_OPRN(Std, "signal",oprnSignal, obRuntimeError);
+DEF_OPRN(Std, "signal", oprnSignal, obRuntimeError);
 
 /* TimeSvcHandler */
 
-DEF("prim-handle-alarm",obHandleAlarm, 2, 2)
-{
-  return PRIM_ERROR("primitive alarm!");
+DEF("prim-handle-alarm", obHandleAlarm, 2, 2) {
+    return PRIM_ERROR("primitive alarm!");
 }
 
-DEF_OPRN(Std,"handle-alarm",oprnHandleAlarm,obHandleAlarm);
+DEF_OPRN(Std, "handle-alarm", oprnHandleAlarm, obHandleAlarm);
 
-void
-timeServiceHandler(FORMALS)
-{
-#if defined(sparc)  
-  Tuple* tshinfo = (Tuple*)(vm->sigPool[sig]); PROTECT(tshinfo);
-  Tuple* newtshinfo = Tuple::create(1, NIV); PROTECT(newtshinfo);
-  Tuple* sleeperinfo; PROTECT(sleeperinfo);
-  Tuple* av; PROTECT(av);
-  Ctxt*  c; PROTECT(c);
-  int curint = FIXVAL(tshinfo->nth(0));
-  int minint = MAXINT;
-  int tmp;
-  newtshinfo->setNth(0, tshinfo->nth(0));
-  
-  if (NIV != tshinfo->nth(1))
-    {
-      sleeperinfo = (Tuple*)(tshinfo->nth(1)); 
-      if ((tmp = ((FIXVAL(sleeperinfo->nth(1))) - curint)) <= 0)
-	{	  
-	  /* send alarm to actor */
-	  av = Tuple::create(2, NIV);	  
-	  c  = Ctxt::create( oprnHandleAlarm, av );	  
-
-	  if (IS_A(sleeperinfo->nth(0), Tuple)) {
-	    ASSIGN(av, elem(0), sleeperinfo->nth(0)->nth(0));
-	    ASSIGN(av, elem(1), sleeperinfo->nth(0)->nth(1));
-	    BASE(sleeperinfo->nth(0)->nth(0)) -> receive(c);
-	  } else {
-	    ASSIGN(av, elem(1), sleeperinfo->nth(0));
-	    BASE(sleeperinfo->nth(0)) -> receive(c);
-	  }
-	  	  
-	  /* reset interval */
-	  sleeperinfo->setNth(1, sleeperinfo->nth(2));
-	  minint = FIXVAL(sleeperinfo->nth(2));
-	} else {
-	  if (tmp < minint) minint = tmp;
-	  sleeperinfo->setNth(1, FIXNUM(tmp));
-	} 
-      newtshinfo = rcons(newtshinfo, sleeperinfo);
-    } else newtshinfo = rcons(newtshinfo, NIV);
-  for (int i = 2; i < tshinfo->numberOfElements(); i++)
-    {
-      sleeperinfo = (Tuple*)(tshinfo->nth(i));
-      if ((tmp = (FIXVAL(sleeperinfo->nth(1)) - curint)) <= 0)
-	{
-	  /* send alarm to actor */
-	  av = Tuple::create(2, NIV);	  
-	  c  = Ctxt::create( oprnHandleAlarm, av );	  
-
-	  if (IS_A(sleeperinfo->nth(0), Tuple)) {
-	    ASSIGN(av, elem(0), sleeperinfo->nth(0)->nth(0));
-	    ASSIGN(av, elem(1), sleeperinfo->nth(0)->nth(1));
-	    BASE(sleeperinfo->nth(0)->nth(0)) -> receive(c);
-	  } else {
-	    ASSIGN(av, elem(1), sleeperinfo->nth(0));
-	    BASE(sleeperinfo->nth(0)) -> receive(c);
-	  }
-	  
-	} else {
-	  if (tmp < minint) minint = tmp;
-	  sleeperinfo->setNth(1, FIXNUM(tmp));
-	  newtshinfo = rcons(newtshinfo, sleeperinfo);
-	}
-    }
-  if ((newtshinfo->numberOfElements() > 2) ||
-      (newtshinfo->nth(1) != NIV))
-    {
-      vm->sigPool[sig] = newtshinfo;
-      /* issue the next ualarm call */
-      (void)ualarm(minint,0);
-    }
-  else { /* remove this handler from sighandlers */
-    vm->deleteSignalHandler(sig);
-  }
-#endif
-}
-
-DEF("prim-register-alarm",registerAlarm, 3, 4)
-{
-  /* if handler already installed add [ARG(0) ARG(1)] to sigPool[SIGALRM]
-  else install handler and add etc. */
-
+void timeServiceHandler(int signal) {
 #if defined(sparc)
-  
-  Ob* beauty = ARG(0); PROTECT(beauty);
-  if (!IS_FIXNUM(ARG(1))) return PRIM_MISMATCH((1), "Fixnum");
-  CHECK(2, RblBool, periodicP); PROTECT(periodicP);
+    Tuple* tshinfo = (Tuple*)(vm->sigPool[sig]);
+    PROTECT(tshinfo);
+    Tuple* newtshinfo = Tuple::create(1, NIV);
+    PROTECT(newtshinfo);
+    Tuple* sleeperinfo;
+    PROTECT(sleeperinfo);
+    Tuple* av;
+    PROTECT(av);
+    Ctxt* c;
+    PROTECT(c);
+    int curint = FIXVAL(tshinfo->nth(0));
+    int minint = MAXINT;
+    int tmp;
+    newtshinfo->setNth(0, tshinfo->nth(0));
 
-  Ob* svctag; PROTECT(svctag);
+    if (NIV != tshinfo->nth(1)) {
+        sleeperinfo = (Tuple*)(tshinfo->nth(1));
+        if ((tmp = ((FIXVAL(sleeperinfo->nth(1))) - curint)) <= 0) {
+            /* send alarm to actor */
+            av = Tuple::create(2, NIV);
+            c = Ctxt::create(oprnHandleAlarm, av);
 
-  if (NARGS == 4) {
-    svctag = ARG(3);
-    Tuple* actortagpair = Tuple::create(2, NIV); PROTECT(actortagpair);
-    actortagpair->setNth(0, beauty);
-    actortagpair->setNth(1, svctag);
-    beauty = actortagpair;
-  } 
-  
-  Tuple* sleeper;
-  if (vm->sigPool[SIGALRM] == INVALID)
-    {
-      Tuple* coccoon;
-      void (*fn)(FORMALS);
-      fn = &timeServiceHandler;
+            if (IS_A(sleeperinfo->nth(0), Tuple)) {
+                ASSIGN(av, elem(0), sleeperinfo->nth(0)->nth(0));
+                ASSIGN(av, elem(1), sleeperinfo->nth(0)->nth(1));
+                BASE(sleeperinfo->nth(0)->nth(0))->receive(c);
+            } else {
+                ASSIGN(av, elem(1), sleeperinfo->nth(0));
+                BASE(sleeperinfo->nth(0))->receive(c);
+            }
 
-      /* See timeServiceHandler for Data Structure setup.
-	 0th entry is the min interval.
-	 1st entry is the only periodic service.
-	 2nd - nth entry are non-periodic alarmists. */
-      
-      if (!(BOOLVAL(periodicP))) {
-	sleeper = Tuple::create(2, NIV);
-	sleeper->setNth(0, beauty);
-	sleeper->setNth(1, ARG(1)); PROTECT(sleeper); 
-	coccoon = Tuple::create(3, NIV);
-	coccoon->setNth(0, ARG(1));
-	coccoon->setNth(1, NIV);
-	coccoon->setNth(2, sleeper);
-      } else {
-	sleeper = Tuple::create(3, NIV);
-	sleeper->setNth(0, beauty);
-	sleeper->setNth(1, ARG(1));
-	sleeper->setNth(2, ARG(1)); PROTECT(sleeper); 
-	coccoon = Tuple::create(2, NIV);
-	coccoon->setNth(0, ARG(1));
-	coccoon->setNth(1, sleeper);
-      }
-
-      if (vm->addSignalHandler(SIGALRM, (SIG_PF) fn, coccoon) == -1)
-	return PRIM_ERROR(sys_errmsg());
-
-      /* issue the very first ualarm call */
-      (void)ualarm((FIXVAL(ARG(1))),0);
-      
+            /* reset interval */
+            sleeperinfo->setNth(1, sleeperinfo->nth(2));
+            minint = FIXVAL(sleeperinfo->nth(2));
+        } else {
+            if (tmp < minint) {
+                minint = tmp;
+            }
+            sleeperinfo->setNth(1, FIXNUM(tmp));
+        }
+        newtshinfo = rcons(newtshinfo, sleeperinfo);
     } else {
-      if (BOOLVAL(periodicP)) {
-	if (vm->sigPool[SIGALRM]->nth(1) != NIV) {
-	  PRIM_ERROR("must unregister periodic service first");
-	}
-	sleeper = Tuple::create(3, NIV);
-	sleeper->setNth(0, beauty);
-	sleeper->setNth(1, ARG(1));
-	sleeper->setNth(2, ARG(2));
-	vm->sigPool[SIGALRM]->setNth(1, sleeper);
-      } else {
-	/* Actually, this code should check to see if the ARG(1) < min */
-	sleeper = Tuple::create(2, NIV);
-	sleeper->setNth(0, beauty);
-	sleeper->setNth(1, ARG(1)); PROTECT(sleeper);
-	vm->sigPool[SIGALRM] = rcons(((Tuple*)(vm->sigPool[SIGALRM])),sleeper);
-      }
+        newtshinfo = rcons(newtshinfo, NIV);
     }
-#else
-  /* defined(sgi) */
-  PRIM_ERROR("time service not supported on this operating system");
+    for (int i = 2; i < tshinfo->numberOfElements(); i++) {
+        sleeperinfo = (Tuple*)(tshinfo->nth(i));
+        if ((tmp = (FIXVAL(sleeperinfo->nth(1)) - curint)) <= 0) {
+            /* send alarm to actor */
+            av = Tuple::create(2, NIV);
+            c = Ctxt::create(oprnHandleAlarm, av);
+
+            if (IS_A(sleeperinfo->nth(0), Tuple)) {
+                ASSIGN(av, elem(0), sleeperinfo->nth(0)->nth(0));
+                ASSIGN(av, elem(1), sleeperinfo->nth(0)->nth(1));
+                BASE(sleeperinfo->nth(0)->nth(0))->receive(c);
+            } else {
+                ASSIGN(av, elem(1), sleeperinfo->nth(0));
+                BASE(sleeperinfo->nth(0))->receive(c);
+            }
+        } else {
+            if (tmp < minint) {
+                minint = tmp;
+            }
+
+            sleeperinfo->setNth(1, FIXNUM(tmp));
+            newtshinfo = rcons(newtshinfo, sleeperinfo);
+        }
+    }
+
+    if ((newtshinfo->numberOfElements() > 2) || (newtshinfo->nth(1) != NIV)) {
+        vm->sigPool[sig] = newtshinfo;
+        /* issue the next ualarm call */
+        (void)ualarm(minint, 0);
+    } else { /* remove this handler from sighandlers */
+        vm->deleteSignalHandler(sig);
+    }
+
 #endif
-  return NIV;
 }
 
-DEF("prim-unregister-alarm",unregisterAlarm, 1, 1)
-{
-  /* remove ARG(0) from vm->sigPool[SIGALRM]
-    if vector drops to zero entries remove handler */
-  
+DEF("prim-register-alarm", registerAlarm, 3, 4) {
+/* if handler already installed add [ARG(0) ARG(1)] to sigPool[SIGALRM]
+else install handler and add etc. */
+
 #if defined(sparc)
 
-  Ob* beauty = ARG(0); PROTECT(beauty);
-  if (vm->sigPool[SIGALRM] == INVALID) {
-    PRIM_ERROR("nothing to remove");
-  } else {
+    Ob* beauty = ARG(0);
+    PROTECT(beauty);
+    if (!IS_FIXNUM(ARG(1))) {
+        return PRIM_MISMATCH((1), "Fixnum");
+    }
 
-    /* this loop should be folded back up to simplify the code! */
-    
-    Tuple* tmp = (Tuple*)(vm->sigPool[SIGALRM]); PROTECT(tmp);
-    Tuple* newtshinfo = Tuple::create(2, NIV); PROTECT(newtshinfo);
-    newtshinfo->setNth(0, tmp->nth(0));
+    CHECK(2, RblBool, periodicP);
+    PROTECT(periodicP);
 
-    int disjunct1, disjunct2, disjunct3a, disjunct3b;
+    Ob* svctag;
+    PROTECT(svctag);
 
-    disjunct1 = (tmp->nth(1) == NIV);
-    disjunct2 = (((Tuple*)(tmp->nth(1)))->nth(0) != beauty);
-    disjunct3a = IS_A((((Tuple*)(tmp->nth(1)))->nth(0)),Tuple);
-    disjunct3b =
-      (((Tuple*)(((Tuple*)(tmp->nth(1)))->nth(0)))->nth(0) != beauty);
+    if (NARGS == 4) {
+        svctag = ARG(3);
+        Tuple* actortagpair = Tuple::create(2, NIV);
+        PROTECT(actortagpair);
+        actortagpair->setNth(0, beauty);
+        actortagpair->setNth(1, svctag);
+        beauty = actortagpair;
+    }
 
-    if ( disjunct1 || (disjunct2 && disjunct3a && disjunct3b) )
-      {
-	newtshinfo->setNth(1, tmp->nth(1));
-	int flag = 0;
-	for (int i = 2; i < tmp->numberOfElements(); i++)
-	  {
-	    disjunct2 = (((Tuple*)(tmp->nth(i)))->nth(0) != beauty);
-	    disjunct3a = IS_A((((Tuple*)(tmp->nth(i)))->nth(0)),Tuple);
-	    disjunct3b =
-	      (((Tuple*)(((Tuple*)(tmp->nth(i)))->nth(0)))->nth(0) != beauty);
+    Tuple* sleeper;
+    if (vm->sigPool[SIGALRM] == INVALID) {
+        Tuple* coccoon;
+        auto fn = &timeServiceHandler;
 
-	    if (disjunct2 || (disjunct3a && disjunct3b))
-	      {
-		newtshinfo = rcons(newtshinfo, tmp->nth(i));
-	      } else flag = 1;
-	  }
-	if (!flag) PRIM_ERROR("no service removed");
-	
-	if ((newtshinfo->numberOfElements() == 2) &&
-	    (newtshinfo->nth(1) == NIV))
-	  {
-	    ualarm(0,0);
-	    vm->deleteSignalHandler(SIGALRM);
-	  } else  vm->sigPool[SIGALRM] = newtshinfo;
-      } else {
-	if ((tmp->numberOfElements() == 2) &&
-	    (tmp->nth(1) != NIV))
-	  {
-	    ualarm(0,0);
-	    vm->deleteSignalHandler(SIGALRM);
-	  } else  {
-	    for (int i = 2; i < tmp->numberOfElements(); i++)
-	      {
-		newtshinfo = rcons(newtshinfo, tmp->nth(i));
-	      }
-	  }
-	  
-      }
-  }
+        /* See timeServiceHandler for Data Structure setup.
+           0th entry is the min interval.
+           1st entry is the only periodic service.
+           2nd - nth entry are non-periodic alarmists. */
+
+        if (!(BOOLVAL(periodicP))) {
+            sleeper = Tuple::create(2, NIV);
+            sleeper->setNth(0, beauty);
+            sleeper->setNth(1, ARG(1));
+            PROTECT(sleeper);
+            coccoon = Tuple::create(3, NIV);
+            coccoon->setNth(0, ARG(1));
+            coccoon->setNth(1, NIV);
+            coccoon->setNth(2, sleeper);
+        } else {
+            sleeper = Tuple::create(3, NIV);
+            sleeper->setNth(0, beauty);
+            sleeper->setNth(1, ARG(1));
+            sleeper->setNth(2, ARG(1));
+            PROTECT(sleeper);
+            coccoon = Tuple::create(2, NIV);
+            coccoon->setNth(0, ARG(1));
+            coccoon->setNth(1, sleeper);
+        }
+
+        if (vm->addSignalHandler(SIGALRM, fn, coccoon) == -1) {
+            return PRIM_ERROR(sys_errmsg());
+        }
+
+        /* issue the very first ualarm call */
+        (void)ualarm((FIXVAL(ARG(1))), 0);
+
+    } else {
+        if (BOOLVAL(periodicP)) {
+            if (vm->sigPool[SIGALRM]->nth(1) != NIV) {
+                PRIM_ERROR("must unregister periodic service first");
+            }
+
+            sleeper = Tuple::create(3, NIV);
+            sleeper->setNth(0, beauty);
+            sleeper->setNth(1, ARG(1));
+            sleeper->setNth(2, ARG(2));
+            vm->sigPool[SIGALRM]->setNth(1, sleeper);
+        } else {
+            /* Actually, this code should check to see if the ARG(1) < min */
+            sleeper = Tuple::create(2, NIV);
+            sleeper->setNth(0, beauty);
+            sleeper->setNth(1, ARG(1));
+            PROTECT(sleeper);
+            vm->sigPool[SIGALRM] =
+                rcons(((Tuple*)(vm->sigPool[SIGALRM])), sleeper);
+        }
+    }
+#else
+    /* defined(sgi) */
+    PRIM_ERROR("time service not supported on this operating system");
+#endif
+    return NIV;
+}
+
+DEF("prim-unregister-alarm", unregisterAlarm, 1, 1) {
+/* remove ARG(0) from vm->sigPool[SIGALRM]
+  if vector drops to zero entries remove handler */
+
+#if defined(sparc)
+
+    Ob* beauty = ARG(0);
+    PROTECT(beauty);
+    if (vm->sigPool[SIGALRM] == INVALID) {
+        PRIM_ERROR("nothing to remove");
+    } else {
+        /* this loop should be folded back up to simplify the code! */
+
+        Tuple* tmp = (Tuple*)(vm->sigPool[SIGALRM]);
+        PROTECT(tmp);
+        Tuple* newtshinfo = Tuple::create(2, NIV);
+        PROTECT(newtshinfo);
+        newtshinfo->setNth(0, tmp->nth(0));
+
+        int disjunct1, disjunct2, disjunct3a, disjunct3b;
+
+        disjunct1 = (tmp->nth(1) == NIV);
+        disjunct2 = (((Tuple*)(tmp->nth(1)))->nth(0) != beauty);
+        disjunct3a = IS_A((((Tuple*)(tmp->nth(1)))->nth(0)), Tuple);
+        disjunct3b =
+            (((Tuple*)(((Tuple*)(tmp->nth(1)))->nth(0)))->nth(0) != beauty);
+
+        if (disjunct1 || (disjunct2 && disjunct3a && disjunct3b)) {
+            newtshinfo->setNth(1, tmp->nth(1));
+            int flag = 0;
+            for (int i = 2; i < tmp->numberOfElements(); i++) {
+                disjunct2 = (((Tuple*)(tmp->nth(i)))->nth(0) != beauty);
+                disjunct3a = IS_A((((Tuple*)(tmp->nth(i)))->nth(0)), Tuple);
+                disjunct3b =
+                    (((Tuple*)(((Tuple*)(tmp->nth(i)))->nth(0)))->nth(0) !=
+                     beauty);
+
+                if (disjunct2 || (disjunct3a && disjunct3b)) {
+                    newtshinfo = rcons(newtshinfo, tmp->nth(i));
+                } else {
+                    flag = 1;
+                }
+            }
+
+            if (!flag) {
+                PRIM_ERROR("no service removed");
+            }
+
+            if ((newtshinfo->numberOfElements() == 2) &&
+                (newtshinfo->nth(1) == NIV)) {
+                ualarm(0, 0);
+                vm->deleteSignalHandler(SIGALRM);
+            } else {
+                vm->sigPool[SIGALRM] = newtshinfo;
+            }
+        } else {
+            if ((tmp->numberOfElements() == 2) && (tmp->nth(1) != NIV)) {
+                ualarm(0, 0);
+                vm->deleteSignalHandler(SIGALRM);
+            } else {
+                for (int i = 2; i < tmp->numberOfElements(); i++) {
+                    newtshinfo = rcons(newtshinfo, tmp->nth(i));
+                }
+            }
+        }
+    }
 
 #else
-  PRIM_ERROR("time service not supported on this operating system");
-#endif  
-  return NIV;
+    PRIM_ERROR("time service not supported on this operating system");
+#endif
+    return NIV;
 }

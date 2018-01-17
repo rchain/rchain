@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,33 +17,24 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_CommandLine_h)
 #define _RBL_CommandLine_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
 
-extern unsigned	SurvivorSpaceSize;
-extern unsigned	InfantSpaceSize;
-extern unsigned	OldSpaceChunkSize;
+extern unsigned SurvivorSpaceSize;
+extern unsigned InfantSpaceSize;
+extern unsigned OldSpaceChunkSize;
 
-extern int	TenuringAge;
-extern int	ParanoidAboutGC;
-extern char	BootDirectory[];
-extern char	BootFile[];
-extern int	RestoringImage;
-extern char*	DefaultBootDirectory;
+extern int TenuringAge;
+extern int ParanoidAboutGC;
+extern char BootDirectory[];
+extern char BootFile[];
+extern char RunFile[];
+extern int RestoringImage;
+extern bool ForceEnableRepl;
+extern int VerboseFlag;
 
-extern int	ParseCommandLine (int, char**);
+extern int ParseCommandLine(int, char**);
 
 #endif

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,32 +17,25 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
-
 #include <sys/types.h>
 #include <sys/stat.h>
 
 /*  */
 extern "C" {
-void force_unix_load ()
-{
+void force_unix_load() {
 /*   Sed script for producing the list of foreign calls */
-/*  
-bullwinkle% cat lib/ROSH/*.rbl | sed -e "/(defForeign (\([a-z_]*\)/p" -n | sed  -e "s:(defForeign (\([a-z_0-9]*\).*:DECL(\1):g"
-*/			  
+/*
+bullwinkle% cat lib/ROSH/*.rbl | sed -e "/(defForeign (\([a-z_]*\)/p" -n | sed
+-e "s:(defForeign (\([a-z_0-9]*\).*:DECL(\1):g"
+*/
 
-  
-#define DECL(a) {extern int a(); (void) a();}
+
+#define DECL(a)         \
+    {                   \
+        extern int a(); \
+        (void)a();      \
+    }
     /* UNIX SYSTEM CALLS */
     DECL(alarm)
     DECL(gethostent)
@@ -61,114 +55,110 @@ bullwinkle% cat lib/ROSH/*.rbl | sed -e "/(defForeign (\([a-z_]*\)/p" -n | sed  
     DECL(lstat)
     DECL(fstat)
 #endif
-      
-    DECL(time)	    
-     DECL(chdir)
-     DECL(endgrent)
-     DECL(endnetent)
-     DECL(endprotoent)
-     DECL(endpwent)
-     DECL(endrpcent)
-     DECL(getgid)
-     DECL(getgrent)
-     DECL(getgrgid)
-     DECL(getgrnam)
-     DECL(gethostbyaddr)
-     DECL(gethostbyname)
-     DECL(gethostname)
-     DECL(gethostid)
-     DECL(gethostname)
-     DECL(getlogin)
-     DECL(getnetbyaddr)
-     DECL(getnetbyname)
-     DECL(getnetent)
-     DECL(getpeername)	 
-     DECL(getpgrp)
-     DECL(getppid)
+
+    DECL(time)
+    DECL(chdir)
+    DECL(endgrent)
+    DECL(endnetent)
+    DECL(endprotoent)
+    DECL(endpwent)
+    DECL(endrpcent)
+    DECL(getgid)
+    DECL(getgrent)
+    DECL(getgrgid)
+    DECL(getgrnam)
+    DECL(gethostbyaddr)
+    DECL(gethostbyname)
+    DECL(gethostname)
+    DECL(gethostid)
+    DECL(gethostname)
+    DECL(getlogin)
+    DECL(getnetbyaddr)
+    DECL(getnetbyname)
+    DECL(getnetent)
+    DECL(getpeername)
+    DECL(getpgrp)
+    DECL(getppid)
 #ifndef HPUX
-     DECL(getpriority)
+    DECL(getpriority)
 #endif
-     DECL(getprotobyname)
-     DECL(getprotobynumber)
-     DECL(getprotoent)
-     DECL(getpwent)
-     DECL(getpwnam)
-     DECL(getpwuid)
-     DECL(getrlimit)
-     DECL(getrpcbyname)
-     DECL(getrpcbynumber)
-     DECL(getrpcent)
-     DECL(getservbyname)
-     DECL(gettimeofday)
-     DECL(getpagesize)
-     DECL(getuid)
-     DECL(kill)
-     DECL(link)
+    DECL(getprotobyname)
+    DECL(getprotobynumber)
+    DECL(getprotoent)
+    DECL(getpwent)
+    DECL(getpwnam)
+    DECL(getpwuid)
+    DECL(getrlimit)
+    DECL(getrpcbyname)
+    DECL(getrpcbynumber)
+    DECL(getrpcent)
+    DECL(getservbyname)
+    DECL(gettimeofday)
+    DECL(getpagesize)
+    DECL(getuid)
+    DECL(kill)
+    DECL(link)
 
 #ifndef MIPS_SGI_SYSV
-     DECL(mkdir)
+    DECL(mkdir)
 #endif
 
-     DECL(readlink)
+    DECL(readlink)
 #ifndef MIPS_SGI_SYSV
-     DECL(rename)
+    DECL(rename)
 #endif
-     DECL(rmdir)
-     DECL(setgrent)
-     DECL(setnetent)
-     DECL(setpgrp)
+    DECL(rmdir)
+    DECL(setgrent)
+    DECL(setnetent)
+    DECL(setpgrp)
 #ifndef HPUX
-     DECL(setpriority)
+    DECL(setpriority)
 #endif
-     DECL(setprotoent)
-     DECL(setpwent)
-     DECL(setrlimit)
-     DECL(setrpcent)
-     DECL(statfs)
-     DECL(symlink)
+    DECL(setprotoent)
+    DECL(setpwent)
+    DECL(setrlimit)
+    DECL(setrpcent)
+    DECL(statfs)
+    DECL(symlink)
 #ifndef MIPS_SGI_SYSV
-     DECL(system)
+    DECL(system)
 #endif
 #if defined(sparc) || defined(mc68020)
-     DECL(ualarm)
+    DECL(ualarm)
 #endif
-       
+
 #ifndef MIPS_SGI_SYSV
-     DECL(umask)
-     DECL(chmod)  
+    DECL(umask)
+    DECL(chmod)
 #endif
 
 
-/* from running the script apr 14 1992 */
-
+    /* from running the script apr 14 1992 */
 }
 
-typedef long rosette_time_t ;       
+typedef long rosette_time_t;
 struct rosette_stat {
-  rosette_time_t rst_atime;
-  rosette_time_t rst_ctime;
-  rosette_time_t rst_mtime;
+    rosette_time_t rst_atime;
+    rosette_time_t rst_ctime;
+    rosette_time_t rst_mtime;
 };
 
 
+int rosette_stat(char *path, struct rosette_stat *buf)
 
-int
-rosette_stat(char *path,struct rosette_stat *buf)
-
-{ struct stat buf1;
-  int result;
-  result = stat(path,&buf1);
-  if (result == 0)
-    {
+{
+    struct stat buf1;
+    int result;
+    result = stat(path, &buf1);
+    if (result == 0) {
 #ifdef ROSETTE_STAT_STORE
-      ROSETTE_STAT_STORE;
+        ROSETTE_STAT_STORE;
 #else
-      buf->rst_atime =   (&buf1)->st_atime ;
-      buf->rst_mtime =   (&buf1)->st_mtime ;
-      buf->rst_ctime =   (&buf1)->st_ctime ;
-#endif      
+        buf->rst_atime = (&buf1)->st_atime;
+        buf->rst_mtime = (&buf1)->st_mtime;
+        buf->rst_ctime = (&buf1)->st_ctime;
+#endif
     }
-  return result;
+    return result;
 }
-
 };

@@ -359,9 +359,11 @@
    (sprint Printer (self) & items))
 
  (defSync (sbo& (sbo Ostream)) (print & items)
-   (free [itemTraverse]
-     (display! (self)
-	       (concat & (mapx items itemTraverse printify))))))
+   (if (null? items)
+     (display! (self) "")
+     (free [itemTraverse]
+       (display! (self)
+	     (concat & (mapx items itemTraverse printify)))))))
 
 ;;; EXAMINE
 (defOprn (sbo& AtomMeta-SBO) (examine! client strm) pure&

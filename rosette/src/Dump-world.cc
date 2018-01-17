@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,66 +17,46 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 
 #if defined(MIPS_SGI_SYSV) || defined(LINUX)
 #include <unistd.h>
-#endif     
-     
+#endif
+
 #include "Dynload.h"
 #include "Prim.h"
 #include "Tuple.h"
 
-#if defined(DYNAMIC_LOADING)
-DynamicLoader* loader; /* initialized in BigBang.cc */
-#endif
-
 extern int RestoringImage;
 
 
-DEF("image-dump",imageDump, 1, 1)
-{
+DEF("image-dump", imageDump, 1, 1) {
     char* path = BASE(ARG(0))->asPathname();
-    if (!path)
-	return PRIM_MISMATCH(0, "String or Symbol");
+    if (!path) {
+        return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
-    RestoringImage = TRUE;
-    char msg_buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    return (loader->dump(path, msg_buf)
-	    ? PRIM_ERROR(msg_buf)
-	    : RBLFALSE);
-#else
+    RestoringImage = 1;
     return RBLFALSE;
-#endif
 }
 
 
-DEF("image-restore",imageRestore, 1, MaxArgs)
-{
+DEF("image-restore", imageRestore, 1, MaxArgs) {
     char* path = BASE(ARG(0))->asPathname();
-    if (!path)
-	return PRIM_MISMATCH(0, "String or Symbol");
+    if (!path) {
+        return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     int argc = NARGS;
-    char** argv = new char* [argc+1];
+    char** argv = new char*[argc + 1];
 
     argv[0] = path;
     for (int i = 1; i < argc; i++) {
-	const char* s1 = BASE(ARG(i))->asCstring();
-	char* s2 = new char [strlen(s1)+1];
-	argv[i] = strcpy(s2, s1);
+        const char* s1 = BASE(ARG(i))->asCstring();
+        char* s2 = new char[strlen(s1) + 1];
+        argv[i] = strcpy(s2, s1);
     }
+
     argv[argc] = 0;
 
     extern char** environ;

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,69 +17,35 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_ResizeablePtrArray_h)
 #define _ResizeablePtrArray_h 1
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
 
-class ResizeablePtrArray
-{
-  protected:
-    void**	array;
-    int		size;
+class ResizeablePtrArray {
+   protected:
+    void** array;
+    int size;
 
-public:
-    ResizeablePtrArray ();
-    ResizeablePtrArray (int);
-    ~ResizeablePtrArray ();
+   public:
+    ResizeablePtrArray() {
+        array = 0;
+        size = 0;
+    }
 
-    int		capacity ();
-  
-    void	resize (int);
-    void	resize ();
+    ResizeablePtrArray(int sz) {
+        array = new void*[sz];
+        size = sz;
+    }
 
-    void*&	operator [] (int);
+    ~ResizeablePtrArray();
+
+    void resize(int);
+
+    int capacity() { return size; }
+    void resize() { resize(2 * size); }
+
+    void*& operator[](int n) { return array[n]; }
 };
-
-inline ResizeablePtrArray::ResizeablePtrArray ()
-{
-    array = 0;
-    size = 0;
-}
-
-inline ResizeablePtrArray::ResizeablePtrArray (int sz)
-{
-    array = new void* [sz];
-    size = sz;
-}
-
-inline int
-ResizeablePtrArray::capacity ()
-{
-    return size;
-}
-
-inline void
-ResizeablePtrArray::resize ()
-{
-    resize(2*size);
-}
-
-inline void*&
-ResizeablePtrArray::operator [] (int n)
-{
-    return array[n];
-}
 
 #endif

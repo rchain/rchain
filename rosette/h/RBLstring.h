@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,50 +17,35 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_String_h)
 #define _RBL_String_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 
-class RBLstring : public ByteVec
-{
+class RBLstring : public ByteVec {
     STD_DECLS(RBLstring);
 
-  protected:
+   protected:
+    RBLstring(int, char = ' ');
+    RBLstring(int, char*);
 
-    RBLstring (int, char = ' ');
-    RBLstring (int, char*);
+   public:
+    static RBLstring* create(int, char = ' ');
+    static RBLstring* create(char*);
+    static RBLstring* create(int, char*);
 
-  public:
-
-    static RBLstring* create (int, char = ' ');
-    static RBLstring* create (char*);
-    static RBLstring* create (int, char*);
-
-    void	printOn (FILE*);
-    void	displayOn (FILE*);
-    char*	asCstring ();
-    char*	asPathname ();
-    Ob*		indexedSize ();
-    Ob*		nth (int);
-    Ob*		setNth (int, Ob*);
-    Ob*		subObject (int, int);
+    void printOn(FILE*);
+    void displayOn(FILE*);
+    const char* asCstring();
+    char* asPathname();
+    Ob* indexedSize();
+    Ob* nth(int);
+    Ob* setNth(int, Ob*);
+    Ob* subObject(int, int);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
-    virtual Ob*         convertActualRslt(Ctxt*, Word32);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 };
 
 #endif

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,12 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
 #include "rosette.h"
 IS_IMPLEMENTATION
 
@@ -34,12 +29,12 @@ IS_IMPLEMENTATION
 #include "Xm/PushBG.h"
 #include "Xm/RowColumn.h"
 #include "Xm/CascadeB.h"
-#include "Xm/Scale.h"		
-#include "Xm/ScrollBar.h"			   
-#include "Xm/ScrolledW.h"			   
-#include "Xm/SelectioB.h"			   
-#include "Xm/SeparatoG.h"			   
-#include "Xm/Separator.h"			   
+#include "Xm/Scale.h"
+#include "Xm/ScrollBar.h"
+#include "Xm/ScrolledW.h"
+#include "Xm/SelectioB.h"
+#include "Xm/SeparatoG.h"
+#include "Xm/Separator.h"
 
 WidgetClass rbl_xmLabelWidgetClass = xmLabelWidgetClass;
 WidgetClass rbl_xmRowColumnWidgetClass = xmRowColumnWidgetClass;
@@ -49,51 +44,50 @@ WidgetClass rbl_xmCascadeButtonWidgetClass = xmCascadeButtonWidgetClass;
 /* WidgetClass rbl_xmPulldownMenuWidgetClass = xmPulldownMenuWidgetClass; */
 
 extern "C" {
-void force_motif_load ()
-{
-  /* X Window manipulation */
-  (void) XDefaultRootWindow();
-  (void) XRootWindow();
-  (void) XRootWindowOfScreen();
-  (void) XCreateSimpleWindow();
-  (void) XMapWindow();
-  (void) XMoveWindow();
-  (void) XNextEvent();
-  (void) XEventsQueued();
-  (void) XCreateGC();
-  (void) XCheckTypedEvent();
-  (void) XSelectInput();
-  (void) XClearWindow();
-  (void) XResizeWindow();
+void force_motif_load() {
+    /* X Window manipulation */
+    XDefaultRootWindow();
+    XRootWindow();
+    XRootWindowOfScreen();
+    XCreateSimpleWindow();
+    XMapWindow();
+    XMoveWindow();
+    XNextEvent();
+    XEventsQueued();
+    XCreateGC();
+    XCheckTypedEvent();
+    XSelectInput();
+    XClearWindow();
+    XResizeWindow();
 
-  /* X Drawing functions */
-  (void) XDrawLine();
-  (void) XDrawLines();
-  (void) XDrawString();
-  (void) XDrawRectangle();
-  (void) XDrawRectangles();
-  (void) XDrawArcs();
-  (void) XDrawText();
-  
-  
-  (void) XmStringCreate("A", XmSTRING_DEFAULT_CHARSET);
-  (void) XmStringCreateLtoR("A", XmSTRING_DEFAULT_CHARSET);
-  (void) XmStringCreateSimple("A");
-  
-  /* Xtoolkit functions */
-  (void) XtInitialize();
-  (void) XtToolkitInitialize();
-  (void) XtGetValues();
-  (void) XtSetValues();
-/*  (void) XtSetArg(); turns out this is a macro? (unni) */
-  (void) XtCreateManagedWidget();
-  (void) XtCreateWidget();
-  (void) XtOpenDisplay();
-  (void) XtAppCreateShell();
-  (void) XtCreateApplicationShell();
-  (void) XtRealizeWidget();
-  (void) XtNextEvent();
-  (void) XtDispatchEvent();
-  (void) XtMainLoop();
+    /* X Drawing functions */
+    XDrawLine();
+    XDrawLines();
+    XDrawString();
+    XDrawRectangle();
+    XDrawRectangles();
+    XDrawArcs();
+    XDrawText();
+
+
+    XmStringCreate("A", XmSTRING_DEFAULT_CHARSET);
+    XmStringCreateLtoR("A", XmSTRING_DEFAULT_CHARSET);
+    XmStringCreateSimple("A");
+
+    /* Xtoolkit functions */
+    XtInitialize();
+    XtToolkitInitialize();
+    XtGetValues();
+    XtSetValues();
+    /*   XtSetArg(); turns out this is a macro? (unni) */
+    XtCreateManagedWidget();
+    XtCreateWidget();
+    XtOpenDisplay();
+    XtAppCreateShell();
+    XtCreateApplicationShell();
+    XtRealizeWidget();
+    XtNextEvent();
+    XtDispatchEvent();
+    XtMainLoop();
 }
 }

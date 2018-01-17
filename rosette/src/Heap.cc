@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,16 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "rosette.h"
 #include "BinaryOb.h"
 #include "CommandLine.h"
@@ -37,22 +28,24 @@
 
 #include <memory.h>
 #ifdef MIPS_SGI_SYSV
-#include <sys/types.h>     
+#include <sys/types.h>
 #include <sys/immu.h>
-#endif     
+#endif
 
-     
+
 /*
  * valloc doesn't appear to be declared in everyone's <stdlib.h>.
  */
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
-    int malloc_verify ();
+int malloc_verify();
 }
 #endif
 
 static const int MaxFixedSize = sizeof(Ctxt);
+
+int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
 
 
 /*
@@ -143,31 +136,26 @@ static const int MaxFixedSize = sizeof(Ctxt);
  */
 
 
-static
-int
-nextMultipleOf (int sz, int multiple)
-{
+static int nextMultipleOf(int sz, int multiple) {
     int r = sz % multiple;
 
-    if (r == 0)
-	return sz;
-    else {
-	int q = sz / multiple;
-	return (q+1) * multiple;
+    if (r == 0) {
+        return sz;
+    } else {
+        int q = sz / multiple;
+        return (q + 1) * multiple;
     }
 }
 
-
 
-void	RootSet::preScavenge ()		{ }
-void	RootSet::scavenge ()		{ }
-void	RootSet::postScavenge ()	{ }
-void	RootSet::preGC ()		{ }
-void	RootSet::mark ()		{ }
-void	RootSet::postGC ()		{ }
-void	RootSet::check ()		{ }
+void RootSet::preScavenge() {}
+void RootSet::scavenge() {}
+void RootSet::postScavenge() {}
+void RootSet::preGC() {}
+void RootSet::mark() {}
+void RootSet::postGC() {}
+void RootSet::check() {}
 
-
 
 /*
  * A "Space" simply identifies a region of memory through a traditional
@@ -175,141 +163,114 @@ void	RootSet::check ()		{ }
  * to its subclasses.
  */
 
-class Space
-{
-  protected:
+class Space {
+   protected:
+    void* const base;   // The address of the beginning of the space.
+    void* const limit;  // The address of the end of the space.
+    void* next;         // The dividing line between allocated and free.
 
-    void* const	base;	// The address of the beginning of the space.
-    void* const	limit;	// The address of the end of the space.
-    void*	next;	// The dividing line between allocated and free.
+    friend class OldSpace;
+    friend class Heap;
+    friend class SpaceTrav;
+    friend Ob* Ob::relocate();
 
-    friend class	OldSpace;
-    friend class	Heap;
-    friend class	SpaceTrav;
-    friend Ob*		Ob::relocate ();
+   public:
+    Space(void*, unsigned);
 
-  public:
-
-    Space (void*, unsigned);
-
-    void	reset ();
-    void*	alloc (unsigned);
-    void	free (Ob*);
-    int		size ();
-    bool	contains (Ob*);
-    void	scan ();
-    void	check ();
+    void reset();
+    void* alloc(unsigned);
+    void free(Ob*);
+    int size();
+    bool contains(Ob*);
+    void scan();
+    void check();
 };
 
 
+class SpaceTrav {
+    Space* sp;
+    void* current;
 
-class SpaceTrav
-{
-    Space*	sp;
-    void*	current;
+   public:
+    SpaceTrav(Space*);
 
-  public:
+    bool valid();
+    Ob* get();
+    void advance();
 
-    SpaceTrav (Space*);
-
-    bool	valid ();
-    Ob*		get ();
-    void	advance ();
-
-    operator void* ();
+    operator void*();
 };
 
 
-inline SpaceTrav::SpaceTrav (Space* space) { sp = space; current = sp->base; }
-inline bool SpaceTrav::valid ()		   { return current < sp->next; }
-inline Ob* SpaceTrav::get ()		   { return (Ob*)current; }
-inline void SpaceTrav::advance ()	   { current = (char*)current + SIZE((Ob*)current); }
-inline SpaceTrav::operator void* ()	   { return valid() ? this : NULL; }
+SpaceTrav::SpaceTrav(Space* space) {
+    sp = space;
+    current = sp->base;
+}
+bool SpaceTrav::valid() { return current < sp->next; }
+Ob* SpaceTrav::get() { return (Ob*)current; }
+void SpaceTrav::advance() { current = (char*)current + SIZE((Ob*)current); }
+SpaceTrav::operator void*() { return valid() ? this : NULL; }
 
 
-Space::Space (void* b, unsigned sz)
-    : base(b), limit((char*)b+sz)
-{
+Space::Space(void* b, unsigned sz) : base(b), limit((char*)b + sz) {
     if (b == 0) {
-	perror("heap allocation");
-	exit(1);
+        perror("heap allocation");
+        exit(1);
     }
     next = b;
 }
 
 
-inline
-void
-Space::reset ()
-{
-    next = base;
-}
+void Space::reset() { next = base; }
 
 
-int
-Space::size ()
-{
-    return ((char*)limit-(char*)base);
-}
+int Space::size() { return ((char*)limit - (char*)base); }
 
 
-inline
-void
-Space::free (Ob* p)
-{
+void Space::free(Ob* p) {
     if (!FREED(p)) {
-	SET_FLAG(HDR_FLAGS(p),f_freed);
-	if (FOREIGN(p) && !FORWARDED(p))
-	    p->Ob::~Ob();
+        SET_FLAG(HDR_FLAGS(p), f_freed);
+        if (FOREIGN(p) && !FORWARDED(p)) {
+            p->Ob::~Ob();
+        }
     }
 }
 
 
-inline
-void*
-Space::alloc (unsigned sz)
-{
+void* Space::alloc(unsigned sz) {
     register void* current = next;
-    register void* temp = (char*)current+sz;
-  
+    register void* temp = (char*)current + sz;
+
     if (temp <= limit) {
-	next = temp;
-	return current;
+        next = temp;
+        return current;
     }
-    else
-	return 0;
+
+    return 0;
 }
 
 
-inline
-bool
-Space::contains (Ob* p)
-{
-    return (base <= (void*)p) && ((void*)p < limit);
-}
+bool Space::contains(Ob* p) { return (base <= (void*)p) && ((void*)p < limit); }
 
 
-void
-Space::scan ()
-{
+void Space::scan() {
     for (SpaceTrav st(this); st; st.advance()) {
-	Ob* p = st.get();
-	if (MARKED(p))
-	    REMOVE_FLAG(HDR_FLAGS(p),f_marked) ;
-	else
-	    free(p);
+        Ob* p = st.get();
+        if (MARKED(p)) {
+            REMOVE_FLAG(HDR_FLAGS(p), f_marked);
+        } else {
+            free(p);
+        }
     }
 }
 
 
-void
-Space::check ()
-{
-    for (SpaceTrav st(this); st; st.advance())
-	st.get()->check();
+void Space::check() {
+    for (SpaceTrav st(this); st; st.advance()) {
+        st.get()->check();
+    }
 }
 
-
 
 /*
  * Every NewSpace has a RememberedSet that holds pointers to objects in
@@ -319,85 +280,69 @@ Space::check ()
  */
 
 
-class RememberedSet : public ObStk
-{
+class RememberedSet : public ObStk {
+    void reallyRemember(Ob*);
 
-    void	reallyRemember (Ob*);
-  
-  public:
-
-    void	scan ();
-    void	remember (Ob*);
+   public:
+    void scan();
+    void remember(Ob*);
 };
 
 
-void
-RememberedSet::scan ()
-{
-    for(PtrCollectionTrav pct(this); pct; pct.advance()) {
-	void*& p = pct.get();
-	if (!MARKED((Ob*)p)) {
-	  REMOVE_FLAG(HDR_FLAGS(((Ob*)p)),f_remembered);
-	  p = NULL;
-	}
+void RememberedSet::scan() {
+    for (PtrCollectionTrav pct(this); pct; pct.advance()) {
+        void*& p = pct.get();
+        if (!MARKED((Ob*)p)) {
+            REMOVE_FLAG(HDR_FLAGS(((Ob*)p)), f_remembered);
+            p = NULL;
+        }
     }
 
     compact();
 }
 
 
-void
-RememberedSet::reallyRemember (Ob* p)
-{
+void RememberedSet::reallyRemember(Ob* p) {
     add(p);
-    SET_FLAG(HDR_FLAGS(p),f_remembered);
-
+    SET_FLAG(HDR_FLAGS(p), f_remembered);
 }
 
 
- inline
-void
-RememberedSet::remember (Ob* p)
-{
-    if (!REMEMBERED(p))
-	reallyRemember(p);
+void RememberedSet::remember(Ob* p) {
+    if (!REMEMBERED(p)) {
+        reallyRemember(p);
+    }
 }
 
-
 
-class NewSpace : public Space
-{
-  protected:
+class NewSpace : public Space {
+   protected:
+    Space* const infants;
+    Space* survivors;
+    Space* pastSurvivors;
+    RememberedSet* const rememberedSet;
 
-    Space* const		infants;
-    Space*			survivors;
-    Space*			pastSurvivors;
-    RememberedSet* const	rememberedSet;
+    friend Ob* Ob::relocate();
+    friend class Heap;
 
-    friend Ob*		Ob::relocate ();
-    friend class	Heap;
+   public:
+    NewSpace(unsigned, unsigned);
+    ~NewSpace();
 
-  public:
-
-    NewSpace (unsigned, unsigned);
-    ~NewSpace ();
-
-    void*	alloc (unsigned);
-    void	scavenge ();
-    void	scan ();
-    void	check ();
-    void	remember (Ob*);
+    void* alloc(unsigned);
+    void scavenge();
+    void scan();
+    void check();
+    void remember(Ob*);
 };
 
 
-NewSpace::NewSpace (unsigned isize,
-		    unsigned ssize)
-    : Space((void *)valloc(isize + 2*ssize), isize + 2*ssize),
-      infants(new Space ((char*)base + 2*ssize,isize)),
-      survivors(new Space ((char*)base + ssize, ssize)),
-      pastSurvivors(new Space (base, ssize)),
-      rememberedSet (new RememberedSet)
-{
+NewSpace::NewSpace(unsigned isize, unsigned ssize)
+    : Space((void*)valloc(isize + 2 * ssize), isize + 2 * ssize),
+      infants(new Space((char*)base + 2 * ssize, isize)),
+      survivors(new Space((char*)base + ssize, ssize)),
+      pastSurvivors(new Space(base, ssize)),
+      rememberedSet(new RememberedSet) {
     /*
      * The NewSpace is allocated as one big chunk (the call to valloc
      * above), and that chunk is divided into three regions: an infant
@@ -409,23 +354,13 @@ NewSpace::NewSpace (unsigned isize,
 }
 
 
-NewSpace::~NewSpace ()
-{
-    delete base;
-}
+NewSpace::~NewSpace() { ::free(base); }
 
 
- inline
-void*
-NewSpace::alloc (unsigned sz)
-{
-    return infants->alloc(sz);
-}
+void* NewSpace::alloc(unsigned sz) { return infants->alloc(sz); }
 
 
-void
-NewSpace::scavenge ()
-{
+void NewSpace::scavenge() {
     PtrCollectionTrav rst(rememberedSet);
     SpaceTrav st(survivors);
 
@@ -438,41 +373,43 @@ NewSpace::scavenge ()
      * Trav's.  Since this is the heart of the scavenger, it's probably
      * worthwhile to break the encapsulation here.
      */
-  
-    while (TRUE) {
 
-	while (rst) {
-	    void*& rp = rst.get();
-	    Ob* p = (Ob*) rp;
+    while (true) {
+        while (rst) {
+            void*& rp = rst.get();
+            Ob* p = (Ob*)rp;
 
-	    if (p->traversePtrs(MF_ADDR(Ob::relocate)) == 0) {
-		/*
-		 * traversePtrs() returns the number of pointers within
-		 * *p that still point into new space.  If there are
-		 * none, there is no point in keeping this p in the
-		 * remembered set.
-		 */
-	      	REMOVE_FLAG(HDR_FLAGS(p),f_remembered);
-		rp = NULL;
-	    }
-	    rst.advance();
-	}
+            if (p->traversePtrs(MF_ADDR(Ob::relocate)) == 0) {
+                /*
+                 * traversePtrs() returns the number of pointers within
+                 * *p that still point into new space.  If there are
+                 * none, there is no point in keeping this p in the
+                 * remembered set.
+                 */
+                REMOVE_FLAG(HDR_FLAGS(p), f_remembered);
+                rp = NULL;
+            }
+            rst.advance();
+        }
 
-	/*
-	 * At this point we know that everything in the remembered set
-	 * has been traversed.  If there is nothing new in the survivor
-	 * space, then there is nothing left to be scavenged and we get
-	 * out.
-	 */
+        /*
+         * At this point we know that everything in the remembered set
+         * has been traversed.  If there is nothing new in the survivor
+         * space, then there is nothing left to be scavenged and we get
+         * out.
+         */
 
-	if (!st) break;
+        if (!st) {
+            break;
+        }
 
-	do {
-	    Ob* p = (Ob*) st.get();
-	    if (!FREED(p))
-		p->traversePtrs(MF_ADDR(Ob::relocate));
-	    st.advance();
-	} while (st);
+        do {
+            Ob* p = (Ob*)st.get();
+            if (!FREED(p)) {
+                p->traversePtrs(MF_ADDR(Ob::relocate));
+            }
+            st.advance();
+        } while (st);
     }
 
     rememberedSet->compact();
@@ -489,9 +426,7 @@ NewSpace::scavenge ()
 }
 
 
-void
-NewSpace::scan ()
-{
+void NewSpace::scan() {
     /*
      * It is imperative that the remembered set be scanned first, since
      * it decides whether to eliminate entries based on whether they are
@@ -506,9 +441,7 @@ NewSpace::scan ()
 }
 
 
-void
-NewSpace::check ()
-{
+void NewSpace::check() {
     rememberedSet->check();
     infants->check();
     survivors->check();
@@ -516,146 +449,118 @@ NewSpace::check ()
 }
 
 
- inline
-void
-NewSpace::remember (Ob* p)
-{
-    rememberedSet->remember(p);
-}
+void NewSpace::remember(Ob* p) { rememberedSet->remember(p); }
 
-
 
-class OldSpaceChunk : public Space
-{
-  protected:
-  
-    OldSpaceChunk*	nextChunk;
-    OldSpace*		parent;
+class OldSpaceChunk : public Space {
+   protected:
+    OldSpaceChunk* nextChunk;
+    OldSpace* parent;
 
-    OldSpaceChunk (unsigned, OldSpaceChunk*, OldSpace*);
-    ~OldSpaceChunk ();
+    OldSpaceChunk(unsigned, OldSpaceChunk*, OldSpace*);
+    ~OldSpaceChunk();
 
-    void	scan ();
-    void	free (Ob*);
-    void	checkUnrememberedPtrs ();
+    void scan();
+    void free(Ob*);
+    void checkUnrememberedPtrs();
 
     friend class OldSpace;
 };
 
 
+class OldSpace {
+   protected:
+    OldSpaceChunk* currentChunk;
+    Ob** fixedFreeLists;
+    Ob* miscFreeList;
+    unsigned chunkSize;
+    int chunkCount;
 
-class OldSpace
-{
-  protected:
+    void addChunk(int);
 
-    OldSpaceChunk*	currentChunk;
-    Ob**		fixedFreeLists;
-    Ob*			miscFreeList;
-    unsigned		chunkSize;
-    int			chunkCount;
-  
-    void	addChunk (int);
+    void link(Ob*);
+    Ob* unlink(Ob*&);
 
-    void	link (Ob*);
-    Ob*		unlink (Ob*&);
+    void* miscAlloc(unsigned);
+    void resetFreeLists();
+    void checkFreeLists(char*);
 
-    void*	miscAlloc (unsigned);
-    void	resetFreeLists ();
-    void	checkFreeLists (char*);
+    friend class OldSpaceChunk;
+    friend class Heap;
 
-    friend class	OldSpaceChunk;
-    friend class	Heap;
+   public:
+    OldSpace(unsigned);
+    ~OldSpace();
 
-  public:
-
-    OldSpace (unsigned);
-    ~OldSpace ();
-
-    void*	alloc (unsigned);
-    void	free (Ob*);
-    bool	contains (Ob*);
-    int		size ();
-    void	scan ();
-    void	check ();
-    void	checkUnrememberedPtrs ();
+    void* alloc(unsigned);
+    void free(Ob*);
+    bool contains(Ob*);
+    int size();
+    void scan();
+    void check();
+    void checkUnrememberedPtrs();
 };
 
 
-OldSpaceChunk::OldSpaceChunk (unsigned int sz, OldSpaceChunk* n, OldSpace* p)
-    : Space((void *)valloc(sz), sz),
-      nextChunk(n),
-      parent(p)
-{ }
+OldSpaceChunk::OldSpaceChunk(unsigned int sz, OldSpaceChunk* n, OldSpace* p)
+    : Space((void*)valloc(sz), sz), nextChunk(n), parent(p) {}
 
 
-OldSpaceChunk::~OldSpaceChunk ()
-{
-    delete base;
-}
+OldSpaceChunk::~OldSpaceChunk() { ::free(base); }
 
 
-void
-OldSpaceChunk::checkUnrememberedPtrs ()
-{
+void OldSpaceChunk::checkUnrememberedPtrs() {
     for (SpaceTrav st(this); st; st.advance()) {
-	pOb p = st.get();
-	if (!REMEMBERED(p)
-	    && !FREED(p)
-	    && p->traversePtrs(MF_ADDR(Ob::gcSensitive)) != 0) {
-	    warning("%s contains an unremembered reference to new space!",
-		    p->typestring());
-	    heap->remember(p);
-	}
+        pOb p = st.get();
+        if (!REMEMBERED(p) && !FREED(p) &&
+            p->traversePtrs(MF_ADDR(Ob::gcSensitive)) != 0) {
+            warning("%s contains an unremembered reference to new space!",
+                    p->typestring());
+            heap->remember(p);
+        }
     }
 }
 
 
-inline
-void
-OldSpaceChunk::free (Ob* p)
-{
+void OldSpaceChunk::free(Ob* p) {
     Space::free(p);
     parent->link(p);
 }
 
 
-void
-OldSpace::addChunk (int sz)
-{
+void OldSpace::addChunk(int sz) {
     int excess = (char*)currentChunk->limit - (char*)currentChunk->next;
     if (excess >= MinObSize) {
-	/*
-	 * We pass NULL as the meta and parent to the new scrap ob.
-	 * Ordinarily, this would be a bad thing to do, but since this
-	 * scrap is never actually traversed (because it is always free),
-	 * it doesn't matter that an invalid pointer is stored in those
-	 * fields.
-	 */
-	Ob* p = NEW(currentChunk->next) Ob (excess, NULL, NULL);
-	currentChunk->next = currentChunk->limit;
-	SET_FLAG(HDR_FLAGS(p),f_freed);
-	currentChunk->free(p);
+        /*
+         * We pass NULL as the meta and parent to the new scrap ob.
+         * Ordinarily, this would be a bad thing to do, but since this
+         * scrap is never actually traversed (because it is always free),
+         * it doesn't matter that an invalid pointer is stored in those
+         * fields.
+         */
+        Ob* p = new (currentChunk->next) Ob(excess, NULL, NULL);
+        currentChunk->next = currentChunk->limit;
+        SET_FLAG(HDR_FLAGS(p), f_freed);
+        currentChunk->free(p);
     }
-    currentChunk = new OldSpaceChunk (sz, currentChunk, this);
+    currentChunk = new OldSpaceChunk(sz, currentChunk, this);
     chunkCount++;
 }
 
 
-void
-OldSpaceChunk::scan ()
-{
+void OldSpaceChunk::scan() {
     for (SpaceTrav st(this); st; st.advance()) {
-	Ob* p = st.get();
-	if (MARKED(p))
-	  { REMOVE_FLAG(HDR_FLAGS(p),f_marked);}
-	else
-	    free(p);
+        Ob* p = st.get();
+        if (MARKED(p)) {
+            REMOVE_FLAG(HDR_FLAGS(p), f_marked);
+        } else {
+            free(p);
+        }
     }
 }
 
 
-OldSpace::OldSpace (unsigned oldSpaceChunkSize)
-{
+OldSpace::OldSpace(unsigned oldSpaceChunkSize) {
     /*
      * Make sure that chunkCount is initialized before currentChunk,
      * because the constructor for currentChunk will use the value of
@@ -664,173 +569,161 @@ OldSpace::OldSpace (unsigned oldSpaceChunkSize)
 
     chunkSize = oldSpaceChunkSize;
     chunkCount = 1;
-    currentChunk = new OldSpaceChunk (chunkSize, NULL, this);
-    fixedFreeLists = new Ob* [MaxFixedSize+1];
-    for (int i = 0; i <= MaxFixedSize; i++)
-	fixedFreeLists[i] = 0;
+    currentChunk = new OldSpaceChunk(chunkSize, NULL, this);
+    fixedFreeLists = new Ob*[MaxFixedSize + 1];
+    for (int i = 0; i <= MaxFixedSize; i++) {
+        fixedFreeLists[i] = 0;
+    }
     miscFreeList = 0;
 }
 
 
-OldSpace::~OldSpace ()
-{
+OldSpace::~OldSpace() {
     OldSpaceChunk* chunk = currentChunk;
     while (currentChunk) {
-	chunk = currentChunk->nextChunk;
-	delete currentChunk;
-	currentChunk = chunk;
+        chunk = currentChunk->nextChunk;
+        delete currentChunk;
+        currentChunk = chunk;
     }
     delete fixedFreeLists;
 }
 
 
-bool
-OldSpace::contains (Ob* p)
-{
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-	if (currentChunk->contains(p))
-	    return TRUE;
+bool OldSpace::contains(Ob* p) {
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        if (currentChunk->contains(p)) {
+            return true;
+        }
+    }
 
-    return FALSE;
+    return false;
 }
 
 
-int
-OldSpace::size ()
-{
+int OldSpace::size() {
     int s = 0;
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-	s += chunk->size();
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        s += chunk->size();
+    }
+
     return s;
 }
 
 
-void
-OldSpace::link (Ob* p)
-{
+void OldSpace::link(Ob* p) {
     int sz = SIZE(p);
     Ob*& freelist = (sz <= MaxFixedSize) ? fixedFreeLists[sz] : miscFreeList;
     p->forwardingAddress() = freelist;
-    SET_FLAG(HDR_FLAGS(p),f_freed);
+    SET_FLAG(HDR_FLAGS(p), f_freed);
     freelist = p;
 }
 
 
-inline
-Ob*
-OldSpace::unlink (Ob*& freelist)
-{
+Ob* OldSpace::unlink(Ob*& freelist) {
     Ob* p = freelist;
     freelist = p->forwardingAddress();
-    REMOVE_FLAG(HDR_FLAGS(p),f_freed);
+    REMOVE_FLAG(HDR_FLAGS(p), f_freed);
     return p;
 }
 
 
-void*
-OldSpace::alloc (unsigned sz)
-{
+void* OldSpace::alloc(unsigned sz) {
     void* p;
-  
-    if (sz <= MaxFixedSize && fixedFreeLists[sz])
-	return (void*)unlink(fixedFreeLists[sz]);
 
-    if (p = currentChunk->alloc(sz))
-	return p;
-  
-    if (p = miscAlloc(sz))
-	return p;
+    if (sz <= MaxFixedSize && fixedFreeLists[sz]) {
+        return (void*)unlink(fixedFreeLists[sz]);
+    }
+
+    p = currentChunk->alloc(sz);
+    if (NULL != p) {
+        return p;
+    }
+
+    p = miscAlloc(sz);
+    if (NULL != p) {
+        return p;
+    }
 
     addChunk(nextMultipleOf(sz, OldSpaceChunkSize));
     return currentChunk->alloc(sz);
 }
 
 
-void*
-OldSpace::miscAlloc (unsigned sz)
-{
-    for (Ob** next = &miscFreeList; *next; next = &(*next)->forwardingAddress())
-	if (SIZE(*next) == sz)
-	    return (void*)unlink(*next);
+void* OldSpace::miscAlloc(unsigned sz) {
+    for (Ob** next = &miscFreeList; *next;
+         next = &(*next)->forwardingAddress()) {
+        if (SIZE(*next) == sz) {
+            return (void*)unlink(*next);
+        }
+    }
 
     return 0;
 }
 
 
-inline
-void
-OldSpace::free (Ob* p)
-{
-    currentChunk->free(p);
-}
+void OldSpace::free(Ob* p) { currentChunk->free(p); }
 
 
-void
-OldSpace::resetFreeLists ()
-{
+void OldSpace::resetFreeLists() {
     miscFreeList = 0;
-    for (int i = 0; i <= MaxFixedSize; i++)
-	fixedFreeLists[i] = 0;
-}
-
-
-void
-OldSpace::checkFreeLists (char* title)
-{
-    Ob* p;
-
     for (int i = 0; i <= MaxFixedSize; i++) {
-	for (p = fixedFreeLists[i]; p != NULL; p = p->forwardingAddress())
-	    if (SIZE(p) != i)
-		warning("%d-byte object (at 0x%x) on free list %s for %d-byte objects",
-			SIZE(p), (intptr_t)p, title, i);
+        fixedFreeLists[i] = 0;
     }
 }
 
 
-void
-OldSpace::scan ()
-{
+void OldSpace::checkFreeLists(char* title) {
+    Ob* p;
+
+    for (int i = 0; i <= MaxFixedSize; i++) {
+        for (p = fixedFreeLists[i]; p != NULL; p = p->forwardingAddress()) {
+            if (SIZE(p) != i) {
+                warning(
+                    "%d-byte object (at 0x%x) on free list %s for %d-byte "
+                    "objects",
+                    SIZE(p), (int)p, title, i);
+            }
+        }
+    }
+}
+
+
+void OldSpace::scan() {
     checkFreeLists("(before scan)");
 
     resetFreeLists();
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-	chunk->scan();
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        chunk->scan();
+    }
 
     checkFreeLists("(after scan)");
 }
 
 
-void
-OldSpace::check ()
-{
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-	chunk->check();
+void OldSpace::check() {
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        chunk->check();
+    }
+
     checkFreeLists("(after scavenge)");
 }
 
 
-void
-OldSpace::checkUnrememberedPtrs ()
-{
-    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk)
-	chunk->checkUnrememberedPtrs();
+void OldSpace::checkUnrememberedPtrs() {
+    for (OldSpaceChunk* chunk = currentChunk; chunk; chunk = chunk->nextChunk) {
+        chunk->checkUnrememberedPtrs();
+    }
 }
 
-
 
-class ForeignObTbl : public ObStk
-{
-  public:
-
-    void	scavenge ();
-    void	scan ();
+class ForeignObTbl : public ObStk {
+   public:
+    void scavenge();
+    void scan();
 };
 
 
-void
-ForeignObTbl::scavenge ()
-{
+void ForeignObTbl::scavenge() {
     /*
      * In a scavenge, any foreign object that has been forwarded (which
      * means it is now necessarily in either survivorSpace or oldSpace)
@@ -841,25 +734,22 @@ ForeignObTbl::scavenge ()
      * this table.  Anything that has not been forwarded is assumed to be
      * garbage and is deleted and its table slot reused.
      */
-  
+
     for (PtrCollectionTrav pct(this); pct; pct.advance()) {
-	Ob* p = (Ob*) pct.get();
-	if (FORWARDED(p)) {
-	    p = p->forwardingAddress();
-	    pct.get() = IS_OLD(p) ? NULL : p;
-	}
-	else {
-	    p->Ob::~Ob();
-	    pct.get() = NULL;
-	}
+        Ob* p = (Ob*)pct.get();
+        if (FORWARDED(p)) {
+            p = p->forwardingAddress();
+            pct.get() = IS_OLD(p) ? NULL : p;
+        } else {
+            p->Ob::~Ob();
+            pct.get() = NULL;
+        }
     }
     compact();
 }
 
 
-void
-ForeignObTbl::scan ()
-{
+void ForeignObTbl::scan() {
     /*
      * Any foreign object that has not been marked is assumed to be
      * garbage, and the reference to it is deleted and its table slot
@@ -867,31 +757,27 @@ ForeignObTbl::scan ()
      * since that will be accomplished during the rest of the scan (doing
      * it here would lead to a double deallocation).
      */
-  
+
     for (PtrCollectionTrav pct(this); pct; pct.advance()) {
-	void*& p = pct.get();
-	Ob* h = (Ob*) p;
-	if (!MARKED(h))
-	    p = NULL;
+        void*& p = pct.get();
+        Ob* h = (Ob*)p;
+        if (!MARKED(h)) {
+            p = NULL;
+        }
     }
 
     compact();
 }
 
-
 
-class GCAgenda : public ObStk
-{
-  public:
-
-    void	scavenge ();
-    void	scan ();
+class GCAgenda : public ObStk {
+   public:
+    void scavenge();
+    void scan();
 };
 
 
-void
-GCAgenda::scavenge ()
-{
+void GCAgenda::scavenge() {
     /*
      * scavengeFixup should return TRUE if an object is to remain on the
      * gcAgenda after the fixup.  If FALSE is returned, the object will
@@ -899,53 +785,49 @@ GCAgenda::scavenge ()
      * re-installed later if so required.
      */
     for (PtrCollectionTrav pct(this); pct; pct.advance()) {
-	void*& p = pct.get();
-	Ob* h = (Ob*) p;
-	if (FORWARDED(h)) {
-	    h = h->forwardingAddress();
-	    p = h->scavengeFixup() ? h : NULL;
-	}
-	else if (!IS_OLD(h) || !h->scavengeFixup())
-	    p = NULL;
+        void*& p = pct.get();
+        Ob* h = (Ob*)p;
+        if (FORWARDED(h)) {
+            h = h->forwardingAddress();
+            p = h->scavengeFixup() ? h : NULL;
+        } else if (!IS_OLD(h) || !h->scavengeFixup()) {
+            p = NULL;
+        }
     }
     compact();
 }
 
 
-void
-GCAgenda::scan ()
-{
+void GCAgenda::scan() {
     /*
      * Unmarked objects are unconditionally deleted from the gcAgenda.
      * Marked objects will be removed from the gcAgenda if they respond
      * FALSE to gcFixup.
      */
     for (PtrCollectionTrav pcct(this); pcct; pcct.advance()) {
-	void*& p = pcct.get();
-	Ob* h = (Ob*) p;
-	if (!MARKED(h) || !h->gcFixup())
-	    p = NULL;
+        void*& p = pcct.get();
+        Ob* h = (Ob*)p;
+        if (!MARKED(h) || !h->gcFixup()) {
+            p = NULL;
+        }
     }
     compact();
 }
-    
-
+
 
 Heap* heap;
 
 
-Heap::Heap (unsigned infantSpaceSize,
-	    unsigned survivorSpaceSize,
-	    unsigned oldSpaceChunkSize)
-    : newSpace(new NewSpace (infantSpaceSize, survivorSpaceSize)),
-      oldSpace(new OldSpace (oldSpaceChunkSize)),
+Heap::Heap(unsigned infantSpaceSize, unsigned survivorSpaceSize,
+           unsigned oldSpaceChunkSize)
+    : newSpace(new NewSpace(infantSpaceSize, survivorSpaceSize)),
+      oldSpace(new OldSpace(oldSpaceChunkSize)),
       foreignObs(new ForeignObTbl),
       gcAgenda(new GCAgenda),
-      rootSets(new PtrCollection),
       tenuredObs(new ObStk),
+      rootSets(new PtrCollection),
       newSpaceBase(newSpace->base),
-      newSpaceLimit(newSpace->limit)
-{
+      newSpaceLimit(newSpace->limit) {
     scavengeCount = 0;
     gcCount = 0;
     totalScavenges = 0;
@@ -953,8 +835,7 @@ Heap::Heap (unsigned infantSpaceSize,
 }
 
 
-Heap::~Heap ()
-{
+Heap::~Heap() {
     delete newSpace;
     delete oldSpace;
     delete foreignObs;
@@ -964,42 +845,31 @@ Heap::~Heap ()
 }
 
 
-void
-Heap::traverseRootSets (RootSet_Fn fn)
-{
+void Heap::traverseRootSets(RootSet_Fn fn) {
     for (PtrCollectionTrav pct(rootSets); pct; pct.advance()) {
-	RootSet* rs = (RootSet*) pct.get();
-	(rs->*fn)();
+        RootSet* rs = (RootSet*)pct.get();
+        (rs->*fn)();
     }
 }
 
 
-void
-Heap::addRootSet (RootSet* rs)
-{
-    rootSets->add(rs);
-}
+void Heap::addRootSet(RootSet* rs) { rootSets->add(rs); }
 
 
-void
-Heap::deleteRootSet (RootSet* rs)
-{
-    for (PtrCollectionTrav pct(rootSets); pct; pct.advance())
-	if (rs == pct.get()) {
-	    pct.get() = NULL;
-	    rootSets->compact();
-	    return;
-	}
+void Heap::deleteRootSet(RootSet* rs) {
+    for (PtrCollectionTrav pct(rootSets); pct; pct.advance()) {
+        if (rs == pct.get()) {
+            pct.get() = NULL;
+            rootSets->compact();
+            return;
+        }
+    }
 
     suicide("tried to delete non-existent root set");
 }
 
 
-int
-Heap::size ()
-{
-    return newSpace->size() + oldSpace->size();
-}
+int Heap::size() { return newSpace->size() + oldSpace->size(); }
 
 
 /*
@@ -1010,43 +880,33 @@ Heap::size ()
  * debugger breakpoints.
  */
 
-static
-void
-catchMagic ()
-{ }
+#ifdef DEBUG
+static void catchMagic() {}
+#endif
 
-
-static void* magicLoc = 0;
-
-
-inline
-void*
-Heap::alloc (unsigned sz)
-{
+void* Heap::alloc(unsigned sz) {
     void* loc = newSpace->alloc(sz);
 #ifdef DEBUG
-    if (loc == magicLoc)
-	catchMagic();
+    if (loc == magicLoc) {
+        catchMagic();
+    }
 #endif
     return loc;
 }
 
 
-void*
-Heap::scavengeAndAlloc (unsigned sz)
-{
-    scavenge ();
+void* Heap::scavengeAndAlloc(unsigned sz) {
+    scavenge();
     void* loc = alloc(sz);
-    if (!loc)
-	suicide("scavengeAndAlloc -- out of space");
+    if (!loc) {
+        suicide("scavengeAndAlloc -- out of space");
+    }
+
     return loc;
 }
 
-
 
-void
-Heap::remember (Ob* p)
-{
+void Heap::remember(Ob* p) {
     /*
      * Heap::remember (as well as NewSpace::remember and
      * RememberedSet::remember) assumes that the argument is in fact a
@@ -1057,9 +917,7 @@ Heap::remember (Ob* p)
 }
 
 
-Ob*
-Heap::copyAndForward (Ob* oldLoc)
-{
+Ob* Heap::copyAndForward(Ob* oldLoc) {
     Ob* newLoc = 0;
 
 #ifdef DEBUG
@@ -1067,32 +925,31 @@ Heap::copyAndForward (Ob* oldLoc)
 #endif
 
     if (AGE(oldLoc) < TenuringAge) {
-	AGE(oldLoc)++;
-	newLoc = (Ob*) newSpace->survivors->alloc(SIZE(oldLoc));
+        AGE(oldLoc)++;
+        newLoc = (Ob*)newSpace->survivors->alloc(SIZE(oldLoc));
     }
 
     if (newLoc == 0) {
-	newLoc = (Ob*) oldSpace->alloc(SIZE(oldLoc));
-	oldLoc->forwardTo(newLoc);
-	remember(newLoc);
-	/*
-	 * The call to remember() *must* be made *after* the call to
-	 * forwardTo() because remember() sets a header bit that
-	 * forwardTo() clobbers.
-	 */
+        newLoc = (Ob*)oldSpace->alloc(SIZE(oldLoc));
+        oldLoc->forwardTo(newLoc);
+        remember(newLoc);
+        /*
+         * The call to remember() *must* be made *after* the call to
+         * forwardTo() because remember() sets a header bit that
+         * forwardTo() clobbers.
+         */
+    } else {
+        oldLoc->forwardTo(newLoc);
     }
-    else
-	oldLoc->forwardTo(newLoc);
 
     return newLoc;
 }
 
 
-void
-Heap::scavenge ()
-{
-    if (ParanoidAboutGC)
-	oldSpace->checkUnrememberedPtrs();
+void Heap::scavenge() {
+    if (ParanoidAboutGC) {
+        oldSpace->checkUnrememberedPtrs();
+    }
 
     int oldChunkCount = oldSpace->chunkCount;
 
@@ -1117,24 +974,24 @@ Heap::scavenge ()
     newSpace->scavenge();
     gcAgenda->scavenge();
     foreignObs->scavenge();
-  
+
     if (ParanoidAboutGC) {
+        traverseRootSets(MF_ADDR(RootSet::check));
+        ProtectedItem::check();
+        tenuredObs->check();
 
-	traverseRootSets(MF_ADDR(RootSet::check));
-	ProtectedItem::check();
-	tenuredObs->check();
-
-	newSpace->check();
-	oldSpace->check();
-	foreignObs->check();
-	gcAgenda->check();
+        newSpace->check();
+        oldSpace->check();
+        foreignObs->check();
+        gcAgenda->check();
 
 #if defined(MALLOC_DEBUGGING)
-	if (!malloc_verify())
-	    suicide("Heap::scavenge -- malloc_verify found a problem");
+        if (!malloc_verify()) {
+            suicide("Heap::scavenge -- malloc_verify found a problem");
+        }
 #endif
     }
-  
+
     scavengeCount++;
 
     traverseRootSets(MF_ADDR(RootSet::postScavenge));
@@ -1144,17 +1001,16 @@ Heap::scavenge ()
      * a GC after the fact to look for unnecessarily tenured objects.
      */
 
-    if (oldChunkCount != oldSpace->chunkCount)
-	gc();
+    if (oldChunkCount != oldSpace->chunkCount) {
+        gc();
+    }
 }
 
 
 int nMarked;
 
 
-void
-Heap::gc ()
-{
+void Heap::gc() {
     traverseRootSets(MF_ADDR(RootSet::preGC));
 
     nMarked = 0;
@@ -1184,16 +1040,16 @@ Heap::gc ()
 }
 
 
-Ob*
-Heap::tenure (Ob* o)
-{
-    if (! IS_PTR(o))
-	return o;
+Ob* Heap::tenure(Ob* o) {
+    if (!IS_PTR(o)) {
+        return o;
+    }
 
     AGE(o) = TenuringAge;
     Ob* newLoc = copyAndForward(o);
-    if (FOREIGN(o))
-	foreignObs->scavenge();
+    if (FOREIGN(o)) {
+        foreignObs->scavenge();
+    }
 
     tenuredObs->add(newLoc);
 
@@ -1201,9 +1057,7 @@ Heap::tenure (Ob* o)
 }
 
 
-void
-Heap::tenureEverything ()
-{
+void Heap::tenureEverything() {
     gc();
     int tempTenuringAge = TenuringAge;
     TenuringAge = 0;
@@ -1212,31 +1066,21 @@ Heap::tenureEverything ()
 }
 
 
-bool
-Heap::validPtrAfterScavenge (Ob* p)
-{
+bool Heap::validPtrAfterScavenge(Ob* p) {
     return newSpace->pastSurvivors->contains(p) || !newSpace->contains(p);
 }
 
 
-void
-Heap::registerForeignOb (Ob* p)
-{
-    SET_FLAG(HDR_FLAGS(p),f_foreign);
+void Heap::registerForeignOb(Ob* p) {
+    SET_FLAG(HDR_FLAGS(p), f_foreign);
     foreignObs->add(p);
 }
 
 
-void
-Heap::registerGCAgenda (Ob* p)
-{
-    gcAgenda->add(p);
-}
+void Heap::registerGCAgenda(Ob* p) { gcAgenda->add(p); }
 
 
-void
-Heap::resetCounts ()
-{
+void Heap::resetCounts() {
     totalScavenges += scavengeCount;
     scavengeCount = 0;
     totalGCs += gcCount;
@@ -1244,53 +1088,40 @@ Heap::resetCounts ()
 }
 
 
-void
-Heap::printCounts (FILE* f)
-{
-    fprintf(f, "heap: %d/%d scavenges, %d/%d garbage collects\n",
-	    scavengeCount, scavengeCount+totalScavenges,
-	    gcCount, gcCount+totalGCs);
+void Heap::printCounts(FILE* f) {
+    fprintf(f, "heap: %d/%d scavenges, %d/%d garbage collects\n", scavengeCount,
+            scavengeCount + totalScavenges, gcCount, gcCount + totalGCs);
 }
 
-
 
 ProtectedItem* ProtectedItem::root = 0;
 
 
-void
-ProtectedItem::scavenge ()
-{
+void ProtectedItem::scavenge() {
     for (ProtectedItem* pi = ProtectedItem::root; pi; pi = pi->next) {
-	pOb* p = (pOb*)(pi->item);
-	useIfPtr(p, MF_ADDR(Ob::relocate));
+        pOb* p = (pOb*)(pi->item);
+        useIfPtr(p, MF_ADDR(Ob::relocate));
     }
 }
 
 
-void
-ProtectedItem::mark ()
-{
+void ProtectedItem::mark() {
     for (ProtectedItem* pi = ProtectedItem::root; pi; pi = pi->next) {
-	pOb* p = (pOb*)(pi->item);
-	useIfPtr(*p, MF_ADDR(Ob::mark));
+        pOb* p = (pOb*)(pi->item);
+        useIfPtr(*p, MF_ADDR(Ob::mark));
     }
 }
 
 
-void
-ProtectedItem::check ()
-{
+void ProtectedItem::check() {
     for (ProtectedItem* pi = ProtectedItem::root; pi; pi = pi->next) {
-	pOb* p = (pOb*)(pi->item);
-	useIfPtr(*p, MF_ADDR(Ob::checkOb));
+        pOb* p = (pOb*)(pi->item);
+        useIfPtr(*p, MF_ADDR(Ob::checkOb));
     }
 }
 
-
 
-Ob*
-Ob::relocate ()
-{
+Ob* Ob::relocate() {
     /*
      * Please excuse the goto's in the following code, as well as the
      * explicit references to the various base and limit pointers, but
@@ -1307,114 +1138,109 @@ Ob::relocate ()
      */
 
     if (FREED(this)) {
-	warning("relocate called on freed %s", typestring());
-	return (Ob*) INVALID;
+        warning("relocate called on freed %s", typestring());
+        return (Ob*)INVALID;
     }
 
-    if ((void*)this >= heap->newSpace->limit) goto nochange;
-    if ((void*)this >= heap->newSpace->infants->base) goto relocate;
-    if ((void*)this < heap->newSpace->pastSurvivors->base) goto nochange;
-    if ((void*)this < heap->newSpace->pastSurvivors->limit) goto relocate;
+    if ((void*)this >= heap->newSpace->limit)
+        goto nochange;
+    if ((void*)this >= heap->newSpace->infants->base)
+        goto relocate;
+    if ((void*)this < heap->newSpace->pastSurvivors->base)
+        goto nochange;
+    if ((void*)this < heap->newSpace->pastSurvivors->limit)
+        goto relocate;
 
-  nochange:
+nochange:
     return this;
 
-  relocate:
-    return FORWARDED(this) ? forwardingAddress() : heap->copyAndForward(this);
+relocate:
+    if (FORWARDED(this)) {
+        return forwardingAddress();
+    } else {
+        return heap->copyAndForward(this);
+    }
 }
 
-
 
-void*
-palloc (unsigned sz)
-{
+void* palloc(unsigned sz) {
     void* loc = heap->alloc(sz);
     return loc ? loc : heap->scavengeAndAlloc(sz);
 }
 
 
-void*
-palloc1 (unsigned sz, void* ob0)
-{
+void* palloc1(unsigned sz, void* ob0) {
     void* loc = heap->alloc(sz);
     if (!loc) {
-	ProtectedItem pob0(ob0);
-	loc = heap->scavengeAndAlloc(sz);
+        ProtectedItem pob0(ob0);
+        loc = heap->scavengeAndAlloc(sz);
     }
     return loc;
 }
 
 
-void*
-palloc2 (unsigned sz, void* ob0, void* ob1)
-{
+void* palloc2(unsigned sz, void* ob0, void* ob1) {
     void* loc = heap->alloc(sz);
     if (!loc) {
-	ProtectedItem pob0(ob0);
-	ProtectedItem pob1(ob1);
-	loc = heap->scavengeAndAlloc(sz);
+        ProtectedItem pob0(ob0);
+        ProtectedItem pob1(ob1);
+        loc = heap->scavengeAndAlloc(sz);
     }
     return loc;
 }
 
 
-void*
-palloc3 (unsigned sz, void* ob0, void* ob1, void* ob2)
-{
+void* palloc3(unsigned sz, void* ob0, void* ob1, void* ob2) {
     void* loc = heap->alloc(sz);
     if (!loc) {
-	ProtectedItem pob0(ob0);
-	ProtectedItem pob1(ob1);
-	ProtectedItem pob2(ob2);
-	loc = heap->scavengeAndAlloc(sz);
+        ProtectedItem pob0(ob0);
+        ProtectedItem pob1(ob1);
+        ProtectedItem pob2(ob2);
+        loc = heap->scavengeAndAlloc(sz);
     }
     return loc;
 }
 
 
-void*
-palloc4 (unsigned sz, void* ob0, void* ob1, void* ob2, void* ob3)
-{
+void* palloc4(unsigned sz, void* ob0, void* ob1, void* ob2, void* ob3) {
     void* loc = heap->alloc(sz);
     if (!loc) {
-	ProtectedItem pob0(ob0);
-	ProtectedItem pob1(ob1);
-	ProtectedItem pob2(ob2);
-	ProtectedItem pob3(ob3);
-	loc = heap->scavengeAndAlloc(sz);
+        ProtectedItem pob0(ob0);
+        ProtectedItem pob1(ob1);
+        ProtectedItem pob2(ob2);
+        ProtectedItem pob3(ob3);
+        loc = heap->scavengeAndAlloc(sz);
     }
     return loc;
 }
 
 
-void*
-palloc5 (unsigned sz, void* ob0, void* ob1, void* ob2, void* ob3, void* ob4)
-{
+void* palloc5(unsigned sz, void* ob0, void* ob1, void* ob2, void* ob3,
+              void* ob4) {
     void* loc = heap->alloc(sz);
     if (!loc) {
-	ProtectedItem pob0(ob0);
-	ProtectedItem pob1(ob1);
-	ProtectedItem pob2(ob2);
-	ProtectedItem pob3(ob3);
-	ProtectedItem pob4(ob4);
-	loc = heap->scavengeAndAlloc(sz);
+        ProtectedItem pob0(ob0);
+        ProtectedItem pob1(ob1);
+        ProtectedItem pob2(ob2);
+        ProtectedItem pob3(ob3);
+        ProtectedItem pob4(ob4);
+        loc = heap->scavengeAndAlloc(sz);
     }
     return loc;
 }
 
 
-void*
-palloc6 (unsigned sz, void* ob0, void* ob1, void* ob2, void* ob3, void* ob4, void* ob5)
-{
+void* palloc6(unsigned sz, void* ob0, void* ob1, void* ob2, void* ob3,
+              void* ob4, void* ob5) {
     void* loc = heap->alloc(sz);
     if (!loc) {
-	ProtectedItem pob0(ob0);
-	ProtectedItem pob1(ob1);
-	ProtectedItem pob2(ob2);
-	ProtectedItem pob3(ob3);
-	ProtectedItem pob4(ob4);
-	ProtectedItem pob5(ob5);
-	loc = heap->scavengeAndAlloc(sz);
+        ProtectedItem pob0(ob0);
+        ProtectedItem pob1(ob1);
+        ProtectedItem pob2(ob2);
+        ProtectedItem pob3(ob3);
+        ProtectedItem pob4(ob4);
+        ProtectedItem pob5(ob5);
+        loc = heap->scavengeAndAlloc(sz);
     }
     return loc;
 }

@@ -377,7 +377,7 @@ extern void fatal(char *, ...);
 #define NEW_PROGRAM_H(n) \
      (*(Elf32_Phdr *) ((byte *) new_program_h + new_file_h->e_phentsize * (n)))
 
-typedef unsigned char byte;
+//typedef unsigned char byte;
 
 /* ****************************************************************
  * unexec

@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,168 +17,132 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Atom_h)
 #define _RBL_Atom_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
-class RblAtom : public Ob
-{
-  protected:
+class RblAtom : public Ob {
+   protected:
+    Ob* atom;
 
-    Ob*		atom;
+    RblAtom(int, Ob*, Ob*);
 
-    RblAtom (int, Ob*, Ob*);
+    friend Ob* decodeAtom(Ob*);
 
-    friend Ob*	decodeAtom (Ob*);
-
-  public:
-
-    virtual Ob*	self ();
-    virtual Ob*	cloneTo (Ob*, Ob*);
-    virtual Ob*	update (bool, Ctxt*);
-    virtual pOb primitiveInitialize (pCtxt);
-    virtual bool coversp (pOb);
+   public:
+    virtual Ob* self();
+    virtual Ob* cloneTo(Ob*, Ob*);
+    virtual Ob* update(bool, Ctxt*);
+    virtual pOb primitiveInitialize(pCtxt);
+    virtual bool coversp(pOb);
 };
 
 
-class Symbol : public RblAtom
-{
+class Symbol : public RblAtom {
     STD_DECLS(Symbol);
 
-  protected:
+   protected:
+    Symbol();
 
-    Symbol ();
+   public:
+    static Symbol* create();
 
-  public:
-
-    static Symbol*	create ();
-
-    bool	ConstantP ();
-    void	printOn (FILE*);
-    void	printQuotedOn (FILE*);
-    void	displayOn (FILE*);
-    const char*	asCstring ();
-    char*	asPathname ();
-    Pattern*	makePattern ();
-    AttrNode*	makeAttrNode (bool valueCtxt);
-    Ob*		unquote ();
+    bool ConstantP();
+    void printOn(FILE*);
+    void printQuotedOn(FILE*);
+    void displayOn(FILE*);
+    const char* asCstring();
+    char* asPathname();
+    Pattern* makePattern();
+    AttrNode* makeAttrNode(bool valueCtxt);
+    Ob* unquote();
 };
 
 
-class RblBool : public RblAtom
-{
+class RblBool : public RblAtom {
     STD_DECLS(RblBool);
 
-  protected:
+   protected:
+    RblBool();
 
-    RblBool ();
+   public:
+    static RblBool* create();
+    const char* asCstring();
 
-  public:
-
-    static RblBool*	create ();
-    const char*		asCstring ();
-
-    virtual convertArgReturnPair  convertActualArg(Ctxt*, Ob*);
-    //virtual Ob*         convertActualRslt(Ctxt*, Word32);
+    virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
+    // virtual Ob*         convertActualRslt(Ctxt*, uint32_t);
 };
 
-class Char : public RblAtom
-{
+class Char : public RblAtom {
     STD_DECLS(Char);
 
-  protected:
+   protected:
+    Char();
 
-    Char ();
-
-  public:
-
-    static Char*	create ();
-    void		printOn (FILE*);
-    void		displayOn (FILE*);
-    char*		asCstring ();
+   public:
+    static Char* create();
+    void printOn(FILE*);
+    void displayOn(FILE*);
+    const char* asCstring();
 };
 
 
 static const int FixnumFormatSize = 16;
 
-class Fixnum : public RblAtom
-{
+class Fixnum : public RblAtom {
     STD_DECLS(Fixnum);
 
-  protected:
+   protected:
+    Fixnum();
 
-    Fixnum ();
-
-    static char format [FixnumFormatSize];
+    static char format[FixnumFormatSize];
     friend BUILTIN_PRIM(fxFormat);
 
-  public:
+   public:
+    static Fixnum* create();
+    const char* asCstring();
 
-    static Fixnum*	create ();
-    char* 		asCstring ();
-
-    virtual convertArgReturnPair  convertActualArg(Ctxt*, Ob*);
-    virtual Ob* convertActualRslt(Ctxt*, Word32);
+    virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
+    virtual Ob* convertActualRslt(Ctxt*, uint32_t);
 };
 
 
-class Niv : public RblAtom
-{
+class Niv : public RblAtom {
     STD_DECLS(Niv);
 
-  protected:
+   protected:
+    Niv();
 
-    Niv ();
-
-  public:
-
-    static Niv*	create ();
-    char*	asCstring ();
-    Ob*		invoke (Ctxt*);
+   public:
+    static Niv* create();
+    const char* asCstring();
+    Ob* invoke(Ctxt*);
 };
 
 
-class Sysval : public RblAtom
-{
+class Sysval : public RblAtom {
     STD_DECLS(Sysval);
 
-  protected:
+   protected:
+    Sysval();
 
-    Sysval ();
-
-  public:
-
-    static Sysval*	create ();
-    char*		asCstring ();
+   public:
+    static Sysval* create();
+    const char* asCstring();
 };
 
 
-class ExpandedLocation : public RblAtom
-{
+class ExpandedLocation : public RblAtom {
     STD_DECLS(ExpandedLocation);
 
-  protected:
+   protected:
+    ExpandedLocation();
 
-    ExpandedLocation ();
-
-  public:
-
-    static ExpandedLocation*	create ();
-    char*			asCstring ();
+   public:
+    static ExpandedLocation* create();
+    const char* asCstring();
 };
 
 #endif

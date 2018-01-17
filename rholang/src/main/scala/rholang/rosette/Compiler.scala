@@ -9,12 +9,8 @@
 
 package coop.rchain.rho2rose
 
-import coop.rchain.lib.term._
-import coop.rchain.lib.zipper._
 import coop.rchain.syntax.rholang._
-import coop.rchain.syntax.rholang.Absyn._
 
-import java_cup.runtime._
 import java.io._
 
 trait Rholang2RosetteCompilerT {
@@ -24,11 +20,8 @@ trait Rholang2RosetteCompilerT {
   def parser( lexer : Yylex ) : parser
   def serialize( ast : VisitorTypes.R ) : String
 
-  def compile( fileName : String ) : VisitorTypes.R
+  def compile( fileName : String ) : Option[VisitorTypes.R]
 }
-
-object StrTermZipr extends StrTermNavigation
-    with StrTermMutation with StrTermZipperComposition
 
 object Rholang2RosetteCompiler extends RholangASTToTerm
     with Rholang2RosetteCompilerT
@@ -36,49 +29,55 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
      // Members declared in coop.rchain.rho2rose.RholangASTToTerm
   def theTupleSpaceVar : String = s"""TupleSpaceVar${Fresh()}"""
 
-  def visit(p: CPattern,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-  def visit(b: Bind,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-  def visit(p: Chan,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-  def visit(p: Proc,arg: coop.rchain.rho2rose.VisitorTypes.A): coop.rchain.rho2rose.VisitorTypes.R = ???
-   
-   // Members declared in coop.rchain.rho2rose.StrFoldCtxtVisitor
-  def theCtxtVar: String = s"""ContextVar${Fresh()}"""
-  def zipr: StrTermNavigation with StrTermMutation with StrTermZipperComposition = 
-    StrTermZipr
-
   override def reader( fileName : String ) : FileReader = { new FileReader( fileName ) }
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
   override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
-    ast match {
-      case Some(Location(term: StrTermCtorAbbrevs.StrTermCtxt, _)) =>
-        term.rosetteSerializeOperation + term.rosetteSerialize
-      case _ => "Not a StrTermCtxt"
-    }
+    val term = ast._1
+    term.rosetteSerializeOperation + term.rosetteSerialize
   }
 
-  override def compile( fileName : String ) : VisitorTypes.R = {
+  override def compile( fileName : String ) : Option[VisitorTypes.R] = {
     try {
       val rdr = reader( fileName )
       val lxr = lexer( rdr )
       val prsr = parser( lxr )
       val ast = prsr.pContr()
-      visit( ast, Here() )
+      Some(visit(ast, Set[String]()))
     }
     catch {
       case e : FileNotFoundException => {
         System.err.println(s"""Error: File not found: ${fileName}""")
         None
       }
+      case e : CompilerExceptions.CompilerException => {
+        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
+        None
+      }
       case t : Throwable => {
-        System.err.println(s"""Unexpect error compiling: ${fileName}""")
+        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
         None
       }
     }
   }
 
   def main(args: Array[String]): Unit = {
-    val result = compile(args(0))
-    println(serialize(result))
+    args match {
+      case Array(fileName) => {
+        compile(fileName) match {
+          case Some(term) => {
+            val rbl: String = serialize(term)
+            val rblFileName = fileName.replaceAll(".rho$", "") + ".rbl"
+            new java.io.PrintWriter(rblFileName) { write(rbl); close }
+            System.err.println(s"compiled $fileName to $rblFileName")
+          }
+          case None => System.exit(1)
+        }
+      }
+      case _ => {
+        System.err.println("no input file?")
+        System.exit(1)
+      }
+    }
   }
 }
