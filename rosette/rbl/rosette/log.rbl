@@ -41,8 +41,8 @@
    (define *log-level-map* tbl)))
 
 (define *log-level*
-  (cond ((same? (kind flag-verbose) 'Bool) 'DEBUG)
-        ((same? (kind flag-verbose) 'Fixnum)
+  (cond ((type? flag-verbose Bool) (if flag-verbose 'DEBUG 'WARNING))
+        ((type? flag-verbose Fixnum)
          (iterate loop [[[level & rest] (names *log-level-map*)]]
                   (cond ((= (tbl-get *log-level-map* level) flag-verbose) level)
                         ((null? rest) 'DEBUG)
@@ -55,7 +55,7 @@
 
 (defProc (log:display level & args)
   (let [[prefix (log:%prefix level)]
-        [dargs (reverse [#\\n &args])]]
+        [dargs (reverse [#\\n & args])]]
     (seq
      (if prefix
          (display stderr (log-time-string) " " (->string level) ": " & dargs))
