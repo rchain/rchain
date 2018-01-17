@@ -39,16 +39,13 @@
 (defOprn symbol-list-concat)
 (defPure Tuple (symbol-list-concat) (->symbol (fold (self) (proc [e acc k] (k (string-concat acc (->string e)))) "")))
 
+;;; TODO: Figure out a more general flatten method
 (defOprn flatten)
 (defPure Tuple (flatten) (fold (self) (proc [e acc k] (k (tuple-concat e acc))) []))
-
 
 (defOprn twoZip)
 (defPure Tuple (twoZip)
   (map (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]) (proc [i value] (reverse value))))
-
-(defOprn length)
-(defPure Tuple (length) (count (self) (proc [x] #t)))
 
 (defOprn filter-niv)
 (defPure Tuple (filter-niv) (filter (self) (proc [x] (not (niv? x)))))
