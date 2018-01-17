@@ -112,7 +112,6 @@ object Main {
     while (true) {
       Thread.sleep(pauseTime)
       for (peer <- net.net.findMorePeers(10)) {
-        logger.info(s"Possibly new peer: $peer.")
         net.connect(peer)
       }
       val thisCount = net.net.table.peers.size
