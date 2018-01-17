@@ -367,6 +367,17 @@ DEF("ostream-log-time", obLogTime, 1, 1) {
     }
 }
 
+DEF("log-time-string", obLogTimeString, 0, 1) {
+    char      buf[128];
+    time_t    rawtime;
+    struct tm timeinfo;
+
+    rawtime = time(NULL);
+    localtime_r(&rawtime, &timeinfo);
+    strftime(buf, sizeof buf, "%F %T", &timeinfo);
+
+    return RBLstring::create(buf);
+}
 
 DEF("prim-flush", obFlush, 0, 1) {
     if (NARGS == 0) {

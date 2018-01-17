@@ -44,3 +44,4 @@
 (load 'apropos  'silent)
 (load 'space 'silent)
 (load 'primitives 'silent)
+(load 'log 'silent)

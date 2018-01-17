@@ -4,7 +4,7 @@ file(COPY apropos.rbl async-repl.rbl boot.rbl classes-types.rbl
     hello_world.rbl io-system.rbl meth-proc-oprns.rbl multimethod.rbl
     primitives.rbl que-stk-oprns.rbl sbo-init.rbl space.rbl
     string-oprns.rbl system.rbl table-oprns.rbl time.rbl timesvc.rbl
-    trace.rbl tuple-oprns.rbl vm-heap.rbl
+    trace.rbl tuple-oprns.rbl vm-heap.rbl log.rbl
     DESTINATION lib/rosette)
 
 install(FILES apropos.rbl async-repl.rbl boot.rbl classes-types.rbl
@@ -13,7 +13,7 @@ install(FILES apropos.rbl async-repl.rbl boot.rbl classes-types.rbl
     hello_world.rbl io-system.rbl meth-proc-oprns.rbl multimethod.rbl
     primitives.rbl que-stk-oprns.rbl sbo-init.rbl space.rbl
     string-oprns.rbl system.rbl table-oprns.rbl time.rbl timesvc.rbl
-    trace.rbl tuple-oprns.rbl vm-heap.rbl
+    trace.rbl tuple-oprns.rbl vm-heap.rbl log.rbl
     DESTINATION lib/rosette)
 
 add_test(NAME boot_rbl
