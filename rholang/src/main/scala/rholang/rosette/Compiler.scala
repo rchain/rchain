@@ -55,7 +55,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
         None
       }
       case t : Throwable => {
-        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
+        System.err.println(s"""Error while compliling: ${fileName}\n${t.toString()}""")
         None
       }
     }
