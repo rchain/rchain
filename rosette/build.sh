@@ -23,7 +23,7 @@ if [ ! -d ${BUILD} ] ; then {
 } ; fi
 
 cd ${BUILD}
-cmake -B${BUILD} -H${SRCDIR}
+cmake -D CMAKE_CXX_COMPILER="/usr/bin/g++" -B${BUILD} -H${SRCDIR}
 make ${PROCS_ARG}
 
 # Make the stack big
