@@ -42,7 +42,7 @@
         [
             ;;; TODO: Find way to deconstruct without reversing
             [[value & reverse_keys] (reverse keys/value)]
-            [[[last_key] remaining_reverse_keys] (if (= (length reverse_keys) 1) [reverse_keys []] [[(head reverse_keys)] (tail reverse_keys)])]
+            [[[last_key] remaining_reverse_keys] (if (= (size reverse_keys) 1) [reverse_keys []] [[(head reverse_keys)] (tail reverse_keys)])]
             [unreversed_keys (reverse remaining_reverse_keys)]
             [final_tbl
                 (if (null? unreversed_keys)
