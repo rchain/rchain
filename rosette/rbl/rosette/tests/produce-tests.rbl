@@ -1,127 +1,127 @@
-;;; tests for fetch_pattern_and_product
+;;; tests for fetch-pattern-and-product
 (let*
   [
     [chart (new RblTable)]
-    [data_list [1 2 3 4 5 42]]
-    [continuation_list []]
-    [foo_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foo foo_subspace)]
+    [data-list [1 2 3 4 5 42]]
+    [continuation-list []]
+    [foo-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foo foo-subspace)]
 
-    [product_patterns ['anything 42]]
+    [product-patterns ['anything 42]]
     [channel 'foo]
 
-    [index_of_1 0]
-    [index_of_42 5]
+    [index-of-1 0]
+    [index-of-42 5]
   ]
   (seq
-    ;;; it works when channel_index == channel_position
-    (test-form (fetch_pattern_and_product chart channel product_patterns 0 0) ['foo -1])
-    ;;; it works with product_patterns[channel_index] == 42
-    (test-form (fetch_pattern_and_product chart channel product_patterns 0 1) ['foo index_of_1])
-    ;;; it works with product_patterns[channel_index] == 'anything
-    (test-form (fetch_pattern_and_product chart channel product_patterns 1 0) ['foo index_of_42])
-    ;;; it works when channel_index == channel_position
-    (test-form (fetch_pattern_and_product chart channel product_patterns 1 1) ['foo -1])
+    ;;; it works when channel-index == channel-position
+    (test-form (fetch-pattern-and-product chart channel product-patterns 0 0) ['foo -1])
+    ;;; it works with product-patterns[channel-index] == 42
+    (test-form (fetch-pattern-and-product chart channel product-patterns 0 1) ['foo index-of-1])
+    ;;; it works with product-patterns[channel-index] == 'anything
+    (test-form (fetch-pattern-and-product chart channel product-patterns 1 0) ['foo index-of-42])
+    ;;; it works when channel-index == channel-position
+    (test-form (fetch-pattern-and-product chart channel product-patterns 1 1) ['foo -1])
   )
 )
 
-;;; tests for fetch_pattern_and_product when data_list is empty
+;;; tests for fetch-pattern-and-product when data-list is empty
 (let*
   [
     [chart (new RblTable)]
-    [data_list []]
-    [continuation_list []]
-    [foo_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foo foo_subspace)]
+    [data-list []]
+    [continuation-list []]
+    [foo-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foo foo-subspace)]
 
-    [product_patterns ['anything]]
+    [product-patterns ['anything]]
     [channel 'foo]
   ]
-  ;;; returns nothing when there is no data_list
-  (test-form (fetch_pattern_and_product chart channel product_patterns 0 1) [])
+  ;;; returns nothing when there is no data-list
+  (test-form (fetch-pattern-and-product chart channel product-patterns 0 1) [])
 )
 
-;;; tests for extract_consume_candidates
+;;; tests for extract-consume-candidates
 (let*
   [
     [chart (new RblTable)]
-    [reverse_channel_lookup_table (new RblTable)]
-    [_ (tbl-add reverse_channel_lookup_table 'foobar ['foo 'bar])]
+    [reverse-channel-lookup-table (new RblTable)]
+    [_ (tbl-add reverse-channel-lookup-table 'foobar ['foo 'bar])]
 
-    [data_list [42]]
-    [continuation_list []]
-    [foo_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foo foo_subspace)]
+    [data-list [42]]
+    [continuation-list []]
+    [foo-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foo foo-subspace)]
 
-    [data_list []]
-    [continuation_struct [['anything 88] 'ctxt-tuple-mock]]
-    [continuation_list [continuation_struct]]
-    [foobar_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foobar foobar_subspace)]
+    [data-list []]
+    [continuation-struct [['anything 88] 'ctxt-tuple-mock]]
+    [continuation-list [continuation-struct]]
+    [foobar-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foobar foobar-subspace)]
 
     [channel 'bar]
     [product 88]
   ]
   (seq
     ;;; it returns empty when no consume awaiting channels are passed in
-    (test-form (extract_consume_candidates [] chart channel product reverse_channel_lookup_table) [])
+    (test-form (extract-consume-candidates [] chart channel product reverse-channel-lookup-table) [])
     ;;; it returns the only candidate which is the match of the following product/continuation pair
     ;;; (a) the data index of 42 in foo along with the inserted product 88 and
     ;;; (b) the 0th index continuation waiting at 'foobar
     (test-form
-      (extract_consume_candidates ['foobar] chart channel product reverse_channel_lookup_table)
+      (extract-consume-candidates ['foobar] chart channel product reverse-channel-lookup-table)
       [[[['foo 0] ['bar -1]] ['foobar 0]]])))
 
 ;;; returns empty when passed empty
-(test-form (select_best_consume []) [])
+(test-form (select-best-consume []) [])
 ;;; returns first candidate when passed multiple
 (let*
   [
     [candidate [[['x -1]] ['x 0]]]
-    [candidate_another [[['x -1]] ['x 1]]]
-    [candidates [candidate candidate_another]]
+    [candidate-another [[['x -1]] ['x 1]]]
+    [candidates [candidate candidate-another]]
   ]
-  (test-form (select_best_consume candidates) candidate))
+  (test-form (select-best-consume candidates) candidate))
 
-;;; tests for delete_product
+;;; tests for delete-product
 (let*
   [
     [chart (new RblTable)]
 
-    [data_list [42]]
-    [continuation_list []]
-    [foo_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foo foo_subspace)]
+    [data-list [42]]
+    [continuation-list []]
+    [foo-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foo foo-subspace)]
 
     [channel 'foo]
     [product 88]
   ]
   (seq
     ;;; it returns data at appropriate index
-    (test-form (delete_product chart channel 0 product) 42)
-    ;;; it returns passed in product when index is NOT_STORED
-    (test-form (delete_product chart channel -1 product) 88)))
+    (test-form (delete-product chart channel 0 product) 42)
+    ;;; it returns passed in product when index is NOT-STORED
+    (test-form (delete-product chart channel -1 product) 88)))
 
-;;; tests for consume_continuation when continuation_list is not emptied
+;;; tests for consume-continuation when continuation-list is not emptied
 (let*
   [
     [chart (new RblTable)]
-    [channel_lookup_table (new RblTable)]
-    [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel_lookup_table channel ['foobar])))]
-    [reverse_channel_lookup_table (new RblTable)]
-    [_ (tbl-add reverse_channel_lookup_table 'foobar ['foo 'bar])]
+    [channel-lookup-table (new RblTable)]
+    [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel-lookup-table channel ['foobar])))]
+    [reverse-channel-lookup-table (new RblTable)]
+    [_ (tbl-add reverse-channel-lookup-table 'foobar ['foo 'bar])]
 
-    [data_list [42]]
-    [continuation_list []]
-    [foo_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foo foo_subspace)]
+    [data-list [42]]
+    [continuation-list []]
+    [foo-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foo foo-subspace)]
 
-    [data_list []]
-    [continuation_struct [['anything 88] 'ctxt-tuple-mock]]
-    [continuation_struct_another [[42 88] 'ctxt-tuple-mock-another]]
-    [continuation_list [continuation_struct continuation_struct_another]]
-    [foobar_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foobar foobar_subspace)]
+    [data-list []]
+    [continuation-struct [['anything 88] 'ctxt-tuple-mock]]
+    [continuation-struct-another [[42 88] 'ctxt-tuple-mock-another]]
+    [continuation-list [continuation-struct continuation-struct-another]]
+    [foobar-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foobar foobar-subspace)]
 
     [channel 'bar]
     [product 88]
@@ -129,33 +129,33 @@
     [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]
   ]
   (let
-    [[reduction (consume_continuation candidate chart channel_lookup_table reverse_channel_lookup_table product)]]
+    [[reduction (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)]]
     (seq
       (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
-      (test-form (tbl-get chart 'foobar) [[] [continuation_struct_another]])
-      (test-form (tbl-get reverse_channel_lookup_table 'foobar) ['foo 'bar])
-      (test-form (tbl-get channel_lookup_table 'foo) ['foobar])
-      (test-form (tbl-get channel_lookup_table 'bar) ['foobar]))))
+      (test-form (tbl-get chart 'foobar) [[] [continuation-struct-another]])
+      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
+      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foobar]))))
 
-;;; tests for consume_continuation when continuation_list is emptied
+;;; tests for consume-continuation when continuation-list is emptied
 (let*
   [
     [chart (new RblTable)]
-    [channel_lookup_table (new RblTable)]
-    [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel_lookup_table channel ['foobar])))]
-    [reverse_channel_lookup_table (new RblTable)]
-    [_ (tbl-add reverse_channel_lookup_table 'foobar ['foo 'bar])]
+    [channel-lookup-table (new RblTable)]
+    [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel-lookup-table channel ['foobar])))]
+    [reverse-channel-lookup-table (new RblTable)]
+    [_ (tbl-add reverse-channel-lookup-table 'foobar ['foo 'bar])]
 
-    [data_list [42]]
-    [continuation_list []]
-    [foo_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foo foo_subspace)]
+    [data-list [42]]
+    [continuation-list []]
+    [foo-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foo foo-subspace)]
 
-    [data_list []]
-    [continuation_struct [['anything 88] 'ctxt-tuple-mock]]
-    [continuation_list [continuation_struct]]
-    [foobar_subspace [data_list continuation_list]]
-    [_ (tbl-add chart 'foobar foobar_subspace)]
+    [data-list []]
+    [continuation-struct [['anything 88] 'ctxt-tuple-mock]]
+    [continuation-list [continuation-struct]]
+    [foobar-subspace [data-list continuation-list]]
+    [_ (tbl-add chart 'foobar foobar-subspace)]
 
     [channel 'bar]
     [product 88]
@@ -163,12 +163,12 @@
     [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]
   ]
   (let
-    [[reduction (consume_continuation candidate chart channel_lookup_table reverse_channel_lookup_table product)]]
+    [[reduction (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)]]
     (seq
       (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
-      (test-form (tbl-get reverse_channel_lookup_table 'foobar) #absent)
-      (test-form (tbl-get channel_lookup_table 'foo) [])
-      (test-form (tbl-get channel_lookup_table 'bar) []))))
+      (test-form (tbl-get reverse-channel-lookup-table 'foobar) #absent)
+      (test-form (tbl-get channel-lookup-table 'foo) [])
+      (test-form (tbl-get channel-lookup-table 'bar) []))))
 
 (if (> failures 0)
   (display "Successes: " successes ". Failures: " failures ".\n")

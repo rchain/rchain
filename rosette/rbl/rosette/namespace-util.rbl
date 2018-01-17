@@ -55,12 +55,12 @@
 
 (defOprn tbl-unique-append)
 (defPure RblTable (tbl-unique-append key value)
-  (let [[current_value (tbl-get (self) key)]]
-    (if (or (= current_value #absent) (null? []))
+  (let [[current-value (tbl-get (self) key)]]
+    (if (or (= current-value #absent) (null? []))
       (tbl-add (self) key [value])
-      (if (type? current_value Tuple)
-        (tbl-add (self) key (remove-duplicates (append current_value value)))
-        (RuntimeError (self) "Value " current_value " at key " key " not a Tuple")))))
+      (if (type? current-value Tuple)
+        (tbl-add (self) key (remove-duplicates (append current-value value)))
+        (RuntimeError (self) "Value " current-value " at key " key " not a Tuple")))))
 
 (defOprn tuplespace-tbl-get-or-create)
 (defPure RblTable (tuplespace-tbl-get-or-create channel)
@@ -71,30 +71,30 @@
         (tbl-get (self) channel))
       subspace)))
 
-(defOprn match_pattern)
-(defOprn match_tuple_pattern)
-(defProc (match_pattern ptrn product)
+(defOprn match-pattern)
+(defOprn match-tuple-pattern)
+(defProc (match-pattern ptrn product)
   (cond ((type? ptrn Symbol) #t)
-        ((type? ptrn Tuple) (match_tuple_pattern ptrn product))
+        ((type? ptrn Tuple) (match-tuple-pattern ptrn product))
         (else (= ptrn product))))
 
-(defPure Tuple (match_tuple_pattern other)
+(defPure Tuple (match-tuple-pattern other)
   (if (or (null? (self)) (null? other))
     (and (null? (self)) (null? other))
     (iterate loop [[[i & r1] (self)] [[j & r2] other]]
       (cond ((and (null? r1) (null? r2)) #t)
-            ((match_pattern i j) (loop r1 r2))
+            ((match-pattern i j) (loop r1 r2))
             (else #f)))))
 
-(defOprn non_niv_head)
-(defProc (non_niv_head list)
+(defOprn non-niv-head)
+(defProc (non-niv-head list)
   (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
 
-(defOprn any_null?)
-(defProc (any_null? list) (any list null?))
+(defOprn any-null?)
+(defProc (any-null? list) (any list null?))
 
-(defOprn clean_fresh)
-(defProc (clean_fresh fresh)
+(defOprn clean-fresh)
+(defProc (clean-fresh fresh)
   (let
     [[[rholang name & r] (string-split (->string fresh) "-")]]
     name))
