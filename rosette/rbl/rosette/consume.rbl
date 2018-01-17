@@ -1,3 +1,7 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
 ;;; File containing the reflective method consume and its helper methods
 
 (defOprn extract_data_candidates)
@@ -10,8 +14,7 @@
             [data_index data]))))))
 
 
-
-;;; This function would have roughly below signature in Scala
+;;; This function would have roughly the following signature in Scala:
 ;;;
 ;;; def select_best_products(candidates: List[List[Candidate]]): Option[List[Candidate]]
 ;;;
@@ -25,6 +28,7 @@
   (let [[prefiltered_reductions
     (map candidates (proc [i channel_candidates] (non_niv_head channel_candidates)))]]
     (if (any_null? prefiltered_reductions) [] prefiltered_reductions)))
+
 
 ;;; For each channel returned from the select_best_products function,
 ;;; delete the matched products from the subspace and return a copy of the products.
@@ -41,6 +45,7 @@
           (tbl-add chart channel [updated_data_list continuation_struct_list])
           data)))))
 
+
 (defOprn store_continuation)
 (defProc (store_continuation channel_lookup_table reverse_channel_lookup_table chart channels product_ptrns ctxt-tuple persistent)
   (let*
@@ -48,15 +53,16 @@
     [channels_concatenated (symbol-list-concat channels)]
     [subspace (tbl-get chart channels_concatenated)]]
     (seq
-      (map channels (proc [i channel] (tbl-unique-append channel_lookup_table channel channels_concatenated)))
+      (walk channels (proc [i channel] (tbl-unique-append channel_lookup_table channel channels_concatenated)))
       (tbl-add reverse_channel_lookup_table channels_concatenated channels)
-      (if (= #absent subspace)
+      (if (absent? subspace)
         (let [[new_subspace [[] [[product_ptrns [ctxt [code env] persistent]]]]]]
           (tbl-add chart channels_concatenated new_subspace))
         (let*
           [[[data_list continuation_struct_list] subspace]
           [updated_subspace [data_list (append continuation_struct_list [product_ptrns [ctxt [code env] persistent]])]]]
           (tbl-add chart channels_concatenated updated_subspace))))))
+
 
 ;;; This reflective method would have roughly below signature in Scala
 ;;;

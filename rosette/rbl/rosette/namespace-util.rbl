@@ -42,6 +42,7 @@
 (defOprn flatten)
 (defPure Tuple (flatten) (fold (self) (proc [e acc k] (k (tuple-concat e acc))) []))
 
+
 (defOprn twoZip)
 (defPure Tuple (twoZip)
   (map (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]) (proc [i value] (reverse value))))
@@ -73,27 +74,24 @@
 (defOprn match_pattern)
 (defOprn match_tuple_pattern)
 (defProc (match_pattern ptrn product)
-  (if (type? ptrn Symbol)
-    #t
-    (if (type? ptrn Tuple)
-      (match_tuple_pattern ptrn product)
-      (= ptrn product))))
+  (cond ((type? ptrn Symbol) #t)
+        ((type? ptrn Tuple) (match_tuple_pattern ptrn product))
+        (else (= ptrn product))))
+
 (defPure Tuple (match_tuple_pattern other)
   (if (or (null? (self)) (null? other))
-    (if (and (null? (self)) (null? other)) #t #f)
+    (and (null? (self)) (null? other))
     (iterate loop [[[i & r1] (self)] [[j & r2] other]]
-      (if (and (null? r1) (null? r2))
-        #t
-        (if (match_pattern i j)
-          (loop r1 r2)
-          #f)))))
+      (cond ((and (null? r1) (null? r2)) #t)
+            ((match_pattern i j) (loop r1 r2))
+            (else #f)))))
 
 (defOprn non_niv_head)
 (defProc (non_niv_head list)
   (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
 
 (defOprn any_null?)
-(defProc (any_null? list) (any list (proc [item] (null? item))))
+(defProc (any_null? list) (any list null?))
 
 (defOprn clean_fresh)
 (defProc (clean_fresh fresh)

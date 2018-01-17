@@ -1,3 +1,7 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
 ;;; File containing the reflective method produce and its helper methods
 
 (defOprn fetch_pattern_and_product)
@@ -52,23 +56,24 @@
     (let [[candidates
       (map concat_channels
         (proc [_ concat_channel]
-        (let*
-          [[channels (tbl-get reverse_channel_lookup_table concat_channel)]
-          [channel_position (position channels channel)]
-          [[data_list continuation_struct_list] (tbl-get chart concat_channel)]]
-          (map continuation_struct_list
-          (proc [continuation_struct_index continuation_struct]
-            (let* [[[product_patterns ctxt_stuff] continuation_struct]]
-            (if (match_pattern (tuple-safe-nth product_patterns channel_position) product)
-              (let
-              [[candidate
-              (map channels
-                (proc [i channel]
-                (fetch_pattern_and_product chart channel product_patterns i channel_position)))]]
-              (if (any_null? candidate)
-                []
-                [candidate [concat_channel continuation_struct_index]])))))))))]]
+          (let*
+            [[channels (tbl-get reverse_channel_lookup_table concat_channel)]
+            [channel_position (position channels channel)]
+            [[data_list continuation_struct_list] (tbl-get chart concat_channel)]]
+            (map continuation_struct_list
+              (proc [continuation_struct_index continuation_struct]
+                (let [[[product_patterns ctxt_stuff] continuation_struct]]
+                  (if (match_pattern (tuple-safe-nth product_patterns channel_position) product)
+                    (let
+                      [[candidate
+                        (map channels
+                          (proc [i channel]
+                          (fetch_pattern_and_product chart channel product_patterns i channel_position)))]]
+                      (if (any_null? candidate)
+                        []
+                        [candidate [concat_channel continuation_struct_index]])))))))))]]
       (flatten candidates))))
+
 
 ;;; Dual to select_best_products in consume.rbl
 (defOprn select_best_consume)
@@ -79,6 +84,7 @@
         (if (null? candidate)
           #f
           (not (any_null? (tuple-safe-nth candidate 0))))))))
+
 
 (defOprn delete_product)
 (defProc (delete_product chart channel data_index product)
@@ -91,6 +97,7 @@
       (seq
         (tbl-add chart channel [updated_data_list continuation_struct_list])
         data))))
+
 
 ;;; Dual to consume_products.
 ;;; This method deletes channels from channel_lookup_table and reverse_channel_lookup_table
@@ -109,7 +116,7 @@
       (if (null? updated_continuation_struct_list)
         (let* [[channels_to_delete (tbl-get reverse_channel_lookup_table concat_channel)]]
           (seq
-            (map channels_to_delete
+            (walk channels_to_delete
               (proc [i channel]
                 (let*
                   [[channels (tbl-get channel_lookup_table channel)]
@@ -117,6 +124,7 @@
                   (tbl-add channel_lookup_table channel updated_channels))))
             (tbl-del reverse_channel_lookup_table concat_channel))))
       [ctxt_tuple product_patterns product_list])))
+
 
 ;;; The produce method is roughly dual to the consume method in consume.rbl.
 ;;; While consume can suspend the thread of execution,
@@ -137,7 +145,7 @@
       (let [[subspace (tbl-get chart channel)]]
         (seq
           (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
-          (if (= #absent subspace)
+          (if (absent? subspace)
             (tbl-add chart channel [[product] []])
             (let [[[data_list continuation_struct_list] subspace]]
               (tbl-add chart channel [(append data_list product) continuation_struct_list])))
