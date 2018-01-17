@@ -8,6 +8,11 @@ This is a web interface to the Rholang compiler, inspired by
 
 ## Security Considerations / Warnings
 
+**WARNING: Do not expose this web service to untrusted parties. It is
+not yet suitable for other than local use.** Submitted code is run in
+a relatively unconstrained rosette VM process that can, for example,
+open and write to local files using `ostream-new`.
+
 Code from each HTTP request is given to the compiler via a temporary
 directory created in a reasonably secure manner (using `tmpfile` from
 the python standard library).
@@ -19,8 +24,6 @@ Settings are used to limit
 
   - compiler: runtime
   - VM: stacksize and runtime
-
-**WARNING**: the VM subprocesses is not otherwise constrained.
 
 
 ## Getting Started
