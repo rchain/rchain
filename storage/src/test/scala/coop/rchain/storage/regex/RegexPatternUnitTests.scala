@@ -4,7 +4,7 @@ import org.scalatest._
 
 class RegexPatternUnitTests extends FlatSpec with Matchers {
 
-  "CharClassPattern" should "pass equality checks" in {
+  "CharClassPattern equality" should "pass checks" in {
     assert(CharClassPattern("a") == CharClassPattern("a"))
     assert(~(~CharClassPattern("a")) == CharClassPattern("a"))
     assert(CharClassPattern("a") == ~(~CharClassPattern("a")))
@@ -13,35 +13,283 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(CharClassPattern("ab") == CharClassPattern("ba"))
   }
 
-  "CharClassPattern" should "support union operation" in {
+  "CharClassPattern union" should "operation checks" in {
     assert((CharClassPattern("ab") | CharClassPattern("bc")) == CharClassPattern("abc"))
     assert((CharClassPattern("ab") | ~CharClassPattern("bc")) == ~CharClassPattern("c"))
     assert((~CharClassPattern("ab") | CharClassPattern("bc")) == ~CharClassPattern("a"))
     assert((~CharClassPattern("ab") | ~CharClassPattern("bc")) == ~CharClassPattern("b"))
   }
 
-  "CharClassPattern" should "support intersection operation" in {
+  "CharClassPattern intersection" should "operation checks" in {
     assert((CharClassPattern("ab") & CharClassPattern("bc")) == CharClassPattern("b"))
     assert((CharClassPattern("ab") & ~CharClassPattern("bc")) == CharClassPattern("a"))
     assert((~CharClassPattern("ab") & CharClassPattern("bc")) == CharClassPattern("c"))
     assert((~CharClassPattern("ab") & ~CharClassPattern("bc")) == ~CharClassPattern("abc"))
   }
 
-  "CharClassPattern" should "suport isEmpty" in {
+  "CharClassPattern isEmpty" should "work well" in {
     assert(CharClassPattern("").isEmpty)
     assert(!(~CharClassPattern("")).isEmpty)
   }
 
-  "CharClassPattern" should "support multiplication" in {
-    //assert(CharClassPattern("a") * 1 == CharClassPattern("a"))
+  "CharClassPattern multiplication" should "pass checks" in {
+    assert(CharClassPattern("a") * 1 == MultPattern(CharClassPattern("a"), Multiplier.presetOne))
     assert((CharClassPattern("a") * Multiplier(Some(1), Some(2))) != CharClassPattern("a"))
   }
 
-  "CharClassPattern" should "produce good Fsm" in {
+  "CharClassPattern Fsm" should "accept test patterns" in {
     val notA = (~CharClassPattern("a")).toFsm()
     assert(notA.alphabet == Set('a', Fsm.anythingElse))
     assert(notA.accepts("b"))
     assert(notA.accepts(Fsm.anythingElse.toString))
+  }
+
+  "CharClassPattern tryParse" should "parse all char classes" in {
+    assert(CharClassPattern.parse("\\x41").contains(CharClassPattern("A")))
+    assert(CharClassPattern.parse("\\u0041").contains(CharClassPattern("A")))
+
+    assert(CharClassPattern.parse("\\[").contains(CharClassPattern("[")))
+    assert(CharClassPattern.parse("\\t").contains(CharClassPattern("\t")))
+    assert(CharClassPattern.parse("[\\t]").contains(CharClassPattern("\t")))
+    assert(CharClassPattern.parse("\\Z").contains(CharClassPattern("Z")))
+    assert(CharClassPattern.parse("[\\Z]").contains(CharClassPattern("Z")))
+    assert(
+      CharClassPattern.parse("[^\\t\\[]").contains(CharClassPattern("\t[", negateCharSet = true)))
+
+    assert(CharClassPattern.parse("a").contains(CharClassPattern("a")))
+    assert(CharClassPattern.parse("\\s").contains(CharClassPattern("\t\n\11\f\r ")))
+    assert(
+      CharClassPattern
+        .parse("\\S")
+        .contains(CharClassPattern("\t\n\11\f\r ", negateCharSet = true)))
+    assert(CharClassPattern.parse("\\d").contains(CharClassPattern("0123456789")))
+    assert(
+      CharClassPattern
+        .parse("\\D")
+        .contains(CharClassPattern("0123456789", negateCharSet = true)))
+    assert(
+      CharClassPattern
+        .parse("\\w")
+        .contains(
+          CharClassPattern("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")))
+    assert(
+      CharClassPattern
+        .parse("\\W")
+        .contains(
+          CharClassPattern("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz",
+                           negateCharSet = true)))
+    assert(CharClassPattern.parse(".").contains(~CharClassPattern("")))
+    assert(CharClassPattern.parse("[abc]").contains(CharClassPattern("abc")))
+    assert(
+      CharClassPattern.parse("[^abc]").contains(CharClassPattern("abc", negateCharSet = true)))
+
+    assert(CharClassPattern.parse("[]").contains(CharClassPattern("")))
+    assert(CharClassPattern.parse("[\\x41]").contains(CharClassPattern("A")))
+    assert(CharClassPattern.parse("[\\x41-\\x44]").contains(CharClassPattern("ABCD")))
+
+    assert(
+      CharClassPattern.parse("[^\\x41]").contains(CharClassPattern("A", negateCharSet = true)))
+    assert(
+      CharClassPattern
+        .parse("[^\\x41-\\x44]")
+        .contains(CharClassPattern("ABCD", negateCharSet = true)))
+
+    assert(CharClassPattern.parse("[\\u0041]").contains(CharClassPattern("A")))
+    assert(CharClassPattern.parse("[\\u0041-\\u0044]").contains(CharClassPattern("ABCD")))
+
+    assert(
+      CharClassPattern.parse("[^\\u0041]").contains(CharClassPattern("A", negateCharSet = true)))
+    assert(
+      CharClassPattern
+        .parse("[^\\u0041-\\u0044]")
+        .contains(CharClassPattern("ABCD", negateCharSet = true)))
+  }
+
+  "CharClassPattern parse" should "return None on invalid patterns" in {
+    assert(CharClassPattern.parse("\\x4").isEmpty)
+    assert(CharClassPattern.parse("\\u004").isEmpty)
+    assert(CharClassPattern.parse("\\").isEmpty)
+    assert(CharClassPattern.parse("[").isEmpty)
+    assert(CharClassPattern.parse("[a-").isEmpty)
+    assert(CharClassPattern.parse("[^").isEmpty)
+    assert(CharClassPattern.parse("[^\\").isEmpty)
+    assert(CharClassPattern.parse("[").isEmpty)
+    assert(CharClassPattern.parse("[^a").isEmpty)
+    assert(CharClassPattern.parse("[^a-").isEmpty)
+    assert(CharClassPattern.parse("[^a--b]").isEmpty)
+    assert(CharClassPattern.parse("[^a-]").isEmpty)
+    assert(CharClassPattern.parse("[^\\x3]").isEmpty)
+    assert(CharClassPattern.parse("[^\\u003]").isEmpty)
+  }
+
+  "MultPattern parse" should "accept simple mult sequences" in {
+    assert(
+      MultPattern.parse("a").contains(MultPattern(CharClassPattern("a"), Multiplier.presetOne)))
+    assert(
+      MultPattern.parse("a*").contains(MultPattern(CharClassPattern("a"), Multiplier.presetStar)))
+    assert(
+      MultPattern
+        .parse("a?")
+        .contains(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)))
+    assert(
+      MultPattern.parse("a+").contains(MultPattern(CharClassPattern("a"), Multiplier.presetPlus)))
+    assert(
+      MultPattern
+        .parse("a{3,5}")
+        .contains(MultPattern(CharClassPattern("a"), Multiplier(Some(3), Some(5)))))
+    assert(
+      MultPattern
+        .parse("a{3,}")
+        .contains(MultPattern(CharClassPattern("a"), Multiplier(Some(3), Multiplier.Inf))))
+  }
+
+  "MultPattern parse" should "return None on invalid patterns" in {
+    assert(MultPattern.parse("(a").isEmpty)
+    assert(MultPattern.parse("a{}").isEmpty)
+    assert(MultPattern.parse("a{3").isEmpty)
+    assert(MultPattern.parse("a{3,").isEmpty)
+    assert(MultPattern.parse("a{,4}").isEmpty)
+  }
+
+  "MultPattern multiply" should "work as expected" in {
+    val a = MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+    assert(a == a.multiply(Multiplier.presetOne))
+    assert(
+      MultPattern(CharClassPattern("a"), Multiplier(Some(2), Some(2))) == a.multiply(
+        Multiplier(Some(2), Some(2))))
+    assert(
+      MultPattern(CharClassPattern("a"), Multiplier.presetPlus).multiply(
+        Multiplier(Some(3), Some(4))) == a.multiply(Multiplier(Some(3), Multiplier.Inf)))
+  }
+
+  "RegexPattern parse" should "parse groups" in {
+    assert(
+      MultPattern
+        .tryParse("(a)")
+        .contains(
+          (MultPattern(AltPattern(ConcPattern(CharClassPattern("a"))), Multiplier.presetOne), 3)))
+
+    val ain = MultPattern.parse("((a))").get.toFsm()
+    assert(ain.accepts("a"))
+
+    val ab = RegexPattern.parse("(a)b").get
+    assert(
+      ab == AltPattern(
+        ConcPattern(
+          MultPattern(AltPattern(ConcPattern(CharClassPattern("a"))), Multiplier.presetOne) ::
+            MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil)))
+
+    assert(ab.toFsm().accepts("ab"))
+
+    val a2b = RegexPattern.parse("((a))b").get.toFsm()
+    assert(a2b.accepts("ab"))
+
+    val abc = RegexPattern.parse("((a)(b*))c").get.toFsm()
+    assert(abc.accepts("abbbc"))
+  }
+
+  "MultPattern common operation" should "work as expected" in {
+    val aStar = MultPattern.parse("a*").get.asInstanceOf[MultPattern]
+    val aPlus = MultPattern.parse("a+").get.asInstanceOf[MultPattern]
+    val aOne = MultPattern.parse("a").get.asInstanceOf[MultPattern]
+
+    assert(aStar.common(aPlus) == aStar)
+  }
+
+  "ConcPattern parse" should "parse sequences" in {
+    assert(
+      ConcPattern
+        .parse("a")
+        .contains(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne))))
+
+    assert(
+      ConcPattern
+        .parse("ab")
+        .contains(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+          :: MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil)))
+
+    assert(
+      ConcPattern
+        .parse("abc")
+        .contains(
+          ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)
+            :: MultPattern(CharClassPattern("b"), Multiplier.presetOne)
+            :: MultPattern(CharClassPattern("c"), Multiplier.presetOne) :: Nil)))
+  }
+
+  "ConcPattern parse" should "return None on invalid sequences" in {
+    assert(ConcPattern.parse("").isEmpty)
+    assert(ConcPattern.parse("\\").isEmpty)
+  }
+
+  "ConcPattern equality" should "work well on rare cases" in {
+    assert(ConcPattern(Nil) == ConcPattern(Nil))
+    //different pattern types comparison shouldn't fail
+    assert(
+      ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) != MultPattern(
+        CharClassPattern("a"),
+        Multiplier.presetOne))
+  }
+
+  "AltPattern tryParse" should "parse alt sequences" in {
+    assert(
+      RegexPattern
+        .parse("a|b")
+        .contains(
+          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
+            ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil)))
+
+    assert(
+      RegexPattern
+        .parse("a|b")
+        .contains(
+          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) ::
+            ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil)))
+
+    assert(
+      RegexPattern
+        .parse("a?b")
+        .contains(
+          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+            MultPattern(CharClassPattern("b"), Multiplier.presetOne) :: Nil))))
+
+    assert(
+      RegexPattern
+        .parse("a?b{3,}")
+        .contains(
+          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+            MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) :: Nil))))
+
+    assert(RegexPattern.parse("ac*").nonEmpty)
+
+    assert(RegexPattern.parse("b{3,4}c").nonEmpty)
+
+    assert(RegexPattern.parse("b{3,}c").nonEmpty)
+
+    assert(
+      RegexPattern
+        .parse("a?b{3,}c*")
+        .contains(
+          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+            MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) ::
+            MultPattern(CharClassPattern("c"), Multiplier(Some(0), Multiplier.Inf)) :: Nil))))
+
+    assert(
+      RegexPattern
+        .parse("a?b{3,}c*")
+        .contains(
+          AltPattern(ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion) ::
+            MultPattern(CharClassPattern("b"), Multiplier(Some(3), Multiplier.Inf)) ::
+            MultPattern(CharClassPattern("c"), Multiplier(Some(0), Multiplier.Inf)) :: Nil))))
+  }
+
+  "AltPattern" should "handle union operations" in {
+    assert(
+      (ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)) |
+        ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetQuestion))) == AltPattern(
+        ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetQuestion)) :: ConcPattern(
+          MultPattern(CharClassPattern("b"), Multiplier.presetQuestion)) :: Nil
+      ))
   }
 
   "Empty" should "work for all char classes" in {
@@ -187,5 +435,13 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
         ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) :: Nil)
         == AltPattern(ConcPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne)) ::
           ConcPattern(MultPattern(CharClassPattern("a"), Multiplier.presetOne)) :: Nil))
+  }
+
+  "ConcPattern" should "be a result of + operation" in {
+    assert(
+      RegexPattern
+        .parse("ba")
+        .contains(AltPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne) +
+          MultPattern(CharClassPattern("a"), Multiplier.presetOne))))
   }
 }

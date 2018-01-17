@@ -3,6 +3,14 @@ package coop.rchain.storage.regex
 import org.scalatest._
 
 class MultiplierUnitTests extends FlatSpec with Matchers {
+
+  "Multiplier tryParse" should "work" in {
+    assert(Multiplier.tryParse("{2,}").contains((Multiplier(Some(2), Multiplier.Inf), 4)))
+    assert(Multiplier.tryParse("{2,}c").contains((Multiplier(Some(2), Multiplier.Inf), 4)))
+    assert(Multiplier.tryParse("{4 , }def").contains((Multiplier(Some(4), Multiplier.Inf), 6)))
+    assert(Multiplier.tryParse("{  4 , 5 }def").contains((Multiplier(Some(4), Some(5)), 10)))
+  }
+
   "Mutltiplier substraction and parse" should "work" in {
     assert(Multiplier.parse("{13,21}").contains(Multiplier(13, 21)))
     //a{3,4}, a{2,5} -> a{2,3} (with a{1,1}, a{0,2} left over)
@@ -42,6 +50,17 @@ class MultiplierUnitTests extends FlatSpec with Matchers {
     assert(
       (Multiplier.parse("{3,}").get - Multiplier.parse("{3,}").get)
         == Multiplier.presetZero)
+  }
+
+  "Multiplier common operation" should "work as expected" in {
+    assert(Multiplier.presetOne.common(Multiplier.presetStar) == Multiplier.presetZero)
+    //* common + => *
+    assert(Multiplier.parse("*").get.common(Multiplier.parse("+").get) == Multiplier.presetStar)
+
+    assert(
+      Multiplier.parse("{3,}").get.common(Multiplier.parse("{2,5}").get) == Multiplier
+        .parse("{2,5}")
+        .get)
   }
 
   "Multiplier union" should "work" in {

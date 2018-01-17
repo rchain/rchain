@@ -1,7 +1,29 @@
 package coop.rchain.storage.regex
 
+import scala.annotation.tailrec
+import scala.util.Try
+
 trait ParsedPattern {
+
+  /**
+    * Tries to convert a given Regex from string to a RegexPattern object
+    * Returns parsed (Alt|Mult|Conc|CharClass)Pattern and position where
+    * parsing finished
+    */
   def tryParse(str: CharSequence): Option[(RegexPattern, Int)]
+
+  /**
+    * Converts entire given string to a RegexPattern object
+    * Returns None if part of the string is a valid regex
+    */
+  def parse(str: CharSequence): Option[RegexPattern] =
+    tryParse(str).flatMap {
+      case (pattern, len) =>
+        if (len == str.length)
+          Some(pattern)
+        else
+          None
+    }
 }
 
 /**
@@ -16,8 +38,11 @@ object RegexPattern extends ParsedPattern {
   def fromFsm(fsm: Fsm): RegexPattern =
     throw new NotImplementedError("TODO")
 
-  def parse(str: CharSequence): Option[RegexPattern] = tryParse(str).map { case (rx, _) => rx }
-
+  /**
+    * Tries to convert a given Regex from string to a RegexPattern object
+    * Returns parsed (Alt|Mult|Conc|CharClass)Pattern and position where
+    * parsing finished
+    */
   def tryParse(str: CharSequence): Option[(RegexPattern, Int)] = AltPattern.tryParse(str)
 
   /**
@@ -170,8 +195,172 @@ object CharClassPattern extends ParsedPattern {
   def apply(charSet: Set[Char], negateCharSet: Boolean): CharClassPattern =
     new CharClassPattern(charSet, negateCharSet)
 
-  def tryParse(str: CharSequence): Option[(CharClassPattern, Int)] =
-    throw new NotImplementedError("TODO")
+  private[this] val escapes =
+    Map('t' -> '\t', 'r' -> '\r', 'n' -> '\n', 'f' -> '\f', 'v' -> '\u0011')
+
+  private[this] val allSpecialChars = "\\\\[]|().?*+{}".toSet
+
+  //region predefined char classes
+  private[this] val wordCharClass: CharClassPattern = CharClassPattern(
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
+
+  private[this] val nonWordCharClass: CharClassPattern = CharClassPattern(
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz",
+    negateCharSet = true)
+
+  private[this] val digitsCharClass: CharClassPattern = CharClassPattern("0123456789")
+
+  private[this] val nonDigitsCharClass: CharClassPattern =
+    CharClassPattern("0123456789", negateCharSet = true)
+
+  private[this] val spacesCharClass: CharClassPattern = CharClassPattern("\t\n\11\f\r ")
+
+  private[this] val nonSpacesCharClass: CharClassPattern =
+    CharClassPattern("\t\n\11\f\r ", negateCharSet = true)
+  //endregion
+
+  def tryParse(str: CharSequence): Option[(CharClassPattern, Int)] = {
+
+    def parseHexChar(startIndex: Int, charsCount: Int): Option[(Char, Int)] =
+      if (startIndex + charsCount <= str.length) {
+        val substr = str.subSequence(startIndex, startIndex + charsCount).toString
+        Try(Integer.parseInt(substr, 16)).toOption
+          .flatMap(codePoint => Some((codePoint.asInstanceOf[Char], startIndex + charsCount)))
+      } else {
+        None
+      }
+
+    def parseEscapedSequence(startIndex: Int): Option[(CharClassPattern, Int)] =
+      if (startIndex < str.length) {
+        str.charAt(startIndex) match {
+          case 'w' =>
+            Some((wordCharClass, startIndex + 1))
+          case 'W' =>
+            Some((nonWordCharClass, startIndex + 1))
+          case 'd' => Some((digitsCharClass, startIndex + 1))
+          case 'D' => Some((nonDigitsCharClass, startIndex + 1))
+          case 's' => Some((spacesCharClass, startIndex + 1))
+          case 'S' => Some((nonSpacesCharClass, startIndex + 1))
+          case 'x' => {
+            //unicode escape hex ascii sequence
+            val hexChar = parseHexChar(startIndex + 1, 2)
+            hexChar.flatMap {
+              case (char, finalIndex) => Some(CharClassPattern(Set(char)), finalIndex)
+            }
+          }
+          case 'u' => {
+            //escape hex unicode sequence
+            val hexChar = parseHexChar(startIndex + 1, 4)
+            hexChar.flatMap {
+              case (char, finalIndex) => Some(CharClassPattern(Set(char)), finalIndex)
+            }
+          }
+          case esc if escapes.contains(esc) =>
+            Some((CharClassPattern(Set(escapes(esc))), startIndex + 1))
+          case other => Some((CharClassPattern(Set(other)), startIndex + 1))
+        }
+      } else {
+        None
+      }
+
+    def addChar(currentChars: List[Char], addChar: Char, inRange: Boolean): List[Char] =
+      if (inRange) {
+        (currentChars.head to addChar).toList ++ currentChars
+      } else {
+        addChar :: currentChars
+      }
+
+    def parseInternalEscapedSequence(startIndex: Int): Option[(Char, Int)] =
+      if (startIndex < str.length) {
+        str.charAt(startIndex) match {
+          case 'x'                          => parseHexChar(startIndex + 1, 2) //escape hex ascii sequence
+          case 'u'                          => parseHexChar(startIndex + 1, 4) //escaped hex unicode sequence
+          case esc if escapes.contains(esc) => Some(escapes(esc), startIndex + 1)
+          case other                        => Some(other, startIndex + 1) //any unsupported escape sequence - just char
+        }
+      } else {
+        None
+      }
+
+    //this function parses interior of a char set [abc-xyz], assuming that
+    //entry '[^' is handled outside, and finished parsing if ']' found
+    //in case of any error, including absent of ']' returns None
+    def parseCharSetSequence(startIndex: Int,
+                             negateCharSet: Boolean): Option[(CharClassPattern, Int)] = {
+      @tailrec
+      def processNextChar(currentChars: List[Char],
+                          currentIndex: Int,
+                          inRange: Boolean): Option[(List[Char], Int)] =
+        if (currentIndex < str.length) {
+          str.charAt(currentIndex) match {
+            case '\\' => {
+              //'\?' escape sequence
+              val charToAdd = parseInternalEscapedSequence(currentIndex + 1)
+              if (charToAdd.isDefined) {
+                //@tailrec restricts flatMap usage here
+                val (nextChar, nextPos) = charToAdd.get
+                processNextChar(addChar(currentChars, nextChar, inRange),
+                                nextPos,
+                                inRange = false)
+              } else {
+                //we got an error during parseInternalEscapedSequence,
+                //for example invalid hex char, or end of string
+                None
+              }
+            }
+            case ']' =>
+              if (inRange) {
+                // closing square bracket when we're in range, something like '[a-]'
+                // that's an error, finish with no result
+                None
+              } else {
+                //we're done
+                Some(currentChars, currentIndex + 1)
+              }
+            case '-' =>
+              if (inRange) {
+                //error found something like "[a--b]"
+                None
+              } else {
+                //remember that we're in range, and continue from the next char
+                processNextChar(currentChars, currentIndex + 1, inRange = true)
+              }
+            case x =>
+              processNextChar(addChar(currentChars, x, inRange),
+                              currentIndex + 1,
+                              inRange = false)
+          }
+        } else {
+          None
+        }
+
+      processNextChar(Nil, startIndex, inRange = false)
+        .flatMap {
+          case (chars, endIndex) => Some(CharClassPattern(chars, negateCharSet), endIndex)
+        }
+    }
+
+    if (str.length > 0) {
+      str.charAt(0) match {
+        case '.'  => Some((CharClassPattern("", negateCharSet = true), 1))
+        case '\\' => parseEscapedSequence(1)
+        case '[' => {
+          if (str.length > 1) {
+            if (str.charAt(1) == '^')
+              parseCharSetSequence(2, negateCharSet = true)
+            else
+              parseCharSetSequence(1, negateCharSet = false)
+          } else {
+            None
+          }
+        }
+        case c if allSpecialChars.contains(c) => None
+        case c                                => Some((CharClassPattern(Set(c)), 1))
+      }
+    } else {
+      None
+    }
+  }
 }
 
 /**
@@ -295,8 +484,34 @@ object ConcPattern extends ParsedPattern {
 
   val presetEmptyString = ConcPattern(Nil)
 
-  def tryParse(str: CharSequence): Option[(ConcPattern, Int)] =
-    throw new NotImplementedError("TODO")
+  def tryParse(str: CharSequence): Option[(ConcPattern, Int)] = {
+    @tailrec
+    def parseRecursive(startPosition: Int, parsed: List[MultPattern]): (List[MultPattern], Int) =
+      MultPattern.tryParse(str.subSequence(startPosition, str.length)) match {
+        case Some((mult, pos)) => {
+          val nextMults = mult :: parsed
+          val nextPos = startPosition + pos
+          if (nextPos < str.length) {
+            //we have one more alternation option
+            parseRecursive(nextPos, nextMults)
+          } else {
+            //no more alternation options
+            (nextMults, nextPos)
+          }
+        }
+        case _ => (parsed, startPosition)
+      }
+
+    val (seq, seqEndIndex) = parseRecursive(0, Nil)
+
+    if (seq.nonEmpty) {
+      val concPattern = ConcPattern(seq.reverse)
+      Some(concPattern, seqEndIndex)
+    } else {
+      //nothing parsed, no characters eaten from input stream
+      None
+    }
+  }
 }
 
 /**
@@ -370,8 +585,34 @@ object AltPattern extends ParsedPattern {
   def apply(patterns: CharClassPattern*): AltPattern =
     new AltPattern(patterns.map(cp => ConcPattern(cp)).toSet)
 
-  def tryParse(str: CharSequence): Option[(AltPattern, Int)] =
-    throw new NotImplementedError("TODO")
+  def tryParse(str: CharSequence): Option[(AltPattern, Int)] = {
+    @tailrec
+    def parseRecursive(startPosition: Int, parsed: List[ConcPattern]): (List[ConcPattern], Int) =
+      ConcPattern.tryParse(str.subSequence(startPosition, str.length)) match {
+        case Some((conc, pos)) => {
+          val nextConcs = conc :: parsed
+          val nextPos = startPosition + pos
+          if ((nextPos < str.length) && (str.charAt(nextPos) == '|')) {
+            //we have one more alternation option
+            parseRecursive(nextPos + 1, nextConcs)
+          } else {
+            //no more alternation options
+            (nextConcs, nextPos)
+          }
+        }
+        case _ => (parsed, startPosition)
+      }
+
+    val (seq, seqEndIndex) = parseRecursive(0, Nil)
+
+    if (seq.nonEmpty) {
+      val altPattern = AltPattern(seq)
+      Some(altPattern, seqEndIndex)
+    } else {
+      //nothing parsed, no characters eaten from input stream
+      None
+    }
+  }
 }
 
 /**
@@ -436,8 +677,44 @@ final case class AltPattern(concs: Set[ConcPattern]) extends RegexPattern {
 }
 
 object MultPattern extends ParsedPattern {
-  def tryParse(str: CharSequence): Option[(MultPattern, Int)] =
-    throw new NotImplementedError("TODO")
+  def tryParse(str: CharSequence): Option[(MultPattern, Int)] = {
+    //matches single charclass or unnamed group (...)
+    def matchMultiplicand(startIndex: Int): Option[(RegexPattern, Int)] =
+      if (startIndex < str.length) {
+        str.charAt(startIndex) match {
+          case '(' => {
+            //parse unnamed group
+            val parsedAltPattern =
+              AltPattern.tryParse(str.subSequence(startIndex + 1, str.length))
+            parsedAltPattern.flatMap {
+              case (altPattern, altInnerEndIndex) => {
+                val altEndIndex = startIndex + 1 + altInnerEndIndex
+                if ((altEndIndex < str.length) && (str.charAt(altEndIndex) == ')')) {
+                  //we found closing bracket, group finished
+                  Some((altPattern.asInstanceOf[RegexPattern], altEndIndex + 1))
+                } else {
+                  None
+                }
+              }
+            }
+          }
+          case _ => CharClassPattern.tryParse(str.subSequence(startIndex, str.length))
+        }
+      } else {
+        None
+      }
+
+    matchMultiplicand(0).flatMap {
+      case (multiplicandPattern, multiplicandEndIndex) =>
+        Multiplier
+          .tryParse(str.subSequence(multiplicandEndIndex, str.length))
+          .flatMap {
+            case (multiplier, multiplierEndIndex) =>
+              Some(MultPattern(multiplicandPattern, multiplier),
+                   multiplicandEndIndex + multiplierEndIndex)
+          }
+    }
+  }
 }
 
 /**
