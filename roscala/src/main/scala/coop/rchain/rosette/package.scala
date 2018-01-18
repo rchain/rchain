@@ -73,9 +73,4 @@ package object rosette {
         .mkString("\n")
     }
   }
-
-  @tailrec
-  def recMap[A](count: Int, l: A)(f: A => A): A = {
-    if (count == 0) l else recMap(count-1, f(l))(f)
-  }
 }

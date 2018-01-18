@@ -27,11 +27,12 @@ object Location {
   sealed trait GenericType
   case class LTCtxtRegister(reg: Int) extends GenericType
   case class LTArgRegister(argReg: Int) extends GenericType
-  case class LTLexVariable(indirect: Int, level: Int, offset: Int)
+  case class LTLexVariable(indirect: Boolean, level: Int, offset: Int)
       extends GenericType
-  case class LTAddrVariable(indirect: Int, level: Int, offset: Int)
+  case class LTAddrVariable(indirect: Boolean, level: Int, offset: Int)
       extends GenericType
   case class LTGlobalVariable(offset: Int) extends GenericType
+  //TODO change indirect's type
   case class LTBitField(indirect: Int,
                         level: Int,
                         offset: Int,
@@ -74,7 +75,8 @@ object Location {
 
           case LTLexVariable(indirect, level, offset) =>
             k.env.setLex(indirect, level, offset, value) match {
-              case env if env != Ob.INVALID => StoreCtxt(k.set(_ >> 'env)(env))
+              case (env, value) if value != Ob.INVALID =>
+                StoreCtxt(k.set(_ >> 'env)(env))
               case _ => StoreFail
             }
 
@@ -191,12 +193,12 @@ object Location {
             s"arg[$argReg]"
 
           case LTLexVariable(indirect, level, offset) => {
-            val offsetStr = if (indirect != 0) s"($offset)" else s"$offset"
+            val offsetStr = if (indirect) s"($offset)" else s"$offset"
             s"lex[$level,$offsetStr]"
           }
 
           case LTAddrVariable(indirect, level, offset) => {
-            val offsetStr = if (indirect != 0) s"($offset)" else s"$offset"
+            val offsetStr = if (indirect) s"($offset)" else s"$offset"
             s"addr[$level,$offsetStr]"
           }
 
@@ -235,7 +237,7 @@ object Location {
             v.getAddr(indirect, level, offset)
 
           case LTGlobalVariable(offset) =>
-            globalEnv.getLex(1, 0, offset)
+            globalEnv.getLex(indirect = true, 0, offset)
 
           case LTBitField(indirect, level, offset, spanSize, sign) =>
             v.getField(indirect, level, offset, spanSize, sign)
@@ -262,13 +264,13 @@ object Location {
       case LocationGT(genericType) =>
         genericType match {
           case LTLexVariable(indirect, level, offset) =>
-            v.setLex(indirect, level, offset, value)
+            v.setLex(indirect, level, offset, value)._2
 
           case LTAddrVariable(indirect, level, offset) =>
             v.setAddr(indirect, level, offset, value)
 
           case LTGlobalVariable(offset) =>
-            globalEnv.setLex(1, 0, offset, value)
+            globalEnv.setLex(indirect = true, 0, offset, value)._2
 
           case LTBitField(indirect, level, offset, spanSize, sign) =>
             v.setField(indirect, level, offset, spanSize, fixVal(value))
@@ -325,24 +327,24 @@ object Location {
     LocationGT(LTArgRegister(n))
   }
 
-  def LexVar(level: Int, offset: Int, indirect: Int): Location = {
+  def LexVar(level: Int, offset: Int, indirect: Boolean): Location = {
     if (level >= (1 << LexLevelSize) || offset >= (1 << LexOffsetSize)) {
-      val offsetStr = if (indirect != 0) s"($offset)" else s"$offset"
+      val offsetStr = if (indirect) s"($offset)" else s"$offset"
       suicide(
         s"Location.LexVar: unrepresentable location (lex[$level,$offsetStr])")
       null
     }
-    LocationGT(LTLexVariable(if (indirect == 0) 0 else 1, level, offset))
+    LocationGT(LTLexVariable(indirect, level, offset))
   }
 
-  def AddrVar(level: Int, offset: Int, indirect: Int): Location = {
+  def AddrVar(level: Int, offset: Int, indirect: Boolean): Location = {
     if (level >= (1 << AddrLevelSize) || offset >= (1 << AddrOffsetSize)) {
-      val offsetStr = if (indirect != 0) s"($offset)" else s"$offset"
+      val offsetStr = if (indirect) s"($offset)" else s"$offset"
       suicide(
         s"Location.AddrVar: unrepresentable location (addr[$level,$offsetStr])")
       null
     }
-    LocationGT(LTAddrVariable(if (indirect == 0) 0 else 1, level, offset))
+    LocationGT(LTAddrVariable(indirect, level, offset))
   }
 
   def GlobalVar(n: Int): Location = {

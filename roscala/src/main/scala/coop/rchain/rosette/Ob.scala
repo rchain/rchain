@@ -8,11 +8,13 @@ import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import shapeless.OpticDefns.RootLens
 import shapeless._
+import coop.rchain.rosette.utils.Instances._
+import coop.rchain.rosette.utils.unsafeCastLens
 
 trait Base
 
 //TODO change type of `indirect` argument to bool
-trait Ob extends Base {
+trait Ob extends Base with Cloneable {
   val slot: Seq[Ob] = Nil
 
   val obTag: ObTag = null
@@ -25,8 +27,8 @@ trait Ob extends Base {
   def dispatch(state: VMState): (Result, VMState) = null
   def extendWith(keyMeta: Ob): Ob = null
 
-  def getAddr(ind: Int, level: Int, offset: Int): Ob =
-    getLex(ind, level, offset)
+  def getAddr(indirect: Boolean, level: Int, offset: Int): Ob =
+    getLex(indirect, level, offset)
 
   def getField(ind: Int,
                level: Int,
@@ -35,10 +37,10 @@ trait Ob extends Base {
                sign: Int): Ob =
     ??? //TODO
 
-  def getLex(ind: Int, level: Int, offset: Int): Ob = {
-    val p: Ob = nthParent(level)
+  def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
+    val p: Ob = (0 until level).foldLeft(this)((ob, _) => ob.parent)
 
-    actorExtension(ind, p)
+    actorExtension(indirect, p)
       .map(offsetOrInvalid(offset, _))
       .getOrElse(Ob.INVALID)
   }
@@ -85,8 +87,8 @@ trait Ob extends Base {
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob =
-    setLex(ind, level, offset, value)
+  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob =
+    setLex(indirect, level, offset, value)._2
 
   def setField(ind: Int,
                level: Int,
@@ -95,7 +97,62 @@ trait Ob extends Base {
                value: Int): Ob =
     ??? //TODO
 
-  def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = Ob.INVALID
+  def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): (Ob, Ob) = {
+    /*
+      pOb p = this;
+      while (level--)
+      p = BASE(p->parent());
+
+
+        if (indirect) {
+          if (p->numberOfSlots() <= SLOT_NUM(Actor, extension))
+              return INVALID;
+          else
+              p = ((Actor*)p)->extension;
+        }
+        if (offset >= p->numberOfSlots())
+          return INVALID;
+        else {
+          ASSIGN(p, slot(offset), val);
+          return val;
+        }
+     */
+    //TODO slotNum
+    //TODO lens trans
+
+    val nthParentLens =
+      (0 until level).foldLeft(lens[Ob]: Lens[Ob, Ob])((l, _) => l >> 'parent)
+
+    val slotNum = 4 //TODO
+
+    def inSlotNum(lens: Lens[Ob, Ob]): Option[Lens[Ob, Ob]] =
+      if (!indirect) Some(lens)
+      else {
+        val numberOfSlots = lens.get(this).numberOfSlots()
+        if (offset >= numberOfSlots) None
+        else {
+          val resLens = unsafeCastLens[Actor](lens) >> 'extension
+          Some(unsafeCastLens[Ob](resLens))
+        }
+      }
+
+    def updateSlot(lens: Lens[Ob, Ob]): Option[(Ob, Ob)] =
+      if (offset >= numberOfSlots) None
+      else {
+        val slotLens = lens >> 'slot
+        val slot = slotLens.get(this)
+        val res = slotLens.set(this)(slot.updated(offset, value))
+        Some(res, value)
+      }
+
+    val res: Option[(Ob, Ob)] =
+      for {
+        v1 <- inSlotNum(nthParentLens)
+        v2 <- updateSlot(v1)
+      } yield v2
+
+    res.getOrElse((this, Ob.INVALID))
+  }
 
   def notImplemented(opName: String): Unit = {
     val className = this.getClass.getSimpleName
@@ -144,8 +201,10 @@ trait Ob extends Base {
   def nth(i: Int): Option[Ob] = Some(notImplementedOb())
   def slotNum() = 0 //TODO missing implementation
 
-  private def actorExtension(ind: Int, p: Ob): Option[Ob] =
-    if (ind > 0) {
+  override def clone(): AnyRef = super.clone()
+
+  private def actorExtension(indirect: Boolean, p: Ob): Option[Ob] =
+    if (indirect) {
       p match {
         case a: Actor =>
           Some(a.extension)
@@ -161,8 +220,6 @@ trait Ob extends Base {
     } else {
       Ob.INVALID
     }
-
-  private def nthParent(level: Int): Ob = recMap(level, this)(_.parent)
 }
 
 object Ob {

@@ -338,4 +338,60 @@ class TransitionSpec extends FlatSpec with Matchers {
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe RblFloat(3.5)
   }
+
+  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "be Fixnum(1)" in {
+
+    /**
+      * litvec:
+      *    0:   {LetExpr}
+      *    1:   {Template}
+      *    2:   {Loc lex[0,0]}
+      * codevec:
+      *    0:   alloc 1
+      *    1:   lit #t,arg[0]
+      *    2:   nargs 1
+      *    3:   extend 1
+      *    4:   xfer lex[0,0],rslt //opApplyPrimReg
+      *    5:   jf 10
+      *    6:   lit #f,rslt
+      *    7:   xfer rslt,lex[0,0]
+      *    8:   xfer lex[0,0],rslt
+      *    9:   jmp 4
+      *   10:   lit 5,rslt
+      *   11:   rtn/nxt
+      */
+    val template = Template(
+      Tuple(Seq(Symbol("x"))),
+      StdMeta(),
+      IdVecPattern(TupleExpr(Seq(Symbol("x"))))
+    )
+
+    val loc: Location = Location.LexVar(0, 0, indirect = false)
+
+    val start =
+      testState
+        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template)))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'loc)(loc)
+        .set(_ >> 'nsigs)(1)
+
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 8, arg = 0),
+      OpNargs(1),
+      OpExtend(1),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmpFalse(10),
+      OpImmediateLitToReg(lit = 9, 0),
+      OpXferRsltToDest(0), //xfer rslt,lex[0,0]
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmp(4),
+      OpImmediateLitToReg(lit = 5, reg = 0),
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.rslt shouldBe Fixnum(5)
+  }
 }
