@@ -51,11 +51,11 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
         None
       }
       case e : CompilerExceptions.CompilerException => {
-        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
+        System.err.println(s"""Error while compiling: ${fileName}\n${e.toString()}""")
         None
       }
       case t : Throwable => {
-        System.err.println(s"""Error while compliling: ${fileName}\n${e.toString()}""")
+        System.err.println(s"""Error while compiling: ${fileName}\n${t.toString()}""")
         None
       }
     }
