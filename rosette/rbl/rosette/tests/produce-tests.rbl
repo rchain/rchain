@@ -12,13 +12,13 @@
        [index-of-42 5]]
   (seq
     ;;; it works when channel-index == channel-position
-   (test-form (fetch-pattern-and-product chart channel product-patterns 0 0) ['foo -1])
+    (test-form (fetch-pattern-and-product chart channel product-patterns 0 0) ['foo -1])
     ;;; it works with product-patterns[channel-index] == 42
-   (test-form (fetch-pattern-and-product chart channel product-patterns 0 1) ['foo index-of-1])
+    (test-form (fetch-pattern-and-product chart channel product-patterns 0 1) ['foo index-of-1])
     ;;; it works with product-patterns[channel-index] == 'anything
-   (test-form (fetch-pattern-and-product chart channel product-patterns 1 0) ['foo index-of-42])
+    (test-form (fetch-pattern-and-product chart channel product-patterns 1 0) ['foo index-of-42])
     ;;; it works when channel-index == channel-position
-   (test-form (fetch-pattern-and-product chart channel product-patterns 1 1) ['foo -1])))
+    (test-form (fetch-pattern-and-product chart channel product-patterns 1 1) ['foo -1])))
 
 ;;; tests for fetch-pattern-and-product when data-list is empty
 (let* [[chart (new RblTable)]
@@ -52,13 +52,13 @@
        [product 88]]
   (seq
     ;;; it returns empty when no consume awaiting channels are passed in
-   (test-form (extract-consume-candidates [] chart channel product reverse-channel-lookup-table) [])
+    (test-form (extract-consume-candidates [] chart channel product reverse-channel-lookup-table) [])
     ;;; it returns the only candidate which is the match of the following product/continuation pair
     ;;; (a) the data index of 42 in foo along with the inserted product 88 and
     ;;; (b) the 0th index continuation waiting at 'foobar
-   (test-form
-    (extract-consume-candidates ['foobar] chart channel product reverse-channel-lookup-table)
-    [[[['foo 0] ['bar -1]] ['foobar 0]]])))
+    (test-form
+     (extract-consume-candidates ['foobar] chart channel product reverse-channel-lookup-table)
+     [[[['foo 0] ['bar -1]] ['foobar 0]]])))
 
 ;;; returns empty when passed empty
 (test-form (select-best-consume []) [])
@@ -80,9 +80,9 @@
        [product 88]]
   (seq
     ;;; it returns data at appropriate index
-   (test-form (delete-product chart channel 0 product) 42)
+    (test-form (delete-product chart channel 0 product) 42)
     ;;; it returns passed in product when index is NOT-STORED
-   (test-form (delete-product chart channel -1 product) 88)))
+    (test-form (delete-product chart channel -1 product) 88)))
 
 ;;; tests for consume-continuation when continuation-list is not emptied
 (let* [[chart (new RblTable)]
@@ -109,11 +109,11 @@
        [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]]
   (let [[reduction (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)]]
     (seq
-     (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
-     (test-form (tbl-get chart 'foobar) [[] [continuation-struct-another]])
-     (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
-     (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
-     (test-form (tbl-get channel-lookup-table 'bar) ['foobar]))))
+      (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
+      (test-form (tbl-get chart 'foobar) [[] [continuation-struct-another]])
+      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
+      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foobar]))))
 
 ;;; tests for consume-continuation when continuation-list is emptied
 (let* [[chart (new RblTable)]
@@ -139,10 +139,10 @@
        [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]]
   (let [[reduction (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)]]
     (seq
-     (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
-     (test-form (tbl-get reverse-channel-lookup-table 'foobar) #absent)
-     (test-form (tbl-get channel-lookup-table 'foo) [])
-     (test-form (tbl-get channel-lookup-table 'bar) []))))
+      (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
+      (test-form (tbl-get reverse-channel-lookup-table 'foobar) #absent)
+      (test-form (tbl-get channel-lookup-table 'foo) [])
+      (test-form (tbl-get channel-lookup-table 'bar) []))))
 
 (if (> failures 0)
     (display "Successes: " successes ". Failures: " failures ".\n")

@@ -41,8 +41,8 @@
                 [[data-list continuation-struct-list] (tbl-get chart channel)]
                 [updated-data-list (delete-i data-list data-index)]]
            (seq
-            (tbl-add chart channel [updated-data-list continuation-struct-list])
-            data)))))
+             (tbl-add chart channel [updated-data-list continuation-struct-list])
+             data)))))
 
 
 (defOprn store-continuation)
@@ -51,14 +51,14 @@
          [channels-concatenated (symbol-list-concat channels)]
          [subspace (tbl-get chart channels-concatenated)]]
     (seq
-     (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
-     (tbl-add reverse-channel-lookup-table channels-concatenated channels)
-     (if (absent? subspace)
-         (let [[new-subspace [[] [[product-ptrns [ctxt [code env] persistent]]]]]]
-           (tbl-add chart channels-concatenated new-subspace))
-         (let* [[[data-list continuation-struct-list] subspace]
-                [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
-           (tbl-add chart channels-concatenated updated-subspace))))))
+      (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
+      (tbl-add reverse-channel-lookup-table channels-concatenated channels)
+      (if (absent? subspace)
+          (let [[new-subspace [[] [[product-ptrns [ctxt [code env] persistent]]]]]]
+            (tbl-add chart channels-concatenated new-subspace))
+          (let* [[[data-list continuation-struct-list] subspace]
+                 [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
+            (tbl-add chart channels-concatenated updated-subspace))))))
 
 
 ;;; This reflective method would have roughly below signature in Scala
@@ -85,17 +85,17 @@
          [reductions (select-best-products candidates)]
          [products (consume-products reductions chart channels)]]
     (seq
-     (if (null? products)
+      (if (null? products)
         ;;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
-         (seq
-          (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")" #\\n)
-          (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels product-ptrns ctxt-tuple persistent)
-          (update!))
-         (seq
-          (display "DEBUG: (consume)" #\\t "ctxt-rtn(" products ", " persistent ")" #\\n)
-          (ctxt-rtn ctxt products)
-          (update!)
-          (if persistent
-              (seq
-               (display "DEBUG: (consume) Re-posting continuation: " code #\\n)
-               (run-with-env code env))))))))
+          (seq
+            (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")" #\\n)
+            (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels product-ptrns ctxt-tuple persistent)
+            (update!))
+          (seq
+            (display "DEBUG: (consume)" #\\t "ctxt-rtn(" products ", " persistent ")" #\\n)
+            (ctxt-rtn ctxt products)
+            (update!)
+            (if persistent
+                (seq
+                  (display "DEBUG: (consume) Re-posting continuation: " code #\\n)
+                  (run-with-env code env))))))))
