@@ -16,32 +16,57 @@ private[regex] object Multiplier {
 
   def apply(multiplier: Int): Multiplier = new Multiplier(Some(multiplier), Some(multiplier))
 
-  def parse(cs: CharSequence): Option[Multiplier] = tryParse(cs).map {
-    case (parsed, _) => parsed
+  def parse(cs: CharSequence): Option[Multiplier] = {
+    val (mult, count) = tryParse(cs)
+    if (count == cs.length)
+      Some(mult)
+    else
+      None
   }
 
-  private[this] val rxMinMax = "(^\\{\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\}).*".r("all", "min", "max")
-  private[this] val rxMin = "(^\\{\\s*(\\d+)\\s*,\\s*\\}).*".r("all", "min")
+  private[this] val rxRange =
+    """(^\{\s*(\d+)\s*(,\s*(\d+)?)?\s*\}).*""".r("all", "min", "hasMax", "max")
 
   /**
     * Attempts to parse character sequence as regex repetitions bounds
     * Supported patterns are: * + ? {1,2} {3,}
     * All other sequences are ignored, and {1,1} multiplier is returned
     * Return Tuple(parsed multiplier, count of characters accepted)
+    * In case of any error - returns (Multiplier.presetOne, 0) - that means no repetitions,
+    * and no characters matched.
+    *
+    * Supported Range Quantifiers are: {#}, {#,}, {#,#}
+    * Range Quantifier {,#} doesn't supported (like in PHP/JS/GO/Java engines),
+    * and in contrast to Python engine which understands it like '0 to # repetitions'
     */
-  def tryParse(cs: CharSequence): Option[(Multiplier, Int)] =
+  def tryParse(cs: CharSequence): (Multiplier, Int) =
     if (cs.length == 0) {
-      Some((Multiplier.presetOne, 0))
+      (Multiplier.presetOne, 0)
     } else {
       cs match {
-        case rxMinMax(all, min, max) => Some((Multiplier(min.toInt, max.toInt), all.length))
-        case rxMin(all, min)         => Some((Multiplier(Some(min.toInt), Multiplier.Inf), all.length))
+        case rxRange(all, min, hasMax, max) => {
+          val minBound = Some(min.toInt)
+          val maxBound = if (hasMax != null) {
+            //we have a ",...}" part
+            if (max != null) {
+              //{#,#} pattern, getting the upper bound
+              Some(max.toInt)
+            } else {
+              //{#,} pattern - upper bound is infinite
+              Multiplier.Inf
+            }
+          } else {
+            //we found {#} pattern, exact count
+            minBound
+          }
+          (Multiplier(minBound, maxBound), all.length)
+        }
         case _ =>
           cs.charAt(0) match {
-            case '*' => Some((Multiplier.presetStar, 1))
-            case '?' => Some((Multiplier.presetQuestion, 1))
-            case '+' => Some((Multiplier.presetPlus, 1))
-            case _   => Some((Multiplier.presetOne, 0))
+            case '*' => (Multiplier.presetStar, 1)
+            case '?' => (Multiplier.presetQuestion, 1)
+            case '+' => (Multiplier.presetPlus, 1)
+            case _   => (Multiplier.presetOne, 0)
           }
       }
     }

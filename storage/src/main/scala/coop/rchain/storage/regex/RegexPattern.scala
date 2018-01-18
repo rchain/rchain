@@ -85,6 +85,11 @@ sealed abstract class RegexPattern {
   def reduced: RegexPattern
 
   /**
+    * Returns
+    */
+  def negated: RegexPattern
+
+  /**
     * Return a set of all unique characters used in this RegexPattern.
     * By convention, fsm.anythingElse is always included in this result.
     */
@@ -181,6 +186,11 @@ sealed abstract class RegexPattern {
   //endregion
 }
 
+//we need 3 states to handle case [a-b-z], that means Set(a,b,-,z)
+private[regex] object RangeState extends Enumeration {
+  val firstSymbol, notStarted, inside, justFinished = Value
+}
+
 /**
   * Companion object for the CharClassPattern, used only for easy testing
   */
@@ -195,37 +205,39 @@ object CharClassPattern extends ParsedPattern {
   def apply(charSet: Set[Char], negateCharSet: Boolean): CharClassPattern =
     new CharClassPattern(charSet, negateCharSet)
 
-  private[this] val escapes =
-    Map('t' -> '\t', 'r' -> '\r', 'n' -> '\n', 'f' -> '\f', 'v' -> '\u0011')
+  private[this] final val escapes =
+    Map('t' -> '\t', 'r' -> '\r', 'n' -> '\n', 'f' -> '\f', 'v' -> '\u000b')
 
-  private[this] val allSpecialChars = "\\\\[]|().?*+{}".toSet
+  private[this] final val allSpecialChars = """\[]|().?*+{}""".toSet
 
   //region predefined char classes
-  private[this] val wordCharClass: CharClassPattern = CharClassPattern(
-    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
 
-  private[this] val nonWordCharClass: CharClassPattern = CharClassPattern(
-    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz",
-    negateCharSet = true)
+  private[this] final val wordCharsSet =
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".toSet
 
-  private[this] val digitsCharClass: CharClassPattern = CharClassPattern("0123456789")
+  private[this] final val digitsCharSet = "0123456789".toSet
 
-  private[this] val nonDigitsCharClass: CharClassPattern =
-    CharClassPattern("0123456789", negateCharSet = true)
+  private[regex] final val spacesCharSet = "\t\n\u000b\f\r \u00A0\u1680\u180E\u202F\u205F\u3000".toSet ++
+    ('\u2000' to '\u200A').toSet
 
-  private[this] val spacesCharClass: CharClassPattern = CharClassPattern("\t\n\11\f\r ")
+  private[this] final val knownClassMap: Map[Char, CharClassPattern] = Map(
+    'w' -> CharClassPattern(wordCharsSet),
+    'W' -> CharClassPattern(wordCharsSet, negateCharSet = true),
+    'd' -> CharClassPattern(digitsCharSet),
+    'D' -> CharClassPattern(digitsCharSet, negateCharSet = true),
+    's' -> CharClassPattern(spacesCharSet),
+    'S' -> CharClassPattern(spacesCharSet, negateCharSet = true)
+  )
 
-  private[this] val nonSpacesCharClass: CharClassPattern =
-    CharClassPattern("\t\n\11\f\r ", negateCharSet = true)
   //endregion
 
-  def tryParse(str: CharSequence): Option[(CharClassPattern, Int)] = {
+  def tryParse(str: CharSequence): Option[(RegexPattern, Int)] = {
 
     def parseHexChar(startIndex: Int, charsCount: Int): Option[(Char, Int)] =
       if (startIndex + charsCount <= str.length) {
         val substr = str.subSequence(startIndex, startIndex + charsCount).toString
         Try(Integer.parseInt(substr, 16)).toOption
-          .flatMap(codePoint => Some((codePoint.asInstanceOf[Char], startIndex + charsCount)))
+          .flatMap(codePoint => Some(codePoint.asInstanceOf[Char], startIndex + charsCount))
       } else {
         None
       }
@@ -233,14 +245,6 @@ object CharClassPattern extends ParsedPattern {
     def parseEscapedSequence(startIndex: Int): Option[(CharClassPattern, Int)] =
       if (startIndex < str.length) {
         str.charAt(startIndex) match {
-          case 'w' =>
-            Some((wordCharClass, startIndex + 1))
-          case 'W' =>
-            Some((nonWordCharClass, startIndex + 1))
-          case 'd' => Some((digitsCharClass, startIndex + 1))
-          case 'D' => Some((nonDigitsCharClass, startIndex + 1))
-          case 's' => Some((spacesCharClass, startIndex + 1))
-          case 'S' => Some((nonSpacesCharClass, startIndex + 1))
           case 'x' => {
             //unicode escape hex ascii sequence
             val hexChar = parseHexChar(startIndex + 1, 2)
@@ -255,42 +259,91 @@ object CharClassPattern extends ParsedPattern {
               case (char, finalIndex) => Some(CharClassPattern(Set(char)), finalIndex)
             }
           }
+          case known if knownClassMap.contains(known) =>
+            Some(knownClassMap(known), startIndex + 1)
           case esc if escapes.contains(esc) =>
-            Some((CharClassPattern(Set(escapes(esc))), startIndex + 1))
-          case other => Some((CharClassPattern(Set(other)), startIndex + 1))
+            Some(CharClassPattern(Set(escapes(esc))), startIndex + 1)
+          case other => Some(CharClassPattern(Set(other)), startIndex + 1)
         }
       } else {
         None
       }
 
-    def addChar(currentChars: List[Char], addChar: Char, inRange: Boolean): List[Char] =
-      if (inRange) {
-        (currentChars.head to addChar).toList ++ currentChars
-      } else {
-        addChar :: currentChars
-      }
-
-    def parseInternalEscapedSequence(startIndex: Int): Option[(Char, Int)] =
+    def parseInternalEscapedSequence(
+        startIndex: Int): Option[(Either[Char, CharClassPattern], Int)] =
       if (startIndex < str.length) {
         str.charAt(startIndex) match {
-          case 'x'                          => parseHexChar(startIndex + 1, 2) //escape hex ascii sequence
-          case 'u'                          => parseHexChar(startIndex + 1, 4) //escaped hex unicode sequence
-          case esc if escapes.contains(esc) => Some(escapes(esc), startIndex + 1)
-          case other                        => Some(other, startIndex + 1) //any unsupported escape sequence - just char
+          //escape hex ascii sequence
+          case 'x' =>
+            parseHexChar(startIndex + 1, 2).map {
+              case (parsedChar, takenCount) => (Left(parsedChar), takenCount)
+            }
+          //escaped hex unicode sequence
+          case 'u' =>
+            parseHexChar(startIndex + 1, 4).map {
+              case (parsedChar, takenCount) => (Left(parsedChar), takenCount)
+            }
+          //common escape sequences
+          case esc if escapes.contains(esc) => Some(Left(escapes(esc)), startIndex + 1)
+          //well-known classes, like \d
+          case known if knownClassMap.contains(known) =>
+            Some(Right(knownClassMap(known)), startIndex + 1)
+          //any other escaped symbol - just leave untouched
+          case other =>
+            Some(Left(other), startIndex + 1) //any unsupported escape sequence - just char
         }
       } else {
         None
       }
+
+    case class ParseState(collectedChars: List[Char],
+                          collectedUnionClasses: List[CharClassPattern],
+                          rangeState: RangeState.Value) {
+      def changeState(nextState: RangeState.Value) =
+        ParseState(collectedChars, collectedUnionClasses, nextState)
+
+      //def add(value: Either[Char, CharClassPattern]) : ParseState = addOverrideState(value, rangeState)
+
+      def add(value: Either[Char, CharClassPattern],
+              overrideRangeState: Option[RangeState.Value] = None): ParseState = {
+        val actualRangeState = overrideRangeState.getOrElse(rangeState)
+
+        value match {
+          case Left(addChar) => {
+            if (actualRangeState == RangeState.inside) {
+              //we're in range, like a-z, add range and switch to justFinished state
+              ParseState((collectedChars.head to addChar).toList ++ collectedChars,
+                         collectedUnionClasses,
+                         RangeState.justFinished)
+            } else {
+              //states justFinished or notStarted - just add single char
+              ParseState(addChar :: collectedChars, collectedUnionClasses, RangeState.notStarted)
+            }
+          }
+          case Right(addCharClass) => {
+            if (actualRangeState == RangeState.inside) {
+              //this is 'bad' case, like [0-\w], we can fail like most regex engines do, but let's better handle it like javascript regex engine
+              ParseState('-' :: collectedChars,
+                         addCharClass :: collectedUnionClasses,
+                         RangeState.justFinished)
+            } else {
+              ParseState(collectedChars,
+                         addCharClass :: collectedUnionClasses,
+                         RangeState.justFinished)
+            }
+          }
+        }
+      }
+    }
 
     //this function parses interior of a char set [abc-xyz], assuming that
     //entry '[^' is handled outside, and finished parsing if ']' found
     //in case of any error, including absent of ']' returns None
     def parseCharSetSequence(startIndex: Int,
-                             negateCharSet: Boolean): Option[(CharClassPattern, Int)] = {
+                             negateCharSet: Boolean): Option[(RegexPattern, Int)] = {
+
       @tailrec
-      def processNextChar(currentChars: List[Char],
-                          currentIndex: Int,
-                          inRange: Boolean): Option[(List[Char], Int)] =
+      def processNextChar(currentIndex: Int, parseState: ParseState): Option[(ParseState, Int)] =
         if (currentIndex < str.length) {
           str.charAt(currentIndex) match {
             case '\\' => {
@@ -299,50 +352,58 @@ object CharClassPattern extends ParsedPattern {
               if (charToAdd.isDefined) {
                 //@tailrec restricts flatMap usage here
                 val (nextChar, nextPos) = charToAdd.get
-                processNextChar(addChar(currentChars, nextChar, inRange),
-                                nextPos,
-                                inRange = false)
+                processNextChar(nextPos, parseState.add(nextChar))
               } else {
                 //we got an error during parseInternalEscapedSequence,
                 //for example invalid hex char, or end of string
                 None
               }
             }
-            case ']' =>
-              if (inRange) {
-                // closing square bracket when we're in range, something like '[a-]'
-                // that's an error, finish with no result
-                None
+            case ']' if parseState.rangeState != RangeState.firstSymbol => {
+              //if ] is a first symbol in a sequence like []] - it will be handled by 'case anyOtherChar' below
+              if (parseState.rangeState == RangeState.inside) {
+                // [a-] is a valid character class, shame on me...
+                Some(parseState.add(Left('-'), Some(RangeState.notStarted)), currentIndex + 1)
               } else {
                 //we're done
-                Some(currentChars, currentIndex + 1)
+                Some(parseState, currentIndex + 1)
               }
-            case '-' =>
-              if (inRange) {
-                //error found something like "[a--b]"
-                None
-              } else {
-                //remember that we're in range, and continue from the next char
-                processNextChar(currentChars, currentIndex + 1, inRange = true)
+            }
+            case '-' => {
+              parseState.rangeState match {
+                case RangeState.notStarted => //remember that range started, and continue from the next char
+                  processNextChar(currentIndex + 1, parseState.changeState(RangeState.inside))
+                case RangeState.inside | RangeState.justFinished |
+                    RangeState.firstSymbol => //range just finished, or we're in, '-' is the symbol to add
+                  processNextChar(currentIndex + 1, parseState.add(Left('-')))
               }
-            case x =>
-              processNextChar(addChar(currentChars, x, inRange),
-                              currentIndex + 1,
-                              inRange = false)
+            }
+            case anyOtherChar => {
+              processNextChar(currentIndex + 1, parseState.add(Left(anyOtherChar)))
+            }
           }
         } else {
           None
         }
-
-      processNextChar(Nil, startIndex, inRange = false)
-        .flatMap {
-          case (chars, endIndex) => Some(CharClassPattern(chars, negateCharSet), endIndex)
+      // start from rangeJustFinished (means 'range just ended'),
+      // consequently cases like [-] will be handled
+      processNextChar(startIndex, ParseState(Nil, Nil, RangeState.firstSymbol)).flatMap {
+        case (parseState, endIndex) => {
+          if (parseState.collectedUnionClasses.isEmpty) {
+            Some(CharClassPattern(parseState.collectedChars, negateCharSet), endIndex)
+          } else {
+            val startCharSet
+              : RegexPattern = CharClassPattern(parseState.collectedChars) //no negation!
+            val unionCharSet = parseState.collectedUnionClasses.foldLeft(startCharSet)(_.union(_))
+            Some(if (negateCharSet) unionCharSet.negated else unionCharSet, endIndex)
+          }
         }
+      }
     }
 
     if (str.length > 0) {
       str.charAt(0) match {
-        case '.'  => Some((CharClassPattern("", negateCharSet = true), 1))
+        case '.'  => Some(CharClassPattern("", negateCharSet = true), 1)
         case '\\' => parseEscapedSequence(1)
         case '[' => {
           if (str.length > 1) {
@@ -355,7 +416,7 @@ object CharClassPattern extends ParsedPattern {
           }
         }
         case c if allSpecialChars.contains(c) => None
-        case c                                => Some((CharClassPattern(Set(c)), 1))
+        case c                                => Some(CharClassPattern(Set(c)), 1)
       }
     } else {
       None
@@ -407,7 +468,7 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
   /**
     * Negate the current CharClass e.g. [ab] becomes [{@literal ^}ab].
     */
-  def negated: CharClassPattern = CharClassPattern(charSet, !negateCharSet)
+  override def negated: CharClassPattern = CharClassPattern(charSet, !negateCharSet)
 
   /**
     * Concatenate a sequence of Regex patterns, regardless of differing classes.
@@ -563,6 +624,8 @@ final case class ConcPattern(mults: List[MultPattern]) extends RegexPattern {
 
   override def reduced: RegexPattern = throw new NotImplementedError("TODO")
 
+  override def negated: RegexPattern = throw new NotImplementedError("TODO")
+
   /**
     * Return the common prefix of these two ConcPatterns;
     * that is, the largest ConcPattern which can be safely beheaded()
@@ -673,6 +736,8 @@ final case class AltPattern(concs: Set[ConcPattern]) extends RegexPattern {
 
   override def reduced: RegexPattern = throw new NotImplementedError("TODO")
 
+  override def negated: RegexPattern = throw new NotImplementedError("TODO")
+
   override def reversed: AltPattern = AltPattern(concs.map(_.reversed))
 }
 
@@ -691,7 +756,7 @@ object MultPattern extends ParsedPattern {
                 val altEndIndex = startIndex + 1 + altInnerEndIndex
                 if ((altEndIndex < str.length) && (str.charAt(altEndIndex) == ')')) {
                   //we found closing bracket, group finished
-                  Some((altPattern.asInstanceOf[RegexPattern], altEndIndex + 1))
+                  Some(altPattern.asInstanceOf[RegexPattern], altEndIndex + 1)
                 } else {
                   None
                 }
@@ -705,14 +770,12 @@ object MultPattern extends ParsedPattern {
       }
 
     matchMultiplicand(0).flatMap {
-      case (multiplicandPattern, multiplicandEndIndex) =>
-        Multiplier
-          .tryParse(str.subSequence(multiplicandEndIndex, str.length))
-          .flatMap {
-            case (multiplier, multiplierEndIndex) =>
-              Some(MultPattern(multiplicandPattern, multiplier),
-                   multiplicandEndIndex + multiplierEndIndex)
-          }
+      case (multiplicandPattern, multiplicandEndIndex) => {
+        val (multiplier, multiplierEndIndex) =
+          Multiplier.tryParse(str.subSequence(multiplicandEndIndex, str.length))
+        Some(MultPattern(multiplicandPattern, multiplier),
+             multiplicandEndIndex + multiplierEndIndex)
+      }
     }
   }
 }
@@ -784,6 +847,8 @@ final case class MultPattern(multiplicand: RegexPattern, multiplier: Multiplier)
   }
 
   override def reduced: RegexPattern = throw new NotImplementedError("TODO")
+
+  override def negated: RegexPattern = throw new NotImplementedError("TODO")
 
   /**
     * Return the common part of these two MultPatterns. This is the largest MultPattern

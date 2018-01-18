@@ -45,6 +45,28 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
   }
 
   "CharClassPattern tryParse" should "parse all char classes" in {
+    val notD0fsm = CharClassPattern.parse("""[\D0]""").get.toFsm()
+    assert(notD0fsm.accepts("a") && notD0fsm.accepts("0") && !notD0fsm.accepts("1"))
+    assert(CharClassPattern.parse("""[\D]""") == CharClassPattern.parse("\\D"))
+    assert(CharClassPattern.parse("""[^\D]""") == CharClassPattern.parse("\\d"))
+
+    assert(CharClassPattern.parse("[a-]").contains(CharClassPattern("a-")))
+    assert(CharClassPattern.parse("[a-b-z]").contains(CharClassPattern("abz-")))
+    assert(CharClassPattern.parse("[-a]").contains(CharClassPattern("a-")))
+    assert(CharClassPattern.parse("[-]").contains(CharClassPattern("-")))
+    assert(CharClassPattern.parse("[---]").contains(CharClassPattern("-")))
+    assert(CharClassPattern.parse("[--0]").contains(CharClassPattern("-./0")))
+    assert(CharClassPattern.parse("[--0-z]").contains(CharClassPattern("-./0z")))
+    assert(CharClassPattern.parse("[+--.]").contains(CharClassPattern("+,-.")))
+    //we need to go deeper...
+    assert(CharClassPattern.parse("[]]").contains(CharClassPattern("]")))
+    assert(CharClassPattern.parse("[^]]").contains(~CharClassPattern("]")))
+    //and even deeper
+    assert(CharClassPattern.parse("""[\d-]""").contains(CharClassPattern("0123456789-")))
+    assert(CharClassPattern.parse("""[-\d]""").contains(CharClassPattern("0123456789-")))
+    //strong as php engine
+    assert(CharClassPattern.parse("""[\d-\d]""").contains(CharClassPattern("0123456789-")))
+
     assert(CharClassPattern.parse("\\x41").contains(CharClassPattern("A")))
     assert(CharClassPattern.parse("\\u0041").contains(CharClassPattern("A")))
 
@@ -57,11 +79,11 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       CharClassPattern.parse("[^\\t\\[]").contains(CharClassPattern("\t[", negateCharSet = true)))
 
     assert(CharClassPattern.parse("a").contains(CharClassPattern("a")))
-    assert(CharClassPattern.parse("\\s").contains(CharClassPattern("\t\n\11\f\r ")))
+    assert(CharClassPattern.parse("\\s").contains(CharClassPattern(CharClassPattern.spacesCharSet)))
     assert(
       CharClassPattern
         .parse("\\S")
-        .contains(CharClassPattern("\t\n\11\f\r ", negateCharSet = true)))
+        .contains(CharClassPattern(CharClassPattern.spacesCharSet, negateCharSet = true)))
     assert(CharClassPattern.parse("\\d").contains(CharClassPattern("0123456789")))
     assert(
       CharClassPattern
@@ -83,7 +105,6 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(
       CharClassPattern.parse("[^abc]").contains(CharClassPattern("abc", negateCharSet = true)))
 
-    assert(CharClassPattern.parse("[]").contains(CharClassPattern("")))
     assert(CharClassPattern.parse("[\\x41]").contains(CharClassPattern("A")))
     assert(CharClassPattern.parse("[\\x41-\\x44]").contains(CharClassPattern("ABCD")))
 
@@ -116,10 +137,10 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(CharClassPattern.parse("[").isEmpty)
     assert(CharClassPattern.parse("[^a").isEmpty)
     assert(CharClassPattern.parse("[^a-").isEmpty)
-    assert(CharClassPattern.parse("[^a--b]").isEmpty)
-    assert(CharClassPattern.parse("[^a-]").isEmpty)
     assert(CharClassPattern.parse("[^\\x3]").isEmpty)
     assert(CharClassPattern.parse("[^\\u003]").isEmpty)
+    assert(CharClassPattern.parse("[]").isEmpty)
+    assert(CharClassPattern.parse("[^]").isEmpty)
   }
 
   "MultPattern parse" should "accept simple mult sequences" in {
