@@ -83,7 +83,7 @@
                                          []
                                          [candidate
                                           [concat-channel continuation-struct-index]])))))))))]]
-        (flatten candidates))))
+        (append-tuples candidates))))
 
 
 ;;; Dual to select-best-products in consume.rbl

@@ -49,8 +49,8 @@
                                                       (k (string-concat acc (->string e)))) "")))
 
 ;;; TODO: Figure out a more general flatten method
-(defOprn flatten)
-(defPure Tuple (flatten) (fold (self) (proc [e acc k] (k (tuple-concat e acc))) []))
+(defOprn append-tuples)
+(defPure Tuple (append-tuples) (fold (self) (proc [e acc k] (k (tuple-concat acc e))) []))
 
 (defOprn twoZip)
 (defPure Tuple (twoZip)
