@@ -1,3 +1,7 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+
 ;;; TODO: Discuss whether empty tuples should match
 (test-form (match-tuple-pattern [] []) #t)
 (test-form (match-tuple-pattern [1] []) #f)

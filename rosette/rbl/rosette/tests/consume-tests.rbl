@@ -1,3 +1,12 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
+;;; Tests for the consume method.
+;;;
+;;; The general pattern for the tests is a Let expression that sets up the mock variables
+;;; followed by a call to the actual helper method that is being tested.
+
 ;;; should return head of lists
 (test-form (select-best-products [[1 2 3] [#niv 4]]) [1 4])
 ;;; should return empty list as one list is empty

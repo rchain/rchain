@@ -44,7 +44,9 @@
                     (fx- (prim-size (self)) (fx+ p 1)))))
 
 (defOprn symbol-list-concat)
-(defPure Tuple (symbol-list-concat) (->symbol (fold (self) (proc [e acc k] (k (string-concat acc (->string e)))) "")))
+(defPure Tuple (symbol-list-concat) (->symbol (fold (self)
+                                                    (proc [e acc k]
+                                                      (k (string-concat acc (->string e)))) "")))
 
 ;;; TODO: Figure out a more general flatten method
 (defOprn flatten)
