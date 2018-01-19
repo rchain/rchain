@@ -31,7 +31,12 @@ Settings are used to limit
 This is a typical [django][] app.
 
 Be sure you have the rholang compiler jar and the rosette executable
-and `rbl` library; adjust `rholang/settings.py` to say where they are.
+and `rbl` library; adjust `rholang/settings.py` to say where they are. Alternatively, set the following environment variables
+
+ * `RHOLANGWEB_EXAMPLES_DIR` The location of the `examples/` directory of sample Rholang contracts.
+ * `RHOLANGWEB_COMPILER_JAR` The path to the rholang compiler's JAR file.
+ * `RHOLANGWEB_VM_PROGRAM` The path to the `rosette` binary.
+ * `RHOLANGWEB_VM_LIBRARY` The location of the Rosette bootstrap files.
 
 Then:
 
