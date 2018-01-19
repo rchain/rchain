@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-input=$(basename $1)
+input=$(realpath $1)
 
-docker run -ti -v ${input}:/tmp/input.rho rhoscala -v
+docker run -ti -v ${input}:/tmp/input.rho rholang-cli
