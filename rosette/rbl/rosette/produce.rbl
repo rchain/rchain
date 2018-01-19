@@ -33,7 +33,7 @@
 ;;;     # Constant to signify that the current product should be used as part of the reduction
 ;;;     NOT-STORED = -1
 ;;;     candidates =
-;;;         map-with-index -, concat-channel in concat-channels:
+;;;         map-with-index _, concat-channel in concat-channels:
 ;;;             channels = reverse-lookup(concat-channel)
 ;;;             channel-position = channels.index-of(channel)
 ;;;             data-list, continuation-struct-list = chart.get(concat-channel)
@@ -70,7 +70,7 @@
                   (proc [_ concat-channel]
                     (let* [[channels (tbl-get reverse-channel-lookup-table concat-channel)]
                            [channel-position (position channels channel)]
-                           [[data-list continuation-struct-list] (tbl-get chart concat-channel)]]
+                           [[_ continuation-struct-list] (tbl-get chart concat-channel)]]
                       (map continuation-struct-list
                            (proc [continuation-struct-index continuation-struct]
                              (let [[[product-patterns ctxt-stuff] continuation-struct]]

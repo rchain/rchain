@@ -2,12 +2,38 @@
 ;;; Author: Kent Shikama <kent@kentshikama.com>
 ;;; This file is licensed under the Apache License, version 2.0.
 
+;;; tests for tbl-unique-append
+(let* [[chart (new RblTable)]]
+  (seq
+    (let [[_ (tbl-unique-append chart 'hello 'world)]]
+      (test-form (tbl-get chart 'hello) ['world]))
+    ;; adding another 'world should have no effect
+    (let [[_ (tbl-unique-append chart 'hello 'world)]]
+      (test-form (tbl-get chart 'hello) ['world]))
+    ;; adding a different value changes the chart
+    (let [[_ (tbl-unique-append chart 'hello 'world2)]]
+      (test-form (tbl-get chart 'hello) ['world 'world2]))))
+
+(let* [[chart (new RblTable)]
+       [_ (tbl-add chart 'hello [])]]
+  (seq
+    ;; adding to an empty tuple works
+    (let [[_ (tbl-unique-append chart 'hello 'world)]]
+      (test-form (tbl-get chart 'hello) ['world]))
+    ;; adding a different value on top still works
+    (let [[_ (tbl-unique-append chart 'hello 'world2)]]
+      (test-form (tbl-get chart 'hello) ['world 'world2]))))
+
 ;;; TODO: Discuss whether empty tuples should match
 (test-form (match-tuple-pattern [] []) #t)
 (test-form (match-tuple-pattern [1] []) #f)
 (test-form (match-tuple-pattern [1 2 3] [1 2 3]) #t)
 (test-form (match-tuple-pattern ['anything 2 3] [1 2 3]) #t)
 (test-form (match-tuple-pattern [42 2 3] [1 2 3]) #f)
+(test-form (match-tuple-pattern [0] [1]) #f)
+(test-form (match-tuple-pattern ["a"] ['foo]) #f)
+(test-form (match-tuple-pattern [0] ['foo]) #f)
+(test-form (match-tuple-pattern ['foo] [2]) #t)
 
 ;;; should return empty list if no values
 (test-form (non-niv-head []) [])
