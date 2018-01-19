@@ -205,22 +205,23 @@ object CharClassPattern extends ParsedPattern {
   def apply(charSet: Set[Char], negateCharSet: Boolean): CharClassPattern =
     new CharClassPattern(charSet, negateCharSet)
 
-  private[this] final val escapes =
+  private[regex] final val escapes =
     Map('t' -> '\t', 'r' -> '\r', 'n' -> '\n', 'f' -> '\f', 'v' -> '\u000b')
 
-  private[this] final val allSpecialChars = """\[]|().?*+{}""".toSet
+  private[regex] final val revEscapes = escapes.map(_.swap)
+
+  private[regex] final val allSpecialChars = """\[]|().?*+{}""".toSet
 
   //region predefined char classes
 
-  private[this] final val wordCharsSet =
+  private[regex] final val wordCharsSet =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".toSet
 
-  private[this] final val digitsCharSet = "0123456789".toSet
+  private[regex] final val digitsCharSet = "0123456789".toSet
 
-  private[regex] final val spacesCharSet = "\t\n\u000b\f\r \u00A0\u1680\u180E\u202F\u205F\u3000".toSet ++
-    ('\u2000' to '\u200A').toSet
+  private[regex] final val spacesCharSet = "\t\n\u000b\f\r \u00A0".toSet
 
-  private[this] final val knownClassMap: Map[Char, CharClassPattern] = Map(
+  private[regex] final val knownClassMap: Map[Char, CharClassPattern] = Map(
     'w' -> CharClassPattern(wordCharsSet),
     'W' -> CharClassPattern(wordCharsSet, negateCharSet = true),
     'd' -> CharClassPattern(digitsCharSet),
@@ -322,7 +323,8 @@ object CharClassPattern extends ParsedPattern {
           }
           case Right(addCharClass) => {
             if (actualRangeState == RangeState.inside) {
-              //this is 'bad' case, like [0-\w], we can fail like most regex engines do, but let's better handle it like javascript regex engine
+              //this is 'bad' case, like [0-\w], we can fail like most regex engines do,
+              //but let's better handle it like javascript regex engine
               ParseState('-' :: collectedChars,
                          addCharClass :: collectedUnionClasses,
                          RangeState.justFinished)
@@ -362,7 +364,7 @@ object CharClassPattern extends ParsedPattern {
             case ']' if parseState.rangeState != RangeState.firstSymbol => {
               //if ] is a first symbol in a sequence like []] - it will be handled by 'case anyOtherChar' below
               if (parseState.rangeState == RangeState.inside) {
-                // [a-] is a valid character class, shame on me...
+                // [a-] is a valid character class
                 Some(parseState.add(Left('-'), Some(RangeState.notStarted)), currentIndex + 1)
               } else {
                 //we're done
