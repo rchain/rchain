@@ -4,7 +4,6 @@
 ;;;
 ;;; File containing the reflective method produce and its helper methods
 
-(defOprn fetch-channel-pattern-and-product)
 (defProc (fetch-channel-pattern-and-product chart channel
                                             product-patterns channel-index channel-position)
   (if (= channel-index channel-position)
@@ -17,7 +16,6 @@
                          [channel data-index]
                          (loop r (inc data-index))))))))
 
-(defOprn fetch-pattern-and-product)
 (defProc (fetch-pattern-and-product chart channels product-patterns channel-position)
   (map channels
        (proc [i channel]
@@ -60,7 +58,6 @@
 ;;;
 ;;;     type Candidate = Tuple2[List[Tuple2[String, Int]], Tuple2[String, Int]]
 ;;;     type Candidates = List[Candidate]
-(defOprn extract-consume-candidates)
 (defProc (extract-consume-candidates concat-channels chart channel
                                      product reverse-channel-lookup-table)
   (if (absent? concat-channels)
@@ -87,7 +84,6 @@
 
 
 ;;; Dual to select-best-products in consume.rbl
-(defOprn select-best-consume)
 (defProc (select-best-consume candidates)
   (head
    (filter candidates
@@ -97,7 +93,6 @@
                  (not (any-null? (tuple-safe-nth candidate 0))))))))
 
 
-(defOprn delete-product)
 (defProc (delete-product chart channel data-index product)
   (if (= data-index -1)
       product
@@ -112,7 +107,6 @@
 ;;; Dual to consume-products.
 ;;; This method deletes channels from channel-lookup-table and reverse-channel-lookup-table
 ;;; if the corresponding channel continuation-struct-list's are empty.
-(defOprn consume-continuation)
 (defProc (consume-continuation candidate chart
                                channel-lookup-table reverse-channel-lookup-table product)
   (let* [[[channel-data-list [concat-channel continuation-struct-index]] candidate]

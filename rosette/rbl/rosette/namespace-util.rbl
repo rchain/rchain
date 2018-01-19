@@ -101,14 +101,12 @@
                           (loop r1 r2)))
                      (else #f)))))
 
-(defOprn non-niv-head)
+
 (defProc (non-niv-head list)
   (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
 
-(defOprn any-null?)
 (defProc (any-null? list) (any list null?))
 
-(defOprn clean-fresh)
 (defProc (clean-fresh fresh)
   (let [[[rholang name & r] (string-split (->string fresh) "-")]]
     name))

@@ -4,7 +4,6 @@
 ;;;
 ;;; File containing the reflective method consume and its helper methods
 
-(defOprn extract-data-candidates)
 (defProc (extract-data-candidates subspaces product-ptrns)
   (map subspaces
        (proc [i [data-list continuation-struct-list]]
@@ -23,7 +22,6 @@
 ;;; The function currently just takes the first candidate for each channel but in the future
 ;;; you will be able to pass in a ranking algorithm (see https://rchain.atlassian.net/browse/ROS-329) that will select candidates.
 ;;; If any channels are missing candidates, it returns an empty list as that implies a incomplete match.
-(defOprn select-best-products)
 (defProc (select-best-products candidates)
   (let [[prefiltered-reductions
          (map candidates (proc [i channel-candidates] (non-niv-head channel-candidates)))]]
@@ -32,7 +30,6 @@
 
 ;;; For each channel returned from the select-best-products function,
 ;;; delete the matched products from the subspace and return a copy of the products.
-(defOprn consume-products)
 (defProc (consume-products reductions chart channels)
   (map reductions
        (proc [i chosen-candidate]
@@ -44,8 +41,6 @@
              (tbl-add chart channel [updated-data-list continuation-struct-list])
              data)))))
 
-
-(defOprn store-continuation)
 (defProc (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels product-ptrns ctxt-tuple persistent)
   (let* [[[ctxt [code env]] ctxt-tuple]
          [channels-concatenated (symbol-list-concat channels)]
@@ -59,7 +54,6 @@
           (let* [[[data-list continuation-struct-list] subspace]
                  [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
             (tbl-add chart channels-concatenated updated-subspace))))))
-
 
 ;;; This reflective method would have roughly below signature in Scala
 ;;;
