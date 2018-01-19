@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+input=$1
+
+docker run -ti -v ${input}:/tmp/input.rho rhoscala -v

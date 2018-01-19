@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -e
+
+ulimit -s unlimited
+
+java -jar ${RHOLANG_JAR} /tmp/input.rho
+
+/usr/local/bin/rosette "$@" /tmp/input.rbl
