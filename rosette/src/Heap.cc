@@ -354,7 +354,7 @@ NewSpace::NewSpace(unsigned isize, unsigned ssize)
 }
 
 
-NewSpace::~NewSpace() { delete base; }
+NewSpace::~NewSpace() { ::free(base); }
 
 
 void* NewSpace::alloc(unsigned sz) { return infants->alloc(sz); }
@@ -506,7 +506,7 @@ OldSpaceChunk::OldSpaceChunk(unsigned int sz, OldSpaceChunk* n, OldSpace* p)
     : Space((void*)valloc(sz), sz), nextChunk(n), parent(p) {}
 
 
-OldSpaceChunk::~OldSpaceChunk() { delete base; }
+OldSpaceChunk::~OldSpaceChunk() { ::free(base); }
 
 
 void OldSpaceChunk::checkUnrememberedPtrs() {
