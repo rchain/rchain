@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+input=$(realpath $1)
+shift
+
+docker run -ti -v ${input}:/tmp/input.rho rholang-cli "$@"
