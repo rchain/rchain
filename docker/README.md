@@ -13,10 +13,10 @@ There are two main `make` targets:
 ### rholang-cli
 `make rholang-cli` constructs a docker image that can compile and execute a Rholang contract. It bundles together the Rholang-to-Rosette compiler in `rchain/rholang` and the Rosette interpreter in `rchain/rosette`. The resulting image is tagged `rholang-cli`.
 
-Once built, run it like this:
+Once built, you could run it from this directory like this:
 
 ```
-$ docker run -v $PWD/rholang/examples/hello_world_again.rho:/tmp/input.rho rholang-cli
+$ docker run -v $PWD/../rholang/examples/hello_world_again.rho:/tmp/input.rho rholang-cli
 compiled /tmp/input.rho to /tmp/input.rbl
 *** warning: more than one result may be returned from a block expression
 Rosette System, Version 4.0.0 - Copyright 1989, 1990, 1991, 1992 MCC
@@ -26,7 +26,7 @@ Rosette System, Version 4.0.0 - Copyright 1989, 1990, 1991, 1992 MCC
 []
 ```
 
-The filename is passed into the container with the `-v` (volume) command. The full path must be specified, and it will be mapped to `/tmp/input.rho` in the container, which is where the script that runs the Rholang compiler expects its input. The output of that is then passed to Rosette, which executes it. There is a shell script included that does this thing (`docker/rholang-cli/rhoscala`), but I'm not sure how to distribute that.
+The filename is passed into the container with the `-v` (volume) command. The full path (absolute) must be specified, and it will be mapped to `/tmp/input.rho` in the container, which is where the script that runs the Rholang compiler expects its input. The output of that is then passed to Rosette, which executes it. There is a shell script included that does this thing (`docker/rholang-cli/rhoscala`), but I'm not sure how to distribute that.
 
 ### rholang-web
 `make rholang-web` builds Dan Connolly's (@dckc) web application into a docker image. It also bundles the Rholang compiler and the Rosette interpreter. This process yields an images tagged `rholang-web`.
