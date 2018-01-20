@@ -99,7 +99,7 @@ ConstPattern* ConstPattern::create(Ob* val) {
 
 
 bool ConstPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
-    if (val == this->val) {
+    if (val->compare(this->val)) {
         ASSIGN(argvec, elem(offset), val);
         return true;
     } else {

@@ -153,6 +153,14 @@ Ob* RBLstring::subObject(int start, int n) {
     return result;
 }
 
+bool RBLstring::compare(Ob* other) {
+    if (!IS_A(other, RBLstring)) {
+        return false;
+    }
+    RBLstring* otherStr = (RBLstring*) other;
+    return strcmp((char*)&this->byte(0), (char*)&otherStr->byte(0)) == 0;
+}
+
 
 /* case sensitive compares */
 
