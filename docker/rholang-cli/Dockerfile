@@ -14,10 +14,10 @@ ENV ESS_SYSDIR /usr/local/lib/rosette
 ENV ROSETTE_LIB /usr/local/lib/rosette
 
 ENV RHOLANG_JAR /usr/local/lib/rholang-assembly-0.1-SNAPSHOT.jar
-ADD rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar /usr/local/lib
+COPY rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar /usr/local/lib
 
-ADD rosette/rbl/rosette /usr/local/lib/rosette
-ADD rosette/build.out/src/rosette /usr/local/bin/rosette
+COPY rosette/rbl/rosette /usr/local/lib/rosette
+COPY rosette/build.out/src/rosette /usr/local/bin/rosette
 
 COPY docker/rholang-cli/run-rhoscala /usr/local/bin
 
