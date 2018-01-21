@@ -339,7 +339,7 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.ctxt.rslt shouldBe RblFloat(3.5)
   }
 
-  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "be Fixnum(1)" in {
+  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "be Fixnum(5)" in {
 
     /**
       * litvec:

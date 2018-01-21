@@ -32,8 +32,7 @@ object Location {
   case class LTAddrVariable(indirect: Boolean, level: Int, offset: Int)
       extends GenericType
   case class LTGlobalVariable(offset: Int) extends GenericType
-  //TODO change indirect's type
-  case class LTBitField(indirect: Int,
+  case class LTBitField(indirect: Boolean,
                         level: Int,
                         offset: Int,
                         spanSize: Int,
@@ -107,7 +106,11 @@ object Location {
 
           case LTBitField00(offset, spanSize, sign) =>
             if (!isFixNum(value)) {
-              k.env.setField(0, 0, offset, spanSize, fixVal(value)) match {
+              k.env.setField(indirect = false,
+                             0,
+                             offset,
+                             spanSize,
+                             fixVal(value)) match {
                 case env if env != Ob.INVALID =>
                   StoreCtxt(k.set(_ >> 'env)(env))
                 case _ => StoreFail
@@ -156,7 +159,7 @@ object Location {
             k.env.getField(indirect, level, offset, spanSize, sign)
 
           case LTBitField00(offset, spanSize, sign) =>
-            k.env.getField(0, 0, offset, spanSize, sign)
+            k.env.getField(false, 0, offset, spanSize, sign)
 
           case LTLimbo => Ob.INVALID
         }
@@ -207,7 +210,7 @@ object Location {
 
           case LTBitField(indirect, level, offset, spanSize, sign) => {
             val signStr = if (sign != 0) "s" else "u"
-            val offsetStr = if (indirect != 0) s"($offset)" else s"$offset"
+            val offsetStr = if (indirect) s"($offset)" else s"$offset"
             s"${signStr}fld[$level,$offsetStr,$spanSize]"
           }
 
@@ -243,7 +246,7 @@ object Location {
             v.getField(indirect, level, offset, spanSize, sign)
 
           case LTBitField00(offset, spanSize, sign) =>
-            v.getField(0, 0, offset, spanSize, sign)
+            v.getField(indirect = false, 0, offset, spanSize, sign)
 
           case LTLimbo => Ob.ABSENT
 
@@ -276,7 +279,7 @@ object Location {
             v.setField(indirect, level, offset, spanSize, fixVal(value))
 
           case LTBitField00(offset, spanSize, sign) =>
-            v.setField(0, 0, offset, spanSize, fixVal(value))
+            v.setField(indirect = false, 0, offset, spanSize, fixVal(value))
 
           case _ => {
             suicide(s"Location.setValWrt: $loc")
@@ -359,12 +362,12 @@ object Location {
   def BitField(level: Int,
                offset: Int,
                span: Int,
-               indirect: Int,
+               indirect: Boolean,
                sign: Int): Location = {
     if (level >= (1 << BitFieldLevelSize)
         || offset >= (1 << BitFieldOffsetSize)
         || span > (1 << BitFieldSpanSize)) {
-      val offsetStr = if (indirect != 0) s"($offset)" else s"$offset"
+      val offsetStr = if (indirect) s"($offset)" else s"$offset"
       val signStr = if (sign == 0) "u" else "s"
       suicide(
         s"Location.BitField: unrepresentable location (${signStr}fld[$level,$offsetStr,$span])")
@@ -372,7 +375,7 @@ object Location {
     }
 
     LocationGT(
-      LTBitField(if (indirect == 0) 0 else 1,
+      LTBitField(indirect,
                  level,
                  offset,
                  span % (1 << BitFieldSpanSize),

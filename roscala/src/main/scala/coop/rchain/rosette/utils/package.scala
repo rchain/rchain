@@ -21,4 +21,10 @@ package object utils {
   object unsafeCastLens {
     def apply[B] = new unsafeCastLens[B]
   }
+
+  def lensTrans[S, A](lens: Lens[S, A], s: S)(f: A => A): S = {
+    val a = lens.get(s)
+    val b = f(a)
+    lens.set(s)(b)
+  }
 }
