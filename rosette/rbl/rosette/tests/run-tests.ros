@@ -55,13 +55,14 @@
 ;; were any failures in that group and accumulate total successes and failure
 ;; counts before resetting the counters.
 (defProc (record-and-reset)
-  (if (> (value failures) 0)
-      (display "Successes: " (value successes) ". Failures: " (value failures) ".\n")
-      (display "All sub-tests passed.\n"))
-  (increment total-successes (value successes))
-  (increment total-failures (value failures))
-  (reset successes)
-  (reset failures))
+  (seq
+    (if (> (value failures) 0)
+        (display "Successes: " (value successes) ". Failures: " (value failures) ".\n")
+        (display "All sub-tests passed.\n"))
+    (increment total-successes (value successes))
+    (increment total-failures (value failures))
+    (reset successes)
+    (reset failures)))
 
 ;; From the docs:
 ;;
