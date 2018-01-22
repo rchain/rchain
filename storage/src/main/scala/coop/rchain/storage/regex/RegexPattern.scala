@@ -530,7 +530,7 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
         singleCharToString(charSet.head)
       }
     } else {
-      //first of all - check for a known classes
+      //check for well-known class first, render the set otherwise
       CharClassPattern.knownClassMap
         .find(_._2 == this)
         .map("\\" + _._1)
