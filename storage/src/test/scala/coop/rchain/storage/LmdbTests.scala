@@ -14,7 +14,7 @@ import org.scalatest._
 // TODO: add timings to tests (get and put)
 
 class LmdbTests extends FlatSpec with Matchers {
-  val basePath = System.getProperty("user.dir") + "/"
+  val workingDir: String = System.getProperty("user.dir")
 
   "Lmdb with keys that are ints and strings are associated with multiple values" should "retrieve the expected values" in {
     val dirName: Option[String] = Some("lmdbPutGetDupSortDb")
@@ -135,10 +135,15 @@ class LmdbTests extends FlatSpec with Matchers {
     val numKeys = 10
     var randGen = new TestTools.RandKeyGen(numKeys)
 
-    val blogSize = 1000000 // 1 MB
-    val blobs = TestTools.createBlobs(numKeys, blogSize)
+    val blobSize = 1000000 // 1 MB
+    val blobs = TestTools.createBlobs(numKeys, blobSize)
 
-    val lmdb = new Lmdb(dirName, name, false, true, None, Lmdb.maxDbSize)
+    // Even though we aren't actually putting much data into the database,
+    // let's be nice and not ask to use more than half of the usable space
+    // on someone's drive for the regular test suite.
+    val dbSize: Long = math.min(new File(workingDir).getUsableSpace / 2L, Lmdb.maxDbSize)
+
+    val lmdb = new Lmdb(dirName, name, false, true, None, dbSize)
 
     try {
       var key = randGen.nextKey()
