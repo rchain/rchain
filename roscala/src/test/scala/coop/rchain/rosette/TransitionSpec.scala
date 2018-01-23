@@ -374,7 +374,6 @@ class TransitionSpec extends FlatSpec with Matchers {
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
         .set(_ >> 'globalEnv)(TblObject(globalEnv))
         .set(_ >> 'loc)(loc)
-        .set(_ >> 'nsigs)(1)
 
     val codevec = Seq(
       OpAlloc(1),
@@ -384,7 +383,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
       OpJmpFalse(10),
       OpImmediateLitToReg(lit = 9, 0),
-      OpXferRsltToDest(0), //xfer rslt,lex[0,0]
+      OpXferRsltToDest(0),
       OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
       OpJmp(4),
       OpImmediateLitToReg(lit = 5, reg = 0),
@@ -392,6 +391,6 @@ class TransitionSpec extends FlatSpec with Matchers {
     )
 
     val end = VirtualMachine.executeSeq(codevec, start)
-    end.ctxt.rslt shouldBe Fixnum(5)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(5)
   }
 }

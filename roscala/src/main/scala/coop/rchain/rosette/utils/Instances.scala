@@ -17,6 +17,8 @@ object Instances {
 
   implicit def cloneOb[T <: Ob]: Clone[T] = _.clone().asInstanceOf[T]
 
+  //instance to create lens for Ob over the `slot` field, like:
+  //lens[Ob] >> 'slot
   implicit val mkSlotFieldLens = new MkFieldLens[Ob, Witness.`'slot`.T] {
     override type Elem = Seq[Ob]
     override def apply(): Lens[Ob, Seq[Ob]] = new Lens[Ob, Seq[Ob]] {
@@ -25,6 +27,8 @@ object Instances {
     }
   }
 
+  //instance to create lens for Ob over the `parent` field, like:
+  //lens[Ob] >> 'parent
   implicit val mkParentFieldLens = new MkFieldLens[Ob, Witness.`'parent`.T] {
     override type Elem = Ob
     override def apply(): Lens[Ob, Ob] = new Lens[Ob, Ob] {
@@ -37,6 +41,8 @@ object Instances {
     }
   }
 
+  //instance to create lens for Actor over the `extension` field, like:
+  //lens[Actor] >> 'field
   implicit val mkExtensionFieldLens =
     new MkFieldLens[Actor, Witness.`'extension`.T] {
       override type Elem = StdExtension

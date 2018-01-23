@@ -10,6 +10,12 @@ package object utils {
     try { op(p) } finally { p.close() }
   }
 
+  //this function exist only to use `asInstanceOf`-like casts at lens level
+  //so normally when we use code like:
+  //    ob.asInstanceOf[StdExtension]
+  //at lens level we can perform a similar cast:
+  //    val l: Lens[Ob,Ob] = lens[Ob] >> 'extension
+  //    val extL: Lens[Ob,StdExtension] = new unsafeCastLens[StdExtension]()
   class unsafeCastLens[B] {
     def apply[T, A](lens: Lens[T, A]): Lens[T, B] =
       new Lens[T, B] {
