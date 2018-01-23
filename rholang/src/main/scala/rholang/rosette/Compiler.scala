@@ -31,7 +31,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm
 
   override def reader( fileName : String ) : FileReader = { new FileReader( fileName ) }
   override def lexer( fileReader : FileReader ) : Yylex = { new Yylex( fileReader ) }
-  override def parser( lexer : Yylex ) : parser = { new parser( lexer ) }
+  override def parser( lexer : Yylex ) : parser = { new parser( lexer, lexer.getSymbolFactory() ) }
   override def serialize( ast : VisitorTypes.R ) : String = {
     val term = ast._1
     term.rosetteSerializeOperation + term.rosetteSerialize

@@ -81,8 +81,10 @@ object CompilerExceptions {
   ) extends Exception( s"internal compiler error: $b" )
       with CompilerException
   case class UnboundVariable(
-    varName: String
-  ) extends Exception( s"Unbound variable: $varName" )
+    varName : String,
+    line : Int,
+    col : Int
+  ) extends Exception( s"Unbound variable: $varName at $line:$col" )
       with CompilerException
 }
 
@@ -242,7 +244,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         if (boundVars(v.var_)) {
           B( _run )( B( _compile )( Var( v.var_ ) ) )
         } else {
-          throw new UnboundVariable(v.var_)
+          throw new UnboundVariable(v.var_, v.line_num, v.col_num)
         }
       }
     } )
@@ -490,7 +492,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
                   B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
                 }
 
-                val matchTerm = B(_match)(pTerm, pattern)
+                val matchTerm = B(_match)(TS, pTerm, pattern)
                 val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
                   createProcForPatternBindings
                 } else {
@@ -570,7 +572,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     if (boundVars(p.var_)) {
       Var(p.var_)
     } else {
-      throw new UnboundVariable(p.var_)
+      throw new UnboundVariable(p.var_, p.line_num, p.col_num)
     }
   }
   override def visit( p : CQuote, arg : A ) : R = {
@@ -593,7 +595,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     if (boundVars(p.var_)) {
       Var(p.var_)
     } else {
-      throw new UnboundVariable(p.var_)
+      throw new UnboundVariable(p.var_, p.line_num, p.col_num)
     }
   }
   override def visit( p : QInt, arg : A ) : R = {
