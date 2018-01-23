@@ -44,7 +44,21 @@ Dependencies
 
         https://packages.ubuntu.com/trusty/libgflags2
 
-    
+    Other required tools and libraries:
+ 
+        sudo apt-get install g++
+        sudo apt-get install g++-multilib
+        sudo apt-get install make
+        sudo apt-get install cmake
+        sudo apt-get install clang
+
+    Optional tools and libraries:
+
+        sudo apt-get install doxygen
+
+	Doxygen requires dot from http://www.graphviz.org/download/
+
+
 Notes on development.
 
     1. CMakeLists.txt enables all warnings, but Rosette is old, and some
