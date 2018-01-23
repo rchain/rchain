@@ -108,7 +108,7 @@ bool ConstPattern::matchIntoArgvec(Tuple* argvec, int offset, Ob* val, int) {
 }
 
 
-int ConstPattern::numberOfKeys(void) { return 0; }
+int ConstPattern::numberOfKeys(void) { return 1; }
 
 
 void ConstPattern::stuffKeys(Tuple*, int) {}

@@ -339,6 +339,54 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.ctxt.rslt shouldBe RblFloat(3.5)
   }
 
+  "Executing bytecode from expression \"100\"" should "result in Fixnum(100)" in {
+
+    /**
+      * litvec:
+      *   0:   100
+      * codevec:
+      *   0:   liti 0,rslt
+      *   1:   rtn/nxt
+      */
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .update(_ >> 'code >> 'litvec)(_ => Tuple(Seq(Fixnum(100))))
+
+    val codevec = Seq(
+      OpIndLitToRslt(lit = 0),
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(100)
+  }
+
+  "Executing bytecode from expression \"(100)\"" should "result in Fixnum(100)" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      *   1:   100
+      * codevec:
+      *   0:   liti 1,trgt
+      *   1:   xmit/nxt 0
+      */
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .update(_ >> 'code >> 'litvec)(_ =>
+          Tuple(Seq(RequestExpr, Fixnum(100))))
+
+    val codevec = Seq(
+      OpIndLitToReg(reg = 1, lit = 1),
+      OpXmit(unwind = false, next = true, nargs = 0)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.trgt shouldBe Fixnum(100)
+  }
+
   """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "be Fixnum(5)" in {
 
     /**

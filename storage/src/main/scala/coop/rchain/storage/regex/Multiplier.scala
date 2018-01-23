@@ -16,27 +16,60 @@ private[regex] object Multiplier {
 
   def apply(multiplier: Int): Multiplier = new Multiplier(Some(multiplier), Some(multiplier))
 
-  def apply(symbol: String): Multiplier = symbol match {
-    case "*" => presetStar
-    case "?" => presetQuestion
-    case ""  => presetOne
-    case "+" => presetPlus
-  }
-
   def parse(cs: CharSequence): Option[Multiplier] = {
-    val rxMinMax = "^\\{(\\d+)\\s*,\\s*(\\d+)}".r("min", "max")
-    val rxMin = "^\\{(\\d+)\\s*,\\s*}".r("min")
-
-    cs match {
-      case rxMinMax(min, max) => Some(Multiplier(min.toInt, max.toInt))
-      case rxMin(min)         => Some(Multiplier(Some(min.toInt), Multiplier.Inf))
-      case "*"                => Some(Multiplier.presetStar)
-      case "?"                => Some(Multiplier.presetQuestion)
-      case "+"                => Some(Multiplier.presetPlus)
-      case ""                 => Some(Multiplier.presetOne)
-      case _                  => None
-    }
+    val (mult, count) = tryParse(cs)
+    if (count == cs.length)
+      Some(mult)
+    else
+      None
   }
+
+  private[this] val rxRange =
+    """(^\{\s*(\d+)\s*(,\s*(\d+)?)?\s*\}).*""".r("all", "min", "hasMax", "max")
+
+  /**
+    * Attempts to parse character sequence as regex repetitions bounds
+    * Supported patterns are: * + ? {1,2} {3,}
+    * All other sequences are ignored, and {1,1} multiplier is returned
+    * Return Tuple(parsed multiplier, count of characters accepted)
+    * In case of any error - returns (Multiplier.presetOne, 0) - that means no repetitions,
+    * and no characters matched.
+    *
+    * Supported Range Quantifiers are: {#}, {#,}, {#,#}
+    * Range Quantifier {,#} doesn't supported (like in PHP/JS/GO/Java engines),
+    * and in contrast to Python engine which understands it like '0 to # repetitions'
+    */
+  def tryParse(cs: CharSequence): (Multiplier, Int) =
+    if (cs.length == 0) {
+      (Multiplier.presetOne, 0)
+    } else {
+      cs match {
+        case rxRange(all, min, hasMax, max) => {
+          val minBound = Some(min.toInt)
+          val maxBound = if (hasMax != null) {
+            //we have a ",...}" part
+            if (max != null) {
+              //{#,#} pattern, getting the upper bound
+              Some(max.toInt)
+            } else {
+              //{#,} pattern - upper bound is infinite
+              Multiplier.Inf
+            }
+          } else {
+            //we found {#} pattern, exact count
+            minBound
+          }
+          (Multiplier(minBound, maxBound), all.length)
+        }
+        case _ =>
+          cs.charAt(0) match {
+            case '*' => (Multiplier.presetStar, 1)
+            case '?' => (Multiplier.presetQuestion, 1)
+            case '+' => (Multiplier.presetPlus, 1)
+            case _   => (Multiplier.presetOne, 0)
+          }
+      }
+    }
 }
 
 /**
@@ -50,6 +83,10 @@ private[regex] object Multiplier {
   * "zero" to exist, which actually are quite useful in their own special way.
   */
 final case class Multiplier(min: Option[Int], max: Option[Int]) {
+
+  /**
+    * Infinite multiplier bound
+    */
   private val Inf = None
 
   require(
@@ -99,11 +136,11 @@ final case class Multiplier(min: Option[Int], max: Option[Int]) {
       case (Some(x), Some(y)) => Some(x - y)
     }
 
-    def *(that: Option[Int]): Option[Int] = (opt, that) match {
-      case (Inf, _)           => Inf
-      case (_, Inf)           => Inf
-      case (Some(x), Some(y)) => Some(x * y)
-    }
+    def *(that: Option[Int]): Option[Int] =
+      for {
+        x <- opt
+        y <- that
+      } yield x * y //Inf * _ => Inf; _ * Inf => Inf
 
     def >=(that: Option[Int]): Boolean = (opt, that) match {
       case (Inf, _)           => true
@@ -182,6 +219,11 @@ final case class Multiplier(min: Option[Int], max: Option[Int]) {
     Multiplier(diffMandatory, diffMandatory + diffOptional)
   }
 
+  /**
+    * Intersection. Max bounds range that is shared between
+    * two multipliers.
+    * This operation is not meaningful for all pairs of multipliers.
+    */
   def &(that: Multiplier): Multiplier = {
     if (!this.canIntersect(that))
       throw new IllegalArgumentException(s"Can't intersect $this and $that")
@@ -201,6 +243,9 @@ final case class Multiplier(min: Option[Int], max: Option[Int]) {
     */
   def canIntersect(that: Multiplier): Boolean = !((max < that.min) || (that.max < min))
 
+  /**
+    * Union. {1,3} | {2,4} => {1,4}
+    */
   def |(that: Multiplier): Multiplier = {
     if (!this.canUnion(that))
       throw new IllegalArgumentException(s"Can't union $this and $that")

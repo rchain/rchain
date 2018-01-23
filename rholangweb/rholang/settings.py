@@ -109,13 +109,14 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
 CORS_ORIGIN_ALLOW_ALL = True
 
-EXAMPLES =  os.path.join(BASE_DIR, 'examples')
-COMPILER_JAR = os.path.join(BASE_DIR, 'rholang-assembly-0.1-SNAPSHOT.jar')
-VM_PROGRAM = os.path.join(BASE_DIR, 'rosette')
+EXAMPLES = os.getenv('RHOLANGWEB_EXAMPLES_DIR', os.path.join(BASE_DIR, 'examples'))
+COMPILER_JAR = os.getenv('RHOLANGWEB_COMPILER_JAR', os.path.join(BASE_DIR, 'rholang-assembly-0.1-SNAPSHOT.jar'))
+VM_PROGRAM = os.getenv('RHOLANGWEB_VM_PROGRAM', os.path.join(BASE_DIR, 'rosette'))
+VM_LIBRARY = os.getenv('RHOLANGWEB_VM_LIBRARY', os.path.join(BASE_DIR, 'rbl/rosette'))
+
 TIMEOUT = 3.0
 STACKLIMIT = 8 * 1024 * 1024 * 1024
 
-VM_LIBRARY = os.path.join(BASE_DIR, 'rbl/rosette')
 
 # Logging
 LOGGING = {
