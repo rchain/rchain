@@ -141,10 +141,8 @@
 ;;; While consume can suspend the thread of execution,
 ;;; produce always resumes the calling thread at the end of the method.
 (defOprn produce)
-(defRMethod NameSpace (produce ctxt-tuple & production)
-  (let* [[[ctxt _] ctxt-tuple]
-         [[channel product] production]
-         [_ (display "INFO:  (produce) " (clean-fresh channel) "!(" product ") called" #\\n)]
+(defMethod NameSpace (produce channel & product)
+  (let* [[_ (display "INFO:  (produce) " (clean-fresh channel) "!(" product ") called" #\\n)]
          [concat-channels (tbl-get channel-lookup-table channel)]
          [_ (display "DEBUG: (produce)" #\\t "relevant channels: " concat-channels #\\n)]
          [candidates (extract-consume-candidates concat-channels chart channel
@@ -160,7 +158,6 @@
                 (tbl-add chart channel [[product] []])
                 (let [[[data-list continuation-struct-list] subspace]]
                   (tbl-add chart channel [(append data-list product) continuation-struct-list])))
-            (ctxt-rtn ctxt [])
             (update!)))
         (let* [[[ctxt-tuple product-patterns product-list]
                 (consume-continuation candidate chart channel-lookup-table
@@ -169,7 +166,6 @@
           (seq
             (display "DEBUG: (produce)" #\\t "ctxt-rtn(" consume-ctxt ", " product-list ")" #\\n)
             (ctxt-rtn consume-ctxt product-list)
-            (ctxt-rtn ctxt [])
             (update!)
             (if persistent
                 (seq
