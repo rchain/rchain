@@ -29,12 +29,15 @@
 ;;; Roughly dual to extract-data-candidates.
 ;;; However, it is more complicated as it has to gather candidates across multiple channels.
 ;;;
-;;; Roughly equivalent to the following python-ish pseudocode.
+;;; We first check whether the currently passed in product matches one of the patterns in a
+;;; candidate consume. If it does match one of the patterns, then we attempt to fetch products for
+;;; the rest of the channels in the candidate consume. We repeat this for every potential candidate
+;;; consume.
+;;;
+;;; The following is some python based pseudo-code.
 ;;;
 ;;; def extract-consume-candidates(concat-channels, chart, channel,
 ;;;                                product, reverse-channel-lookup-table):
-;;;     # Constant to signify that the current product should be used as part of the reduction
-;;;     NOT-STORED = -1
 ;;;     candidates =
 ;;;         map-with-index _, concat-channel in concat-channels:
 ;;;             channels = reverse-lookup(concat-channel)
@@ -44,20 +47,11 @@
 ;;;                            continuation-struct in continuation-struct-list:
 ;;;                 product-patterns, ctxt-stuff = continuation-struct
 ;;;                 if match-pattern(product-patterns[channel-position], product):
-;;;                     def fetch-channel-pattern-and-product(channel-index, channel):
-;;;                         if channel-index == channel-position:
-;;;                             [channel NOT-STORED]
-;;;                         else:
-;;;                             data-list, continuation-struct-list = chart.get(channel)
-;;;                             for data-index, data in enumerate(data-list):
-;;;                                 # Note here we are taking the first available match
-;;;                                 # but this could also be a ranked choice
-;;;                                 if match?(product-patterns[channel-index], data):
-;;;                                     [channel data-index]
+;;;                     # fetch-channel-pattern-and-product is documented above
 ;;;                     candidate = map-with-index(fetch-channel-pattern-and-product, channels)
 ;;;                     [] if any-null?(candidate) \
 ;;;                        else (candidate, [concat-channel continuation-struct-index])
-;;;     return flatten(candidates)
+;;;     return append-tuples(candidates)
 ;;;
 ;;; While RBL is untyped, the following is some of the would be inferred types
 ;;;
