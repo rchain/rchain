@@ -21,8 +21,9 @@
           (prim-sub-object (self) (fx+ p 1)
                            (fx- (prim-size (self)) (fx+ p 1)))))
 
-(defOprn symbol-list-concat)
-(defPure Tuple (symbol-list-concat) (->symbol (fold (self)
+;;; Concatenates a list of symbols to a single long symbol
+(defOprn concat-symbol-list)
+(defPure Tuple (concat-symbol-list) (->symbol (fold (self)
                                                     (proc [e acc k]
                                                       (k (string-concat acc (->string e)))) "")))
 

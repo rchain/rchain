@@ -43,7 +43,7 @@
 
 (defProc (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels product-ptrns ctxt-tuple persistent)
   (let* [[[ctxt [code env]] ctxt-tuple]
-         [channels-concatenated (symbol-list-concat channels)]
+         [channels-concatenated (concat-symbol-list channels)]
          [subspace (tbl-get chart channels-concatenated)]]
     (seq
       (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
