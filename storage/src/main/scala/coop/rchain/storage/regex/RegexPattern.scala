@@ -471,25 +471,22 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
       }
 
     def unknownSetToString: String = {
-      def listToString(lst: List[Char]): String =
-        lst.size match {
-          case 0 => ""
-          case 1 => singleCharToString(lst.head)
-          case x if x > 3 => {
-            //sequence of 4 chars or more "abcd" -> "a-d"
-            val startChar = singleCharToString(lst.last)
-            val endChar = singleCharToString(lst.head)
-            s"$startChar-$endChar"
-          }
-          case _ => {
-            //sequence like "abc", no sense to convert to "a-c"
-            lst.map(c => singleCharToString(c)).mkString
-          }
-        }
+      def listToString(lst: List[Char]): String = lst.size match {
+        case 0 => ""
+        case 1 => singleCharToString(lst.head)
+        case 2 | 3 =>
+          //sequence like "abc", no sense to convert to "a-c"
+          lst.map(singleCharToString).mkString
+        case _ =>
+          //sequence of 4 chars or more "abcd" -> "a-d"
+          val startChar = singleCharToString(lst.last)
+          val endChar = singleCharToString(lst.head)
+          s"$startChar-$endChar"
+      }
 
       val sortedSet = charSet.toList.sorted
       val (strings, pending) = sortedSet.foldLeft((Nil: List[String], Nil: List[Char])) {
-        case ((strings, pending), nextChar) => {
+        case ((strings, pending), nextChar) =>
           if (pending.isEmpty) {
             (strings, nextChar :: pending)
           } else {
@@ -500,7 +497,6 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
               (listToString(pending) :: strings, nextChar :: Nil)
             }
           }
-        }
       }
 
       val finalStrings = if (pending.isEmpty) {
