@@ -30,6 +30,9 @@
 
 ;;; For each channel returned from the select-best-products function,
 ;;; delete the matched products from the subspace and return a copy of the products.
+;;;
+;;; TODO: Remove data from extract-data-candidates and simply refetch data by the data-index.
+;;; Currently the data-index is only used to delete the data.
 (defProc (consume-products reductions channel-subspace-tbl channels)
   (map reductions
        (proc [i chosen-candidate]
