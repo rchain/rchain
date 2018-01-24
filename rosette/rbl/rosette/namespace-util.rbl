@@ -26,7 +26,7 @@
                                                     (proc [e acc k]
                                                       (k (string-concat acc (->string e)))) "")))
 
-;;; TODO: Figure out a more general flatten method
+;;; Equivalent to a depth of one "flatten"
 (defOprn append-tuples)
 (defPure Nil (append-tuples) [])
 (defPure Tuple (append-tuples) (concat & (self)))
