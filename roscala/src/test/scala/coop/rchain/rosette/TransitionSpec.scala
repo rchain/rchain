@@ -387,7 +387,7 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.trgt shouldBe Fixnum(100)
   }
 
-  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "be Fixnum(5)" in {
+  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "result in Fixnum(5)" in {
 
     /**
       * litvec:
@@ -399,7 +399,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       *    1:   lit #t,arg[0]
       *    2:   nargs 1
       *    3:   extend 1
-      *    4:   xfer lex[0,0],rslt //opApplyPrimReg
+      *    4:   xfer lex[0,0],rslt
       *    5:   jf 10
       *    6:   lit #f,rslt
       *    7:   xfer rslt,lex[0,0]
@@ -430,7 +430,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpExtend(1),
       OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
       OpJmpFalse(10),
-      OpImmediateLitToReg(lit = 9, 0),
+      OpImmediateLitToReg(lit = 9, reg = 0),
       OpXferRsltToDest(0),
       OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
       OpJmp(4),
@@ -440,5 +440,60 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Fixnum(5)
+  }
+
+  """Executing bytecode from expression (let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) x)))""" should "result in RBLFALSE" in {
+
+    /**
+      * litvec:
+      *    0:   {LetExpr}
+      *    1:   {Template}
+      *    2:   {Loc lex[0,0]}
+      * codevec:
+      *    0:   alloc 1
+      *    1:   lit #t,arg[0]
+      *    2:   nargs 1
+      *    3:   extend 1
+      *    4:   xfer lex[0,0],rslt
+      *    5:   jf 10
+      *    6:   lit #f,rslt
+      *    7:   xfer rslt,lex[0,0]
+      *    8:   xfer lex[0,0],rslt
+      *    9:   jmp 4
+      *   10:   xfer lex[0,0],rslt
+      *   11:   rtn/nxt
+      */
+    val template = Template(
+      Tuple(Seq(Symbol("x"))),
+      StdMeta(),
+      IdVecPattern(TupleExpr(Seq(Symbol("x"))))
+    )
+
+    val loc: Location = Location.LexVar(0, 0, indirect = false)
+
+    val start =
+      testState
+        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template)))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'loc)(loc)
+
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 8, arg = 0),
+      OpNargs(1),
+      OpExtend(1),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmpFalse(10),
+      OpImmediateLitToReg(lit = 9, reg = 0),
+      OpXferRsltToDest(0),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmp(4),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Ob.RBLFALSE
   }
 }
