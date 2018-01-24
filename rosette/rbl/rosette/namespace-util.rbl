@@ -75,7 +75,7 @@
                           (loop r1 r2)))
                      (else #f)))))
 
-
+;;; Equivalent to (head (drop-while list niv?)) - see Haskell dropWhile
 (defProc (non-niv-head list)
   (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
 
