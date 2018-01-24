@@ -81,6 +81,7 @@
 
 (defProc (any-null? list) (any list null?))
 
+;;; For debugging purposes only.
 (defProc (clean-fresh fresh)
   (let [[[rholang name & r] (string-split (->string fresh) "-")]]
     name))
