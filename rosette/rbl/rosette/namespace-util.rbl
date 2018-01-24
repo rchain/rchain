@@ -14,34 +14,12 @@
 (defPure Tuple (append item)
   (concat (self) [item]))
 
-(defOprn string-length<)
-(defOprn string-length>=)
-(defPure String (string-length< other)
-  (< (string-length (self)) (string-length other)))
-(defPure String (string-length>= other)
-  (not (string-length< (self) other)))
-
-(defOprn symbol-length<)
-(defOprn symbol-length>=)
-(defPure Symbol (symbol-length< other)
-  (string-length< (->string (self)) (->string other)))
-(defPure Symbol (symbol-length>= other)
-  (string-length>= (->string (self)) (->string other)))
-
 ;;; Deletes element at position i in Tuple
 (defOprn delete-i)
 (defPure Tuple (delete-i p)
   (concat (prim-sub-object (self) 0 p)
           (prim-sub-object (self) (fx+ p 1)
                            (fx- (prim-size (self)) (fx+ p 1)))))
-
-(defOprn replace-i)
-(defPure Tuple (replace-i p item)
-  (concat
-   (prim-sub-object (self) 0 p)
-   [item]
-   (prim-sub-object (self) (fx+ p 1)
-                    (fx- (prim-size (self)) (fx+ p 1)))))
 
 (defOprn symbol-list-concat)
 (defPure Tuple (symbol-list-concat) (->symbol (fold (self)
@@ -51,19 +29,6 @@
 ;;; TODO: Figure out a more general flatten method
 (defOprn append-tuples)
 (defPure Tuple (append-tuples) (fold (self) (proc [e acc k] (k (tuple-concat acc e))) []))
-
-(defOprn twoZip)
-(defPure Tuple (twoZip)
-  (map (fold (self) (proc [[x y] acc k]
-                      (let [[[xs ys] acc]]
-                        (k [[x & xs] [y & ys]])))
-             [[] []])
-       (proc [i value]
-         (reverse value))))
-
-(defOprn filter-niv)
-(defPure Tuple (filter-niv)
-  (filter (self) (proc [x] (not (niv? x)))))
 
 ;;; TODO: Eliminate with implemenation of https://rchain.atlassian.net/browse/ROS-340
 (defOprn tbl-unique-append)
