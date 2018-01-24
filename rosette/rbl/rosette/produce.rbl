@@ -4,7 +4,7 @@
 ;;;
 ;;; File containing the reflective method produce and its helper methods
 
-;;; Fetches products that matches the pattern at `product-patterns[channel-index]`.
+;;; Fetches the first product that matches the pattern at `product-patterns[channel-index]`.
 ;;; It returns the channel the product was found along with the index of the product.
 ;;; If the channel-index is the current channel-position, then we don't want to consume the product
 ;;; as it is the currently passed in product, so we return NOT-STORED.
