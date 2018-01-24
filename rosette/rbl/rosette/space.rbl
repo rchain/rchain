@@ -86,7 +86,19 @@
     ;;; TODO: We currently do not support prologue style unification (bidirectional) pattern matching
     ;;; Potential implementation: (if (type? ptrn candidate) (seq (update) ((proc [ptrn] ptrn) candidate)) (seq (update) #niv)) )
     (pure (unify? ptrn candidate) #t)
-    (pure (match? ptrn candidate) (if (type? ptrn Symbol) #t (type? ptrn candidate)))
+    (pure (match? ptrn candidate)
+      (if (type? ptrn Symbol)
+        #t
+        (if (type? ptrn candidate)
+          (cond
+            ((type? ptrn String)
+              (= ptrn candidate))
+            ((type? ptrn Tuple)
+              (and (match? (self) (head ptrn) (head candidate))
+                (match? (self) (tail ptrn) (tail candidate))))
+            (else
+              (= ptrn candidate)))
+          #f)))
     ;;; storedValue is the tuple [data continuation]
     (pure (production? storedValue) (not (null? (head storedValue))))
 )
