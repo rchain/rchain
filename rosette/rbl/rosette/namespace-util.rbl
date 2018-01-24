@@ -28,7 +28,8 @@
 
 ;;; TODO: Figure out a more general flatten method
 (defOprn append-tuples)
-(defPure Tuple (append-tuples) (fold (self) (proc [e acc k] (k (tuple-concat acc e))) []))
+(defPure Nil (append-tuples) [])
+(defPure Tuple (append-tuples) (concat & (self)))
 
 ;;; TODO: Eliminate with implemenation of https://rchain.atlassian.net/browse/ROS-340
 (defOprn tbl-unique-append)
