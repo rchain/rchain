@@ -35,6 +35,10 @@
 (test-form (match-tuple-pattern [0] ['foo]) #f)
 (test-form (match-tuple-pattern ['foo] [2]) #t)
 
+(test-form (append-tuples []) [])
+(test-form (append-tuples [[1 2] [3 4] [5 6]]) [1 2 3 4 5 6])
+(test-form (append-tuples [['a 'b] ['c 'd] ['e ['f 'g]]]) ['a 'b 'c 'd 'e ['f 'g]])
+
 ;;; should return empty list if no values
 (test-form (non-niv-head []) [])
 (test-form (non-niv-head [#niv #niv #niv]) [])
