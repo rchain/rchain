@@ -70,7 +70,7 @@
         ;; appropriately deletes the former 2 instead of the latter
         (test-form bar-data-list [1 3 4 2])))))
 
-;;; store-continuation works when channel-subspace-tbl is
+;;; store-continuation works when channel-subspace-tbl is empty
 (let* [[channel-lookup-table (new RblTable)]
        [reverse-channel-lookup-table (new RblTable)]
        [channel-subspace-tbl (new RblTable)]
