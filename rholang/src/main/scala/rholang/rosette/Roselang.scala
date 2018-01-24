@@ -306,8 +306,9 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       val procTerm: StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
       val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsResults)
       val consumeTerm = B("consume")(TS, B(_list, chanTerms), B(_list, wildcards), B(_list, quotedPtrnTerms), Tag("#f")) // #f for persistent
+      val wrappedPtrnTerms = ptrnTerms map (x => B(_list)(x))
       val letBindingsTerm = B(_list)(B(_list)(B(_list, unificationFreshes), B(_list, productFreshes)), consumeTerm)
-      val bodyTerm = B("")(B("proc")(B(_list)(B(_list, ptrnTerms)), procTerm), B(_list, productFreshes))
+      val bodyTerm = B("")(B("proc")(B(_list)(B(_list, wrappedPtrnTerms)), procTerm), B(_list, productFreshes))
       B("let")(B(_list)(letBindingsTerm), bodyTerm)
     }
 

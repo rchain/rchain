@@ -324,7 +324,7 @@
 (defRMethod NameSpace (produce ctxt-tuple & production)
 (let* [
     [[ctxt _] ctxt-tuple]
-    [[channel unification_ptrn product] production]
+    [[channel unification_ptrn & products] production]
     [_
         (if flag-verbose
             (seq
@@ -333,7 +333,7 @@
                 (print (->symbol ", "))
                 (print unification_ptrn)
                 (print (->symbol ", "))
-                (print product)
+                (print products)
                 (print (->symbol ")"))
                 (p "")))]
 
@@ -396,11 +396,11 @@
                                 ;;; TODO: This assumes that the channel cannot be in multiple positions in the consume, which is not necessarily true.
                             [[product_ptrn stored_product] (tuple-safe-nth product_ptrns_struct channel_position)]
                         ]
-                        (if (match? NameSpace product_ptrn product)
+                        (if (match? NameSpace product_ptrn products)
                             [
                                 [channel (tuple-safe-nth subspaces i)]
                                 [unification_ptrn unification_ptrn]
-                                [product [n channel_position product_ptrn]]
+                                [products [n channel_position product_ptrn]]
                             ]
                         )
                     ))))))))]
@@ -428,9 +428,9 @@
                             [[data_struct continuations_struct] (tbl-get subspace unification_ptrn)]
                             [[n o product_ptrn] product_info]
                             [[product_ptrns_struct ctxt_triple] (tuple-safe-nth continuations_struct n)]
-                            [updated_product_ptrns_struct (replace-i product_ptrns_struct o [product_ptrn product])]
+                            [updated_product_ptrns_struct (replace-i product_ptrns_struct o [product_ptrn products])]
                         ]
-                        (if (all updated_product_ptrns_struct (proc [[product_ptrn product]] (not (= product #absent))))
+                        (if (all updated_product_ptrns_struct (proc [[product_ptrn products]] (not (= products #absent))))
                             candidate
                         ))))
                 ]
@@ -449,30 +449,30 @@
 ]
     (seq
         (if (null? reduction)
-            ;;; If product was not consumed by a matching continuation above, store it directly
+            ;;; If "products" was not consumed by a matching continuation above, store it directly
             (let*
                 [
                     [subspace (tuplespace-tbl-get-or-create chart channel)]
                     [stored_value (tbl-get subspace unification_ptrn)]
                 ]
                 (seq
-                    (if flag-verbose (p "DEBUG: No consumes were filled. Storing product."))
+                    (if flag-verbose (p "DEBUG: No consumes were filled. Storing products."))
                     (tbl-add unification_ptrn_lookup_table (->symbol unification_ptrn) [unification_ptrn])
                     (if (= #absent stored_value)
-                        (tbl-add subspace unification_ptrn [[product] []])
+                        (tbl-add subspace unification_ptrn [[products] []])
                         (let [[[data_struct continuation_struct] (tbl-get subspace unification_ptrn)]]
-                            (tbl-add subspace unification_ptrn [(append data_struct product) continuation_struct])))
-                    (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
+                            (tbl-add subspace unification_ptrn [(append data_struct products) continuation_struct])))
+                    (ctxt-rtn ctxt []) ;;; TODO: Update to (ctxt-rtn ctxt products) when unification is required
                     (update!)))
 
-            ;;; If product was consumed, fill consume
+            ;;; If "products" was consumed, fill consume
             (let*
                 [
                     [[[_ subspace] [_ unification_ptrn] [_ product_info]] reduction]
                     [[data_struct continuations_struct] (tbl-get subspace unification_ptrn)]
                     [[n o product_ptrn] product_info]
                     [[product_ptrns_struct [consume_ctxt [consume_code consume_env] consume_persistent]] (tuple-safe-nth continuations_struct n)]
-                    [updated_product_ptrns_struct (replace-i product_ptrns_struct o [product_ptrn product])] ;;; TODO: Eventually store binding
+                    [updated_product_ptrns_struct (replace-i product_ptrns_struct o [product_ptrn products])] ;;; TODO: Eventually store binding
                 ]
 
                 ;;; If all product patterns are filled, send ctxt-rtn
@@ -480,11 +480,11 @@
                     (seq
                         ;;; TODO: Replace dummy bindings
                         (if flag-verbose (p "DEBUG: A consume was fully filled. Sending all products."))
-                        (ctxt-rtn consume_ctxt [(newN Tuple (length updated_product_ptrns_struct) #t) (map updated_product_ptrns_struct (proc [j [product_ptrn product]] product))])
+                        (ctxt-rtn consume_ctxt [(newN Tuple (length updated_product_ptrns_struct) #t) (map updated_product_ptrns_struct (proc [j [product_ptrn products]] products))])
                         (let [[updated_continuations_struct (delete-i continuations_struct n)]]
                             (tbl-add subspace unification_ptrn [data_struct updated_continuations_struct])
                         )
-                        (ctxt-rtn ctxt [])  ;;; TODO: Update to (ctxt-rtn ctxt product) when unification is required
+                        (ctxt-rtn ctxt [])  ;;; TODO: Update to (ctxt-rtn ctxt products) when unification is required
                         (if consume_persistent
                             (seq
                                 (if flag-verbose (p "About to re-post continuation"))
