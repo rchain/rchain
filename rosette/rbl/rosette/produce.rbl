@@ -131,7 +131,6 @@
       [ctxt-tuple product-patterns product-list])))
 
 
-;;; The produce method is roughly dual to the consume method in consume.rbl.
 ;;; While consume can suspend the thread of execution,
 ;;; produce always resumes the calling thread at the end of the method.
 (defOprn produce)

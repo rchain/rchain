@@ -83,7 +83,7 @@
          [products (consume-products reductions channel-subspace-tbl channels)]]
     (seq
       (if (null? products)
-        ;;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
+          ;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
           (seq
             (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")" #\\n)
             (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-tbl channels product-ptrns ctxt-tuple persistent)

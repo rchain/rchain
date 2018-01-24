@@ -5,6 +5,17 @@
 ;;; File defining the NameSpace actor.
 ;;; Its two main accessor methods produce and consume are defined in their respective files.
 
+;;; While RBL is untyped, the following is some of the would be inferred types
+;;;
+;;;     type Data = Any
+;;;     type ContinuationStruct = Tuple2[List[Pattern], Tuple3[Continuation, Tuple2[Code, Env], Boolean]]
+;;;     type Subspace = Tuple2[List[Data], List[ContinuationStruct]]
+;;;
+;;; The channel-subspace-tbl is a key value store that has channels as keys and subspaces as values.
+;;; The type of the subspace is described above. Note the subspace contains lists of products/data
+;;; and lists of continuation structs instead of just products/data and continuation structs because
+;;; you can queue up a bunch of produces or consumes at each channel (e.g., x!(5) | x!(5) | x!(5) -
+;;; this will store a data list of length 3 at channel x with each datum representing 5).
 (defActor NameSpace
   (slots& channel-subspace-tbl (new RblTable)
           channel-lookup-table (new RblTable)
