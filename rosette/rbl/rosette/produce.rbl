@@ -9,11 +9,11 @@
 ;;; If the channel-index is the current channel-position, then we don't want to consume the product
 ;;; as it is the currently passed in product, so we return NOT-STORED.
 (define NOT-STORED -1)
-(defProc (fetch-channel-pattern-and-product chart channel
+(defProc (fetch-channel-pattern-and-product channel-subspace-tbl channel
                                             product-patterns channel-index channel-position)
   (if (= channel-index channel-position)
       [channel NOT-STORED]
-      (let [[[data-list continuation-struct-list] (tbl-get chart channel)]]
+      (let [[[data-list continuation-struct-list] (tbl-get channel-subspace-tbl channel)]]
         (if (null? data-list)
             []
             (iterate loop [[[data & r] data-list] [data-index 0]]
@@ -21,10 +21,10 @@
                          [channel data-index]
                          (loop r (inc data-index))))))))
 
-(defProc (fetch-pattern-and-product chart channels product-patterns channel-position)
+(defProc (fetch-pattern-and-product channel-subspace-tbl channels product-patterns channel-position)
   (map channels
        (proc [i channel]
-         (fetch-channel-pattern-and-product chart channel product-patterns i channel-position))))
+         (fetch-channel-pattern-and-product channel-subspace-tbl channel product-patterns i channel-position))))
 
 ;;; Roughly dual to extract-data-candidates.
 ;;; However, it is more complicated as it has to gather candidates across multiple channels.
@@ -36,13 +36,13 @@
 ;;;
 ;;; The following is some python based pseudo-code.
 ;;;
-;;; def extract-consume-candidates(concat-channels, chart, channel,
+;;; def extract-consume-candidates(concat-channels, channel-subspace-tbl, channel,
 ;;;                                product, reverse-channel-lookup-table):
 ;;;     candidates =
 ;;;         map-with-index _, concat-channel in concat-channels:
 ;;;             channels = reverse-lookup(concat-channel)
 ;;;             channel-position = channels.index-of(channel)
-;;;             data-list, continuation-struct-list = chart.get(concat-channel)
+;;;             data-list, continuation-struct-list = channel-subspace-tbl.get(concat-channel)
 ;;;             map-with-index continuation-struct-index, \
 ;;;                            continuation-struct in continuation-struct-list:
 ;;;                 product-patterns, ctxt-stuff = continuation-struct
@@ -57,7 +57,7 @@
 ;;;
 ;;;     type Candidate = Tuple2[List[Tuple2[String, Int]], Tuple2[String, Int]]
 ;;;     type Candidates = List[Candidate]
-(defProc (extract-consume-candidates concat-channels chart channel
+(defProc (extract-consume-candidates concat-channels channel-subspace-tbl channel
                                      product reverse-channel-lookup-table)
   (if (absent? concat-channels)
       []
@@ -66,13 +66,13 @@
                   (proc [_ concat-channel]
                     (let* [[channels (tbl-get reverse-channel-lookup-table concat-channel)]
                            [channel-position (position channels channel)]
-                           [[_ continuation-struct-list] (tbl-get chart concat-channel)]]
+                           [[_ continuation-struct-list] (tbl-get channel-subspace-tbl concat-channel)]]
                       (map continuation-struct-list
                            (proc [continuation-struct-index continuation-struct]
                              (let [[[product-patterns ctxt-stuff] continuation-struct]]
                                (if (match-pattern (tuple-safe-nth product-patterns channel-position)
                                                   product)
-                                   (let [[candidate (fetch-pattern-and-product chart channels
+                                   (let [[candidate (fetch-pattern-and-product channel-subspace-tbl channels
                                                                                product-patterns
                                                                                channel-position)]]
                                      (if (any-null? candidate)
@@ -92,32 +92,32 @@
                  (not (any-null? (tuple-safe-nth candidate 0))))))))
 
 
-(defProc (delete-product chart channel data-index product)
+(defProc (delete-product channel-subspace-tbl channel data-index product)
   (if (= data-index NOT-STORED)
       product
-      (let* [[[data-list continuation-struct-list] (tbl-get chart channel)]
+      (let* [[[data-list continuation-struct-list] (tbl-get channel-subspace-tbl channel)]
              [data (tuple-safe-nth data-list data-index)]
              [updated-data-list (delete-i data-list data-index)]]
         (seq
-          (tbl-add chart channel [updated-data-list continuation-struct-list])
+          (tbl-add channel-subspace-tbl channel [updated-data-list continuation-struct-list])
           data))))
 
 
 ;;; Dual to consume-products.
 ;;; This method deletes channels from channel-lookup-table and reverse-channel-lookup-table
 ;;; if the corresponding channel continuation-struct-list's are empty.
-(defProc (consume-continuation candidate chart
+(defProc (consume-continuation candidate channel-subspace-tbl
                                channel-lookup-table reverse-channel-lookup-table product)
   (let* [[[channel-data-list [concat-channel continuation-struct-index]] candidate]
          [product-list
           (map channel-data-list
-               (proc [i [channel data-index]] (delete-product chart channel data-index product)))]
-         [[data-list continuation-struct-list] (tbl-get chart concat-channel)]
+               (proc [i [channel data-index]] (delete-product channel-subspace-tbl channel data-index product)))]
+         [[data-list continuation-struct-list] (tbl-get channel-subspace-tbl concat-channel)]
          [[product-patterns ctxt-tuple]
           (tuple-safe-nth continuation-struct-list continuation-struct-index)]
          [updated-continuation-struct-list
           (delete-i continuation-struct-list continuation-struct-index)]
-         [_ (tbl-add chart concat-channel [data-list updated-continuation-struct-list])] ]
+         [_ (tbl-add channel-subspace-tbl concat-channel [data-list updated-continuation-struct-list])] ]
     (seq
       (if (null? updated-continuation-struct-list)
           (let* [[channels-to-delete (tbl-get reverse-channel-lookup-table concat-channel)]]
@@ -139,22 +139,22 @@
   (let* [[_ (display "INFO:  (produce) " (clean-fresh channel) "!(" product ") called" #\\n)]
          [concat-channels (tbl-get channel-lookup-table channel)]
          [_ (display "DEBUG: (produce)" #\\t "relevant channels: " concat-channels #\\n)]
-         [candidates (extract-consume-candidates concat-channels chart channel
+         [candidates (extract-consume-candidates concat-channels channel-subspace-tbl channel
                                                  product reverse-channel-lookup-table)]
          [_ (display "DEBUG: (produce)" #\\t "candidates: " candidates #\\n)]
          [candidate (select-best-consume candidates)]
          [_ (display "DEBUG: (produce)" #\\t "candidate: " candidate #\\n)]]
     (if (null? candidate)
-        (let [[subspace (tbl-get chart channel)]]
+        (let [[subspace (tbl-get channel-subspace-tbl channel)]]
           (seq
             (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
             (if (absent? subspace)
-                (tbl-add chart channel [[product] []])
+                (tbl-add channel-subspace-tbl channel [[product] []])
                 (let [[[data-list continuation-struct-list] subspace]]
-                  (tbl-add chart channel [(append data-list product) continuation-struct-list])))
+                  (tbl-add channel-subspace-tbl channel [(append data-list product) continuation-struct-list])))
             (update!)))
         (let* [[[ctxt-tuple product-patterns product-list]
-                (consume-continuation candidate chart channel-lookup-table
+                (consume-continuation candidate channel-subspace-tbl channel-lookup-table
                                       reverse-channel-lookup-table product)]
                [[consume-ctxt [code env] persistent] ctxt-tuple]]
           (seq
