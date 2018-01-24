@@ -32,7 +32,10 @@
 (defPure Nil (append-tuples) [])
 (defPure Tuple (append-tuples) (concat & (self)))
 
-;;; TODO: Eliminate with implemenation of https://rchain.atlassian.net/browse/ROS-340
+;;; TODO: Eliminate with implementation of https://rchain.atlassian.net/browse/ROS-340
+;;;
+;;; Appends [value] to the current tuple referenced by key, treating absent/null as [],
+;;; unless [value] is already in the tuple.
 (defOprn tbl-unique-append)
 (defPure RblTable (tbl-unique-append key value)
   (let [[current-value (tbl-get (self) key)]]
