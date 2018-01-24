@@ -54,6 +54,10 @@
         (tbl-get (self) channel))
       subspace)))
 
+;;; Predicate to test whether a pattern matches with a product.
+;;; By default we just try a strict equality test between the pattern and the product.
+;;; For patterns that are type symbol, they are treated as wildcard patterns.
+;;; For tuples, the pattern and product must match element-wise.
 (defOprn match-pattern)
 (defOprn match-tuple-pattern)
 (defProc (match-pattern ptrn product)
