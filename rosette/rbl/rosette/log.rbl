@@ -55,7 +55,7 @@
 
 (defProc (log:display level & args)
   (let [[prefix (log:%prefix level)]
-        [dargs (reverse [#\\n & args])]]
+        [dargs (concat args [#\\n])]]
     (seq
      (if prefix
          (display stderr (log-time-string) " " (->string prefix) ": " & dargs))
