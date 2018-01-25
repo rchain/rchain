@@ -11,6 +11,7 @@ The language is still in the early stages of development, but for those who are 
     * [sbt](http://www.scala-sbt.org/0.13/docs/Installing-sbt-on-Linux.html)
     * [CUP](http://www2.cs.tum.edu/projects/cup/install.php) - can be installed using apt
     * JLex - install using apt
+    * JFlex - install using apt
     * BNFC - install 2.8.2 manually or just do the hackier `cd rholang; ./install.sh;`
     * Scala
 4. Run `sbt bnfc:generate` to generate the parser
