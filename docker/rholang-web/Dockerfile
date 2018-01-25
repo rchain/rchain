@@ -32,7 +32,9 @@ WORKDIR /opt/rholangweb
 RUN pip3 install -r requirements.txt
 RUN python3 manage.py migrate
 
-ENTRYPOINT [ "python3", "manage.py", "runserver" ]
+COPY docker/rholang-web/run-server .
+
+ENTRYPOINT [ "/opt/rholangweb/run-server" ]
 
 # Local Variables:
 # indent-tabs-mode: nil
