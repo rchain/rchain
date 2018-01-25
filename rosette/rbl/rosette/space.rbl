@@ -212,14 +212,17 @@
                             [consummation_results
                                 (map continuation_group (proc [m [unification_ptrn continuations_struct]]
                                     (map continuations_struct (proc [n [product_ptrns_struct ctxt_triple]]
-                                        (map product_ptrns_struct (proc [o [product_ptrn product]]
-                                            (if (match? NameSpace (tuple-safe-nth product_ptrns i) product)
-                                                [
-                                                    [(tuple-safe-nth channels i) (tuple-safe-nth (tuple-safe-nth subspace_groups i) j)]
-                                                    [(tuple-safe-nth unification_ptrns i) [unification_ptrn binding]]
-                                                    ["continuation" (tuple-safe-nth product_ptrns i) [n o product]]
-                                                ]
-                                            )))))))
+                                        (filter-niv
+                                            (map product_ptrns_struct (proc [o [product_ptrn product]]
+                                                (if (and (not (absent? product))
+                                                      (match? NameSpace (tuple-safe-nth product_ptrns i) product))
+                                                    [
+                                                        [(tuple-safe-nth channels i) (tuple-safe-nth (tuple-safe-nth subspace_groups i) j)]
+                                                        [(tuple-safe-nth unification_ptrns i) [unification_ptrn binding]]
+                                                        ["continuation" (tuple-safe-nth product_ptrns i) [n o product]]
+                                                    ]
+                                                    #niv
+                                            ))))))))
                             ]
                         ]
                         (tuple-concat (flatten production_results) (flatten (flatten consummation_results)))
@@ -389,21 +392,23 @@
                 ]
             ]
             (map continuation_group (proc [m [[unification_ptrn binding] continuations_struct]]
-                (map continuations_struct (proc [n [product_ptrns_struct ctxt_triple]]
-                    (let*
-                        [
-                            [channel_position (tuple-safe-nth current_channel_positions i)]
-                                ;;; TODO: This assumes that the channel cannot be in multiple positions in the consume, which is not necessarily true.
-                            [[product_ptrn stored_product] (tuple-safe-nth product_ptrns_struct channel_position)]
-                        ]
-                        (if (match? NameSpace product_ptrn products)
+                (filter-niv
+                    (map continuations_struct (proc [n [product_ptrns_struct ctxt_triple]]
+                        (let*
                             [
-                                [channel (tuple-safe-nth subspaces i)]
-                                [unification_ptrn unification_ptrn]
-                                [products [n channel_position product_ptrn]]
+                                [channel_position (tuple-safe-nth current_channel_positions i)]
+                                    ;;; TODO: This assumes that the channel cannot be in multiple positions in the consume, which is not necessarily true.
+                                [[product_ptrn stored_product] (tuple-safe-nth product_ptrns_struct channel_position)]
                             ]
-                        )
-                    ))))))))]
+                            (if (match? NameSpace product_ptrn products)
+                                [
+                                    [channel (tuple-safe-nth subspaces i)]
+                                    [unification_ptrn unification_ptrn]
+                                    [products [n channel_position product_ptrn]]
+                                ]
+                                #niv
+                            )
+                    )))))))))]
 
    [_
         (if flag-verbose
