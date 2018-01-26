@@ -113,7 +113,7 @@ VPtNegDbl. ValPattern ::= "-" Double;
 --VPtStr. ValPattern ::= String ;
 
 -- Variables
-token Var ((letter | '_')(letter | digit | '_' | '\'')*) ;
+token Var ((letter | '_')(letter | digit | '_' | '-' | '\'')*) ;
 
 separator nonempty Var "," ;
 
