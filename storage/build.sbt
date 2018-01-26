@@ -1,19 +1,50 @@
-lazy val rootSettingsDependencies = Seq(
+lazy val compilerOptions = Seq(
+  "-Xfatal-warnings",
+  "-Xfuture",
+  "-Xlint:-unused",
+  "-Ypartial-unification",
+  "-Ywarn-dead-code",
+  "-Ywarn-numeric-widen",
+  "-deprecation",
+  "-encoding", "UTF-8",
+  "-feature",
+  "-language:_",
+  "-unchecked"
+)
+
+lazy val nonConsoleOptions = Set(
+  "-Ywarn-unused-import",
+  "-Xfatal-warnings"
+)
+
+lazy val commonSettingsDependencies = Seq(
   libraryDependencies ++= Seq(
-    "org.lmdbjava"   % "lmdbjava"  % "0.0.2",
-    "org.scalatest" %% "scalatest" % "3.0.4" % "test",
+    "org.scalatest" %% "scalatest" % "3.0.4" % "test"
   )
 )
 
-lazy val rootSettings = Seq(
+lazy val commonSettings = Seq(
   organization := "coop.rchain",
-  name := "storage",
-  version := "0.1.0-SNAPSHOT",
   scalaVersion := "2.12.4",
-  connectInput in run := true,
-  logBuffered in Test := false,
+  scalacOptions ++= compilerOptions,
+  scalacOptions in (Compile, console) ~= { _.filterNot(nonConsoleOptions) },
+  scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value
 )
 
-lazy val root = (project in file("."))
-  .settings(rootSettings: _*)
-  .settings(rootSettingsDependencies: _*)
+lazy val storageSettingsDependencies = Seq(
+  libraryDependencies ++= Seq(
+    "org.lmdbjava"   % "lmdbjava"  % "0.0.2",
+    "org.typelevel" %% "cats-core" % "1.0.1"
+  )
+)
+
+lazy val storageSettings = Seq(
+  name := "storage",
+  version := "0.1.0-SNAPSHOT",
+)
+
+lazy val storage = (project in file("."))
+  .settings(commonSettings: _*)
+  .settings(commonSettingsDependencies: _*)
+  .settings(storageSettings: _*)
+  .settings(storageSettingsDependencies: _*)
