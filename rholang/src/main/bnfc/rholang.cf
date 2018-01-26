@@ -110,7 +110,7 @@ VPtInt. ValPattern ::= Integer ;
 VPtDbl. ValPattern ::= Double ;
 VPtNegInt. ValPattern ::= "-" Integer;
 VPtNegDbl. ValPattern ::= "-" Double;
---VPtStr. ValPattern ::= String ;
+VPtStr. ValPattern ::= String ;
 
 -- Variables
 token Var ((letter | '_')(letter | digit | '_' | '\'')*) ;

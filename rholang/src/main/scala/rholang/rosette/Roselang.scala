@@ -735,6 +735,9 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       )
     (B( _list, tupleContents._1 ), tupleContents._2)
   }
+  override def visit( p : VPtStr, arg : A ) : R = {
+    Tag( s""""${p.string_}"""" )
+  }
   override def visit( p : VPtTrue, arg: A ): R = {
     (Tag( s"""#t"""), arg)
   }
