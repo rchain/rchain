@@ -33,7 +33,7 @@ lazy val commonSettings = Seq(
 
 lazy val storageSettingsDependencies = Seq(
   libraryDependencies ++= Seq(
-    "org.lmdbjava"   % "lmdbjava"  % "0.0.2",
+    "org.lmdbjava"   % "lmdbjava"  % "0.6.0",
     "org.typelevel" %% "cats-core" % "1.0.1"
   )
 )
