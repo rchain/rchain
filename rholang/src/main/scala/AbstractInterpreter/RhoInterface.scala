@@ -1,453 +1,352 @@
 package AbstractInterpreter
 
-import ADT._
-import AbstractInterpreter.Alias.{RunQueue, Store}
+import ADT.Proc._
+import ADT.{Channel, Proc, Quote}
+import State.{RunQueue, Store, Trace}
+import cats.implicits._
 
 import scala.collection.immutable.HashMap
 
-package object Alias {
+/** When creating sample expressions, every name must be unique! */
+object Example {
 
-  //The store is a finite partial mapping from Channels to ChannelQueues.
-  type Store = HashMap[Channel,ChannelQueue]
+  /** @0!0 */
+  val reducible_1 = Output(Quote(Zero), Zero)
 
-  //The run-queue is just the list of expressions to be evaluated.
-  type RunQueue = List[Proc[Channel]]
+  /** @0!(0|0) */
+  val reducible_2 = Output(Quote(Zero), Par(Zero, Zero))
 
-}
+  /** @(0|0)!0 */
+  val reducible_3 = Output(Quote(Par(Zero, Zero)), Zero)
 
-// When creating sample expressions, every name must be unique!
-object Example extends App {
+  /** @(0|0)!(0|0) */
+  val reducible_4 = Output(Quote(Par(Zero, Zero)), Par(Zero, Zero)) // counter example
 
-  // @0!0
-  val reducible_1 = List(Output(Quote(Zero()), Par(Zero(), Zero())))
+  /** @0!(*@(0|0)) */
+  val reducible_5 = Output(Quote(Zero), Drop(Quote(Par(Zero, Zero))))
 
-  // @0!(0|0)
-  val reducible_2 = List(Output(Quote(Zero()), Par(Zero(), Zero())))
-
-  // @(0|0)!0
-  val reducible_3 = List(Output(Quote(Par(Zero(), Zero())), Zero()))
-
-  // @(0|0)!(0|0)
-  val reducible_4 = List(Output(Quote(Par(Zero(), Zero())), Par(Zero(), Zero()))) // counter example
-
-  // @0!(*@(0|0))
-  val reducible_5 = List(Output(Quote(Zero()), Drop(Quote(Par(Zero(), Zero())))))
-
-  // @0!(*@(0|0)) | for(@(0|0|0) <- @0){ *@(0|0|0)!( }
-  val reducible_6 = List(
+  /** @0!(*@(0|0)) | for(@(0|0|0) <- @0){ *@(0|0|0)!( } */
+  val reducible_6 =
     Par(
       Output(
-        Quote(Zero()),
-        Drop(Quote(Par(Zero(), Zero())))
+        Quote(Zero),
+        Drop(Quote(Par(Zero, Zero)))
       ),
       Input(
-        Quote(Par(Zero(), Zero(), Zero())),
-        Quote(Zero()),
-        Drop(Quote(Par(Zero(), Zero(), Zero())))
+        Action(
+          Quote(Zero),
+          Quote(Par(Zero, Zero, Zero))
+        ),
+        Drop(Quote(Par(Zero, Zero, Zero)))
       ),
     )
-  )
 
-  // new x in { x!(0) }
-  val reducible_7 = List(
-    New(
-      Var("x"),
-      Output(
-        Var("x"),
-        Zero()
-      )
-    )
-  )
 
-  // new x in { x!(0) | for(z <- x){*z} }
-  val reducible_8 = List(
-    New[Channel](
-      Var("x"),
-      Par(
-        Output(
-          Var("x"),
-          Zero()
-        ),
-        Input(
-          Var("z"),
-          Var("x"),
-          Drop(Var("z"))
-        )
-      )
-    )
-  )
+  def evaluate(proc: Proc): Unit = {
+    val result = RhoInterface.reduce
+      .run(MachineState(HashMap.empty[Channel, ChannelQueue], List(proc)))
+      .run
+    for { index <- result.indices } {
+      println(
+        "\n" + result(index)._1.mkString(
+          "Trace " + (index.toInt + 1).toString + "\n" + "\n",
+          "\n",
+          "\n" + "Terminated" + "\n"))
+    }
+  }
+  evaluate(reducible_6)
 
-  // new x in { x!(0) | for(z <- x){ *z } }
-  val reducible_9 = List(
-    New(
-      Var("x"),
-      Par(
-        Output(
-          Var("x"),
-          Zero()
-        ),
-        Input(
-          Var("z"),
-          Var("x"),
-          Drop(Var("z"))
-        ),
-        Input(
-          Var("u"),
-          Var("x"),
-          Drop(Var("u"))
-        )
-      )
-    )
-  )
-
-  // new x in { new y in { x!(*y) | for(u <- y){ u!0 }} | for( z <- x ){ z!(0) } }
-  val reducible_10 = List(
-    New(
-      Var("x"),
-      Par(
-        New(
-          Var("y"),
-          Par(
-            Output(Var("x"), Drop(Var("y"))),
-            Input(Var("u"), Var("y"), Output(Var("u"), Zero()))
-          )
-        ),
-        Input(Var("z"), Var("x"), Output(Var("z"), Zero()))
-      )
-    )
-  )
-
-  // new x in { @(0|0)!*x | for(z <- @0){ new y in { z!(y!(0)) | for(v <- y){ *v } | for(q <- z){ *q }}}}
-
-  val reducible_11 = List(
-    New[Channel](
-     Var("x"),
-      Par(
-        Output(Quote(Par(Zero(),Zero())),Drop(Var("x"))),
-        Input(
-          Var("z"),
-          Quote(Par(Zero(),Zero())),
-          New(
-            Var("y"),
-            Par(
-              Output(Var("z"),Output(Var("y"),Zero())),
-              Input(Var("v"),Var("y"),Drop(Var("v"))),
-              Input(Var("q"),Var("z"),Drop(Var("q")))
-            )
-          )
-        )
-      )
-    )
-  )
-
-  val result = RhoInterface.reduceM.reduce(MachineState(HashMap.empty[Channel, ChannelQueue], reducible_11))
-
-  println(result.length)
-  println(result.map{triple => triple._3.mkString("\n")}.mkString("\n" + "Terminated" + "\n" + "\n"))
 }
 
-//A channel may be a quoted process, or a variable.
-sealed trait Channel
-
-  case class Quote(unquote: Proc[Channel]) extends Channel {
-    override def toString: String = "@(" + unquote + ")"
-  }
-
-  case class Var(id: String) extends Channel {
-    override def toString: String = id
-  }
-
-//A ChannelQueue may be an empty queue, a list of readers, or a list of writers.
-// It will never be both a list of readers and a list of writers
+/*
+ A ChannelQueue may be an empty queue, a list of readers, or a list of writers.
+ It will never be both a list of readers and a list of writers.
+*/
 sealed trait ChannelQueue
 
-  case class ReaderQueue(x:Reader, xs: List[Reader]) extends ChannelQueue {
-    override def toString: String = (x :: xs).map{_.toString}.mkString("[", "][", "]")
-  }
-
-  case class WriterQueue(x: Writer, xs: List[Writer]) extends ChannelQueue {
-    override def toString: String = (x :: xs).map{_.toString}.mkString("[", "][", "]")
-  }
-
-  case class EmptyQueue() extends ChannelQueue {
-    override def toString: String = "[]"
-  }
-
-//A reader is a abstraction providing a bound name "z", and a continuation
-//to evaluate, "k".
-sealed trait Reader
-
-  case class Abstraction(z: Channel, k: Proc[Channel]) extends Reader {
-    override def toString: String = " λ" + z + " { " + k.toString + " } "
-  }
-
-//A writer simply represents a message, "q".
-sealed trait Writer
-
-  case class Concretion(q: Channel) extends Writer {
-    override def toString: String = " " + q.toString + " "
-  }
-
-
-case class MachineState(store: Store, runQueue: RunQueue){
-  override def toString: String = "Queue: " + runQueue.mkString(" | ") + "\n" + "Store: " + store.mkString("{ ",", "," }") + "\n"
+case class ReaderQueue(x: Reader, xs: List[Reader]) extends ChannelQueue {
+  override def toString: String =
+    (x :: xs).map(_.toString).mkString("[", "][", "]")
 }
 
+case class WriterQueue(x: Writer, xs: List[Writer]) extends ChannelQueue {
+  override def toString: String =
+    (x :: xs).map(_.toString).mkString("[", "][", "]")
+}
+
+case object EmptyQueue extends ChannelQueue {
+  override def toString: String = "[]"
+}
+
+/** A reader is a abstraction providing a bound name "z", and a continuation to evaluate, "k".*/
+sealed trait Reader
+
+case class Abstraction(z: Quote, k: Proc) extends Reader {
+  override def toString: String = " λ" + z + " { " + k.toString + " } "
+}
+
+/** A writer simply represents a message, "q". */
+sealed trait Writer
+
+case class Concretion(q: Quote) extends Writer {
+  override def toString: String = " " + q.toString + " "
+}
+
+case class MachineState(store: Store, runQueue: RunQueue) {
+  override def toString: String =
+    "Queue: " + runQueue.mkString(" | ") + "\n" + "Store: " + store.mkString(
+      "{ ",
+      ", ",
+      " }") + "\n"
+}
 
 object RhoInterface {
 
-  val getStore: Trace[MachineState, Store] =
-    Trace.state { st => (st.store, st) }
+  import Trace._
 
-
-  val putStore: Store => Trace[MachineState, Unit] =
-    store =>
-      Trace.state { st0 => ((), MachineState(store, st0.runQueue)) }
-
-
-  val getRunQueue: Trace[MachineState, RunQueue] =
-    Trace.state { st => (st.runQueue, st) }
-
-
-  val putRunQueue: RunQueue => Trace[MachineState, Unit] =
-    runQ =>
-      Trace.state { st0 => ((), MachineState(st0.store, runQ)) }
-
-  // cancel(@*N) = N
-  val cancel: Channel => Channel = {
-    case Quote(Drop(n)) => n
-    case chan => chan
+  def getStore: Trace[MachineState, List[MachineState], Store] = {
+    Trace.get[MachineState, List[MachineState]].map { state =>
+      state.store
+    }
   }
 
-  // Variable binding is represented by substitution in the body of the process.
-  // A more efficient implementation will achieve the same result using environments.
-  val bind: Channel => Channel => Proc[Channel] => Proc[Channel] =
-    chan0 =>
-      chan1 =>
-        proc =>
-          Proc.functorProc.map[Channel,Channel](proc) { name =>
-            //@*@Q = @Q in P{@*@Q/z}
-            if (name.equals(chan0)) cancel(chan1)
-            else name
-          }
+  def putStore: Store => Trace[MachineState, List[MachineState], Unit] =
+    store =>
+      Trace.modify[MachineState, List[MachineState]] {
+        case MachineState(_, runQueue) => MachineState(store, runQueue)
+      }
 
+  def getRunQueue: Trace[MachineState, List[MachineState], RunQueue] = {
+    Trace.get[MachineState, List[MachineState]].map { st =>
+      st.runQueue
+    }
+  }
 
-  val write: Channel => ChannelQueue => Trace[MachineState, Unit] =
+  def putRunQueue: RunQueue => Trace[MachineState, List[MachineState], Unit] =
+    runQueue =>
+      Trace.modify[MachineState, List[MachineState]] {
+        case MachineState(store, _) => MachineState(store, runQueue)
+      }
+
+  def cancel: Channel => Channel = {
+    case Quote(Drop(n)) => n
+    case chan           => chan
+  }
+
+  /*
+    Variable binding is represented by substitution in the body of the process.
+    A more efficient implementation will achieve the same result using environments.
+  */
+  def bind: Quote => Quote => Proc => Proc =
+    atQ => z => proc => substitute(proc)(atQ)(z)
+
+  def write
+  : Channel => ChannelQueue => Trace[MachineState, List[MachineState], Unit] =
     chan =>
       chanQ =>
-        for {store <- getStore
-             _ <- putStore(store + {
-               chan -> chanQ
-             })
+        for {
+          store <- getStore
+          _ <- putStore(store + {
+            chan -> chanQ
+          })
         } yield ()
 
-
-  val alloc: Channel => Trace[MachineState, ChannelQueue] = {
+  def alloc
+  : Channel => Trace[MachineState, List[MachineState], ChannelQueue] = {
     chan =>
-      val e = EmptyQueue()
-      for {_ <- write(chan)(e)} yield e
+      val e = EmptyQueue
+      for { _ <- write(chan)(e) } yield e
   }
 
-
-  val read: Channel => Trace[MachineState, ChannelQueue] =
+  def read: Channel => Trace[MachineState, List[MachineState], ChannelQueue] =
     chan =>
-      for {store <- getStore
-           chanQ1 <- store.get(chan) match {
-             //I'd like to just be able to say pure(chanQ0)
-             case Some(chanQ0) => Trace.reduceMonad[MachineState].pure(chanQ0)
-             case None => alloc(chan)
-           }
+      for {
+        store <- getStore
+        chanQ1 <- store.get(chan) match {
+          case Some(chanQ0) =>
+            Trace.pure[MachineState, List[MachineState], ChannelQueue](chanQ0)
+          case None => alloc(chan)
+        }
       } yield chanQ1
 
-
-  val readerQueue: List[Reader] => ChannelQueue = {
-    case Nil => EmptyQueue()
+  /** Smart constructor for readerQueue */
+  def readerQueue: List[Reader] => ChannelQueue = {
+    case Nil          => EmptyQueue
     case reader :: rs => ReaderQueue(reader, rs)
   }
 
-
-  val writerQueue: List[Writer] => ChannelQueue = {
-    case Nil => EmptyQueue()
+  /** Smart constructor for writerQueue */
+  def writerQueue: List[Writer] => ChannelQueue = {
+    case Nil          => EmptyQueue
     case writer :: ws => WriterQueue(writer, ws)
   }
 
+  def reduce: Trace[MachineState, List[MachineState], Unit] = {
 
-  val reduceM: Trace[MachineState, Unit] = {
+    /** Get run-queue and pull first process off. */
+    for {
+      runQueue <- getRunQueue
 
-    // Get run-queue and pull first process off.
-    for {runQueue <- getRunQueue
+      _ <- runQueue match {
 
-         _ <- runQueue match {
+        /** If the queue is empty, log the final state, and terminate. */
+        case Nil =>
+          for {
+            st <- Trace.get[MachineState, List[MachineState]]
 
-           // If the queue is empty, log the final state, and terminate.
-           case Nil =>
+            _ <- Trace.tell(List(st))
+          } yield ()
 
-             for {st <- Trace.get[MachineState]
+        case proc :: xs =>
+          for {
+            _ <- proc match {
 
-                  _ <- Trace.tell(List(st))} yield ()
+              /** (Store, 0 :: R) -> (Store, R) */
+              case Zero =>
+                for {
+                  st <- Trace.get[MachineState, List[MachineState]]
 
-           case proc :: xs =>
+                  _ <- Trace.tell(List(st))
 
-             for {_ <- proc match {
+                  _ <- putRunQueue(xs)
 
-                 // (Store, 0 :: R) -> (Store, R)
-               case Zero() =>
+                } yield ()
 
-                 for {st <- Trace.get[MachineState]
+              case par @ Par(_) =>
+                /** Encodes non-determinism by generating an auxiliary run-queue for every permutation of the set (P1 | ... | Pn) */
+                for {
+                  interleaving <- Trace
+                    .fromList[MachineState, List[MachineState], Seq[Proc]](
+                    par.processes.permutations.toList)
 
-                      _ <- Trace.tell(List(st))
+                  /** Adds a permutation to the original run-queue */
+                  newRunQueue = (interleaving ++ xs).toList
 
-                      _ <- putRunQueue(xs)
+                  /** Continues evaluating with new run-queue */
+                  _ <- putRunQueue(newRunQueue)
 
-                 } yield ()
+                } yield ()
 
+              case Input(Action(x, z), k) =>
+                val abs = Abstraction(z, k)
 
-               case par@Par(_*) =>
+                for {
+                  st <- Trace.get[MachineState, List[MachineState]]
 
-                 // Encodes non-determinism by generating an auxiliary run-queue for every permutation of the set (P1 | ... | Pn)
-                 for {interleaving <- Trace.fromList(par.processes.permutations.toList)
+                  _ <- Trace.tell(List(st))
 
-                      // Adds a permutation to the original run-queue
-                      newRunQueue = (interleaving ++ xs).toList
+                  chanQ <- read(x)
 
-                      // Continues evaluating with new run-queue
-                      _ <- putRunQueue(newRunQueue)
+                  _ <- chanQ match {
 
-                 } yield ()
+                    /** If there is a writer waiting, pull it off, and bind it's message to z in k.*/
+                    case WriterQueue(writer: Concretion, writers) =>
+                      for {
+                        _ <- write(x)(writerQueue(writers))
 
-               case Input(z, x, k) =>
+                        _ <- putRunQueue(bind(writer.q)(z)(k) :: xs)
 
-                 val abs = Abstraction(z, k)
+                      } yield ()
 
-                 for {st <- Trace.get[MachineState]
+                    /** If there is a reader waiting, create a reader, Abstraction(z,k), and add to the end of queue. */
+                    case ReaderQueue(reader, readers) =>
+                      for {
+                        _ <- write(x)(readerQueue((reader :: readers) :+ abs))
 
-                      _ <- Trace.tell(List(st))
+                        _ <- putRunQueue(xs)
 
-                      chanQ <- read(x)
+                      } yield ()
 
-                      _ <- chanQ match {
+                    /** If queue is empty, create a ReaderQueue, and add reader to it. */
+                    case EmptyQueue =>
+                      for {
+                        _ <- write(x)(readerQueue(List(abs)))
 
-                          // If there is a writer waiting, pull it off, and bind it's message to z in k.
-                        case WriterQueue(writer: Concretion, writers) =>
+                        newStore <- getStore
 
-                          for {_ <- write(x)(writerQueue(writers))
+                        _ <- Trace.set[MachineState, List[MachineState]](
+                          MachineState(newStore, xs))
 
-                               _ <- putRunQueue(bind(z)(writer.q)(k) :: xs)
+                      } yield ()
+                  }
+                } yield ()
 
-                          } yield ()
+              case Output(x, q) =>
+                val atQ = Quote(q)
 
-                          // If there is a reader waiting, create a reader, Abstraction(z,k), and add to the end of queue.
-                        case ReaderQueue(reader, readers) =>
+                for {
+                  st <- Trace.get[MachineState, List[MachineState]]
+                  _ <- Trace.tell(List(st))
 
-                          for {_ <- write(x)(readerQueue((reader :: readers) :+ abs))
+                  chanQ <- read(x)
 
-                               _ <- putRunQueue(xs)
+                  _ <- chanQ match {
 
-                          } yield ()
+                    /** Similar to ReaderQueue rule in Input. */
+                    case WriterQueue(writer: Concretion, writers) =>
+                      for {
+                        _ <- write(x)(
+                          writerQueue((writer :: writers) :+ Concretion(atQ)))
 
-                          // If queue is empty, create a ReaderQueue, and add reader to it.
-                        case EmptyQueue() =>
+                        newStore <- getStore
 
-                          for {_ <- write(x)(readerQueue(List(abs)))
+                        _ <- Trace.set[MachineState, List[MachineState]](
+                          MachineState(newStore, xs))
 
-                               newStore <- getStore
+                      } yield ()
 
-                               _ <- Trace.put(MachineState(newStore, xs))
+                    /** If reader in the queue, pull it off, bind message, and add continuation to the end of the run-queue */
+                    case ReaderQueue(reader, readers) =>
+                      reader match {
 
-                          } yield ()
-                      }
-                 } yield ()
+                        case Abstraction(z, k) =>
+                          for {
+                            _ <- write(x)(readerQueue(readers))
 
+                            newStore <- getStore
 
-               case Output(x, q) =>
-
-                 val atQ = Quote(q)
-
-                 for {st <- Trace.get[MachineState]
-
-                      _ <- Trace.tell(List(st))
-
-                      chanQ <- read(x)
-
-                      _ <- chanQ match {
-
-                          // Similar to ReaderQueue rule in Input.
-                        case WriterQueue(writer: Concretion, writers) =>
-
-                          for {_ <- write(x)(writerQueue((writer :: writers) :+ Concretion(atQ)))
-
-                               newStore <- getStore
-
-                               _ <- Trace.put(MachineState(newStore, xs))
-
-                          } yield ()
-
-                          // If reader in the queue, pull it off, bind message, and add continuation to the end of the run-queue
-                        case ReaderQueue(reader, readers) =>
-
-                          reader match {
-
-                            case Abstraction(z, k) =>
-
-                              for {_ <- write(x)(readerQueue(readers))
-
-                                   newStore <- getStore
-
-                                   _ <- Trace.put(MachineState(newStore, xs :+ bind(z)(atQ)(k)))
-
-                              } yield ()
-                          }
-
-                          // Similar to EmptyQueue rule in Input
-                        case EmptyQueue() =>
-
-                          for {_ <- write(x)(writerQueue(List(Concretion(atQ))))
-
-                               newStore <- getStore
-
-                               _ <- Trace.put(MachineState(newStore, xs))
+                            _ <- Trace.set[MachineState, List[MachineState]](
+                              MachineState(newStore, xs :+ bind(atQ)(z)(k)))
 
                           } yield ()
                       }
-                 } yield ()
 
-                //
-               case Drop(x) =>
+                    /** Similar to EmptyQueue rule in Input */
+                    case EmptyQueue =>
+                      for {
+                        _ <- write(x)(writerQueue(List(Concretion(atQ))))
 
-                 x match {
+                        newStore <- getStore
 
-                   case Quote(p) =>
+                        _ <- Trace.set[MachineState, List[MachineState]](
+                          MachineState(newStore, xs))
 
-                     for {st <- Trace.get[MachineState]
+                      } yield ()
+                  }
+                } yield ()
 
-                          _ <- Trace.tell(List(st))
+              case Drop(x) =>
+                x match {
 
-                          //(Store, *@Q :: R) -> (Store, Q :: R)
-                          _ <- putRunQueue(p :: xs)} yield ()
-
-                   case v@Var(_) => sys.error(s"Variable $v cannot be de-referenced")
-                 }
-
-
-               case New(x, k) =>
-
-                 for {st <- Trace.get[MachineState]
+                  case Quote(p) =>
+                    for {
+                      st <- Trace.get[MachineState, List[MachineState]]
 
                       _ <- Trace.tell(List(st))
 
-                      _ <- alloc(x)
+                      /**(Store, *@Q :: R) -> (Store, Q :: R)*/
+                      _ <- putRunQueue(p :: xs)
+                    } yield ()
 
-                      _ <- putRunQueue(k :: xs)
+                }
 
-                 } yield ()
+              case _ => sys.error("Undefined term")
+            }
 
-               case _ => sys.error("Undefined term")
-             }
+            _ <- reduce
 
-                  _ <- reduceM
-
-             } yield ()
-         }
+          } yield ()
+      }
     } yield ()
   }
 }
