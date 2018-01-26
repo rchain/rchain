@@ -16,6 +16,34 @@
 ;;; and lists of continuation structs instead of just products/data and continuation structs because
 ;;; you can queue up a bunch of produces or consumes at each channel (e.g., x!(5) | x!(5) | x!(5) -
 ;;; this will store a data list of length 3 at channel x with each datum representing 5).
+;;;
+;;; A general outline for the consume and produce methods are as follows.
+;;;
+;;; Consume(list of [channel pattern] tuples)
+;;;   Check if data matching each pattern is available on each channel
+;;;     yes: Remove it from table and pass it to continuation
+;;;     no:
+;;;       Produce joined channel
+;;;       Store continuation and patterns at joined channel
+;;;       add joined channel -> [[channel pattern]] mapping
+;;;         ;; (Not necessary if we store the joined channel separated below)
+;;;       add channel -> joined channel mapping
+;;;
+;;; Produce(bat-channel, data)
+;;;  for each joined channel in channel->joined channel mapping:
+;;;    for each continuation struct list in joined channel:
+;;;      if pattern at bat-channel matches data:
+;;;        for each channel in joined channel ;; (This is where we use the mapping commented above)
+;;;          if channel == bat-channel and pattern matches data
+;;;            save data ;;; or technically the fact that its valid
+;;;          elif channel has data that matches the pattern
+;;;            save data
+;;;          else:
+;;;            this joined channel isn't viable
+;;;  if any joined channel is viable:
+;;;    pick 1 and eat the data
+;;;  else:
+;;;    store the data
 (defActor NameSpace
   (slots& channel-subspace-tbl (new RblTable)
           channel-lookup-table (new RblTable)
