@@ -545,7 +545,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         ( acc, e ) => e.accept( this, arg )._1 :: acc
       )
 
-    B( _produce, TS :: Leaf(Var(p.var_)) :: Leaf(Var("**wildcard**")) :: actls)
+    B( _produce, TS :: Leaf(Var(p.var_)) :: actls)
   }
 
   override def visit( p : PPar, arg : A ) : R = {
