@@ -41,6 +41,7 @@ lazy val storageSettingsDependencies = Seq(
 lazy val storageSettings = Seq(
   name := "storage",
   version := "0.1.0-SNAPSHOT",
+  PB.targets in Compile := Seq(scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value)
 )
 
 lazy val storage = (project in file("."))
