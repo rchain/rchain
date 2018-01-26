@@ -487,7 +487,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
                   B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
                 }
 
-                val matchTerm = B(_match)(TS, qPattern, pTerm)
+                val matchTerm = B(_match)(qPattern, pTerm)
                 val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
                   createProcForPatternBindings
                 } else {
