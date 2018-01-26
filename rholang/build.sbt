@@ -1,5 +1,10 @@
 import BNFC._
 
+libraryDependencies += "org.typelevel" %% "cats-core" % "1.0.0-RC1"
+libraryDependencies += "org.typelevel" %% "cats-free" % "1.0.0-RC1"
+libraryDependencies += "io.monix" %% "monix" % "2.3.0"
+libraryDependencies += "io.monix" %% "monix-cats" % "2.3.0"
+
 lazy val commonOptions = Seq(
   "-language:existentials",
   "-language:higherKinds",
