@@ -34,6 +34,7 @@
 (test-form (match-tuple-pattern ["a"] ['foo]) #f)
 (test-form (match-tuple-pattern [0] ['foo]) #f)
 (test-form (match-tuple-pattern ['foo] [2]) #t)
+(test-form (match-tuple-pattern ['y 'z] ['a]) #f)
 
 (test-form (concat-symbol-list []) ')
 (test-form (concat-symbol-list ['hello 'world]) 'helloworld)

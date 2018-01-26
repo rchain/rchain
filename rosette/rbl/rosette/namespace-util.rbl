@@ -68,12 +68,11 @@
 (defPure Tuple (match-tuple-pattern other)
   (if (or (null? (self)) (null? other))
       (same? (self) other)
-      (iterate loop [[[i & r1] (self)] [[j & r2] other]]
-               (cond ((match-pattern i j)
-                        (if (and (null? r1) (null? r2))
-                          #t
-                          (loop r1 r2)))
-                     (else #f)))))
+      (let  [[[i & r1] (self)]
+             [[j & r2] other]]
+        (if (match-pattern i j)
+            (match-tuple-pattern r1 r2)
+            #f))))
 
 ;;; Equivalent to (head (drop-while list niv?)) - see Haskell dropWhile
 (defProc (non-niv-head list)
