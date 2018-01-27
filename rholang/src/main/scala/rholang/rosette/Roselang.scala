@@ -482,7 +482,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
               val patternResult: R = pm.ppattern_.accept(this, arg)
               val pattern: StrTermCtxt = patternResult._1
               val qPattern: StrTermCtxt = doQuote(pattern)._1
-              val patternBindings: BoundSet = patternResult._2
+              val patternBindings: BoundSet = arg ++ patternResult._2
               val continuation: StrTermCtxt = pm.proc_.accept(this, patternBindings)._1
               val remainder: StrTermCtxt = acc
               if (isWild(pm.ppattern_)) {
