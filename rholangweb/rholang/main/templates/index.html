@@ -30,7 +30,7 @@
         {% csrf_token %}
         <input id="hdnView" type="hidden" name="view" />
         <div class="page-header">
-          <h1>Rholang Playground (PRE-ALPHA)</h1>
+          <h1>Rholang Playground (0.1 ALPHA)</h1>
 
           <p>
             <a href="https://rholang.rchain.coop/">Rholang</a> is a
@@ -47,7 +47,10 @@
           </select>
           <div class="panel-body">
             {% render_field form.rho class="form-control" rows="16" cols="80" style="font-family: monospace;" placeholder='print(5)' %}
-            <button type="submit" class="btn btn-default">Compile and Run</button>
+            <button type="submit" class="btn btn-primary">Compile and Run</button>
+            <button type="button" class="btn" data-toggle="modal" data-target="#saveDialog">
+              Save As...
+            </button>
             <br />
             <label>{{ form.verbose }} Verbose</label>
           </div>
@@ -89,6 +92,34 @@
           {% endif %}
         </div>
     </form>
+
+    <!-- Save Dialog -->
+    <div class="modal fade" id="saveDialog" tabindex="-1"
+         role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="saveAs">Save Rholang to File</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <form action="save" method="POST">
+            {% csrf_token %}
+            <div class="modal-body">
+              <label>Filename: <input name="basename" />.rho</label>
+              <input type="hidden" name="rhoSave" id="rhoSave" />
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-dismiss="modal"
+                      >Cancel</button>
+              <input type="submit" class="btn btn-primary" id="save" data-dismiss="modal"
+                     value="Save" />
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 
         <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
@@ -101,6 +132,7 @@
           e.preventDefault()
           $(this).tab('show')
         });
+
         var examples = {{ examples|safe }};
         var exElt = $('#examples');
         exElt.html('<option>Examples:<' + '/option>');
@@ -115,6 +147,11 @@
             (_ix, opt) => { name = $(opt).attr('value') });
           $('#id_rho').text(exByName[name]);
         });
+
+        $('#save').click(function (e) {
+          $('#rhoSave').val($('#rhoEdit').val());
+        });
+
       });
     </script>
 </body>
