@@ -72,7 +72,8 @@ class Playground(object):
         log.info('saving text %s... (%d) to %s',
                  rho[:8], len(rho), filename)
         try:
-            dest.open('w').write(rho)
+            with dest.open('w') as f:
+                f.write(rho)
         except IOError as oops:
             log.error('cannot save: %s', oops)
             return HttpResponse('failed to save', status=500)
