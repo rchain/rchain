@@ -79,7 +79,8 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       CharClassPattern.parse("[^\\t\\[]").contains(CharClassPattern("\t[", negateCharSet = true)))
 
     assert(CharClassPattern.parse("a").contains(CharClassPattern("a")))
-    assert(CharClassPattern.parse("\\s").contains(CharClassPattern(CharClassPattern.spacesCharSet)))
+    assert(
+      CharClassPattern.parse("\\s").contains(CharClassPattern(CharClassPattern.spacesCharSet)))
     assert(
       CharClassPattern
         .parse("\\S")
@@ -464,5 +465,45 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
         .parse("ba")
         .contains(AltPattern(MultPattern(CharClassPattern("b"), Multiplier.presetOne) +
           MultPattern(CharClassPattern("a"), Multiplier.presetOne))))
+  }
+
+  "CharClassPattern toString" should "work on all patterns" in {
+    assert(CharClassPattern.parse("[\\t\\r\\n]").get.toString == "[\\n\\t\\r]")
+    assert(CharClassPattern.parse("[^\\t\\r\\n]").get.toString == "[^\\n\\t\\r]")
+
+    assert(CharClassPattern.parse("[\\t]").get.toString == "\\t")
+    assert(CharClassPattern.parse("[^\\t]").get.toString == "[^\\t]")
+
+    assert(CharClassPattern.parse("\\w").get.toString == "\\w")
+    assert(CharClassPattern.parse("\\s").get.toString == "\\s")
+    assert(CharClassPattern.parse("\\d").get.toString == "\\d")
+
+    assert(CharClassPattern.parse("\\W").get.toString == "\\W")
+    assert(CharClassPattern.parse("\\S").get.toString == "\\S")
+    assert(CharClassPattern.parse("\\D").get.toString == "\\D")
+
+    assert(CharClassPattern.parse("[^\\D]").get.toString == "\\d")
+    assert(CharClassPattern.parse("[^\\d]").get.toString == "\\D")
+    //single sequence
+    assert(CharClassPattern.parse("[a-z]").get.toString == "[a-z]")
+    assert(CharClassPattern.parse("[^a-z]").get.toString == "[^a-z]")
+    //multi-sequence
+    assert(CharClassPattern.parse("[0-9a-zQ]").get.toString == "[0-9Qa-z]")
+    assert(CharClassPattern.parse("[^0-9a-zQ]").get.toString == "[^0-9Qa-z]")
+    //complex things
+    assert(CharClassPattern.parse("[\\dABCD]").get.toString == "[0-9A-D]")
+    assert(CharClassPattern.parse("[^\\dABCD]").get.toString == "[^0-9A-D]")
+    //char codes
+    assert(CharClassPattern.parse("[\\uFFF1-\\uFFF80-9]").get.toString == "[0-9\\uFFF1-\\uFFF8]")
+    assert(
+      CharClassPattern.parse("[^\\uFFF1-\\uFFF80-9]").get.toString == "[^0-9\\uFFF1-\\uFFF8]")
+    //empty and anythingElse sets
+    assert(CharClassPattern.parse(".").get.toString == ".")
+    assert(CharClassPattern.parse(".").get.negated.toString == "")
+    //escape sequences
+    assert(CharClassPattern.parse("\\[").get.toString == "\\[")
+    assert(CharClassPattern.parse("\\xFF").get.toString == "\\xFF")
+    //empty set (no match)
+    assert(CharClassPattern(Nil).toString == "")
   }
 }
