@@ -3,7 +3,7 @@ new helloAgain in {
     new chan in {
       chan!("Hello again, world!") |
       for (text <- chan) {
-        text.display()
+        text.display("\n")
       }
     }
   } |

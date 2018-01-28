@@ -23,12 +23,12 @@ new MakeCell in {
     new ack in {
       myGet!(ack) |
       for (result <- ack) {
-        result.display() |
+        result.display("\n") |
         mySet!([456, ack]) |
         for (_ <- ack) {
           myGet!(ack) |
           for (result <- ack) {
-            result.display()
+            result.display("\n")
           }
         }
       }

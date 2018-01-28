@@ -28,7 +28,7 @@ Rholang is "process-oriented": all computation is done by means of message passi
      3     new chan in {
      4       chan!("Hello again, world!") |
      5       for (text <- chan) {
-     6         text.display()
+     6         text.display("\n")
      7       }
      8     }
      9   } |
@@ -70,12 +70,12 @@ Rholang is "process-oriented": all computation is done by means of message passi
     23     new ack in {
     24       myGet!(ack) |
     25       for (result <- ack) {
-    26         result.display() |
+    26         result.display("\n") |
     27         mySet!([456, ack]) |
     28         for (_ <- ack) {
     29           myGet!(ack) |
     30           for (result <- ack) {
-    31             result.display()
+    31             result.display("\n")
     32           }
     33         }
     34       }
