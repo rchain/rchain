@@ -9,9 +9,11 @@ done
 sed -i 's/print/ostream-print (ostream-new "results.txt")/g' tests/*.rbl
 # Move all generated tests under the rosette/tests folder to run
 mv tests/*.rbl ../rosette/rbl/rosette/tests/
+# Test for rho files that won't compile because of bad syntax
 for i in failure_tests/*.rho; do
-  if ./rho2rbl "$i" ; then
-    rm "${i%.*}.rbl"
-    exit 1
+  if ./rho2rbl "$i"; then
+    rm "${i%.*}.rbl";
+  else
+    exit 1;
   fi
 done
