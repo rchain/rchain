@@ -2,6 +2,7 @@ from pathlib import Path
 from resource import setrlimit
 from subprocess import Popen
 from tempfile import TemporaryDirectory
+import logging
 
 from django import forms
 from django.forms import Form
@@ -9,6 +10,8 @@ from django.shortcuts import render
 
 import rholang.settings as cfg
 from .runner import Compiler, VM, ConfigurationError, UserError
+
+log = logging.getLogger(__name__)
 
 
 def home(request):
@@ -35,6 +38,7 @@ def home(request):
                     rbl = compiler.compile_text(rho, work=Path(tmp))
                 compile_error = None
             except UserError as oops:
+                log.error('compile_text: %s', oops)
                 rbl = None
                 compile_error = str(oops)
 
@@ -50,6 +54,7 @@ def home(request):
                     _warnings, _preamble, session = vm.run_repl(rbl, verbose)
                     run_error = None
                 except UserError as oops:
+                    log.error('run_repl: %s', oops)
                     run_error = oops.args[0]
                     session = None
     else:
