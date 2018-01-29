@@ -54,6 +54,5 @@
 (defActor NameSpace
   (slots& channel-subspace-table (new RblTable)
           channel-lookup-table (new RblTable)
-          reverse-channel-lookup-table (new RblTable)
-          unification-ptrn-lookup-table (new RblTable)))
+          reverse-channel-lookup-table (new RblTable)))
 (define t (new NameSpace))
