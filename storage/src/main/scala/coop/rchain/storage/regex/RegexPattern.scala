@@ -465,7 +465,7 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
         "\\u%04X".format(c.toInt)
       } else {
         //we don't support surrogates anyway, but let's be able to print them
-        val surrogatePair = Character.toChars(c)
+        val surrogatePair = Character.toChars(c.toInt)
         //one day Unicode consortium will add 3-chars surrogate, lets handle it today
         surrogatePair.foldLeft("")((str, ch) => str + "\\u%04X".format(ch.toInt))
       }
