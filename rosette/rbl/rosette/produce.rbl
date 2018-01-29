@@ -13,11 +13,12 @@
                                             product-patterns channel-index channel-position)
   (if (= channel-index channel-position)
       [channel NOT-STORED]
-      (let [[[data-list continuation-struct-list] (tbl-get channel-subspace-tbl channel)]]
+      (let [[[data-list continuation-struct-list] (tbl-get channel-subspace-tbl channel)]
+           [product-pattern (tuple-safe-nth product-patterns channel-index)]]
         (if (null? data-list)
             []
             (iterate loop [[[data & r] data-list] [data-index 0]]
-                     (if (match-pattern (tuple-safe-nth product-patterns channel-index) data)
+                     (if (match-pattern product-pattern data)
                          [channel data-index]
                          (loop r (inc data-index))))))))
 
