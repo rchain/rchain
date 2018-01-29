@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,18 +17,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "RBLstream.h"
-
 #include <sys/errno.h>
 #include <stdio.h>
 #include "BinaryOb.h"
@@ -72,7 +62,7 @@ Istream* Istream::create(Reader* r) {
     PROTECT(r);
     pExt ext = StdExtension::create(0);
     void* loc = PALLOC1(sizeof(Istream), ext);
-    return NEW(loc) Istream(emptyMbox, ext, r);
+    return new (loc) Istream(emptyMbox, ext, r);
 }
 
 
@@ -103,7 +93,7 @@ Ostream::~Ostream() {
 
 Ostream* Ostream::create(FILE* ostrm) {
     void* loc = PALLOC(sizeof(Ostream));
-    return NEW(loc) Ostream(ostrm);
+    return new (loc) Ostream(ostrm);
 }
 
 
@@ -132,8 +122,9 @@ DEF("istream-new", makeIstream, 1, 2) {
     char* path = BASE(ARG(0))->asPathname();
     const char* mode = "r";
 
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     if (NARGS == 2) {
         CHECK(1, RBLstring, mode_string);
@@ -141,12 +132,13 @@ DEF("istream-new", makeIstream, 1, 2) {
     }
 
     FILE* f = fopen(path, mode);
+
     if (f) {
         Reader* r = Reader::create(f);
         return Istream::create(r);
-    }
-    else
+    } else {
         return PRIM_ERROR(sys_errmsg());
+    }
 }
 
 
@@ -174,8 +166,9 @@ DEF("istream-readline", istreamReadLine, 1, 1) {
     CHECK(0, Istream, stream);
 
     pOb cOb = stream->reader->readCh();
-    if (cOb == RBLEOF)
+    if (cOb == RBLEOF) {
         return RBLEOF;
+    }
 
     char c;
 
@@ -184,16 +177,17 @@ DEF("istream-readline", istreamReadLine, 1, 1) {
             readline_buf[i] = 0;
             return RBLstring::create(readline_buf);
         }
+
         c = CHARVAL(cOb);
         if (c == '\n') {
             readline_buf[i] = 0;
             return RBLstring::create(readline_buf);
-        }
-        else {
+        } else {
             readline_buf[i] = c;
             cOb = stream->reader->readCh();
         }
     }
+
     readline_buf[1023] = 0;
     return RBLstring::create(readline_buf);
 }
@@ -207,7 +201,7 @@ DEF("istream-clear", istreamClear, 1, 2) {
 
 
 DEF("istream-rdstate", istreamRdState, 1, 1) {
-    CHECK(0, Istream, stream);
+    CHECK_NOVAR(0, Istream);
     return PRIM_ERROR("de-implemented");
 }
 
@@ -215,12 +209,13 @@ DEF("istream-rdstate", istreamRdState, 1, 1) {
 DEF("istream-close", istreamClose, 1, 1) {
     CHECK(0, Istream, stream);
 
-    if (stream->reader != NIV)
+    if (stream->reader != NIV) {
         if (stream->reader->file) {
             fclose(stream->reader->file);
             stream->reader->file = 0;
             stream->reader = (Reader*)NIV;
         }
+    }
 
     return NIV;
 }
@@ -228,11 +223,11 @@ DEF("istream-close", istreamClose, 1, 1) {
 
 DEF("ostream-new", makeOstream, 1, 2) {
     char* path = BASE(ARG(0))->asPathname();
-    char* reason = "problem opening ostream";
     const char* mode = "a";
 
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     if (NARGS == 2) {
         CHECK(1, RBLstring, mode_string);
@@ -241,10 +236,11 @@ DEF("ostream-new", makeOstream, 1, 2) {
 
     FILE* f = fopen(path, mode);
 
-    if (f)
+    if (f) {
         return Ostream::create(f);
-    else
+    } else {
         return PRIM_ERROR(sys_errmsg());
+    }
 }
 
 
@@ -254,15 +250,18 @@ DEF("ostream-display", ostreamDisplay, 2, MaxArgs) {
     if (strm->stream) {
         int n = NARGS;
         errno = 0;
-        for (int i = 1; i < n; i++)
+        for (int i = 1; i < n; i++) {
             BASE(ARG(i))->displayOn(strm->stream);
-        if (errno != 0)
+        }
+
+        if (errno != 0) {
             return FIXNUM(-errno);
-        else
+        } else {
             return NIV;
-    }
-    else
+        }
+    } else {
         return PRIM_ERROR("cannot display on closed ostream");
+    }
 }
 
 
@@ -273,17 +272,21 @@ DEF("ostream-print", ostreamPrint, 2, MaxArgs) {
         int n = NARGS;
         errno = 0;
         for (int i = 1; i < n; i++) {
-            if (i > 1)
+            if (i > 1) {
                 putc(' ', strm->stream);
+            }
+
             BASE(ARG(i))->printQuotedOn(strm->stream);
         }
-        if (errno != 0)
+
+        if (errno != 0) {
             return FIXNUM(-errno);
-        else
+        } else {
             return NIV;
-    }
-    else
+        }
+    } else {
         return PRIM_ERROR("cannot print on closed ostream");
+    }
 }
 
 
@@ -293,6 +296,7 @@ DEF("ostream-close", ostreamClose, 1, 1) {
         fclose(strm->stream);
         strm->stream = 0;
     }
+
     return NIV;
 }
 
@@ -300,14 +304,15 @@ DEF("ostream-close", ostreamClose, 1, 1) {
 DEF("stream-status", streamStat, 1, 1) {
     char* path = BASE(ARG(0))->asPathname();
 
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     static struct stat statbuf;
     int status = stat(path, &statbuf);
-    if (status)
+    if (status) {
         return NIV;
-    else {
+    } else {
         ByteVec* result = ByteVec::create(sizeof(struct stat));
         memcpy(&result->byte(0), &statbuf, sizeof(struct stat));
         return result;
@@ -318,8 +323,9 @@ DEF("stream-status", streamStat, 1, 1) {
 DEF("prim-display", obDisplay, 1, MaxArgs) {
     int nargs = NARGS;
 
-    for (int i = 0; i < nargs; i++)
+    for (int i = 0; i < nargs; i++) {
         BASE(ARG(i))->displayOn(stdout);
+    }
 
     return NIV;
 }
@@ -328,8 +334,10 @@ DEF("prim-display", obDisplay, 1, MaxArgs) {
 DEF("prim-print", obPrint, 1, MaxArgs) {
     int n = NARGS;
     for (int i = 0; i < n; i++) {
-        if (i > 0)
+        if (i > 0) {
             putchar(' ');
+        }
+
         BASE(ARG(i))->printQuotedOn(stdout);
     }
 
@@ -351,50 +359,52 @@ DEF("ostream-log-time", obLogTime, 1, 1) {
         int length = fprintf(strm->stream, "%s", buf);
         if (length <= 0) {
             return PRIM_ERROR("Error writing to ostream");
-        }
-        else {
+        } else {
             return NIV;
         }
-    }
-    else {
+    } else {
         return PRIM_ERROR("cannot print on closed ostream");
     }
 }
 
+DEF("log-time-string", obLogTimeString, 0, 1) {
+    char      buf[128];
+    time_t    rawtime;
+    struct tm timeinfo;
+
+    rawtime = time(NULL);
+    localtime_r(&rawtime, &timeinfo);
+    strftime(buf, sizeof buf, "%F %T", &timeinfo);
+
+    return RBLstring::create(buf);
+}
 
 DEF("prim-flush", obFlush, 0, 1) {
-    if (NARGS == 0)
+    if (NARGS == 0) {
         fflush(stdout);
-    else {
+    } else {
         CHECK(0, Ostream, strm);
         if (strm->stream) {
-            if (fflush(strm->stream) == EOF)
+            if (fflush(strm->stream) == EOF) {
                 return FIXNUM(-errno);
-        }
-        else
+            }
+        } else {
             return PRIM_ERROR("cannot flush closed ostream");
+        }
     }
+
     return NIV;
 }
 
-#if !defined(LINUX)
 DEF("getFd", obGetFd, 1, 1) {
-    if (IS_A(ARG(0), Istream))
-#ifdef HPUX
-        return FIXNUM(((Istream*)ARG(0))->reader->file->__fileL);
-#else
-        return FIXNUM(((Istream*)ARG(0))->reader->file->_file);
-#endif
-    else if (IS_A(ARG(0), Ostream))
-#ifdef HPUX
-        return FIXNUM(((Ostream*)ARG(0))->stream->__fileL);
-#else
-        return FIXNUM(((Ostream*)ARG(0))->stream->_file);
-#endif
-    else
+    if (IS_A(ARG(0), Istream)) {
+        return FIXNUM(fileno(((Istream*)ARG(0))->reader->file));
+    } else if (IS_A(ARG(0), Ostream)) {
+        return FIXNUM(fileno(((Ostream*)ARG(0))->stream));
+    } else {
         return FIXNUM(-1);
+    }
 }
-#endif /* ! LINUX */
 
 DEF_OPRN(Sync, "print", oprnPrint, obPrint);
 DEF_OPRN(Sync, "display", oprnDisplay, obDisplay);

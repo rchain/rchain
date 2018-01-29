@@ -1,0 +1,68 @@
+;;;  -*- coding: utf-8; mode: scheme; -*-
+;;;
+;;;
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Chris Kirkwood-Watts <kirkwood@pyrofex.net>
+;;;
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
+;;;
+;;; This is a simple logging facility. There is a global log level
+;;; (*log-level*) controlled initially by the flag-verbose parameter. There are
+;;; four predefined log level "constants": ERROR, WARNING, INFO, and DEBUG, in
+;;; order of severity.
+;;;
+;;; Expressions of the form
+;;;
+;;;   (log:display 'ERROR "This is a " 'fancy " log message.")
+;;;
+;;; will print a newline-terminated, timestamped log line to the standard error
+;;; stream like:
+;;;
+;;;   2018-01-16 18:35:35 ERROR: This is a fancy log message.
+;;;
+;;; if the given <level> is at least as severe as the global log level.
+;;;
+;;; The global log level may be manipulated, but it's probably best to leave it
+;;; alone:
+;;;
+;;;   rosette> (define *log-level* 'ERROR)
+;;;   '*log-level*
+;;;   rosette> (log:display 'WARNING "This is a warning!")
+;;;   rosette> (define *log-level* 'WARNING)
+;;;   '*log-level*
+;;;   rosette> (log:display 'WARNING "This is a warning!")
+;;;   2018-01-16 18:36:54 WARNING: This is a warning!
+
+(let [[tbl (new RblTable)]]
+  (seq
+   (walk '[ERROR WARNING INFO DEBUG]
+         (proc [v k] (tbl-add tbl k v)))
+   (define *log-level-map* tbl)))
+
+(define *log-level*
+  (cond ((type? flag-verbose Bool) (if flag-verbose 'DEBUG 'WARNING))
+        ((type? flag-verbose Fixnum)
+         (iterate loop [[[level & rest] (names *log-level-map*)]]
+                  (cond ((= (tbl-get *log-level-map* level) flag-verbose) level)
+                        ((null? rest) 'DEBUG)
+                        (else (loop rest)))))))
+
+(defProc (log:%prefix level)
+  (let [[lvl (tbl-get *log-level-map* level)]
+        [cur (tbl-get *log-level-map* *log-level*)]]
+    (if (>= cur lvl) level #f)))
+
+(defProc (log:display level & args)
+  (let [[prefix (log:%prefix level)]
+        [dargs (concat args [#\\n])]]
+    (seq
+     (if prefix
+         (display stderr (log-time-string) " " (->string prefix) ": " & dargs))
+     #niv)))
+
+;;; Local Variables:
+;;; indent-tabs-mode: nil
+;;; fill-column: 79
+;;; comment-column: 37
+;;; End:

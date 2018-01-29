@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Mbox_h)
 #define _RBL_Mbox
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "Ob.h"
 
 class EmptyMbox : public Ob {
@@ -79,17 +68,12 @@ class QueueMbox : public Ob {
     virtual Ob* receiveMsg(MboxOb*, Ctxt*);
     virtual Ob* nextMsg(MboxOb*, Ob*);
 
-    bool isLocked();
-    void lock();
-    void unlock();
+    bool isLocked() { return BOOLVAL(lockVal); }
+    void lock() { lockVal = RBLTRUE; }
+    void unlock() { lockVal = RBLFALSE; }
     void enqueue(Ob*);
     Ob* dequeue();
 };
-
-
-inline bool QueueMbox::isLocked() { return BOOLVAL(lockVal); }
-inline void QueueMbox::lock() { lockVal = RBLTRUE; }
-inline void QueueMbox::unlock() { lockVal = RBLFALSE; }
 
 
 extern Ob* emptyMbox;

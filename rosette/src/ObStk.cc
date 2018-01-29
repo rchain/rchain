@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,16 +17,6 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "ObStk.h"
 
 void ObStk::reset() { next = array; }
@@ -33,7 +24,7 @@ void ObStk::reset() { next = array; }
 
 int ObStk::traversePtrs(PSOb__PSOb f) {
     int sum = 0;
-    pOb* KONST n = (pOb*)next;
+    pOb* const n = (pOb*)next;
     for (pOb* p = (pOb*)array; p < n; p++) {
         sum += useIfPtr(p, f);
     }
@@ -43,7 +34,7 @@ int ObStk::traversePtrs(PSOb__PSOb f) {
 
 int ObStk::traversePtrs(SI__PSOb f) {
     int sum = 0;
-    pOb* KONST n = (pOb*)next;
+    pOb* const n = (pOb*)next;
     for (pOb* p = (pOb*)array; p < n; p++) {
         sum += useIfPtr(*p, f);
     }
@@ -52,7 +43,7 @@ int ObStk::traversePtrs(SI__PSOb f) {
 
 
 void ObStk::traversePtrs(V__PSOb f) {
-    pOb* KONST n = (pOb*)next;
+    pOb* const n = (pOb*)next;
     for (pOb* p = (pOb*)array; p < n; p++) {
         useIfPtr(*p, f);
     }

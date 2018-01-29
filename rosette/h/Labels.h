@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,22 +17,10 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_Labels_h)
 #define _RBL_Labels_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "BinaryOb.h"
 #include "Ob.h"
 
@@ -66,26 +55,20 @@ class FixupVec : public BinaryOb {
     static FixupVec* create(int);
     static FixupVec* create(FixupVec*, int);
 
-    FixupEntry& entry(int);
+    FixupEntry& entry(int n) {
+        FixupEntry* p = (FixupEntry*)(((char*)&count) + sizeof(count));
+        return p[n];
+    }
 
     friend class LabelTable;
 
    public:
-    int numberOfEntries();
-    int capacity();
+    int numberOfEntries() { return (count); }
     void addEntry(int, Label);
+    int capacity() {
+        return ((SIZE(this) - sizeof(FixupVec)) / sizeof(FixupEntry));
+    }
 };
-
-inline FixupEntry& FixupVec::entry(int n) {
-    FixupEntry* p = (FixupEntry*)(((char*)&count) + sizeof(count));
-    return p[n];
-}
-
-inline int FixupVec::numberOfEntries() { return (count); }
-
-inline int FixupVec::capacity() {
-    return ((SIZE(this) - sizeof(FixupVec)) / sizeof(FixupEntry));
-}
 
 
 static const int DefaultLabelTableSize = 32;

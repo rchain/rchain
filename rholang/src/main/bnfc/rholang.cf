@@ -5,10 +5,7 @@ DContr. Contr ::= Proc1 ;
 PNil.     Proc4 ::= "Nil" ;
 PValue.   Proc4 ::= Value;
 PDrop.    Proc3 ::= "*" Chan ;
-PInject.  Proc3 ::= "#" Chan ;
 PLift.    Proc2 ::= Chan "!" "(" [Proc] ")" ;
-PFoldL.   Proc1 ::= "sum" "(" Bind "/:" Bind ")" "{" Proc "}" ;
-PFoldR.   Proc1 ::= "total" "(" Bind ":\\" Bind ")" "{" Proc "}" ;
 PInput.   Proc1 ::= "for" "(" [Bind] ")" "{" Proc "}" ;
 PChoice.  Proc1 ::= "select" "{" [CBranch] "}" ;
 PMatch.   Proc1 ::= "match" Proc "with" [PMBranch] ;
@@ -17,7 +14,7 @@ PPrint.   Proc1 ::= "print" "(" Proc ")" ;
 PConstr.  Proc1 ::= Var "(" [Proc] ")" ;
 PContr.   Proc1 ::= "contract" Var "(" [CPattern] ")" "=" "{" Proc "}" ;
 PPar.     Proc  ::= Proc "|" Proc1 ;
-separator nonempty Proc "," ;
+separator Proc "," ;
 _. Proc  ::= Proc1 ;
 _. Proc1 ::= Proc2 ;
 _. Proc2 ::= Proc3 ;
@@ -93,15 +90,6 @@ separator VarPattern "," ;
 -- Process patterns
 PPtVal.    PPattern4 ::= ValPattern ;
 PPtVar.    PPattern4 ::= VarPattern ;
-PPtNil.    PPattern4 ::= "Nil" ;
-PPtDrop.   PPattern3 ::= "*" CPattern ;
-PPtInject. PPattern3 ::= "#" CPattern ;
-PPtOutput. PPattern2 ::= CPattern "!" "(" [PPattern] ")" ;
-PPtInput.  PPattern1 ::= "for" "(" [PatternBind] ")" "{" PPattern "}" ;
-PPtMatch.  PPattern1 ::= "match" PPattern "with" [PatternPatternMatch] ;
-PPtNew.    PPattern1 ::= "new" [VarPattern] "in" PPattern1 ;
-PPtConstr. PPattern1 ::= Var "(" [PPattern] ")" ;
-PPtPar.    PPattern  ::= PPattern "|" PPattern1 ;
 separator PPattern "," ;
 coercions PPattern 4 ;
 
@@ -111,20 +99,11 @@ CValPtrn.  CPattern ::= ValPattern ;
 CPtQuote.  CPattern ::= "@" PPattern3 ;
 separator CPattern "," ;
 
--- Bind pattern
-PtBind.   PatternBind ::= CPattern "<-" CPattern ;
-separator nonempty PatternBind ";" ;
-
--- Pattern match branch pattern
-PtBranch. PatternPatternMatch ::= PPattern "=>" "{" PPattern "}" ;
-separator nonempty PatternPatternMatch "" ;
-
 -- Value patterns
 
 -- We only allow for constants in pattern matches
 -- unlike for Procs which can have arbitrary operations
-VPtStruct. ValPattern ::= Var "{" [PPattern] "}" ;
-VPtTuple. ValPattern ::= "<" [PPattern] ">" ;
+VPtTuple. ValPattern ::= "[" [PPattern] "]" ;
 VPtTrue. ValPattern ::= "true" ;
 VPtFalse. ValPattern ::= "false" ;
 VPtInt. ValPattern ::= Integer ;
@@ -132,17 +111,11 @@ VPtDbl. ValPattern ::= Double ;
 VPtNegInt. ValPattern ::= "-" Integer;
 VPtNegDbl. ValPattern ::= "-" Double;
 VPtStr. ValPattern ::= String ;
---VPtString. ValPattern ::=  ;
---VPtArray.  ValPattern ::=  ;
---VPtList.   ValPattern ::=  ;
-separator nonempty ValPattern "," ;
 
--- Names and variables
-token Name (upper (letter | digit | '_' | '\'' | '-' )*) ;
-token Var (lower (letter | digit | '_' | '\'' | '-')*) ;
+-- Variables
+token Var ((letter | '_')(letter | digit | '_' | '\'')*) ;
 
 separator nonempty Var "," ;
-separator nonempty Name "," ;
 
 comment "//" ;
 comment "/*" "*/" ;

@@ -1,2 +1,0 @@
-All these numbers are done with one transaction for the entire test.
-

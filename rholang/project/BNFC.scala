@@ -28,10 +28,10 @@ object BNFC {
   def bnfcGenerateSources(fullClasspath: Seq[Attributed[File]], grammarFile: File, outputDir: File, namespace: String): Unit = {
     val classpath: String = fullClasspath.map(e => e.data).mkString(":")
     val targPath: String  = makeOutputPath(grammarFile, outputDir, namespace)
-    val bnfcCmd: String   = s"bnfc --java -o ${outputDir.getAbsolutePath} -p $namespace $grammarFile"
-    val jlexCmd: String   = s"java -cp $classpath JLex.Main $targPath/Yylex"
+    val bnfcCmd: String   = s"bnfc -l --java --jflex -o ${outputDir.getAbsolutePath} -p $namespace $grammarFile"
+    val jlexCmd: String   = s"jflex $targPath/Yylex"
     val renameDefaultCmd: String = s"mv $targPath/_cup.cup $targPath/${stripSuffix(grammarFile.getName)}.cup"
-    val cupCmd: String    = s"java -cp $classpath java_cup.Main -nopositions -expect 100 $targPath/${stripSuffix(grammarFile.getName)}.cup" // TODO: Figure out naming behind _cup.cup
+    val cupCmd: String    = s"java -cp $classpath java_cup.Main -locations -expect 100 $targPath/${stripSuffix(grammarFile.getName)}.cup" // TODO: Figure out naming behind _cup.cup
     val mvCmd: String     = s"mv sym.java parser.java $targPath"
     Process(bnfcCmd) #&& Process(jlexCmd) #&& Process(renameDefaultCmd) #&& Process(cupCmd) #&& Process(mvCmd) !
   }

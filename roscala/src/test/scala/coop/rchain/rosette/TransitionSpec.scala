@@ -1,15 +1,14 @@
 package coop.rchain.rosette
 
-import coop.rchain.rosette
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.expr.{LetExpr, TupleExpr}
+import coop.rchain.rosette.expr.{LetExpr, RequestExpr, TupleExpr}
 import org.scalatest._
 
 /**
   * NOTE that in Roscala we are using one-byte offset for every opcode,
   * so PC will change per unit for every opcode
   *
- */
+  */
 class TransitionSpec extends FlatSpec with Matchers {
   val testCtxt = Ctxt(
     tag = LocationGT(Location.LTCtxtRegister(0)),
@@ -305,5 +304,196 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt should (be(Fixnum(3)) or be(Fixnum(7)))
+  }
+
+  "Executing bytecode from expression \"(+ 1.2 2.3)\"" should "result in RoFloat(3.5)" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      *   1:   1.1
+      *   2:   2.2
+      * codevec:
+      *   0:   alloc 2
+      *   1:   liti 1,arg[0]
+      *   2:   liti 2,arg[1]
+      *   3:   xfer global[+],trgt
+      *   5:   xmit/nxt 2
+      */
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .update(_ >> 'code >> 'litvec)(_ =>
+          Tuple(Seq(RequestExpr, RblFloat(1.2), RblFloat(2.3))))
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpIndLitToArg(arg = 0, lit = 1),
+      OpIndLitToArg(arg = 1, lit = 2),
+      OpXferGlobalToReg(reg = 1, global = 668),
+      OpXmit(unwind = false, next = true, nargs = 2)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe RblFloat(3.5)
+  }
+
+  "Executing bytecode from expression \"100\"" should "result in Fixnum(100)" in {
+
+    /**
+      * litvec:
+      *   0:   100
+      * codevec:
+      *   0:   liti 0,rslt
+      *   1:   rtn/nxt
+      */
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .update(_ >> 'code >> 'litvec)(_ => Tuple(Seq(Fixnum(100))))
+
+    val codevec = Seq(
+      OpIndLitToRslt(lit = 0),
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(100)
+  }
+
+  "Executing bytecode from expression \"(100)\"" should "result in Fixnum(100)" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      *   1:   100
+      * codevec:
+      *   0:   liti 1,trgt
+      *   1:   xmit/nxt 0
+      */
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .update(_ >> 'code >> 'litvec)(_ =>
+          Tuple(Seq(RequestExpr, Fixnum(100))))
+
+    val codevec = Seq(
+      OpIndLitToReg(reg = 1, lit = 1),
+      OpXmit(unwind = false, next = true, nargs = 0)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.trgt shouldBe Fixnum(100)
+  }
+
+  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))"""" should "result in Fixnum(5)" in {
+
+    /**
+      * litvec:
+      *    0:   {LetExpr}
+      *    1:   {Template}
+      *    2:   {Loc lex[0,0]}
+      * codevec:
+      *    0:   alloc 1
+      *    1:   lit #t,arg[0]
+      *    2:   nargs 1
+      *    3:   extend 1
+      *    4:   xfer lex[0,0],rslt
+      *    5:   jf 10
+      *    6:   lit #f,rslt
+      *    7:   xfer rslt,lex[0,0]
+      *    8:   xfer lex[0,0],rslt
+      *    9:   jmp 4
+      *   10:   lit 5,rslt
+      *   11:   rtn/nxt
+      */
+    val template = Template(
+      Tuple(Seq(Symbol("x"))),
+      StdMeta(),
+      IdVecPattern(TupleExpr(Seq(Symbol("x"))))
+    )
+
+    val loc: Location = Location.LexVar(0, 0, indirect = false)
+
+    val start =
+      testState
+        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template)))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'loc)(loc)
+
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 8, arg = 0),
+      OpNargs(1),
+      OpExtend(1),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmpFalse(10),
+      OpImmediateLitToReg(lit = 9, reg = 0),
+      OpXferRsltToDest(2),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmp(4),
+      OpImmediateLitToReg(lit = 5, reg = 0),
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(5)
+  }
+
+  """Executing bytecode from expression (let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) x)))""" should "result in RBLFALSE" in {
+
+    /**
+      * litvec:
+      *    0:   {LetExpr}
+      *    1:   {Template}
+      *    2:   {Loc lex[0,0]}
+      * codevec:
+      *    0:   alloc 1
+      *    1:   lit #t,arg[0]
+      *    2:   nargs 1
+      *    3:   extend 1
+      *    4:   xfer lex[0,0],rslt
+      *    5:   jf 10
+      *    6:   lit #f,rslt
+      *    7:   xfer rslt,lex[0,0]
+      *    8:   xfer lex[0,0],rslt
+      *    9:   jmp 4
+      *   10:   xfer lex[0,0],rslt
+      *   11:   rtn/nxt
+      */
+    val template = Template(
+      Tuple(Seq(Symbol("x"))),
+      StdMeta(),
+      IdVecPattern(TupleExpr(Seq(Symbol("x"))))
+    )
+
+    val loc: Location = Location.LexVar(0, 0, indirect = false)
+
+    val start =
+      testState
+        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template)))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'loc)(loc)
+
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 8, arg = 0),
+      OpNargs(1),
+      OpExtend(1),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmpFalse(10),
+      OpImmediateLitToReg(lit = 9, reg = 0),
+      OpXferRsltToDest(2),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpJmp(4),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = 0),
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Ob.RBLFALSE
   }
 }

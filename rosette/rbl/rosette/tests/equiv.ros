@@ -1,0 +1,126 @@
+;; -*- Coding: utf-8; Mode: Scheme; -*-
+;;
+;; e.g., (eval-file (head (find-file "equiv.ros" ["tests"])) #t)
+;;
+
+(test-form 1 1)
+(test-form 0x41 65)
+
+(test-form (+ 1 2) 3)
+(test-form (+ 1 2) (- 5 2))
+(test-form (/ 1 2) 0)
+(test-form (/ 1.0 2.0) 0.5)
+(test-form (* 10 20) 200)
+(test-form (* 2.3 4.5) 10.349999)
+
+(defOprn withdraw)
+(defOprn deposit)
+(defActor BankAccount (slots& balance 0)
+  (method (withdraw amount)
+          (cond ((<= amount balance)
+                 (update balance (- balance amount))
+                 ['withdrew amount])
+                ((> amount balance)
+                 (update)
+                 ['overdraft (- balance amount)])))
+  (method (deposit amount)
+          (update balance (+ balance amount))
+          ['deposited amount]))
+
+(define my-account (new BankAccount 1000.0))
+
+(test-form (deposit my-account 100.01) ['deposited 100.01])
+(test-form (withdraw my-account 78.87) ['withdrew 78.87])
+
+(defActor SafeAccount
+  (extends& BankAccount)
+  (slots& backup BankAccount)
+  (method (withdraw amount)
+          (cond ((<= amount balance)
+                 (update balance (- balance amount))
+                 ['withdrew amount])
+                ((> amount balance)
+                 (let [[[status value] (withdraw backup (- amount balance))]]
+                   (if (same? status 'withdrew)
+                       (block (update balance 0)
+                              ['withdrew amount])
+                       (block (update)
+                              ['overdraft value])))))))
+
+(define my-safe-account (new SafeAccount 1000.0 (new BankAccount 2000.0)))
+(defOprn enquire)
+(defPure BankAccount (enquire) balance)
+
+(test-form (enquire my-account) 1021.14)
+(test-form (enquire my-safe-account) 1000.0)
+
+(test-form (and) #t)
+(test-form (and #t) #t)
+(test-form (and #t #t) #t)
+(test-form (and (> 1 0) (< 0 1)) #t)
+(test-form (and #f) #f)
+
+(test-form (< #\G #\g) #t)
+(test-form (->fixnum #\A) 0x41)
+(test-form (->float (->fixnum #\A)) (->float 0x41))
+(test-form 8 (+ 2 2 2 2))
+(test-form 8 (abs -8))
+(test-form 8.1 (abs -8.1))
+(test-form (lgf 120) 6)
+(test-form (log 12.0) 2.4849067)
+(test-form (->string (log 0.1234)) "-2.09232")
+
+(test-form (concat "Reader " "\"test" "\" \\") "Reader \"test\" \\")
+(test-form "Reader \"test\" \\" (concat "Reader " "\"test" "\" \\"))
+
+(test-form (new Tuple 'a 'b 'c 'd 'e) ['a 'b 'c 'd 'e])
+(test-form (newN Tuple 4 'a) ['a 'a 'a 'a])
+(test-form (size (newN Tuple 13 'a)) 13)
+(test-form (null? []) #t)
+(test-form ['a 'b 'c 'd 'e 'f] (concat ['a 'b 'c] ['d 'e 'f]))
+
+(let [[tup '[foo bar baz]]]
+  (seq
+   (test-form (head tup) (nth tup 0))
+   (test-form (head (sub-obj tup 0 1)) (head tup))
+   ;; Something's wrong with this test
+   ;; (test-form (tail tup) (sub-obj tup 1 (- (size tup) 1)))
+   ))
+
+(test-form (map [1 2 3] (proc [i x] [i (+ 1 x)])) [[0 2] [1 3] [2 4]])
+(test-form (map (walk [1 2 3] (proc [i x] (display "foo " i " bar\n")))
+                (proc [i x] (+ i x)))
+           [1 3 5])
+
+(let [[sym ((-> Symbol) (concat "foo-" (+ 1 234)))]]
+  (seq
+   (test-form sym 'foo-235)
+   (test-form (->string sym) "foo-235")))
+
+;; This one's not right, yet, either.
+;; (test-form (Q (expand '(defProc (zum) (+ 1 2))))
+;;            '(addPD 'zum (letrec [[zum (proc [] (+ 1 2))]] zum) Global #absent #absent #absent))
+
+(letrec [[zot (proc [a b] (+ a b))]]
+  (seq
+   (test-form (zot 1 1) 2)
+   (test-form (zot 2 3) 5)))
+
+(defProc (string-nth-test str)
+  (let [[tup (->tuple str)]]
+    (test-form (map tup (proc [i c] (= (nth str i) c)))
+               (newN Tuple (size str) #t))))
+
+(string-nth-test "hello, world")
+(string-nth-test "")
+(string-nth-test "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
+
+(if (> failures 0)
+    (display "Successes: " successes ". Failures: " failures ".\n")
+    (display "All tests passed.\n"))
+
+;; Local Variables:
+;; indent-tabs-mode: nil
+;; fill-column: 79
+;; comment-column: 37
+;; End:

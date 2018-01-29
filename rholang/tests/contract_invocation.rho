@@ -1,0 +1,19 @@
+new test in {
+  contract test(x, y, z) = {
+    x!(Nil) |
+    y!(Nil) |
+    z!(Nil)
+  } |
+  new x, y, z in {
+    test(x, y, z) |
+    for(_ <- x) {
+      print("x")
+    } |
+    for(_ <- y) {
+      print("y")
+    } |
+    for(_ <- x) {
+      print("z")
+    }
+  }
+}

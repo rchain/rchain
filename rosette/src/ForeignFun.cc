@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,18 +17,7 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
-
 #include "ForeignFun.h"
-
 #include "RblAtom.h"
 #include "BinaryOb.h"
 #include "Dynload.h"
@@ -38,10 +28,6 @@
 #include "Tuple.h"
 
 #include "BuiltinClass.h"
-
-#if defined(DYNAMIC_LOADING)
-extern DynamicLoader* loader;
-#endif
 
 // abstract class
 
@@ -77,22 +63,6 @@ AbstractForeignFunction::AbstractForeignFunction(Ob* Cname,
     AbstractForeignFunction::updateCnt();
 }
 
-/*
-AbstractForeignFunction*
-AbstractForeignFunction::create (Ob* Cname,
-                                 Tuple* argConverters,
-                                 Ob* rsltConverter,
-                                 void* Caddr)
-{
-  void* loc =
-    PALLOC3(sizeof(AbstractForeignFunction), Cname, argConverters,
-rsltConverter);
-  return
-    NEW(loc) AbstractForeignFunction (Cname, argConverters, rsltConverter,
-Caddr);
-}
-*/
-
 int FF_ERRNO = 0;
 
 /****************************************************************************/
@@ -125,67 +95,65 @@ ForeignFunction* ForeignFunction::create(Ob* Cname, Tuple* argConverters,
                                          Ob* rsltConverter, void* Caddr) {
     void* loc =
         PALLOC3(sizeof(ForeignFunction), Cname, argConverters, rsltConverter);
-    return NEW(loc) ForeignFunction(Cname, argConverters, rsltConverter, Caddr);
+    return new (loc)
+        ForeignFunction(Cname, argConverters, rsltConverter, Caddr);
 }
 
 Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
 
     Ob* result = RBLTRUE;
 
-    KONST int n = argConverters->numberOfElements();
+    const int n = argConverters->numberOfElements();
     for (int argpos = 0; argpos < n; argpos++) {
-        if (RBLTRUE != BASE(argConverters->elem(argpos))->typep(ARG(argpos)))
+        if (RBLTRUE != BASE(argConverters->elem(argpos))->typep(ARG(argpos))) {
             return (PRIM_ERROR("unknown argument type"));
+        }
     }
     return result;
 }
 
 convertArgReturnPair ForeignFunction::convertActual(Ctxt* ctxt, int argpos) {
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
-
+    Ctxt* const __CTXT__ = ctxt;
     Ob* argCnv = argConverters->elem(argpos);
     Ob* arg = ARG(argpos);
-
     return BASE(argCnv)->convertActualArg(ctxt, arg);
 }
 
 Ob* ForeignFunction::convertResult(Ctxt* ctxt, long rslt) {
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    if (NIV == rsltConverter) {
+        return NIV;
+    }
 
-    return (rsltConverter == NIV)
-               ? NIV
-               : BASE(rsltConverter)->convertActualRslt(ctxt, rslt);
+    return BASE(rsltConverter)->convertActualRslt(ctxt, rslt);
 }
 
 #define CNVARG(i) this->convertActual(ctxt, i)
 
 Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tforeign fn %s\n", BASE(Cname)->asCstring());
+    }
 
     /*
-      * Check all of the arguments for type conformance, and compute how
-        * much space will be required to pass them.  (We also give
-                                                      * definitions of
+     * Check all of the arguments for type conformance, and compute how
+     * much space will be required to pass them.  (We also give
+     * definitions of
      * "__CTXT__" and "__PRIM__" to keep the CHECK macros
-                                                      * happy.)
-          */
+     * happy.)
+     */
     PROTECT(ctxt);
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
     uint32_t x[32];
-    KONST int n = argConverters->numberOfElements();
-    int i = 0;
+    const int n = argConverters->numberOfElements();
     long res;
-    int nChars = 0;
     Incantation the_real_fn = (Incantation)(FIXVAL(Caddr));
 
-    if (n != NARGS)
+    if (n != NARGS) {
         return PRIM_MISMATCH(n, n);
+    }
 
     Ob* result = NIV;
 
@@ -199,9 +167,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
                 result = runtimeError(ctxt, "type mismatch ");
                 ctxt->ret(result);
                 return result;
-            }
-            else
+            } else {
                 x[i] = u.val;
+            }
         }
 
 #define CAS(i) \
@@ -396,7 +364,8 @@ ForeignFunction* ForeignFunction::create(Ob* Cname, Tuple* argConverters,
                                          Ob* rsltConverter, void* Caddr) {
     void* loc =
         PALLOC3(sizeof(ForeignFunction), Cname, argConverters, rsltConverter);
-    return NEW(loc) ForeignFunction(Cname, argConverters, rsltConverter, Caddr);
+    return new (loc)
+        ForeignFunction(Cname, argConverters, rsltConverter, Caddr);
 }
 
 #if defined(sun) && (defined(mc68020) || defined(sparc))
@@ -463,26 +432,26 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         sizeof(PTR_ARG),    /* AC_FixnumToVoidStar	     */
     };
 
-    if (debugging_level)
+    if (debugging_level) {
         printf("\tforeign fn %s\n", BASE(Cname)->asCstring());
+    }
 
-    /*
-      * Check all of the arguments for type conformance, and compute how
-        * much space will be required to pass them.  (We also give
-                                                      * definitions of
-     * "__CTXT__" and "__PRIM__" to keep the CHECK macros
-                                                      * happy.)
-          */
+    /**
+     * Check all of the arguments for type conformance, and compute how much
+     * space will be required to pass them.  (We also give definitions of
+     * "__CTXT__" and "__PRIM__" to keep the CHECK macros happy.)
+     */
 
-    ForeignFunction* KONST __PRIM__ = this;
-    Ctxt* KONST __CTXT__ = ctxt;
+    ForeignFunction* const __PRIM__ = this;
+    Ctxt* const __CTXT__ = ctxt;
 
-    KONST int n = argConverters->numberOfElements();
+    const int n = argConverters->numberOfElements();
     int i = 0;
     int nChars = 0;
 
-    if (n != NARGS)
+    if (n != NARGS) {
         return PRIM_MISMATCH(n, n);
+    }
 
     for (i = 0; i < n; i++) {
         switch ((ArgConverter)FIXVAL(argConverters->elem(i))) {
@@ -524,17 +493,19 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
     static int marshallingSize = 0;
 
     if (marshallingSize < nChars) {
-        if (marshallingArea)
+        if (marshallingArea) {
             free(marshallingArea);
+        }
+
         marshallingArea = new char[nChars];
         marshallingSize = nChars;
     }
 
-    /*
-      * By now, all of the arguments are known to conform, and we know how
-        * much space each argument requires, so we lay them all down in the
-          * marshalling area.
-            */
+    /**
+     * By now, all of the arguments are known to conform, and we know how
+     * much space each argument requires, so we lay them all down in the
+     * marshalling area.
+     */
 
     char* argp = marshallingArea;
 
@@ -635,9 +606,9 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         }
         case nArgConverters:
             /*
-              * To silence the compiler while still allowing it to make
-                * sure that we have covered all cases.
-                  */
+             * To silence the compiler while still allowing it to make
+             * sure that we have covered all cases.
+             */
             break;
         }
 
@@ -650,8 +621,7 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
         extern double ff_double_helper(double_fun, char*, int);
         double_fun fn = (double_fun)FIXVAL(Caddr);
         result = Float::create(ff_double_helper(fn, marshallingArea, nChars));
-    }
-    else {
+    } else {
         extern long ff_single_helper(single_fun, char*, int);
         single_fun fn = (single_fun)FIXVAL(Caddr);
         LONG_ARG rslt = ff_single_helper(fn, marshallingArea, nChars);
@@ -688,10 +658,11 @@ Ob* ForeignFunction::dispatch(Ctxt* ctxt) {
             break;
 
         case RC_VoidStar:
-            if (rslt & 0xc0000000L)
+            if (rslt & 0xc0000000L) {
                 return PRIM_ERROR("unrepresentable address");
-            else
+            } else {
                 result = FIXNUM(rslt);
+            }
             break;
 
         case RC_ByteVec:
@@ -721,8 +692,9 @@ DEF("unix-load", unixLoad, 1, 3) {
     const char* otherStr = "";
     const char* path = BASE(ARG(0))->asPathname();
 
-    if (!path)
+    if (!path) {
         return PRIM_MISMATCH(0, "String or Symbol");
+    }
 
     switch (NARGS) {
     case 3:
@@ -735,12 +707,6 @@ DEF("unix-load", unixLoad, 1, 3) {
         if (!libStr)
             return PRIM_MISMATCH(1, "String");
     }
-
-    char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    if (loader->load(path, buf, libStr, otherStr))
-        return PRIM_ERROR(buf);
-#endif
 
     return NIV;
 }
@@ -762,14 +728,9 @@ DEF("wizard-load", unixWizardLoad, 1, 1) {
      */
 
     const char* cmd = BASE(ARG(0))->asPathname();
-    if (!cmd)
+    if (!cmd) {
         return PRIM_MISMATCH(0, "String or Symbol");
-
-    char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    if (loader->loadhelp(cmd, buf))
-        return PRIM_ERROR(buf);
-#endif
+    }
 
     return NIV;
 }
@@ -777,37 +738,21 @@ DEF("wizard-load", unixWizardLoad, 1, 1) {
 
 DEF("unix-resolve", unixResolve, 1, 1) {
     const char* name = BASE(ARG(0))->asPathname();
-    if (!name)
+    if (!name) {
         return PRIM_MISMATCH(0, "String or Symbol");
-
-#if defined(DYNAMIC_LOADING)
-    void* addr = loader->resolve(name);
-#else
-    void* addr = 0;
-#endif
-
-    if (addr == 0)
-        return ABSENT;
-
-    return FIXNUM((int)addr);
+    }
+    // NB(leaf): No dynamic loading support.
+    return ABSENT;
 }
 
 
 DEF("ff-new", ffNew, 3, 3) {
-    CHECK_SYM(0, Cname);
-    CHECK(1, Tuple, argConverters);
+    CHECK_SYM_NOVAR(0);
+    CHECK_NOVAR(1, Tuple);
 
-    const char* name = BASE(Cname)->asCstring();
     char buf[BUFSIZ];
-#if defined(DYNAMIC_LOADING)
-    void* addr = loader->resolve(name, buf);
-#else
-    void* addr = 0;
-#endif
-
-    return (addr == 0
-                ? PRIM_ERROR(buf)
-                : ForeignFunction::create(Cname, argConverters, ARG(2), addr));
+    // NB(leaf): No dynamic loading support.
+    return PRIM_ERROR(buf);
 }
 
 DEF("ff-create", ffCreate, 4, 4) {
@@ -815,5 +760,5 @@ DEF("ff-create", ffCreate, 4, 4) {
     CHECK_FIXNUM(1, addr);
     CHECK(2, Tuple, argConverters);
 
-    return (ForeignFunction::create(Cname, argConverters, ARG(3), (void*)addr));
+    return ForeignFunction::create(Cname, argConverters, ARG(3), (void*)addr);
 }

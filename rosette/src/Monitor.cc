@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -15,16 +16,6 @@
  *	IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
-
-/*
- * $Header$
- *
- * $Log$
- @EC */
-
-#ifdef __GNUG__
-#pragma implementation
-#endif
 
 #include "Monitor.h"
 
@@ -70,7 +61,7 @@ Monitor* Monitor::create(Ob* id) {
     Word32Vec* obCounts = Word32Vec::create(Base::nClasses);
     PROTECT(obCounts);
     void* loc = PALLOC(sizeof(Monitor));
-    return NEW(loc) Monitor(id, timer, opcodeCounts, obCounts);
+    return new (loc) Monitor(id, timer, opcodeCounts, obCounts);
 }
 
 
@@ -88,8 +79,9 @@ void Monitor::stop() { timer->stop(); }
 
 
 static void prettyPrint(uint32_t n, char* name, FILE* f) {
-    if (n != 0)
+    if (n != 0) {
         fprintf(f, "%8ul %s%s\n", n, name, plural((int)n));
+    }
 }
 
 
@@ -106,8 +98,8 @@ void Monitor::printStats(FILE* f) {
         prettyPrint(count, Base::classNames[i], f);
         total += count;
     }
-    fprintf(f, "%8ul total\n", total);
 
+    fprintf(f, "%8ul total\n", total);
     fprintf(f, "bytecodes:\n");
     total = 0;
     for (i = 0; i < 256; i++) {
@@ -115,10 +107,11 @@ void Monitor::printStats(FILE* f) {
         if (n > 0) {
             total += n;
             char* str = opcodeStrings[i];
-            if (str)
+            if (str) {
                 fprintf(f, "%8ul %s\n", n, str);
-            else
+            } else {
                 fprintf(f, "%8ul ?%2x\n", n, i);
+            }
         }
     }
     fprintf(f, "%8ul total\n", total);
@@ -131,8 +124,9 @@ void Monitor::printStats(FILE* f) {
 DEF("monitor-new", monitorNew, 0, 1) {
     Ob* id = SYMBOL("anonymous monitor");
 
-    if (NARGS == 1)
+    if (NARGS == 1) {
         id = ARG(0);
+    }
 
     return Monitor::create(id);
 }
@@ -201,8 +195,9 @@ DEF("monitor-dump", monitorDump, 1, 2) {
 
     if (NARGS == 2) {
         CHECK(1, Ostream, s);
-        if (s->stream)
+        if (s->stream) {
             file = s->stream;
+        }
     }
 
     mon->printStats(file);

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+PORT=8000
+
+if [ $# -gt 0 ]
+then
+    PORT=$1
+fi
+
+HOSTPORT=0.0.0.0:$PORT
+
+python3 manage.py runserver $HOSTPORT

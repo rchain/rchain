@@ -1,4 +1,5 @@
 /* Mode: -*- C++ -*- */
+// vim: set ai ts=4 sw=4 expandtab
 /* @BC
  *		                Copyright (c) 1993
  *	    by Microelectronics and Computer Technology Corporation (MCC)
@@ -16,34 +17,25 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- * $Header$
- *
- * $Log$
- *
- @EC */
-
 #if !defined(_RBL_ObStk_h)
 #define _RBL_ObStk_h
 
-#ifdef __GNUG__
-#pragma interface
-#endif
-
 #include "rosette.h"
-
 #include "PtrCollect.h"
 #include "Ob.h"
 
 class ObStk : public PtrCollection {
    public:
-    ObStk();
-    ObStk(int);
+    ObStk() : PtrCollection() {}
+    ObStk(int sz) : PtrCollection(sz) {}
 
     void reset();
-    void push(Ob*);
-    Ob* pop();
-    Ob*& top(int = 1);
+    void push(Ob* o) { PtrCollection::add((void*)o); }
+    Ob* pop() { return (Ob*)(*--next); }
+    Ob*& top(int n) {
+        Ob** p = (Ob**)(next - n);
+        return *p;
+    }
 
     int traversePtrs(PSOb__PSOb);
     int traversePtrs(SI__PSOb);
@@ -53,21 +45,5 @@ class ObStk : public PtrCollection {
     void mark();
     void check();
 };
-
-
-inline ObStk::ObStk() : PtrCollection() {}
-inline ObStk::ObStk(int sz) : PtrCollection(sz) {}
-
-
-inline void ObStk::push(Ob* o) { PtrCollection::add((void*)o); }
-
-
-inline Ob* ObStk::pop() { return (Ob*)(*--next); }
-
-
-inline Ob*& ObStk::top(int n) {
-    Ob** p = (Ob**)(next - n);
-    return *p;
-}
 
 #endif

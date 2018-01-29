@@ -23,7 +23,9 @@ case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                 short = 'b',
                 descr = "Bootstrap rnode address for initial seed.")
 
-  val standalone = opt[Boolean](default = Some(false), short = 's', descr = "Start a stand-alone node (no bootstrapping).")
+  val standalone = opt[Boolean](default = Some(false),
+                                short = 's',
+                                descr = "Start a stand-alone node (no bootstrapping).")
 
   val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
