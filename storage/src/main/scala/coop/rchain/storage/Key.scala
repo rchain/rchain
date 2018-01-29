@@ -3,7 +3,7 @@ package coop.rchain.storage
 import java.nio.charset.StandardCharsets
 
 /**
-  * Represents the keys of the key-value pairs that will persisted in LMDB
+  * Represents the key in a key-value pair that will be stored in LMDB
   *
   * @param bytes the underlying byte-array, suitable for storage
   */

@@ -1,7 +1,7 @@
 package coop.rchain.storage
 
 /**
-  * Represents errors that can occur in the storage layer
+  * Represents an error that can occur in the storage layer
   */
 sealed trait Error
 final case class SerializeError(throwable: Throwable) extends Error
