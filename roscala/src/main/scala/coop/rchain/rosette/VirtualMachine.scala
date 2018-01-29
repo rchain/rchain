@@ -779,7 +779,7 @@ object VirtualMachine {
 
   def execute(op: OpXferRsltToDest, state: VMState): VMState =
     state
-      .set(_ >> 'loc)(LocationAtom(state.code.lit(op.lit)))
+    //.set(_ >> 'loc)(LocationAtom(state.code.lit(op.lit))) //TODO probably we should change `atom` field only
       .updateSelf(
         state => {
           import Location._
