@@ -2,10 +2,10 @@
 ;;; Author: Kent Shikama <kent@kentshikama.com>
 ;;; This file is licensed under the Apache License, version 2.0.
 ;;;
-;;; File containing the reflective method produce and its helper methods
+;;; File containing the method produce and its helper methods
 
 ;;; Fetches the first product that matches the pattern at `product-patterns[channel-index]`.
-;;; It returns the channel the product was found along with the index of the product.
+;;; It returns the channel where the product was found along with the index of the product.
 ;;; If the channel-index is the current channel-position, then we don't want to consume the product
 ;;; as it is the currently passed in product, so we return NOT-STORED.
 (define NOT-STORED -1)
@@ -55,8 +55,11 @@
 ;;;
 ;;; While RBL is untyped, the following is some of the would be inferred types
 ;;;
-;;;     type Candidate = Tuple2[List[Tuple2[String, Int]], Tuple2[String, Int]]
+;;;     type Candidate = Tuple2[List[Option[Tuple2[String, Int]]], Tuple2[String, Int]]
 ;;;     type Candidates = List[Candidate]
+;;;
+;;;     return type = List[Option[Tuple2[List[Option[Tuple2[String, Int]]], Tuple2[String,
+;;;                   Int]]]]
 (defProc (extract-consume-candidates concat-channels channel-subspace-tbl channel
                                      product reverse-channel-lookup-table)
   (if (absent? concat-channels)

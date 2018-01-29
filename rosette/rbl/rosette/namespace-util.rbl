@@ -22,6 +22,15 @@
                            (fx- (prim-size (self)) (fx+ p 1)))))
 
 ;;; Concatenates a list of symbols to a single long symbol
+;;;
+;;; While the following is true
+;;;
+;;; (same? (symbol-list-concat ['ab 'c]) (symbol-list-concat ['a 'bc]))
+;;;
+;;; all channel names are "rholang-XXXX...X" (note these are Rosette freshes not Rholang channels
+;;; - Rholang channels can be anything) so you can never have the concatenation of channel
+;;; symbols being equal to a concatenation of different channel symbols. Note that with
+;;; https://rchain.atlassian.net/browse/ROS-340 this function will be removed anyways.
 (defOprn concat-symbol-list)
 (defPure Tuple (concat-symbol-list) (->symbol (fold (self)
                                                     (proc [e acc k]
@@ -45,6 +54,7 @@
             (tbl-add (self) key (remove-duplicates (concat [value] current-value)))
             (RuntimeError (self) "Value " current-value " at key " key " not a Tuple")))))
 
+;;; See namespace.rbl for a description of the structure of the channel-subspace-table
 (defOprn tuplespace-tbl-get-or-create)
 (defPure RblTable (tuplespace-tbl-get-or-create channel)
   (let [[subspace (tbl-get (self) channel)]]

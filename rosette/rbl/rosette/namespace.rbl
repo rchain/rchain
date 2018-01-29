@@ -17,6 +17,12 @@
 ;;; you can queue up a bunch of produces or consumes at each channel (e.g., x!(5) | x!(5) | x!(5) -
 ;;; this will store a data list of length 3 at channel x with each datum representing 5).
 ;;;
+;;; The channel-lookup-table and reverse-channel-lookup-table are used to simulate being able to
+;;; add tuples as keys to channel-subspace-tbl. channel-lookup-table maps a channel to a list of
+;;; joined-channels that contain the channel. reverse-channel-lookup-table maps a joined-channel to
+;;; a list of channels that constitute that joined-channel.
+;;; These two tables will be removed with https://rchain.atlassian.net/browse/ROS-340 .
+;;;
 ;;; A general outline for the consume and produce methods are as follows.
 ;;;
 ;;; Consume(list of [channel pattern] tuples)
