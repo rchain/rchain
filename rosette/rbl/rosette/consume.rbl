@@ -46,17 +46,12 @@
 
 (defProc (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels product-ptrns ctxt-tuple persistent)
   (let* [[[ctxt [code env]] ctxt-tuple]
-         [channels-concatenated (concat-symbol-list channels)]
-         [subspace (tbl-get channel-subspace-table channels-concatenated)]]
+         [channels-concatenated (concat-symbol-list channels)]]
     (seq
       (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
       (tbl-add reverse-channel-lookup-table channels-concatenated channels)
-      (if (absent? subspace)
-          (let [[new-subspace [[] [[product-ptrns [ctxt [code env] persistent]]]]]]
-            (tbl-add channel-subspace-table channels-concatenated new-subspace))
-          (let* [[[data-list continuation-struct-list] subspace]
-                 [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
-            (tbl-add channel-subspace-table channels-concatenated updated-subspace))))))
+      (append-continuation-at-channel channel-subspace-table channels-concatenated
+                                      [product-ptrns [ctxt [code env] persistent]]))))
 
 ;;; This reflective method would have roughly below signature in Scala
 ;;;

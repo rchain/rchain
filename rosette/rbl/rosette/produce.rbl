@@ -89,11 +89,11 @@
 ;;; Dual to select-best-products in consume.rbl
 (defProc (select-best-consume candidates)
   (head
-   (filter candidates
-           (proc [candidate]
-             (if (null? candidate)
-                 #f
-                 (not (any-null? (tuple-safe-nth candidate 0))))))))
+    (filter candidates
+            (proc [candidate]
+              (if (null? candidate)
+                  #f
+                  (not (any-null? (tuple-safe-nth candidate 0))))))))
 
 
 (defProc (delete-product channel-subspace-table channel data-index product)
@@ -148,14 +148,10 @@
          [candidate (select-best-consume candidates)]
          [_ (display "DEBUG: (produce)" #\\t "candidate: " candidate #\\n)]]
     (if (null? candidate)
-        (let [[subspace (tbl-get channel-subspace-table channel)]]
-          (seq
-            (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
-            (if (absent? subspace)
-                (tbl-add channel-subspace-table channel [[product] []])
-                (let [[[data-list continuation-struct-list] subspace]]
-                  (tbl-add channel-subspace-table channel [(append data-list product) continuation-struct-list])))
-            (update!)))
+        (seq
+          (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
+          (append-product-at-channel channel-subspace-table channel product)
+          (update!))
         (let* [[[ctxt-tuple product-patterns product-list]
                 (consume-continuation candidate channel-subspace-table channel-lookup-table
                                       reverse-channel-lookup-table product)]

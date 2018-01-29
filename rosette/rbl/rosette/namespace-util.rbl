@@ -94,3 +94,22 @@
 (defProc (clean-fresh fresh)
   (let [[[rholang name & r] (string-split (->string fresh) "-")]]
     name))
+
+;;; TODO: Refactor as methods in namespace.rbl so channel-subspace-table doesn't have to be passed
+;;; in.
+(defProc (append-product-at-channel channel-subspace-table channel product)
+  (let [[subspace (tbl-get channel-subspace-table channel)]]
+    (if (absent? subspace)
+        (tbl-add channel-subspace-table channel [[product] []])
+        (let [[[data-list continuation-struct-list] subspace]]
+          (tbl-add channel-subspace-table channel [(append data-list product)
+                                                   continuation-struct-list])))))
+
+(defProc (append-continuation-at-channel channel-subspace-table channel continuation-struct)
+  (let [[subspace (tbl-get channel-subspace-table channel)]]
+    (if (absent? subspace)
+        (let [[new-subspace [[] [continuation-struct]]]]
+          (tbl-add channel-subspace-table channel new-subspace))
+        (let* [[[data-list continuation-struct-list] subspace]
+               [updated-subspace [data-list (append continuation-struct-list continuation-struct)]]]
+          (tbl-add channel-subspace-table channel updated-subspace)))))
