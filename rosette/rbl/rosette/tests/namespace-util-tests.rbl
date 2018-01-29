@@ -3,26 +3,26 @@
 ;;; This file is licensed under the Apache License, version 2.0.
 
 ;;; tests for tbl-unique-append
-(let* [[channel-subspace-tbl (new RblTable)]]
+(let* [[channel-subspace-table (new RblTable)]]
   (seq
-    (let [[_ (tbl-unique-append channel-subspace-tbl 'hello 'world)]]
-      (test-form (tbl-get channel-subspace-tbl 'hello) ['world]))
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world]))
     ;; adding another 'world should have no effect
-    (let [[_ (tbl-unique-append channel-subspace-tbl 'hello 'world)]]
-      (test-form (tbl-get channel-subspace-tbl 'hello) ['world]))
-    ;; adding a different value changes the channel-subspace-tbl
-    (let [[_ (tbl-unique-append channel-subspace-tbl 'hello 'world2)]]
-      (test-form (tbl-get channel-subspace-tbl 'hello) ['world 'world2]))))
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world]))
+    ;; adding a different value changes the channel-subspace-table
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world2)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world 'world2]))))
 
-(let* [[channel-subspace-tbl (new RblTable)]
-       [_ (tbl-add channel-subspace-tbl 'hello [])]]
+(let* [[channel-subspace-table (new RblTable)]
+       [_ (tbl-add channel-subspace-table 'hello [])]]
   (seq
     ;; adding to an empty tuple works
-    (let [[_ (tbl-unique-append channel-subspace-tbl 'hello 'world)]]
-      (test-form (tbl-get channel-subspace-tbl 'hello) ['world]))
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world]))
     ;; adding a different value on top still works
-    (let [[_ (tbl-unique-append channel-subspace-tbl 'hello 'world2)]]
-      (test-form (tbl-get channel-subspace-tbl 'hello) ['world 'world2]))))
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world2)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world 'world2]))))
 
 ;;; TODO: Discuss whether empty tuples should match
 (test-form (match-tuple-pattern [] []) #t)

@@ -33,30 +33,30 @@
 ;;;
 ;;; TODO: Remove data from extract-data-candidates and simply refetch data by the data-index.
 ;;; Currently the data-index is only used to delete the data.
-(defProc (consume-products reductions channel-subspace-tbl channels)
+(defProc (consume-products reductions channel-subspace-table channels)
   (map reductions
        (proc [i chosen-candidate]
          (let* [[[data-index data] chosen-candidate]
                 [channel (tuple-safe-nth channels i)]
-                [[data-list continuation-struct-list] (tbl-get channel-subspace-tbl channel)]
+                [[data-list continuation-struct-list] (tbl-get channel-subspace-table channel)]
                 [updated-data-list (delete-i data-list data-index)]]
            (seq
-             (tbl-add channel-subspace-tbl channel [updated-data-list continuation-struct-list])
+             (tbl-add channel-subspace-table channel [updated-data-list continuation-struct-list])
              data)))))
 
-(defProc (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-tbl channels product-ptrns ctxt-tuple persistent)
+(defProc (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels product-ptrns ctxt-tuple persistent)
   (let* [[[ctxt [code env]] ctxt-tuple]
          [channels-concatenated (concat-symbol-list channels)]
-         [subspace (tbl-get channel-subspace-tbl channels-concatenated)]]
+         [subspace (tbl-get channel-subspace-table channels-concatenated)]]
     (seq
       (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
       (tbl-add reverse-channel-lookup-table channels-concatenated channels)
       (if (absent? subspace)
           (let [[new-subspace [[] [[product-ptrns [ctxt [code env] persistent]]]]]]
-            (tbl-add channel-subspace-tbl channels-concatenated new-subspace))
+            (tbl-add channel-subspace-table channels-concatenated new-subspace))
           (let* [[[data-list continuation-struct-list] subspace]
                  [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
-            (tbl-add channel-subspace-tbl channels-concatenated updated-subspace))))))
+            (tbl-add channel-subspace-table channels-concatenated updated-subspace))))))
 
 ;;; This reflective method would have roughly below signature in Scala
 ;;;
@@ -77,16 +77,16 @@
   (let* [[[ctxt [code env]] ctxt-tuple]
          [[channels product-ptrns persistent] location]
          [_ (display "INFO:  (consume) for (" product-ptrns " <- " channels ") called with " persistent " and " code #\\n)]
-         [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create channel-subspace-tbl channel)))]
+         [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create channel-subspace-table channel)))]
          [candidates (extract-data-candidates subspaces product-ptrns)]
          [reductions (select-best-products candidates)]
-         [products (consume-products reductions channel-subspace-tbl channels)]]
+         [products (consume-products reductions channel-subspace-table channels)]]
     (seq
       (if (null? products)
           ;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
           (seq
             (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")" #\\n)
-            (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-tbl channels product-ptrns ctxt-tuple persistent)
+            (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels product-ptrns ctxt-tuple persistent)
             (update!))
           (seq
             (display "DEBUG: (consume)" #\\t "ctxt-rtn(" products ", " persistent ")" #\\n)

@@ -11,14 +11,14 @@
 ;;;     type ContinuationStruct = Tuple2[List[Pattern], Tuple3[Continuation, Tuple2[Code, Env], Boolean]]
 ;;;     type Subspace = Tuple2[List[Data], List[ContinuationStruct]]
 ;;;
-;;; The channel-subspace-tbl is a key value store that has channels as keys and subspaces as values.
+;;; The channel-subspace-table is a key value store that has channels as keys and subspaces as values.
 ;;; The type of the subspace is described above. Note the subspace contains lists of products/data
 ;;; and lists of continuation structs instead of just products/data and continuation structs because
 ;;; you can queue up a bunch of produces or consumes at each channel (e.g., x!(5) | x!(5) | x!(5) -
 ;;; this will store a data list of length 3 at channel x with each datum representing 5).
 ;;;
 ;;; The channel-lookup-table and reverse-channel-lookup-table are used to simulate being able to
-;;; add tuples as keys to channel-subspace-tbl. channel-lookup-table maps a channel to a list of
+;;; add tuples as keys to channel-subspace-table. channel-lookup-table maps a channel to a list of
 ;;; joined-channels that contain the channel. reverse-channel-lookup-table maps a joined-channel to
 ;;; a list of channels that constitute that joined-channel.
 ;;; These two tables will be removed with https://rchain.atlassian.net/browse/ROS-340 .
@@ -52,7 +52,7 @@
 ;;;    store the data
 (define **wildcard** 'anything)
 (defActor NameSpace
-  (slots& channel-subspace-tbl (new RblTable)
+  (slots& channel-subspace-table (new RblTable)
           channel-lookup-table (new RblTable)
           reverse-channel-lookup-table (new RblTable)
           unification-ptrn-lookup-table (new RblTable)))
