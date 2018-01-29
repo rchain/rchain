@@ -161,11 +161,6 @@ class VirtualMachineSpec extends WordSpec with Matchers {
       _ shouldBe updated
     }
 
-    (theState >> 'loc on OpXferRsltToDest(someObsInd)) {
-      val atom = LocationAtom(testState.code.lit(someObsInd))
-      _ shouldBe atom
-    }
-
     (theState >> 'loc on OpXferSrcToRslt(someObsInd)) {
       val atom = LocationAtom(testState.code.lit((someObsInd)))
       _ shouldBe atom

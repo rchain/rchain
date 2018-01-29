@@ -444,6 +444,99 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
 
   override def hashCode(): Int = if (negateCharSet) charSet.hashCode() else -charSet.hashCode()
 
+  override def toString: String = {
+    def isPrintable(c: Char): Boolean =
+      ((c >= 32) && (c <= 127)) || (!Character.isISOControl(c) && {
+        val block = Character.UnicodeBlock.of(c)
+        block != null && block != Character.UnicodeBlock.SPECIALS
+      })
+
+    def singleCharToString(c: Char): String =
+      if (CharClassPattern.allSpecialChars.contains(c)) {
+        //this character needs escape
+        "\\" + c
+      } else if (CharClassPattern.revEscapes.contains(c)) {
+        "\\" + CharClassPattern.revEscapes(c)
+      } else if ((c >= 128) && (c <= 255)) {
+        "\\x%02X".format(c.toInt)
+      } else if (isPrintable(c)) {
+        c.toString
+      } else if (!c.isSurrogate && (c <= 65535)) {
+        "\\u%04X".format(c.toInt)
+      } else {
+        //we don't support surrogates anyway, but let's be able to print them
+        val surrogatePair = Character.toChars(c)
+        //one day Unicode consortium will add 3-chars surrogate, lets handle it today
+        surrogatePair.foldLeft("")((str, ch) => str + "\\u%04X".format(ch.toInt))
+      }
+
+    def unknownSetToString: String = {
+      def listToString(lst: List[Char]): String = lst.size match {
+        case 0 => ""
+        case 1 => singleCharToString(lst.head)
+        case 2 | 3 =>
+          //sequence like "abc", no sense to convert to "a-c"
+          lst.map(singleCharToString).mkString
+        case _ =>
+          //sequence of 4 chars or more "abcd" -> "a-d"
+          val startChar = singleCharToString(lst.last)
+          val endChar = singleCharToString(lst.head)
+          s"$startChar-$endChar"
+      }
+
+      val sortedSet = charSet.toList.sorted
+      val (strings, pending) = sortedSet.foldLeft((Nil: List[String], Nil: List[Char])) {
+        case ((strings, pending), nextChar) =>
+          if (pending.isEmpty) {
+            (strings, nextChar :: pending)
+          } else {
+            if (nextChar == (pending.head + 1)) {
+              //next char in a continious sequence, add to pending
+              (strings, nextChar :: pending)
+            } else {
+              (listToString(pending) :: strings, nextChar :: Nil)
+            }
+          }
+      }
+
+      val finalStrings = if (pending.isEmpty) {
+        strings
+      } else {
+        listToString(pending) :: strings
+      }
+
+      finalStrings.reverse.mkString
+    }
+
+    if (charSet.isEmpty) {
+      if (negateCharSet) {
+        //corner case - any char ~[] => '.'
+        "."
+      } else {
+        //or empty set => nothing
+        ""
+      }
+    } else if (charSet.size == 1) {
+      if (negateCharSet) {
+        //single character negated
+        val cStr = singleCharToString(charSet.head)
+        s"[^$cStr]"
+      } else {
+        //just one simple character
+        singleCharToString(charSet.head)
+      }
+    } else {
+      //check for well-known class first, render the set otherwise
+      CharClassPattern.knownClassMap
+        .find(_._2 == this)
+        .map("\\" + _._1)
+        .getOrElse {
+          val inv = if (negateCharSet) "^" else ""
+          s"[$inv$unknownSetToString]"
+        }
+    }
+  }
+
   override def equivalent(that: RegexPattern): Boolean = that match {
     case thatCharClass: CharClassPattern =>
       (negateCharSet == thatCharClass.negateCharSet) && (charSet == thatCharClass.charSet)
