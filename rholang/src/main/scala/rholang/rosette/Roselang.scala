@@ -139,7 +139,10 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       }
       case StrTermPtdCtxtBr( op, subterms ) => {
         val qterms = subterms.map(( term ) => doQuote( term ))
-        B( _rx, Var( op ) :: qterms )
+        if ( op == _list )
+          B( _list, qterms )
+        else
+          B( _rx, Var(op) :: qterms )
       }
     }
   }
@@ -166,6 +169,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     def toListOfTuples(bindingsResults: List[(List[StrTermCtxt], A)]) = {
       (bindingsResults map (x => x._1)) transpose match {
         case List(a, b, c) => (a, b, c)
+        case List() => (List(), List(), List())
       }
     }
 
@@ -192,15 +196,10 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     val pTerm : StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
     val wildcard = Var("**wildcard**")
     val unificationFresh = Var(Fresh())
-    val (formals, quotedFormals, productFreshes) =
-      if (ptrnTermList.length == 1) {
-        toListOfTuples(bindingsResults) match {
-          case (List(a), List(b), List(c)) => (a, b, c)
-        }
-      } else {
-        val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsResults)
-        (B(_list, formalsUnwrapped), B(_list, quotedFormalsUnwrapped), B(_list, productFreshesUnwrapped))
-      }
+    val (formals, quotedFormals, productFreshes) = {
+      val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsResults)
+      (B(_list, formalsUnwrapped), B(_list, quotedFormalsUnwrapped), B(_list, productFreshesUnwrapped))
+    }
 
     val consumeTerm = B("consume")(TS, B(_list)( Tag(p.var_) ), B(_list)(wildcard), B(_list)(quotedFormals), Tag("#t"))
     val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFresh), B(_list)(productFreshes)), consumeTerm)
@@ -277,6 +276,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       def toListOfTuples(bindingsResults: List[(List[StrTermCtxt], A)]) = {
         (bindingsResults map (x => x._1)) transpose match {
           case List(a, b, c, d, e, f) => (a, b, c, d, e, f)
+          case List() => (List(), List(), List(), List(), List(), List())
         }
       }
 
@@ -306,8 +306,9 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       val procTerm: StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
       val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsResults)
       val consumeTerm = B("consume")(TS, B(_list, chanTerms), B(_list, wildcards), B(_list, quotedPtrnTerms), Tag("#f")) // #f for persistent
+      val wrappedPtrnTerms = ptrnTerms map (x => B(_list)(x))
       val letBindingsTerm = B(_list)(B(_list)(B(_list, unificationFreshes), B(_list, productFreshes)), consumeTerm)
-      val bodyTerm = B("")(B("proc")(B(_list)(B(_list, ptrnTerms)), procTerm), B(_list, productFreshes))
+      val bodyTerm = B("")(B("proc")(B(_list)(B(_list, wrappedPtrnTerms)), procTerm), B(_list, productFreshes))
       B("let")(B(_list)(letBindingsTerm), bodyTerm)
     }
 
@@ -480,7 +481,8 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
             case pm: PatternMatch => {
               val patternResult: R = pm.ppattern_.accept(this, arg)
               val pattern: StrTermCtxt = patternResult._1
-              val patternBindings: BoundSet = patternResult._2
+              val qPattern: StrTermCtxt = doQuote(pattern)._1
+              val patternBindings: BoundSet = arg ++ patternResult._2
               val continuation: StrTermCtxt = pm.proc_.accept(this, patternBindings)._1
               val remainder: StrTermCtxt = acc
               if (isWild(pm.ppattern_)) {
@@ -492,7 +494,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
                   B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
                 }
 
-                val matchTerm = B(_match)(TS, pTerm, pattern)
+                val matchTerm = B(_match)(TS, qPattern, pTerm)
                 val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
                   createProcForPatternBindings
                 } else {
@@ -732,6 +734,9 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         }
       )
     (B( _list, tupleContents._1 ), tupleContents._2)
+  }
+  override def visit( p : VPtStr, arg : A ) : R = {
+    Tag( s""""${p.string_}"""" )
   }
   override def visit( p : VPtTrue, arg: A ): R = {
     (Tag( s"""#t"""), arg)
