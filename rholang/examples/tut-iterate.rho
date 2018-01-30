@@ -1,11 +1,11 @@
 new channel, iterate in {
     contract iterate(list, channel) = {
         new ack, right in {
-            channel!(ack) |
+            channel(ack) |
             for (_ <- ack) {
                 contract right(pair) = {
                     match pair with [i, limit] => {
-                        channel!([list.nth(i), i < limit]) |
+                        channel([list.nth(i), i < limit]) |
                         for (_ <- ack) {
                             match i + 1 < limit with true => { right([i + 1, limit]) }
                         }
@@ -20,14 +20,14 @@ new channel, iterate in {
     
     // Interacts with the iterator
     for (ack <- channel) {
-        ack!(Nil) |
+        ack(Nil) |
         new left in {
             contract left(_) = {
                 for (pair <- channel) {
                     match pair with [v, keepGoing] => {
                         v.display("\n") |
                         match keepGoing with true => { 
-                            ack!(Nil) |
+                            ack(Nil) |
                             left(Nil) 
                         }
                     }

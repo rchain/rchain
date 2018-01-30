@@ -2,5 +2,5 @@ new helloWorld in {
   contract helloWorld(name) = {
     "Hello, ".display(name, "!\n")
   } |
-  helloWorld!("Joe")
+  helloWorld("Joe")
 }

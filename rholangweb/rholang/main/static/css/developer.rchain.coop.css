@@ -1,0 +1,42 @@
+body {
+    font-family: 'Lato';
+    background: #c5c7c9;
+}
+
+.masthead {
+    background-image: url("https://developer.rchain.coop/fractal3.jpg");
+    /* height: 450px;
+    padding-top: 9rem; */
+}
+
+.masthead p {
+    color: white;
+    background: rgba(70, 69, 68, 0.8);
+}
+
+.logoWrapper {
+    background: rgba(70, 69, 68, 0.8);
+    color: white;
+    font-family: 'Lato', sans-serif;
+}
+
+.header {
+    text-transform: uppercase;
+}
+
+.footer {
+    background: rgba(70, 69, 68, 1);
+    text-align: center;
+    color: white;
+}
+
+
+@media (max-width: 1200px) {
+    .nav .item {
+        width: 23%;
+        font-size: .8rem;
+    }
+    .nav {
+        padding: 1rem .5rem;
+    }
+}
