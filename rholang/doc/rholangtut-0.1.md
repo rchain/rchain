@@ -10,7 +10,7 @@ Rholang is "process-oriented": all computation is done by means of message passi
     2   contract helloWorld(name) = {
     3     "Hello, ".display(name, "!\n")
     4   } |
-    5   helloWorld!("Joe")
+    5   helloWorld("Joe")
     6 }
 
 1) A Rholang program is a single process.  This process starts by creating a new channel named `helloWorld`.  To create a new, private channel, we use the `new ... in` construction. No other process can send or receive messages over this channel unless we explicitly send this channel to the other process.
@@ -26,13 +26,13 @@ Rholang is "process-oriented": all computation is done by means of message passi
      1 new helloAgain in {
      2   contract helloAgain(_) = {
      3     new chan in {
-     4       chan!("Hello again, world!") |
+     4       chan("Hello again, world!") |
      5       for (text <- chan) {
      6         text.display("\n")
      7       }
      8     }
      9   } |
-    10   helloAgain!(Nil)
+    10   helloAgain(Nil)
     11 }
 
 2) Contracts take at least one parameter, but we can throw it away by binding it to a variable we never use.
@@ -49,16 +49,16 @@ Rholang is "process-oriented": all computation is done by means of message passi
      2   // Makes a single cell in which you can store values
      3   contract MakeCell(init, get, set) = {
      4     new valueStore in {
-     5       valueStore!(init) |
+     5       valueStore(init) |
      6       contract get(ack) = {
      7         for(value <- valueStore) {
-     8           valueStore(value) | ack!(value)
+     8           valueStore(value) | ack(value)
      9         }
     10       } |
     11       contract set(pair) = {
     12         for(_ <- valueStore) {
     13           match pair with [newValue, ack] => {
-    14             valueStore(newValue) | ack!(Nil)
+    14             valueStore(newValue) | ack(Nil)
     15           }
     16         }
     17       }
@@ -68,12 +68,12 @@ Rholang is "process-oriented": all computation is done by means of message passi
     21   new myGet, mySet in {
     22     MakeCell(123, myGet, mySet) |
     23     new ack in {
-    24       myGet!(ack) |
+    24       myGet(ack) |
     25       for (result <- ack) {
     26         result.display("\n") |
-    27         mySet!([456, ack]) |
+    27         mySet([456, ack]) |
     28         for (_ <- ack) {
-    29           myGet!(ack) |
+    29           myGet(ack) |
     30           for (result <- ack) {
     31             result.display("\n")
     32           }
@@ -116,11 +116,11 @@ In the code below, `iterate` first sends a channel `next` over `iterator`, and t
      1 new iterator, iterate in {
      2     contract iterate(list, iterator) = {
      3         new next, right in {
-     4             iterator!(next) |
+     4             iterator(next) |
      5             for (_ <- next) {
      6                 contract right(pair) = {
      7                     match pair with [i, limit] => {
-     8                         iterator!([list.nth(i), i < limit]) |
+     8                         iterator([list.nth(i), i < limit]) |
      9                         for (_ <- next) {
     10                             match i + 1 < limit with true => {
     11                                 right([i + 1, limit]) 
@@ -137,14 +137,14 @@ In the code below, `iterate` first sends a channel `next` over `iterator`, and t
     22     
     23     // Interacts with the iterator
     24     for (next <- iterator) {
-    25         next!(Nil) |
+    25         next(Nil) |
     26         new left in {
     27             contract left(_) = {
     28                 for (pair <- iterator) {
     29                     match pair with [v, keepGoing] => {
     30                         v.display("\n") |
     31                         match keepGoing with true => { 
-    32                             next!(Nil) |
+    32                             next(Nil) |
     33                             left(Nil) 
     34                         }
     35                     }
@@ -166,30 +166,30 @@ In the code below, `iterate` first sends a channel `next` over `iterator`, and t
      1 new MakeCoatCheck in {
      2     contract MakeCoatCheck(ret) = {
      3         new port, mapStore in {
-     4             mapStore!(Map()) |
-     5             ret!(port) |
+     4             mapStore(Map()) |
+     5             ret(port) |
      6             contract port (method, ack, arg1, arg2) = {
      7                 match method with
      8                 "new" => {
      9                     for (map <- mapStore) {
     10                         new ticket in {
     11                             map.insert(ticket, arg1) |
-    12                             mapStore!(map) |
-    13                             ack!(ticket)
+    12                             mapStore(map) |
+    13                             ack(ticket)
     14                         }            
     15                     }
     16                 }
     17                 "get" => {
     18                     for (map <- mapStore) {
-    19                         mapStore!(map) |
-    20                         ack!(map.get(arg1))
+    19                         mapStore(map) |
+    20                         ack(map.get(arg1))
     21                     }
     22                 }
     23                 "set" => {
     24                     for (map <- mapStore) {
     25                         map.insert(arg1, arg2) |
-    26                         mapStore!(map) |
-    27                         ack!(Nil)
+    26                         mapStore(map) |
+    27                         ack(Nil)
     28                     }
     29                 }
     30             }
@@ -201,13 +201,13 @@ In the code below, `iterate` first sends a channel `next` over `iterator`, and t
     36         MakeCoatCheck(ret) |
     37         for (cc <- ret) {
     38             // Creates new cell with initial value 0
-    39             cc!("new", ret, 0, Nil) |
+    39             cc("new", ret, 0, Nil) |
     40             for (ticket <- ret) {
     41                 // Sets the cell to 1
-    42                 cc!("set", ret, ticket, 1) |
+    42                 cc("set", ret, ticket, 1) |
     43                 for (ack <- ret) {
     44                     // Reads the value
-    45                     cc!("get", ret, ticket, Nil) |
+    45                     cc("get", ret, ticket, Nil) |
     46                     for (storedValue <- ret) {
     47                         // Prints 1
     48                         storedValue.display("\n")
@@ -232,17 +232,17 @@ In the code below, `iterate` first sends a channel `next` over `iterator`, and t
 ## Dining philosophers and deadlock
 
      1 new north, south, knife, spoon in {
-     2     north!(knife) |
-     3     south!(spoon) |
+     2     north(knife) |
+     3     south(spoon) |
      4     for (knf <- north) { for (spn <- south) {
      5         "Philosopher 1 Utensils: ".display(knf, ", ", spn, "\n") |
-     6         north!(knf) |
-     7         south!(spn)
+     6         north(knf) |
+     7         south(spn)
      8     } } |
      9     for (knf <- north) { for (spn <- south) {
     10         "Philosopher 2 Utensils: ".display(knf, ", ", spn, "\n") |
-    11         north!(knf) |
-    12         south!(spn)
+    11         north(knf) |
+    12         south(spn)
     13     } }
     14 }
 
@@ -251,17 +251,17 @@ The dining philosophers problem has two philosophers that share only one set of 
 Here's how to solve the problem:
 
      1 new north, south, knife, spoon in {
-     2     north!(knife) |
-     3     south!(spoon) |
+     2     north(knife) |
+     3     south(spoon) |
      4     for (knf <- north; spn <- south) {
      5         "Philosopher 1 Utensils: ".display(knf, ", ", spn, "\n") |
-     6         north!(knf) |
-     7         south!(spn)
+     6         north(knf) |
+     7         south(spn)
      8     } |
      9     for (spn <- south; knf <- north) {
     10         "Philosopher 2 Utensils: ".display(knf, ", ", spn, "\n") |
-    11         north!(knf) |
-    12         south!(spn)
+    11         north(knf) |
+    12         south(spn)
     13     }
     14 }
 
@@ -281,7 +281,7 @@ Note that if `get` and `set` are not created as halves of iopairs, then possessi
 
     for (ret <- get) { P } | 
     for (ret <- get) { Q } | 
-    get!(ack)
+    get(ack)
 
 This term has two processes listening on the channel `get` and a single message sent over `get`.  Only one of the two processes will be able to receive the message.
 
@@ -293,9 +293,9 @@ In the MakeCellFactory contract, there's only one channel and messages are dispa
 
     contract MakeGetForwarder(target, ret) = {
         new port in {
-            ret!(port) |
+            ret(port) |
             contract port(tuple) = {
-                tuple.nth(0) match with "get" => target!(tuple)
+                tuple.nth(0) match with "get" => target(tuple)
             }
         }
     }
@@ -306,16 +306,16 @@ We can implement revocation by creating a forwarder with a kill switch.
 
      1 contract MakeRevokableForwarder(target, ret) = {
      2     new port, kill, forwardFlag in {
-     3         ret!(port, kill) |
-     4         forwardFlag!(true) |
+     3         ret(port, kill) |
+     4         forwardFlag(true) |
      5         contract port(tuple) = {
      6             for (status <- forwardFlag) {
-     7                 forwardFlag!(status) |
-     8                 match status with true => { target!(tuple) }
+     7                 forwardFlag(status) |
+     8                 match status with true => { target(tuple) }
      9             }
     10         } |
     11         for (_ <- kill; _ <- forwardFlag) {
-    12             forwardFlag!(false)
+    12             forwardFlag(false)
     13         }
     14     }
     15 }
@@ -353,10 +353,10 @@ A logging forwarder can record all messages sent on a channel by echoing them to
 
     contract MakeLoggingForwarder(target, logger, ret) = {
         new port in {
-            ret!(port) |
+            ret(port) |
             contract port(tuple) {
-                target!(tuple) |
-                logger!(tuple)
+                target(tuple) |
+                logger(tuple)
             }
         }
     }
@@ -369,14 +369,14 @@ Suppose Alice has a channel and would like to log Bob's access to it.  Bob would
 
     contract MakeSealerUnsealer(ret) =  {
         new sealer, unsealer, ccRet in {
-            ret!(sealer, unsealer) |
+            ret(sealer, unsealer) |
             MakeCoatCheck(ccRet) |
             for (cc <- ccRet) {
                 contract sealer(value, ret) = {
-                    cc!("new", ret, value, Nil)
+                    cc("new", ret, value, Nil)
                 } |
                 contract unsealer(ticket, ret) = {
-                    cc!("get", ret, ticket, Nil)
+                    cc("get", ret, ticket, Nil)
                 }
             }
         }
