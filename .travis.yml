@@ -22,4 +22,12 @@ notifications:
       - rchain-makers@pyrofex.net
     on_success: never
     on_failure: always
+addons:
+    apt:
+        packages:
+            - sbt
+            - cup
+            - jlex
+            - haskell-platform
+
 
