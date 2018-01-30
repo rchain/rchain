@@ -73,7 +73,7 @@ class Playground(object):
                  rho[:8], len(rho), filename)
         try:
             with dest.open('w') as f:
-                f.write(rho)
+                f.write(rho + "\n")
         except IOError as oops:
             log.error('cannot save: %s', oops)
             return HttpResponse('failed to save', status=500)
