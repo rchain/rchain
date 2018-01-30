@@ -28,7 +28,7 @@ addons:
             - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
         packages:
             - sbt
-            - jlex
+            - jflex
             - haskell-platform
 
 
