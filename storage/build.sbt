@@ -17,6 +17,14 @@ lazy val nonConsoleOptions = Set(
   "-Xfatal-warnings"
 )
 
+lazy val coverageSettings = Seq(
+  coverageMinimum := 90,
+  coverageFailOnMinimum := false,
+  coverageExcludedFiles := Seq(
+    (sourceManaged in Compile).value.getPath ++ "/.*"
+  ).mkString(";")
+)
+
 lazy val commonSettingsDependencies = Seq(
   libraryDependencies ++= Seq(
     "org.scalatest" %% "scalatest" % "3.0.4" % "test"
@@ -49,3 +57,4 @@ lazy val storage = (project in file("."))
   .settings(commonSettingsDependencies: _*)
   .settings(storageSettings: _*)
   .settings(storageSettingsDependencies: _*)
+  .settings(coverageSettings: _*)
