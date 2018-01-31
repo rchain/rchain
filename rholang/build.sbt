@@ -1,10 +1,5 @@
 import BNFC._
 
-libraryDependencies += "org.typelevel" %% "cats-core" % "1.0.0-RC1"
-libraryDependencies += "org.typelevel" %% "cats-free" % "1.0.0-RC1"
-libraryDependencies += "io.monix" %% "monix" % "2.3.0"
-libraryDependencies += "io.monix" %% "monix-cats" % "2.3.0"
-
 lazy val commonOptions = Seq(
   "-language:existentials",
   "-language:higherKinds",
@@ -36,8 +31,8 @@ lazy val root = (project in file("."))
   .settings(commonSettings: _*)
   .settings(bnfcSettings: _*)
 
-// Scalaz
-libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.3.0-M17"
+// Scalaz & Cats
+libraryDependencies ++= Seq("org.scalaz" %% "scalaz-core" % "7.3.0-M17", "org.typelevel" %% "cats-core" % "1.0.0-RC1")
 
 // Kind projector
 resolvers += Resolver.sonatypeRepo("releases")
