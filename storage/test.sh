@@ -12,7 +12,7 @@ run_tests ()
 if run_tests
 then
     # Upload test coverage reports to CodeCov
-    bash <(curl -s https://codecov.io/bash)
+    bash <(curl -s https://codecov.io/bash) -c -F storage
     exit 0
 else
     # On failure, exit with exit status of last command (run_tests)
