@@ -102,8 +102,6 @@ case class MachineState(store: Store, runQueue: RunQueue) {
 
 object RhoInterface {
 
-  import Trace._
-
   def getStore: Trace[MachineState, List[MachineState], Store] = {
     Trace.get[MachineState, List[MachineState]].map { state =>
       state.store
