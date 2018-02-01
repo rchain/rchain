@@ -54,40 +54,19 @@ object Equivalences{
         nameEquivalent(env1, lift1.chan_, env2, lift2.chan_) &&
           allStructurallyEquivalent(env1, lift1.listproc_, env2, lift2.listproc_)
       }
-      case (input1: PInput, input2: PInput) => ???
-    //   case (input1: PInput, input2: PInput) =>
-    //     import scala.collection.JavaConverters._
-    //     input1.listbind_.asScala.toList match {
-    //       case Nil => false
-    //       case head :: tail =>
-    //         input2.listbind_.asScala.toList.partition{
-    //           bind => !(bindEquivalent(env1,bind,env2,head).isEmpty)
-    //         } match {
-    //           case (Nil,_) => false
-    //           case (eqhd,eqtl) =>
-    //             val bindfold = eqhd.foldLeft((List[(CPattern,CPattern)](), List[Bind](), eqhd.tail)) {
-    //               (rejects, bnd) => rejects match {
-    //                 case (substs, r, l) =>
-    //                   bindEquivalent(env1, r ++ l ++ eqtl, env2, tail) match {
-    //                     case Some(s) => (s :: substs,r,l)
-    //                     case None => l match {
-    //                       case Nil => (substs, r ++ List(bnd), Nil)
-    //                       case x :: xs1 => (substs, r ++ List(bnd), xs1)
-    //                       }
-    //                     }
-    //                 case (s,r,l) => (s,r,l)
-    //                 }
-    //             }
-    //             bindfold._1 match {
-    //               case None => false
-    //               case Some(substs) =>
-    //                 val substituted = substs.foldLeft(input2.proc_){
-    //                   (subst,prc) => syntacticSubstitution(prc,subst._1,subst._2)
-    //                 }
-    //                 structurallyEquivalent(input1.proc_, substituted)
-    //             }
-    //         }
-    //     }
+      case (input1: PInput, input2: PInput) =>
+        import scala.collection.JavaConverters._
+        bindsEquivalent (
+          env1, input1.listbind_.asScala.toList,
+          env2, input2.listbind_.asScala.toList
+        ) match {
+          case None => false
+          case Some(substs) =>
+            val substituted = substs.foldLeft(input2.proc_) {
+              (prc,subst) => syntacticSubstitution(prc,subst._1,subst._2)
+            }
+            structurallyEquivalent(env1, input1.proc_, env2, substituted)
+        }
       case (_: PChoice, _: PChoice) => ???
       case (_: PMatch, _: PMatch) => ???
       case (_: PNew, _: PNew) => ???
@@ -110,7 +89,7 @@ object Equivalences{
     }
   }
 
-  def bindEquivalent(env1: DeBruijn, b1: Bind, env2: DeBruijn, b2: Bind): Option[(CPattern,CPattern)] = {
+  def bindEquivalent(env1: DeBruijn, b1: Bind, env2: DeBruijn, b2: Bind): Option[(CPattern,CPattern)] =
     (b1, b2) match {
       case (inpBind1: InputBind, inpBind2: InputBind) =>
         if (nameEquivalent(env1, inpBind1.chan_, env2, inpBind2.chan_)) {
@@ -125,7 +104,38 @@ object Equivalences{
         } else None
       case _ => None 
     }
-  }
+
+  def bindsEquivalent(env1: DeBruijn, b1: List[Bind], env2: DeBruijn, b2: List[Bind]): Option[List[(CPattern,CPattern)]] =
+    b1 match {
+      case Nil => b2 match {
+        case Nil => Some(Nil)
+        case _ => None
+      }
+      case head :: tail => b2.partition {
+        bind => !(bindEquivalent(env1,bind,env2,head).isEmpty)
+      } match {
+        case (Nil,_) => None
+        case (eqhd,eqtl) =>
+          val init = (false,List[(CPattern,CPattern)](),List[Bind](),eqhd.tail)
+          val bindfold = eqhd.foldLeft(init) {
+            (rejects, bnd) => rejects match {
+              case (false, substs, r, l) =>
+                bindsEquivalent(env1, r ++ l ++ eqtl, env2, tail) match {
+                  case Some(s) => (true, s ++ substs, r, l)
+                  case None => l match {
+                    case Nil => (false, substs, r ++ List(bnd), Nil)
+                    case x :: xs1 => (false, substs, r ++ List(bnd), xs1)
+                  }
+                }
+              case (true, s,r,l) => (true, s,r,l)
+            }
+          }
+          bindfold match {
+            case (false, _, _, _) => None
+            case (true, substs, _, _) => Some(substs)
+          }
+        }
+    }
 
   def syntacticSubstitution(proc: Proc, source: CPattern, target: CPattern): Proc = ???
 
@@ -152,8 +162,8 @@ object Equivalences{
           }
           case _ => None
         }
-      case (cpval1: CValPtrn, cpval2: CValPtrn) => sys.error("unimplemented")
-      case (cpq1: CPtQuote, cpq2: CPtQuote) => sys.error("unimplemented")
+      case (cpval1: CValPtrn, cpval2: CValPtrn) => ???
+      case (cpq1: CPtQuote, cpq2: CPtQuote) => ???
       case _ => None
     }
   }
@@ -200,19 +210,19 @@ object Equivalences{
       procs2.partition(proc => structurallyEquivalent(head, proc)) match {
         case (Nil, tl) => false
         case (eqhd, eqtl) =>
-          eqhd.foldLeft((false, List[Proc](), eqhd.tail)) { (rejects, proc) =>
-                rejects match {
-                  case (false, r, l) =>
-                    if (parEquiv(r ++ l ++ eqtl, tail)) (true, r, l)
-                    else {
-                      l match {
-                        case Nil => (false, r ++ List(proc), Nil)
-                        case x :: xs1 => (false, r ++ List(proc), xs1)
-                      }
-                    }
-                  case (true, r, l) => (true, r, l)
+          eqhd.foldLeft((false, List[Proc](), eqhd.tail)) {
+            (rejects, proc) => rejects match {
+              case (false, r, l) =>
+                if (parEquiv(r ++ l ++ eqtl, tail)) (true, r, l)
+                else {
+                  l match {
+                    case Nil => (false, r ++ List(proc), Nil)
+                    case x :: xs1 => (false, r ++ List(proc), xs1)
+                  }
                 }
-              }._1
+              case (true, r, l) => (true, r, l)
+            }
+          }._1
       }
   }
 }
