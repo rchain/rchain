@@ -8,55 +8,8 @@ import interpreter.Trace._
 
 import scala.collection.immutable.HashMap
 
-// When creating sample expressions, every name must be unique!
+//* When creating sample expressions, every name must be unique!*/
 object Example extends App {
-
-  // @0!0
-  val reducible_1 = Output(Quote(Zero), Zero)
-
-  // @0!(0|0)
-  val reducible_2 = Output(Quote(Zero), Par(Zero, Zero))
-
-  // @(0|0)!0
-  val reducible_3 = Output(Quote(Par(Zero, Zero)), Zero)
-
-  // @(0|0)!(0|0)
-  val reducible_4 = Output(Quote(Par(Zero, Zero)), Par(Zero, Zero)) // counter example
-
-  // @0!(*@(0|0))
-  val reducible_5 = Output(Quote(Zero), Drop(Quote(Par(Zero, Zero))))
-
-  // @0!(*@(0|0)) | for(@(0|0|0) <- @0){ *@(0|0|0)!( }
-  val reducible_6 =
-    Par(
-      Output(
-        Quote(Zero),
-        Drop(Quote(Par(Zero, Zero)))
-      ),
-      Input(
-        Action(
-          Quote(Zero),
-          Quote(Par(Zero, Zero, Zero))
-        ),
-        Drop(Quote(Par(Zero, Zero, Zero)))
-      ),
-    )
-
-  val application: Quote => Proc = { x =>
-    val y = calcNextName(Zero)
-    input(x, y, Par(Output(x, Drop(y)), Drop(y)))
-  }
-
-  val repeat: Proc => Quote => Proc =
-    p =>
-      x =>
-        Par(
-          Output(x, Par(application(x), p)),
-          application(x)
-    )
-
-  //*
-  val reducible_repeat = repeat(reducible_1)(Quote(reducible_2))
 
   def evaluate(proc: Proc): Unit = {
     val result = RhoInterface.reduce
@@ -82,8 +35,10 @@ case class MachineState(store: Store, runQueue: RunQueue) {
 
 object MachineState {
 
-  //A ChannelQueue may be an empty queue, a list of readers, or a list of writers.
-  // It will never be both a list of readers and a list of writers
+  /*
+    A ChannelQueue may be an empty queue, a list of readers, or a list of writers.
+    It will never be both a list of readers and a list of writers.
+  */ 
   sealed trait ChannelQueue
 
   case class ReaderQueue(x: Reader, xs: List[Reader]) extends ChannelQueue {
@@ -108,15 +63,17 @@ object MachineState {
     override def toString: String = "[]"
   }
 
-  //A reader is a abstraction providing a bound name "z", and a continuation
-  //to evaluate, "k".
+  /*
+    A reader is a abstraction providing a bound name "z", and a continuation
+    to evaluate, "k".
+  */
   sealed trait Reader
 
   case class Abstraction(z: Quote, k: Proc) extends Reader {
     override def toString: String = " λ" + z + " { " + k.toString + " } "
   }
 
-  //A writer simply represents a message, "q".
+  //* A writer simply represents a message, "q".*/
   sealed trait Writer
 
   case class Concretion(q: Quote) extends Writer {
@@ -149,13 +106,13 @@ object MachineState {
       }
   }
 
-  // Smart constructor for readerQueue
+  //* Smart constructor for readerQueue */
   def readerQueue: List[Reader] => ChannelQueue = {
     case Nil          => EmptyQueue
     case reader :: rs => ReaderQueue(reader, rs)
   }
 
-  // Smart constructor for writerQueue
+  //* Smart constructor for writerQueue */
   def writerQueue: List[Writer] => ChannelQueue = {
     case Nil          => EmptyQueue
     case writer :: ws => WriterQueue(writer, ws)
@@ -167,8 +124,10 @@ object RhoInterface {
 
   import MachineState._
 
-  // Variable binding is represented by substitution in the body of the process.
-  // A more efficient implementation will achieve the same result using environments.
+  /* 
+    Variable binding is represented by substitution in the body of the process.
+    A more efficient implementation will achieve the same result using environments.
+  */
   def bind: Quote => Quote => Proc => Proc =
     atQ => z => proc => semanticSubstitution(proc)(atQ)(z)
 
@@ -203,13 +162,13 @@ object RhoInterface {
 
   def reduce: Trace[MachineState, List[MachineState], Unit] = {
 
-    // Get run-queue and pull first process off.
+    //* Get run-queue and pull first process off.*/
     for {
       runQueue <- getRunQueue
 
       _ <- runQueue match {
 
-        // If the queue is empty, log the final state, and terminate.
+        //* If the queue is empty, log the final state, and terminate.*/
         case Nil =>
           for {
             st <- get[MachineState, List[MachineState]]
@@ -221,7 +180,7 @@ object RhoInterface {
           for {
             _ <- proc match {
 
-              // (Store, 0 :: R) -> (Store, R)
+              //* (Store, 0 :: R) -> (Store, R) */
               case Zero =>
                 for {
                   st <- get[MachineState, List[MachineState]]
@@ -233,17 +192,20 @@ object RhoInterface {
                 } yield ()
 
               case par @ Par(_) =>
-                // Encodes non-determinism by generating an auxiliary run-queue for every permutation of the set (P1 | ... | Pn)
+                /*
+                  Encodes non-determinism by generating an auxiliary run-queue 
+                  for every permutation of the set (P1 | ... | Pn)
+                */
                 for {
                   interleaving <- fromList[MachineState,
                                            List[MachineState],
                                            Seq[Proc]](
                     par.processes.permutations.toList)
 
-                  // Adds a permutation to the original run-queue
+                  //* Adds a permutation to the original run-queue*/
                   newRunQueue = (interleaving ++ xs).toList
 
-                  // Continues evaluating with new run-queue
+                  //* Continues evaluating with new run-queue*/
                   _ <- putRunQueue(newRunQueue)
 
                 } yield ()
@@ -260,7 +222,7 @@ object RhoInterface {
 
                   _ <- chanQ match {
 
-                    // If there is a writer waiting, pull it off, and bind it's message to z in k.
+                    //* If there is a writer waiting, pull it off, and bind it's message to z in k.*/
                     case WriterQueue(writer: Concretion, writers) =>
                       for {
                         _ <- write(x)(writerQueue(writers))
@@ -269,7 +231,7 @@ object RhoInterface {
 
                       } yield ()
 
-                    // If there is a reader waiting, create a reader, Abstraction(z,k), and add to the end of queue.
+                    //* If there is a reader waiting, create a reader, Abstraction(z,k), and add to the end of queue.*/
                     case ReaderQueue(reader, readers) =>
                       for {
                         _ <- write(x)(readerQueue((reader :: readers) :+ abs))
@@ -278,7 +240,7 @@ object RhoInterface {
 
                       } yield ()
 
-                    // If queue is empty, create a ReaderQueue, and add reader to it.
+                    //* If queue is empty, create a ReaderQueue, and add reader to it.*/
                     case EmptyQueue =>
                       for {
                         _ <- write(x)(readerQueue(List(abs)))
@@ -304,7 +266,7 @@ object RhoInterface {
 
                   _ <- chanQ match {
 
-                    // Similar to ReaderQueue rule in Input.
+                    //* Similar to ReaderQueue rule in Input.*/
                     case WriterQueue(writer: Concretion, writers) =>
                       for {
                         _ <- write(x)(
@@ -317,7 +279,7 @@ object RhoInterface {
 
                       } yield ()
 
-                    // If reader in the queue, pull it off, bind message, and add continuation to the end of the run-queue
+                    //* If reader in the queue, pull it off, bind message, and add continuation to the end of the run-queue*/
                     case ReaderQueue(reader, readers) =>
                       reader match {
 
@@ -333,7 +295,7 @@ object RhoInterface {
                           } yield ()
                       }
 
-                    // Similar to EmptyQueue rule in Input
+                    //* Similar to EmptyQueue rule in Input*/
                     case EmptyQueue =>
                       for {
                         _ <- write(x)(writerQueue(List(Concretion(atQ))))
@@ -356,7 +318,7 @@ object RhoInterface {
 
                       _ <- tell(List(st))
 
-                      // (Store, *@Q :: R) -> (Store, Q :: R)
+                      //* (Store, *@Q :: R) -> (Store, Q :: R) */
                       _ <- putRunQueue(p :: xs)
                     } yield ()
 
