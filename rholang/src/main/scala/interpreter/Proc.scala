@@ -16,24 +16,25 @@ case class Var(id: String) extends Channel {
   override def toString: String = id
 }
 
+//* Term Constructors */
 sealed trait Proc extends Serializable
 
-// 0 : 1 => P
+//* 0 : 1 => P
 case object Zero extends Proc {
   override def toString: String = "0"
 }
 
-// ! : N x P => P
+//* ! : N x P => P */
 final case class Output(x: Quote, q: Proc) extends Proc {
   override def toString: String = x.toString + "!(" + q.toString + ")"
 }
 
-// for : N x N x P => P
+//* for : N x N x P => P */
 final case class Input(a: Action, k: Proc) extends Proc {
   override def toString: String = a.toString + "{ " + k.toString + " }"
 }
 
-// | : P x P => P
+//* | : P x P => P */
 final case class Par(processes: List[Proc]) extends Proc {
   override def toString: String = {
     processes.map(p => p.toString).mkString(" | ")
@@ -44,12 +45,12 @@ object Par {
   def apply(seqProc: Proc*): Par = Par(seqProc.toList)
 }
 
-// * : N => P
+//* * : N => P */
 final case class Drop(x: Quote) extends Proc {
   override def toString: String = "*" + x.toString
 }
 
-// Action(x,z) := x(z) := for(z <- x)
+//* Action(x,z) := x(z) := for(z <- x) */
 final case class Action(nsubj: Quote, nobj: Quote) {
   override def toString: String =
     "for( " + nobj.toString + " <- " + nsubj.toString + " )"
@@ -57,9 +58,10 @@ final case class Action(nsubj: Quote, nobj: Quote) {
 
 object Proc {
 
+  //* Smart Constructors */
   def zero: Zero.type = Zero
 
-  def lift(nsubj: Quote, cont: Proc): Output = Output(nsubj, cont)
+  def output(nsubj: Quote, cont: Proc): Output = Output(nsubj, cont)
 
   def input(nsubj: Quote, nobj: Quote, cont: Proc): Input =
     Input(Action(nsubj, nobj), cont)
@@ -73,9 +75,10 @@ object Proc {
     }
   }
 
+ 
   def parstar(xs: List[Proc]): Proc = {
     xs match {
-      case Nil          => Zero
+      case Nil          => Zero //* Nil := Par() */
       case head :: tail => tail.foldLeft(head)((acc, proc) => par(acc, proc))
     }
   }
@@ -89,6 +92,7 @@ object Proc {
     }
   }
 
+  //* Given a unique process, generate a unique name */
   def calcNextName: Proc => Quote = {
     case Zero           => Quote(Zero)
     case Drop(Quote(p)) => Quote(par(p, p))
@@ -159,6 +163,10 @@ object Proc {
     }
   }
 
+  /* 
+    Differs from syntacticSubstitution because Drop(Quote(n))
+    cancels to n.
+  */
   def semanticSubstitution: Proc => Quote => Quote => Proc = {
     proc => nsource => ntarget =>
       proc match {
@@ -276,6 +284,7 @@ object Proc {
     }
   }
 
+  //* Collect the free names of a process into a set */
   def free(proc: Proc): Set[Quote] = {
     proc match {
       case Zero                             => Set.empty[Quote]
@@ -320,12 +329,12 @@ object Proc {
       case Nil => (None, procList)
       case hProc :: rProc =>
         proc match {
-          case Zero    => (None, procList) //(* 0 has no match *)
-          case Drop(n) => (None, procList) //(* Drop has no match *)
+          case Zero    => (None, procList) //* 0 has no match */
+          case Drop(n) => (None, procList) //* Drop has no match */
           case Par(prox) =>
-            (None, procList) //(* This could be extended pt-wise ... *)
+            (None, procList) //* This could be extended pt-wise ... */
 
-          case Input(Action(insubj, inobj), iproc) => //(* Find a Lift( ... ) with matching subject *)
+          case Input(Action(insubj, inobj), iproc) => //* Find a Lift( ... ) with matching subject */
             val ans: (List[Proc], List[Proc]) =
               procList.partition {
                 case Output(onsubj, oproc) => nameEquiv(insubj, onsubj)
@@ -336,7 +345,7 @@ object Proc {
               case (mProc :: mrProc, procs) => (Some(mProc), mrProc ++ procs)
             }
 
-          case Output(onsubj, oproc) => //(* Find an Input( ... ) with matching subject *)
+          case Output(onsubj, oproc) => //* Find an Input( ... ) with matching subject */
             val ans: (List[Proc], List[Proc]) =
               procList.partition {
                 case Input(Action(insubj, inobj), iproc) =>
@@ -352,50 +361,50 @@ object Proc {
 
   def normalizeOnce(proc: Proc): (Boolean, Proc) =
     proc match {
-      case Zero                => (false, Zero) //(* stuck *)
-      case Input(act, cont)    => (false, Input(act, cont)) //(* stuck *)
-      case Output(nsubj, cont) => (false, Output(nsubj, cont)) //(* stuck *)
-      case Drop(nsubj)         => (false, Drop(nsubj)) //(* stuck *)
+      case Zero                => (false, Zero) //* stuck */
+      case Input(act, cont)    => (false, Input(act, cont)) //* stuck */
+      case Output(nsubj, cont) => (false, Output(nsubj, cont)) //* stuck */
+      case Drop(nsubj)         => (false, Drop(nsubj)) //* stuck */
 
-      case Par(List())     => (false, Par(List())) //(* stuck *)
-      case Par(List(Zero)) => (false, Par(List(Zero))) //(* stuck *)
+      case Par(List())     => (false, Par(List())) //* stuck */
+      case Par(List(Zero)) => (false, Par(List(Zero))) //* stuck */
       case Par(List(Input(act, cont))) =>
-        (false, Par(List(Input(act, cont)))) //(* stuck *)
+        (false, Par(List(Input(act, cont))))  //* stuck */
       case Par(List(Output(nsubj, cont))) =>
-        (false, Par(List(Output(nsubj, cont)))) //(* stuck *)
+        (false, Par(List(Output(nsubj, cont)))) //* stuck */
       case Par(List(Drop(nsubj))) =>
-        (false, Par(List(Drop(nsubj)))) //(* stuck *)
+        (false, Par(List(Drop(nsubj))))  //* stuck */
 
       case Par(Par(hprox) :: rProc) =>
-        normalizeOnce(Par(hprox ++ rProc)) //(* mix *)
+        normalizeOnce(Par(hprox ++ rProc)) //* mix */
       case Par(Zero :: rProc) =>
         normalizeOnce(Par(rProc)) //(* structural equivalence *)
-      case Par(Drop(nsubj) :: rProc) => //(* mix *)
+      case Par(Drop(nsubj) :: rProc) => //* mix */
         normalizeOnce(Par(rProc ++ List(Drop(nsubj))))
 
       case Par(Input(Action(insubj, inobj), iproc) :: rProc) =>
         val mProc: (Option[Proc], List[Proc]) =
           matchIO(Input(Action(insubj, inobj), iproc), rProc)
         mProc match {
-          case (None, nrProc) => //(* mix *)
+          case (None, nrProc) => //* mix */
             val mix = normalizeOnce(Par(rProc))
             mix match {
               case (b, Par(prox)) =>
                 (b, Par(Input(Action(insubj, inobj), iproc) :: prox))
               case (b, redproc) =>
-                sys.error(s"Invalid reduction result: $redproc") //raise (InvalidReductionResult( redproc )) )
+                sys.error(s"Invalid reduction result: $redproc") 
             }
-          case (Some(Output(onsubj, oproc)), nrProc) => //(* comm *)
+          case (Some(Output(onsubj, oproc)), nrProc) => //* comm */
             val inputK = semanticSubstitution(iproc)(Quote(oproc))(inobj)
             (true, Par(nrProc ++ List(inputK)))
           case (Some(badMProc), rmproc) =>
-            sys.error(s"Invalid reduction result: $badMProc") //raise (InvalidMatchResult( badMProc )) )
+            sys.error(s"Invalid reduction result: $badMProc") 
         }
       case Par(Output(onsubj, oproc) :: rProc) =>
         val mProc: (Option[Proc], List[Proc]) =
           matchIO(Output(onsubj, oproc), rProc)
         mProc match {
-          case (None, nrProc) => //(* mix *)
+          case (None, nrProc) => //* mix */
             val mix = normalizeOnce(Par(rProc))
             mix match {
               case (b, Par(prox)) =>
@@ -403,7 +412,7 @@ object Proc {
               case (b, redproc) =>
                 sys.error(s"Invalid reduction result: $redproc")
             }
-          case (Some(Input(Action(insubj, inobj), iproc)), nrProc) => //(* comm *)
+          case (Some(Input(Action(insubj, inobj), iproc)), nrProc) => //* comm */
             val inputK = semanticSubstitution(iproc)(Quote(oproc))(inobj)
             (true, Par(nrProc ++ List(inputK)))
           case (Some(badMProc), rmproc) =>
@@ -416,15 +425,4 @@ object Proc {
       case (true, reduct) => normalize(reduct)
       case (false, fixpt) => fixpt
     }
-
-  def application(x: Quote): Proc = {
-    val y = calcNextName(Zero)
-    input(x, y, Par(Output(x, Drop(y)), Drop(y)))
-  }
-
-  def repeat(p: Proc, x: Quote): Proc =
-    Par(
-      Output(x, Par(application(x), p)),
-      application(x)
-    )
 }
