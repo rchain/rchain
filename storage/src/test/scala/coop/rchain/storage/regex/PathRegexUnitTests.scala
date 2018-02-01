@@ -523,19 +523,19 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
       .struct(
         List(
           PathToken(Some("route"),
-            0,
-            Some('/'),
-            Some('/'),
-            optional = false,
-            repeat = false,
-            partial = false,
-            """[a-z]+""")))
-      .accept(("/abcde", List("/abcde", "abcde")),
-        ("/12345", Nil))
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """[a-z]+""")))
+      .accept(("/abcde", List("/abcde", "abcde")), ("/12345", Nil))
       .build(
         (Map("route" -> List("")), Left(new IllegalArgumentException)),
         (Map("route" -> List("123")), Left(new IllegalArgumentException)),
-        (Map("route" -> List("abc")), Right("/abc")))
+        (Map("route" -> List("abc")), Right("/abc"))
+      )
   }
 
   "Custom named parameter" should "support alternation" in {
@@ -543,43 +543,43 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
       .struct(
         List(
           PathToken(Some("route"),
-            0,
-            Some('/'),
-            Some('/'),
-            optional = false,
-            repeat = false,
-            partial = false,
-            """this|that""")))
-      .accept(("/this", List("/this", "this")),
-        ("/that", List("/that", "that")),
-        ("/foo", Nil))
-      .build(
-        (Map("route" -> List("this")), Right("/this")),
-        (Map("route" -> List("that")), Right("/that")),
-        (Map("route" -> List("abc")), Left(new IllegalArgumentException)))
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """this|that""")))
+      .accept(("/this", List("/this", "this")), ("/that", List("/that", "that")), ("/foo", Nil))
+      .build((Map("route" -> List("this")), Right("/this")),
+             (Map("route" -> List("that")), Right("/that")),
+             (Map("route" -> List("abc")), Left(new IllegalArgumentException)))
 
     parse("/:path(abc|xyz)*")
       .struct(
         List(
           PathToken(Some("path"),
-            0,
-            Some('/'),
-            Some('/'),
-            optional = true,
-            repeat = true,
-            partial = false,
-            """abc|xyz""")))
-      .accept(("/abc", List("/abc", "abc")),
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = true,
+                    repeat = true,
+                    partial = false,
+                    """abc|xyz""")))
+      .accept(
+        ("/abc", List("/abc", "abc")),
         ("/abc/abc", List("/abc/abc", "abc/abc")),
         ("/xyz/xyz", List("/xyz/xyz", "xyz/xyz")),
         ("/abc/xyz/abc/xyz", List("/abc/xyz/abc/xyz", "abc/xyz/abc/xyz")),
-        ("/xyzxyz", Nil))
+        ("/xyzxyz", Nil)
+      )
       .build(
         (Map("path" -> List("abc")), Right("/abc")),
         (Map("path" -> List("abc", "xyz")), Right("/abc/xyz")),
         (Map("path" -> List("xyz", "abc", "xyz")), Right("/xyz/abc/xyz")),
         (Map("path" -> List("abc123")), Left(new IllegalArgumentException)),
-        (Map("path" -> List("abcxyz")), Left(new IllegalArgumentException)))
+        (Map("path" -> List("abcxyz")), Left(new IllegalArgumentException))
+      )
   }
 
   "Prefixed slashes" should "be supported" in {
@@ -588,289 +588,306 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
       .accept(("/test", Nil), ("test", List("test")))
       .build((Map(), Right("test")))
 
-    parse(":test").struct(
-      List(PathToken(Some("test"),
-        0,
-        None,
-        Some('/'),
-        optional = false,
-        repeat = false,
-        partial = false,
-        """[^\/]+?""")))
-      .accept(("/route", Nil), ("route", List("route", "route")),
-        ("/route", Nil), ("route/", List("route/", "route")))
+    parse(":test")
+      .struct(
+        List(
+          PathToken(Some("test"),
+                    0,
+                    None,
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """[^\/]+?""")))
+      .accept(("/route", Nil),
+              ("route", List("route", "route")),
+              ("/route", Nil),
+              ("route/", List("route/", "route")))
       .build(
         (Map("test" -> List("")), Left(new IllegalArgumentException)),
         (Map(), Left(new IllegalArgumentException)),
         (Map("test" -> Nil), Left(new IllegalArgumentException)),
-        (Map("test" -> List("route")), Right("route")))
+        (Map("test" -> List("route")), Right("route"))
+      )
 
-    parse(":test", PathRegexOptions.strict).struct(
-      List(PathToken(Some("test"),
-        0,
-        None,
-        Some('/'),
-        optional = false,
-        repeat = false,
-        partial = false,
-        """[^\/]+?""")))
+    parse(":test", PathRegexOptions.strict)
+      .struct(
+        List(
+          PathToken(Some("test"),
+                    0,
+                    None,
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """[^\/]+?""")))
       .accept(("/route", Nil), ("route", List("route", "route")), ("route/", Nil))
       .build((Map("test" -> List("route")), Right("route")))
 
-    parse(":test", PathRegexOptions.nonEnd).struct(
-      List(PathToken(Some("test"),
-        0,
-        None,
-        Some('/'),
-        optional = false,
-        repeat = false,
-        partial = false,
-        """[^\/]+?""")))
+    parse(":test", PathRegexOptions.nonEnd)
+      .struct(
+        List(
+          PathToken(Some("test"),
+                    0,
+                    None,
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """[^\/]+?""")))
       .accept(("/route", Nil),
-        ("route", List("route", "route")),
-        ("route/", List("route/", "route")),
-        ("route/foobar", List("route", "route")))
+              ("route", List("route", "route")),
+              ("route/", List("route/", "route")),
+              ("route/foobar", List("route", "route")))
       .build((Map("test" -> List("route")), Right("route")))
 
-    parse(":test?").struct(
-      List(PathToken(Some("test"),
-        0,
-        None,
-        Some('/'),
-        optional = true,
-        repeat = false,
-        partial = false,
-        """[^\/]+?""")))
+    parse(":test?")
+      .struct(
+        List(
+          PathToken(Some("test"),
+                    0,
+                    None,
+                    Some('/'),
+                    optional = true,
+                    repeat = false,
+                    partial = false,
+                    """[^\/]+?""")))
       .accept(("/route", Nil),
-        ("route", List("route", "route")),
-        ("", List("", null)),
-        ("route/foobar", Nil))
-      .build(
-        (Map(), Right("")),
-        (Map("test" -> List("")), Left(new IllegalArgumentException())),
-        (Map("test" -> List("route")), Right("route")))
+              ("route", List("route", "route")),
+              ("", List("", null)),
+              ("route/foobar", Nil))
+      .build((Map(), Right("")),
+             (Map("test" -> List("")), Left(new IllegalArgumentException())),
+             (Map("test" -> List("route")), Right("route")))
   }
 
   "Formats" should "work" in {
-    parse("/test.json").struct(
-      List(PathToken("/test.json")))
-      .accept(("/route.json", Nil),
-        ("/test.json", List("/test.json")))
+    parse("/test.json")
+      .struct(List(PathToken("/test.json")))
+      .accept(("/route.json", Nil), ("/test.json", List("/test.json")))
       .build((Map(), Right("/test.json")))
 
-    parse("/:test.json").struct(
-      List(PathToken(Some("test"),
-        0,
-        Some('/'),
-        Some('/'),
-        optional = false,
-        repeat = false,
-        partial = true,
-        """[^\/]+?"""), PathToken(".json")))
-      .accept(("/.json", Nil),
+    parse("/:test.json")
+      .struct(
+        List(PathToken(Some("test"),
+                       0,
+                       Some('/'),
+                       Some('/'),
+                       optional = false,
+                       repeat = false,
+                       partial = true,
+                       """[^\/]+?"""),
+             PathToken(".json")))
+      .accept(
+        ("/.json", Nil),
         ("/test.json", List("/test.json", "test")),
         ("/route.json", List("/route.json", "route")),
-        ("/route.json.json", List("/route.json.json", "route.json")))
-      .build(
-        (Map(), Left(new IllegalArgumentException())),
-        (Map("test" -> List("")), Left(new IllegalArgumentException())),
-        (Map("test" -> List("foo")), Right("/foo.json")))
+        ("/route.json.json", List("/route.json.json", "route.json"))
+      )
+      .build((Map(), Left(new IllegalArgumentException())),
+             (Map("test" -> List("")), Left(new IllegalArgumentException())),
+             (Map("test" -> List("foo")), Right("/foo.json")))
   }
 
   "Format params" should "work" in {
-    parse("/test.:format").struct(
-      List(
-        PathToken("/test"),
-        PathToken(Some("format"),
-          0,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = false,
-          partial = false,
-          """[^\.]+?""")))
-      .accept(("/test.html", List("/test.html", "html")),
-        ("/test.txt.html", Nil))
+    parse("/test.:format")
+      .struct(
+        List(PathToken("/test"),
+             PathToken(Some("format"),
+                       0,
+                       Some('.'),
+                       Some('.'),
+                       optional = false,
+                       repeat = false,
+                       partial = false,
+                       """[^\.]+?""")))
+      .accept(("/test.html", List("/test.html", "html")), ("/test.txt.html", Nil))
       .build(
         (Map(), Left(new IllegalArgumentException())),
         (Map("format" -> List("")), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo")), Right("/test.foo")))
+        (Map("format" -> List("foo")), Right("/test.foo"))
+      )
 
-    parse("/test.:format.:format").struct(
-      List(
+    parse("/test.:format.:format")
+      .struct(List(
         PathToken("/test"),
         PathToken(Some("format"),
-          0,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = false,
-          partial = false,
-          """[^\.]+?"""),
+                  0,
+                  Some('.'),
+                  Some('.'),
+                  optional = false,
+                  repeat = false,
+                  partial = false,
+                  """[^\.]+?"""),
         PathToken(Some("format"),
-          1,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = false,
-          partial = false,
-          """[^\.]+?""")))
-      .accept(("/test.html", Nil),
-        ("/test.txt.html", List("/test.txt.html", "txt", "html")))
+                  1,
+                  Some('.'),
+                  Some('.'),
+                  optional = false,
+                  repeat = false,
+                  partial = false,
+                  """[^\.]+?""")
+      ))
+      .accept(("/test.html", Nil), ("/test.txt.html", List("/test.txt.html", "txt", "html")))
       .build(
         (Map(), Left(new IllegalArgumentException())),
         (Map("format" -> List("foo.bar")), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo")), Right("/test.foo.foo")))
+        (Map("format" -> List("foo")), Right("/test.foo.foo"))
+      )
   }
 
   "Format params" should "support multipliers" in {
-    parse("/test.:format+").struct(
-      List(
-        PathToken("/test"),
-        PathToken(Some("format"),
-          0,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = true,
-          partial = false,
-          """[^\.]+?""")))
+    parse("/test.:format+")
+      .struct(
+        List(PathToken("/test"),
+             PathToken(Some("format"),
+                       0,
+                       Some('.'),
+                       Some('.'),
+                       optional = false,
+                       repeat = true,
+                       partial = false,
+                       """[^\.]+?""")))
       .accept(("/test.html", List("/test.html", "html")),
-        ("/test.txt.html", List("/test.txt.html", "txt.html")))
-      .build(
-        (Map(), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo")), Right("/test.foo")),
-        (Map("format" -> List("foo", "bar")), Right("/test.foo.bar")))
+              ("/test.txt.html", List("/test.txt.html", "txt.html")))
+      .build((Map(), Left(new IllegalArgumentException())),
+             (Map("format" -> List("foo")), Right("/test.foo")),
+             (Map("format" -> List("foo", "bar")), Right("/test.foo.bar")))
   }
 
   "Format params" should "support nonEnd mode" in {
-    parse("/test.:format", PathRegexOptions.nonEnd).struct(
-      List(
-        PathToken("/test"),
-        PathToken(Some("format"),
-          0,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = false,
-          partial = false,
-          """[^\.]+?""")))
-      .accept(("/test.html", List("/test.html", "html")),
-        ("/test.txt.html", Nil))
+    parse("/test.:format", PathRegexOptions.nonEnd)
+      .struct(
+        List(PathToken("/test"),
+             PathToken(Some("format"),
+                       0,
+                       Some('.'),
+                       Some('.'),
+                       optional = false,
+                       repeat = false,
+                       partial = false,
+                       """[^\.]+?""")))
+      .accept(("/test.html", List("/test.html", "html")), ("/test.txt.html", Nil))
       .build(
         (Map(), Left(new IllegalArgumentException())),
         (Map("format" -> List("")), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo")), Right("/test.foo")))
+        (Map("format" -> List("foo")), Right("/test.foo"))
+      )
   }
 
-
   "Format params" should "support partial paths" in {
-    parse("/test.:format.").struct(
-      List(
-        PathToken("/test"),
-        PathToken(Some("format"),
-          0,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = false,
-          partial = false,
-          """[^\.]+?"""), PathToken(".")))
-      .accept(("/test.html.", List("/test.html.", "html")),
-        ("/test.txt.html", Nil))
+    parse("/test.:format.")
+      .struct(
+        List(PathToken("/test"),
+             PathToken(Some("format"),
+                       0,
+                       Some('.'),
+                       Some('.'),
+                       optional = false,
+                       repeat = false,
+                       partial = false,
+                       """[^\.]+?"""),
+             PathToken(".")))
+      .accept(("/test.html.", List("/test.html.", "html")), ("/test.txt.html", Nil))
       .build(
         (Map(), Left(new IllegalArgumentException())),
         (Map("format" -> List("")), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo")), Right("/test.foo.")))
+        (Map("format" -> List("foo")), Right("/test.foo."))
+      )
   }
 
   "Format and path params" should "work" in {
-    parse("/:test.:format").struct(
-      List(
+    parse("/:test.:format")
+      .struct(List(
         PathToken(Some("test"),
-          0,
-          Some('/'),
-          Some('/'),
-          optional = false,
-          repeat = false,
-          partial = true,
-          """[^\/]+?"""),
+                  0,
+                  Some('/'),
+                  Some('/'),
+                  optional = false,
+                  repeat = false,
+                  partial = true,
+                  """[^\/]+?"""),
         PathToken(Some("format"),
-          1,
-          Some('.'),
-          Some('.'),
-          optional = false,
-          repeat = false,
-          partial = false,
-          """[^\.]+?""")))
+                  1,
+                  Some('.'),
+                  Some('.'),
+                  optional = false,
+                  repeat = false,
+                  partial = false,
+                  """[^\.]+?""")
+      ))
       .accept(("/route.html", List("/route.html", "route", "html")),
-        ("/route", Nil), ("/route.html.json", List("/route.html.json", "route.html", "json")))
-      .build(
-        (Map(), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo"), "test" -> List("route")), Right("/route.foo")))
+              ("/route", Nil),
+              ("/route.html.json", List("/route.html.json", "route.html", "json")))
+      .build((Map(), Left(new IllegalArgumentException())),
+             (Map("format" -> List("foo"), "test" -> List("route")), Right("/route.foo")))
   }
 
   "Format and path params" should "support optional" in {
-    parse("/:test.:format?").struct(
-      List(
+    parse("/:test.:format?")
+      .struct(List(
         PathToken(Some("test"),
-          0,
-          Some('/'),
-          Some('/'),
-          optional = false,
-          repeat = false,
-          partial = true,
-          """[^\/]+?"""),
+                  0,
+                  Some('/'),
+                  Some('/'),
+                  optional = false,
+                  repeat = false,
+                  partial = true,
+                  """[^\/]+?"""),
         PathToken(Some("format"),
-          1,
-          Some('.'),
-          Some('.'),
-          optional = true,
-          repeat = false,
-          partial = false,
-          """[^\.]+?""")))
+                  1,
+                  Some('.'),
+                  Some('.'),
+                  optional = true,
+                  repeat = false,
+                  partial = false,
+                  """[^\.]+?""")
+      ))
       .accept(
         ("/route", List("/route", "route", null)),
         ("/route.html", List("/route.html", "route", "html")),
-        ("/route.html.json", List("/route.html.json", "route.html", "json")))
+        ("/route.html.json", List("/route.html.json", "route.html", "json"))
+      )
       .build(
         (Map(), Left(new IllegalArgumentException())),
-        (Map("test" -> List("route")), Right("/route")),
-        (Map("test" -> List("route"), "format" -> List("")), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo"), "test" -> List("route")), Right("/route.foo")))
+        (Map("test"   -> List("route")), Right("/route")),
+        (Map("test"   -> List("route"), "format" -> List("")), Left(new IllegalArgumentException())),
+        (Map("format" -> List("foo"), "test" -> List("route")), Right("/route.foo"))
+      )
 
     //and non-end mode
-    parse("/:test.:format?", PathRegexOptions.nonEnd).struct(
-      List(
+    parse("/:test.:format?", PathRegexOptions.nonEnd)
+      .struct(List(
         PathToken(Some("test"),
-          0,
-          Some('/'),
-          Some('/'),
-          optional = false,
-          repeat = false,
-          partial = true,
-          """[^\/]+?"""),
+                  0,
+                  Some('/'),
+                  Some('/'),
+                  optional = false,
+                  repeat = false,
+                  partial = true,
+                  """[^\/]+?"""),
         PathToken(Some("format"),
-          1,
-          Some('.'),
-          Some('.'),
-          optional = true,
-          repeat = false,
-          partial = false,
-          """[^\.]+?""")))
+                  1,
+                  Some('.'),
+                  Some('.'),
+                  optional = true,
+                  repeat = false,
+                  partial = false,
+                  """[^\.]+?""")
+      ))
       .accept(
         ("/route", List("/route", "route", null)),
         ("/route.html", List("/route.html", "route", "html")),
-        ("/route.html.json", List("/route.html.json", "route.html", "json")))
+        ("/route.html.json", List("/route.html.json", "route.html", "json"))
+      )
       .build(
         (Map(), Left(new IllegalArgumentException())),
-        (Map("test" -> List("route")), Right("/route")),
-        (Map("test" -> List("route"), "format" -> Nil), Right("/route")),
-        (Map("test" -> List("route"), "format" -> List("")), Left(new IllegalArgumentException())),
-        (Map("format" -> List("foo"), "test" -> List("route")), Right("/route.foo")))
+        (Map("test"   -> List("route")), Right("/route")),
+        (Map("test"   -> List("route"), "format" -> Nil), Right("/route")),
+        (Map("test"   -> List("route"), "format" -> List("")), Left(new IllegalArgumentException())),
+        (Map("format" -> List("foo"), "test" -> List("route")), Right("/route.foo"))
+      )
   }
 
-  "Format and path params" should "support custom regex-es" in {
-
-  }
+  "Format and path params" should "support custom regex-es" in {}
 }

@@ -60,6 +60,7 @@ private[regex] case class PathToken(name: Option[String],
     * This function converts token to path segment
     * We do not expect that this function will be called outside of PathRegex.toPath
     * method.
+    *
     * @throws IllegalArgumentException if token couldn't be formatted
     */
   private[regex] def formatSegment(args: Map[String, Iterable[String]],
@@ -87,10 +88,11 @@ private[regex] case class PathToken(name: Option[String],
             for ((encValue, idx) <- lstValue.map(encode).zipWithIndex)
               yield
                 if (matchRegex.pattern.matcher(encValue).matches) {
-                  if (idx == 0)
+                  if (idx == 0) {
                     prefix.getOrElse("") + encValue
-                  else
+                  } else {
                     delimiter.getOrElse("") + encValue
+                  }
                 } else {
                   throw new IllegalArgumentException(
                     s"Expected $argName[$idx] to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
@@ -135,29 +137,27 @@ case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
     val endsWith = ("$" :: options.endsWith.map(PathRegex.escapeString)).mkString("|")
 
     val route: List[Option[String]] = tokens.flatMap { token =>
-      {
-        if (token.isRawPathPart) {
-          token.rawPathPart.map(tokenRawPart => Some(PathRegex.escapeString(tokenRawPart)))
-        } else {
-          token.pattern.map(tokenPattern => {
-            val prefix = token.prefix.map(PathRegex.escapeString).getOrElse("")
-            val capture = if (token.repeat) {
-              s"(?:$tokenPattern)(?:$prefix(?:$tokenPattern))*"
-            } else {
-              tokenPattern
-            }
+      if (token.isRawPathPart) {
+        token.rawPathPart.map(tokenRawPart => Some(PathRegex.escapeString(tokenRawPart)))
+      } else {
+        token.pattern.map(tokenPattern => {
+          val prefix = token.prefix.map(PathRegex.escapeString).getOrElse("")
+          val capture = if (token.repeat) {
+            s"(?:$tokenPattern)(?:$prefix(?:$tokenPattern))*"
+          } else {
+            tokenPattern
+          }
 
-            if (token.optional) {
-              if (token.partial) {
-                Some(s"$prefix($capture)?")
-              } else {
-                Some(s"(?:$prefix($capture))?")
-              }
+          if (token.optional) {
+            if (token.partial) {
+              Some(s"$prefix($capture)?")
             } else {
-              Some(s"$prefix($capture)")
+              Some(s"(?:$prefix($capture))?")
             }
-          })
-        }
+          } else {
+            Some(s"$prefix($capture)")
+          }
+        })
       }
     }
 
@@ -219,7 +219,7 @@ object PathRegex {
     } else {
       //we need to transform our string to UTF-8 (internally, Java/Scala uses UTF-16)
       str
-        .map(c => {
+        .map(c =>
           if (uriAllowedChars.contains(c)) {
             c.toString
           } else {
@@ -227,7 +227,6 @@ object PathRegex {
               .getBytes(StandardCharsets.UTF_8)
               .map(b => "%%%02X".format(b))
               .mkString("")
-          }
         })
         .mkString("")
     }
