@@ -481,12 +481,12 @@ object VirtualMachine {
         val maybePrim = Prim.nthPrim(op.primNum)
 
         val (result, newState) =
-          maybePrim.map { prim =>
+          (maybePrim.map { prim =>
             if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
               // TODO: Fix
               (maybePrim.get.dispatchHelper(state.ctxt), state)
             }
-          } orElse Some(Left(Absent))
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
@@ -525,12 +525,12 @@ object VirtualMachine {
         val argno = op.arg
 
         val (result, newState) =
-          maybePrim.map { prim =>
-            if (op.unwind) { unwindAndApplyPrim(maybePrim.get, state) } else {
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
               // TODO: Fix
               (maybePrim.get.dispatchHelper(state.ctxt), state)
             }
-          } orElse Some(Left(Absent))
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
@@ -559,13 +559,12 @@ object VirtualMachine {
         val regno = op.reg
 
         val (result, newState) =
-          maybePrim.map { prim =>
-            if (op.unwind) { unwindAndApplyPrim(maybePrim.get, state) } else {
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
               // TODO: Fix
               (maybePrim.get.dispatchHelper(state.ctxt), state)
             }
-          } orElse Some(Left(Absent))
-
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
@@ -590,12 +589,12 @@ object VirtualMachine {
         val maybePrim = Prim.nthPrim(op.primNum)
 
         val (result, newState) =
-          maybePrim.map { prim =>
-            if (op.unwind) { unwindAndApplyPrim(maybePrim.get, state) } else {
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
               // TODO: Fix
               (maybePrim.get.dispatchHelper(state.ctxt), state)
             }
-          } orElse Some(Left(Absent))
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
