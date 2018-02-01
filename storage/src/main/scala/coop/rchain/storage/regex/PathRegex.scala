@@ -1,7 +1,11 @@
 package coop.rchain.storage.regex
 
+import scala.util.matching.Regex
 import java.nio.charset.StandardCharsets
+import java.util.regex.Pattern
+
 import scala.annotation.tailrec
+import scala.util.Try
 
 private[regex] trait ParseOptions {
   val delimiter: Char
@@ -12,7 +16,7 @@ private[regex] trait RegexOptions extends ParseOptions {
   val caseSensitive: Boolean
   val strict: Boolean
   val end: Boolean
-  val endsWith: Either[String, List[String]]
+  val endsWith: List[String]
 }
 
 case class PathRegexOptions(
@@ -21,7 +25,7 @@ case class PathRegexOptions(
     end: Boolean = true,
     delimiter: Char = PathRegexOptions.defaultDelimiter,
     delimiters: Set[Char] = PathRegexOptions.defaultDelimiters,
-    endsWith: Either[String, List[String]] = Right(Nil)
+    endsWith: List[String] = Nil
 ) extends RegexOptions
 
 object PathRegexOptions {
@@ -46,6 +50,57 @@ private[regex] case class PathToken(name: Option[String],
   def isRawPathPart: Boolean = rawPathPart.isDefined
 
   def isToken: Boolean = rawPathPart.isEmpty
+
+  lazy val MatchRegex: Option[Regex] = pattern.map(p => new Regex("^(?:" + p + "$"))
+
+  private[regex] def rawPartChar: Option[Char] =
+    rawPathPart.filter(_.length > 0).map(part => part.charAt(part.length - 1))
+
+  /**
+    * This function converts token to path segment
+    * We do not expect that this function will be called outside of PathRegex.toPath
+    * method.
+    * @throws IllegalArgumentException if token couldn't be formatted
+    */
+  private[regex] def formatSegment(args: Map[String, Iterable[String]], encode: String => String): String = {
+    def formatStrValue(argName: String, encValue: String): String =
+      if (MatchRegex.get.pattern.matcher(encValue).matches) {
+        prefix.getOrElse("") + encValue
+      } else {
+        throw new IllegalArgumentException(
+          s"Expected $argName to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
+      }
+
+    rawPathPart.getOrElse {
+      val argName  = name.getOrElse(key.toString)
+      val argValue = args.get(argName)
+      val sumSegments = argValue match {
+        case None | Some(Nil) =>
+          if (optional) {
+            prefix.filter(_ => partial).map(_.toString).getOrElse("")
+          } else {
+            throw new IllegalArgumentException(s"Expected value for token $argName")
+          }
+        case Some(singleValue) if singleValue.size == 1 => formatStrValue(argName, singleValue.head)
+        case Some(lstValue: Iterable[String]) =>
+          val matchRegex = MatchRegex.get
+          val allValues =
+            for ((encValue, idx) <- lstValue.map(v => encode(v.toString)).zipWithIndex)
+              yield
+                if (matchRegex.pattern.matcher(encValue).matches) {
+                  if (idx == 0)
+                    prefix.getOrElse("") + encValue
+                  else
+                    delimiter + encValue
+                } else {
+                  throw new IllegalArgumentException(
+                    s"Expected $argName[$idx] to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
+                }
+          allValues.mkString
+      }
+      sumSegments
+    }
+  }
 }
 
 private[regex] object PathToken {
@@ -65,10 +120,79 @@ private[regex] object PathToken {
 case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
   def withOptions(newOptions: RegexOptions): PathRegex = new PathRegex(tokens, newOptions)
 
-  def toPath(args: List[(String, Any)] = Nil): Either[Throwable, String] =
-    throw new NotImplementedError("TODO")
+  /**
+    * Takes some arguments (argument can be a value or a sequence of values),
+    * and builds an Uri-path
+    */
+  def toPath(args: Map[String, Iterable[String]],
+             encode: String => String = PathRegex.encodeUriComponent): Either[Throwable, String] =
+    Try(tokens.map(_.formatSegment(args, encode)).mkString).toEither
 
-  def toPath(arg: (String, Any)): Either[Throwable, String] = toPath(arg :: Nil)
+  val keys: List[PathToken] = tokens.filter(_.isToken)
+
+  /**
+    * Returns Regex that is able to parse our tokens with defined options
+    */
+  lazy val Regex: Either[Throwable, Regex] = {
+    val endsWith = ("$" :: options.endsWith.map(PathRegex.escapeString)).mkString("|")
+
+    val route: List[Option[String]] = tokens.flatMap { token =>
+      {
+        if (token.isRawPathPart) {
+          token.rawPathPart.map(tokenRawPart => Some(PathRegex.escapeString(tokenRawPart)))
+        } else {
+          token.pattern.map(tokenPattern => {
+            val prefix = token.prefix.map(PathRegex.escapeString).getOrElse("")
+            val capture = if (token.repeat) {
+              s"(?:$tokenPattern)(?:$prefix(?:$tokenPattern))*"
+            } else {
+              tokenPattern
+            }
+
+            if (token.optional) {
+              if (token.partial) {
+                Some(s"$prefix($capture)?")
+              } else {
+                Some(s"(?:$prefix($capture))?")
+              }
+            } else {
+              Some(s"$prefix($capture)")
+            }
+          })
+        }
+      }
+    }
+
+    val routeFinish: List[String] = if (options.end) {
+      val strictFinish = if (options.strict) {
+        Nil
+      } else {
+        s"(?:${options.delimiter})?" :: Nil
+      }
+      val routeFinish = (if (endsWith == "$") "$" else s"(?=$endsWith)") :: Nil
+      strictFinish ++ routeFinish
+    } else {
+      val strictFinish = if (options.strict) {
+        Nil
+      } else {
+        s"(?:${options.delimiter}(?=$endsWith))?" :: Nil
+      }
+
+      val isEndDelimited = tokens.nonEmpty && tokens.last.rawPartChar
+        .exists(options.delimiters.contains)
+      val routeFinish = if (!isEndDelimited) {
+        "(?=" + options.delimiter + "|" + endsWith + ")" :: Nil
+      } else {
+        Nil
+      }
+      strictFinish ++ routeFinish
+    }
+
+    Try {
+      val patternFlags = if (options.caseSensitive) "" else "(?i)"
+      new Regex(patternFlags + "^" + (route.flatten ++ routeFinish).mkString)
+    }.toEither
+  }
 }
 
 object PathRegex {
@@ -79,6 +203,8 @@ object PathRegex {
     */
   def escapeString(str: String): String =
     rxEscapeString.replaceAllIn(str, """\\$1""")
+
+  private[regex] def escapeString(c: Char): String = escapeString(c.toString)
 
   private[this] val uriAllowedChars =
     (('a' to 'z') ++ ('A' to 'Z') ++ ('0' to '9') ++ "-_.!~*'()".toList).toSet
@@ -209,14 +335,5 @@ object PathRegex {
   /**
     * Compile a string to a template function for the path.
     */
-  def compile(str: String): PathRegex = compile(str, PathRegexOptions.default)
-
-  /**
-    * Compile a string to a template function for the path.
-    */
-  def compile(str: String, options: PathRegexOptions): PathRegex =
-    PathRegex(parse(str, options), options)
-
-  def apply(str: String): PathRegex                            = compile(str)
-  def apply(str: String, options: PathRegexOptions): PathRegex = compile(str, options)
+  def apply(str: String, options: PathRegexOptions = PathRegexOptions.default): PathRegex = PathRegex(parse(str, options), options)
 }
