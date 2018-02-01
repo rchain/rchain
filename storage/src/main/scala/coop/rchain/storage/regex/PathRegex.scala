@@ -2,7 +2,6 @@ package coop.rchain.storage.regex
 
 import scala.util.matching.Regex
 import java.nio.charset.StandardCharsets
-import java.util.regex.Pattern
 
 import scala.annotation.tailrec
 import scala.util.Try
@@ -51,7 +50,7 @@ private[regex] case class PathToken(name: Option[String],
 
   def isToken: Boolean = rawPathPart.isEmpty
 
-  lazy val MatchRegex: Option[Regex] = pattern.map(p => new Regex("^(?:" + p + ")$"))
+  lazy val matchRegex: Option[Regex] = pattern.map(p => new Regex("^(?:" + p + ")$"))
 
   private[regex] def rawPartChar: Option[Char] =
     rawPathPart.filter(_.length > 0).map(part => part.charAt(part.length - 1))
@@ -76,18 +75,17 @@ private[regex] case class PathToken(name: Option[String],
           }
         case Some(singleValue) if singleValue.size == 1 =>
           val encValue = encode(singleValue.head)
-          if (MatchRegex.get.pattern.matcher(encValue).matches) {
+          if (matchRegex.get.pattern.matcher(encValue).matches) {
             prefix.getOrElse("") + encValue
           } else {
             throw new IllegalArgumentException(
-              s"Expected $argName to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
+              s"Expected $argName to match pattern ${matchRegex.get.pattern}, but got value $encValue")
           }
         case Some(lstValue: Iterable[String]) =>
-          val matchRegex = MatchRegex.get
           val allValues =
             for ((encValue, idx) <- lstValue.map(encode).zipWithIndex)
               yield
-                if (matchRegex.pattern.matcher(encValue).matches) {
+                if (matchRegex.get.pattern.matcher(encValue).matches) {
                   if (idx == 0) {
                     prefix.getOrElse("") + encValue
                   } else {
@@ -95,7 +93,7 @@ private[regex] case class PathToken(name: Option[String],
                   }
                 } else {
                   throw new IllegalArgumentException(
-                    s"Expected $argName[$idx] to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
+                    s"Expected $argName[$idx] to match pattern ${matchRegex.get.pattern}, but got value $encValue")
                 }
           allValues.mkString
       }
@@ -133,7 +131,7 @@ case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
   /**
     * Returns Regex that is able to parse our tokens with defined options
     */
-  lazy val Regex: Either[Throwable, Regex] = {
+  lazy val regex: Either[Throwable, Regex] = {
     val endsWith = ("$" :: options.endsWith.map(PathRegex.escapeString)).mkString("|")
 
     val route: List[Option[String]] = tokens.flatMap { token =>
@@ -163,25 +161,25 @@ case class PathRegex(tokens: List[PathToken], options: RegexOptions) {
 
     val routeFinish: List[String] = if (options.end) {
       val strictFinish = if (options.strict) {
-        Nil
+        List.empty
       } else {
-        s"(?:${options.delimiter})?" :: Nil
+        List(s"(?:${options.delimiter})?")
       }
-      val routeFinish = (if (endsWith == "$") "$" else s"(?=$endsWith)") :: Nil
+      val routeFinish = List(if (endsWith == "$") "$" else s"(?=$endsWith)")
       strictFinish ++ routeFinish
     } else {
       val strictFinish = if (options.strict) {
-        Nil
+        List.empty
       } else {
-        s"(?:${options.delimiter}(?=$endsWith))?" :: Nil
+        List(s"(?:${options.delimiter}(?=$endsWith))?")
       }
 
       val isEndDelimited = tokens.nonEmpty && tokens.last.rawPartChar
         .exists(options.delimiters.contains)
       val routeFinish = if (!isEndDelimited) {
-        "(?=" + options.delimiter + "|" + endsWith + ")" :: Nil
+        List("(?=" + options.delimiter + "|" + endsWith + ")")
       } else {
-        Nil
+        List.empty
       }
       strictFinish ++ routeFinish
     }
@@ -326,7 +324,7 @@ object PathRegex {
             ParseState("", "", PathToken(finalCollectedPath) :: parseState.tokens, false)
       }
 
-    toTokens(ParseState(str, "", Nil, false)).tokens.reverse
+    toTokens(ParseState(str, "", List.empty, false)).tokens.reverse
   }
 
   /**

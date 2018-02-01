@@ -6,7 +6,7 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
 
   class ExPathRegex(value: PathRegex) {
     def accept(matchCases: (String, Seq[String])*): ExPathRegex = {
-      value.Regex match {
+      value.regex match {
         case Right(regex) =>
           for ((sample, sampleGroups) <- matchCases) {
             val matches = regex.findAllMatchIn(sample).toList
