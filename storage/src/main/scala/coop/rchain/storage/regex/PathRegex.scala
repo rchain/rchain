@@ -51,7 +51,7 @@ private[regex] case class PathToken(name: Option[String],
 
   def isToken: Boolean = rawPathPart.isEmpty
 
-  lazy val MatchRegex: Option[Regex] = pattern.map(p => new Regex("^(?:" + p + "$"))
+  lazy val MatchRegex: Option[Regex] = pattern.map(p => new Regex("^(?:" + p + ")$"))
 
   private[regex] def rawPartChar: Option[Char] =
     rawPathPart.filter(_.length > 0).map(part => part.charAt(part.length - 1))
@@ -62,36 +62,35 @@ private[regex] case class PathToken(name: Option[String],
     * method.
     * @throws IllegalArgumentException if token couldn't be formatted
     */
-  private[regex] def formatSegment(args: Map[String, Iterable[String]], encode: String => String): String = {
-    def formatStrValue(argName: String, encValue: String): String =
-      if (MatchRegex.get.pattern.matcher(encValue).matches) {
-        prefix.getOrElse("") + encValue
-      } else {
-        throw new IllegalArgumentException(
-          s"Expected $argName to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
-      }
-
+  private[regex] def formatSegment(args: Map[String, Iterable[String]],
+                                   encode: String => String): String =
     rawPathPart.getOrElse {
-      val argName  = name.getOrElse(key.toString)
-      val argValue = args.get(argName)
-      val sumSegments = argValue match {
+      val argName = name.getOrElse(key.toString)
+      val sumSegments = args.get(argName) match {
         case None | Some(Nil) =>
           if (optional) {
             prefix.filter(_ => partial).map(_.toString).getOrElse("")
           } else {
             throw new IllegalArgumentException(s"Expected value for token $argName")
           }
-        case Some(singleValue) if singleValue.size == 1 => formatStrValue(argName, singleValue.head)
+        case Some(singleValue) if singleValue.size == 1 =>
+          val encValue = encode(singleValue.head)
+          if (MatchRegex.get.pattern.matcher(encValue).matches) {
+            prefix.getOrElse("") + encValue
+          } else {
+            throw new IllegalArgumentException(
+              s"Expected $argName to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
+          }
         case Some(lstValue: Iterable[String]) =>
           val matchRegex = MatchRegex.get
           val allValues =
-            for ((encValue, idx) <- lstValue.map(v => encode(v.toString)).zipWithIndex)
+            for ((encValue, idx) <- lstValue.map(encode).zipWithIndex)
               yield
                 if (matchRegex.pattern.matcher(encValue).matches) {
                   if (idx == 0)
                     prefix.getOrElse("") + encValue
                   else
-                    delimiter + encValue
+                    delimiter.getOrElse("") + encValue
                 } else {
                   throw new IllegalArgumentException(
                     s"Expected $argName[$idx] to match pattern ${MatchRegex.get.pattern}, but got value $encValue")
@@ -100,7 +99,6 @@ private[regex] case class PathToken(name: Option[String],
       }
       sumSegments
     }
-  }
 }
 
 private[regex] object PathToken {
@@ -227,7 +225,7 @@ object PathRegex {
           } else {
             c.toString
               .getBytes(StandardCharsets.UTF_8)
-              .map(b => "%02X".format(b))
+              .map(b => "%%%02X".format(b))
               .mkString("")
           }
         })
@@ -335,5 +333,6 @@ object PathRegex {
   /**
     * Compile a string to a template function for the path.
     */
-  def apply(str: String, options: PathRegexOptions = PathRegexOptions.default): PathRegex = PathRegex(parse(str, options), options)
+  def apply(str: String, options: PathRegexOptions = PathRegexOptions.default): PathRegex =
+    PathRegex(parse(str, options), options)
 }
