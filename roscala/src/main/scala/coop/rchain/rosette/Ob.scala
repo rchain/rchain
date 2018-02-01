@@ -221,7 +221,7 @@ object Ob {
   def setLex(indirect: Boolean,
              level: Int,
              offset: Int,
-             value: Ob): State[Ob, Option[Ob]] = State { ob =>
+             value: Ob): State[Ob, StoreResult] = State { ob =>
     val nthParentLens =
       (0 until level).foldLeft(lens[Ob]: Lens[Ob, Ob])((l, _) => l >> 'parent)
 
@@ -245,8 +245,8 @@ object Ob {
       }
 
     inSlotNum(nthParentLens).flatMap(updateSlot) match {
-      case Some(newOb) => (newOb, Some(value))
-      case None => (ob, None)
+      case Some(newOb) => (newOb, Success)
+      case None => (ob, Failure)
     }
   }
 

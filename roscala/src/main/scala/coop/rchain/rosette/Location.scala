@@ -90,11 +90,10 @@ object Location {
       case LexVariable(indirect, level, offset) =>
         for {
           ctxt <- State.get[Ctxt]
-          (env, res) = setLex(indirect, level, offset, value)
+          (env, storeRes) = setLex(indirect, level, offset, value)
             .run(ctxt.env)
             .value
           _ <- State.modify[Ctxt](_.copy(env = env))
-          storeRes <- if (res.isDefined) pure(Success) else pure(Failure)
         } yield storeRes
 
       // TODO:
