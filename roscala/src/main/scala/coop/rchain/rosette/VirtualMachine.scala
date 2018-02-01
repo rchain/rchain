@@ -805,27 +805,6 @@ object VirtualMachine {
     newState.runS(state).value
   }
 
-  /*
-  def execute(op: OpXferRsltToDest, state: VMState): VMState =
-    state
-    //.set(_ >> 'loc)(LocationAtom(state.code.lit(op.lit))) //TODO probably we should change `atom` field only
-      .updateSelf(
-        state => {
-          import Location._
-
-          Location.store(state.loc,
-                         state.ctxt,
-                         state.globalEnv,
-                         state.ctxt.rslt) match {
-            case StoreFail => state.set(_ >> 'vmErrorFlag)(true)
-
-            case StoreCtxt(ctxt) => state.set(_ >> 'ctxt)(ctxt)
-
-            case StoreGlobal(env) => state.set(_ >> 'globalEnv)(env)
-          }
-        })
-   */
-
   def execute(op: OpXferSrcToRslt, state: VMState): VMState = {
     val location = state.code.lit(op.lit).asInstanceOf[Location]
     val st0 = state.set(_ >> 'loc)(location)
