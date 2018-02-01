@@ -1,8 +1,8 @@
-package AbstractInterpreter
+package interpreter
 
-import State.Trace
-import cats._
-import cats.data._
+import Alias.Trace
+import cats.Monoid
+import cats.data.{StateT, WriterT}
 import cats.implicits._
 
 object Trace {
