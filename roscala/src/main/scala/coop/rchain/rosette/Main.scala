@@ -15,11 +15,8 @@ object Main extends App {
 
   Parser.parse(bytes) match {
     case Right(opCodes) =>
-      val initState = VMState(Map(),
-                              Code(null, null),
-                              Ctxt.PLACEHOLDER,
-                              Location.PLACEHOLDER,
-                              PC(0))
+      val initState =
+        VMState(Map(), Code(null, null), Ctxt.PLACEHOLDER, Limbo, PC(0))
 
       val exitState = VirtualMachine.executeSeq(opCodes, initState)
 
