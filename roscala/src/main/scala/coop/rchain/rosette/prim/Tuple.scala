@@ -10,11 +10,6 @@ import coop.rchain.rosette.{
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
-//DEF("tuple-cons", tplCons, 2, 2) {
-//    CHECK(1, Tuple, tail);
-//    return cons(ARG(0), tail);
-//}
-
 object Tuple {
   object tplCons extends Prim {
     override val name: String = "tuple-cons"
