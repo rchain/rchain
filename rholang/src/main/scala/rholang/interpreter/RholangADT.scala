@@ -43,12 +43,12 @@ case class FreeVar(level: Int) extends Var
 
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
-case class Send(chan: Channel, data: Channel)
+case class Send(chan: Channel, data: List[Par])
 
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
 // Don't currently support conditional receive
-case class Receive(binds: List[(List[Par], Channel)])
+case class Receive(binds: List[(List[Channel], Channel)])
 
 case class Eval(channel: Channel)
 
@@ -82,6 +82,9 @@ case class EGt(p1: Par, p2: Par) extends Expr
 case class EGte(p1: Par, p2: Par) extends Expr
 case class EEq(p1: Par, p2: Par) extends Expr
 case class ENeq(p1: Par, p2: Par) extends Expr
+case class ENot(p: Par) extends Expr
+case class EAnd(p1: Par, p2: Par) extends Expr
+case class EOr(p1: Par, p2: Par) extends Expr
 
 case class GBool(b: Boolean) extends Ground
 case class GInt(i: Integer) extends Ground
