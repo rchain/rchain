@@ -46,7 +46,7 @@ case class FreeVar(level: Int) extends Var
 case class Send(chan: Channel, data: Channel)
 
 // [Par] is an n-arity Pattern.
-// It's an error for free Variable in the list of patterns to overlap.
+// It's an error for free Variable to occur more than once in a pattern.
 // Don't currently support conditional receive
 case class Receive(binds: List[(List[Par], Channel)])
 
