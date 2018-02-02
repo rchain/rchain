@@ -113,6 +113,8 @@ case class Tuple(elem: Seq[Ob]) extends Ob {
 
   override def subObject(i: Int, n: Int): Tuple = makeSlice(i, n)
 
+  def numberOfElements: Int = elem.length
+
 }
 
 object Tuple {
