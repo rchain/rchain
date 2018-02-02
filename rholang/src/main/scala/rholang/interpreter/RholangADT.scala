@@ -41,7 +41,7 @@ case class WildCard() extends Var
 // In the DeBruijn level paper, they use negatives, but this is more clear.
 case class FreeVar(level: Int) extends Var
 
-// upon send, all free variables in data are substituted with their values.
+// Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
 case class Send(chan: Channel, data: Channel)
 
