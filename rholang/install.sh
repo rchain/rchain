@@ -5,6 +5,7 @@
 set -e
 
 sudo apt install haskell-platform
+sudo apt install jflex 
 git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
 sudo cabal install --global
