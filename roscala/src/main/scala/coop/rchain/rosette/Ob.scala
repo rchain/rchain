@@ -244,9 +244,13 @@ object Ob {
         Some(res)
       }
 
-    inSlotNum(nthParentLens).flatMap(updateSlot) match {
-      case Some(newOb) => (newOb, Success)
-      case None => (ob, Failure)
+    try {
+      inSlotNum(nthParentLens).flatMap(updateSlot) match {
+        case Some(newOb) => (newOb, Success)
+        case None => (ob, Failure)
+      }
+    } catch {
+      case _: IndexOutOfBoundsException => (ob, Failure)
     }
   }
 
