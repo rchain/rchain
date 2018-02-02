@@ -1,6 +1,7 @@
 package coop.rchain.storage.models
 
 import cats.syntax.either._
+import coop.rchain.storage.models.StorableData.Value
 import coop.rchain.storage.{Serialize, SerializeError}
 
 trait SerializeInstances {
@@ -8,33 +9,39 @@ trait SerializeInstances {
   implicit object blockInstance extends Serialize[Block] {
 
     def encode(a: Block): Array[Byte] =
-      a.toByteArray
+      StorableData(value = Value.Block(a)).toByteArray
 
     def decode(bytes: Array[Byte]): Either[SerializeError, Block] =
-      Either
-        .catchNonFatal(Block.parseFrom(bytes))
-        .leftMap(SerializeError.apply)
+      StorableData
+        .parseFrom(bytes)
+        .value
+        .block
+        .toRight(SerializeError("decode: could not parse Block"))
   }
 
   implicit object contractInstance extends Serialize[Contract] {
 
     def encode(a: Contract): Array[Byte] =
-      a.toByteArray
+      StorableData(value = Value.Contract(a)).toByteArray
 
     def decode(bytes: Array[Byte]): Either[SerializeError, Contract] =
-      Either
-        .catchNonFatal(Contract.parseFrom(bytes))
-        .leftMap(SerializeError.apply)
+      StorableData
+        .parseFrom(bytes)
+        .value
+        .contract
+        .toRight(SerializeError("decode: could not parse Contract"))
   }
 
   implicit object systemContractInstance extends Serialize[SystemContract] {
 
     def encode(a: SystemContract): Array[Byte] =
-      a.toByteArray
+      StorableData(value = Value.SystemContract(a)).toByteArray
 
     def decode(bytes: Array[Byte]): Either[SerializeError, SystemContract] =
-      Either
-        .catchNonFatal(SystemContract.parseFrom(bytes))
-        .leftMap(SerializeError.apply)
+      StorableData
+        .parseFrom(bytes)
+        .value
+        .systemContract
+        .toRight(SerializeError("decode: could not parse SystemContract"))
   }
 }
