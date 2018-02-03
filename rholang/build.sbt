@@ -1,5 +1,8 @@
 import BNFC._
 
+// needed for SuperSafe sbt plugin
+resolvers += "Artima Maven Repository" at "http://repo.artima.com/releases"
+
 lazy val commonOptions = Seq(
   "-language:existentials",
   "-language:higherKinds",
@@ -41,6 +44,7 @@ lazy val commonSettingsDependencies = Seq(
   resolvers += Resolver.sonatypeRepo("releases"),
   libraryDependencies ++= Seq(
     compilerPlugin("org.spire-math"  %% "kind-projector" % "0.9.4"),
+    "org.scalactic" %% "scalactic"   % "3.0.4",
     "org.scalaz"    %% "scalaz-core" % "7.3.0-M17",
     "org.scalatest" %% "scalatest"   % "3.0.4" % "test"
   )
