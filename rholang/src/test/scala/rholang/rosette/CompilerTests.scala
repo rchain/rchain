@@ -12,6 +12,9 @@ class CompilerTests extends FunSuite {
   val testFiles: Iterable[Path] =
     Files.newDirectoryStream(Paths.get("tests")).asScala
 
+  val failureTestFiles: Iterable[Path] =
+    Files.newDirectoryStream(Paths.get("failure_tests")).asScala
+
   for (file <- testFiles if file.getFileName.toString.endsWith(".rho")) {
     test(file.toString) {
       assert(
@@ -19,6 +22,16 @@ class CompilerTests extends FunSuite {
           .compile(file.toString)
           .map(Rholang2RosetteCompiler.serialize)
           .isDefined)
+    }
+  }
+
+  for (file <- failureTestFiles if file.getFileName.toString.endsWith(".rho")) {
+    test(file.toString) {
+      assert(
+        Rholang2RosetteCompiler
+          .compile(file.toString)
+          .map(Rholang2RosetteCompiler.serialize)
+          .isEmpty)
     }
   }
 }
