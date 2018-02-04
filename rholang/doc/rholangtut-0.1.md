@@ -277,7 +277,7 @@ In the MakeCell contract, the client provides two channels, one for getting the 
 
 Channels like `get` and `set` are called "facets" of the process.  They encapsulate the authority to perform the action.  If the `set` channel is a public channel like `@"Foo"`, then anyone who can learn or even guess the string `"Foo"` has the authority to set the cell's value.  On the other hand, if the `set` channel was created with the `new` operator, then there's no way for any other process to construct the `set` channel; it must be passed to a process directly in order for the process to use it.  
 
-Note that if `get` and `set` are not created as halves of iopairs, then possession of those channels is also authority to intercept messages sent to the cell:
+Note that posession of `get` and `set` is also authority to intercept messages sent to the cell:
 
     for (ret <- get) { P } | 
     for (ret <- get) { Q } | 
