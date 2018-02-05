@@ -9,21 +9,24 @@ sealed trait VarSort
 case object ProcSort extends VarSort
 case object NameSort extends VarSort
 
-trait BoolNormalizeMatcher {
+object BoolNormalizeMatcher {
   def normalizeMatch( b: Bool ) : GBool = {
     b match {
-      case b : BoolTrue => GBool(true)
-      case b : BoolFalse => GBool(false)
+      case b: BoolTrue => GBool(true)
+      case b: BoolFalse => GBool(false)
     }
   }
 }
 
-trait GroundNormalizeVisitor extends AbsynGround.Visitor[Ground, Any] 
-    with BoolNormalizeMatcher {
-  override def visit( gb: GroundBool, n: Any ) : Ground = this.normalizeMatch(gb.bool_)
-  override def visit( gi: GroundInt, n: Any ) : Ground = GInt(gi.integer_)
-  override def visit( gi: GroundString, n: Any ) : Ground = GString(gi.string_)
-  override def visit( gi: GroundUri, n: Any ) : Ground = GUri(gi.uri_)
+object GroundNormalizeMatcher {
+  def normalizeMatch ( g: AbsynGround ) : Ground = {
+    g match {
+      case gb: GroundBool => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
+      case gi: GroundInt => GInt(gi.integer_)
+      case gs: GroundString => GString(gs.string_)
+      case gu: GroundUri => GUri(gu.uri_)
+    }
+  }
 }
 
 trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInputs] {
@@ -67,13 +70,12 @@ trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInput
 }
 
 trait ProcNormalizeVisitor
-    extends Proc.Visitor[ProcVisitOutputs, ProcVisitInputs]
-    with GroundNormalizeVisitor {
+    extends Proc.Visitor[ProcVisitOutputs, ProcVisitInputs] {
 
   override def visit( p: PGround, input: ProcVisitInputs )
       : ProcVisitOutputs = {
     ProcVisitOutputs(
-      input.par.copy(expr = p.ground_.accept(this, input) :: input.par.expr),
+      input.par.copy(expr = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.expr),
       input.knownFree)
   }
 

@@ -3,7 +3,7 @@ import coop.rchain.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 import org.scalatest._
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
-  val matcher = new BoolNormalizeMatcher() {}
+  val matcher = BoolNormalizeMatcher
   "BoolTrue" should "Compile as GBool(true)" in {
     val btrue = new BoolTrue()
 
@@ -16,22 +16,22 @@ class BoolMatcherSpec extends FlatSpec with Matchers {
   }
 }
 
-class GroundVisitorSpec extends FlatSpec with Matchers {
-  val visitor = new GroundNormalizeVisitor() {}
+class GroundMatcherSpec extends FlatSpec with Matchers {
+  val matcher = GroundNormalizeMatcher
   "GroundInt" should "Compile as GInt" in {
     val gi = new GroundInt(7)
 
-    gi.accept(visitor, this) should be (GInt(7))
+    matcher.normalizeMatch(gi) should be (GInt(7))
   }
   "GroundString" should "Compile as GString" in {
     val gs = new GroundString("String")
 
-    gs.accept(visitor, this) should be (GString("String"))
+    matcher.normalizeMatch(gs) should be (GString("String"))
   }
   "GroundUri" should "Compile as GUri" in {
     val gu = new GroundUri("Uri")
 
-    gu.accept(visitor, this) should be (GUri("Uri"))
+    matcher.normalizeMatch(gu) should be (GUri("Uri"))
   }
 }
 
