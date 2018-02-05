@@ -1,5 +1,6 @@
-import coop.rchain.interpreter._
-import coop.rchain.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
+package coop.rchain.rholang.intepreter
+
+import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 import org.scalatest._
 
 class BoolVisitorSpec extends FlatSpec with Matchers {

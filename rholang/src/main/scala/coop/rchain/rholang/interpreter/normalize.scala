@@ -1,9 +1,7 @@
-package coop.rchain.interpreter
+package coop.rchain.rholang.intepreter
 
-import coop.rchain.syntax.rholang_mercury
-import coop.rchain.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
-
-import coop.rchain.interpreter._
+import coop.rchain.rholang.syntax.rholang_mercury
+import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 
 sealed trait VarSort
 case object ProcSort extends VarSort
