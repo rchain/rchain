@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Ob, RblBool, Tuple}
+import coop.rchain.rosette.{Ctxt, Ob, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -15,14 +15,12 @@ object tuple {
       val elem = ctxt.argvec.elem
       checkTuple(1, elem).map(Tuple.cons(elem.head, _)) // arg1 must be a Tuple
     }
-
   }
 
   private def checkTuple(n: Int, elem: Seq[Ob]): Either[PrimError, Tuple] =
     if (!elem(n).isInstanceOf[Tuple]) {
-      Left(TypeMismatch(n, Tuple.getClass().getName()))
+      Left(TypeMismatch(n, Tuple.getClass.getName))
     } else {
       Right(elem(n).asInstanceOf[Tuple])
     }
-
 }
