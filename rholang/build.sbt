@@ -1,8 +1,5 @@
 import BNFC._
 
-// needed for SuperSafe sbt plugin
-resolvers += "Artima Maven Repository" at "http://repo.artima.com/releases"
-
 lazy val commonOptions = Seq(
   "-language:existentials",
   "-language:higherKinds",
