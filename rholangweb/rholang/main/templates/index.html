@@ -7,9 +7,10 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
-    <title>RChain Rholang REPL (PRE-ALPHA)</title>
+    <title>RChain Rholang REPL (0.1 ALPHA)</title>
     <!-- Bootstrap -->
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'css/developer.rchain.coop.css' %}" rel="stylesheet">
     <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
     <!--[if lt IE 9]>
@@ -29,14 +30,8 @@
     <form action="" method="POST">
         {% csrf_token %}
         <input id="hdnView" type="hidden" name="view" />
-        <div class="page-header">
-          <h1>Rholang Playground (PRE-ALPHA)</h1>
-
-          <p>
-            <a href="https://rholang.rchain.coop/">Rholang</a> is a
-            language for writing smart contracts that run on the
-            RChain virtual machine.
-          </p>
+        <div class="page-header masthead">
+          <h1 class="header logoWrapper">Rholang Playground (0.1 ALPHA)</h1>
         </div>
         <div class="panel panel-primary">
           <div class="panel-heading">
@@ -45,9 +40,22 @@
           <select id="examples">
             <option>...</option>
           </select>
+          <p>
+            For help, visit
+            the <a href="http://developer.rchain.coop">RChain
+            Developer Portal</a>.
+          </p>
+          <p>
+            You can also get started with
+            the <a href="http://developer.rchain.coop/rholang-tutorial">Rholang
+            tutorial</a>.
+          </p>
           <div class="panel-body">
             {% render_field form.rho class="form-control" rows="16" cols="80" style="font-family: monospace;" placeholder='print(5)' %}
-            <button type="submit" class="btn btn-default">Compile and Run</button>
+            <button type="submit" class="btn btn-primary">Compile and Run</button>
+            <button type="button" class="btn" data-toggle="modal" data-target="#saveDialog">
+              Save As...
+            </button>
             <br />
             <label>{{ form.verbose }} Verbose</label>
           </div>
@@ -58,11 +66,8 @@
             <h3 class="panel-title">Output</h3>
           </div>
           {% if compile_error %}
-          <pre class="alert alert-warning"
+          <pre class="alert alert-warning" id="rbl"
                >{{ compile_error }}</pre>
-          {% elif run_error %}
-          <pre class="alert alert-warning"
-               >{{ run_error }}</pre>
           {% else %}
           <div class="panel-body">
             <ul class="nav nav-tabs" role="tablist">
@@ -80,13 +85,50 @@
             <div class="tab-content">
               <p role="tabpanel" class="tab-pane" id="rbl"
                    ><code>{{ rbl_code }}</code></p>
+              {% if run_error %}
+              <pre role="tabpanel" class="tab-pane active alert alert-warning" id="repl"
+               >{{ run_error }}</pre>
+              {% else %}
               <pre role="tabpanel" class="tab-pane active" id="repl"
                    >{{ repl_session }}</pre>
+              {% endif %}
             </div>
           </div>
           {% endif %}
         </div>
     </form>
+
+    <!-- Save Dialog -->
+    <div class="modal fade" id="saveDialog" tabindex="-1"
+         role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="saveAs">Save Rholang to File</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <form action="save" method="POST">
+            {% csrf_token %}
+            <div class="modal-body">
+              <label>Filename: <input name="basename" />.rho</label>
+              <input type="hidden" name="rhoSave" id="rhoSave" />
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-dismiss="modal"
+                      >Cancel</button>
+              <input type="submit" class="btn btn-primary" id="save"
+                     value="Save" />
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <hr />
+    <address class="footer">
+      Copyright (c) 2017-2018 <a href="https://rchain.coop">RChain Cooperative</a>
+    </address>
   </div>
 
         <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
@@ -99,6 +141,7 @@
           e.preventDefault()
           $(this).tab('show')
         });
+
         var examples = {{ examples|safe }};
         var exElt = $('#examples');
         exElt.html('<option>Examples:<' + '/option>');
@@ -113,6 +156,13 @@
             (_ix, opt) => { name = $(opt).attr('value') });
           $('#id_rho').text(exByName[name]);
         });
+
+        $('#save').click(function (e) {
+          $('#rhoSave').val($('#id_rho').val());
+          $(this.form).submit();
+          $('#saveDialog').modal('hide');
+        });
+
       });
     </script>
 </body>

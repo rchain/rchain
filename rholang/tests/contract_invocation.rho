@@ -5,7 +5,7 @@ new test in {
     z!(Nil)
   } |
   new x, y, z in {
-    test([x, y, z]) |
+    test(x, y, z) |
     for(_ <- x) {
       print("x")
     } |

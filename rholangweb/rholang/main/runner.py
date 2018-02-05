@@ -168,7 +168,10 @@ class VM(object):
                          stdin=PIPE, stdout=PIPE, stderr=PIPE)
             out, err = proc.communicate(input, timeout=timeout)
             if proc.returncode != 0:
-                raise RunError('%d: %s' % (proc.returncode, err))
+                log.error('subprocess returned %d: %s',
+                          proc.returncode, err.decode('utf-8'))
+                raise RunError('%d: %s'
+                               % (proc.returncode, err.decode('utf-8')))
             return out, err
 
         return run_program

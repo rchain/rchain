@@ -1,0 +1,12 @@
+new helloAgain in {
+  contract helloAgain(_) = {
+    new chan in {
+      chan("Hello again, world!") |
+      for (text <- chan) {
+        text.display("\n")
+      }
+    }
+  } |
+  helloAgain(Nil) |
+  helloAgain(Nil)
+}

@@ -2,15 +2,15 @@ package coop.rchain.rosette
 
 import org.scalatest.{Matchers, WordSpec}
 
-// TODO for Alex: Please adapt this to immutable Ob
-/*
 class ObSpec extends WordSpec with Matchers {
+  val meta = new Ob {}
+  val parent = new Ob {}
 
   "forwardingAddress" should {
 
     "return meta" in {
       val newMeta = createOb()
-      val ob = createOb(meta = newMeta)
+      val ob = createOb(Seq(newMeta))
       ob.forwardingAddress shouldBe newMeta
     }
   }
@@ -21,17 +21,19 @@ class ObSpec extends WordSpec with Matchers {
       val third = createOb()
       val parent = parentWithThreeSlots(third)
 
-      val ob = createOb(parent = parent)
-      val lex = ob.getLex(ind = 1, level = 1, offset = 2)
+      val ob = createOb(Seq(meta, parent))
+      val lex = ob.getLex(indirect = true, level = 1, offset = 2)
 
       lex shouldEqual third
     }
 
     "return INVALID when offset is out of bounds" in {
       val parent = parentWithThreeSlots()
-      val ob = createOb(parent = parent)
+      val ob = createOb(Seq(meta, parent))
       val lex =
-        ob.getLex(ind = 1, level = 1, offset = parent.numberOfSlots() + 1)
+        ob.getLex(indirect = true,
+                  level = 1,
+                  offset = parent.numberOfSlots() + 1)
 
       lex shouldEqual Ob.INVALID
     }
@@ -40,42 +42,46 @@ class ObSpec extends WordSpec with Matchers {
   "setLex" should {
 
     "set an extension slot by offset" in {
-      val ext = createOb(slot = twoSlots)
+      val ext = createExtension(twoSlots)
       val value = createOb()
       val parent: Ob = parentWithThreeSlots(extension = Some(ext))
-      val ob = createOb(parent = parent)
+      val ob = createOb(Seq(meta, parent))
       val offset = 1
-      ob.setLex(ind = 1, level = 1, offset = offset, value = value)
-      ext.slot(offset) shouldEqual value
+
+      val (newOb, newValue) =
+        ob.setLex(indirect = true, level = 1, offset = offset, value = value)
+
+      val actorParent = newOb.parent.asInstanceOf[Actor]
+
+      actorParent.extension.slot(offset) shouldEqual value
     }
   }
 
-  def parentWithThreeSlots(third: Ob = null,
-                           extension: Option[Ob] = None): Actor = {
+  def parentWithThreeSlots(third: Ob = createOb(),
+                           extension: Option[StdExtension] = None): Actor = {
 
     val seq = twoSlots :+ third
-    val ext = extension.getOrElse(createOb(slot = seq))
+    val ext = extension.getOrElse(createExtension(slot = seq))
     createActor(ext, seq)
   }
 
-  def twoSlots: mutable.Seq[Ob] = {
+  def twoSlots: Seq[Ob] = {
     val first = createOb()
     val second = createOb()
-    mutable.Seq(first, second)
+    Seq(first, second)
   }
 
-  def createActor(ext: Ob, slots: mutable.Seq[Ob]): Actor =
+  def createActor(ext: StdExtension, slots: Seq[Ob]): Actor =
     new Actor {
       override val extension = ext
+      override val slot: Seq[Ob] = slots
     }
 
-  def createOb(meta: Ob = null,
-               parent: Ob = null,
-               slot: mutable.Seq[Ob] = mutable.Seq.empty): Ob = {
-    val (m, p, s) = (meta, parent, slot)
+  def createExtension(slot: Seq[Ob]): StdExtension =
+    StdExtension(meta, parent, slot)
+
+  def createOb(slots: Seq[Ob] = Seq.empty): Ob =
     new Ob {
-      override val slot = Slot.Placeholder
+      override val slot = slots
     }
-  }
 }
- */

@@ -111,7 +111,7 @@ The `print` method of the system process can take one or two arguments.  In the 
 
 ## Pattern matching and rest parameters
 
-     1 contract @"MapDemo"(system) = new MakeMap in {
+     1 contract @"CoatCheckDemo"(system) = new MakeCoatCheck in {
      2     contract MakeCoatCheck(ret) = {
      3         new (portIn, portOut):iopair, table in {
      4             ret!(*portOut) |
@@ -151,7 +151,7 @@ The `print` method of the system process can take one or two arguments.  In the 
     38             cc!("new", *ret, 0) |
     39             for (ticket <- ret) {
     40                 // Sets the cell to 1
-    41                 cc!("set", *ret, *ticket, 0) |
+    41                 cc!("set", *ret, *ticket, 1) |
     42                 for (ack <- ret) {
     43                     // Reads the value
     44                     cc!("get", *ret, *ticket) |
@@ -321,7 +321,7 @@ We can implement revocation by creating a forwarder with a kill switch.
      1 contract MakeRevokableForwarder(target, ret) = {
      2     new (portIn, portOut):iopair, kill, forwardFlag in {
      3         ret!(*portOut, *kill) |
-     4         flag!(true) |
+     4         forwardFlag!(true) |
      5         for (...@rest <= portIn) {
      6             for (@status <! forwardFlag) {
      7                 if (status) {
@@ -331,9 +331,11 @@ We can implement revocation by creating a forwarder with a kill switch.
     11                 }
     12             }
     13         } |
-    14         for (_ <- kill; _ <- flag) forwardFlag!(false)
-    15     }
-    16 }
+    14         for (_ <- kill; _ <- forwardFlag) {
+    15             forwardFlag!(false)
+    16         }
+    17     }
+    18 }
 
 2) We create an iopair for method dispatch and a channel `forwardFlag` to store whether to forward messages.
 
@@ -343,7 +345,7 @@ We can implement revocation by creating a forwarder with a kill switch.
 
 5-13) We read in an arbitrary tuple of message parts and get the value of the flag.  If the flag is true, we forward the message tuple to `target`.
 
-14) If a message is ever sent on the `kill` channel, we set `forwardFlag` to false, which stops forwarding messages.
+14-15) If a message is ever sent on the `kill` channel, we set `forwardFlag` to false, which stops forwarding messages.
 
 ### Composition
 
