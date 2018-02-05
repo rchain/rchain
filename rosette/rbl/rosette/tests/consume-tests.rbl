@@ -79,11 +79,11 @@
     (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels
                         ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
     (seq
-      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
-      (test-form (tbl-get channel-lookup-table 'bar) ['foobar])
-      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
+      (test-form (tbl-get channel-lookup-table 'foo) ['foo--bar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foo--bar])
+      (test-form (tbl-get reverse-channel-lookup-table 'foo--bar) ['foo 'bar])
       (test-form
-       (tbl-get channel-subspace-table 'foobar)
+       (tbl-get channel-subspace-table 'foo--bar)
        [[] [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
 
 ;;; store-continuation works when channel-subspace-table already contains subspace contents
@@ -97,11 +97,11 @@
     (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels
                         [43 44] ['ctxt-mock ['code-mock 'env-mock]] #t)
     (seq
-      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
-      (test-form (tbl-get channel-lookup-table 'bar) ['foobar])
-      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
+      (test-form (tbl-get channel-lookup-table 'foo) ['foo--bar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foo--bar])
+      (test-form (tbl-get reverse-channel-lookup-table 'foo--bar) ['foo 'bar])
       (test-form
-       (tbl-get channel-subspace-table 'foobar)
+       (tbl-get channel-subspace-table 'foo--bar)
        [[]
         [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]
          [[43 44] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))

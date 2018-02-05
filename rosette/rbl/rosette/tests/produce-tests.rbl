@@ -44,7 +44,7 @@
 ;;; tests for extract-consume-candidates
 (let* [[channel-subspace-table (new RblTable)]
        [reverse-channel-lookup-table (new RblTable)]
-       [_ (tbl-add reverse-channel-lookup-table 'foobar ['foo 'bar])]
+       [_ (tbl-add reverse-channel-lookup-table 'foo--bar ['foo 'bar])]
 
        [data-list [42]]
        [continuation-list []]
@@ -55,7 +55,7 @@
        [continuation-struct [['anything 88] 'ctxt-tuple-mock]]
        [continuation-list [continuation-struct]]
        [foobar-subspace [data-list continuation-list]]
-       [_ (tbl-add channel-subspace-table 'foobar foobar-subspace)]
+       [_ (tbl-add channel-subspace-table 'foo--bar foobar-subspace)]
 
        [channel 'bar]
        [product 88]]
@@ -65,10 +65,11 @@
       (extract-consume-candidates [] channel-subspace-table channel product reverse-channel-lookup-table) [])
     ;;; it returns the only candidate which is the match of the following product/continuation pair
     ;;; (a) the data index of 42 in foo along with the inserted product 88 and
-    ;;; (b) the 0th index continuation waiting at 'foobar
+    ;;; (b) the 0th index continuation waiting at 'foo--bar
     (test-form
-      (extract-consume-candidates ['foobar] channel-subspace-table channel product reverse-channel-lookup-table)
-      [[[['foo 0] ['bar -1]] ['foobar 0]]])))
+      (extract-consume-candidates ['foo--bar] channel-subspace-table channel product
+                                  reverse-channel-lookup-table)
+      [[[['foo 0] ['bar -1]] ['foo--bar 0]]])))
 
 ;;; returns empty when passed empty
 (test-form (select-best-consume []) [])
@@ -97,9 +98,9 @@
 ;;; tests for consume-continuation when continuation-list is not emptied
 (let* [[channel-subspace-table (new RblTable)]
        [channel-lookup-table (new RblTable)]
-       [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel-lookup-table channel ['foobar])))]
+       [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel-lookup-table channel ['foo--bar])))]
        [reverse-channel-lookup-table (new RblTable)]
-       [_ (tbl-add reverse-channel-lookup-table 'foobar ['foo 'bar])]
+       [_ (tbl-add reverse-channel-lookup-table 'foo--bar ['foo 'bar])]
 
        [data-list [42]]
        [continuation-list []]
@@ -111,27 +112,27 @@
        [continuation-struct-another [[42 88] 'ctxt-tuple-mock-another]]
        [continuation-list [continuation-struct continuation-struct-another]]
        [foobar-subspace [data-list continuation-list]]
-       [_ (tbl-add channel-subspace-table 'foobar foobar-subspace)]
+       [_ (tbl-add channel-subspace-table 'foo--bar foobar-subspace)]
 
        [channel 'bar]
        [product 88]
 
-       [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]]
+       [candidate [[['foo 0] ['bar -1]] ['foo--bar 0]]]]
   (let [[reduction (consume-continuation candidate channel-subspace-table channel-lookup-table
                                          reverse-channel-lookup-table product)]]
     (seq
       (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
-      (test-form (tbl-get channel-subspace-table 'foobar) [[] [continuation-struct-another]])
-      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
-      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
-      (test-form (tbl-get channel-lookup-table 'bar) ['foobar]))))
+      (test-form (tbl-get channel-subspace-table 'foo--bar) [[] [continuation-struct-another]])
+      (test-form (tbl-get reverse-channel-lookup-table 'foo--bar) ['foo 'bar])
+      (test-form (tbl-get channel-lookup-table 'foo) ['foo--bar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foo--bar]))))
 
 ;;; tests for consume-continuation when continuation-list is emptied
 (let* [[channel-subspace-table (new RblTable)]
        [channel-lookup-table (new RblTable)]
-       [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel-lookup-table channel ['foobar])))]
+       [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel-lookup-table channel ['foo--bar])))]
        [reverse-channel-lookup-table (new RblTable)]
-       [_ (tbl-add reverse-channel-lookup-table 'foobar ['foo 'bar])]
+       [_ (tbl-add reverse-channel-lookup-table 'foo--bar ['foo 'bar])]
 
        [data-list [42]]
        [continuation-list []]
@@ -142,17 +143,17 @@
        [continuation-struct [['anything 88] 'ctxt-tuple-mock]]
        [continuation-list [continuation-struct]]
        [foobar-subspace [data-list continuation-list]]
-       [_ (tbl-add channel-subspace-table 'foobar foobar-subspace)]
+       [_ (tbl-add channel-subspace-table 'foo--bar foobar-subspace)]
 
        [channel 'bar]
        [product 88]
 
-       [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]]
+       [candidate [[['foo 0] ['bar -1]] ['foo--bar 0]]]]
   (let [[reduction (consume-continuation candidate channel-subspace-table channel-lookup-table
                                          reverse-channel-lookup-table product)]]
     (seq
       (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
-      (test-form (tbl-get reverse-channel-lookup-table 'foobar) #absent)
+      (test-form (tbl-get reverse-channel-lookup-table 'foo--bar) #absent)
       (test-form (tbl-get channel-lookup-table 'foo) [])
       (test-form (tbl-get channel-lookup-table 'bar) []))))
 

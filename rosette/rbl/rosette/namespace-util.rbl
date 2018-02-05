@@ -23,18 +23,18 @@
 
 ;;; Concatenates a list of symbols to a single long symbol
 ;;;
-;;; While the following is true
-;;;
-;;; (same? (symbol-list-concat ['ab 'c]) (symbol-list-concat ['a 'bc]))
-;;;
-;;; all channel names are "rholang-XXXX...X" (note these are Rosette freshes not Rholang channels
-;;; - Rholang channels can be anything) so you can never have the concatenation of channel
-;;; symbols being equal to a concatenation of different channel symbols. Note that with
+;;; Note that with
 ;;; https://rchain.atlassian.net/browse/ROS-340 this function will be removed anyways.
+(define concat-separator "--")
 (defOprn concat-symbol-list)
-(defPure Tuple (concat-symbol-list) (->symbol (fold (self)
-                                                    (proc [e acc k]
-                                                      (k (string-concat acc (->string e)))) "")))
+(defPure Tuple (concat-symbol-list)
+  (->symbol
+    (fold (self)
+          (proc [e acc k]
+            (if (= acc "")
+                (k (->string e))
+                (k (string-concat acc concat-separator (->string e)))))
+          "")))
 
 ;;; Equivalent to a depth of one "flatten"
 (defOprn append-tuples)

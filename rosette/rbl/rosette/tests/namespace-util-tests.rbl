@@ -37,8 +37,8 @@
 (test-form (match-tuple-pattern ['y 'z] ['a]) #f)
 
 (test-form (concat-symbol-list []) ')
-(test-form (concat-symbol-list ['hello 'world]) 'helloworld)
-(test-form (concat-symbol-list ['hello 'world 'again]) 'helloworldagain)
+(test-form (concat-symbol-list ['hello 'world]) 'hello--world)
+(test-form (concat-symbol-list ['hello 'world 'again]) 'hello--world--again)
 
 (test-form (append-tuples []) [])
 (test-form (append-tuples [[1 2] [3 4] [5 6]]) [1 2 3 4 5 6])
