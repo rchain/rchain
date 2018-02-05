@@ -1,0 +1,116 @@
+-- A program is just a process. We put the coercions first, because that's what
+-- bnfc uses to determine the starting production.
+_. Proc  ::= Proc1 ;
+_. Proc1 ::= Proc2 ;
+_. Proc2 ::= Proc3 ;
+_. Proc3 ::= Proc4 ;
+_. Proc4 ::= Proc5 ;
+_. Proc5 ::= Proc6 ;
+_. Proc6 ::= Proc7 ;
+_. Proc7 ::= Proc8 ;
+_. Proc8 ::= Proc9 ;
+_. Proc9 ::= Proc10 ;
+_. Proc10 ::= Proc11 ;
+_. Proc11 ::= Proc12 ;
+_. Proc12 ::= Proc13 ;
+_. Proc13 ::= "{" Proc "}" ;
+
+-- Processes
+-- In general the expression style processes are higher precedence.
+-- Expression style is anything that necessary resolves to a single ground value
+-- or a collection.
+PGround.      Proc13 ::= Ground ;
+PCollect.     Proc13 ::= Collection ;
+PVar.         Proc13 ::= Var ;
+PNil.         Proc13 ::= "Nil" ;
+PEval.        Proc12 ::= "*" Name ;
+PMethod.      Proc11 ::= Proc11 "." Var "(" [Proc] ")" ;
+PNot.         Proc10 ::= "not" Proc10 ;
+PNeg.         Proc10 ::= "-" Proc10 ;
+PMult.        Proc9  ::= Proc9 "*" Proc10 ;
+PDiv.         Proc9  ::= Proc9 "/" Proc10 ;
+PAdd.         Proc8  ::= Proc8 "+" Proc9 ;
+PMinus.       Proc8  ::= Proc8 "-" Proc9 ;
+PLt.          Proc7  ::= Proc7 "<" Proc8 ;
+PLte.         Proc7  ::= Proc7 "<=" Proc8 ;
+PGt.          Proc7  ::= Proc7 ">" Proc8 ;
+PGte.         Proc7  ::= Proc7 ">=" Proc8 ;
+PEq.          Proc6  ::= Proc6 "==" Proc7 ;
+PMatches.     Proc6  ::= Proc7 "matches" Proc7 ;
+PNeq.         Proc6  ::= Proc6 "!=" Proc7 ;
+PAnd.         Proc5  ::= Proc5 "and" Proc6 ;
+POr.          Proc4  ::= Proc4 "or" Proc5 ;
+PSend.        Proc3  ::= Name Send "(" [Proc] ")" ;
+PContr.       Proc2 ::= "contract" Name "(" [Name] ")" "=" "{" Proc "}" ;
+PInput.       Proc2 ::= "for" "(" Receipt ")" "{" Proc "}" ;
+PChoice.      Proc2 ::= "select" "{" [Branch] "}" ;
+PMatch.       Proc2 ::= "match" Proc4 "{" [Case] "}" ;
+PIf.          Proc1 ::= "if" "(" Proc ")" Proc2 ;
+-- Use precedence to force braces around an interior if.
+PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
+PNew.         Proc1 ::= "new" [NameDecl] "in" Proc1 ;
+PPar.         Proc  ::= Proc "|" Proc1 ;
+
+separator nonempty Proc "," ;
+
+-- Names
+NameWildcard. Name ::= "_" ;
+NameVar.      Name ::= Var ;
+NameQuote.    Name ::= "@" Proc12 ;
+separator nonempty Name "," ;
+
+-- Receipt
+ReceiptLinear.    Receipt ::= ReceiptLinearImpl ;
+ReceiptRepeated.  Receipt ::= ReceiptRepeatedImpl ;
+
+-- Linear Receipts
+LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
+-- Implementing this will be tricky.
+-- for (x <- a; y <- b if *x)
+-- LinearCond.   Linear ::= [LinearBind] "if" Proc ;
+
+-- Single Linear Bind
+LinearBindImpl. LinearBind ::= [Name] "<-" Name ;
+separator nonempty LinearBind ";" ;
+
+-- Repeated Receipts
+RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
+-- Single Repeated Bind
+RepeatedBindImpl. RepeatedBind ::= [Name] "<=" Name ;
+separator nonempty RepeatedBind ";" ;
+
+-- Types of Send:
+SendSingle.   Send ::= "!" ;
+SendMultiple. Send ::= "!!" ;
+
+-- Select Branches
+BranchImpl. Branch ::= ReceiptLinearImpl "=>" Proc3 ;
+separator nonempty Branch "" ;
+
+-- Match Cases
+CaseImpl. Case ::= Proc13 "=>" Proc3 ;
+separator nonempty Case "" ;
+
+-- Name Declarations.
+-- Eventually will have IOPairs.
+NameDeclSimpl. NameDecl ::= Var ;
+separator nonempty NameDecl "," ;
+
+-- Booleans:
+BoolTrue.   Bool ::= "true" ;
+BoolFalse.  Bool ::= "false" ;
+-- Ground types:
+GroundBool.    Ground ::= Bool ;
+GroundInt.     Ground ::= Integer ;
+GroundString.  Ground ::= String ;
+GroundUri.     Ground ::= Uri ;
+token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
+-- Collections:
+CollectList.   Collection ::= "[" [Proc] "]" ;
+CollectTuple.  Collection ::= "(" [Proc] ")" ;
+CollectSet.    Collection ::= "Set" "(" [Proc] ")" ;
+CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
+KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
+separator KeyValuePair "," ;
+
+token Var ((letter | '_' | '\'') (letter | digit | '_' | '\'')*) ;
