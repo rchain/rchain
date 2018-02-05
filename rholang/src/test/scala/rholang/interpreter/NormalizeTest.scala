@@ -2,17 +2,17 @@ import coop.rchain.interpreter._
 import coop.rchain.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 import org.scalatest._
 
-class BoolVisitorSpec extends FlatSpec with Matchers {
-  val visitor = new BoolNormalizeVisitor() {}
+class BoolMatcherSpec extends FlatSpec with Matchers {
+  val matcher = new BoolNormalizeMatcher() {}
   "BoolTrue" should "Compile as GBool(true)" in {
     val btrue = new BoolTrue()
 
-    btrue.accept(visitor, this) should be (GBool(true))
+    matcher.normalizeMatch(btrue) should be (GBool(true))
   }
   "BoolFalse" should "Compile as GBool(false)" in {
     val bfalse = new BoolFalse()
 
-    bfalse.accept(visitor, this) should be (GBool(false))
+    matcher.normalizeMatch(bfalse) should be (GBool(false))
   }
 }
 

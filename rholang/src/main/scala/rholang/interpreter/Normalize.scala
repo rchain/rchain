@@ -9,14 +9,18 @@ sealed trait VarSort
 case object ProcSort extends VarSort
 case object NameSort extends VarSort
 
-trait BoolNormalizeVisitor extends Bool.Visitor[GBool, Any] {
-  override def visit( b: BoolTrue, n: Any ) : GBool = GBool(true)
-  override def visit( b: BoolFalse, n: Any ) : GBool = GBool(false)
+trait BoolNormalizeMatcher {
+  def normalizeMatch( b: Bool ) : GBool = {
+    b match {
+      case b : BoolTrue => GBool(true)
+      case b : BoolFalse => GBool(false)
+    }
+  }
 }
 
 trait GroundNormalizeVisitor extends AbsynGround.Visitor[Ground, Any] 
-    with BoolNormalizeVisitor {
-  override def visit( gb: GroundBool, n: Any ) : Ground = gb.bool_.accept(this, n)
+    with BoolNormalizeMatcher {
+  override def visit( gb: GroundBool, n: Any ) : Ground = this.normalizeMatch(gb.bool_)
   override def visit( gi: GroundInt, n: Any ) : Ground = GInt(gi.integer_)
   override def visit( gi: GroundString, n: Any ) : Ground = GString(gi.string_)
   override def visit( gi: GroundUri, n: Any ) : Ground = GUri(gi.uri_)
