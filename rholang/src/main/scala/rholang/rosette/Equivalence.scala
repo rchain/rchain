@@ -8,11 +8,11 @@
 
 package coop.rchain.rho2rose
 
-// import coop.rchain.syntax.rholang._
 import coop.rchain.syntax.rholang.Absyn._
 import scalaz.{Bind => _, Value => _, _}
 import scalaz.std.list._
 import scalaz.std.option._
+import scala.collection.JavaConverters._
 
 object Equivalences{
 
@@ -55,7 +55,6 @@ object Equivalences{
           allStructurallyEquivalent(env1, lift1.listproc_, env2, lift2.listproc_)
       }
       case (input1: PInput, input2: PInput) =>
-        import scala.collection.JavaConverters._
         bindsEquivalent (
           env1, input1.listbind_.asScala.toList,
           env2, input2.listbind_.asScala.toList
@@ -137,7 +136,32 @@ object Equivalences{
         }
     }
 
-  def syntacticSubstitution(proc: Proc, source: CPattern, target: CPattern): Proc = ???
+  def syntacticSubstitution(proc: Proc, source: CPattern, target: CPattern): Proc = proc match {
+    case (_: PNil) => proc
+    case (p: PValue) => p.value_ match {
+      case (t: ETuple) =>
+        val substituted = t.listproc_.asScala.map (
+          proc => syntacticSubstitution(proc,source,target)
+        ).asJava
+        val listproc = new ListProc
+        listproc.addAll(substituted)
+        new PValue(new ETuple(listproc))
+      case _ => p
+    }
+    case (p: PDrop) => ???
+    case (p: PLift) => ???
+    case (p: PInput) => ???
+    case (p: PChoice) => ???
+    case (p: PMatch) => ???
+    case (p: PNew) => ???
+    case (p: PPrint) => ???
+    case (p: PConstr) => ???
+    case (p: PContr) => ???
+    case (p: PPar) => new PPar (
+      syntacticSubstitution(p.proc_1, source, target),
+      syntacticSubstitution(p.proc_2, source, target)
+    )
+  }
 
   def alphaEquivalent(p1: Proc, p2: Proc): Boolean = ???
 
@@ -145,7 +169,6 @@ object Equivalences{
     structurallyEquivalent(DeBruijn(), p1, DeBruijn(), p2)
   
   def allStructurallyEquivalent(env1: DeBruijn, ps1: ListProc, env2: DeBruijn, ps2: ListProc): Boolean = {
-    import scala.collection.JavaConverters._
     ps1.size() == ps2.size() &&
       (ps1.asScala.toList, ps2.asScala.toList).zipped.forall(
         (proc1,proc2) => structurallyEquivalent(env1, proc1, env2, proc2)
@@ -169,7 +192,6 @@ object Equivalences{
   }
 
   def allCPatternEquivalent(env1: DeBruijn, cps1: ListCPattern, env2: DeBruijn, cps2: ListCPattern): Option[(DeBruijn, DeBruijn)] = {
-    import scala.collection.JavaConverters._
     if (cps1.size() != cps2.size()) {
       None
     } else {
