@@ -81,8 +81,10 @@ object CompilerExceptions {
   ) extends Exception( s"internal compiler error: $b" )
       with CompilerException
   case class UnboundVariable(
-    varName: String
-  ) extends Exception( s"Unbound variable: $varName" )
+    varName : String,
+    line : Int,
+    col : Int
+  ) extends Exception( s"Unbound variable: $varName at $line:$col" )
       with CompilerException
 }
 
@@ -242,7 +244,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         if (boundVars(v.var_)) {
           B( _run )( B( _compile )( Var( v.var_ ) ) )
         } else {
-          throw new UnboundVariable(v.var_)
+          throw new UnboundVariable(v.var_, v.line_num, v.col_num)
         }
       }
     } )
@@ -490,7 +492,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
                   B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
                 }
 
-                val matchTerm = B(_match)(pTerm, pattern)
+                val matchTerm = B(_match)(TS, pTerm, pattern)
                 val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
                   createProcForPatternBindings
                 } else {
@@ -524,7 +526,6 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     // TODO: Fill in rest of cases
     p match {
       case pPtVar : PPtVar => true
-      case pPtNil : PPtNil => false
       case pPtVal : PPtVal => hasVariable( pPtVal.valpattern_ )
     }
   }
@@ -532,7 +533,6 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
   def hasVariable(p: ValPattern) : Boolean = {
     import scala.collection.JavaConverters._
     p match {
-      case vPtStruct : VPtStruct => vPtStruct.listppattern_.asScala.toList.exists(hasVariable)
       case vPtTuple: VPtTuple => vPtTuple.listppattern_.asScala.toList.exists(hasVariable)
       case _ => false
     }
@@ -550,7 +550,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         ( acc, e ) => e.accept( this, arg )._1 :: acc
       )
 
-    B( p.var_, actls )
+    B( _produce, TS :: Leaf(Var(p.var_)) :: Leaf(Var("**wildcard**")) :: actls)
   }
 
   override def visit( p : PPar, arg : A ) : R = {
@@ -570,7 +570,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     if (boundVars(p.var_)) {
       Var(p.var_)
     } else {
-      throw new UnboundVariable(p.var_)
+      throw new UnboundVariable(p.var_, p.line_num, p.col_num)
     }
   }
   override def visit( p : CQuote, arg : A ) : R = {
@@ -593,7 +593,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     if (boundVars(p.var_)) {
       Var(p.var_)
     } else {
-      throw new UnboundVariable(p.var_)
+      throw new UnboundVariable(p.var_, p.line_num, p.col_num)
     }
   }
   override def visit( p : QInt, arg : A ) : R = {
@@ -721,19 +721,6 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     p.varpattern_.accept(this, arg)
   }
   /* ValPattern */
-  override def visit( p : VPtStruct, arg : A ) : R = {
-    import scala.collection.JavaConverters._
-    
-    val structContents : (List[StrTermCtxt], BoundSet) =
-      ( (List[StrTermCtxt](), Set[String]()) /: p.listppattern_.asScala.toList.reverse )(
-        ( acc, e ) => {
-          val result = e.accept(this, arg)
-          (result._1 :: acc._1, result._2 ++ acc._2)
-        }
-      )
-    // All patterns must pass back up the variables bound at their leaves.
-    (B( p.var_, structContents._1 ), structContents._2)
-  }
   override def visit( p : VPtTuple, arg : A ) : R = {
     import scala.collection.JavaConverters._
 
@@ -765,25 +752,10 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     (Tag( s"""-${p.double_}"""), arg)
   }
 
-  override def visit( p: PtBranch, arg: A ): R = ???
-  override def visit( p: PtBind, arg: A ): R = ???
   override def visit( p: CPtQuote, arg: A ): R = ???
-  override def visit( p: PPtPar, arg: A ): R = ???
-  override def visit( p: PPtConstr, arg: A ): R = ???
-  override def visit( p: PPtNew, arg: A ): R = ???
-  override def visit( p: PPtMatch, arg: A ): R = ???
-  override def visit( p: PPtInput, arg: A ): R = ???
-  override def visit( p: PPtOutput, arg: A ): R = ???
-  override def visit( p: PPtInject, arg: A ): R = ???
-  override def visit( p: PPtDrop, arg: A ): R = ???
-  override def visit( p: PPtNil, arg: A ): R = ???
   override def visit( p: Choice, arg: A ): R = ???
-  override def visit( p: PInject, arg: A ): R = ???
   override def visit( p: DContr, arg: A ): R = ???
-  override def visit( p: PFoldR, arg: A ): R = ???
-  override def visit( p: PFoldL, arg: A ): R = ???
   override def visit( p: CValPtrn, arg: A ): R = ???
   override def visit( p: PatternMatch, arg: A ): R = ???
   override def visit( p: CondInputBind, arg: A ): R = ???
-  override def visit( p: VPtStr, arg: A ): R = ???
 }

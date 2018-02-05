@@ -3,7 +3,8 @@
 // Rosette's output. We probably want to change a lot of behavior
 // in the reimplementation.
 
-match [
+{
+  match [
     // Equal
 
     2 == 2,                        // true
@@ -72,14 +73,22 @@ match [
 
     ] with
 
-< true, true, true, false, false, false,
-  false, false, false, true, true, true,
-  true, false, false, true, false, false, true, false, false,
-  true, true, false, true, true, false, true, true, false,
-  false, false, true, false, false,true, false, false, true,
-  false, true, true, false, true, true, false, true, true > => {
-    print("Pass")
-}
-_ => {
-    print("Fail")
-}
+  [ true, true, true, false, false, false,
+    false, false, false, true, true, true,
+    true, false, false, true, false, false, true, false, false,
+    true, true, false, true, true, false, true, true, false,
+    false, false, true, false, false,true, false, false, true,
+    false, true, true, false, true, true, false, true, true ] => {
+      print("Pass")
+  }
+  _ => {
+      print("Fail")
+  } |
+  match 2 == 2 with
+    true => {
+      print("Pass")
+    }
+    _ => {
+      print("Fail")
+    }
+} 
