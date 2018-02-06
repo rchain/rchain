@@ -2,7 +2,7 @@
 // Normalization requires the evaluation of everything that doesn't go through
 // the tuplespace, so the top level of a normalized process must have everything
 
-package coop.rchain.interpreter
+package coop.rchain.rholang.intepreter
 
 case class Par(
   sends: List[Send],
@@ -20,7 +20,7 @@ case class Par(
 }
 
 object Par {
-  def apply() : Par = new Par()
+  def apply(): Par = new Par()
 }
 
 sealed trait Channel

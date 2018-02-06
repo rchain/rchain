@@ -89,7 +89,10 @@ object Main {
         }
     }
 
-    val addy = s"rnode://$name@$host:${conf.port()}"
+    val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
+      case Right(node)               => node
+      case Left(p2p.ParseError(msg)) => throw new Exception(msg)
+    }
 
     val net = p2p.Network(addy)
     logger.info(s"Listening for traffic on $net.")
