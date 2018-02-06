@@ -20,7 +20,7 @@ case class Par(
 }
 
 object Par {
-  def apply() : Par = new Par()
+  def apply(): Par = new Par()
 }
 
 sealed trait Channel
