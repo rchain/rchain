@@ -9,7 +9,7 @@
 
 package coop.rchain.rho2rose
 
-import coop.rchain.syntax.rholang._
+import coop.rchain.rholang.syntax.rholang._
 
 import java.io._
 
