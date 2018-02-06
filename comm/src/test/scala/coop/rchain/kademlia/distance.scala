@@ -4,7 +4,7 @@ import org.scalatest._
 import scala.util.{Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
-case class PeerNode(val key: Seq[Byte]) extends Peer {
+final case class PeerNode(val key: Seq[Byte]) extends Peer {
   val rand = new scala.util.Random
 
   override def ping: Try[Duration] =

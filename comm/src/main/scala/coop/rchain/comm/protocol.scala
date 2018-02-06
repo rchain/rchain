@@ -114,7 +114,7 @@ trait ProtocolMessage {
       h <- header
       s <- h.sender
     } yield
-      PeerNode(NodeIdentifier(s.id.toByteArray),
+      new PeerNode(NodeIdentifier(s.id.toByteArray),
                Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   def toByteSeq: Seq[Byte] =
@@ -132,7 +132,7 @@ trait ProtocolResponse extends ProtocolMessage {
 /**
   * A ping is a simple are-you-there? message.
   */
-case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+final case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
       h <- header
@@ -142,13 +142,13 @@ case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 /**
   * A pong is the response to a ping.
   */
-case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
+final case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**
   * A lookup message asks for a list of peers from the local Kademlia
   * table that are closest to a given key.
   */
-case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
+final case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
   def lookupId: Option[Seq[Byte]] =
     for {
       lookup <- proto.message.lookup
@@ -166,16 +166,16 @@ case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessa
 /**
   * A disconnect causes the receiver to forget about this peer.
   */
-case class DisconnectMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+final case class DisconnectMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
 /**
   * The response to a lookup message. It holds the list of peers
   * closest to the queried key.
   */
-case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
+final case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
-case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
-case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolResponse
+final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+final case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**
   * Utility functions for working with protocol buffers.
@@ -203,7 +203,7 @@ object ProtocolMessage {
       .withTcpPort(n.endpoint.tcpPort)
 
   def toPeerNode(n: Node): PeerNode =
-    PeerNode(NodeIdentifier(n.id.toByteArray),
+    new PeerNode(NodeIdentifier(n.id.toByteArray),
              Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
   def returnHeader(h: Header): ReturnHeader =
