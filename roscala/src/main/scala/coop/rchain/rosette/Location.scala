@@ -30,7 +30,7 @@ object Location {
   val LocTrgt = CtxtRegister(1)
 
   def fetch(loc: Location, globalEnv: TblObject): State[Ctxt, Option[Ob]] = {
-    def pure(optOb: Option[Ob]) = State.pure[Ctxt, Option[Ob]](optOb)
+    val pure = State.pure[Ctxt, Option[Ob]] _
 
     for {
       ctxt <- State.get[Ctxt]
@@ -58,8 +58,7 @@ object Location {
   }
 
   def store(loc: Location, value: Ob): State[Ctxt, StoreResult] = {
-    def pure(storeResult: StoreResult) =
-      State.pure[Ctxt, StoreResult](storeResult)
+    val pure = State.pure[Ctxt, StoreResult] _
 
     loc match {
       case CtxtRegister(reg) =>
@@ -76,25 +75,22 @@ object Location {
         } yield storeRes
 
       case ArgRegister(argReg) =>
-        for {
-          ctxt <- State.get[Ctxt]
-          storeRes <- if (argReg >= ctxt.argvec.elem.size)
-            pure(Failure)
+        State { ctxt: Ctxt =>
+          if (argReg >= ctxt.argvec.elem.size)
+            (ctxt, Failure)
           else
-            for {
-              _ <- State.modify[Ctxt](
-                _.update(_ >> 'argvec >> 'elem)(_.updated(argReg, value)))
-            } yield Success
-        } yield storeRes
+            (ctxt.update(_ >> 'argvec >> 'elem)(_.updated(argReg, value)),
+             Success)
+        }
 
       case LexVariable(indirect, level, offset) =>
-        for {
-          ctxt <- State.get[Ctxt]
-          (env, storeRes) = setLex(indirect, level, offset, value)
+        State { ctxt: Ctxt =>
+          val (env, storeRes) = setLex(indirect, level, offset, value)
             .run(ctxt.env)
             .value
-          _ <- State.modify[Ctxt](_.copy(env = env))
-        } yield storeRes
+
+          (ctxt.copy(env = env), storeRes)
+        }
 
       // TODO:
       case _ => pure(Failure)

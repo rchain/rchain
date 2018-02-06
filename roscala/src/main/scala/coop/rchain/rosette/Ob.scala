@@ -88,7 +88,7 @@ trait Ob extends Base with Cloneable {
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob = ???
+  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] = ???
 
   def setField(indirect: Boolean,
                level: Int,
@@ -250,6 +250,7 @@ object Ob {
         case None => (ob, Failure)
       }
     } catch {
+      // TODO: Add logging
       case _: IndexOutOfBoundsException => (ob, Failure)
     }
   }
