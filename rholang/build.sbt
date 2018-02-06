@@ -38,9 +38,6 @@ libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.3.0-M17"
 libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.4"
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.4" % "test"
 
-resolvers += "Artima Maven Repository" at "http://repo.artima.com/releases"
-addSbtPlugin("com.artima.supersafe" % "sbtplugin" % "1.1.3")
-
 // Kind projector
 resolvers += Resolver.sonatypeRepo("releases")
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
