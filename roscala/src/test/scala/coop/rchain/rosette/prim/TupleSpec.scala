@@ -30,8 +30,8 @@ class TupleSpec extends FlatSpec with Matchers {
   }
 
   it should "fail for non-tuple arguments" in {
-//    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-//    tplCons.fn(newCtxt) should be('left)
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplCons.fn(newCtxt) should be('left)
   }
 
 }
