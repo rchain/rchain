@@ -98,33 +98,6 @@ object Equivalences{
         (b1,b2) => bindEquivalent(env1, b1, env2, b2)
         )
 
-  def syntacticSubstitution(env: DeBruijn, proc: Proc, source: CPattern, target: CPattern): Proc = proc match {
-    case (_: PNil) => proc
-    case (p: PValue) => p.value_ match {
-      case (t: ETuple) =>
-        val substituted = t.listproc_.asScala.map (
-          proc => syntacticSubstitution(env,proc,source,target)
-        ).asJava
-        val listproc = new ListProc
-        listproc.addAll(substituted)
-        new PValue(new ETuple(listproc))
-      case _ => p
-    }
-    case (p: PDrop) => ???
-    case (p: PLift) => ???
-    case (p: PInput) => ???
-    case (p: PChoice) => ???
-    case (p: PMatch) => ???
-    case (p: PNew) => ???
-    case (p: PPrint) => ???
-    case (p: PConstr) => ???
-    case (p: PContr) => ???
-    case (p: PPar) => new PPar (
-      syntacticSubstitution(env, p.proc_1, source, target),
-      syntacticSubstitution(env, p.proc_2, source, target)
-    )
-  }
-
   def alphaEquivalent(p1: Proc, p2: Proc): Boolean = ???
 
   def structurallyEquivalent(p1: Proc, p2: Proc): Boolean =
