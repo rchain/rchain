@@ -478,14 +478,15 @@ object VirtualMachine {
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .set(_ >> 'loc)(LocationAtom(state.code.lit(op.lit)))
       .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+        val maybePrim = Prim.nthPrim(op.primNum)
 
         val (result, newState) =
-          // TODO: Remove get
-          if (op.unwind) { unwindAndApplyPrim(prim.get, state) } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
+              // TODO: Fix
+              (maybePrim.get.dispatchHelper(state.ctxt), state)
+            }
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
@@ -510,6 +511,9 @@ object VirtualMachine {
 
           case Left(DeadThread) =>
             newState.set(_ >> 'doNextThreadFlag)(true)
+
+          case Left(Absent) =>
+            newState.set(_ >> 'doNextThreadFlag)(true)
         }
       })
 
@@ -517,14 +521,16 @@ object VirtualMachine {
     state
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+        val maybePrim = Prim.nthPrim(op.primNum)
         val argno = op.arg
 
         val (result, newState) =
-          if (op.unwind) { unwindAndApplyPrim(prim.get, state) } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
+              // TODO: Fix
+              (maybePrim.get.dispatchHelper(state.ctxt), state)
+            }
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
@@ -549,14 +555,16 @@ object VirtualMachine {
     state
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+        val maybePrim = Prim.nthPrim(op.primNum)
         val regno = op.reg
 
         val (result, newState) =
-          if (op.unwind) { unwindAndApplyPrim(prim.get, state) } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
+              // TODO: Fix
+              (maybePrim.get.dispatchHelper(state.ctxt), state)
+            }
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
@@ -578,13 +586,15 @@ object VirtualMachine {
     state
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+        val maybePrim = Prim.nthPrim(op.primNum)
 
         val (result, newState) =
-          if (op.unwind) { unwindAndApplyPrim(prim.get, state) } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+          (maybePrim.map { prim =>
+            if (op.unwind) { unwindAndApplyPrim(prim, state) } else {
+              // TODO: Fix
+              (maybePrim.get.dispatchHelper(state.ctxt), state)
+            }
+          } orElse Some((Left(Absent), state))).get
 
         result match {
           case Right(ob) =>
