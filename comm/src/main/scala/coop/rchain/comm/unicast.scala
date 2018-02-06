@@ -29,7 +29,7 @@ case class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
   socket.setSoTimeout(500) // 500 ms
 
   val recv_buffer = new Array[Byte](65508)
-  val recv_dgram = new DatagramPacket(recv_buffer, recv_buffer.size)
+  val recv_dgram  = new DatagramPacket(recv_buffer, recv_buffer.size)
 
   /*
    * encode() and decode() make a naive framing protocol for dgrams,

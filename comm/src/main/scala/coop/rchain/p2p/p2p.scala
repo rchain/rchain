@@ -36,9 +36,9 @@ case object NetworkAddress {
       val addy =
         for {
           scheme <- uri.scheme
-          key <- uri.user
-          host <- uri.host
-          port <- uri.port
+          key    <- uri.user
+          host   <- uri.host
+          port   <- uri.port
         } yield NetworkAddress(scheme, key, host, port)
 
       addy match {

@@ -30,7 +30,7 @@ class UPnP(port: Int) {
   }
 
   def localAddress: Option[InetAddress] = gateway.map(_.getLocalAddress)
-  def externalAddress: Option[String] = gateway.map(_.getExternalIPAddress)
+  def externalAddress: Option[String]   = gateway.map(_.getExternalIPAddress)
 
   addPort(port)
 
