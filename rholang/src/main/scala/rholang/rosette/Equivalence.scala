@@ -23,7 +23,7 @@ object Equivalences{
           case pdrop1: PDrop => nameEquivalent(pdrop1.chan_, n2)
           case _ => q2.proc_ match {
             case pdrop2: PDrop => nameEquivalent(n1, pdrop2.chan_)
-            case _ => structurallyEquivalent(env1, q1.proc_, env2, q2.proc_)
+            case _ => structurallyEquivalent(q1.proc_, q2.proc_)
           }
         }
       case (q1: CVar, q2: CVar) => env1.equivalent(q1.var_, env2, q2.var_)
@@ -55,11 +55,20 @@ object Equivalences{
           allStructurallyEquivalent(env1, lift1.listproc_, env2, lift2.listproc_)
       }
       case (input1: PInput, input2: PInput) =>
-        if (allBindEquivalent (
-          env1, input1.listbind_, env2, input2.listbind_
-        )) {
-          structurallyEquivalent(env1, input1.proc_, env2, input2.proc_)
-        } else false
+        bindsEquivalent (
+          env1, input1.listbind_.asScala.toList,
+          env2, input2.listbind_.asScala.toList
+        ) match {
+          case None => false
+          case Some(substs) =>
+            val substs1 = substs.map(_._1)
+            val substs2 = substs.map(_._2)
+            val newEnv1 = DeBruijn.modifyEnv(substs1)(env1)
+            val newEnv2 = DeBruijn.modifyEnv(substs2)(env2)
+            val proc1 = input1.proc_
+            val proc2 = input2.proc_
+            structurallyEquivalent(newEnv1, proc1, newEnv2, proc2)
+        }
       case (_: PChoice, _: PChoice) => ???
       case (_: PMatch, _: PMatch) => ???
       case (_: PNew, _: PNew) => ???
@@ -82,34 +91,67 @@ object Equivalences{
     }
   }
 
-  def bindEquivalent(env1: DeBruijn, b1: Bind, env2: DeBruijn, b2: Bind): Boolean =
+  def bindEquivalent(env1: DeBruijn, b1: Bind, env2: DeBruijn, b2: Bind): Option[(CPattern,CPattern)] =
     (b1, b2) match {
       case (inpBind1: InputBind, inpBind2: InputBind) =>
-        nameEquivalent(env1, inpBind1.chan_, env2, inpBind2.chan_)
+        if (nameEquivalent(env1, inpBind1.chan_, env2, inpBind2.chan_)) {
+          Some((inpBind1.cpattern_, inpBind2.cpattern_))
+        } else None
       case (condInpBind1: CondInputBind, condInpBind2: CondInputBind) =>
-        nameEquivalent(env1, condInpBind1.chan_, env2, condInpBind2.chan_) &&
+        val check =
+          nameEquivalent(env1, condInpBind1.chan_, env2, condInpBind2.chan_) &&
           structurallyEquivalent(env1, condInpBind1.proc_, env2, condInpBind2.proc_)
-      case _ => false
+        if (check) {
+          Some((condInpBind1.cpattern_, condInpBind2.cpattern_))
+        } else None
+      case _ => None 
     }
 
-  def allBindEquivalent(env1: DeBruijn, bs1: ListBind, env2: DeBruijn, bs2: ListBind): Boolean =
-    bs1.size() == bs2.size() &&
-      (bs1.asScala.toList, bs2.asScala.toList).zipped.forall(
-        (b1,b2) => bindEquivalent(env1, b1, env2, b2)
-        )
+  def bindsEquivalent(env1: DeBruijn, b1: List[Bind], env2: DeBruijn, b2: List[Bind]): Option[List[(CPattern,CPattern)]] =
+    b1 match {
+      case Nil => b2 match {
+        case Nil => Some(Nil)
+        case _ => None
+      }
+      case head :: tail => b2.partition {
+        bind => !(bindEquivalent(env1,bind,env2,head).isEmpty)
+      } match {
+        case (Nil,_) => None
+        case (eqhd,eqtl) =>
+          val init = (false,List[(CPattern,CPattern)](),List[Bind](),eqhd.tail)
+          val bindfold = eqhd.foldLeft(init) {
+            (rejects, bnd) => rejects match {
+              case (false, substs, r, l) =>
+                bindsEquivalent(env1, r ++ l ++ eqtl, env2, tail) match {
+                  case Some(s) => (true, s ++ substs, r, l)
+                  case None => l match {
+                    case Nil => (false, substs, r ++ List(bnd), Nil)
+                    case x :: xs1 => (false, substs, r ++ List(bnd), xs1)
+                  }
+                }
+              case (true, s,r,l) => (true, s,r,l)
+            }
+          }
+          bindfold match {
+            case (false, _, _, _) => None
+            case (true, substs, _, _) => Some(substs)
+          }
+        }
+    }
 
   def alphaEquivalent(p1: Proc, p2: Proc): Boolean = ???
 
   def structurallyEquivalent(p1: Proc, p2: Proc): Boolean =
     structurallyEquivalent(DeBruijn(), p1, DeBruijn(), p2)
   
-  def allStructurallyEquivalent(env1: DeBruijn, ps1: ListProc, env2: DeBruijn, ps2: ListProc): Boolean =
+  def allStructurallyEquivalent(env1: DeBruijn, ps1: ListProc, env2: DeBruijn, ps2: ListProc): Boolean = {
     ps1.size() == ps2.size() &&
       (ps1.asScala.toList, ps2.asScala.toList).zipped.forall(
         (proc1,proc2) => structurallyEquivalent(env1, proc1, env2, proc2)
         )
+  }
 
-  def cpatternEquivalent(env1: DeBruijn, cp1: CPattern, env2: DeBruijn, cp2: CPattern): Option[(DeBruijn, DeBruijn)] =
+  def cpatternEquivalent(env1: DeBruijn, cp1: CPattern, env2: DeBruijn, cp2: CPattern): Option[(DeBruijn, DeBruijn)] = {
     (cp1, cp2) match {
       case (cpvar1: CPtVar, cpvar2: CPtVar) =>
         (cpvar1.varpattern_, cpvar2.varpattern_) match {
@@ -123,8 +165,9 @@ object Equivalences{
       case (cpq1: CPtQuote, cpq2: CPtQuote) => ???
       case _ => None
     }
+  }
 
-  def allCPatternEquivalent(env1: DeBruijn, cps1: ListCPattern, env2: DeBruijn, cps2: ListCPattern): Option[(DeBruijn, DeBruijn)] =
+  def allCPatternEquivalent(env1: DeBruijn, cps1: ListCPattern, env2: DeBruijn, cps2: ListCPattern): Option[(DeBruijn, DeBruijn)] = {
     if (cps1.size() != cps2.size()) {
       None
     } else {
@@ -133,6 +176,7 @@ object Equivalences{
         cpatternEquivalent(envs._1, cps._1, envs._2, cps._2)
       Foldable[List].foldLeftM(list, (env1,env2)) (step _)
     }
+  }
   
   def valueEquivalent(env1: DeBruijn, v1: Value, env2: DeBruijn, v2: Value): Boolean =
     (v1,v2) match {
@@ -216,4 +260,16 @@ object DeBruijn{
     Some((db.environment, db.next))
   }
   
+  def modifyEnv: List[CPattern] => DeBruijn => DeBruijn =
+    substitutions => env => {
+      val newVars = substitutions.map {
+        case (_: CPtQuote) => ???
+        case (cptvar: CPtVar) => cptvar.varpattern_ match {
+          case (varptvar: VarPtVar) => varptvar.var_
+          case (_: VarPtWild) => ???
+        }
+        case (_: CValPtrn) => ???
+      }
+      env.newBindings(newVars)
+    }
 }
