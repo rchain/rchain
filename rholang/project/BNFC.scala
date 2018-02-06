@@ -46,7 +46,7 @@ object BNFC {
   lazy val bnfcSettings = inConfig(BNFCConfig)(Defaults.configSettings ++ Seq(
     javaSource     := (javaSource in Compile).value,
     scalaSource    := (javaSource in Compile).value,
-    bnfcNamespace  := "coop.rchain.syntax",
+    bnfcNamespace  := "coop.rchain.rholang.syntax",
     bnfcGrammarDir := baseDirectory.value / "src" / "main" / "bnfc",
     bnfcOutputDir  := (javaSource in Compile).value,
     bnfcDocDir     := baseDirectory.value / "doc" / "bnfc",
