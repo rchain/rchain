@@ -23,7 +23,7 @@ object Equivalences{
           case pdrop1: PDrop => nameEquivalent(pdrop1.chan_, n2)
           case _ => q2.proc_ match {
             case pdrop2: PDrop => nameEquivalent(n1, pdrop2.chan_)
-            case _ => structurallyEquivalent(q1.proc_, q2.proc_)
+            case _ => structurallyEquivalent(env1,q1.proc_,env2,q2.proc_)
           }
         }
       case (q1: CVar, q2: CVar) => env1.equivalent(q1.var_, env2, q2.var_)
