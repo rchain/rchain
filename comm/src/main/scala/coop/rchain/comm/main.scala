@@ -90,7 +90,7 @@ object Main {
     }
 
     val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
-      case Right(node)           => node
+      case Right(node)               => node
       case Left(p2p.ParseError(msg)) => throw new Exception(msg)
     }
 
