@@ -34,6 +34,10 @@ lazy val root = (project in file("."))
 // Scalaz
 libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.3.0-M17"
 
+// Scala Test
+libraryDependencies += "org.scalactic" %% "scalactic" % "3.0.4"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.4" % "test"
+
 // Kind projector
 resolvers += Resolver.sonatypeRepo("releases")
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
