@@ -22,7 +22,9 @@ class TupleSpec extends FlatSpec with Matchers {
     monitor = null
   )
 
-  // tuple-cons
+  /**
+   * tuple-cons
+   */
   "tplCons" should "correctly cons an Ob with a Tuple" in {
     val tup = Seq(RFixnum(2), RFixnum(3), RFixnum(4))
     val newCtxt =
@@ -35,7 +37,9 @@ class TupleSpec extends FlatSpec with Matchers {
     tplCons.fn(newCtxt) should be('left)
   }
 
-  // tuple-cons*
+  /**
+   * tuple-cons*
+   */
   "tplConsStar" should "correctly cons n Obs with a Tuple" in {
     val tup = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
 
@@ -65,7 +69,9 @@ class TupleSpec extends FlatSpec with Matchers {
     tplCons.fn(newCtxt) should be('left)
   }
 
-  // tuple-rcons
+  /**
+   * tuple-rcons
+   */
   "tplRcons" should "correctly rcons an Ob with a Tuple" in {
     val tup = Seq(RFixnum(1), RFixnum(2), RFixnum(3))
     val newCtxt =
