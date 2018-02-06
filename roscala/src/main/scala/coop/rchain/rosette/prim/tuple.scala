@@ -49,7 +49,6 @@ object tuple {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    //@checkTypeMismatch[Tuple]    arg1 can be any Ob
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
