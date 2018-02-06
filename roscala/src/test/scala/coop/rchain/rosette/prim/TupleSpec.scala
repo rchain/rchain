@@ -51,8 +51,17 @@ class TupleSpec extends FlatSpec with Matchers {
                  Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(tup))))))
   }
 
+  "tplConsStar" should "correctly cons 0 Obs with a Tuple" in {
+    val tup = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+
+    tplConsStar.fn(newCtxt) should be(Right(Tuple(tup)))
+  }
+
   it should "fail for non-tuple arguments" in {
-    val newCtxt = ctxt.copy(nargs = 4, argvec = Tuple(5, Ob.NIV))
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     tplCons.fn(newCtxt) should be('left)
   }
 

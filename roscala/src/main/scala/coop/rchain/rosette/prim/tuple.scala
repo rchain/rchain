@@ -26,7 +26,7 @@ object tuple {
   // e.g. (tuple-cons* 1 2 3 4 [5 6]) ==> [1 2 3 4 5 6]
   object tplConsStar extends Prim {
     override val name: String = "tuple-cons*"
-    override val minArgs: Int = 2
+    override val minArgs: Int = 1
     override val maxArgs: Int = MaxArgs
 
     @checkArgumentMismatch
