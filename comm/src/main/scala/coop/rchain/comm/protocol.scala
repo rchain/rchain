@@ -174,7 +174,7 @@ case class DisconnectMessage(proto: Protocol, timestamp: Long) extends ProtocolM
   */
 case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
-case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+case class UpstreamMessage(proto: Protocol, timestamp: Long)  extends ProtocolMessage
 case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**

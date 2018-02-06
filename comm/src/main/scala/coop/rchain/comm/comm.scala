@@ -30,7 +30,7 @@ case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
   */
 case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
-  def key = id.key
+  def key  = id.key
   val sKey = key.map(_.toChar).mkString
 
   override def toString =
