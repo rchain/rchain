@@ -55,19 +55,17 @@ object Equivalences{
           allStructurallyEquivalent(env1, lift1.listproc_, env2, lift2.listproc_)
       }
       case (input1: PInput, input2: PInput) =>
-        bindsEquivalent (
+        allBindsEquivalent (
           env1, input1.listbind_.asScala.toList,
           env2, input2.listbind_.asScala.toList
         ) match {
           case None => false
-          case Some(substs) =>
-            val substs1 = substs.map(_._1)
-            val substs2 = substs.map(_._2)
-            val newEnv1 = DeBruijn.modifyEnv(substs1)(env1)
-            val newEnv2 = DeBruijn.modifyEnv(substs2)(env2)
-            val proc1 = input1.proc_
-            val proc2 = input2.proc_
-            structurallyEquivalent(newEnv1, proc1, newEnv2, proc2)
+          case Some((names1,names2)) =>
+            allCPatternEquivalent(env1,names1,env2,names2) match {
+              case None => false
+              case Some((newEnv1,newEnv2)) =>
+                structurallyEquivalent(newEnv1, input1.proc_, newEnv2, input2.proc_)
+            }
         }
       case (_: PChoice, _: PChoice) => ???
       case (_: PMatch, _: PMatch) => ???
@@ -79,12 +77,15 @@ object Equivalences{
           allStructurallyEquivalent(env1, constr1.listproc_, env2, constr2.listproc_)
       }
       case (contr1: PContr, contr2: PContr) => {
-        allCPatternEquivalent(env1, contr1.listcpattern_, env2, contr2.listcpattern_) match {
-          case None => false
-          case Some((newenv1,newenv2)) =>
-            env1.equivalent(contr1.var_, env2, contr2.var_) &&
-              structurallyEquivalent(newenv1, contr1.proc_, newenv2, contr2.proc_)
-        }
+        allCPatternEquivalent(
+          env1, contr1.listcpattern_.asScala.toList,
+          env2, contr2.listcpattern_.asScala.toList
+          ) match {
+            case None => false
+            case Some((newenv1,newenv2)) =>
+              env1.equivalent(contr1.var_, env2, contr2.var_) &&
+                structurallyEquivalent(newenv1, contr1.proc_, newenv2, contr2.proc_)
+          }
       }
       case (p1: PPar, p2: PPar) => parEquiv(parLeaves(p1),parLeaves(p2))
       case _ => false
@@ -107,10 +108,10 @@ object Equivalences{
       case _ => None 
     }
 
-  def bindsEquivalent(env1: DeBruijn, b1: List[Bind], env2: DeBruijn, b2: List[Bind]): Option[List[(CPattern,CPattern)]] =
+  def allBindsEquivalent(env1: DeBruijn, b1: List[Bind], env2: DeBruijn, b2: List[Bind]): Option[(List[CPattern],List[CPattern])] =
     b1 match {
       case Nil => b2 match {
-        case Nil => Some(Nil)
+        case Nil => Some((Nil,Nil))
         case _ => None
       }
       case head :: tail => b2.partition {
@@ -118,23 +119,42 @@ object Equivalences{
       } match {
         case (Nil,_) => None
         case (eqhd,eqtl) =>
-          val init = (false,List[(CPattern,CPattern)](),List[Bind](),eqhd.tail)
+          val init = (
+            false,
+            List[CPattern](),
+            List[CPattern](),
+            List[Bind](),
+            eqhd.tail
+          )
           val bindfold = eqhd.foldLeft(init) {
             (rejects, bnd) => rejects match {
-              case (false, substs, r, l) =>
-                bindsEquivalent(env1, r ++ l ++ eqtl, env2, tail) match {
-                  case Some(s) => (true, s ++ substs, r, l)
+              case (false, names1, names2, r, l) =>
+                allBindsEquivalent(env1, r ++ l ++ eqtl, env2, tail) match {
+                  case Some((name1,name2)) => (
+                    true,
+                    name1 ++ names1,
+                    name2 ++ names2,
+                    r, l
+                  )
                   case None => l match {
-                    case Nil => (false, substs, r ++ List(bnd), Nil)
-                    case x :: xs1 => (false, substs, r ++ List(bnd), xs1)
+                    case Nil => (
+                      false, names1, names2,
+                      r ++ List(bnd),
+                      Nil
+                    )
+                    case x :: xs1 => (
+                      false, names1, names2,
+                      r ++ List(bnd),
+                      xs1
+                    )
                   }
                 }
-              case (true, s,r,l) => (true, s,r,l)
+              case tuple => tuple
             }
           }
           bindfold match {
-            case (false, _, _, _) => None
-            case (true, substs, _, _) => Some(substs)
+            case (false,_,_,_,_) => None
+            case (true,names1,names2,_,_) => Some((names1,names2))
           }
         }
     }
@@ -167,11 +187,9 @@ object Equivalences{
     }
   }
 
-  def allCPatternEquivalent(env1: DeBruijn, cps1: ListCPattern, env2: DeBruijn, cps2: ListCPattern): Option[(DeBruijn, DeBruijn)] = {
-    if (cps1.size() != cps2.size()) {
-      None
-    } else {
-      val list = cps1.asScala.toList.zip(cps2.asScala.toList)
+  def allCPatternEquivalent(env1: DeBruijn, cps1: List[CPattern], env2: DeBruijn, cps2: List[CPattern]): Option[(DeBruijn, DeBruijn)] = {
+    if (cps1.size != cps2.size) None else {
+      val list = cps1.zip(cps2)
       def step(envs: (DeBruijn,DeBruijn), cps: (CPattern,CPattern)): Option[(DeBruijn,DeBruijn)] =
         cpatternEquivalent(envs._1, cps._1, envs._2, cps._2)
       Foldable[List].foldLeftM(list, (env1,env2)) (step _)
@@ -259,17 +277,4 @@ object DeBruijn{
   def unapply(db: DeBruijn): Option[(Map[String,Int],Int)] = {
     Some((db.environment, db.next))
   }
-  
-  def modifyEnv: List[CPattern] => DeBruijn => DeBruijn =
-    substitutions => env => {
-      val newVars = substitutions.map {
-        case (_: CPtQuote) => ???
-        case (cptvar: CPtVar) => cptvar.varpattern_ match {
-          case (varptvar: VarPtVar) => varptvar.var_
-          case (_: VarPtWild) => ???
-        }
-        case (_: CValPtrn) => ???
-      }
-      env.newBindings(newVars)
-    }
 }
