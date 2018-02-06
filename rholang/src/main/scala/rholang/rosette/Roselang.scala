@@ -10,8 +10,8 @@ package coop.rchain.rho2rose
 
 import coop.rchain.lib.term._
 import coop.rchain.rho2rose.StrTermCtorAbbrevs.StrTermCtxt
-import coop.rchain.syntax.rholang._
-import coop.rchain.syntax.rholang.Absyn._
+import coop.rchain.rholang.syntax.rholang._
+import coop.rchain.rholang.syntax.rholang.Absyn._
 
 import scala.language.implicitConversions
 import scala.language.postfixOps
