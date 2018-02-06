@@ -2,6 +2,11 @@ scalaVersion := "2.12.4"
 organization := "rchain"
 version      := "0.1"
 
+coverageExcludedFiles := Seq(
+  (javaSource in Compile).value,
+  (sourceManaged in Compile).value
+).map(_.getPath ++ "/.*").mkString(";")
+
 PB.targets in Compile := Seq(
   PB.gens.java -> (sourceManaged in Compile).value,
   scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
@@ -54,6 +59,7 @@ lazy val commonOptions = Seq(
   "-feature",
   "-unchecked"
 )
+
 
 scalacOptions ++= commonOptions
 
