@@ -10,14 +10,14 @@ case class Par(
   // selects: List[Select],
   evals: List[Eval],
   news: List[New],
-  expr: List[Expr]
+  exprs: List[Expr]
   // matches: List[Match]
 ) {
   // TODO: write helper methods to append an X and return a new par
   def this() =
     this(List(), List(), List(), List(), List())
   def singleEval(): Option[Eval] = {
-    if (sends.isEmpty && receives.isEmpty && news.isEmpty && expr.isEmpty) {
+    if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
       evals match {
         case List(single) => Some(single)
         case _ => None
@@ -31,7 +31,7 @@ case class Par(
       that.receives ++ receives,
       that.evals ++ evals,
       that.news ++ news,
-      that.expr ++ expr)
+      that.exprs ++ exprs)
 }
 
 object Par {
