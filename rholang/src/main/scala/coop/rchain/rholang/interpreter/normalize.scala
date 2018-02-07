@@ -27,41 +27,43 @@ object GroundNormalizeMatcher {
   }
 }
 
-trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInputs] {
-  override def visit(n: NameWildcard, input: NameVisitInputs): NameVisitOutputs = {
-    NameVisitOutputs(ChanVar(WildCard()), input.knownFree.setWildcardUsed())
-  }
-  override def visit(n: NameVar, input: NameVisitInputs): NameVisitOutputs = {
-    input.env.get(n.var_) match {
-      case Some((level, NameSort)) => {
-        NameVisitOutputs(
-          ChanVar(BoundVar(level)),
-          input.knownFree)
-      }
-      case Some((level, ProcSort)) => {
-        throw new Error("Proc variable used in process context.")
-      }
-      case None => {
-        input.knownFree.get(n.var_) match {
-          case None =>
-            val newBindingsPair = 
-              input.knownFree.newBindings(List((n.var_, NameSort)))
+object NameNormalizeMatcher {
+  def normalizeMatch(n: Name, input: NameVisitInputs): NameVisitOutputs = {
+    n match {
+      case n: NameWildcard =>
+        NameVisitOutputs(ChanVar(WildCard()), input.knownFree.setWildcardUsed())
+      case n: NameVar =>
+        input.env.get(n.var_) match {
+          case Some((level, NameSort)) => {
             NameVisitOutputs(
-              ChanVar(FreeVar(newBindingsPair._2(0))),
-              newBindingsPair._1)
-          case _ => throw new Error(
-            "Free variable used as binder may not be used twice.")
+              ChanVar(BoundVar(level)),
+              input.knownFree)
+          }
+          case Some((level, ProcSort)) => {
+            throw new Error("Proc variable used in process context.")
+          }
+          case None => {
+            input.knownFree.get(n.var_) match {
+              case None =>
+                val newBindingsPair = 
+                  input.knownFree.newBindings(List((n.var_, NameSort)))
+                NameVisitOutputs(
+                  ChanVar(FreeVar(newBindingsPair._2(0))),
+                  newBindingsPair._1)
+              case _ => throw new Error(
+                "Free variable used as binder may not be used twice.")
+            }
+          }
         }
+
+      case n: NameQuote => {
+        val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
+            n.proc_,
+            ProcVisitInputs(Par(), input.env, input.knownFree))
+        NameVisitOutputs(Quote(procVisitResult.par),
+          procVisitResult.knownFree)
       }
     }
-  }
-
-  override def visit(n: NameQuote, input: NameVisitInputs): NameVisitOutputs = {
-    val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
-        n.proc_,
-        ProcVisitInputs(Par(), input.env, input.knownFree))
-    NameVisitOutputs(Quote(procVisitResult.par),
-      procVisitResult.knownFree)
   }
 }
 
