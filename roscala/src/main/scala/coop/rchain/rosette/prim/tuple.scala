@@ -63,6 +63,31 @@ object tuple {
     }
   }
 
+  /**
+    * Define the tuple-concat primitive.
+    * This concatenates n Tuples
+    * e.g. (tuple-concat [1 2 3] [4] [5 6]) ==> [1 2 3 4 5 6]
+    */
+  object tplConcat extends Prim {
+    override val name: String = "tuple-concat"
+    override val minArgs: Int = 0
+    override val maxArgs: Int = MaxArgs
+
+    @checkTypeMismatch[Tuple] // All args must be Tuples
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem = ctxt.argvec.elem
+      val n = ctxt.nargs
+      var ret = Tuple(Seq.empty)
+
+      for (el <- elem) {
+        ret = Tuple(ret, el.asInstanceOf[Tuple])
+      }
+
+      Right(ret)
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the specified parameter for type Tuple. Return a PrimError if it is
