@@ -102,6 +102,15 @@ object ProcNormalizeMatcher {
 
       case p: PNil => ProcVisitOutputs(input.par, input.knownFree)
 
+      case p: PEval => {
+        val nameMatchResult = NameNormalizeMatcher.normalizeMatch(
+          p.name_,
+          NameVisitInputs(input.env, input.knownFree))
+        ProcVisitOutputs(
+          input.par.copy(evals = Eval(nameMatchResult.chan) :: input.par.evals),
+          nameMatchResult.knownFree)
+      }
+
       case p: PPar => {
         val result = normalizeMatch(p.proc_1, input)
         val chainedInput = input.copy(

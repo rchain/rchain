@@ -83,6 +83,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PEval" should "Handle a bound name varible" in {
+    val pEval = new PEval(new NameVar("x"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
+    result.par should be (inputs.par.copy(evals = List(Eval(ChanVar(BoundVar(0))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(
         new PGround(
