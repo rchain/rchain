@@ -8,7 +8,7 @@ import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Dbi, Env, Txn}
 
-class Storage private (env: Env[ByteBuffer], db: Dbi[ByteBuffer])
+class Storage private (env: Env[ByteBuffer], dbs: Map[String, Dbi[ByteBuffer]], rootName: String)
     extends IStorage
     with AutoCloseable {
 
@@ -20,7 +20,7 @@ class Storage private (env: Env[ByteBuffer], db: Dbi[ByteBuffer])
         val valBuff = ByteBuffer.allocateDirect(encoded.length)
         ignore { keyBuff.put(key.bytes).flip() }
         ignore { valBuff.put(encoded).flip() }
-        db.put(keyBuff, valBuff)
+        Storage.getDbi(dbs, rootName, key).put(keyBuff, valBuff)
       }
       .leftMap(StorageError.apply)
 
@@ -30,7 +30,7 @@ class Storage private (env: Env[ByteBuffer], db: Dbi[ByteBuffer])
         val keyBuff = ByteBuffer.allocateDirect(env.getMaxKeySize)
         ignore { keyBuff.put(key.bytes).flip() }
         withResource(env.txnRead()) { (txn: Txn[ByteBuffer]) =>
-          if (db.get(txn, keyBuff) != null) {
+          if (Storage.getDbi(dbs, rootName, key).get(txn, keyBuff) != null) {
             val fetchedBuff = txn.`val`()
             val fetched     = new Array[Byte](fetchedBuff.remaining())
             ignore { fetchedBuff.get(fetched) }
@@ -48,17 +48,48 @@ class Storage private (env: Env[ByteBuffer], db: Dbi[ByteBuffer])
       .catchNonFatal {
         val keyBuff = ByteBuffer.allocateDirect(env.getMaxKeySize)
         ignore { keyBuff.put(key.bytes).flip() }
-        db.delete(keyBuff)
+        Storage.getDbi(dbs, rootName, key).delete(keyBuff)
       }
       .leftMap(StorageError.apply)
 
   def close(): Unit = {
-    db.close()
+    dbs.foreach {
+      case (_: String, value: Dbi[ByteBuffer]) => value.close()
+    }
     env.close()
   }
 }
 
 object Storage {
+
+  private def createBlocksName(rootName: String): String =
+    s"$rootName-blocks"
+
+  private def createContractsName(rootName: String): String =
+    s"$rootName-contracts"
+
+  private def createSystemContractsName(rootName: String): String =
+    s"$rootName-systemContracts"
+
+  protected def createDbis[A](env: Env[A], rootName: String): Map[String, Dbi[A]] = {
+    val blocks          = createBlocksName(rootName)
+    val contracts       = createContractsName(rootName)
+    val systemContracts = createSystemContractsName(rootName)
+    Map(
+      blocks          -> env.openDbi(blocks, MDB_CREATE),
+      contracts       -> env.openDbi(contracts, MDB_CREATE),
+      systemContracts -> env.openDbi(systemContracts, MDB_CREATE)
+    )
+  }
+
+  protected def getDbi(dbs: Map[String, Dbi[ByteBuffer]],
+                       rootName: String,
+                       key: Key): Dbi[ByteBuffer] =
+    key match {
+      case Hash(_)    => dbs(createBlocksName(rootName))
+      case Flat(_)    => dbs(createContractsName(rootName))
+      case FlatSys(_) => dbs(createSystemContractsName(rootName))
+    }
 
   /**
     * Creates an instance of [[Storage]]
@@ -68,9 +99,8 @@ object Storage {
     * @param mapSize Maximum size of the database, in bytes
     */
   def create(path: Path, name: String, mapSize: Long): Storage = {
-    val env: Env[ByteBuffer] =
-      Env.create().setMapSize(mapSize).setMaxDbs(1).open(path.toFile)
-    val db: Dbi[ByteBuffer] = env.openDbi(name, MDB_CREATE)
-    new Storage(env, db)
+    val env: Env[ByteBuffer]              = Env.create().setMapSize(mapSize).setMaxDbs(3).open(path.toFile)
+    val dbs: Map[String, Dbi[ByteBuffer]] = createDbis(env, name)
+    new Storage(env, dbs, name)
   }
 }
