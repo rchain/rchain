@@ -561,7 +561,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       *
       * litvec:
       *   0:   100
-      *   1:   {Loc arg[2]}
+      *   1:   {Loc arg[1]}
       * codevec:
       *   0:   liti 0,rslt
       *   1:   rtn/nxt
