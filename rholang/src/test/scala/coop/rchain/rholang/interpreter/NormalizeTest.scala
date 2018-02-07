@@ -36,8 +36,7 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
   }
 }
 
-class NilVisitSpec extends FlatSpec with Matchers {
-  val visitor = new ProcNormalizeVisitor() {}
+class ProcMatcherSpec extends FlatSpec with Matchers {
   val inputs = ProcVisitInputs(
       Par(),
       DebruijnLevelMap[VarSort](),
@@ -46,30 +45,22 @@ class NilVisitSpec extends FlatSpec with Matchers {
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
 
-    val result = nil.accept(visitor, inputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(nil, inputs)
     result.par should be (inputs.par)
     result.knownFree should be (inputs.knownFree)
   }
-}
 
-class ProcVarVisitSpec extends FlatSpec with Matchers {
-  val visitor = new ProcNormalizeVisitor() {}
-  val inputs = ProcVisitInputs(
-      Par(),
-      DebruijnLevelMap[VarSort](),
-      DebruijnLevelMap[VarSort]())
   val pvar = new PVar("x")
-
   "PVar" should "Compile as BoundVar if it's in env" in {
     val boundinputs = inputs.copy(env =
       inputs.env.newBindings(List(("x", ProcSort)))._1)
   
-    val result = pvar.accept(visitor, boundinputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(pvar, boundinputs)
     result.par should be (inputs.par.copy(expr = List(EVar(BoundVar(0)))))
     result.knownFree should be (inputs.knownFree)
   }
   "PVar" should "Compile as FreeVar if it's not in env" in {
-    val result = pvar.accept(visitor, inputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(pvar, inputs)
     result.par should be (inputs.par.copy(expr = List(EVar(FreeVar(0)))))
     result.knownFree shouldEqual
         (inputs.knownFree.newBindings(
@@ -80,7 +71,7 @@ class ProcVarVisitSpec extends FlatSpec with Matchers {
       inputs.env.newBindings(List(("x", NameSort)))._1)
     
     an [Error] should be thrownBy {
-      pvar.accept(visitor, boundinputs)
+      ProcNormalizeMatcher.normalizeMatch(pvar, boundinputs)
     }
   }
   "PVar" should "Not compile if it's used free somewhere else" in {
@@ -88,17 +79,9 @@ class ProcVarVisitSpec extends FlatSpec with Matchers {
       inputs.knownFree.newBindings(List(("x", ProcSort)))._1)
     
     an [Error] should be thrownBy {
-      pvar.accept(visitor, boundinputs)
+      ProcNormalizeMatcher.normalizeMatch(pvar, boundinputs)
     }
   }
-}
-
-class ParVisitSpec extends FlatSpec with Matchers {
-  val visitor = new ProcNormalizeVisitor() {}
-  val inputs = ProcVisitInputs(
-      Par(),
-      DebruijnLevelMap[VarSort](),
-      DebruijnLevelMap[VarSort]())
 
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(
@@ -106,7 +89,7 @@ class ParVisitSpec extends FlatSpec with Matchers {
             new GroundInt(7)),
         new PGround(
             new GroundInt(8)))
-    val result = parGround.accept(visitor, inputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(parGround, inputs)
     result.par should be (
         inputs.par.copy(expr =
             List(GInt(8), GInt(7))))
@@ -119,7 +102,7 @@ class ParVisitSpec extends FlatSpec with Matchers {
     val boundinputs = inputs.copy(env =
       inputs.env.newBindings(List(("x", ProcSort)))._1)
 
-    val result = parDoubleBound.accept(visitor, boundinputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(parDoubleBound, boundinputs)
     result.par should be (
         inputs.par.copy(expr =
             List(EVar(BoundVar(0)), EVar(BoundVar(0)))))
@@ -130,16 +113,13 @@ class ParVisitSpec extends FlatSpec with Matchers {
         new PVar("x"),
         new PVar("x"))
     an [Error] should be thrownBy {
-      parDoubleFree.accept(visitor, inputs)
+      ProcNormalizeMatcher.normalizeMatch(parDoubleFree, inputs)
     }
   }
 }
 
 class NameWildcardVisitSpec extends FlatSpec with Matchers {
-  val procVisitor = new ProcNormalizeVisitor() {}
-  val nameVisitor = new NameNormalizeVisitor() {
-    val procVisitor = NameWildcardVisitSpec.this.procVisitor
-  }
+  val nameVisitor = new NameNormalizeVisitor() {}
   val inputs = NameVisitInputs(
       DebruijnLevelMap[VarSort](),
       DebruijnLevelMap[VarSort]())
@@ -154,10 +134,7 @@ class NameWildcardVisitSpec extends FlatSpec with Matchers {
 }
 
 class NameVarVisitSpec extends FlatSpec with Matchers {
-  val procVisitor = new ProcNormalizeVisitor() {}
-  val nameVisitor = new NameNormalizeVisitor() {
-    val procVisitor = NameVarVisitSpec.this.procVisitor
-  }
+  val nameVisitor = new NameNormalizeVisitor() {}
   val inputs = NameVisitInputs(
       DebruijnLevelMap[VarSort](),
       DebruijnLevelMap[VarSort]())
@@ -197,10 +174,7 @@ class NameVarVisitSpec extends FlatSpec with Matchers {
 }
 
 class NameQuoteVisitSpec extends FlatSpec with Matchers {
-  val procVisitor = new ProcNormalizeVisitor() {}
-  val nameVisitor = new NameNormalizeVisitor() {
-    val procVisitor = NameQuoteVisitSpec.this.procVisitor
-  }
+  val nameVisitor = new NameNormalizeVisitor() {}
   val inputs = NameVisitInputs(
       DebruijnLevelMap[VarSort](),
       DebruijnLevelMap[VarSort]())

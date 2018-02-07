@@ -17,7 +17,7 @@ object BoolNormalizeMatcher {
 }
 
 object GroundNormalizeMatcher {
-  def normalizeMatch (g: AbsynGround): Ground = {
+  def normalizeMatch(g: AbsynGround): Ground = {
     g match {
       case gb: GroundBool => BoolNormalizeMatcher.normalizeMatch(gb.bool_)
       case gi: GroundInt => GInt(gi.integer_)
@@ -28,8 +28,6 @@ object GroundNormalizeMatcher {
 }
 
 trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInputs] {
-  val procVisitor: Proc.Visitor[ProcVisitOutputs, ProcVisitInputs]
-
   override def visit(n: NameWildcard, input: NameVisitInputs): NameVisitOutputs = {
     NameVisitOutputs(ChanVar(WildCard()), input.knownFree.setWildcardUsed())
   }
@@ -59,91 +57,60 @@ trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInput
   }
 
   override def visit(n: NameQuote, input: NameVisitInputs): NameVisitOutputs = {
-    val procVisitResult: ProcVisitOutputs = n.proc_.accept(
-        procVisitor,
+    val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
+        n.proc_,
         ProcVisitInputs(Par(), input.env, input.knownFree))
     NameVisitOutputs(Quote(procVisitResult.par),
       procVisitResult.knownFree)
   }
 }
 
-trait ProcNormalizeVisitor
-    extends Proc.Visitor[ProcVisitOutputs, ProcVisitInputs] {
-
-  override def visit(p: PGround, input: ProcVisitInputs): ProcVisitOutputs = {
-    ProcVisitOutputs(
-      input.par.copy(expr = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.expr),
-      input.knownFree)
-  }
-
-  override def visit(p: PVar, input: ProcVisitInputs): ProcVisitOutputs = {
-    input.env.get(p.var_) match {
-      case Some((level, ProcSort)) => {
-        ProcVisitOutputs(
-          input.par.copy(expr = EVar(BoundVar(level))
-                         :: input.par.expr),
+object ProcNormalizeMatcher {
+  def normalizeMatch(p: Proc, input: ProcVisitInputs): ProcVisitOutputs = {
+    p match {
+      case p: PGround => ProcVisitOutputs(
+          input.par.copy(expr = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.expr),
           input.knownFree)
-      }
-      case Some((level, NameSort)) => {
-        throw new Error("Name variable used in process context.")
-      }
-      case None => {
-        input.knownFree.get(p.var_) match {
-          case None =>
-            val newBindingsPair = 
-              input.knownFree.newBindings(List((p.var_, ProcSort)))
-            ProcVisitOutputs(
-              input.par.copy(expr = EVar(FreeVar(newBindingsPair._2(0)))
-                             :: input.par.expr),
-              newBindingsPair._1)
-          case _ => throw new Error(
-            "Free variable used as binder may not be used twice.")
+
+      case p: PVar => input.env.get(p.var_) match {
+        case Some((level, ProcSort)) => {
+          ProcVisitOutputs(
+            input.par.copy(expr = EVar(BoundVar(level))
+                           :: input.par.expr),
+            input.knownFree)
+        }
+        case Some((level, NameSort)) => {
+          throw new Error("Name variable used in process context.")
+        }
+        case None => {
+          input.knownFree.get(p.var_) match {
+            case None =>
+              val newBindingsPair = 
+                input.knownFree.newBindings(List((p.var_, ProcSort)))
+              ProcVisitOutputs(
+                input.par.copy(expr = EVar(FreeVar(newBindingsPair._2(0)))
+                               :: input.par.expr),
+                newBindingsPair._1)
+            case _ => throw new Error(
+              "Free variable used as binder may not be used twice.")
+          }
         }
       }
+
+      case p: PNil => ProcVisitOutputs(input.par, input.knownFree)
+
+      case p: PPar => {
+        val result = normalizeMatch(p.proc_1, input)
+        val chainedInput = input.copy(
+          knownFree = result.knownFree,
+          par = result.par)
+        normalizeMatch(p.proc_2, chainedInput)
+      }
+
+      case _ => throw new Error("Compilation of construct not yet supported.")
     }
   }
-
-  override def visit(p: PNil, input: ProcVisitInputs): ProcVisitOutputs = {
-    ProcVisitOutputs(input.par, input.knownFree)
-  }
-
-  override def visit(p: PPar, input: ProcVisitInputs): ProcVisitOutputs = {
-    // Binders are numbered in lexicographical order.
-    val result = p.proc_1.accept(this, input)
-    val chainedInput = input.copy(
-      knownFree = result.knownFree,
-      par = result.par)
-    p.proc_2.accept(this, chainedInput)
-  }
-    
-  override def visit(p: PCollect, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PEval, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PMethod, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PNot, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PNeg, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PMult, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PDiv, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PAdd, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PMinus, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PLt, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PLte, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PGt, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PGte, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PEq, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PMatches, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PNeq, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PAnd, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: POr, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PSend, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PContr, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PInput, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PChoice, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PMatch, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PIf, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PIfElse, input: ProcVisitInputs): ProcVisitOutputs = ???
-  override def visit(p: PNew, input: ProcVisitInputs): ProcVisitOutputs = ???
 }
-
 
 // Parameterized over T, the kind of typing discipline we are enforcing.
 class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wildcardUsed: Boolean) {
