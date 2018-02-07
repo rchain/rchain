@@ -794,12 +794,19 @@ object VirtualMachine {
       _ <- State.modify[VMState](_.copy(loc = location))
       rslt <- State.inspect[VMState, Ob](_.ctxt.rslt)
       ctxt0 <- State.inspect[VMState, Ctxt](_.ctxt)
-      (ctxt1, storeRes) = Location.store(location, rslt).run(ctxt0).value
-      _ <- storeRes match {
-        case Success => State.modify[VMState](_.copy(ctxt = ctxt1))
-        case Failure =>
-          State.modify[VMState](_.copy(ctxt = ctxt1, vmErrorFlag = true))
-      }
+
+      _ <- Location
+        .store(location, rslt)
+        .transformS[VMState](_.ctxt,
+                             (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+        .transform { (vmState, storeRes) =>
+          storeRes match {
+            case Success =>
+              (vmState, ())
+            case Failure =>
+              (vmState.copy(vmErrorFlag = true), ())
+          }
+        }
     } yield ()
 
     newState.runS(state).value

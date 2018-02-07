@@ -84,13 +84,8 @@ object Location {
         }
 
       case LexVariable(indirect, level, offset) =>
-        State { ctxt: Ctxt =>
-          val (env, storeRes) = setLex(indirect, level, offset, value)
-            .run(ctxt.env)
-            .value
-
-          (ctxt.copy(env = env), storeRes)
-        }
+        setLex(indirect, level, offset, value)
+          .transformS(_.env, (ctxt, env) => ctxt.copy(env = env))
 
       // TODO:
       case _ => pure(Failure)
