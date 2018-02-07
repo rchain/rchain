@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option java_package = "coop.rchain.storage.models";
+
+import "Block.proto";
+import "Contract.proto";
+import "SystemContract.proto";
+
+message StorableData {
+  oneof value {
+    Block block = 1;
+    Contract contract = 2;
+    SystemContract system_contract = 3;
+  }
+}
