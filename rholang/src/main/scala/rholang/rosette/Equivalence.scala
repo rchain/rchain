@@ -9,7 +9,7 @@
 package coop.rchain.rho2rose
 
 import coop.rchain.syntax.rholang.Absyn._
-import scalaz.{Bind => _, Value => _, _}
+import scalaz.{Foldable}
 import scalaz.std.list._
 import scalaz.std.option._
 import scala.collection.JavaConverters._
@@ -65,7 +65,30 @@ object Equivalences{
                 structurallyEquivalent(newEnv1, input1.proc_, newEnv2, input2.proc_)
             }
         }
-      case (_: PChoice, _: PChoice) => ???
+      case (choice1: PChoice, choice2: PChoice) =>
+        choice1.listcbranch_.size() == choice2.listcbranch_.size() && (
+          choice1.listcbranch_.asScala.toList,
+          choice2.listcbranch_.asScala.toList
+          ).zipped.forall {
+            case (ch1: Choice,ch2: Choice) =>
+              allBindsEquivalent (
+                env1, ch1.listbind_.asScala.toList,
+                env2, ch2.listbind_.asScala.toList
+              ) match {
+                case None => false
+                case Some((names1,names2)) =>
+                  allCPatternEquivalent(env1,names1,env2,names2) match {
+                    case None => false
+                    case Some((newEnv1,newEnv2)) =>
+                      structurallyEquivalent(
+                        newEnv1, ch1.proc_,
+                        newEnv2, ch2.proc_
+                      )
+                  }
+                }
+            case _ => false
+          }
+        
       case (_: PMatch, _: PMatch) => ???
       case (_: PNew, _: PNew) => ???
       case (print1: PPrint, print2: PPrint) =>
