@@ -83,12 +83,13 @@ case class EList(ps: List[Par]) extends Ground
 case class ETuple(ps: List[Par]) extends Ground
 case class ESet(ps: List[Par]) extends Ground
 case class EMap(kvs: List[(Par,Par)]) extends Ground
-case class ENeg(p: Par) extends Expr
 // A variable used as a var should be bound in a process context, not a name
 // context. For example:
 // for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
 // for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
 case class EVar(v: Var) extends Expr
+case class ENot(p: Par) extends Expr
+case class ENeg(p: Par) extends Expr
 case class EMult(p1: Par, p2: Par) extends Expr
 case class EDiv(p1: Par, p2: Par) extends Expr
 case class EPlus(p1: Par, p2: Par) extends Expr
@@ -99,7 +100,6 @@ case class EGt(p1: Par, p2: Par) extends Expr
 case class EGte(p1: Par, p2: Par) extends Expr
 case class EEq(p1: Par, p2: Par) extends Expr
 case class ENeq(p1: Par, p2: Par) extends Expr
-case class ENot(p: Par) extends Expr
 case class EAnd(p1: Par, p2: Par) extends Expr
 case class EOr(p1: Par, p2: Par) extends Expr
 
