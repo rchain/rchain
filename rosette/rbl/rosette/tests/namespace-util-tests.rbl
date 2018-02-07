@@ -1,0 +1,19 @@
+;;; TODO: Discuss whether empty tuples should match
+(test-form (match_tuple_pattern [] []) #t)
+(test-form (match_tuple_pattern [1] []) #f)
+(test-form (match_tuple_pattern [1 2 3] [1 2 3]) #t)
+(test-form (match_tuple_pattern ['anything 2 3] [1 2 3]) #t)
+(test-form (match_tuple_pattern [42 2 3] [1 2 3]) #f)
+
+;;; should return empty list if no values
+(test-form (non_niv_head []) [])
+(test-form (non_niv_head [#niv #niv #niv]) [])
+(test-form (non_niv_head [#niv #niv 2 3]) 2)
+
+(test-form (any_null? [1 2 3 4]) #f)
+(test-form (any_null? [1 [] 3 4]) #t)
+(test-form (any_null? [1 [2] [3 4] 4]) #f)
+
+(if (> failures 0)
+    (display "Successes: " successes ". Failures: " failures ".\n")
+    (display "All tests passed.\n"))

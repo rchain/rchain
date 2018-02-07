@@ -1,0 +1,7 @@
+;;; File defining the NameSpace actor. 
+;;; Its two main accessor methods produce and consume are defined in their respective files.
+
+(defActor NameSpace
+  (slots& chart (new RblTable) channel_lookup_table (new RblTable) reverse_channel_lookup_table (new RblTable)
+          unification_ptrn_lookup_table (new RblTable)))
+(define t (new NameSpace))

@@ -1,0 +1,175 @@
+;;; tests for fetch_pattern_and_product
+(let*
+  [
+    [chart (new RblTable)]
+    [data_list [1 2 3 4 5 42]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foo foo_subspace)]
+
+    [product_patterns ['anything 42]]
+    [channel 'foo]
+
+    [index_of_1 0]
+    [index_of_42 5]
+  ]
+  (seq
+    ;;; it works when channel_index == channel_position
+    (test-form (fetch_pattern_and_product chart channel product_patterns 0 0) ['foo -1])
+    ;;; it works with product_patterns[channel_index] == 42
+    (test-form (fetch_pattern_and_product chart channel product_patterns 0 1) ['foo index_of_1])
+    ;;; it works with product_patterns[channel_index] == 'anything
+    (test-form (fetch_pattern_and_product chart channel product_patterns 1 0) ['foo index_of_42])
+    ;;; it works when channel_index == channel_position
+    (test-form (fetch_pattern_and_product chart channel product_patterns 1 1) ['foo -1])
+  )
+)
+
+;;; tests for fetch_pattern_and_product when data_list is empty
+(let*
+  [
+    [chart (new RblTable)]
+    [data_list []]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foo foo_subspace)]
+
+    [product_patterns ['anything]]
+    [channel 'foo]
+  ]
+  ;;; returns nothing when there is no data_list
+  (test-form (fetch_pattern_and_product chart channel product_patterns 0 1) [])
+)
+
+;;; tests for extract_consume_candidates
+(let*
+  [
+    [chart (new RblTable)]
+    [reverse_channel_lookup_table (new RblTable)]
+    [_ (tbl-add reverse_channel_lookup_table 'foobar ['foo 'bar])]
+
+    [data_list [42]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foo foo_subspace)]
+
+    [data_list []]
+    [continuation_struct [['anything 88] 'ctxt-tuple-mock]]
+    [continuation_list [continuation_struct]]
+    [foobar_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foobar foobar_subspace)]
+
+    [channel 'bar]
+    [product 88]
+  ]
+  (seq
+    ;;; it returns empty when no consume awaiting channels are passed in
+    (test-form (extract_consume_candidates [] chart channel product reverse_channel_lookup_table) [])
+    ;;; it returns the only candidate which is the match of the following product/continuation pair
+    ;;; (a) the data index of 42 in foo along with the inserted product 88 and
+    ;;; (b) the 0th index continuation waiting at 'foobar
+    (test-form
+      (extract_consume_candidates ['foobar] chart channel product reverse_channel_lookup_table)
+      [[[['foo 0] ['bar -1]] ['foobar 0]]])))
+
+;;; returns empty when passed empty
+(test-form (select_best_consume []) [])
+;;; returns first candidate when passed multiple
+(let*
+  [
+    [candidate [[['x -1]] ['x 0]]]
+    [candidate_another [[['x -1]] ['x 1]]]
+    [candidates [candidate candidate_another]]
+  ]
+  (test-form (select_best_consume candidates) candidate))
+
+;;; tests for delete_product
+(let*
+  [
+    [chart (new RblTable)]
+
+    [data_list [42]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foo foo_subspace)]
+
+    [channel 'foo]
+    [product 88]
+  ]
+  (seq
+    ;;; it returns data at appropriate index
+    (test-form (delete_product chart channel 0 product) 42)
+    ;;; it returns passed in product when index is NOT_STORED
+    (test-form (delete_product chart channel -1 product) 88)))
+
+;;; tests for consume_continuation when continuation_list is not emptied
+(let*
+  [
+    [chart (new RblTable)]
+    [channel_lookup_table (new RblTable)]
+    [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel_lookup_table channel ['foobar])))]
+    [reverse_channel_lookup_table (new RblTable)]
+    [_ (tbl-add reverse_channel_lookup_table 'foobar ['foo 'bar])]
+
+    [data_list [42]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foo foo_subspace)]
+
+    [data_list []]
+    [continuation_struct [['anything 88] 'ctxt-tuple-mock]]
+    [continuation_struct_another [[42 88] 'ctxt-tuple-mock-another]]
+    [continuation_list [continuation_struct continuation_struct_another]]
+    [foobar_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foobar foobar_subspace)]
+
+    [channel 'bar]
+    [product 88]
+
+    [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]
+  ]
+  (let
+    [[reduction (consume_continuation candidate chart channel_lookup_table reverse_channel_lookup_table product)]]
+    (seq
+      (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
+      (test-form (tbl-get chart 'foobar) [[] [continuation_struct_another]])
+      (test-form (tbl-get reverse_channel_lookup_table 'foobar) ['foo 'bar])
+      (test-form (tbl-get channel_lookup_table 'foo) ['foobar])
+      (test-form (tbl-get channel_lookup_table 'bar) ['foobar]))))
+
+;;; tests for consume_continuation when continuation_list is emptied
+(let*
+  [
+    [chart (new RblTable)]
+    [channel_lookup_table (new RblTable)]
+    [_ (map ['foo 'bar] (proc [i channel] (tbl-add channel_lookup_table channel ['foobar])))]
+    [reverse_channel_lookup_table (new RblTable)]
+    [_ (tbl-add reverse_channel_lookup_table 'foobar ['foo 'bar])]
+
+    [data_list [42]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foo foo_subspace)]
+
+    [data_list []]
+    [continuation_struct [['anything 88] 'ctxt-tuple-mock]]
+    [continuation_list [continuation_struct]]
+    [foobar_subspace [data_list continuation_list]]
+    [_ (tbl-add chart 'foobar foobar_subspace)]
+
+    [channel 'bar]
+    [product 88]
+
+    [candidate [[['foo 0] ['bar -1]] ['foobar 0]]]
+  ]
+  (let
+    [[reduction (consume_continuation candidate chart channel_lookup_table reverse_channel_lookup_table product)]]
+    (seq
+      (test-form reduction ['ctxt-tuple-mock ['anything 88] [42 88]])
+      (test-form (tbl-get reverse_channel_lookup_table 'foobar) #absent)
+      (test-form (tbl-get channel_lookup_table 'foo) [])
+      (test-form (tbl-get channel_lookup_table 'bar) []))))
+
+(if (> failures 0)
+  (display "Successes: " successes ". Failures: " failures ".\n")
+  (display "All tests passed.\n"))

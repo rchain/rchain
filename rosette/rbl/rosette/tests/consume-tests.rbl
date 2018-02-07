@@ -1,0 +1,124 @@
+;;; should return head of lists
+(test-form (select_best_products [[1 2 3] [#niv 4]]) [1 4])
+;;; should return empty list as one list is empty
+(test-form (select_best_products [[1 2] [#niv #niv] [3 4]]) [])
+;;; should return only items in list
+(test-form (select_best_products [[1] [2] [3]]) [1 2 3])
+
+;;; should return appropriate candidates
+(let*
+  [
+    [data_list [1 2 3 4 5]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+
+    [data_list [3 3 3 3 3]]
+    [continuation_list []]
+    [bar_subspace [data_list continuation_list]]
+
+    [subspaces [foo_subspace bar_subspace]]
+
+    [product_patterns [2 3]]
+  ]
+
+  (let
+    [
+      [[foo_candidates bar_candidates] (extract_data_candidates subspaces product_patterns)]
+    ]
+    (seq
+      ;;; should only return the 2nd piece of data
+      (test-form foo_candidates [#niv [1 2] #niv #niv #niv])
+      ;;; should return everything as all pieces of data match
+      (test-form bar_candidates [[0 3] [1 3] [2 3] [3 3] [4 3]]))))
+
+;;; tests for consume_products
+(let*
+  [
+    [chart (new RblTable)]
+
+    [data_list [1 2 3 4 5]]
+    [continuation_list []]
+    [foo_subspace [data_list continuation_list]]
+
+    [data_list [1 2 3 4 2]]
+    [continuation_list []]
+    [bar_subspace [data_list continuation_list]]
+
+    [_ (tbl-add chart 'foo foo_subspace)]
+    [_ (tbl-add chart 'bar bar_subspace)]
+
+    [channels ['foo 'bar]]
+    [reductions [[1 2] [1 2]]]
+  ]
+  (seq
+    ;;; it returns an empty list if reductions is empty
+    (let*
+      [
+        [products (consume_products [] chart channels)]
+        [[foo_data_list _] (tbl-get chart 'foo)]
+        [[bar_data_list _] (tbl-get chart 'bar)]
+      ]
+      (seq
+        (test-form products [])
+        ;;; appropriately deletes nothing
+        (test-form foo_data_list [1 2 3 4 5])
+        (test-form bar_data_list [1 2 3 4 2])))
+    ;;; it works with multiple channels
+    (let*
+      [
+        [products (consume_products reductions chart channels)]
+        [[foo_data_list _] (tbl-get chart 'foo)]
+        [[bar_data_list _] (tbl-get chart 'bar)]
+      ]
+      (seq
+        (test-form products [2 2])
+        (test-form foo_data_list [1 3 4 5])
+        ;; appropriately deletes the former 2 instead of the latter
+        (test-form bar_data_list [1 3 4 2])))))
+
+;;; store_continuation works when chart is 
+(let*
+  [
+    [channel_lookup_table (new RblTable)]
+    [reverse_channel_lookup_table (new RblTable)]
+    [chart (new RblTable)]
+    [channels ['foo 'bar]]
+  ]
+  (seq
+    (store_continuation channel_lookup_table reverse_channel_lookup_table chart channels
+              ['arbitrary_pattern 42] ['ctxt_mock ['code_mock 'env_mock]] #t)
+    (seq
+      (test-form (tbl-get channel_lookup_table 'foo) ['foobar])
+      (test-form (tbl-get channel_lookup_table 'bar) ['foobar])
+      (test-form (tbl-get reverse_channel_lookup_table 'foobar) ['foo 'bar])
+      (test-form
+        (tbl-get chart 'foobar)
+        [[] [[['arbitrary_pattern 42] ['ctxt_mock ['code_mock 'env_mock] #t]]]]))))
+
+;;; store_continuation works when chart already contains subspace contents 
+(let*
+  [
+    [channel_lookup_table (new RblTable)]
+    [reverse_channel_lookup_table (new RblTable)]
+    [chart (new RblTable)]
+    [channels ['foo 'bar]]
+  ]
+  (seq
+    (store_continuation channel_lookup_table reverse_channel_lookup_table chart channels
+              ['arbitrary_pattern 42] ['ctxt_mock ['code_mock 'env_mock]] #t)
+    (store_continuation channel_lookup_table reverse_channel_lookup_table chart channels
+              [43 44] ['ctxt_mock ['code_mock 'env_mock]] #t)
+    (seq
+      (test-form (tbl-get channel_lookup_table 'foo) ['foobar])
+      (test-form (tbl-get channel_lookup_table 'bar) ['foobar])
+      (test-form (tbl-get reverse_channel_lookup_table 'foobar) ['foo 'bar])
+      (test-form
+        (tbl-get chart 'foobar)
+        [
+          []
+          [[['arbitrary_pattern 42] ['ctxt_mock ['code_mock 'env_mock] #t]]
+            [[43 44] ['ctxt_mock ['code_mock 'env_mock] #t]]]]))))
+
+(if (> failures 0)
+  (display "Successes: " successes ". Failures: " failures ".\n")
+  (display "All tests passed.\n"))

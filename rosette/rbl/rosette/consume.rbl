@@ -1,0 +1,99 @@
+;;; File containing the reflective method consume and its helper methods
+
+(defOprn extract_data_candidates)
+(defProc (extract_data_candidates subspaces product_ptrns)
+  (map subspaces
+    (proc [i [data_list continuation_struct_list]]
+      (map data_list
+        (proc [data_index data]
+          (if (match_pattern (tuple-safe-nth product_ptrns i) data)
+            [data_index data]))))))
+
+
+
+;;; This function would have roughly below signature in Scala
+;;;
+;;; def select_best_products(candidates: List[List[Candidate]]): Option[List[Candidate]]
+;;;
+;;; For each channel, we choose the product to match with.
+;;; The input is a list of list of potential candidates and from each inner list, a candidate is chosen.
+;;; The function currently just takes the first candidate for each channel but in the future
+;;; you will be able to pass in a ranking algorithm (see https://rchain.atlassian.net/browse/ROS-329) that will select candidates.
+;;; If any channels are missing candidates, it returns an empty list as that implies a incomplete match.
+(defOprn select_best_products)
+(defProc (select_best_products candidates)
+  (let [[prefiltered_reductions
+    (map candidates (proc [i channel_candidates] (non_niv_head channel_candidates)))]]
+    (if (any_null? prefiltered_reductions) [] prefiltered_reductions)))
+
+;;; For each channel returned from the select_best_products function,
+;;; delete the matched products from the subspace and return a copy of the products.
+(defOprn consume_products)
+(defProc (consume_products reductions chart channels)
+  (map reductions
+    (proc [i chosen_candidate]
+      (let*
+        [[[data_index data] chosen_candidate]
+        [channel (tuple-safe-nth channels i)]
+        [[data_list continuation_struct_list] (tbl-get chart channel)]
+        [updated_data_list (delete-i data_list data_index)]]
+        (seq
+          (tbl-add chart channel [updated_data_list continuation_struct_list])
+          data)))))
+
+(defOprn store_continuation)
+(defProc (store_continuation channel_lookup_table reverse_channel_lookup_table chart channels product_ptrns ctxt-tuple persistent)
+  (let*
+    [[[ctxt [code env]] ctxt-tuple]
+    [channels_concatenated (symbol-list-concat channels)]
+    [subspace (tbl-get chart channels_concatenated)]]
+    (seq
+      (map channels (proc [i channel] (tbl-unique-append channel_lookup_table channel channels_concatenated)))
+      (tbl-add reverse_channel_lookup_table channels_concatenated channels)
+      (if (= #absent subspace)
+        (let [[new_subspace [[] [[product_ptrns [ctxt [code env] persistent]]]]]]
+          (tbl-add chart channels_concatenated new_subspace))
+        (let*
+          [[[data_list continuation_struct_list] subspace]
+          [updated_subspace [data_list (append continuation_struct_list [product_ptrns [ctxt [code env] persistent]])]]]
+          (tbl-add chart channels_concatenated updated_subspace))))))
+
+;;; This reflective method would have roughly below signature in Scala
+;;;
+;;; def consume(ctxt_tuple: Tuple2[Continuation, Tuple2[Code, Any]],
+;;;             location: Tuple3[List[Channel], List[Pattern], Boolean]):
+;;;             Option[Tuple2[Continuation, List[Product]]]
+;;;
+;;; Note the ctxt_tuple is injected because this method is marked as reflective.
+;;;
+;;; While RBL is untyped, the following is some of the would be inferred types
+;;;
+;;;     type ContinuationStruct = Tuple2[List[Pattern], Tuple3[Continuation, Tuple2[Code, Env], Boolean]]
+;;;     type Subspace = Tuple2[List[Data], List[ContinuationStruct]]
+;;;     type Subspaces = List[Subspace]
+;;;     type Candidate = Tuple2[Int, Data]
+(defOprn consume)
+(defRMethod NameSpace (consume ctxt-tuple & location)
+  (let*
+    [[[ctxt [code env]] ctxt-tuple]
+    [[channels product_ptrns persistent] location]
+    [_ (display "INFO:  (consume) for (" product_ptrns " <- " channels ") called with " persistent " and " code #\\n)]
+    [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create chart channel)))]
+    [candidates (extract_data_candidates subspaces product_ptrns)]
+    [reductions (select_best_products candidates)]
+    [products (consume_products reductions chart channels)]]
+    (seq
+      (if (null? products)
+        ;;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
+        (seq
+          (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product_ptrns ")" #\\n)
+          (store_continuation channel_lookup_table reverse_channel_lookup_table chart channels product_ptrns ctxt-tuple persistent)
+          (update!))
+        (seq
+          (display "DEBUG: (consume)" #\\t "ctxt-rtn(" products ", " persistent ")" #\\n)
+          (ctxt-rtn ctxt products)
+          (update!)
+          (if persistent
+            (seq
+              (display "DEBUG: (consume) Re-posting continuation: " code #\\n)
+              (run-with-env code env))))))))

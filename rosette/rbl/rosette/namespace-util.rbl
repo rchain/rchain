@@ -1,0 +1,102 @@
+;;; TODO: Remove unused methods in Tuplespace and add tests for the rest
+
+;;; TODO: Add tag for whether persistent
+;;; TODO: Translate match in compiler
+
+(random-number-init)
+;;; The debugSymbol is inserted so that the output is easier to read
+(defOprn generateFresh)
+(defProc (generateFresh debugSymbol) (->symbol (string-concat "Rholang-" debugSymbol "-" (->string (random-number)))))
+
+(defOprn append)
+(defPure Tuple (append item) (reverse [item & (reverse (self))]))
+
+(defOprn string-length<)
+(defOprn string-length>=)
+(defPure String (string-length< other) (< (string-length (self)) (string-length other)))
+(defPure String (string-length>= other) (not (string-length< (self) other)))
+
+(defOprn symbol-length<)
+(defOprn symbol-length>=)
+(defPure Symbol (symbol-length< other) (string-length< (->string (self)) (->string other)))
+(defPure Symbol (symbol-length>= other) (string-length>= (->string (self)) (->string other)))
+
+;;; Deletes element at position i in Tuple
+(defOprn delete-i)
+(defPure Tuple (delete-i p)
+  (concat (prim-sub-object (self) 0 p)
+    (prim-sub-object (self) (fx+ p 1)
+      (fx- (prim-size (self)) (fx+ p 1)))))
+
+(defOprn replace-i)
+(defPure Tuple (replace-i p item)
+  (concat
+    (prim-sub-object (self) 0 p)
+    [item]
+    (prim-sub-object (self) (fx+ p 1)
+      (fx- (prim-size (self)) (fx+ p 1)))))
+
+(defOprn symbol-list-concat)
+(defPure Tuple (symbol-list-concat) (->symbol (fold (self) (proc [e acc k] (k (string-concat acc (->string e)))) "")))
+
+(defOprn flatten)
+(defPure Tuple (flatten) (fold (self) (proc [e acc k] (k (tuple-concat e acc))) []))
+
+(defOprn twoZip)
+(defPure Tuple (twoZip)
+  (map (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]) (proc [i value] (reverse value))))
+
+(defOprn length)
+(defPure Tuple (length) (count (self) (proc [x] #t)))
+
+(defOprn filter-niv)
+(defPure Tuple (filter-niv) (filter (self) (proc [x] (not (niv? x)))))
+
+(defOprn tbl-unique-append)
+(defPure RblTable (tbl-unique-append key value)
+  (let [[current_value (tbl-get (self) key)]]
+    (if (or (= current_value #absent) (null? []))
+      (tbl-add (self) key [value])
+      (if (type? current_value Tuple)
+        (tbl-add (self) key (remove-duplicates (append current_value value)))
+        (RuntimeError (self) "Value " current_value " at key " key " not a Tuple")))))
+
+(defOprn tuplespace-tbl-get-or-create)
+(defPure RblTable (tuplespace-tbl-get-or-create channel)
+  (let [[subspace (tbl-get (self) channel)]]
+    (if (absent? subspace)
+      (seq
+        (tbl-add (self) channel [[] []])
+        (tbl-get (self) channel))
+      subspace)))
+
+(defOprn match_pattern)
+(defOprn match_tuple_pattern)
+(defProc (match_pattern ptrn product)
+  (if (type? ptrn Symbol)
+    #t
+    (if (type? ptrn Tuple)
+      (match_tuple_pattern ptrn product)
+      (= ptrn product))))
+(defPure Tuple (match_tuple_pattern other)
+  (if (or (null? (self)) (null? other))
+    (if (and (null? (self)) (null? other)) #t #f)
+    (iterate loop [[[i & r1] (self)] [[j & r2] other]]
+      (if (and (null? r1) (null? r2))
+        #t
+        (if (match_pattern i j)
+          (loop r1 r2)
+          #f)))))
+
+(defOprn non_niv_head)
+(defProc (non_niv_head list)
+  (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
+
+(defOprn any_null?)
+(defProc (any_null? list) (any list (proc [item] (null? item))))
+
+(defOprn clean_fresh)
+(defProc (clean_fresh fresh)
+  (let
+    [[[rholang name & r] (string-split (->string fresh) "-")]]
+    name))
