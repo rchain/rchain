@@ -139,9 +139,9 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PDiv" should "Delegate" in {
-    val pMult = new PDiv(new PGround(new GroundInt(7)), new PGround(new GroundInt(2)))
+    val pDiv = new PDiv(new PGround(new GroundInt(7)), new PGround(new GroundInt(2)))
 
-    val result = ProcNormalizeMatcher.normalizeMatch(pMult, inputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(pDiv, inputs)
     result.par should be (
         inputs.par.copy(
             exprs = List(EDiv(
