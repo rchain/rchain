@@ -150,6 +150,38 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be (inputs.knownFree)
   }
 
+  "PAdd" should "Delegate" in {
+    val pAdd = new PAdd(new PVar("x"), new PVar("y"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort), (Some("y"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pAdd, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(EPlus(
+                Par().copy(exprs = List(EVar(BoundVar(0)))),
+                Par().copy(exprs = List(EVar(BoundVar(1))))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PMinus" should "Delegate" in {
+    val pMinus = new PMinus(new PVar("x"), new PMult(new PVar("y"), new PVar("z")))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort),
+                                  (Some("y"), ProcSort),
+                                  (Some("z"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pMinus, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(EMinus(
+                Par().copy(exprs = List(EVar(BoundVar(0)))),
+                Par().copy(exprs = List(EMult(
+                    Par().copy(exprs = List(EVar(BoundVar(1)))),
+                    Par().copy(exprs = List(EVar(BoundVar(2)))))))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(
         new PGround(

@@ -151,6 +151,19 @@ object ProcNormalizeMatcher {
 
       case p: PMult => binaryExp(p.proc_1, p.proc_2, input, EMult)
       case p: PDiv => binaryExp(p.proc_1, p.proc_2, input, EDiv)
+      case p: PAdd => binaryExp(p.proc_1, p.proc_2, input, EPlus)
+      case p: PMinus => binaryExp(p.proc_1, p.proc_2, input, EMinus)
+
+      case p: PLt => binaryExp(p.proc_1, p.proc_2, input, ELt)
+      case p: PLte => binaryExp(p.proc_1, p.proc_2, input, ELte)
+      case p: PGt => binaryExp(p.proc_1, p.proc_2, input, EGt)
+      case p: PGte => binaryExp(p.proc_1, p.proc_2, input, EGte)
+
+      case p: PEq => binaryExp(p.proc_1, p.proc_2, input, EEq)
+      case p: PNeq => binaryExp(p.proc_1, p.proc_2, input, ENeq)
+
+      case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd)
+      case p: POr => binaryExp(p.proc_1, p.proc_2, input, EOr)
 
       case p: PPar => {
         val result = normalizeMatch(p.proc_1, input)
