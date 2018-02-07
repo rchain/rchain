@@ -7,10 +7,10 @@ import coop.rchain.rosette.prim.Prim._
 object tuple {
 
   /**
-   * Define the tuple-cons primitive.
-   * This prepends an Ob to the specified Tuple
-   * e.g. (tuple-cons 1 [2 3]) ==> [1 2 3]
-   */
+    * Define the tuple-cons primitive.
+    * This prepends an Ob to the specified Tuple
+    * e.g. (tuple-cons 1 [2 3]) ==> [1 2 3]
+    */
   object tplCons extends Prim {
     override val name: String = "tuple-cons"
     override val minArgs: Int = 2
@@ -24,10 +24,10 @@ object tuple {
   }
 
   /**
-   * Define the tuple-cons* primitive.
-   * This prepends n Obs to the specified Tuple
-   * e.g. (tuple-cons* 1 2 3 4 [5 6]) ==> [1 2 3 4 5 6]
-   */
+    * Define the tuple-cons* primitive.
+    * This prepends n Obs to the specified Tuple
+    * e.g. (tuple-cons* 1 2 3 4 [5 6]) ==> [1 2 3 4 5 6]
+    */
   object tplConsStar extends Prim {
     override val name: String = "tuple-cons*"
     override val minArgs: Int = 1
@@ -46,10 +46,10 @@ object tuple {
   }
 
   /**
-   * Define the "tuple-rcons" primitive.
-   * This appends an Ob to the specified Tuple
-   * e.g. (tuple-rcons [1 2] 3) ==> [1 2 3]
-   */
+    * Define the "tuple-rcons" primitive.
+    * This appends an Ob to the specified Tuple
+    * e.g. (tuple-rcons [1 2] 3) ==> [1 2 3]
+    */
   object tplRcons extends Prim {
     override val name: String = "tuple-rcons"
     override val minArgs: Int = 2
@@ -63,14 +63,11 @@ object tuple {
     }
   }
 
-  // *****************************
-  // Helper functions begin here
-  // *****************************
-
+  /** Helper functions begin here */
   /**
-   * Check the specified parameter for type Tuple. Return a PrimError if it is
-   * not else return the Tuple.
-   */
+    * Check the specified parameter for type Tuple. Return a PrimError if it is
+    * not else return the Tuple.
+    */
   private def checkTuple(n: Int, elem: Seq[Ob]): Either[PrimError, Tuple] =
     if (!elem(n).isInstanceOf[Tuple]) {
       Left(TypeMismatch(n, Tuple.getClass.getName))
