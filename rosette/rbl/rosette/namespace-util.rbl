@@ -6,35 +6,42 @@
 (random-number-init)
 ;;; The debugSymbol is inserted so that the output is easier to read
 (defOprn generateFresh)
-(defProc (generateFresh debugSymbol) (->symbol (string-concat "Rholang-" debugSymbol "-" (->string (random-number)))))
+(defProc (generateFresh debugSymbol)
+  (->symbol
+   (string-concat "Rholang-" debugSymbol "-" (->string (random-number)))))
 
 (defOprn append)
-(defPure Tuple (append item) (reverse [item & (reverse (self))]))
+(defPure Tuple (append item)
+  (reverse [item & (reverse (self))]))
 
 (defOprn string-length<)
 (defOprn string-length>=)
-(defPure String (string-length< other) (< (string-length (self)) (string-length other)))
-(defPure String (string-length>= other) (not (string-length< (self) other)))
+(defPure String (string-length< other)
+  (< (string-length (self)) (string-length other)))
+(defPure String (string-length>= other)
+  (not (string-length< (self) other)))
 
 (defOprn symbol-length<)
 (defOprn symbol-length>=)
-(defPure Symbol (symbol-length< other) (string-length< (->string (self)) (->string other)))
-(defPure Symbol (symbol-length>= other) (string-length>= (->string (self)) (->string other)))
+(defPure Symbol (symbol-length< other)
+  (string-length< (->string (self)) (->string other)))
+(defPure Symbol (symbol-length>= other)
+  (string-length>= (->string (self)) (->string other)))
 
 ;;; Deletes element at position i in Tuple
 (defOprn delete-i)
 (defPure Tuple (delete-i p)
   (concat (prim-sub-object (self) 0 p)
-    (prim-sub-object (self) (fx+ p 1)
-      (fx- (prim-size (self)) (fx+ p 1)))))
+          (prim-sub-object (self) (fx+ p 1)
+                           (fx- (prim-size (self)) (fx+ p 1)))))
 
 (defOprn replace-i)
 (defPure Tuple (replace-i p item)
   (concat
-    (prim-sub-object (self) 0 p)
-    [item]
-    (prim-sub-object (self) (fx+ p 1)
-      (fx- (prim-size (self)) (fx+ p 1)))))
+   (prim-sub-object (self) 0 p)
+   [item]
+   (prim-sub-object (self) (fx+ p 1)
+                    (fx- (prim-size (self)) (fx+ p 1)))))
 
 (defOprn symbol-list-concat)
 (defPure Tuple (symbol-list-concat) (->symbol (fold (self) (proc [e acc k] (k (string-concat acc (->string e)))) "")))
@@ -45,19 +52,25 @@
 
 (defOprn twoZip)
 (defPure Tuple (twoZip)
-  (map (fold (self) (proc [[x y] acc k] (let [[[xs ys] acc]] (k [[x & xs] [y & ys]]))) [[] []]) (proc [i value] (reverse value))))
+  (map (fold (self) (proc [[x y] acc k]
+                      (let [[[xs ys] acc]]
+                        (k [[x & xs] [y & ys]])))
+             [[] []])
+       (proc [i value]
+         (reverse value))))
 
 (defOprn filter-niv)
-(defPure Tuple (filter-niv) (filter (self) (proc [x] (not (niv? x)))))
+(defPure Tuple (filter-niv)
+  (filter (self) (proc [x] (not (niv? x)))))
 
 (defOprn tbl-unique-append)
 (defPure RblTable (tbl-unique-append key value)
   (let [[current-value (tbl-get (self) key)]]
     (if (or (= current-value #absent) (null? []))
-      (tbl-add (self) key [value])
-      (if (type? current-value Tuple)
-        (tbl-add (self) key (remove-duplicates (append current-value value)))
-        (RuntimeError (self) "Value " current-value " at key " key " not a Tuple")))))
+        (tbl-add (self) key [value])
+        (if (type? current-value Tuple)
+            (tbl-add (self) key (remove-duplicates (append current-value value)))
+            (RuntimeError (self) "Value " current-value " at key " key " not a Tuple")))))
 
 (defOprn tuplespace-tbl-get-or-create)
 (defPure RblTable (tuplespace-tbl-get-or-create channel)
@@ -77,11 +90,11 @@
 
 (defPure Tuple (match-tuple-pattern other)
   (if (or (null? (self)) (null? other))
-    (and (null? (self)) (null? other))
-    (iterate loop [[[i & r1] (self)] [[j & r2] other]]
-      (cond ((and (null? r1) (null? r2)) #t)
-            ((match-pattern i j) (loop r1 r2))
-            (else #f)))))
+      (and (null? (self)) (null? other))
+      (iterate loop [[[i & r1] (self)] [[j & r2] other]]
+               (cond ((and (null? r1) (null? r2)) #t)
+                     ((match-pattern i j) (loop r1 r2))
+                     (else #f)))))
 
 (defOprn non-niv-head)
 (defProc (non-niv-head list)
@@ -92,6 +105,5 @@
 
 (defOprn clean-fresh)
 (defProc (clean-fresh fresh)
-  (let
-    [[[rholang name & r] (string-split (->string fresh) "-")]]
+  (let [[[rholang name & r] (string-split (->string fresh) "-")]]
     name))

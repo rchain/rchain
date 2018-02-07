@@ -7,11 +7,11 @@
 (defOprn extract-data-candidates)
 (defProc (extract-data-candidates subspaces product-ptrns)
   (map subspaces
-    (proc [i [data-list continuation-struct-list]]
-      (map data-list
-        (proc [data-index data]
-          (if (match-pattern (tuple-safe-nth product-ptrns i) data)
-            [data-index data]))))))
+       (proc [i [data-list continuation-struct-list]]
+         (map data-list
+              (proc [data-index data]
+                (if (match-pattern (tuple-safe-nth product-ptrns i) data)
+                    [data-index data]))))))
 
 
 ;;; This function would have roughly the following signature in Scala:
@@ -26,7 +26,7 @@
 (defOprn select-best-products)
 (defProc (select-best-products candidates)
   (let [[prefiltered-reductions
-    (map candidates (proc [i channel-candidates] (non-niv-head channel-candidates)))]]
+         (map candidates (proc [i channel-candidates] (non-niv-head channel-candidates)))]]
     (if (any-null? prefiltered-reductions) [] prefiltered-reductions)))
 
 
@@ -35,33 +35,30 @@
 (defOprn consume-products)
 (defProc (consume-products reductions chart channels)
   (map reductions
-    (proc [i chosen-candidate]
-      (let*
-        [[[data-index data] chosen-candidate]
-        [channel (tuple-safe-nth channels i)]
-        [[data-list continuation-struct-list] (tbl-get chart channel)]
-        [updated-data-list (delete-i data-list data-index)]]
-        (seq
-          (tbl-add chart channel [updated-data-list continuation-struct-list])
-          data)))))
+       (proc [i chosen-candidate]
+         (let* [[[data-index data] chosen-candidate]
+                [channel (tuple-safe-nth channels i)]
+                [[data-list continuation-struct-list] (tbl-get chart channel)]
+                [updated-data-list (delete-i data-list data-index)]]
+           (seq
+            (tbl-add chart channel [updated-data-list continuation-struct-list])
+            data)))))
 
 
 (defOprn store-continuation)
 (defProc (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels product-ptrns ctxt-tuple persistent)
-  (let*
-    [[[ctxt [code env]] ctxt-tuple]
-    [channels-concatenated (symbol-list-concat channels)]
-    [subspace (tbl-get chart channels-concatenated)]]
+  (let* [[[ctxt [code env]] ctxt-tuple]
+         [channels-concatenated (symbol-list-concat channels)]
+         [subspace (tbl-get chart channels-concatenated)]]
     (seq
-      (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
-      (tbl-add reverse-channel-lookup-table channels-concatenated channels)
-      (if (absent? subspace)
-        (let [[new-subspace [[] [[product-ptrns [ctxt [code env] persistent]]]]]]
-          (tbl-add chart channels-concatenated new-subspace))
-        (let*
-          [[[data-list continuation-struct-list] subspace]
-          [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
-          (tbl-add chart channels-concatenated updated-subspace))))))
+     (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
+     (tbl-add reverse-channel-lookup-table channels-concatenated channels)
+     (if (absent? subspace)
+         (let [[new-subspace [[] [[product-ptrns [ctxt [code env] persistent]]]]]]
+           (tbl-add chart channels-concatenated new-subspace))
+         (let* [[[data-list continuation-struct-list] subspace]
+                [updated-subspace [data-list (append continuation-struct-list [product-ptrns [ctxt [code env] persistent]])]]]
+           (tbl-add chart channels-concatenated updated-subspace))))))
 
 
 ;;; This reflective method would have roughly below signature in Scala
@@ -80,26 +77,25 @@
 ;;;     type Candidate = Tuple2[Int, Data]
 (defOprn consume)
 (defRMethod NameSpace (consume ctxt-tuple & location)
-  (let*
-    [[[ctxt [code env]] ctxt-tuple]
-    [[channels product-ptrns persistent] location]
-    [_ (display "INFO:  (consume) for (" product-ptrns " <- " channels ") called with " persistent " and " code #\\n)]
-    [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create chart channel)))]
-    [candidates (extract-data-candidates subspaces product-ptrns)]
-    [reductions (select-best-products candidates)]
-    [products (consume-products reductions chart channels)]]
+  (let* [[[ctxt [code env]] ctxt-tuple]
+         [[channels product-ptrns persistent] location]
+         [_ (display "INFO:  (consume) for (" product-ptrns " <- " channels ") called with " persistent " and " code #\\n)]
+         [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create chart channel)))]
+         [candidates (extract-data-candidates subspaces product-ptrns)]
+         [reductions (select-best-products candidates)]
+         [products (consume-products reductions chart channels)]]
     (seq
-      (if (null? products)
+     (if (null? products)
         ;;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
-        (seq
+         (seq
           (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")" #\\n)
           (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels product-ptrns ctxt-tuple persistent)
           (update!))
-        (seq
+         (seq
           (display "DEBUG: (consume)" #\\t "ctxt-rtn(" products ", " persistent ")" #\\n)
           (ctxt-rtn ctxt products)
           (update!)
           (if persistent
-            (seq
-              (display "DEBUG: (consume) Re-posting continuation: " code #\\n)
-              (run-with-env code env))))))))
+              (seq
+               (display "DEBUG: (consume) Re-posting continuation: " code #\\n)
+               (run-with-env code env))))))))

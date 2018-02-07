@@ -6,119 +6,97 @@
 (test-form (select-best-products [[1] [2] [3]]) [1 2 3])
 
 ;;; should return appropriate candidates
-(let*
-  [
-    [data-list [1 2 3 4 5]]
-    [continuation-list []]
-    [foo-subspace [data-list continuation-list]]
+(let* [[data-list [1 2 3 4 5]]
+       [continuation-list []]
+       [foo-subspace [data-list continuation-list]]
 
-    [data-list [3 3 3 3 3]]
-    [continuation-list []]
-    [bar-subspace [data-list continuation-list]]
+       [data-list [3 3 3 3 3]]
+       [continuation-list []]
+       [bar-subspace [data-list continuation-list]]
 
-    [subspaces [foo-subspace bar-subspace]]
+       [subspaces [foo-subspace bar-subspace]]
 
-    [product-patterns [2 3]]
-  ]
+       [product-patterns [2 3]]]
 
-  (let
-    [
-      [[foo-candidates bar-candidates] (extract-data-candidates subspaces product-patterns)]
-    ]
+  (let [[[foo-candidates bar-candidates] (extract-data-candidates subspaces product-patterns)]]
     (seq
       ;;; should only return the 2nd piece of data
-      (test-form foo-candidates [#niv [1 2] #niv #niv #niv])
+     (test-form foo-candidates [#niv [1 2] #niv #niv #niv])
       ;;; should return everything as all pieces of data match
-      (test-form bar-candidates [[0 3] [1 3] [2 3] [3 3] [4 3]]))))
+     (test-form bar-candidates [[0 3] [1 3] [2 3] [3 3] [4 3]]))))
 
 ;;; tests for consume-products
-(let*
-  [
-    [chart (new RblTable)]
+(let* [[chart (new RblTable)]
 
-    [data-list [1 2 3 4 5]]
-    [continuation-list []]
-    [foo-subspace [data-list continuation-list]]
+       [data-list [1 2 3 4 5]]
+       [continuation-list []]
+       [foo-subspace [data-list continuation-list]]
 
-    [data-list [1 2 3 4 2]]
-    [continuation-list []]
-    [bar-subspace [data-list continuation-list]]
+       [data-list [1 2 3 4 2]]
+       [continuation-list []]
+       [bar-subspace [data-list continuation-list]]
 
-    [_ (tbl-add chart 'foo foo-subspace)]
-    [_ (tbl-add chart 'bar bar-subspace)]
+       [_ (tbl-add chart 'foo foo-subspace)]
+       [_ (tbl-add chart 'bar bar-subspace)]
 
-    [channels ['foo 'bar]]
-    [reductions [[1 2] [1 2]]]
-  ]
+       [channels ['foo 'bar]]
+       [reductions [[1 2] [1 2]]]]
   (seq
     ;;; it returns an empty list if reductions is empty
-    (let*
-      [
-        [products (consume-products [] chart channels)]
-        [[foo-data-list _] (tbl-get chart 'foo)]
-        [[bar-data-list _] (tbl-get chart 'bar)]
-      ]
-      (seq
-        (test-form products [])
+   (let* [[products (consume-products [] chart channels)]
+          [[foo-data-list _] (tbl-get chart 'foo)]
+          [[bar-data-list _] (tbl-get chart 'bar)]]
+     (seq
+      (test-form products [])
         ;;; appropriately deletes nothing
-        (test-form foo-data-list [1 2 3 4 5])
-        (test-form bar-data-list [1 2 3 4 2])))
+      (test-form foo-data-list [1 2 3 4 5])
+      (test-form bar-data-list [1 2 3 4 2])))
     ;;; it works with multiple channels
-    (let*
-      [
-        [products (consume-products reductions chart channels)]
-        [[foo-data-list _] (tbl-get chart 'foo)]
-        [[bar-data-list _] (tbl-get chart 'bar)]
-      ]
-      (seq
-        (test-form products [2 2])
-        (test-form foo-data-list [1 3 4 5])
-        ;; appropriately deletes the former 2 instead of the latter
-        (test-form bar-data-list [1 3 4 2])))))
+   (let* [[products (consume-products reductions chart channels)]
+          [[foo-data-list _] (tbl-get chart 'foo)]
+          [[bar-data-list _] (tbl-get chart 'bar)]]
+     (seq
+      (test-form products [2 2])
+      (test-form foo-data-list [1 3 4 5])
+      ;; appropriately deletes the former 2 instead of the latter
+      (test-form bar-data-list [1 3 4 2])))))
 
 ;;; store-continuation works when chart is
-(let*
-  [
-    [channel-lookup-table (new RblTable)]
-    [reverse-channel-lookup-table (new RblTable)]
-    [chart (new RblTable)]
-    [channels ['foo 'bar]]
-  ]
+(let* [[channel-lookup-table (new RblTable)]
+       [reverse-channel-lookup-table (new RblTable)]
+       [chart (new RblTable)]
+       [channels ['foo 'bar]]]
   (seq
-    (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels
-              ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
-    (seq
-      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
-      (test-form (tbl-get channel-lookup-table 'bar) ['foobar])
-      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
-      (test-form
-        (tbl-get chart 'foobar)
-        [[] [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
+   (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels
+                       ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
+   (seq
+    (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
+    (test-form (tbl-get channel-lookup-table 'bar) ['foobar])
+    (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
+    (test-form
+     (tbl-get chart 'foobar)
+     [[] [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
 
 ;;; store-continuation works when chart already contains subspace contents
-(let*
-  [
-    [channel-lookup-table (new RblTable)]
-    [reverse-channel-lookup-table (new RblTable)]
-    [chart (new RblTable)]
-    [channels ['foo 'bar]]
-  ]
+(let* [[channel-lookup-table (new RblTable)]
+       [reverse-channel-lookup-table (new RblTable)]
+       [chart (new RblTable)]
+       [channels ['foo 'bar]]]
   (seq
-    (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels
-              ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
-    (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels
-              [43 44] ['ctxt-mock ['code-mock 'env-mock]] #t)
-    (seq
-      (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
-      (test-form (tbl-get channel-lookup-table 'bar) ['foobar])
-      (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
-      (test-form
-        (tbl-get chart 'foobar)
-        [
-          []
-          [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]
-            [[43 44] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
+   (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels
+                       ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
+   (store-continuation channel-lookup-table reverse-channel-lookup-table chart channels
+                       [43 44] ['ctxt-mock ['code-mock 'env-mock]] #t)
+   (seq
+    (test-form (tbl-get channel-lookup-table 'foo) ['foobar])
+    (test-form (tbl-get channel-lookup-table 'bar) ['foobar])
+    (test-form (tbl-get reverse-channel-lookup-table 'foobar) ['foo 'bar])
+    (test-form
+     (tbl-get chart 'foobar)
+     [[]
+      [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]
+       [[43 44] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
 
 (if (> failures 0)
-  (display "Successes: " successes ". Failures: " failures ".\n")
-  (display "All tests passed.\n"))
+    (display "Successes: " successes ". Failures: " failures ".\n")
+    (display "All tests passed.\n"))

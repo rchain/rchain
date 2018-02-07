@@ -7,14 +7,14 @@
 (defOprn fetch-pattern-and-product)
 (defProc (fetch-pattern-and-product chart channel product-patterns channel-index channel-position)
   (if (= channel-index channel-position)
-    [channel -1]
-    (let [[[data-list continuation-struct-list] (tbl-get chart channel)]]
-      (if (null? data-list)
-        []
-        (iterate loop [[[data & r] data-list] [data-index 0]]
-          (if (match-pattern (tuple-safe-nth product-patterns channel-index) data)
-            [channel data-index]
-            (loop r (inc data-index))))))))
+      [channel -1]
+      (let [[[data-list continuation-struct-list] (tbl-get chart channel)]]
+        (if (null? data-list)
+            []
+            (iterate loop [[[data & r] data-list] [data-index 0]]
+                     (if (match-pattern (tuple-safe-nth product-patterns channel-index) data)
+                         [channel data-index]
+                         (loop r (inc data-index))))))))
 
 
 ;;; Roughly dual to extract-data-candidates.
@@ -52,51 +52,47 @@
 (defOprn extract-consume-candidates)
 (defProc (extract-consume-candidates concat-channels chart channel product reverse-channel-lookup-table)
   (if (absent? concat-channels)
-    []
-    (let [[candidates
-      (map concat-channels
-        (proc [_ concat-channel]
-          (let*
-            [[channels (tbl-get reverse-channel-lookup-table concat-channel)]
-            [channel-position (position channels channel)]
-            [[data-list continuation-struct-list] (tbl-get chart concat-channel)]]
-            (map continuation-struct-list
-              (proc [continuation-struct-index continuation-struct]
-                (let [[[product-patterns ctxt-stuff] continuation-struct]]
-                  (if (match-pattern (tuple-safe-nth product-patterns channel-position) product)
-                    (let
-                      [[candidate
-                        (map channels
-                          (proc [i channel]
-                          (fetch-pattern-and-product chart channel product-patterns i channel-position)))]]
-                      (if (any-null? candidate)
-                        []
-                        [candidate [concat-channel continuation-struct-index]])))))))))]]
-      (flatten candidates))))
+      []
+      (let [[candidates
+             (map concat-channels
+                  (proc [_ concat-channel]
+                    (let* [[channels (tbl-get reverse-channel-lookup-table concat-channel)]
+                           [channel-position (position channels channel)]
+                           [[data-list continuation-struct-list] (tbl-get chart concat-channel)]]
+                      (map continuation-struct-list
+                           (proc [continuation-struct-index continuation-struct]
+                             (let [[[product-patterns ctxt-stuff] continuation-struct]]
+                               (if (match-pattern (tuple-safe-nth product-patterns channel-position) product)
+                                   (let [[candidate (map channels
+                                                         (proc [i channel]
+                                                           (fetch-pattern-and-product chart channel product-patterns i channel-position)))]]
+                                     (if (any-null? candidate)
+                                         []
+                                         [candidate [concat-channel continuation-struct-index]])))))))))]]
+        (flatten candidates))))
 
 
 ;;; Dual to select-best-products in consume.rbl
 (defOprn select-best-consume)
 (defProc (select-best-consume candidates)
   (head
-    (filter candidates
-      (proc [candidate]
-        (if (null? candidate)
-          #f
-          (not (any-null? (tuple-safe-nth candidate 0))))))))
+   (filter candidates
+           (proc [candidate]
+             (if (null? candidate)
+                 #f
+                 (not (any-null? (tuple-safe-nth candidate 0))))))))
 
 
 (defOprn delete-product)
 (defProc (delete-product chart channel data-index product)
   (if (= data-index -1)
-    product
-    (let*
-      [[[data-list continuation-struct-list] (tbl-get chart channel)]
-      [data (tuple-safe-nth data-list data-index)]
-      [updated-data-list (delete-i data-list data-index)]]
-      (seq
-        (tbl-add chart channel [updated-data-list continuation-struct-list])
-        data))))
+      product
+      (let* [[[data-list continuation-struct-list] (tbl-get chart channel)]
+             [data (tuple-safe-nth data-list data-index)]
+             [updated-data-list (delete-i data-list data-index)]]
+        (seq
+         (tbl-add chart channel [updated-data-list continuation-struct-list])
+         data))))
 
 
 ;;; Dual to consume-products.
@@ -104,26 +100,24 @@
 ;;; if the corresponding channel continuation-struct-list's are empty.
 (defOprn consume-continuation)
 (defProc (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)
-  (let*
-    [[[channel-data-list [concat-channel continuation-struct-index]] candidate]
-    [product-list
-      (map channel-data-list (proc [i [channel data-index]] (delete-product chart channel data-index product)))]
-    [[data-list continuation-struct-list] (tbl-get chart concat-channel)]
-    [[product-patterns ctxt-tuple] (tuple-safe-nth continuation-struct-list continuation-struct-index)]
-    [updated-continuation-struct-list (delete-i continuation-struct-list continuation-struct-index)]
-    [_ (tbl-add chart concat-channel [data-list updated-continuation-struct-list])] ]
+  (let* [[[channel-data-list [concat-channel continuation-struct-index]] candidate]
+         [product-list
+          (map channel-data-list (proc [i [channel data-index]] (delete-product chart channel data-index product)))]
+         [[data-list continuation-struct-list] (tbl-get chart concat-channel)]
+         [[product-patterns ctxt-tuple] (tuple-safe-nth continuation-struct-list continuation-struct-index)]
+         [updated-continuation-struct-list (delete-i continuation-struct-list continuation-struct-index)]
+         [_ (tbl-add chart concat-channel [data-list updated-continuation-struct-list])] ]
     (seq
-      (if (null? updated-continuation-struct-list)
-        (let* [[channels-to-delete (tbl-get reverse-channel-lookup-table concat-channel)]]
-          (seq
+     (if (null? updated-continuation-struct-list)
+         (let* [[channels-to-delete (tbl-get reverse-channel-lookup-table concat-channel)]]
+           (seq
             (walk channels-to-delete
-              (proc [i channel]
-                (let*
-                  [[channels (tbl-get channel-lookup-table channel)]
-                  [updated-channels (delete channels concat-channel)]]
-                  (tbl-add channel-lookup-table channel updated-channels))))
+                  (proc [i channel]
+                    (let* [[channels (tbl-get channel-lookup-table channel)]
+                           [updated-channels (delete channels concat-channel)]]
+                      (tbl-add channel-lookup-table channel updated-channels))))
             (tbl-del reverse-channel-lookup-table concat-channel))))
-      [ctxt-tuple product-patterns product-list])))
+     [ctxt-tuple product-patterns product-list])))
 
 
 ;;; The produce method is roughly dual to the consume method in consume.rbl.
@@ -131,36 +125,34 @@
 ;;; produce always resumes the calling thread at the end of the method.
 (defOprn produce)
 (defRMethod NameSpace (produce ctxt-tuple & production)
-  (let*
-    [[[ctxt _] ctxt-tuple]
-    [[channel product] production]
-    [_ (display "INFO:  (produce) " (clean-fresh channel) "!(" product ") called" #\\n)]
-    [concat-channels (tbl-get channel-lookup-table channel)]
-    [_ (display "DEBUG: (produce)" #\\t "relevant channels: " concat-channels #\\n)]
-    [candidates (extract-consume-candidates concat-channels chart channel product reverse-channel-lookup-table)]
-    [_ (display "DEBUG: (produce)" #\\t "candidates: " candidates #\\n)]
-    [candidate (select-best-consume candidates)]
-    [_ (display "DEBUG: (produce)" #\\t "candidate: " candidate #\\n)]]
+  (let* [[[ctxt _] ctxt-tuple]
+         [[channel product] production]
+         [_ (display "INFO:  (produce) " (clean-fresh channel) "!(" product ") called" #\\n)]
+         [concat-channels (tbl-get channel-lookup-table channel)]
+         [_ (display "DEBUG: (produce)" #\\t "relevant channels: " concat-channels #\\n)]
+         [candidates (extract-consume-candidates concat-channels chart channel product reverse-channel-lookup-table)]
+         [_ (display "DEBUG: (produce)" #\\t "candidates: " candidates #\\n)]
+         [candidate (select-best-consume candidates)]
+         [_ (display "DEBUG: (produce)" #\\t "candidate: " candidate #\\n)]]
     (if (null? candidate)
-      (let [[subspace (tbl-get chart channel)]]
-        (seq
-          (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
-          (if (absent? subspace)
-            (tbl-add chart channel [[product] []])
-            (let [[[data-list continuation-struct-list] subspace]]
-              (tbl-add chart channel [(append data-list product) continuation-struct-list])))
-          (ctxt-rtn ctxt [])
-          (update!)))
-      (let*
-        [[[ctxt-tuple product-patterns product-list]
-          (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)]
-        [[consume-ctxt [code env] persistent] ctxt-tuple]]
-        (seq
-          (display "DEBUG: (produce)" #\\t "ctxt-rtn(" consume-ctxt ", " product-list ")" #\\n)
-          (ctxt-rtn consume-ctxt product-list)
-          (ctxt-rtn ctxt [])
-          (update!)
-          (if persistent
-            (seq
-              (display "DEBUG: (produce) Re-posting continuation: " code #\\n)
-              (run-with-env code env))))))))
+        (let [[subspace (tbl-get chart channel)]]
+          (seq
+           (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
+           (if (absent? subspace)
+               (tbl-add chart channel [[product] []])
+               (let [[[data-list continuation-struct-list] subspace]]
+                 (tbl-add chart channel [(append data-list product) continuation-struct-list])))
+           (ctxt-rtn ctxt [])
+           (update!)))
+        (let* [[[ctxt-tuple product-patterns product-list]
+                (consume-continuation candidate chart channel-lookup-table reverse-channel-lookup-table product)]
+               [[consume-ctxt [code env] persistent] ctxt-tuple]]
+          (seq
+           (display "DEBUG: (produce)" #\\t "ctxt-rtn(" consume-ctxt ", " product-list ")" #\\n)
+           (ctxt-rtn consume-ctxt product-list)
+           (ctxt-rtn ctxt [])
+           (update!)
+           (if persistent
+               (seq
+                (display "DEBUG: (produce) Re-posting continuation: " code #\\n)
+                (run-with-env code env))))))))
