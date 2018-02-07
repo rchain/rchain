@@ -2,6 +2,7 @@ package coop.rchain.rosette
 
 import java.io.File
 
+import cats.data.State
 import coop.rchain.rosette
 import coop.rchain.rosette.utils.{lensTrans, printToFile, unsafeCastLens}
 import coop.rchain.rosette.Meta.StdMeta
@@ -87,8 +88,7 @@ trait Ob extends Base with Cloneable {
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob =
-    setLex(indirect, level, offset, value)._2
+  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] = ???
 
   def setField(indirect: Boolean,
                level: Int,
@@ -96,33 +96,6 @@ trait Ob extends Base with Cloneable {
                spanSize: Int,
                value: Int): Ob =
     ??? //TODO
-
-  def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): (Ob, Ob) = {
-    val nthParentLens =
-      (0 until level).foldLeft(lens[Ob]: Lens[Ob, Ob])((l, _) => l >> 'parent)
-
-    def inSlotNum(lens: Lens[Ob, Ob]): Option[Lens[Ob, Ob]] =
-      if (!indirect) Some(lens)
-      else {
-        val numberOfSlots = lens.get(this).numberOfSlots()
-        if (slotNum() >= numberOfSlots) None
-        else {
-          val resLens = unsafeCastLens[Actor](lens) >> 'extension
-          Some(unsafeCastLens[Ob](resLens))
-        }
-      }
-
-    def updateSlot(lens: Lens[Ob, Ob]): Option[(Ob, Ob)] =
-      if (offset >= numberOfSlots) None
-      else {
-        val slotLens = lens >> 'slot
-        val res = lensTrans(slotLens, this)(_.updated(offset, value))
-        Some(res, value)
-      }
-
-    (inSlotNum(nthParentLens) >>= updateSlot)
-      .getOrElse((this, Ob.INVALID))
-  }
 
   def notImplemented(opName: String): Unit = {
     val className = this.getClass.getSimpleName
@@ -234,6 +207,51 @@ object Ob {
         updateA(base)(f)(value)
 
       def updateSelf[T](value: A => A): A = value(base)
+    }
+  }
+
+  def getLex(indirect: Boolean,
+             level: Int,
+             offset: Int): State[Ob, Option[Ob]] = ???
+
+  def getAddr(indirect: Boolean,
+              level: Int,
+              offset: Int): State[Ob, Option[Ob]] = ???
+
+  def setLex(indirect: Boolean,
+             level: Int,
+             offset: Int,
+             value: Ob): State[Ob, StoreResult] = State { ob =>
+    val nthParentLens =
+      (0 until level).foldLeft(lens[Ob]: Lens[Ob, Ob])((l, _) => l >> 'parent)
+
+    def inSlotNum(lens: Lens[Ob, Ob]): Option[Lens[Ob, Ob]] =
+      if (!indirect) Some(lens)
+      else {
+        val numberOfSlots = lens.get(ob).numberOfSlots()
+        if (ob.slotNum() >= numberOfSlots) None
+        else {
+          val resLens = unsafeCastLens[Actor](lens) >> 'extension
+          Some(unsafeCastLens[Ob](resLens))
+        }
+      }
+
+    def updateSlot(lens: Lens[Ob, Ob]): Option[Ob] =
+      if (offset >= ob.numberOfSlots) None
+      else {
+        val slotLens = lens >> 'slot
+        val res = lensTrans(slotLens, ob)(_.updated(offset, value))
+        Some(res)
+      }
+
+    try {
+      inSlotNum(nthParentLens).flatMap(updateSlot) match {
+        case Some(newOb) => (newOb, Success)
+        case None => (ob, Failure)
+      }
+    } catch {
+      // TODO: Add logging
+      case _: IndexOutOfBoundsException => (ob, Failure)
     }
   }
 

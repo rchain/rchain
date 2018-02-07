@@ -12,13 +12,13 @@ import org.scalatest._
   */
 class TransitionSpec extends FlatSpec with Matchers {
   val testCtxt = Ctxt(
-    tag = LocationGT(Location.LTCtxtRegister(0)),
+    tag = CtxtRegister(0),
     nargs = 1,
     outstanding = 0,
     pc = PC(0),
     rslt = null,
     trgt = null,
-    argvec = Tuple(Ob.NIV),
+    argvec = Tuple(Seq(Ob.NIV, Ob.NIV, Ob.NIV)),
     env = StdExtension(null, null),
     code = null,
     ctxt = null,
@@ -414,14 +414,14 @@ class TransitionSpec extends FlatSpec with Matchers {
       IdVecPattern(TupleExpr(Seq(Symbol("x"))))
     )
 
-    val loc: Location = Location.LexVar(0, 0, indirect = false)
+    val lexVar: Location = LexVariable(indirect = false, 0, 0)
 
     val start =
       testState
-        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template)))
+        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template, lexVar)))
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
         .set(_ >> 'globalEnv)(TblObject(globalEnv))
-        .set(_ >> 'loc)(loc)
+        .set(_ >> 'loc)(lexVar)
 
     val codevec = Seq(
       OpAlloc(1),
@@ -469,14 +469,14 @@ class TransitionSpec extends FlatSpec with Matchers {
       IdVecPattern(TupleExpr(Seq(Symbol("x"))))
     )
 
-    val loc: Location = Location.LexVar(0, 0, indirect = false)
+    val lexVar: Location = LexVariable(indirect = false, 0, 0)
 
     val start =
       testState
-        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template)))
+        .set(_ >> 'code >> 'litvec)(Tuple(Seq(LetExpr(), template, lexVar)))
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
         .set(_ >> 'globalEnv)(TblObject(globalEnv))
-        .set(_ >> 'loc)(loc)
+        .set(_ >> 'loc)(lexVar)
 
     val codevec = Seq(
       OpAlloc(1),
@@ -523,4 +523,5 @@ class TransitionSpec extends FlatSpec with Matchers {
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.trgt shouldBe Fixnum(100)
   }
+
 }
