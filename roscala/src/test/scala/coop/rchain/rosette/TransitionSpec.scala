@@ -540,7 +540,7 @@ class TransitionSpec extends FlatSpec with Matchers {
     val start =
       testState
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
-        .set(_ >> 'ctxt >> 'argvec)(Tuple(Seq(Ob.NIV, Ob.NIV, Ob.NIV)))
+        .set(_ >> 'ctxt >> 'argvec)(Tuple(Seq(Ob.NIV, Ob.NIV)))
         .set(_ >> 'code >> 'litvec)(Tuple(Seq(Fixnum(100))))
 
     val codevec = Seq(
@@ -569,7 +569,7 @@ class TransitionSpec extends FlatSpec with Matchers {
     val start =
       testState
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
-        .set(_ >> 'ctxt >> 'argvec)(Tuple(Seq(Ob.NIV, Ob.NIV, Ob.NIV)))
+        .set(_ >> 'ctxt >> 'argvec)(Tuple(Seq(Ob.NIV, Ob.NIV)))
         .set(_ >> 'code >> 'litvec)(Tuple(Seq(Fixnum(100), ArgRegister(1))))
 
     val codevec = Seq(
