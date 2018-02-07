@@ -16,7 +16,7 @@ import scala.collection.JavaConverters._
 
 object Equivalences{
 
-  def nameEquivalent(env1: DeBruijn, n1: Chan, env2: DeBruijn, n2: Chan): Boolean = {
+  def nameEquivalent(env1: DeBruijn, n1: Chan, env2: DeBruijn, n2: Chan): Boolean =
     (n1, n2) match {
       case (q1: CQuote, q2: CQuote) =>
         q1.proc_ match {
@@ -29,21 +29,19 @@ object Equivalences{
       case (q1: CVar, q2: CVar) => env1.equivalent(q1.var_, env2, q2.var_)
       case _ => false
     }
-  }
 
   def nameEquivalent(n1: Chan, n2: Chan): Boolean =
     nameEquivalent(DeBruijn(), n1, DeBruijn(), n2)
 
-  def structurallyNil(p: Proc): Boolean = {
+  def structurallyNil(p: Proc): Boolean =
     p match {
       case _ : PNil => true
       case ppar : PPar =>
         structurallyNil(ppar.proc_1) && structurallyNil (ppar.proc_2)
       case _ => false
     }
-  }
 
-  def structurallyEquivalent(env1: DeBruijn, p1: Proc, env2: DeBruijn, p2: Proc): Boolean = {
+  def structurallyEquivalent(env1: DeBruijn, p1: Proc, env2: DeBruijn, p2: Proc): Boolean =
     (p1,p2) match {
       case (_ : PNil, _) => structurallyNil(p2)
       case (_, _ : PNil) => structurallyNil(p1)
@@ -90,7 +88,6 @@ object Equivalences{
       case (p1: PPar, p2: PPar) => parEquiv(parLeaves(p1),parLeaves(p2))
       case _ => false
     }
-  }
 
   def bindEquivalent(env1: DeBruijn, b1: Bind, env2: DeBruijn, b2: Bind): Option[(CPattern,CPattern)] =
     (b1, b2) match {
@@ -163,14 +160,13 @@ object Equivalences{
   def structurallyEquivalent(p1: Proc, p2: Proc): Boolean =
     structurallyEquivalent(DeBruijn(), p1, DeBruijn(), p2)
   
-  def allStructurallyEquivalent(env1: DeBruijn, ps1: ListProc, env2: DeBruijn, ps2: ListProc): Boolean = {
+  def allStructurallyEquivalent(env1: DeBruijn, ps1: ListProc, env2: DeBruijn, ps2: ListProc): Boolean =
     ps1.size() == ps2.size() &&
       (ps1.asScala.toList, ps2.asScala.toList).zipped.forall(
         (proc1,proc2) => structurallyEquivalent(env1, proc1, env2, proc2)
         )
-  }
 
-  def cpatternEquivalent(env1: DeBruijn, cp1: CPattern, env2: DeBruijn, cp2: CPattern): Option[(DeBruijn, DeBruijn)] = {
+  def cpatternEquivalent(env1: DeBruijn, cp1: CPattern, env2: DeBruijn, cp2: CPattern): Option[(DeBruijn, DeBruijn)] =
     (cp1, cp2) match {
       case (cpvar1: CPtVar, cpvar2: CPtVar) =>
         (cpvar1.varpattern_, cpvar2.varpattern_) match {
@@ -184,16 +180,14 @@ object Equivalences{
       case (cpq1: CPtQuote, cpq2: CPtQuote) => ???
       case _ => None
     }
-  }
 
-  def allCPatternEquivalent(env1: DeBruijn, cps1: List[CPattern], env2: DeBruijn, cps2: List[CPattern]): Option[(DeBruijn, DeBruijn)] = {
+  def allCPatternEquivalent(env1: DeBruijn, cps1: List[CPattern], env2: DeBruijn, cps2: List[CPattern]): Option[(DeBruijn, DeBruijn)] =
     if (cps1.size != cps2.size) None else {
       val list = cps1.zip(cps2)
       def step(envs: (DeBruijn,DeBruijn), cps: (CPattern,CPattern)): Option[(DeBruijn,DeBruijn)] =
         cpatternEquivalent(envs._1, cps._1, envs._2, cps._2)
       Foldable[List].foldLeftM(list, (env1,env2)) (step _)
     }
-  }
   
   def valueEquivalent(env1: DeBruijn, v1: Value, env2: DeBruijn, v2: Value): Boolean =
     (v1,v2) match {
