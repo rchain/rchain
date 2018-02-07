@@ -126,7 +126,7 @@ object Equivalences{
             List[Bind](),
             eqhd.tail
           )
-          val bindfold = eqhd.foldLeft(init) {
+          eqhd.foldLeft(init) {
             (rejects, bnd) => rejects match {
               case (false, names1, names2, r, l) =>
                 allBindsEquivalent(env1, r ++ l ++ eqtl, env2, tail) match {
@@ -151,8 +151,7 @@ object Equivalences{
                 }
               case tuple => tuple
             }
-          }
-          bindfold match {
+          } match {
             case (false,_,_,_,_) => None
             case (true,names1,names2,_,_) => Some((names1,names2))
           }
@@ -238,7 +237,7 @@ object Equivalences{
                 }
               case (true, r, l) => (true, r, l)
             }
-          }._1
+          } match { case (eq,_,_) => eq }
       }
   }
 }
