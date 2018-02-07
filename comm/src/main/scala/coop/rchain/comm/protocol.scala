@@ -115,7 +115,7 @@ trait ProtocolMessage {
       s <- h.sender
     } yield
       new PeerNode(NodeIdentifier(s.id.toByteArray),
-               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
+                   Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   def toByteSeq: Seq[Byte] =
     proto.toByteArray
@@ -174,7 +174,7 @@ final case class DisconnectMessage(proto: Protocol, timestamp: Long) extends Pro
   */
 final case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
-final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
+final case class UpstreamMessage(proto: Protocol, timestamp: Long)  extends ProtocolMessage
 final case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolResponse
 
 /**
@@ -204,7 +204,7 @@ object ProtocolMessage {
 
   def toPeerNode(n: Node): PeerNode =
     new PeerNode(NodeIdentifier(n.id.toByteArray),
-             Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
+                 Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
   def returnHeader(h: Header): ReturnHeader =
     ReturnHeader()

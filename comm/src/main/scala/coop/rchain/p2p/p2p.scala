@@ -36,9 +36,9 @@ case object NetworkAddress {
       val addy =
         for {
           scheme <- uri.scheme
-          key <- uri.user
-          host <- uri.host
-          port <- uri.port
+          key    <- uri.user
+          host   <- uri.host
+          port   <- uri.port
         } yield NetworkAddress(scheme, key, host, port)
 
       addy match {
@@ -51,13 +51,8 @@ case object NetworkAddress {
     }
 }
 
-final case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.SocketAddress] {
+final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.SocketAddress] {
   val logger = Logger("p2p")
-
-  val local = NetworkAddress.parse(homeAddress) match {
-    case Right(node)           => node
-    case Left(ParseError(msg)) => throw new Exception(msg)
-  }
 
   val net = new UnicastNetwork(local, Some(this))
 
@@ -172,7 +167,7 @@ final case class Network(homeAddress: String) extends ProtocolDispatcher[java.ne
       }
     }
 
-  override def toString = s"#{Network $homeAddress}"
+  override def toString = s"#{Network ${local.toAddress}}"
 }
 
 object NetworkProtocol {

@@ -33,7 +33,7 @@ final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 @SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass")) // TODO temporarely, see above
 case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
-  def key = id.key
+  def key  = id.key
   val sKey = key.map(_.toChar).mkString
 
   override def toString =

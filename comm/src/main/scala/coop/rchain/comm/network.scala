@@ -13,8 +13,8 @@ import scala.util.{Failure, Success}
   * Implements the lower levels of the network protocol.
   */
 final case class UnicastNetwork(id: NodeIdentifier,
-                          endpoint: Endpoint,
-                          next: Option[ProtocolDispatcher[SocketAddress]] = None)
+                                endpoint: Endpoint,
+                                next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
     with ProtocolDispatcher[SocketAddress] {
 
@@ -31,7 +31,7 @@ final case class UnicastNetwork(id: NodeIdentifier,
     new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
   val local = new ProtocolNode(id, endpoint, this)
-  val comm = UnicastComm(local)
+  val comm  = UnicastComm(local)
   val table = PeerTable(local)
 
   private val receiver = new Thread {
@@ -72,7 +72,7 @@ final case class UnicastNetwork(id: NodeIdentifier,
     val potentials = mutable.Set[PeerNode]()
     if (currentSet.size > 0) {
       val dists = table.sparseness()
-      var i = 0
+      var i     = 0
       while (currentSet.size > 0 && potentials.size < limit && i < dists.size) {
         val dist = dists(i)
         /*
@@ -80,8 +80,8 @@ final case class UnicastNetwork(id: NodeIdentifier,
          * distance from our own key. So, construct a key that first differs
          * from ours at bit position dist.
          */
-        val target = id.key.to[mutable.ArrayBuffer] // Our key
-        val byteIndex = dist / 8
+        val target       = id.key.to[mutable.ArrayBuffer] // Our key
+        val byteIndex    = dist / 8
         val differentBit = 1 << (dist % 8)
         target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
         currentSet.head.lookup(target) match {
@@ -151,7 +151,7 @@ final case class UnicastNetwork(id: NodeIdentifier,
     */
   private def handleLookup(sender: PeerNode, lookup: LookupMessage): Unit =
     for {
-      id <- lookup.lookupId
+      id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
     } {
       comm.send(resp.toByteSeq, sender)
@@ -189,8 +189,8 @@ final case class UnicastNetwork(id: NodeIdentifier,
       timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage] =
     msg.header match {
       case Some(header) => {
-        val bytes = msg.toByteSeq
-        val pend = PendingKey(remote.key, header.timestamp, header.seq)
+        val bytes   = msg.toByteSeq
+        val pend    = PendingKey(remote.key, header.timestamp, header.seq)
         val promise = Promise[Either[CommError, ProtocolMessage]]
         pending.put(pend, promise)
         try {
