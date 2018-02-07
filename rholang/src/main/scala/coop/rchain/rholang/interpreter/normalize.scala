@@ -41,7 +41,7 @@ object NameNormalizeMatcher {
               input.knownFree)
           }
           case Some((level, ProcSort)) => {
-            throw new Error("Proc variable used in process context.")
+            throw new Error("Proc variable used in name context.")
           }
           case None => {
             input.knownFree.get(n.var_) match {
