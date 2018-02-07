@@ -33,8 +33,10 @@ case class ChanVar(cvar: Var) extends Channel
 // These are DeBruijn levels
 sealed trait Var
 case class BoundVar(level: Int) extends Var
-// It is an error to use WildCard() in a non-binding position
-case class WildCard() extends Var
+// Wildcards are represented as bound variables. The initial normalization will
+// not produce uses of the variable, but for (_ <- x) P is the same as
+// for (y <- x) P if y is not free in P. We model that equivalence by turning all
+// wildcards into bound variables.
 // Variables that occur free in Par used as a pattern or ChanVar are binders.
 // For the purpose of comparing patterns, we count just like BoundVars.
 

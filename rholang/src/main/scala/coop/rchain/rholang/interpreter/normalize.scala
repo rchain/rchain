@@ -29,7 +29,8 @@ object GroundNormalizeMatcher {
 
 trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInputs] {
   override def visit(n: NameWildcard, input: NameVisitInputs): NameVisitOutputs = {
-    NameVisitOutputs(ChanVar(WildCard()), input.knownFree.setWildcardUsed())
+    val wildcardBindResult = input.knownFree.setWildcardUsed(1)
+    NameVisitOutputs(ChanVar(FreeVar(wildcardBindResult._2)), wildcardBindResult._1)
   }
   override def visit(n: NameVar, input: NameVisitInputs): NameVisitOutputs = {
     input.env.get(n.var_) match {
@@ -44,8 +45,8 @@ trait NameNormalizeVisitor extends Name.Visitor[NameVisitOutputs, NameVisitInput
       case None => {
         input.knownFree.get(n.var_) match {
           case None =>
-            val newBindingsPair = 
-              input.knownFree.newBindings(List((n.var_, NameSort)))
+            val newBindingsPair =
+              input.knownFree.newBindings(List((Some(n.var_), NameSort)))
             NameVisitOutputs(
               ChanVar(FreeVar(newBindingsPair._2(0))),
               newBindingsPair._1)
@@ -86,7 +87,7 @@ object ProcNormalizeMatcher {
           input.knownFree.get(p.var_) match {
             case None =>
               val newBindingsPair = 
-                input.knownFree.newBindings(List((p.var_, ProcSort)))
+                input.knownFree.newBindings(List((Some(p.var_), ProcSort)))
               ProcVisitOutputs(
                 input.par.copy(expr = EVar(FreeVar(newBindingsPair._2(0)))
                                :: input.par.expr),
@@ -113,27 +114,28 @@ object ProcNormalizeMatcher {
 }
 
 // Parameterized over T, the kind of typing discipline we are enforcing.
-class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wildcardUsed: Boolean) {
-  def this() = this(0, Map[String, (Int, T)](), false)
+class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)]) {
+  def this() = this(0, Map[String, (Int, T)]())
 
-  def newBindings(bindings: List[(String, T)]): (DebruijnLevelMap[T], List[Int]) = {
+  def newBindings(bindings: List[(Option[String], T)]): (DebruijnLevelMap[T], List[Int]) = {
     val result = bindings.foldLeft((this, List[Int]())) {
-      (acc: (DebruijnLevelMap[T], List[Int]), binding: (String,T)) =>
-      (DebruijnLevelMap(
-          acc._1.next + 1,
-          acc._1.env + (binding._1 -> ((acc._1.next, binding._2))),
-          wildcardUsed),
-       acc._1.next :: acc._2)
+      (acc: (DebruijnLevelMap[T], List[Int]), binding: (Option[String], T)) => {
+        val newMap = binding._1 match {
+          case None => acc._1.env
+          case Some(varName) => acc._1.env + (varName -> ((acc._1.next, binding._2)))
+        }
+        (DebruijnLevelMap(
+            acc._1.next + 1,
+            newMap),
+         acc._1.next :: acc._2)
+      }
     }
     (result._1, result._2.reverse)
   }
 
-  def setWildcardUsed(): DebruijnLevelMap[T] = {
-    if (wildcardUsed) {
-      this
-    } else {
-      DebruijnLevelMap(next, env, true)
-    }
+  // Returns the new map, and the starting level of the newly "bound" wildcards
+  def setWildcardUsed(count: Int): (DebruijnLevelMap[T], Int) = {
+    (DebruijnLevelMap(next + count, env), next)
   }
 
   def getBinding(varName: String): Option[T] = {
@@ -143,33 +145,32 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wil
     for (pair <- env.get(varName)) yield pair._1
   }
   def get(varName: String): Option [(Int, T)] = env.get(varName)
-  def isEmpty() = env.isEmpty
+  def isEmpty() = next == 0
 
   override def equals(that: Any): Boolean = {
     that match {
       case that: DebruijnLevelMap[T] =>
         next == that.next &&
-        env == that.env &&
-        wildcardUsed == that.wildcardUsed
+        env == that.env
       case _ => false
     }
   }
 
   override def hashCode(): Int = {
-    (next.hashCode() * 37 + env.hashCode) * 37 + wildcardUsed.hashCode
+    (next.hashCode() * 37 + env.hashCode)
   }
 }
 
 object DebruijnLevelMap{
   def apply[T](
-      next: Int, env: Map[String, (Int, T)], wildcardUsed: Boolean): DebruijnLevelMap[T] = {
-    new DebruijnLevelMap(next, env, wildcardUsed)
+      next: Int, env: Map[String, (Int, T)]): DebruijnLevelMap[T] = {
+    new DebruijnLevelMap(next, env)
   }
 
   def apply[T](): DebruijnLevelMap[T] = new DebruijnLevelMap[T]()
 
-  def unapply[T](db: DebruijnLevelMap[T]): Option[(Int, Map[String,(Int, T)], Boolean)] = {
-    Some((db.next, db.env, db.wildcardUsed))
+  def unapply[T](db: DebruijnLevelMap[T]): Option[(Int, Map[String,(Int, T)])] = {
+    Some((db.next, db.env))
   }
 }
 
