@@ -38,6 +38,7 @@ case class ScoredTerm[T](term: T, score: Tree[Int]) extends Ordered[ScoredTerm[T
     def compareScore(s1: Tree[Int], s2: Tree[Int]) : Int = {
       (s1, s2) match {
         case (Leaf(a), Leaf(b)) => a.compare(b)
+        case (Node(Nil), Node(Nil)) => 0
         case (Node(h1 +: t1), Node(h2 +: t2)) =>
           compareScore(h1, h2) match {
             case 0 => compareScore(Node(t1), Node(t2))
@@ -143,7 +144,6 @@ object GroundSortMatcher {
     }
   }
 }
-
 
 object ExprSortMatcher {
   def sortBinaryOperation(p1: Par, p2: Par) : Tuple2[ScoredTerm[Par], ScoredTerm[Par]] = {
