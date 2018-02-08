@@ -27,19 +27,45 @@ case class Node[T] (children: Seq[Tree[T]]) extends Tree[T] {
   def size = children.map(_.size).sum
 }
 
+case class ScoreAtom(value : Either[Int, String]) {
+  def compare(that: ScoreAtom) : Int = {
+    (this.value, that.value) match {
+      case (Left(i1), Left(i2)) => i1.compare(i2)
+      case (Left(i), Right(s)) => -1
+      case (Right(s), Left(i)) => 1
+      case (Right(s1), Right(s2)) => s1.compare(s2)
+    }
+  }
+}
+
+object ScoreAtom {
+  def apply(value: Int): ScoreAtom = new ScoreAtom(Left(value))
+  def apply(value: String): ScoreAtom = new ScoreAtom(Right(value))
+}
+
+object Leaf {
+  def apply(item: Int) = new Leaf(ScoreAtom(item))
+  def apply(item: String) = new Leaf(ScoreAtom(item))
+}
+
 object Leaves {
   // Shortcut to be able to write Leaves(1,2,3) instead of Node(Seq(Leaf(1),Leaf(2),Leaf(3)))
-  def apply[T](children: T*) : Node[T] = Node(children.map(a => Leaf(a)))
+  def apply(children: Int*) = new Node(children.map(a => Leaf(ScoreAtom(a))))
+}
+
+object Node {
+  // Shortcut to write Node(1, Leaf(1)) instead of Node(Seq(Leaf(ScoreAtom(1)), Leaf(ScoreAtom(1))))
+  def apply(left: Int, right: Tree[ScoreAtom]*) : Tree[ScoreAtom] = new Node(Seq(Leaf(left)) ++ right)
 }
 
 // Effectively a tuple that groups the term to its score tree.
-case class ScoredTerm[T](term: T, score: Tree[Int]) extends Ordered[ScoredTerm[T]] {
+case class ScoredTerm[T](term: T, score: Tree[ScoreAtom]) extends Ordered[ScoredTerm[T]] {
   def compare(that: ScoredTerm[T]) : Int = {
-    def compareScore(s1: Tree[Int], s2: Tree[Int]) : Int = {
+    def compareScore(s1: Tree[ScoreAtom], s2: Tree[ScoreAtom]) : Int = {
       (s1, s2) match {
         case (Leaf(a), Leaf(b)) => a.compare(b)
-        case (Node(a), Leaf(b)) => 1
         case (Leaf(a), Node(b)) => -1
+        case (Node(a), Leaf(b)) => 1
         case (Node(a), Node(b)) =>
           (a, b) match {
             case (Nil, Nil) => 0
@@ -123,19 +149,18 @@ object GroundSortMatcher {
     g match {
       case gb: GBool => ScoredTerm(g, BoolSortMatcher.sortMatch(gb).score)
       case gi: GInt => ScoredTerm(g, Leaves(Score.INT, gi.i))
-      // TODO: Think about hashCode collisions
-      case gs: GString => ScoredTerm(g, Leaves(Score.STRING, gs.s.hashCode()))
-      case gu: GUri => ScoredTerm(g, Leaves(Score.URI, gu.u.hashCode()))
-      case gp: GPrivate => ScoredTerm(gp, Leaves(Score.PRIVATE, gp.p.hashCode()))
+      case gs: GString => ScoredTerm(g, Node(Score.STRING, Leaf(gs.s)))
+      case gu: GUri => ScoredTerm(g, Node(Score.URI, Leaf(gu.u)))
+      case gp: GPrivate => ScoredTerm(gp, Node(Score.PRIVATE, Leaf(gp.p)))
       case gl: EList =>
         val pars = gl.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(EList(pars.map(_.term)), Node(Seq(Leaf(Score.ELIST)) ++ pars.map(_.score)))
+        ScoredTerm(EList(pars.map(_.term)), Node(Score.ELIST, pars.map(_.score):_*))
       case gt: ETuple =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETuple(pars.map(_.term)), Node(Seq(Leaf(Score.ETUPLE)) ++ pars.map(_.score)))
+        ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score):_*))
       case gs: ESet =>
         val sortedPars = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
-        ScoredTerm(ESet(sortedPars.map(_.term)), Node(Seq(Leaf(Score.ESET)) ++ sortedPars.map(_.score)))
+        ScoredTerm(ESet(sortedPars.map(_.term)), Node(Score.ESET, sortedPars.map(_.score):_*))
       case gm: EMap =>
         def sortKeyValuePair(kv: (Par, Par)): ScoredTerm[Tuple2[Par, Par]] = {
           val (key, value) = kv
@@ -145,7 +170,7 @@ object GroundSortMatcher {
                      Node(Seq(sortedKey.score, sortedValue.score)))
         }
         val sortedPars = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
-        ScoredTerm(EMap(sortedPars.map(_.term)), Node(Seq(Leaf(Score.EMAP)) ++ sortedPars.map(_.score)))
+        ScoredTerm(EMap(sortedPars.map(_.term)), Node(Score.EMAP, sortedPars.map(_.score):_*))
     }
   }
 }
@@ -166,63 +191,63 @@ object ExprSortMatcher {
       case en: ENeg =>
         val sortedPar = ParSortMatcher.sortMatch(en.p)
         ScoredTerm(ENeg(sortedPar.term),
-          Node(Seq(Leaf(Score.ENEG), sortedPar.score)))
+          Node(Score.ENEG, sortedPar.score))
       case ev: EVar =>
         val sortedVar = VarSortMatcher.sortMatch(ev.v)
         ScoredTerm(EVar(sortedVar.term),
-          Node(Seq(Leaf(Score.EVAR), sortedVar.score)))
+          Node(Score.EVAR, sortedVar.score))
       case em : EMult =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(em.p1, em.p2)
         ScoredTerm(EMult(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EMULT), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EMULT, sortedPar1.score, sortedPar2.score))
       case ed : EDiv =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(ed.p1, ed.p2)
         ScoredTerm(EDiv(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EDIV), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EDIV, sortedPar1.score, sortedPar2.score))
       case ep : EPlus =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
         ScoredTerm(EPlus(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EPLUS), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EPLUS, sortedPar1.score, sortedPar2.score))
       case em : EMinus =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(em.p1, em.p2)
         ScoredTerm(EMinus(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EMINUS), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EMINUS, sortedPar1.score, sortedPar2.score))
       case el : ELt =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(el.p1, el.p2)
         ScoredTerm(ELt(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.ELT), sortedPar1.score, sortedPar2.score)))
+          Node(Score.ELT, sortedPar1.score, sortedPar2.score))
       case el : ELte =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(el.p1, el.p2)
         ScoredTerm(ELte(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.ELTE), sortedPar1.score, sortedPar2.score)))
+          Node(Score.ELTE, sortedPar1.score, sortedPar2.score))
       case eg : EGt =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(eg.p1, eg.p2)
         ScoredTerm(EGt(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EGT), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EGT, sortedPar1.score, sortedPar2.score))
       case eg : EGte =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(eg.p1, eg.p2)
         ScoredTerm(EGte(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EGTE), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EGTE, sortedPar1.score, sortedPar2.score))
       case ee : EEq =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(ee.p1, ee.p2)
         ScoredTerm(EEq(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EEQ), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EEQ, sortedPar1.score, sortedPar2.score))
       case en : ENeq =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(en.p1, en.p2)
         ScoredTerm(ENeq(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.ENEQ), sortedPar1.score, sortedPar2.score)))
+          Node(Score.ENEQ, sortedPar1.score, sortedPar2.score))
       case en: ENot =>
         val sortedPar = ParSortMatcher.sortMatch(en.p)
         ScoredTerm(ENot(sortedPar.term),
-          Node(Seq(Leaf(Score.ENOT), sortedPar.score)))
+          Node(Score.ENOT, sortedPar.score))
       case ea : EAnd =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(ea.p1, ea.p2)
         ScoredTerm(EAnd(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EAND), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EAND, sortedPar1.score, sortedPar2.score))
       case eo : EOr =>
         val (sortedPar1, sortedPar2) = sortBinaryOperation(eo.p1, eo.p2)
         ScoredTerm(EOr(sortedPar1.term, sortedPar2.term),
-          Node(Seq(Leaf(Score.EOR), sortedPar1.score, sortedPar2.score)))
+          Node(Score.EOR, sortedPar1.score, sortedPar2.score))
     }
   }
 }
@@ -242,10 +267,10 @@ object ChannelSortMatcher {
     c match {
       case cq : Quote =>
         val sortedPar = ParSortMatcher.sortMatch(cq.p)
-        ScoredTerm(Quote(sortedPar.term), Node(Seq(Leaf(Score.QUOTE), sortedPar.score)))
+        ScoredTerm(Quote(sortedPar.term), Node(Score.QUOTE, sortedPar.score))
       case cv : ChanVar =>
         val sortedVar = VarSortMatcher.sortMatch(cv.cvar)
-        ScoredTerm(ChanVar(sortedVar.term), Node(Seq(Leaf(Score.CHAN_VAR), sortedVar.score)))
+        ScoredTerm(ChanVar(sortedVar.term), Node(Score.CHAN_VAR, sortedVar.score))
     }
   }
 }
@@ -255,7 +280,7 @@ object SendSortMatcher {
     val sortedChan = ChannelSortMatcher.sortMatch(s.chan)
     val sortedData = s.data.map(d => ParSortMatcher.sortMatch(d))
     val sortedSend = Send(chan = sortedChan.term, data = sortedData.map(_.term))
-    val sendScore = Node(Seq(Leaf(Score.SEND)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score))
+    val sendScore = Node(Score.SEND, Seq(sortedChan.score) ++ sortedData.map(_.score):_*)
     ScoredTerm(sortedSend, sendScore)
   }
 }
@@ -285,21 +310,21 @@ object ReceiveSortMatcher {
   // This function will then sort the insides of the preordered binds.
   def sortMatch(r: Receive) : ScoredTerm[Receive] = {
     val sortedBinds = r.binds.map(bind => sortBind(bind))
-    ScoredTerm(Receive(sortedBinds.map(_.term)), Node(Seq(Leaf(Score.RECEIVE)) ++ sortedBinds.map(_.score)))
+    ScoredTerm(Receive(sortedBinds.map(_.term)), Node(Score.RECEIVE, sortedBinds.map(_.score):_*))
   }
 }
 
 object EvalSortMatcher {
   def sortMatch(e: Eval) : ScoredTerm[Eval] = {
     val sortedChannel = ChannelSortMatcher.sortMatch(e.channel)
-    ScoredTerm(Eval(sortedChannel.term), Node(Seq(Leaf(Score.EVAL), sortedChannel.score)))
+    ScoredTerm(Eval(sortedChannel.term), Node(Score.EVAL, sortedChannel.score))
   }
 }
 
 object NewSortMatcher {
   def sortMatch(n: New) : ScoredTerm[New] = {
     val sortedPar = ParSortMatcher.sortMatch(n.p)
-    ScoredTerm(New(count=n.count, p=sortedPar.term), Node(Seq(Leaf(Score.NEW), Leaf(n.count), sortedPar.score)))
+    ScoredTerm(New(count=n.count, p=sortedPar.term), Node(Score.NEW, Leaf(n.count), sortedPar.score))
   }
 }
 
@@ -315,9 +340,9 @@ object ParSortMatcher {
                         expr=exprs.map(_.term),
                         evals=evals.map(_.term),
                         news=news.map(_.term))
-    val parScore = Node(Seq(Leaf(Score.PAR)) ++ sends.map(_.score) ++
+    val parScore = Node(Score.PAR, sends.map(_.score) ++
                         receives.map(_.score) ++ exprs.map(_.score) ++
-                        evals.map(_.score) ++ news.map(_.score))
+                        evals.map(_.score) ++ news.map(_.score):_*)
     ScoredTerm(sortedPar, parScore)
   }
 }
