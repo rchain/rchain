@@ -28,6 +28,56 @@ class ScoredTermSpec extends FlatSpec with Matchers {
   }
 }
 
+class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
+  val emptyMap = DebruijnLevelMap[VarSort]()
+  var p = Par()
+  "Binds" should "Presort based on their channel and then pattern" in {
+    val binds =
+      List(
+        (
+          List(
+            Quote(p.copy(expr=List(GInt(2))))),
+          Quote(p.copy(expr=List(GInt(3)))),
+          emptyMap
+        ),
+        (
+          List(
+            Quote(p.copy(expr=List(GInt(3))))),
+          Quote(p.copy(expr=List(GInt(2)))),
+          emptyMap
+        ),
+        (
+          List(
+            Quote(p.copy(expr=List(GInt(1))))),
+          Quote(p.copy(expr=List(GInt(3)))),
+          emptyMap
+        )
+      )
+    val sortedBinds =
+      List(
+        (
+          List(
+            Quote(p.copy(expr=List(GInt(3))))),
+          Quote(p.copy(expr=List(GInt(2)))),
+          emptyMap
+        ),
+        (
+          List(
+            Quote(p.copy(expr=List(GInt(1))))),
+          Quote(p.copy(expr=List(GInt(3)))),
+          emptyMap
+        ),
+        (
+          List(
+            Quote(p.copy(expr=List(GInt(2))))),
+          Quote(p.copy(expr=List(GInt(3)))),
+          emptyMap
+        )
+      )
+    val result = ReceiveSortMatcher.preSortBinds(binds)
+    result should be (sortedBinds)
+  }
+}
 
 class ParSortMatcherSpec extends FlatSpec with Matchers {
   val p = Par()

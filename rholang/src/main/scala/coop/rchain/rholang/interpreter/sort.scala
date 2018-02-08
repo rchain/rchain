@@ -260,7 +260,6 @@ object SendSortMatcher {
   }
 }
 
-// TODO: Sort the binds
 object ReceiveSortMatcher {
   def sortBind(bind: (List[Channel], Channel)): ScoredTerm[Tuple2[List[Channel], Channel]] = {
     val (patterns, channel) = bind
@@ -270,6 +269,20 @@ object ReceiveSortMatcher {
                 Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score)))
   }
 
+  // Used during normalize to presort the binds.
+  def preSortBinds[T](binds: List[Tuple3[List[Channel], Channel, DebruijnLevelMap[T]]]) :
+    List[Tuple3[List[Channel], Channel, DebruijnLevelMap[T]]] = {
+    val sortedBind = binds.map{
+      case (patterns : List[Channel], channel: Channel, knownFree : DebruijnLevelMap[T]) =>
+        val sortedBind = sortBind((patterns, channel))
+        val (sortedPatterns, sortedChannel) = sortedBind.term
+        ScoredTerm((sortedPatterns, sortedChannel, knownFree), sortedBind.score)
+    }.sorted
+    sortedBind.map(_.term)
+  }
+
+  // The order of the binds must already be presorted by the time this is called.
+  // This function will then sort the insides of the preordered binds.
   def sortMatch(r: Receive) : ScoredTerm[Receive] = {
     val sortedBinds = r.binds.map(bind => sortBind(bind))
     ScoredTerm(Receive(sortedBinds.map(_.term)), Node(Seq(Leaf(Score.RECEIVE)) ++ sortedBinds.map(_.score)))
