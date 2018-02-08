@@ -4,22 +4,16 @@ import cats.data.State
 import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
 
-sealed trait Location extends Ob
-case class ArgRegister(argReg: Int) extends Location
-case class CtxtRegister(reg: Int) extends Location
-case class AddrVariable(indirect: Boolean, level: Int, offset: Int)
+sealed trait Location                                               extends Ob
+case class ArgRegister(argReg: Int)                                 extends Location
+case class CtxtRegister(reg: Int)                                   extends Location
+case class AddrVariable(indirect: Boolean, level: Int, offset: Int) extends Location
+case class BitField(indirect: Boolean, level: Int, offset: Int, spanSize: Int, sign: Int = 0)
     extends Location
-case class BitField(indirect: Boolean,
-                    level: Int,
-                    offset: Int,
-                    spanSize: Int,
-                    sign: Int = 0)
-    extends Location
-case class BitField00(offset: Int, spanSize: Int, sign: Int) extends Location
-case class GlobalVariable(offset: Int) extends Location
-case class LexVariable(indirect: Boolean, level: Int, offset: Int)
-    extends Location
-case object Limbo extends Location
+case class BitField00(offset: Int, spanSize: Int, sign: Int)       extends Location
+case class GlobalVariable(offset: Int)                             extends Location
+case class LexVariable(indirect: Boolean, level: Int, offset: Int) extends Location
+case object Limbo                                                  extends Location
 
 sealed trait StoreResult
 case object Success extends StoreResult
@@ -79,8 +73,7 @@ object Location {
           if (argReg >= ctxt.argvec.elem.size)
             (ctxt, Failure)
           else
-            (ctxt.update(_ >> 'argvec >> 'elem)(_.updated(argReg, value)),
-             Success)
+            (ctxt.update(_ >> 'argvec >> 'elem)(_.updated(argReg, value)), Success)
         }
 
       case LexVariable(indirect, level, offset) =>

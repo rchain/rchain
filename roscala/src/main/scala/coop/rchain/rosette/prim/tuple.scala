@@ -35,9 +35,9 @@ object tuple {
 
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
-      val elem = ctxt.argvec.elem
+      val elem  = ctxt.argvec.elem
       val nargs = ctxt.nargs
-      val last = nargs - 1
+      val last  = nargs - 1
       val slice = elem.slice(0, last)
 
       checkTuple(last, elem)

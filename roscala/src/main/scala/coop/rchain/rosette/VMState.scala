@@ -33,8 +33,7 @@ case class VMState(bytecodes: Map[Op, Long],
   def set[T](f: RootLens[VMState] ⇒ Lens[VMState, T])(value: T): VMState =
     f(lens[VMState]).set(this)(value)
 
-  def update[T](f: RootLens[VMState] ⇒ Lens[VMState, T])(
-      value: T => T): VMState =
+  def update[T](f: RootLens[VMState] ⇒ Lens[VMState, T])(value: T => T): VMState =
     f(lens[VMState]).modify(this)(value)
 
   def updateSelf[T](value: VMState => VMState): VMState = value(this)
