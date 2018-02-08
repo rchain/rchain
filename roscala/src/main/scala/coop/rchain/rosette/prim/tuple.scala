@@ -77,14 +77,14 @@ object tuple {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
-      val n = ctxt.nargs
-      var ret = Tuple(Seq.empty)
+      val n    = ctxt.nargs
+      val init = Tuple(Seq.empty)
 
-      for (el <- elem) {
-        ret = Tuple(ret, el.asInstanceOf[Tuple])
-      }
-
-      Right(ret)
+      Right(
+        elem.foldLeft(init)(
+          (acc: Tuple, el: Ob) => Tuple(acc, el.asInstanceOf[Tuple])
+        )
+      )
     }
   }
 
@@ -99,4 +99,5 @@ object tuple {
     } else {
       Right(elem(n).asInstanceOf[Tuple])
     }
+
 }
