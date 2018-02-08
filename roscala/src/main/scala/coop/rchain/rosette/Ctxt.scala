@@ -43,8 +43,7 @@ case class Ctxt(tag: Location,
         val newState = state
           .set(_ >> 'ctxt >> 'ctxt)(ctxt)
           .update(_ >> 'ctxt >> 'ctxt >> 'outstanding)(_ - 1)
-          .updateSelf(st =>
-            if (st.ctxt.ctxt.outstanding == 0) scheduleStrand(st) else st)
+          .updateSelf(st => if (st.ctxt.ctxt.outstanding == 0) scheduleStrand(st) else st)
 
         (false, newState)
 
@@ -81,8 +80,8 @@ case class Ctxt(tag: Location,
 
   def vmError(state: VMState): (Result, VMState) = {
     val newArgvec = Tuple(this.prepare())
-    val newState = state.set(_ >> 'ctxt)(
-      Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor))
+    val newState =
+      state.set(_ >> 'ctxt)(Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor))
 
     OprnVmError.dispatch(newState)
   }
@@ -112,34 +111,8 @@ object Ctxt {
   def apply(trgt: Ob, argvec: Tuple): Ctxt = PLACEHOLDER
 
   object NIV
-      extends Ctxt(null,
-                   0,
-                   0,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null)
+      extends Ctxt(null, 0, 0, null, null, null, null, null, null, null, null, null, null, null)
 
   object PLACEHOLDER
-      extends Ctxt(null,
-                   0,
-                   0,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null)
+      extends Ctxt(null, 0, 0, null, null, null, null, null, null, null, null, null, null, null)
 }

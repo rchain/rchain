@@ -6,8 +6,8 @@ import coop.rchain.rosette.Ob._
 import coop.rchain.rosette.prim.Prim
 
 sealed trait Work
-case object NoWorkLeft extends Work
-case object WaitForAsync extends Work
+case object NoWorkLeft                      extends Work
+case object WaitForAsync                    extends Work
 case class StrandsScheduled(state: VMState) extends Work
 
 object VirtualMachine {
@@ -31,12 +31,12 @@ object VirtualMachine {
     Ob.NIV
   )
 
-  def handleApplyPrimSuspend(op: Op): Unit = ()
-  def handleApplyPrimUpcall(op: Op, tag: Location): Unit = ()
-  def handleFormalsMismatch(formals: Template): Ob = null
+  def handleApplyPrimSuspend(op: Op): Unit                = ()
+  def handleApplyPrimUpcall(op: Op, tag: Location): Unit  = ()
+  def handleFormalsMismatch(formals: Template): Ob        = null
   def handleMissingBinding(key: Ob, argReg: Location): Ob = null
-  def handleSleep(): Unit = ()
-  def handleXmitUpcall(op: Op, tag: Location): Unit = ()
+  def handleSleep(): Unit                                 = ()
+  def handleXmitUpcall(op: Op, tag: Location): Unit       = ()
 
   def handleVirtualMachineError(state: VMState): VMState =
     state.ctxt.vmError(state)._2
@@ -82,8 +82,7 @@ object VirtualMachine {
     v.sysval match {
       case SyscodeUpcall =>
         op match {
-          case _: OpApplyCmd | _: OpApplyPrimArg | _: OpApplyPrimReg |
-              _: OpApplyPrimTag =>
+          case _: OpApplyCmd | _: OpApplyPrimArg | _: OpApplyPrimReg | _: OpApplyPrimTag =>
             handleApplyPrimUpcall(op, tag)
           case _ =>
             handleXmitUpcall(op, tag)
@@ -91,8 +90,7 @@ object VirtualMachine {
 
       case SyscodeSuspend =>
         op match {
-          case _: OpApplyCmd | _: OpApplyPrimArg | _: OpApplyPrimReg |
-              _: OpApplyPrimTag =>
+          case _: OpApplyCmd | _: OpApplyPrimArg | _: OpApplyPrimReg | _: OpApplyPrimTag =>
             handleApplyPrimSuspend(op)
 
           case _ => // Nothing happens; this is the usual case.
@@ -125,13 +123,13 @@ object VirtualMachine {
             stateScheduled
           }
 
-          val strand = stateDebug.strandPool.head
+          val strand   = stateDebug.strandPool.head
           val newState = stateDebug.update(_ >> 'strandPool)(_.tail)
 
           (false, installStrand(strand, newState))
       }
     } else {
-      val strand = state.strandPool.head
+      val strand   = state.strandPool.head
       val newState = state.update(_ >> 'strandPool)(_.tail)
 
       (false, installStrand(strand, newState))
@@ -207,8 +205,8 @@ object VirtualMachine {
   }
 
   def executeSeq(opCodes: Seq[Op], state: VMState): VMState = {
-    var pc = state.pc.relative
-    var exit = false
+    var pc           = state.pc.relative
+    var exit         = false
     var currentState = state
 
     while (pc < opCodes.size && !exit) {
@@ -272,13 +270,13 @@ object VirtualMachine {
   def setCtxtReg(reg: Int, ob: Ob)(state: VMState): VMState =
     state.ctxt.setReg(reg, ob) match {
       case Some(newCtxt) => state.set(_ >> 'ctxt)(newCtxt)
-      case None => die(unknownRegister(reg))(state)
+      case None          => die(unknownRegister(reg))(state)
     }
 
   def getCtxtReg(reg: Int)(state: VMState): (Option[Ob], VMState) =
     state.ctxt.getReg(reg) match {
       case someOb @ Some(_) => (someOb, state)
-      case None => (None, die(unknownRegister(reg))(state))
+      case None             => (None, die(unknownRegister(reg))(state))
     }
 
   def doRtn(state: VMState): VMState = {
@@ -303,64 +301,64 @@ object VirtualMachine {
       case Right(ob) if ob.is(OTsysval) =>
         // handleException(ob, instr, state.ctxt.tag)
         newState.set(_ >> 'doNextThreadFlag)(true)
-      case Left(DeadThread) => newState.set(_ >> 'doNextThreadFlag)(true)
+      case Left(DeadThread)       => newState.set(_ >> 'doNextThreadFlag)(true)
       case _ if state.xmitData._2 => newState.set(_ >> 'doNextThreadFlag)(true)
-      case _ => newState
+      case _                      => newState
     }
   }
 
   def executeDispatch(op: Op, state: VMState): VMState =
     op match {
-      case o: OpHalt => execute(o, state)
-      case o: OpPush => execute(o, state)
-      case o: OpPop => execute(o, state)
-      case o: OpNargs => execute(o, state)
-      case o: OpPushAlloc => execute(o, state)
-      case o: OpExtend => execute(o, state)
-      case o: OpOutstanding => execute(o, state)
-      case o: OpAlloc => execute(o, state)
-      case o: OpFork => execute(o, state)
-      case o: OpXmitTag => execute(o, state)
-      case o: OpXmitArg => execute(o, state)
-      case o: OpXmitReg => execute(o, state)
-      case o: OpXmit => execute(o, state)
-      case o: OpXmitTagXtnd => execute(o, state)
-      case o: OpXmitArgXtnd => execute(o, state)
-      case o: OpXmitRegXtnd => execute(o, state)
-      case o: OpSend => execute(o, state)
-      case o: OpApplyPrimTag => execute(o, state)
-      case o: OpApplyPrimArg => execute(o, state)
-      case o: OpApplyPrimReg => execute(o, state)
-      case o: OpApplyCmd => execute(o, state)
-      case o: OpRtnTag => execute(o, state)
-      case o: OpRtnArg => execute(o, state)
-      case o: OpRtnReg => execute(o, state)
-      case o: OpRtn => execute(o, state)
-      case o: OpUpcallRtn => execute(o, state)
-      case o: OpUpcallResume => execute(o, state)
-      case o: OpNxt => execute(o, state)
-      case o: OpJmp => execute(o, state)
-      case o: OpJmpFalse => execute(o, state)
-      case o: OpJmpCut => execute(o, state)
-      case o: OpLookupToArg => execute(o, state)
-      case o: OpLookupToReg => execute(o, state)
-      case o: OpXferLexToArg => execute(o, state)
-      case o: OpXferLexToReg => execute(o, state)
-      case o: OpXferGlobalToArg => execute(o, state)
-      case o: OpXferGlobalToReg => execute(o, state)
-      case o: OpXferArgToArg => execute(o, state)
-      case o: OpXferRsltToArg => execute(o, state)
-      case o: OpXferArgToRslt => execute(o, state)
-      case o: OpXferRsltToReg => execute(o, state)
-      case o: OpXferRegToRslt => execute(o, state)
-      case o: OpXferRsltToDest => execute(o, state)
-      case o: OpXferSrcToRslt => execute(o, state)
-      case o: OpIndLitToArg => execute(o, state)
-      case o: OpIndLitToReg => execute(o, state)
-      case o: OpIndLitToRslt => execute(o, state)
+      case o: OpHalt              => execute(o, state)
+      case o: OpPush              => execute(o, state)
+      case o: OpPop               => execute(o, state)
+      case o: OpNargs             => execute(o, state)
+      case o: OpPushAlloc         => execute(o, state)
+      case o: OpExtend            => execute(o, state)
+      case o: OpOutstanding       => execute(o, state)
+      case o: OpAlloc             => execute(o, state)
+      case o: OpFork              => execute(o, state)
+      case o: OpXmitTag           => execute(o, state)
+      case o: OpXmitArg           => execute(o, state)
+      case o: OpXmitReg           => execute(o, state)
+      case o: OpXmit              => execute(o, state)
+      case o: OpXmitTagXtnd       => execute(o, state)
+      case o: OpXmitArgXtnd       => execute(o, state)
+      case o: OpXmitRegXtnd       => execute(o, state)
+      case o: OpSend              => execute(o, state)
+      case o: OpApplyPrimTag      => execute(o, state)
+      case o: OpApplyPrimArg      => execute(o, state)
+      case o: OpApplyPrimReg      => execute(o, state)
+      case o: OpApplyCmd          => execute(o, state)
+      case o: OpRtnTag            => execute(o, state)
+      case o: OpRtnArg            => execute(o, state)
+      case o: OpRtnReg            => execute(o, state)
+      case o: OpRtn               => execute(o, state)
+      case o: OpUpcallRtn         => execute(o, state)
+      case o: OpUpcallResume      => execute(o, state)
+      case o: OpNxt               => execute(o, state)
+      case o: OpJmp               => execute(o, state)
+      case o: OpJmpFalse          => execute(o, state)
+      case o: OpJmpCut            => execute(o, state)
+      case o: OpLookupToArg       => execute(o, state)
+      case o: OpLookupToReg       => execute(o, state)
+      case o: OpXferLexToArg      => execute(o, state)
+      case o: OpXferLexToReg      => execute(o, state)
+      case o: OpXferGlobalToArg   => execute(o, state)
+      case o: OpXferGlobalToReg   => execute(o, state)
+      case o: OpXferArgToArg      => execute(o, state)
+      case o: OpXferRsltToArg     => execute(o, state)
+      case o: OpXferArgToRslt     => execute(o, state)
+      case o: OpXferRsltToReg     => execute(o, state)
+      case o: OpXferRegToRslt     => execute(o, state)
+      case o: OpXferRsltToDest    => execute(o, state)
+      case o: OpXferSrcToRslt     => execute(o, state)
+      case o: OpIndLitToArg       => execute(o, state)
+      case o: OpIndLitToReg       => execute(o, state)
+      case o: OpIndLitToRslt      => execute(o, state)
       case o: OpImmediateLitToArg => execute(o, state)
       case o: OpImmediateLitToReg => execute(o, state)
-      case o: OpUnknown => execute(o, state)
+      case o: OpUnknown           => execute(o, state)
     }
 
   def execute(op: OpHalt, state: VMState): VMState =
@@ -388,16 +386,15 @@ object VirtualMachine {
     def getStdExtension = state.ctxt.env.as[StdExtension]
 
     val newState = for {
-      template <- getTemplate or die(
-        s"OpExtend: No template in state.code.litvec(${op.lit})")(state)
+      template <- getTemplate or die(s"OpExtend: No template in state.code.litvec(${op.lit})")(
+        state)
 
       tuple <- matchActuals(template) or
         // TODO: Revisit
         //handleFormalsMismatch(formals)
         state.set(_ >> 'doNextThreadFlag)(true)
 
-      env <- getStdExtension or die(
-        "OpExtend: state.ctxt.env needs to be a StdExtension")(state)
+      env <- getStdExtension or die("OpExtend: state.ctxt.env needs to be a StdExtension")(state)
 
     } yield {
       val newEnv = env.extendWith(template.keyMeta, tuple)
@@ -524,7 +521,7 @@ object VirtualMachine {
     state
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+        val prim  = Prim.nthPrim(op.primNum)
         val argno = op.arg
 
         val (result, newState) =
@@ -556,7 +553,7 @@ object VirtualMachine {
     state
       .set(_ >> 'ctxt >> 'nargs)(op.nargs)
       .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+        val prim  = Prim.nthPrim(op.primNum)
         val regno = op.reg
 
         val (result, newState) =
@@ -681,12 +678,11 @@ object VirtualMachine {
   }
 
   def execute(op: OpJmpFalse, state: VMState): VMState =
-    state.update(_ >> 'pc >> 'relative)(
-      if (state.ctxt.rslt == Ob.RBLFALSE) op.pc else _)
+    state.update(_ >> 'pc >> 'relative)(if (state.ctxt.rslt == Ob.RBLFALSE) op.pc else _)
 
   def execute(op: OpLookupToArg, state: VMState): VMState = {
     val argno = op.arg
-    val key = state.code.lit(op.lit)
+    val key   = state.code.lit(op.lit)
 
     val value =
       state.ctxt.selfEnv.meta.lookupOBO(state.ctxt.selfEnv, key, state.ctxt)
@@ -706,7 +702,7 @@ object VirtualMachine {
 
   def execute(op: OpLookupToReg, state: VMState): VMState = {
     val regno = op.reg
-    val key = state.code.lit(op.lit)
+    val key   = state.code.lit(op.lit)
 
     val value =
       state.ctxt.selfEnv.meta.lookupOBO(state.ctxt.selfEnv, key, state.ctxt)
@@ -736,8 +732,7 @@ object VirtualMachine {
 
     environment match {
       case Some(e) =>
-        state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-          _.updated(op.arg, e.slot(op.offset)))
+        state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, e.slot(op.offset)))
       case None => die("OpXferLexToArg: Type mismatch")(state)
     }
   }
@@ -773,8 +768,7 @@ object VirtualMachine {
       _.updated(op.dest, state.ctxt.argvec.elem(op.src)))
 
   def execute(op: OpXferRsltToArg, state: VMState): VMState =
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.arg, state.ctxt.rslt))
+    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.ctxt.rslt))
 
   def execute(op: OpXferArgToRslt, state: VMState): VMState =
     state.set(_ >> 'ctxt >> 'rslt)(state.ctxt.argvec.elem(op.arg))
@@ -791,14 +785,13 @@ object VirtualMachine {
     val location = state.code.lit(op.lit).asInstanceOf[Location]
 
     val newState = for {
-      _ <- State.modify[VMState](_.copy(loc = location))
-      rslt <- State.inspect[VMState, Ob](_.ctxt.rslt)
+      _     <- State.modify[VMState](_.copy(loc = location))
+      rslt  <- State.inspect[VMState, Ob](_.ctxt.rslt)
       ctxt0 <- State.inspect[VMState, Ctxt](_.ctxt)
 
       _ <- Location
         .store(location, rslt)
-        .transformS[VMState](_.ctxt,
-                             (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+        .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
         .transform { (vmState, storeRes) =>
           storeRes match {
             case Success =>
@@ -814,14 +807,13 @@ object VirtualMachine {
 
   def execute(op: OpXferSrcToRslt, state: VMState): VMState = {
     val location = state.code.lit(op.lit).asInstanceOf[Location]
-    val st0 = state.set(_ >> 'loc)(location)
+    val st0      = state.set(_ >> 'loc)(location)
     val (_, res) = Location.fetch(location, st0.globalEnv).run(st0.ctxt).value
     st0.set(_ >> 'ctxt >> 'rslt)(res.getOrElse(Ob.INVALID))
   }
 
   def execute(op: OpIndLitToArg, state: VMState): VMState =
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.arg, state.code.lit(op.lit)))
+    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.code.lit(op.lit)))
 
   def execute(op: OpIndLitToReg, state: VMState): VMState =
     setCtxtReg(op.reg, state.code.lit(op.lit))(state)
@@ -830,8 +822,7 @@ object VirtualMachine {
     state.set(_ >> 'ctxt >> 'rslt)(state.code.lit(op.lit))
 
   def execute(op: OpImmediateLitToArg, state: VMState): VMState =
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.arg, vmLiterals(op.value)))
+    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, vmLiterals(op.value)))
 
   def execute(op: OpImmediateLitToReg, state: VMState): VMState =
     setCtxtReg(op.reg, vmLiterals(op.lit))(state)
