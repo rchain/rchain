@@ -89,8 +89,42 @@ object Equivalences{
             case _ => false
           }
         
-      case (_: PMatch, _: PMatch) => ???
-      case (_: PNew, _: PNew) => ???
+      case (match1: PMatch, match2: PMatch) =>
+        val p1 = match1.proc_
+        val p2 = match2.proc_
+        if (structurallyEquivalent(env1,p1,env2,p2)) {
+          val cases1 = match1.listpmbranch_.asScala.toList
+          val cases2 = match2.listpmbranch_.asScala.toList
+          cases1.size == cases2.size &&
+            (cases1,cases2).zipped.forall {
+              case (pm1: PatternMatch,pm2: PatternMatch) =>
+                val pmp1 = pm1.proc_
+                val pmp2 = pm2.proc_
+                if (structurallyEquivalent(env1,pmp1,env2,pmp2)) {
+                  val pat1 = pm1.ppattern_
+                  val pat2 = pm2.ppattern_
+                  (pat1,pat2) match {
+                    case (val1: PPtVal, val2: PPtVal) =>
+                      val1.valpattern_ == val2.valpattern_
+                    case (var1: PPtVar, var2: PPtVar) =>
+                      var1.varpattern_ == var2.varpattern_
+                    case _ => false
+                  }
+                } else false
+              case _ => false
+            }
+        } else false
+
+        structurallyEquivalent (env1,p1,env2,p2)
+
+      case (nu1: PNew, nu2: PNew) =>
+        val vars1 = nu1.listvar_.asScala.toList
+        val vars2 = nu2.listvar_.asScala.toList
+        val p1 = nu1.proc_
+        val p2 = nu2.proc_
+        val newEnv1 = env1.newBindings(vars1)
+        val newEnv2 = env2.newBindings(vars2)
+        structurallyEquivalent(newEnv1,p1,newEnv2,p2)
       case (print1: PPrint, print2: PPrint) =>
         structurallyEquivalent(env1, print1.proc_, env2, print2.proc_)
       case (constr1: PConstr, constr2: PConstr) => {
