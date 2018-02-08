@@ -118,37 +118,30 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 }
 
-class NameWildcardVisitSpec extends FlatSpec with Matchers {
-  val nameVisitor = new NameNormalizeVisitor() {}
+class NameMatcherSpec extends FlatSpec with Matchers {
   val inputs = NameVisitInputs(
       DebruijnLevelMap[VarSort](),
       DebruijnLevelMap[VarSort]())
 
   "NameWildcard" should "Set wildcard flag in knownFree" in {
     val nw = new NameWildcard()
-    val result = nw.accept(nameVisitor, inputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nw, inputs)
     result.chan should be (ChanVar(FreeVar(0)))
     result.knownFree shouldEqual (inputs.knownFree.setWildcardUsed(1)._1)
   }
-}
 
-class NameVarVisitSpec extends FlatSpec with Matchers {
-  val nameVisitor = new NameNormalizeVisitor() {}
-  val inputs = NameVisitInputs(
-      DebruijnLevelMap[VarSort](),
-      DebruijnLevelMap[VarSort]())
   val nvar = new NameVar("x")
 
   "NameVar" should "Compile as BoundVar if it's in env" in {
     val boundInputs = inputs.copy(env =
       inputs.env.newBindings(List((Some("x"), NameSort)))._1)
   
-    val result = nvar.accept(nameVisitor, boundInputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     result.chan should be (ChanVar(BoundVar(0)))
     result.knownFree should be (inputs.knownFree)
   }
   "NameVar" should "Compile as FreeVar if it's not in env" in {
-    val result = nvar.accept(nameVisitor, inputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nvar, inputs)
     result.chan should be (ChanVar(FreeVar(0)))
     result.knownFree shouldEqual
         (inputs.knownFree.newBindings(
@@ -159,7 +152,7 @@ class NameVarVisitSpec extends FlatSpec with Matchers {
       inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
     
     an [Error] should be thrownBy {
-      nvar.accept(nameVisitor, boundInputs)
+      NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
   "NameVar" should "Not compile if it's used free somewhere else" in {
@@ -167,39 +160,31 @@ class NameVarVisitSpec extends FlatSpec with Matchers {
       inputs.knownFree.newBindings(List((Some("x"), NameSort)))._1)
     
     an [Error] should be thrownBy {
-      nvar.accept(nameVisitor, boundInputs)
+      NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
-}
 
-class NameQuoteVisitSpec extends FlatSpec with Matchers {
-  val nameVisitor = new NameNormalizeVisitor() {}
-  val inputs = NameVisitInputs(
-      DebruijnLevelMap[VarSort](),
-      DebruijnLevelMap[VarSort]())
-  val nvar = new NameVar("x")
+  val nqvar = new NameQuote(new PVar("x"))
 
   "NameQuote" should "compile to a quoted var if the var is bound" in {
     val boundInputs = inputs.copy(env =
       inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
     val nqvar = new NameQuote(new PVar("x"))
-    val result = nqvar.accept(nameVisitor, boundInputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nqvar, boundInputs)
     result.chan should be (Quote(Par().copy(expr = List(EVar(BoundVar(0))))))
     result.knownFree should be (inputs.knownFree)
   }
 
   "NameQuote" should "return a free use if the quoted proc has a free var" in {
-    val nqvar = new NameQuote(new PVar("x"))
-    val result = nqvar.accept(nameVisitor, inputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nqvar, inputs)
     result.chan should be (Quote(Par().copy(expr = List(EVar(FreeVar(0))))))
     result.knownFree should be (inputs.knownFree.newBindings(List((Some("x"), ProcSort)))._1)
   }
 
   "NameQuote" should "compile to a quoted ground" in {
     val nqground = new NameQuote(new PGround(new GroundInt(7)))
-    val result = nqground.accept(nameVisitor, inputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nqground, inputs)
     result.chan should be (Quote(Par().copy(expr = List(GInt(7)))))
     result.knownFree should be (inputs.knownFree)
   }
 }
-

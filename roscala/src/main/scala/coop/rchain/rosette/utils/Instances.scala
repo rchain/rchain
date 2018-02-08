@@ -22,7 +22,7 @@ object Instances {
   implicit val mkSlotFieldLens = new MkFieldLens[Ob, Witness.`'slot`.T] {
     override type Elem = Seq[Ob]
     override def apply(): Lens[Ob, Seq[Ob]] = new Lens[Ob, Seq[Ob]] {
-      override def get(s: Ob): Seq[Ob] = s.slot
+      override def get(s: Ob): Seq[Ob]        = s.slot
       override def set(s: Ob)(a: Seq[Ob]): Ob = setField(s, "slot")(a)
     }
   }
@@ -34,7 +34,7 @@ object Instances {
     override def apply(): Lens[Ob, Ob] = new Lens[Ob, Ob] {
       override def get(s: Ob): Ob = s.parent
       override def set(s: Ob)(a: Ob): Ob = {
-        val l = lens[Ob] >> 'slot
+        val l          = lens[Ob] >> 'slot
         val r: Seq[Ob] = l.get(s).updated(1, a)
         l.set(s)(r)
       }

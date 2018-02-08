@@ -35,7 +35,7 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
         (value.toPath(args), expectedResult) match {
           case (Right(path), Right(expectedPath)) =>
             assert(expectedPath.contains(path))
-          case (Right(path), Left(expectedErr)) =>
+          case (Right(path), Left(_)) =>
             fail(s"Expected error instead of path: '$path'")
           case (Left(err), Left(expectedErr)) =>
             assert(err.getClass == expectedErr.getClass)

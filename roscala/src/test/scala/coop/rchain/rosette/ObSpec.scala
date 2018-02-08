@@ -1,5 +1,6 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.Ob.setLex
 import org.scalatest.{Matchers, WordSpec}
 
 class ObSpec extends WordSpec with Matchers {
@@ -48,8 +49,10 @@ class ObSpec extends WordSpec with Matchers {
       val ob = createOb(Seq(meta, parent))
       val offset = 1
 
-      val (newOb, newValue) =
-        ob.setLex(indirect = true, level = 1, offset = offset, value = value)
+      val newOb = setLex(indirect = true,
+                         level = 1,
+                         offset = offset,
+                         value = value).runS(ob).value
 
       val actorParent = newOb.parent.asInstanceOf[Actor]
 
