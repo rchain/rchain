@@ -38,14 +38,19 @@ case class ScoredTerm[T](term: T, score: Tree[Int]) extends Ordered[ScoredTerm[T
     def compareScore(s1: Tree[Int], s2: Tree[Int]) : Int = {
       (s1, s2) match {
         case (Leaf(a), Leaf(b)) => a.compare(b)
-        case (Node(Nil), Node(Nil)) => 0
-        case (Node(h1 +: t1), Node(h2 +: t2)) =>
-          compareScore(h1, h2) match {
-            case 0 => compareScore(Node(t1), Node(t2))
-            case other => other
+        case (Node(a), Leaf(b)) => 1
+        case (Leaf(a), Node(b)) => -1
+        case (Node(a), Node(b)) =>
+          (a, b) match {
+            case (Nil, Nil) => 0
+            case (Nil, _) => -1
+            case (_, Nil) => 1
+            case (h1 +: t1, h2 +: t2) =>
+              compareScore(h1, h2) match {
+                case 0 => compareScore(Node(t1), Node(t2))
+                case other => other
+              }
           }
-        case (Node(_), _) => -1
-        case (_, Node(_)) => 1
       }
     }
     compareScore(this.score, that.score)
