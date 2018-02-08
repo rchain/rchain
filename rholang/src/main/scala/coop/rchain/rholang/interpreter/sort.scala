@@ -297,7 +297,7 @@ object ReceiveSortMatcher {
   // Used during normalize to presort the binds.
   def preSortBinds[T](binds: List[Tuple3[List[Channel], Channel, DebruijnLevelMap[T]]]) :
     List[Tuple3[List[Channel], Channel, DebruijnLevelMap[T]]] = {
-    val sortedBind = binds.map{
+    val sortedBind = binds.map {
       case (patterns : List[Channel], channel: Channel, knownFree : DebruijnLevelMap[T]) =>
         val sortedBind = sortBind((patterns, channel))
         val (sortedPatterns, sortedChannel) = sortedBind.term
