@@ -14,7 +14,7 @@ object CompilerSettings {
   private lazy val commonOptions =
     // format: off
     Seq(
-      "-Xfatal-warnings",
+      // "-Xfatal-warnings",
       "-Xfuture",
       "-Ypartial-unification",
       "-Ywarn-dead-code",
@@ -52,7 +52,7 @@ object CompilerSettings {
     scalacOptions in (Compile, console) ~= {
       _.filterNot(
         Set(
-          "-Xfatal-warnings",
+          // "-Xfatal-warnings",
           "-Ywarn-unused-import",
           "-Ywarn-unused:imports"
         ))

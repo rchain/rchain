@@ -9,7 +9,10 @@ def commonSettings: Seq[Setting[_]] =
     scalaVersion := "2.12.4",
 
     version := "0.1.0-SNAPSHOT",
-    resolvers += Resolver.sonatypeRepo("releases"),
+
+    // resolvers += Resolver.sonatypeRepo("releases"),
+    // resolvers += Resolver.url("scoverage-bintray", url("https://dl.bintray.com/sksamuel/sbt-plugins/"))(Resolver.ivyStylePatterns),
+
     CompilerSettings.options,
     logBuffered in Test := false,
     crossScalaVersions := Seq("2.10.6", scalaVersion.value),
@@ -65,10 +68,15 @@ lazy val node = project
 lazy val rholang = project
   .settings(
     commonSettings,
-    crossScalaVersions := Seq("2.10.6", scalaVersion.value),
+    scalacOptions ++= Seq(
+      "-language:existentials",
+      "-language:higherKinds",
+      "-Yno-adapted-args",
+    ),
+    libraryDependencies ++= Seq(scalaz, spire),
     bnfcSettings,
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
-    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler")
+    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
   )
 
 

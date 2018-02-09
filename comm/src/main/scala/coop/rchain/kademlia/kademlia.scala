@@ -32,7 +32,7 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
-case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
+final case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
   var pinging           = false
   override def key      = entry.key
   override def toString = s"#{PeerTableEntry $entry}"
@@ -72,9 +72,9 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-case class PeerTable[A <: Peer](home: A,
-                                val k: Int = PeerTable.Redundancy,
-                                val alpha: Int = PeerTable.Alpha) {
+final case class PeerTable[A <: Peer](home: A,
+                                      val k: Int = PeerTable.Redundancy,
+                                      val alpha: Int = PeerTable.Alpha) {
 
   type Entry = PeerTableEntry[A]
 
