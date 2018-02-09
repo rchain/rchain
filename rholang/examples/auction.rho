@@ -23,9 +23,9 @@ new auction in {
                     now_channel.injectNow() |
                     for (now <- now_channel; highest_bidder <- highest_bidder_channel; highest_bid <- highest_bid_channel; auction_start <- auction_start_channel) {
                         match [now <= auction_start + bidding_time, amount > highest_bid] with
-                            <true, true> => {
+                            [true, true] => {
                                 match [highest_bidder != 0] with
-                                    <true> => {
+                                    [true] => {
                                         for (pending_returns <- pending_returns_channel) {
                                             pending_returns_channel!(
                                                 pending_returns.insert(highest_bidder,
@@ -71,7 +71,7 @@ new auction in {
                     now_channel.injectNow() |
                     for (now <- now_channel;  auction_start <- auction_start_channel; ended <- ended_channel; highest_bid <- highest_bid_channel) {
                         match [now >= auction_start + bidding_time, ended != true] with
-                            <true, true> => {
+                            [true, true] => {
                                 ended_channel!(true) |
                                 auction_start_channel!(auction_start) |
                                 highest_bid_channel!(highest_bid) |
