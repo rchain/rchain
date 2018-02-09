@@ -76,11 +76,7 @@ object Main {
 
     val host = conf.host.toOption match {
       case Some(host) => host
-      case None =>
-        whoami(conf.port()) match {
-          case Some(addy) => addy.getHostAddress
-          case None       => "localhost"
-        }
+      case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
     }
 
     val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
