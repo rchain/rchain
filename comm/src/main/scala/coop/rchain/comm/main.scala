@@ -34,11 +34,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 object Main {
   val logger = Logger("main")
 
-  /*
-   * Duration (in ms) to pause between successive queries for more peers.
-   */
-  val pauseTime = 5000L
-
   def whoami(port: Int): Option[InetAddress] = {
 
     val upnp = new UPnP(port)
@@ -110,6 +105,7 @@ object Main {
       logger.info("Goodbye.")
     }
 
+    val pauseTime = 5000L
     var lastCount = 0
     while (true) {
       Thread.sleep(pauseTime)
