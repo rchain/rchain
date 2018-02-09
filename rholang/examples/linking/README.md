@@ -14,7 +14,7 @@ When `link.scala` is used on a Rholang source containing the `import` keyword, t
 ### Example: 
 Let's say X.rho contains
 ```
-  export X in { contract X(input, return) = { return( 2input ) } }
+  export X in { contract X(input, return) = { return( 2 * input ) } }
 ```
 and that Y.rho contains
 ```
