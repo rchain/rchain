@@ -1,0 +1,58 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
+;;; File defining the NameSpace actor.
+;;; Its two main accessor methods produce and consume are defined in their respective files.
+
+;;; While RBL is untyped, the following is some of the would be inferred types
+;;;
+;;;     type Data = Any
+;;;     type ContinuationStruct = Tuple2[List[Pattern], Tuple3[Continuation, Tuple2[Code, Env], Boolean]]
+;;;     type Subspace = Tuple2[List[Data], List[ContinuationStruct]]
+;;;
+;;; The channel-subspace-table is a key value store that has channels as keys and subspaces as values.
+;;; The type of the subspace is described above. Note the subspace contains lists of products/data
+;;; and lists of continuation structs instead of just products/data and continuation structs because
+;;; you can queue up a bunch of produces or consumes at each channel (e.g., x!(5) | x!(5) | x!(5) -
+;;; this will store a data list of length 3 at channel x with each datum representing 5).
+;;;
+;;; The channel-lookup-table and reverse-channel-lookup-table are used to simulate being able to
+;;; add tuples as keys to channel-subspace-table. channel-lookup-table maps a channel to a list of
+;;; joined-channels that contain the channel. reverse-channel-lookup-table maps a joined-channel to
+;;; a list of channels that constitute that joined-channel.
+;;; These two tables will be removed with https://rchain.atlassian.net/browse/ROS-340 .
+;;;
+;;; A general outline for the consume and produce methods are as follows.
+;;;
+;;; Consume(list of [channel pattern] tuples)
+;;;   Check if data matching each pattern is available on each channel
+;;;     yes: Remove it from table and pass it to continuation
+;;;     no:
+;;;       Produce joined channel
+;;;       Store continuation and patterns at joined channel
+;;;       add joined channel -> [[channel pattern]] mapping
+;;;         ;; (Not necessary if we store the joined channel separated below)
+;;;       add channel -> joined channel mapping
+;;;
+;;; Produce(bat-channel, data)
+;;;  for each joined channel in channel->joined channel mapping:
+;;;    for each continuation struct list in joined channel:
+;;;      if pattern at bat-channel matches data:
+;;;        for each channel in joined channel ;; (This is where we use the mapping commented above)
+;;;          if channel == bat-channel and pattern matches data
+;;;            save data ;;; or technically the fact that its valid
+;;;          elif channel has data that matches the pattern
+;;;            save data
+;;;          else:
+;;;            this joined channel isn't viable
+;;;  if any joined channel is viable:
+;;;    pick 1 and eat the data
+;;;  else:
+;;;    store the data
+(define **wildcard** 'anything)
+(defActor NameSpace
+  (slots& channel-subspace-table (new RblTable)
+          channel-lookup-table (new RblTable)
+          reverse-channel-lookup-table (new RblTable)))
+(define t (new NameSpace))
