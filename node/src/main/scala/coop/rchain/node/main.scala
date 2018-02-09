@@ -1,4 +1,4 @@
-package coop.rchain.comm
+package coop.rchain.node
 
 import org.rogach.scallop._
 import java.util.UUID

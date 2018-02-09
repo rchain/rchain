@@ -1,25 +1,33 @@
-lazy val commonSettings = Seq(
-  organization := "coop.rchain",
-  version := "0.1.0-SNAPSHOT",
-  scalaVersion := "2.12.4"
-)
+import Dependencies._
+import BNFC._
 
-lazy val commonOptions = Seq(
-  "-language:existentials",
-  "-language:higherKinds",
-  "-language:implicitConversions",
-  "-Xfuture",
-  "-Xlint:_,-unused",
-  "-Yno-adapted-args",
-  "-Ywarn-dead-code",
-  "-Ywarn-numeric-widen",
-  "-Ywarn-value-discard",
-  "-deprecation",
-  "-encoding",
-  "UTF-8",
-  "-feature",
-  "-unchecked"
-)
+def commonSettings: Seq[Setting[_]] =
+  Seq[SettingsDefinition](
+    
+    organization := "coop.rchain",
+    scalaVersion := "2.12.4",
+
+    version := "0.1.0-SNAPSHOT",
+    resolvers += Resolver.sonatypeRepo("releases"),
+    scalacOptions ++= Seq(
+      "-language:existentials",
+      "-language:higherKinds",
+      "-language:implicitConversions",
+      "-Xfuture",
+      "-Xlint:_,-unused",
+      "-Yno-adapted-args",
+      "-Ywarn-dead-code",
+      "-Ywarn-numeric-widen",
+      "-Ywarn-value-discard",
+      "-deprecation",
+      "-encoding",
+      "UTF-8",
+      "-feature",
+      "-unchecked"
+    ),
+    logBuffered in Test := false,
+    crossScalaVersions := Seq("2.10.6", scalaVersion.value),
+  ).flatMap(_.settings)
 
 lazy val root = (project in file("."))
   .aggregate(node, comm)
@@ -27,15 +35,43 @@ lazy val root = (project in file("."))
 lazy val comm = project
   .settings(
     commonSettings,
-    scalacOptions ++= commonOptions
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      uriParsing,
+      uPnP),
+    PB.targets in Compile := Seq(
+      PB.gens.java -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+    ),
+  )
+
+lazy val storage = project
+  .settings(
+    commonSettings,
+    libraryDependencies += lmdb,
+    connectInput in run := true,
   )
 
 lazy val node = project
   .settings(
     commonSettings,
-    scalacOptions ++= commonOptions
+    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    libraryDependencies ++= Seq(
+      argParsing,
+      uriParsing
+    ),
+    mainClass in assembly := Some("coop.rchain.node.Main")
   )
   .dependsOn(comm)
+
+lazy val rholang = project
+  .settings(
+    commonSettings,
+    crossScalaVersions := Seq("2.10.6", scalaVersion.value),
+    bnfcSettings,
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
+    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler")
+  )
+
 
 /*
  * Dockerization via sbt-docker
