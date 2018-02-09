@@ -11,7 +11,11 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.0.1" % "test",
   )
 
-  val commonDependencies = loggingDependencies ++ testingDependencies
+  val coverageDependencies = Seq(
+    "org.scoverage" % "sbt-scoverage" % "1.5.1"
+  )
+
+  val commonDependencies = loggingDependencies ++ testingDependencies ++ coverageDependencies
 
   val crypto = "org.scorexfoundation" %% "scrypto" % "2.0.0"
 
@@ -27,6 +31,8 @@ object Dependencies {
   val protobufRuntime = "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
 
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)
+
+  val cats = "org.typelevel" %% "cats-core" % "1.0.1"
 
   val lmdb = "org.lmdbjava" % "lmdbjava" % "0.0.2"
 }

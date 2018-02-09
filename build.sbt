@@ -1,4 +1,5 @@
 import Dependencies._
+import CompilerSettings._
 import BNFC._
 
 def commonSettings: Seq[Setting[_]] =
@@ -9,24 +10,16 @@ def commonSettings: Seq[Setting[_]] =
 
     version := "0.1.0-SNAPSHOT",
     resolvers += Resolver.sonatypeRepo("releases"),
-    scalacOptions ++= Seq(
-      "-language:existentials",
-      "-language:higherKinds",
-      "-language:implicitConversions",
-      "-Xfuture",
-      "-Xlint:_,-unused",
-      "-Yno-adapted-args",
-      "-Ywarn-dead-code",
-      "-Ywarn-numeric-widen",
-      "-Ywarn-value-discard",
-      "-deprecation",
-      "-encoding",
-      "UTF-8",
-      "-feature",
-      "-unchecked"
-    ),
+    CompilerSettings.options,
     logBuffered in Test := false,
     crossScalaVersions := Seq("2.10.6", scalaVersion.value),
+
+    coverageMinimum := 90,
+    coverageFailOnMinimum := false,
+    coverageExcludedFiles := Seq(
+      (sourceManaged in Compile).value.getPath ++ "/.*"
+    ).mkString(";"),
+
   ).flatMap(_.settings)
 
 lazy val root = (project in file("."))
@@ -47,8 +40,14 @@ lazy val comm = project
 lazy val storage = project
   .settings(
     commonSettings,
-    libraryDependencies += lmdb,
+    libraryDependencies ++= Seq(
+      lmdb,
+      cats,
+    ),
     connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    )
   )
 
 lazy val node = project
