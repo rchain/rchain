@@ -90,8 +90,8 @@
                (loop r))))
 )
 
-(defOprn inject-now)
-(defProc (inject-now channel)
+(defOprn injectNow)
+(defProc (injectNow channel)
     (let [[now (now)]]
         (produce t channel now)
     )

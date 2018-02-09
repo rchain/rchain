@@ -7,13 +7,13 @@ new auction in {
             ended_channel!(false) |
             highest_bidder_channel!("no one") |
             highest_bid_channel!(-1) |
-            inject-now(auction_start_channel) |
+            auction_start_channel.injectNow() |
             pending_returns_channel!(Map()) |
 
             new bid, withdraw, auction_end in {
 
                 contract bid(message_sender, amount, rtn) = {
-                    inject-now(now_channel) |
+                    now_channel.injectNow() |
                     for (now <- now_channel; highest_bidder <- highest_bidder_channel; highest_bid <- highest_bid_channel; auction_start <- auction_start_channel) {
                         match [now <= auction_start + bidding_time, amount > highest_bid] with
                             <true, true> => {
@@ -61,7 +61,7 @@ new auction in {
                 } |
 
                 contract auction_end(message_sender, rtn) = {
-                    inject-now(now_channel) |
+                    now_channel.injectNow() |
                     for (now <- now_channel;  auction_start <- auction_start_channel; ended <- ended_channel; highest_bid <- highest_bid_channel) {
                         match [now >= auction_start + bidding_time, ended != true] with
                             <true, true> => {
