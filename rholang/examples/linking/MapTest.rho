@@ -1,0 +1,26 @@
+import IArrayApi, IMapApi in {
+  new MapContains, MapGet, Keys, MapUpdated, EmptyMapFunc, ArrayFold in {
+    IMapApi("Get", MapGet) | IMapApi("Keys", Keys) | IMapApi("Updated", MapUpdated) |
+    IMapApi("Contains", MapContains) | IMapApi("EmptyMap", EmptyMapFunc) | IArrayApi("Fold", ArrayFold) |
+    for(
+        get <- MapGet; updated <- MapUpdated; keys <- Keys; afold <- ArrayFold;
+        contains <- MapContains; EmptyMap <- EmptyMapFunc
+    ) {
+      new mapCh, combinator, result in {
+        EmptyMap(mapCh) | for(emptyMap <- mapCh) {
+          contract combinator(elem, accumulatedValue, return) = {
+            match elem with [key, value] => { 
+              updated(accumulatedValue, key, value, return)
+            }
+          } |
+          afold([["one", 1], ["two", 2], ["three", 3]], emptyMap, combinator, result) | 
+          for(map <- result) {
+            map.display("\n") | get("two", map, result) | for(r <- result) {
+              r.display("\n") | contains(map, "two", result) | for(r <- result){ r.display("\n") }
+            }
+          }
+        }
+      }
+    }
+  }
+}
