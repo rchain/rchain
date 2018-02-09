@@ -5,7 +5,7 @@ import scala.io.Source
 import scala.util.Try
 
 /**
- * Provides facility for "linking" Rholang source code. Linking is done
+ * Provides a facility for "linking" Rholang source code. Linking is done
  * by trans-piling extended Rholang source into standard Rholang source.
  * The extended Rholang includes two new keywords: `export` and `import`.
  * These two keywords work very similarly to the `new` keyword in standard
@@ -93,7 +93,8 @@ object RholangLinker {
         c match {
             case close if close == blocker.close => search(chars, blockingList.tail)
               
-            case b if b == BlockDef.brace.open => search(chars, BlockDef.brace :: blockingList)
+            case b if b == BlockDef.brace.open && blocker.open != BlockDef.quote.open => 
+              search(chars, BlockDef.brace :: blockingList)
 
             case q if q == BlockDef.quote.open => search(chars, BlockDef.quote :: blockingList)
 
@@ -196,7 +197,7 @@ object RholangLinker {
       basePackages
     } else if (basePackages.isEmpty || count > 10) {
       throw new Exception(
-        "Could not resolve dependencies within packages. Likely cause: packages which mutually import each other."
+        "Could not resolve dependencies within exports. Likely cause: exports which mutually import each other."
       )
     } else {
       resolvePackageImports(
