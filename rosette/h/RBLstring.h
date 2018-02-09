@@ -43,6 +43,7 @@ class RBLstring : public ByteVec {
     Ob* nth(int);
     Ob* setNth(int, Ob*);
     Ob* subObject(int, int);
+    bool compare(Ob*);
 
     virtual convertArgReturnPair convertActualArg(Ctxt*, Ob*);
     virtual Ob* convertActualRslt(Ctxt*, uint32_t);
