@@ -112,7 +112,7 @@ object Fixnum {
       checkRFixnum(0, ctxt.argvec.elem).map { m =>
         checkRFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m < n
-          case Left(_) => RblBool(false)
+          case Left(_)  => RblBool(false)
         }
       }
   }
@@ -127,7 +127,7 @@ object Fixnum {
       checkRFixnum(0, ctxt.argvec.elem).map { m =>
         checkRFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m <= n
-          case Left(_) => RblBool(false)
+          case Left(_)  => RblBool(false)
         }
       }
   }
@@ -142,7 +142,7 @@ object Fixnum {
       checkRFixnum(0, ctxt.argvec.elem).map { m =>
         checkRFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m > n
-          case Left(_) => RblBool(false)
+          case Left(_)  => RblBool(false)
         }
       }
   }
@@ -157,7 +157,7 @@ object Fixnum {
       checkRFixnum(0, ctxt.argvec.elem).map { m =>
         checkRFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m >= n
-          case Left(_) => RblBool(false)
+          case Left(_)  => RblBool(false)
         }
       }
   }
@@ -172,7 +172,7 @@ object Fixnum {
       checkRFixnum(0, ctxt.argvec.elem).map { m =>
         checkRFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m == n
-          case Left(_) => RblBool(false)
+          case Left(_)  => RblBool(false)
         }
       }
   }
@@ -187,7 +187,7 @@ object Fixnum {
       checkRFixnum(0, ctxt.argvec.elem).map { m =>
         checkRFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m != n
-          case Left(_) => RblBool(false)
+          case Left(_)  => RblBool(false)
         }
       }
   }

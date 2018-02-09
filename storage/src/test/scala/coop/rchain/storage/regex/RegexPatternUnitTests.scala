@@ -213,7 +213,6 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
   "MultPattern common operation" should "work as expected" in {
     val aStar = MultPattern.parse("a*").get.asInstanceOf[MultPattern]
     val aPlus = MultPattern.parse("a+").get.asInstanceOf[MultPattern]
-    val aOne = MultPattern.parse("a").get.asInstanceOf[MultPattern]
 
     assert(aStar.common(aPlus) == aStar)
   }

@@ -1,11 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{
-  Ctxt,
-  Fixnum => RFixnum,
-  RblBool,
-  RblFloat => RFloat
-}
+import coop.rchain.rosette.{Ctxt, Fixnum => RFixnum, RblBool, RblFloat => RFloat}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 

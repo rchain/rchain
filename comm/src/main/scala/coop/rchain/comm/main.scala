@@ -5,11 +5,10 @@ import java.util.UUID
 import java.nio.ByteBuffer
 import java.net.{InetAddress, NetworkInterface}
 import scala.collection.JavaConverters._
-// import scala.collection.JavaConversions._
 import coop.rchain.p2p
 import com.typesafe.scalalogging.Logger
 
-case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
+final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("RChain Communications Library version 0.1")
 
   val name =
@@ -89,7 +88,10 @@ object Main {
         }
     }
 
-    val addy = s"rnode://$name@$host:${conf.port()}"
+    val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
+      case Right(node)               => node
+      case Left(p2p.ParseError(msg)) => throw new Exception(msg)
+    }
 
     val net = p2p.Network(addy)
     logger.info(s"Listening for traffic on $net.")

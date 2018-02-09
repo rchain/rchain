@@ -29,9 +29,8 @@ object ArgumentMismatchMacro {
           }"""
 
         case _ =>
-          c.abort(
-            c.enclosingPosition,
-            "Annotation @checkArgumentMismatch can only be used on Prim.fn")
+          c.abort(c.enclosingPosition,
+                  "Annotation @checkArgumentMismatch can only be used on Prim.fn")
       }
 
     c.Expr[Any](result)
@@ -44,7 +43,7 @@ object TypeMismatchMacro {
 
     val typeParam = c.macroApplication.filter {
       case Ident(_) => true
-      case _ => false
+      case _        => false
     }(1)
 
     val result =

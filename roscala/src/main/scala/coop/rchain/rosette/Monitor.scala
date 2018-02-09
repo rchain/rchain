@@ -6,9 +6,9 @@ case class Monitor(id: Ob,
                    obCounts: Long,
                    tracing: Boolean)
     extends Ob {
-  def reset(): Unit = {}
-  def start(): Unit = timer.start()
-  def stop(): Unit = timer.stop()
+  def reset(): Unit                  = {}
+  def start(): Unit                  = timer.start()
+  def stop(): Unit                   = timer.stop()
   def printStats(file: String): Unit = {}
 }
 
