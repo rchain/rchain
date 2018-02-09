@@ -8,21 +8,24 @@
 FROM ubuntu:16.04
 
 RUN dpkg --add-architecture i386
-RUN apt-get update && apt-get install -y python3-pip openjdk-8-jre-headless libstdc++6:i386
-RUN pip3 install --upgrade pip
+RUN apt-get update && apt-get install -y openjdk-8-jre-headless libstdc++6:i386
 
-RUN mkdir -p /opt/rosette/bin
-RUN mkdir -p /opt/rosette/lib
-COPY rosette/build.out/src/rosette /opt/rosette/bin
-COPY rosette/rbl/rosette /opt/rosette/lib/rosette
-ENV ROSETTE_LIB /opt/rosette/lib/rosette
-ENV ESS_SYSDIR /opt/rosette/lib/rosette # muffle warning
-ENV RHOLANGWEB_VM_PROGRAM /opt/rosette/bin/rosette
-ENV RHOLANGWEB_VM_LIBRARY /opt/rosette/lib/rosette
+ENV ESS_SYSDIR /usr/local/lib/rosette
+ENV ROSETTE_LIB /usr/local/lib/rosette
 
-RUN mkdir -p /opt/rholang/lib
-COPY rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar /opt/rholang/lib
-ENV RHOLANGWEB_COMPILER_JAR /opt/rholang/lib/rholang-assembly-0.1-SNAPSHOT.jar
+ENV RHOLANG_JAR /usr/local/lib/rholang-assembly-0.1-SNAPSHOT.jar
+COPY rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar /usr/local/lib
+
+COPY rosette/rbl/rosette /usr/local/lib/rosette
+COPY rosette/build.out/src/rosette /usr/local/bin/rosette
+
+COPY docker/rholang-cli/run-rhoscala /usr/local/bin
+
+ENV RHOLANGWEB_VM_PROGRAM /usr/local/bin/rosette
+ENV RHOLANGWEB_VM_LIBRARY /usr/local/lib/rosette
+
+RUN apt-get install -y python3-pip && pip3 install --upgrade pip
+ENV RHOLANGWEB_COMPILER_JAR /usr/local/lib/rholang-assembly-0.1-SNAPSHOT.jar
 
 COPY rholang/examples /opt/rholang/lib/examples
 ENV RHOLANGWEB_EXAMPLES_DIR /opt/rholang/lib/examples
@@ -33,9 +36,6 @@ RUN pip3 install -r requirements.txt
 RUN python3 manage.py migrate
 
 COPY docker/rholang-web/run-server .
-
-RUN python3 -c \
-    "from urllib.request import urlretrieve as wget; wget('https://github.com/django/django/raw/master/LICENSE', filename='/opt/rholangweb/rholang/main/static/django-license')"
 
 ENTRYPOINT [ "/opt/rholangweb/run-server" ]
 
