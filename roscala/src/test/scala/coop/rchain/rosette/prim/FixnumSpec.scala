@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.prim.Fixnum._
+import coop.rchain.rosette.prim.fixnum._
 import coop.rchain.rosette.{Ctxt, Fixnum => RFixnum, Ob, PC, RblBool, Tuple}
 import org.scalatest._
 
@@ -211,7 +211,9 @@ class FixnumSpec extends FlatSpec with Matchers {
   }
 
   "fxLogand" should "correctly return the bitwise 'and' of all input values" in {
-    val newCtxt = ctxt.copy(nargs = 3, argvec = Tuple(Tuple(RFixnum(8)), Tuple(Tuple(RFixnum(4)), Tuple(RFixnum(2)))))
+    val newCtxt =
+      ctxt.copy(nargs = 3,
+                argvec = Tuple(Tuple(RFixnum(8)), Tuple(Tuple(RFixnum(4)), Tuple(RFixnum(2)))))
     fxLogand.fn(newCtxt) should be(Right(RFixnum(0)))
 
     val newCtxt2 = ctxt.copy(nargs = 1, argvec = Tuple.NIL)
@@ -224,7 +226,9 @@ class FixnumSpec extends FlatSpec with Matchers {
   }
 
   "fxLogor" should "correctly return the bitwise 'or' of all input values" in {
-    val newCtxt = ctxt.copy(nargs = 3, argvec = Tuple(Tuple(RFixnum(8)), Tuple(Tuple(RFixnum(4)), Tuple(RFixnum(2)))))
+    val newCtxt =
+      ctxt.copy(nargs = 3,
+                argvec = Tuple(Tuple(RFixnum(8)), Tuple(Tuple(RFixnum(4)), Tuple(RFixnum(2)))))
     fxLogor.fn(newCtxt) should be(Right(RFixnum(14)))
 
     val newCtxt2 = ctxt.copy(nargs = 1, argvec = Tuple.NIL)
@@ -237,7 +241,9 @@ class FixnumSpec extends FlatSpec with Matchers {
   }
 
   "fxLogxor" should "correctly return the bitwise 'xor' of all input values" in {
-    val newCtxt = ctxt.copy(nargs = 3, argvec = Tuple(Tuple(RFixnum(6)), Tuple(Tuple(RFixnum(4)), Tuple(RFixnum(2)))))
+    val newCtxt =
+      ctxt.copy(nargs = 3,
+                argvec = Tuple(Tuple(RFixnum(6)), Tuple(Tuple(RFixnum(4)), Tuple(RFixnum(2)))))
     fxLogxor.fn(newCtxt) should be(Right(RFixnum(0)))
 
     val newCtxt2 = ctxt.copy(nargs = 1, argvec = Tuple.NIL)

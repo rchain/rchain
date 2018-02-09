@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.prim.RblFloat._
+import coop.rchain.rosette.prim.rblfloat._
 import coop.rchain.rosette.{Ctxt, Fixnum => RFixnum, Ob, PC, RblBool, RblFloat => RFloat, Tuple}
 import org.scalatest._
 
