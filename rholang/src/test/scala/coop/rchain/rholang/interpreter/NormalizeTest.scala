@@ -52,10 +52,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   val pvar = new PVar("x")
   "PVar" should "Compile as BoundVar if it's in env" in {
-    val boundinputs = inputs.copy(env =
-      inputs.env.newBindings(List(("x", ProcSort)))._1)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
   
-    val result = ProcNormalizeMatcher.normalizeMatch(pvar, boundinputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     result.par should be (inputs.par.copy(expr = List(EVar(BoundVar(0)))))
     result.knownFree should be (inputs.knownFree)
   }
@@ -64,22 +64,22 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be (inputs.par.copy(expr = List(EVar(FreeVar(0)))))
     result.knownFree shouldEqual
         (inputs.knownFree.newBindings(
-            List(("x", ProcSort)))._1)
+            List((Some("x"), ProcSort)))._1)
   }
   "PVar" should "Not compile if it's in env of the wrong sort" in {
-    val boundinputs = inputs.copy(env =
-      inputs.env.newBindings(List(("x", NameSort)))._1)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
     
     an [Error] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch(pvar, boundinputs)
+      ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     }
   }
   "PVar" should "Not compile if it's used free somewhere else" in {
-    val boundinputs = inputs.copy(knownFree =
-      inputs.knownFree.newBindings(List(("x", ProcSort)))._1)
+    val boundInputs = inputs.copy(knownFree =
+      inputs.knownFree.newBindings(List((Some("x"), ProcSort)))._1)
     
     an [Error] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch(pvar, boundinputs)
+      ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     }
   }
 
@@ -99,10 +99,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val parDoubleBound = new PPar(
         new PVar("x"),
         new PVar("x"))
-    val boundinputs = inputs.copy(env =
-      inputs.env.newBindings(List(("x", ProcSort)))._1)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
 
-    val result = ProcNormalizeMatcher.normalizeMatch(parDoubleBound, boundinputs)
+    val result = ProcNormalizeMatcher.normalizeMatch(parDoubleBound, boundInputs)
     result.par should be (
         inputs.par.copy(expr =
             List(EVar(BoundVar(0)), EVar(BoundVar(0)))))
@@ -126,18 +126,17 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   "NameWildcard" should "Set wildcard flag in knownFree" in {
     val nw = new NameWildcard()
     val result = NameNormalizeMatcher.normalizeMatch(nw, inputs)
-    result.chan should be (ChanVar(WildCard()))
-    result.knownFree.wildcardUsed should be (true)
-    result.knownFree shouldEqual (inputs.knownFree.setWildcardUsed())
+    result.chan should be (ChanVar(FreeVar(0)))
+    result.knownFree shouldEqual (inputs.knownFree.setWildcardUsed(1)._1)
   }
 
   val nvar = new NameVar("x")
 
   "NameVar" should "Compile as BoundVar if it's in env" in {
-    val boundinputs = inputs.copy(env =
-      inputs.env.newBindings(List(("x", NameSort)))._1)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
   
-    val result = NameNormalizeMatcher.normalizeMatch(nvar, boundinputs)
+    val result = NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     result.chan should be (ChanVar(BoundVar(0)))
     result.knownFree should be (inputs.knownFree)
   }
@@ -146,31 +145,32 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     result.chan should be (ChanVar(FreeVar(0)))
     result.knownFree shouldEqual
         (inputs.knownFree.newBindings(
-            List(("x", NameSort)))._1)
+            List((Some("x"), NameSort)))._1)
   }
   "NameVar" should "Not compile if it's in env of the wrong sort" in {
-    val boundinputs = inputs.copy(env =
-      inputs.env.newBindings(List(("x", ProcSort)))._1)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
     
     an [Error] should be thrownBy {
-      NameNormalizeMatcher.normalizeMatch(nvar, boundinputs)
+      NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
   "NameVar" should "Not compile if it's used free somewhere else" in {
-    val boundinputs = inputs.copy(knownFree =
-      inputs.knownFree.newBindings(List(("x", NameSort)))._1)
+    val boundInputs = inputs.copy(knownFree =
+      inputs.knownFree.newBindings(List((Some("x"), NameSort)))._1)
     
     an [Error] should be thrownBy {
-      NameNormalizeMatcher.normalizeMatch(nvar, boundinputs)
+      NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
 
   val nqvar = new NameQuote(new PVar("x"))
 
   "NameQuote" should "compile to a quoted var if the var is bound" in {
-    val boundinputs = inputs.copy(env =
-      inputs.env.newBindings(List(("x", ProcSort)))._1)
-    val result = NameNormalizeMatcher.normalizeMatch(nqvar, boundinputs)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
+    val nqvar = new NameQuote(new PVar("x"))
+    val result = NameNormalizeMatcher.normalizeMatch(nqvar, boundInputs)
     result.chan should be (Quote(Par().copy(expr = List(EVar(BoundVar(0))))))
     result.knownFree should be (inputs.knownFree)
   }
@@ -178,7 +178,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   "NameQuote" should "return a free use if the quoted proc has a free var" in {
     val result = NameNormalizeMatcher.normalizeMatch(nqvar, inputs)
     result.chan should be (Quote(Par().copy(expr = List(EVar(FreeVar(0))))))
-    result.knownFree should be (inputs.knownFree.newBindings(List(("x", ProcSort)))._1)
+    result.knownFree should be (inputs.knownFree.newBindings(List((Some("x"), ProcSort)))._1)
   }
 
   "NameQuote" should "compile to a quoted ground" in {
