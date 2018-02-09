@@ -39,4 +39,15 @@ object Secp256k1 {
   def secKeyVerify(seckey: Array[Byte]): Boolean =
     NativeSecp256k1.secKeyVerify(seckey)
 
+  /**
+  * libsecp256k1 Compute Pubkey - computes public key from secret key
+  *
+  * @param seckey ECDSA Secret key, 32 bytes
+  *
+  * Return values
+  * @param pubkey ECDSA Public key, 33 or 65 bytes
+  */
+  def computePubkey(seckey: Array[Byte]): Array[Byte] =
+    computePubkey(seckey)
+
 }
