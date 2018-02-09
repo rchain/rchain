@@ -58,10 +58,18 @@ object NameNormalizeMatcher {
         }
 
       case n: NameQuote => {
+        def collapseQuoteEval(p: Par): Channel = {
+          p.singleEval() match {
+            case Some(Eval(chanNew)) => chanNew
+            case _ => Quote(p)
+          }
+        }
+
         val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
             n.proc_,
             ProcVisitInputs(Par(), input.env, input.knownFree))
-        NameVisitOutputs(Quote(procVisitResult.par),
+
+        NameVisitOutputs(collapseQuoteEval(procVisitResult.par),
           procVisitResult.knownFree)
       }
     }
@@ -103,11 +111,18 @@ object ProcNormalizeMatcher {
       case p: PNil => ProcVisitOutputs(input.par, input.knownFree)
 
       case p: PEval => {
+        def collapseEvalQuote(chan: Channel): Par = {
+          chan match {
+            case Quote(p) => p
+            case _ => Par().copy(evals = List(Eval(chan)))
+          }
+        }
+
         val nameMatchResult = NameNormalizeMatcher.normalizeMatch(
           p.name_,
           NameVisitInputs(input.env, input.knownFree))
         ProcVisitOutputs(
-          input.par.copy(evals = Eval(nameMatchResult.chan) :: input.par.evals),
+          input.par.merge(collapseEvalQuote(nameMatchResult.chan)),
           nameMatchResult.knownFree)
       }
 
