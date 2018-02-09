@@ -1,11 +1,11 @@
 # Reusing Code Through "Linking"
 ### Warning: The extension of Rholang to allow for importing/exporting macros is only temporary! In a future release the Rholang compiler will include a proper package management system.
 
-##Usage
+## Usage
 ```
 $ scala link.scala <rholangSource> <libraryDirectory>
 ```
-Where <rholangSource> is the file to be linked with packages (i.e. imports resolved) and <libraryDirectory> is a directory with all the Rholang sources with `export` declarations.
+Where `<rholangSource>` is the file to be linked with packages (i.e. imports resolved) and `<libraryDirectory>` is a directory with all the Rholang sources with `export` declarations.
 
 `link.scala` provides facility for "linking" Rholang source code. Linking is done  by trans-piling extended Rholang source into standard Rholang source. The extended Rholang includes two new keywords: `export` and `import`. These two keywords work very similarly to the `new` keyword in standard Rholang, but `export` has the restriction that only a single  name can be declared (i.e. `export x, y in { ... }` would be INVALID). Also note that `export` and `import` declarations can only appear at the "top level" of a file -- i.e. NOT inside `contract` definitions, bodies of `for` statements or `match` cases, etc. `export`s can use `import`s from other packages so long as there is not a loop of `import`s (e.g. if Y imports X then X cannot import Y or anything that depends on Y).
 
