@@ -7,7 +7,7 @@ trait Comm[A] {
   def recv: Either[CommError, (A, Seq[Byte])]
 }
 
-case class NodeIdentifier(pKey: Seq[Byte]) {
+final case class NodeIdentifier(pKey: Seq[Byte]) {
   def keccak256(iterations: Int = 1): Seq[Byte] =
     // Not really hashing, yet.
     Vector[Byte](pKey: _*)
@@ -17,7 +17,7 @@ case class NodeIdentifier(pKey: Seq[Byte]) {
   override def toString = key.map("%02x" format _).mkString
 }
 
-case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
+final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
   val tcpSocketAddress = new InetSocketAddress(host, tcpPort)
   val udpSocketAddress = new InetSocketAddress(host, udpPort)
 
@@ -28,6 +28,9 @@ case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 /**
   * A PeerNode is (at least) an identifier and a network configuration.
   */
+// FIX-ME There is a class ProtocolNode that extends this case class which can
+// break our code on runtime, equals is by definiton broken, this requires discussion
+@SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass")) // TODO temporarely, see above
 case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def key  = id.key
@@ -40,7 +43,7 @@ case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
     s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
 
   def withUdpSocket(udp: java.net.InetSocketAddress): PeerNode =
-    PeerNode(id, endpoint.withUdp(udp))
+    new PeerNode(id, endpoint.withUdp(udp))
 }
 
 trait Notary {

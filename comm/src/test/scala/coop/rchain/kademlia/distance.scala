@@ -4,7 +4,7 @@ import org.scalatest._
 import scala.util.{Success, Try}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
-case class PeerNode(val key: Seq[Byte]) extends Peer {
+final case class PeerNode(val key: Seq[Byte]) extends Peer {
   val rand = new scala.util.Random
 
   override def ping: Try[Duration] =
@@ -17,8 +17,8 @@ case class PeerNode(val key: Seq[Byte]) extends Peer {
 }
 
 object b {
-  val rand = new scala.util.Random(System.currentTimeMillis)
-  def apply(i: Int): Byte = i.toByte
+  val rand                   = new scala.util.Random(System.currentTimeMillis)
+  def apply(i: Int): Byte    = i.toByte
   def apply(s: String): Byte = b(Integer.parseInt(s, 2))
   def rand(nbytes: Int): Seq[Byte] = {
     val arr = Array.fill(nbytes)(b(0))
@@ -31,8 +31,8 @@ class DistanceSpec extends FlatSpec with Matchers {
   "A PeerNode of width n bytes" should "have distance to itself equal to 8n" in {
     for (i <- 1 to 64) {
       val home = PeerNode(b.rand(i))
-      val nt = PeerTable(home)
-      nt.distance(home) should be (Some(8 * nt.width))
+      val nt   = PeerTable(home)
+      nt.distance(home) should be(Some(8 * nt.width))
     }
   }
 
@@ -62,17 +62,17 @@ class DistanceSpec extends FlatSpec with Matchers {
 
     val k0 = Array.fill(width)(b(0))
     s"A node with key all zeroes (${keyString(k0)})" should "compute distance correctly" in {
-      testKey(k0) should be (true)
+      testKey(k0) should be(true)
     }
 
     val k1 = Array.fill(width)(b(0xff))
     s"A node with key all ones (${keyString(k1)})" should "compute distance correctly" in {
-      testKey(k1) should be (true)
+      testKey(k1) should be(true)
     }
 
     val kr = b.rand(width)
     s"A node with random key (${keyString(kr)})" should "compute distance correctly" in {
-      testKey(kr.toArray) should be (true)
+      testKey(kr.toArray) should be(true)
     }
 
     s"An empty table of width $width" should "have no peers" in {
@@ -82,21 +82,21 @@ class DistanceSpec extends FlatSpec with Matchers {
 
     it should "return no peers" in {
       val table = PeerTable(PeerNode(kr))
-      table.peers.size should be (0)
+      table.peers.size should be(0)
     }
 
     it should "return no values on lookup" in {
       val table = PeerTable(PeerNode(kr))
-      table.lookup(b.rand(width)).size should be (0)
+      table.lookup(b.rand(width)).size should be(0)
     }
 
     s"A table of width $width" should "add a key at most once" in {
       val table = PeerTable(PeerNode(kr))
       val toAdd = oneOffs(kr).head
-      val dist = table.distance(toAdd).get
+      val dist  = table.distance(toAdd).get
       for (i <- 1 to 10) {
         table.observe(PeerNode(toAdd), true)
-        table.table(dist).size should be (1)
+        table.table(dist).size should be(1)
       }
     }
 
@@ -113,7 +113,7 @@ class DistanceSpec extends FlatSpec with Matchers {
       for (k <- oneOffs(kr.toArray)) {
         table.observe(PeerNode(k), true)
       }
-      table.lookup(b.rand(width)).size should be (scala.math.min(table.k, 8 * width))
+      table.lookup(b.rand(width)).size should be(scala.math.min(table.k, 8 * width))
     }
 
     it should "not return sought peer on lookup" in {
@@ -122,7 +122,7 @@ class DistanceSpec extends FlatSpec with Matchers {
         table.observe(PeerNode(k), true)
       }
       val target = table.table(table.width * 4)(0)
-      val resp = table.lookup(target.key)
+      val resp   = table.lookup(target.key)
       assert(resp.forall(_.key != target.key))
     }
 
@@ -131,7 +131,7 @@ class DistanceSpec extends FlatSpec with Matchers {
       for (k <- oneOffs(kr.toArray)) {
         table.observe(PeerNode(k), true)
       }
-      table.peers.size should be (8 * width)
+      table.peers.size should be(8 * width)
     }
 
     it should "find each added peer" in {
@@ -140,7 +140,7 @@ class DistanceSpec extends FlatSpec with Matchers {
         table.observe(PeerNode(k), true)
       }
       for (k <- oneOffs(kr.toArray)) {
-        table.find(k) should be (Some(PeerNode(k)))
+        table.find(k) should be(Some(PeerNode(k)))
       }
     }
   }

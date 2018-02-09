@@ -10,20 +10,22 @@ class ProtocolTest extends FlatSpec with Matchers {
     val uri = "rnode://abcde@localhost:12345"
     val node = NetworkAddress.parse(uri) match {
       case Right(node) => node
-      case Left(_) => null
+      case Left(_)     => null
     }
 
     node should not be null
 
     val src = new ProtocolNode(node.id, node.endpoint, null)
-    val hs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src), System.currentTimeMillis)
+    val hs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src),
+                                        System.currentTimeMillis)
     val result = hs.response(src)
 
     val upstream = result match {
-      case Some(message: ProtocolMessage) => message.proto.message match {
-        case routing.Protocol.Message.Upstream(upstream) => upstream
-        case _ => null
-      }
+      case Some(message: ProtocolMessage) =>
+        message.proto.message match {
+          case routing.Protocol.Message.Upstream(upstream) => upstream
+          case _                                           => null
+        }
       case _ => null
     }
 
@@ -37,20 +39,22 @@ class ProtocolTest extends FlatSpec with Matchers {
     val uri = "rnode://abcde@localhost:12345"
     val node = NetworkAddress.parse(uri) match {
       case Right(node) => node
-      case Left(_) => null
+      case Left(_)     => null
     }
 
     node should not be null
 
     val src = new ProtocolNode(node.id, node.endpoint, null)
-    val hs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(src), System.currentTimeMillis)
+    val hs =
+      ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(src), System.currentTimeMillis)
     val result = hs.response(src)
 
     val upstream = result match {
-      case Some(message: ProtocolMessage) => message.proto.message match {
-        case routing.Protocol.Message.Upstream(upstream) => upstream
-        case _ => null
-      }
+      case Some(message: ProtocolMessage) =>
+        message.proto.message match {
+          case routing.Protocol.Message.Upstream(upstream) => upstream
+          case _                                           => null
+        }
       case _ => null
     }
 
