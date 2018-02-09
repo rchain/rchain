@@ -9,5 +9,6 @@ lazy val root = (project in file(".")).
     )),
     name := "Crypto",
     libraryDependencies += scalaTest % Test,
-    libraryDependencies += "org.scorexfoundation" %% "scrypto" % "2.0.0"
+    libraryDependencies += "org.scorexfoundation" %% "scrypto" % "2.0.0",
+    libraryDependencies += "org.abstractj.kalium" % "kalium" % "0.7.0"
   )
