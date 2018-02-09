@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Ob, Tuple}
+import coop.rchain.rosette.{Ctxt, Ob, Fixnum => RFixnum, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -63,6 +63,31 @@ object tuple {
     }
   }
 
+  /**
+    * Define the tuple-concat primitive.
+    * This concatenates n Tuples
+    * e.g. (tuple-concat [1 2 3] [4] [5 6]) ==> [1 2 3 4 5 6]
+    */
+  object tplConcat extends Prim {
+    override val name: String = "tuple-concat"
+    override val minArgs: Int = 0
+    override val maxArgs: Int = MaxArgs
+
+    @checkTypeMismatch[Tuple] // All args must be Tuples
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem = ctxt.argvec.elem
+      val n    = ctxt.nargs
+      val init = Tuple(Seq.empty)
+
+      Right(
+        elem.foldLeft(init)(
+          (acc: Tuple, el: Ob) => Tuple(acc, el.asInstanceOf[Tuple])
+        )
+      )
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the specified parameter for type Tuple. Return a PrimError if it is
@@ -74,4 +99,5 @@ object tuple {
     } else {
       Right(elem(n).asInstanceOf[Tuple])
     }
+
 }
