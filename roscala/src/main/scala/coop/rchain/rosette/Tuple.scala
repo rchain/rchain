@@ -8,7 +8,7 @@ package coop.rchain.rosette
   *  of other actors
   */
 sealed trait TupleError
-case object AbsentRest extends TupleError
+case object AbsentRest  extends TupleError
 case object InvalidRest extends TupleError
 
 case class Tuple(elem: Seq[Ob]) extends Ob {
@@ -29,13 +29,13 @@ case class Tuple(elem: Seq[Ob]) extends Ob {
       case Some(t: Tuple) if t != Tuple.NIL =>
         Right(Tuple(this.makeSlice(0, this.elem.size - 1), t))
       case Some(ob) => Left(InvalidRest)
-      case None => Left(AbsentRest)
+      case None     => Left(AbsentRest)
     }
 
   def makeSlice(offset: Int, n: Int): Tuple =
     this match {
       case Tuple.NIL => Tuple.NIL
-      case _ => Tuple(n, this, offset, n)
+      case _         => Tuple(n, this, offset, n)
     }
 
   def makeTail(entriesToSkip: Int): Tuple = {
@@ -127,11 +127,7 @@ object Tuple {
   def apply(t1: Tuple, t2: Tuple): Tuple =
     new Tuple(t1.elem ++ t2.elem)
 
-  def apply(size: Int,
-            master: Tuple,
-            offset: Int,
-            n: Int,
-            init: Option[Ob] = None): Tuple = {
+  def apply(size: Int, master: Tuple, offset: Int, n: Int, init: Option[Ob] = None): Tuple = {
     val slice = master.elem.slice(offset, n + offset)
 
     val filling = if (size > n && init.isDefined) {

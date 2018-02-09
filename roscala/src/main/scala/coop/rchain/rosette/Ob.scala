@@ -2,43 +2,42 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import coop.rchain.rosette.utils.printToFile
+import cats.data.State
+import coop.rchain.rosette
+import coop.rchain.rosette.utils.{lensTrans, printToFile, unsafeCastLens}
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
+import coop.rchain.rosette.utils.Instances._
 import shapeless.OpticDefns.RootLens
 import shapeless._
+import cats.implicits._
 
 trait Base
 
-//TODO change type of `indirect` argument to bool
-trait Ob extends Base {
+trait Ob extends Base with Cloneable {
   val slot: Seq[Ob] = Nil
 
-  val obTag: ObTag = null
+  val obTag: ObTag    = null
   val sysval: SysCode = null
-  val constantP = true
+  val constantP       = true
 
-  def meta: Ob = slot.head
+  def meta: Ob   = slot.head
   def parent: Ob = slot(1)
 
   def dispatch(state: VMState): (Result, VMState) = null
-  def extendWith(keyMeta: Ob): Ob = null
+  def extendWith(keyMeta: Ob): Ob                 = null
 
-  def getAddr(ind: Int, level: Int, offset: Int): Ob =
-    getLex(ind, level, offset)
+  def getAddr(indirect: Boolean, level: Int, offset: Int): Ob =
+    getLex(indirect, level, offset)
 
-  def getField(ind: Int,
-               level: Int,
-               offset: Int,
-               spanSize: Int,
-               sign: Int): Ob =
+  def getField(indirect: Boolean, level: Int, offset: Int, spanSize: Int, sign: Int): Ob =
     ??? //TODO
 
-  def getLex(ind: Int, level: Int, offset: Int): Ob = {
-    val p: Ob = nthParent(level)
+  def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
+    val p: Ob = (0 until level).foldLeft(this)((ob, _) => ob.parent)
 
-    actorExtension(ind, p)
+    actorExtension(indirect, p)
       .map(offsetOrInvalid(offset, _))
       .getOrElse(Ob.INVALID)
   }
@@ -75,27 +74,20 @@ trait Ob extends Base {
 
       fn match {
         case Right(prim: Prim) => prim.invoke(state)
-        case _ => (Left(Absent), state)
+        case _                 => (Left(Absent), state)
       }
     }
   }
 
   def matches(ctxt: Ctxt): Boolean = false
-  def numberOfSlots(): Int = slot.size
+  def numberOfSlots(): Int         = slot.size
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(ind: Int, level: Int, offset: Int, value: Ob): Ob =
-    setLex(ind, level, offset, value)
+  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] = ???
 
-  def setField(ind: Int,
-               level: Int,
-               offset: Int,
-               spanSize: Int,
-               value: Int): Ob =
+  def setField(indirect: Boolean, level: Int, offset: Int, spanSize: Int, value: Int): Ob =
     ??? //TODO
-
-  def setLex(ind: Int, level: Int, offset: Int, value: Ob): Ob = Ob.INVALID
 
   def notImplemented(opName: String): Unit = {
     val className = this.getClass.getSimpleName
@@ -139,13 +131,15 @@ trait Ob extends Base {
   def indexedSize: Ob = notImplementedOb()
 
   def setNth(i: Int, v: Ob): Option[Ob] = Some(notImplementedOb())
-  def subObject(i1: Int, i2: Int): Ob = notImplementedOb()
-  def asPathname: String = ""
-  def nth(i: Int): Option[Ob] = Some(notImplementedOb())
-  def slotNum() = 0 //TODO missing implementation
+  def subObject(i1: Int, i2: Int): Ob   = notImplementedOb()
+  def asPathname: String                = ""
+  def nth(i: Int): Option[Ob]           = Some(notImplementedOb())
+  def slotNum()                         = 0 //TODO missing implementation
 
-  private def actorExtension(ind: Int, p: Ob): Option[Ob] =
-    if (ind > 0) {
+  override def clone(): AnyRef = super.clone()
+
+  private def actorExtension(indirect: Boolean, p: Ob): Option[Ob] =
+    if (indirect) {
       p match {
         case a: Actor =>
           Some(a.extension)
@@ -161,36 +155,34 @@ trait Ob extends Base {
     } else {
       Ob.INVALID
     }
-
-  private def nthParent(level: Int): Ob = recMap(level, this)(_.parent)
 }
 
 object Ob {
   sealed trait ObTag
-  case object OTptr extends ObTag
-  case object OTsym extends ObTag
-  case object OTfixnum extends ObTag
-  case object OTesc extends ObTag
-  case object OTbool extends ObTag
-  case object OTchar extends ObTag
-  case object OTniv extends ObTag
-  case object OTsysval extends ObTag
+  case object OTptr      extends ObTag
+  case object OTsym      extends ObTag
+  case object OTfixnum   extends ObTag
+  case object OTesc      extends ObTag
+  case object OTbool     extends ObTag
+  case object OTchar     extends ObTag
+  case object OTniv      extends ObTag
+  case object OTsysval   extends ObTag
   case object OTlocation extends ObTag
 
   sealed trait SysCode
-  case object SyscodeInvalid extends SysCode
-  case object SyscodeUpcall extends SysCode
-  case object SyscodeSuspend extends SysCode
-  case object SyscodeInterrupt extends SysCode
-  case object SyscodeSleep extends SysCode
+  case object SyscodeInvalid    extends SysCode
+  case object SyscodeUpcall     extends SysCode
+  case object SyscodeSuspend    extends SysCode
+  case object SyscodeInterrupt  extends SysCode
+  case object SyscodeSleep      extends SysCode
   case object SyscodeDeadThread extends SysCode
 
-  object ABSENT extends Ob
-  object INVALID extends Ob
-  object NIV extends Ob
-  object RBLTRUE extends Ob
+  object ABSENT   extends Ob
+  object INVALID  extends Ob
+  object NIV      extends Ob
+  object RBLTRUE  extends Ob
   object RBLFALSE extends Ob
-  object NilMeta extends Ob
+  object NilMeta  extends Ob
 
   object Lenses {
     def setA[T, A](a: A)(f: RootLens[A] ⇒ Lens[A, T])(value: T): A =
@@ -209,6 +201,45 @@ object Ob {
       def updateSelf[T](value: A => A): A = value(base)
     }
   }
+
+  def getLex(indirect: Boolean, level: Int, offset: Int): State[Ob, Option[Ob]] = ???
+
+  def getAddr(indirect: Boolean, level: Int, offset: Int): State[Ob, Option[Ob]] = ???
+
+  def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] =
+    State { ob =>
+      val nthParentLens =
+        (0 until level).foldLeft(lens[Ob]: Lens[Ob, Ob])((l, _) => l >> 'parent)
+
+      def inSlotNum(lens: Lens[Ob, Ob]): Option[Lens[Ob, Ob]] =
+        if (!indirect) Some(lens)
+        else {
+          val numberOfSlots = lens.get(ob).numberOfSlots()
+          if (ob.slotNum() >= numberOfSlots) None
+          else {
+            val resLens = unsafeCastLens[Actor](lens) >> 'extension
+            Some(unsafeCastLens[Ob](resLens))
+          }
+        }
+
+      def updateSlot(lens: Lens[Ob, Ob]): Option[Ob] =
+        if (offset >= ob.numberOfSlots) None
+        else {
+          val slotLens = lens >> 'slot
+          val res      = lensTrans(slotLens, ob)(_.updated(offset, value))
+          Some(res)
+        }
+
+      try {
+        inSlotNum(nthParentLens).flatMap(updateSlot) match {
+          case Some(newOb) => (newOb, Success)
+          case None        => (ob, Failure)
+        }
+      } catch {
+        // TODO: Add logging
+        case _: IndexOutOfBoundsException => (ob, Failure)
+      }
+    }
 
   //TODO use logging framework
   def printOn[A <: Ob: Show](ob: A, file: File): Unit = {
