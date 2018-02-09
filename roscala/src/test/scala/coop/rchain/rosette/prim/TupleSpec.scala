@@ -40,15 +40,13 @@ class TupleSpec extends FlatSpec with Matchers {
     val tup = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
 
     val newCtxt =
-      ctxt.copy(
-        nargs = 4,
-        argvec = Tuple.cons(
-          RFixnum(1),
-          Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(Tuple(tup))))))
+      ctxt.copy(nargs = 4,
+                argvec =
+                  Tuple.cons(RFixnum(1),
+                             Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(Tuple(tup))))))
 
-    tplConsStar.fn(newCtxt) should be(Right(
-      Tuple.cons(RFixnum(1),
-                 Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(tup))))))
+    tplConsStar.fn(newCtxt) should be(
+      Right(Tuple.cons(RFixnum(1), Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(tup))))))
   }
 
   "tplConsStar" should "correctly cons 0 Obs with a Tuple" in {
@@ -85,17 +83,12 @@ class TupleSpec extends FlatSpec with Matchers {
     val tup3 = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
     val tups = Seq(Tuple(tup1), Tuple(tup2), Tuple(tup3))
 
+    val result = Seq(RFixnum(1), RFixnum(2), RFixnum(3), RFixnum(4), RFixnum(5), RFixnum(6))
+
     val newCtxt =
       ctxt.copy(nargs = 3, argvec = Tuple(tups))
 
-    tplConcat.fn(newCtxt) should be(
-      Right(
-        Tuple.rcons(Tuple.rcons(Tuple.rcons(Tuple.rcons(Tuple(tup1),
-                                                        RFixnum(3)),
-                                            RFixnum(4)),
-                                RFixnum(5)),
-                    RFixnum(6))
-      ))
+    tplConcat.fn(newCtxt) should be(Right(Tuple(result)))
   }
 
   "tplConcat" should "correctly concat 1 Tuple" in {
