@@ -10,7 +10,6 @@ PInput.   Proc1 ::= "for" "(" [Bind] ")" "{" Proc "}" ;
 PChoice.  Proc1 ::= "select" "{" [CBranch] "}" ;
 PMatch.   Proc1 ::= "match" Proc "with" [PMBranch] ;
 PNew.     Proc1 ::= "new" [Var] "in" Proc1 ;
-PPrint.   Proc1 ::= "print" "(" Proc ")" ;
 PConstr.  Proc1 ::= Var "(" [Proc] ")" ;
 PContr.   Proc1 ::= "contract" Var "(" [CPattern] ")" "=" "{" Proc "}" ;
 PPar.     Proc  ::= Proc "|" Proc1 ;
