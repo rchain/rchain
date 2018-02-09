@@ -34,6 +34,9 @@ RUN python3 manage.py migrate
 
 COPY docker/rholang-web/run-server .
 
+RUN python3 -c \
+    "from urllib.request import urlretrieve as wget; wget('https://github.com/django/django/raw/master/LICENSE', filename='/opt/rholangweb/rholang/main/static/django-license')"
+
 ENTRYPOINT [ "/opt/rholangweb/run-server" ]
 
 # Local Variables:
