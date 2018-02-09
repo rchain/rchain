@@ -263,6 +263,44 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch(parDoubleFree, inputs)
     }
   }
+  "PContr" should "Handle a basic contract" in {
+    /*  new add in {
+          contract add(ret, @x, @y) = {
+            ret!(x + y)
+          }
+        }
+        // new is simulated by bindings.
+    */
+    val listBindings = new ListName()
+    listBindings.add(new NameVar("ret"))
+    listBindings.add(new NameQuote(new PVar("x")))
+    listBindings.add(new NameQuote(new PVar("y")))
+    val listSend = new ListProc()
+    listSend.add(new PAdd(new PVar("x"), new PVar("y")))
+    val pBasicContr = new PContr(new NameVar("add"), listBindings,
+      new PSend(new NameVar("ret"), new SendSingle(), listSend))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("add"), NameSort)))._1)
+    
+    val result = ProcNormalizeMatcher.normalizeMatch(pBasicContr, boundInputs)
+    result.par should be (
+        inputs.par.copy(receives = 
+            List(Receive(
+                List(
+                    (List(
+                        ChanVar(FreeVar(0)),
+                        Quote(Par().copy(exprs = List(EVar(FreeVar(1))))),
+                        Quote(Par().copy(exprs = List(EVar(FreeVar(2)))))),
+                    ChanVar(BoundVar(0)))),
+                Par().copy(sends = List(Send(
+                    ChanVar(BoundVar(1)),
+                    List(Par().copy(exprs = List(EPlus(
+                        Par().copy(exprs = List(EVar(BoundVar(2)))),
+                        Par().copy(exprs = List(EVar(BoundVar(3)))))))),
+                    false))),
+                true)))) // persistent
+    result.knownFree should be (inputs.knownFree)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {

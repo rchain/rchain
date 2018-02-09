@@ -301,7 +301,10 @@ object ReceiveSortMatcher {
   // This function will then sort the insides of the preordered binds.
   def sortMatch(r: Receive): ScoredTerm[Receive] = {
     val sortedBinds = r.binds.map(bind => sortBind(bind))
-    ScoredTerm(Receive(sortedBinds.map(_.term)), Node(Score.RECEIVE, sortedBinds.map(_.score): _*))
+    val persistentScore = if (r.persistent) 1 else 0
+    val sortedBody = ParSortMatcher.sortMatch(r.body)
+    ScoredTerm(Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent),
+        Node(Score.RECEIVE, Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*))
   }
 }
 
