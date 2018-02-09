@@ -90,13 +90,13 @@ new auction in {
 
     // auction_end fails if bidding time has passed
     new rtn, me, bidder_one, bidder_two, unused_rtn in {
-        auction!([me, 9999, rtn]) | // Bidding time of 9999 is an arbitrary time that this test shouldn't take
+        auction!(me, 9999, rtn) | // Bidding time of 9999 is an arbitrary time that this test shouldn't take
         for (auction_contract <- rtn) {
-            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            @auction_contract.get("bid")!(bidder_one, 100, unused_rtn) |
             for (_ <- unused_rtn) { // Ensures sequential bid
-                @auction_contract.get("bid")!([bidder_two, 200, unused_rtn]) |
+                @auction_contract.get("bid")!(bidder_two, 200, unused_rtn) |
                 for (_ <- unused_rtn) { // Ensures auction end happens after bids
-                    @auction_contract.get("auction_end")!([me, unused_rtn]) |
+                    @auction_contract.get("auction_end")!(me, unused_rtn) |
                     for (has_ended <- unused_rtn) {
                         match has_ended with
                         false => {
@@ -114,14 +114,14 @@ new auction in {
 
     // it ensures bidder_one receives back their bid
     new rtn, me, bidder_one, bidder_two, unused_rtn in {
-        auction!([me, 0, rtn]) | // Note bidding time of 0 means anyone can immediately end the auction
+        auction!(me, 0, rtn) | // Note bidding time of 0 means anyone can immediately end the auction
         for (auction_contract <- rtn) {
-            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            @auction_contract.get("bid")!(bidder_one, 100, unused_rtn) |
             for (_ <- unused_rtn) { // Ensures sequential bid
-                @auction_contract.get("bid")!([bidder_two, 200, unused_rtn]) |
+                @auction_contract.get("bid")!(bidder_two, 200, unused_rtn) |
                 for (_ <- unused_rtn) { // Ensures auction end happens after bids
-                    @auction_contract.get("auction_end")!([me, unused_rtn]) |
-                    @auction_contract.get("withdraw")!([bidder_one, unused_rtn]) |
+                    @auction_contract.get("auction_end")!(me, unused_rtn) |
+                    @auction_contract.get("withdraw")!(bidder_one, unused_rtn) |
                     for (bidder_one_balance <- bidder_one) {
                         match bidder_one_balance with
                         100 => {
@@ -139,13 +139,13 @@ new auction in {
 
     // It rejects lower bids
     new rtn, me, bidder_one, bidder_two, unused_rtn in {
-        auction!([me, 0, rtn]) | // Note bidding time of 0 means anyone can immediately end the auction
+        auction!(me, 0, rtn) | // Note bidding time of 0 means anyone can immediately end the auction
         for (auction_contract <- rtn) {
-            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            @auction_contract.get("bid")!(bidder_one, 100, unused_rtn) |
             for (_ <- unused_rtn) { // Ensures sequential bid
-                @auction_contract.get("bid")!([bidder_two, 50, unused_rtn]) |
+                @auction_contract.get("bid")!(bidder_two, 50, unused_rtn) |
                 for (_ <- unused_rtn) { // Ensures auction end happens after bids
-                    @auction_contract.get("auction_end")!([me, unused_rtn]) |
+                    @auction_contract.get("auction_end")!(me, unused_rtn) |
                     for (me_balance <- me) {
                         match me_balance with
                         100 => {

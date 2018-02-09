@@ -103,13 +103,13 @@ new auction in {
     //
     // See tests/auction_tests.rho to see more calls
     new rtn, me, bidder_one, bidder_two, unused_rtn in {
-        auction!([me, 0, rtn]) | // Note bidding time of 0 means anyone can immediately end the auction
+        auction!(me, 0, rtn) | // Note bidding time of 0 means anyone can immediately end the auction
         for (auction_contract <- rtn) {
-            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            @auction_contract.get("bid")!(bidder_one, 100, unused_rtn) |
             for (_ <- unused_rtn) { // Ensures sequential bid
-                @auction_contract.get("bid")!([bidder_two, 200, unused_rtn]) |
+                @auction_contract.get("bid")!(bidder_two, 200, unused_rtn) |
                 for (_ <- unused_rtn) { // Ensures auction end happens after bids
-                    @auction_contract.get("auction_end")!([me, unused_rtn]) |
+                    @auction_contract.get("auction_end")!(me, unused_rtn) |
                     for (me_balance <- me) { print(me_balance) }
                 }
             } |
