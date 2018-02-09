@@ -84,13 +84,15 @@ object Main {
       case Left(p2p.ParseError(msg)) => throw new Exception(msg)
     }
 
+    // TODO consider closing this over IO
     val net = p2p.Network(addy)
     logger.info(s"Listening for traffic on $net.")
 
     if (!conf.standalone()) {
-      conf.bootstrap.foreach { address =>
-        logger.info(s"Bootstrapping from $address.")
-        net.connect(address)
+      conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
+        address =>
+          logger.info(s"Bootstrapping from $address.")
+          net.connect(address)
       }
     } else {
       logger.info(s"Starting stand-alone node.")

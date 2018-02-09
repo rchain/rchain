@@ -57,41 +57,33 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
   val net = new UnicastNetwork(local, Some(this))
 
   /**
-    * Connect to a remote node named by `remoteAddress`.
-    *
     * This method (eventually) will initiate the two-part RChain handshake protocol. First, encryption keys are exchanged,
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
     * the same language.
     */
-  def connect(remoteAddress: String): Unit =
-    for {
-      peer <- NetworkAddress.parse(remoteAddress)
-    } {
-      logger.debug(s"connect(): Connecting to $peer")
-      val ehs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(net.local),
+  def connect(peer: PeerNode): Unit = {
+    logger.debug(s"connect(): Connecting to $peer")
+    val ehs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(net.local),
+                                         System.currentTimeMillis)
+    val remote = new ProtocolNode(peer, this.net)
+    net.roundTrip(ehs, remote) match {
+      case Right(resp) => {
+        logger.debug(
+          s"connect(): Received encryption handshake response from ${resp.sender.get}.")
+        val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
                                            System.currentTimeMillis)
-      val remote = new ProtocolNode(peer, this.net)
-      net.roundTrip(ehs, remote) match {
-        case Right(resp) => {
-          logger.debug(
-            s"connect(): Received encryption handshake response from ${resp.sender.get}.")
-          val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
-                                             System.currentTimeMillis)
-          net.roundTrip(phs, remote) match {
-            case Right(resp) => {
-              logger.debug(
-                s"connect(): Received protocol handshake response from ${resp.sender.get}.")
-              net.add(remote)
-            }
-            case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
+        net.roundTrip(phs, remote) match {
+          case Right(resp) => {
+            logger.debug(
+              s"connect(): Received protocol handshake response from ${resp.sender.get}.")
+            net.add(remote)
           }
+          case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
         }
-        case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
       }
+      case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
     }
-
-  def connect(node: PeerNode): Unit =
-    connect(node.toAddress)
+  }
 
   def disconnect(): Unit = {
     net.broadcast(
