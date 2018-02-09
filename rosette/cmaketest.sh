@@ -18,7 +18,7 @@ cat > "${RESULTS}" < /dev/null
     ulimit -s unlimited
 
     export ESS_SYSDIR=$PWD/rbl/rosette
-    ROSETTE="./build.out/src/rosette --boot rbl/rosette/boot.rbl"
+    ROSETTE="./build.out/src/rosette --boot-dir rbl/rosette"
 
     # Execute Rosette instance
     ${ROSETTE} rbl/rosette/hello_world.rbl <<EOF
