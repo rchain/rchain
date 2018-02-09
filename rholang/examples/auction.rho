@@ -110,7 +110,7 @@ new auction in {
                 @auction_contract.get("bid")!(bidder_two, 200, unused_rtn) |
                 for (_ <- unused_rtn) { // Ensures auction end happens after bids
                     @auction_contract.get("auction_end")!(me, unused_rtn) |
-                    for (me_balance <- me) { print(me_balance) }
+                    for (me_balance <- me) { me_balance.display("\n") }
                 }
             } |
             rtn!(auction_contract)

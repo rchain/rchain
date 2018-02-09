@@ -100,10 +100,10 @@ new auction in {
                     for (has_ended <- unused_rtn) {
                         match has_ended with
                         false => {
-                            print("Pass")
+                            "Pass".display("\n")
                         }
                         _ => {
-                            print("Fail")
+                            "Fail".display("\n")
                         }
                     }
                 }
@@ -125,10 +125,10 @@ new auction in {
                     for (bidder_one_balance <- bidder_one) {
                         match bidder_one_balance with
                         100 => {
-                            print("Pass")
+                            "Pass".display("\n")
                         }
                         _ => {
-                            print("Fail")
+                            "Fail".display("\n")
                         }
                     }
                 }
@@ -149,10 +149,10 @@ new auction in {
                     for (me_balance <- me) {
                         match me_balance with
                         100 => {
-                            print("Pass")
+                            "Pass".display("\n")
                         }
                         _ => {
-                            print("Fail")
+                            "Fail".display("\n")
                         }
                     }
                 }
