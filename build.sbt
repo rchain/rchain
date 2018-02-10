@@ -1,5 +1,4 @@
 import Dependencies._
-import CompilerSettings._
 import BNFC._
 
 def commonSettings: Seq[Setting[_]] =
@@ -10,8 +9,7 @@ def commonSettings: Seq[Setting[_]] =
 
     version := "0.1.0-SNAPSHOT",
 
-    // resolvers += Resolver.sonatypeRepo("releases"),
-    // resolvers += Resolver.url("scoverage-bintray", url("https://dl.bintray.com/sksamuel/sbt-plugins/"))(Resolver.ivyStylePatterns),
+    resolvers += Resolver.sonatypeRepo("releases"),
 
     CompilerSettings.options,
     logBuffered in Test := false,
@@ -21,7 +19,7 @@ def commonSettings: Seq[Setting[_]] =
     coverageFailOnMinimum := false,
     coverageExcludedFiles := Seq(
       (sourceManaged in Compile).value.getPath ++ "/.*"
-    ).mkString(";"),
+    ).mkString(";")
 
   ).flatMap(_.settings)
 
@@ -37,20 +35,21 @@ lazy val comm = project
     PB.targets in Compile := Seq(
       PB.gens.java -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
-    ),
+    )
   )
 
 lazy val storage = project
   .settings(
     commonSettings,
-    libraryDependencies ++= Seq(
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       lmdb,
-      cats,
+      cats
     ),
     connectInput in run := true,
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
-    )
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value)
   )
 
 lazy val node = project
@@ -73,10 +72,20 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(scalaz, spire),
+    libraryDependencies ++= commonDependencies ++ Seq(scalaz),
     bnfcSettings,
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
+    coverageExcludedFiles := Seq(
+      (javaSource in Compile).value,
+      (bnfcGrammarDir in BNFCConfig).value,
+      (bnfcOutputDir in BNFCConfig).value,
+      baseDirectory.value / "src" / "main" / "k",
+      baseDirectory.value / "src" / "main" / "rbl"
+    ).map(_.getPath ++ "/.*").mkString(";"),
+
+    // Fix up root directory so tests find relative files they need
+    fork in Test := true
   )
 
 

@@ -19,7 +19,7 @@ object CompilerSettings {
       "-Ypartial-unification",
       "-Ywarn-dead-code",
       "-Ywarn-numeric-widen",
-      "-deprecation",
+      // "-deprecation", // rholang's Term.scala uses some deprecated shit.  Kill it with fire.
       "-encoding", "UTF-8",
       "-feature",
       "-language:_",
