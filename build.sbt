@@ -19,7 +19,18 @@ def commonSettings: Seq[Setting[_]] =
     coverageFailOnMinimum := false,
     coverageExcludedFiles := Seq(
       (sourceManaged in Compile).value.getPath ++ "/.*"
-    ).mkString(";")
+    ).mkString(";"),
+
+    // scalafmtOnCompile := true // pretty destructive still
+
+    /*
+     * By default, tag docker images with organization and the
+     * version.
+     */
+    imageNames in docker := Seq(
+      ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
+      ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
+    )
 
   ).flatMap(_.settings)
 
@@ -29,13 +40,18 @@ lazy val root = (project in file("."))
 lazy val comm = project
   .settings(
     commonSettings,
+    version := "0.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
       uPnP),
     PB.targets in Compile := Seq(
       PB.gens.java -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
-    )
+    ),
+    coverageExcludedFiles := Seq(
+      (javaSource in Compile).value,
+      (sourceManaged in Compile).value
+    ).map(_.getPath ++ "/.*").mkString(";")
   )
 
 lazy val storage = project
@@ -49,13 +65,17 @@ lazy val storage = project
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
     ),
-    crossScalaVersions := Seq("2.11.12", scalaVersion.value)
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
   )
 
 lazy val node = project
   .enablePlugins(DockerPlugin)
   .settings(
     commonSettings,
+
+    version := "0.1",
+
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
@@ -81,11 +101,6 @@ lazy val node = project
         entryPoint("/bin/main.sh")
       }
     },
-
-    imageNames in docker := Seq(
-      ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
-      ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
-    )
   )
   .dependsOn(comm, storage, rholang) // Not really, but it will
 
