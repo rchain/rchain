@@ -19,15 +19,50 @@
 ;; Form (+ 1 2) = 4 failed (produced 3).
 ;; NIL
 
-(define failures 0)
-(defProc (incf-failures)
-  (set! failures (+ failures 1))
-  failures)
+;; Make an actor that emulates a counter. It can be incremented, decremented,
+;; and reset to zero.
+(defOprn increment)
+(defOprn decrement)
+(defOprn reset)
+(defOprn value)
 
-(define successes 0)
-(defProc (incf-successes)
-  (set! successes (+ successes 1))
-  successes)
+(defActor Counter (slots& value 0)
+  (method (increment & delta)
+     (let* [[delta (if (null? delta) 1 (head delta))]
+            [new-value (+ value delta)]]
+       (update value new-value)
+       new-value))
+  (method (decrement & delta)
+     (let* [[delta (if (null? delta) 1 (head delta))]
+            [new-value (- value delta)]]
+       (update value new-value)
+       new-value))
+  (method (reset)
+     (let []
+       (update value 0)
+       0))
+  (pure (value) value))
+
+;; Counters for logical sets of tests.
+(define failures (new Counter))
+(define successes (new Counter))
+
+;; Counters for total test success and failure counts.
+(define total-failures (new Counter))
+(define total-successes (new Counter))
+
+;; Call this at the end of a logical group of test. It will print out if there
+;; were any failures in that group and accumulate total successes and failure
+;; counts before resetting the counters.
+(defProc (record-and-reset)
+  (seq
+    (if (> (value failures) 0)
+        (display "Successes: " (value successes) ". Failures: " (value failures) ".\n")
+        (display "All sub-tests passed.\n"))
+    (increment total-successes (value successes))
+    (increment total-failures (value failures))
+    (reset successes)
+    (reset failures)))
 
 ;; From the docs:
 ;;
@@ -53,14 +88,14 @@
                             "Form " (Q form) " = " (Q answer) " passed.\n"
                             (Q color-normal)))
                    e)
-                (e (new RequestExpr 'incf-successes '[]) e))
+                (e (new RequestExpr 'increment '[successes]) e))
                (SqX
                 (e (new RequestExpr 'display
                         (TX (Q color-red)
                             "Form " (Q form) " = " (Q answer) " failed (expected " 'exp " but got " 'res ").\n"
                             (Q color-normal)))
                    e)
-                (e (new RequestExpr 'incf-failures '[]) e)
+                (e (new RequestExpr 'increment '[failures]) e)
                 ))
           ;; Return #niv to declutter the output.
           '#niv))))
@@ -71,11 +106,15 @@
 (load "tests/reader-utf-8.ros" 'silent)
 
 ;;; tests for tuplespace
-(load "namespace-util-tests.rbl" 'silent)
-(load "consume-tests.rbl" 'silent)
-(load "produce-tests.rbl" 'silent)
+(load "tests/namespace-util-tests.rbl" 'silent)
+(load "tests/consume-tests.rbl" 'silent)
+(load "tests/produce-tests.rbl" 'silent)
 
-(exit (if (> failures 0) 1 0))
+;; Returning 1 or 0, not (value total-failures) on the off chance that
+;;
+;;    (= 0 (mod (value total-failures) 256))
+;;
+(exit (if (> (value total-failures) 0) 1 0))
 
 
 ;; Local Variables:
