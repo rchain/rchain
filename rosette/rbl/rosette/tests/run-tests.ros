@@ -70,7 +70,13 @@
 (load "tests/reader-iso-8859-1.ros" 'silent)
 (load "tests/reader-utf-8.ros" 'silent)
 
+;;; tests for tuplespace
+(load "namespace-util-tests.rbl" 'silent)
+(load "consume-tests.rbl" 'silent)
+(load "produce-tests.rbl" 'silent)
+
 (exit (if (> failures 0) 1 0))
+
 
 ;; Local Variables:
 ;; indent-tabs-mode: nil
