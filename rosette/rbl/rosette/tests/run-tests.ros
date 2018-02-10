@@ -29,12 +29,12 @@
 (defActor Counter (slots& value 0)
   (method (increment & delta)
      (let* [[delta (if (null? delta) 1 (head delta))]
-            [new-value (+ delta value)]]
+            [new-value (+ value delta)]]
        (update value new-value)
        new-value))
   (method (decrement & delta)
      (let* [[delta (if (null? delta) 1 (head delta))]
-            [new-value (- delta value)]]
+            [new-value (- value delta)]]
        (update value new-value)
        new-value))
   (method (reset)
