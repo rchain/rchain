@@ -10,15 +10,15 @@ cat > "${RESULTS}" < /dev/null
 ./clean.sh
 ./build.sh
 
-{
-    # Continue after errors
-    set +e
+# Continue after errors from this point on.
+set +e
 
+{
     # Increase stack limit so that Rosette can load all files
     ulimit -s unlimited
 
     export ESS_SYSDIR=$PWD/rbl/rosette
-    ROSETTE="./build.out/src/rosette --boot rbl/rosette/boot.rbl"
+    ROSETTE="./build.out/src/rosette --boot-dir rbl/rosette"
 
     # Execute Rosette instance
     ${ROSETTE} rbl/rosette/hello_world.rbl <<EOF
