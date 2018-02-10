@@ -53,6 +53,7 @@ lazy val storage = project
   )
 
 lazy val node = project
+  .enablePlugins(DockerPlugin)
   .settings(
     commonSettings,
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
@@ -60,9 +61,33 @@ lazy val node = project
       argParsing,
       uriParsing
     ),
-    mainClass in assembly := Some("coop.rchain.node.Main")
+
+    mainClass in assembly := Some("coop.rchain.node.Main"),
+
+    /*
+     * Dockerization via sbt-docker
+     */
+
+    dockerfile in docker := {
+      val artifact: File = assembly.value
+      val artifactTargetPath = s"/${artifact.name}"
+      val entry: File = baseDirectory(_ / "main.sh").value
+      val entryTargetPath = "/bin"
+      new Dockerfile {
+        from("openjdk:8u151-jre-alpine")
+        add(artifact, artifactTargetPath)
+        env("RCHAIN_TARGET_JAR", artifactTargetPath)
+        add(entry, entryTargetPath)
+        entryPoint("/bin/main.sh")
+      }
+    },
+
+    imageNames in docker := Seq(
+      ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
+      ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
+    )
   )
-  .dependsOn(comm)
+  .dependsOn(comm, storage, rholang) // Not really, but it will
 
 lazy val rholang = project
   .settings(
@@ -89,26 +114,3 @@ lazy val rholang = project
   )
 
 
-/*
- * Dockerization via sbt-docker
- */
-enablePlugins(DockerPlugin)
-
-dockerfile in docker := {
-  val artifact: File = assembly.value
-  val artifactTargetPath = s"/${artifact.name}"
-  val entry: File = baseDirectory(_ / "main.sh").value
-  val entryTargetPath = "/bin"
-  new Dockerfile {
-    from("openjdk:8u151-jre-alpine")
-    add(artifact, artifactTargetPath)
-    env("RCHAIN_TARGET_JAR", artifactTargetPath)
-    add(entry, entryTargetPath)
-    entryPoint("/bin/main.sh")
-  }
-}
-
-imageNames in docker := Seq(
-  ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
-  ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
-)
