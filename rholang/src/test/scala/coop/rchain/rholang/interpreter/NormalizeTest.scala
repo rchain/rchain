@@ -83,6 +83,25 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PEval" should "Handle a bound name varible" in {
+    val pEval = new PEval(new NameVar("x"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
+    result.par should be (inputs.par.copy(evals = List(Eval(ChanVar(BoundVar(0))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+  "PEval" should "Collapse a quote" in {
+    val pEval = new PEval(new NameQuote(new PPar(new PVar("x"), new PVar("x"))))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
+    result.par should be (inputs.par.copy(expr = List(EVar(BoundVar(0)), EVar(BoundVar(0)))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(
         new PGround(
@@ -185,6 +204,24 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     val nqground = new NameQuote(new PGround(new GroundInt(7)))
     val result = NameNormalizeMatcher.normalizeMatch(nqground, inputs)
     result.chan should be (Quote(Par().copy(expr = List(GInt(7)))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "NameQuote" should "collapse an eval" in {
+    val nqeval = new NameQuote(new PEval(new NameVar("x")))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+    val result = NameNormalizeMatcher.normalizeMatch(nqeval, boundInputs)
+    result.chan should be (ChanVar(BoundVar(0)))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "NameQuote" should "not collapse an eval | eval" in {
+    val nqeval = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+    val result = NameNormalizeMatcher.normalizeMatch(nqeval, boundInputs)
+    result.chan should be (Quote(Par().copy(evals = List(Eval(ChanVar(BoundVar(0))), Eval(ChanVar(BoundVar(0)))))))
     result.knownFree should be (inputs.knownFree)
   }
 }
