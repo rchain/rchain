@@ -18,14 +18,13 @@ object Dsl {
     def on(op: Op,
            state: VMState = testState,
            formatter: (String, String) => String = defaultFormatter)(
-        f: Any => Unit)(implicit sel: DeepSelector[Path, VMState],
-                        m: WordSpec): Unit = {
+        f: Any => Unit)(implicit sel: DeepSelector[Path, VMState], m: WordSpec): Unit = {
 
       val newState = dispatch(op, state)
       sel(newState) match {
         case (l: List[Witness], r) =>
-          val path = buildPath(l)
-          val name = op.getClass.getSimpleName
+          val path    = buildPath(l)
+          val name    = op.getClass.getSimpleName
           val message = formatter(name, path)
           m.registerTest(message)(f(r))
       }

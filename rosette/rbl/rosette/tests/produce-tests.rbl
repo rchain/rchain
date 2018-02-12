@@ -157,6 +157,4 @@
       (test-form (tbl-get channel-lookup-table 'foo) [])
       (test-form (tbl-get channel-lookup-table 'bar) []))))
 
-(if (> failures 0)
-    (display "Successes: " successes ". Failures: " failures ".\n")
-    (display "All tests passed.\n"))
+(record-and-reset)

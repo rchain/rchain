@@ -106,6 +106,4 @@
         [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]
          [[43 44] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
 
-(if (> failures 0)
-    (display "Successes: " successes ". Failures: " failures ".\n")
-    (display "All tests passed.\n"))
+(record-and-reset)

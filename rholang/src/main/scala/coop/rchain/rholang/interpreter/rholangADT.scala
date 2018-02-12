@@ -14,9 +14,24 @@ case class Par(
   // matches: List[Match]
 ) {
   // TODO: write helper methods to append an X and return a new par
-  // TODO: write helper method to get an empty par
   def this() =
     this(List(), List(), List(), List(), List())
+  def singleEval(): Option[Eval] = {
+    if (sends.isEmpty && receives.isEmpty && news.isEmpty && expr.isEmpty) {
+      evals match {
+        case List(single) => Some(single)
+        case _ => None
+      }
+    } else {
+      None
+    }
+  }
+  def merge(that: Par) = Par(
+      that.sends ++ sends,
+      that.receives ++ receives,
+      that.evals ++ evals,
+      that.news ++ news,
+      that.expr ++ expr)
 }
 
 object Par {
@@ -33,8 +48,10 @@ case class ChanVar(cvar: Var) extends Channel
 // These are DeBruijn levels
 sealed trait Var
 case class BoundVar(level: Int) extends Var
-// It is an error to use WildCard() in a non-binding position
-case class WildCard() extends Var
+// Wildcards are represented as bound variables. The initial normalization will
+// not produce uses of the variable, but for (_ <- x) P is the same as
+// for (y <- x) P if y is not free in P. We model that equivalence by turning all
+// wildcards into bound variables.
 // Variables that occur free in Par used as a pattern or ChanVar are binders.
 // For the purpose of comparing patterns, we count just like BoundVars.
 
