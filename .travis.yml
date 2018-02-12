@@ -3,13 +3,15 @@ scala:
   - 2.12.4
 sbt_args: -no-colors
 dist: trusty
-# env:
-#   - SUBPROJECT=comm
-#   - SUBPROJECT=rholang
-#   - SUBPROJECT=roscala
-#   - SUBPROJECT=rosette
-#   - SUBPROJECT=storage
-script: ./scripts/build-subprojects.sh
+env:
+  - SUBPROJECT=comm
+  - SUBPROJECT=rholang
+  - SUBPROJECT=roscala
+  - SUBPROJECT=rosette
+  - SUBPROJECT=storage
+script:
+  - ./scripts/build-subprojects.sh
+  - ./scripts/install.sh
 sudo: required
 install: ./scripts/install.sh
 cache:
