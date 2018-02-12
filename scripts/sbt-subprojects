@@ -1,0 +1,11 @@
+comm / compile
+comm / assembly
+rholang / bnfc:generate
+rholang / compile
+rholang / assembly
+storage / compile
+storage / assembly
+node / compile
+node / assembly
+node / docker
+
