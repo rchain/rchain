@@ -14,9 +14,24 @@ case class Par(
   // matches: List[Match]
 ) {
   // TODO: write helper methods to append an X and return a new par
-  // TODO: write helper method to get an empty par
   def this() =
     this(List(), List(), List(), List(), List())
+  def singleEval(): Option[Eval] = {
+    if (sends.isEmpty && receives.isEmpty && news.isEmpty && expr.isEmpty) {
+      evals match {
+        case List(single) => Some(single)
+        case _ => None
+      }
+    } else {
+      None
+    }
+  }
+  def merge(that: Par) = Par(
+      that.sends ++ sends,
+      that.receives ++ receives,
+      that.evals ++ evals,
+      that.news ++ news,
+      that.expr ++ expr)
 }
 
 object Par {
