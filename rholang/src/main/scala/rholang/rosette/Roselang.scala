@@ -107,7 +107,7 @@ object RosetteOps {
   val _run = "run"
   val _compile = "compile"
   var _if = "if"
-  var _match = "match?" // TODO: Adjust based on Rosette implementation. This operation checks for equality in the "match" implementation.
+  var _match = "match-pattern" // TODO: Adjust based on Rosette implementation. This operation checks for equality in the "match" implementation.
   var _list = "list" // TODO: Extract into "temporary operations" set
 }
 
