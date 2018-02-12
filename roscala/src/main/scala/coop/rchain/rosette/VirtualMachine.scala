@@ -3,6 +3,7 @@ package coop.rchain.rosette
 import cats.data.State
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rosette.Ob._
+import coop.rchain.rosette.Ctxt.setReg
 import coop.rchain.rosette.prim.Prim
 
 sealed trait Work
@@ -40,6 +41,33 @@ object VirtualMachine {
 
   def handleVirtualMachineError(state: VMState): VMState =
     state.ctxt.vmError(state)._2
+
+  def handlePrimResult(primResult: Result,
+                       save: Ob => State[VMState, Unit]): State[VMState, Unit] =
+    primResult match {
+      case Right(ob) => save(ob)
+
+      case Left(DeadThread) => modify(_.copy(doNextThreadFlag = true))
+
+      case Left(PrimNotFound) => modify(_.copy(exitFlag = true, exitCode = 1))
+
+      // TODO: Port handleException for OTsysval
+      case Left(_) => modify(_.copy(doNextThreadFlag = true))
+    }
+
+  def runPrim(unwind: Boolean, optPrim: Option[Prim]): State[VMState, Result] =
+    State { state =>
+      optPrim match {
+        case Some(prim) =>
+          if (unwind) {
+            val (res, st) = unwindAndApplyPrim(prim, state)
+            (st, res)
+          } else (state, prim.dispatchHelper(state.ctxt))
+
+        case None =>
+          (state, Left(PrimNotFound))
+      }
+    }
 
   /**
     *  This code protects the current argvec, temporarily replacing it
@@ -267,11 +295,14 @@ object VirtualMachine {
       .set(_ >> 'exitCode)(1)
       .update(_ >> 'debugInfo)(info => if (state.debug) info :+ msg else info)
 
-  def setCtxtReg(reg: Int, ob: Ob)(state: VMState): VMState =
-    state.ctxt.setReg(reg, ob) match {
-      case Some(newCtxt) => state.set(_ >> 'ctxt)(newCtxt)
-      case None          => die(unknownRegister(reg))(state)
+  def setCtxtReg(reg: Int, ob: Ob)(state: VMState): VMState = {
+    val (ctxt, storeRes) = setReg(reg, ob).run(state.ctxt).value
+
+    storeRes match {
+      case Success => state.set(_ >> 'ctxt)(ctxt)
+      case Failure => die(unknownRegister(reg))(state)
     }
+  }
 
   def getCtxtReg(reg: Int)(state: VMState): (Option[Ob], VMState) =
     state.ctxt.getReg(reg) match {
@@ -517,66 +548,59 @@ object VirtualMachine {
       })
   }
 
-  def execute(op: OpApplyPrimArg, state: VMState): VMState =
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .updateSelf(state => {
-        val prim  = Prim.nthPrim(op.primNum)
-        val argno = op.arg
+  def execute(op: OpApplyPrimArg, state: VMState): VMState = {
+    val st = for {
+      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-        val (result, newState) =
-          if (op.unwind) { unwindAndApplyPrim(prim.get, state) } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+      prim = Prim.nthPrim(op.primNum)
+      result <- runPrim(op.unwind, prim)
 
-        result match {
-          case Right(ob) =>
-            if (ob.is(Ob.OTsysval)) {
-              handleException(ob, op, newState.loc)
-              newState.set(_ >> 'doNextThreadFlag)(true)
-            } else if (argno >= newState.ctxt.argvec.elem.length) {
-              newState.set(_ >> 'vmErrorFlag)(true)
-            } else {
-              newState
-                .update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(argno, ob))
-                .update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
-            }
-
-          case Left(DeadThread) =>
-            newState.set(_ >> 'doNextThreadFlag)(true)
+      _ <- handlePrimResult(
+        result,
+        ob =>
+          State { vmState: VMState =>
+            if (ob.is(Ob.OTsysval))
+              //handleException(ob, op, vmState.loc)
+              (vmState.copy(doNextThreadFlag = true), ())
+            else if (op.arg >= vmState.ctxt.argvec.elem.size)
+              (vmState.copy(vmErrorFlag = true), ())
+            else
+              (vmState
+                 .update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, ob))
+                 .update(_ >> 'doNextThreadFlag)(if (op.next) true else _),
+               ())
         }
+      )
+    } yield ()
 
-      })
+    st.runS(state).value
+  }
 
-  def execute(op: OpApplyPrimReg, state: VMState): VMState =
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .updateSelf(state => {
-        val prim  = Prim.nthPrim(op.primNum)
-        val regno = op.reg
+  def execute(op: OpApplyPrimReg, state: VMState): VMState = {
+    val st = for {
+      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-        val (result, newState) =
-          if (op.unwind) { unwindAndApplyPrim(prim.get, state) } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
+      prim = Prim.nthPrim(op.primNum)
+      result <- runPrim(op.unwind, prim)
+
+      _ <- handlePrimResult(
+        result,
+        ob =>
+          setReg(op.reg, ob)
+            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+            .transform { (vmState, storeResult) =>
+              storeResult match {
+                case Success =>
+                  (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
+                case Failure =>
+                  (vmState.copy(exitFlag = true, exitCode = 1), ())
+              }
           }
+      )
+    } yield ()
 
-        result match {
-          case Right(ob) =>
-            if (ob.is(Ob.OTsysval)) {
-              handleException(ob, op, CtxtRegister(regno))
-              newState.set(_ >> 'doNextThreadFlag)(true)
-            } else {
-              setCtxtReg(regno, ob)(newState)
-                .update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
-            }
-
-          case Left(DeadThread) =>
-            newState.set(_ >> 'doNextThreadFlag)(true)
-        }
-
-      })
+    st.runS(state).value
+  }
 
   def execute(op: OpApplyCmd, state: VMState): VMState =
     state
@@ -829,4 +853,11 @@ object VirtualMachine {
 
   def execute(op: OpUnknown, state: VMState): VMState =
     state.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(1)
+
+  def inspect[A](f: VMState => A): State[VMState, A] =
+    State.inspect[VMState, A](f)
+
+  def modify(f: VMState => VMState): State[VMState, Unit] =
+    State.modify[VMState](f)
+
 }

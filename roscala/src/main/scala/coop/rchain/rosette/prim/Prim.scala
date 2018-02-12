@@ -26,6 +26,8 @@ abstract class Prim extends Ob {
     val n = ctxt.nargs
 
     if (minArgs <= n && n <= maxArgs) {
+      println(fn(ctxt))
+      println(this.name)
       fn(ctxt).left.map(PrimErrorWrapper)
     } else {
       Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
