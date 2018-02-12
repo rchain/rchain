@@ -18,7 +18,7 @@ import scala.util.control.NonFatal
   * (`local`) be given; this supplies the source data for datagrams it
   * sends.
   */
-final case class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
+class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
   val socket = new DatagramSocket(local.endpoint.udpPort)
 
   /*

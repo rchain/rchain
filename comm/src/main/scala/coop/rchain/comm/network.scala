@@ -31,7 +31,7 @@ final case class UnicastNetwork(id: NodeIdentifier,
     new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
   val local = new ProtocolNode(id, endpoint, this)
-  val comm  = UnicastComm(local)
+  val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
   private val receiver = new Thread {
