@@ -109,11 +109,10 @@ object tuple {
               if (n.value < 0)
                 Fixnum(Int.MinValue)
               else if (n.value < t.elem.size) {
-                val value = t.nth(n.value) match {
+                t.nth(n.value) match {
                   case Some(v: Fixnum) => v
                   case None            => Fixnum(Int.MaxValue)
                 }
-                value
               } else
                 Fixnum(Int.MaxValue)))
     }
