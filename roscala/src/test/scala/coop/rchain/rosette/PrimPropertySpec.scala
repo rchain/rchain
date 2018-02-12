@@ -6,7 +6,7 @@ import org.scalatest.prop.PropertyChecks
 
 class PrimPropertySpec extends PropSpec with PropertyChecks with Matchers {
   property("Primitives should return error for illegal number of arguments") {
-    val nargsGen = Gen.choose(0, 1000)
+    val nargsGen   = Gen.choose(0, 1000)
     val primitives = prim.Prims.values
 
     primitives.foreach { prim =>

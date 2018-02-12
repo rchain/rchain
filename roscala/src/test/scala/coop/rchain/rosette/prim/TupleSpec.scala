@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.prim.tuple._
-import coop.rchain.rosette.{Ctxt, Fixnum => RFixnum, Ob, PC, RblBool, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, Tuple}
 import org.scalatest._
 
 class TupleSpec extends FlatSpec with Matchers {
@@ -12,7 +12,7 @@ class TupleSpec extends FlatSpec with Matchers {
     pc = PC.PLACEHOLDER,
     rslt = null,
     trgt = null,
-    argvec = Tuple(1, RFixnum(1)),
+    argvec = Tuple(1, Fixnum(1)),
     env = null,
     code = null,
     ctxt = null,
@@ -24,10 +24,10 @@ class TupleSpec extends FlatSpec with Matchers {
 
   /** tuple-cons */
   "tplCons" should "correctly cons an Ob with a Tuple" in {
-    val tup = Seq(RFixnum(2), RFixnum(3), RFixnum(4))
+    val tup = Seq(Fixnum(2), Fixnum(3), Fixnum(4))
     val newCtxt =
-      ctxt.copy(nargs = 2, argvec = Tuple.cons(RFixnum(1), Tuple(Tuple(tup))))
-    tplCons.fn(newCtxt) should be(Right(Tuple.cons(RFixnum(1), Tuple(tup))))
+      ctxt.copy(nargs = 2, argvec = Tuple.cons(Fixnum(1), Tuple(Tuple(tup))))
+    tplCons.fn(newCtxt) should be(Right(Tuple.cons(Fixnum(1), Tuple(tup))))
   }
 
   it should "fail for non-tuple arguments" in {
@@ -37,20 +37,20 @@ class TupleSpec extends FlatSpec with Matchers {
 
   /** tuple-cons* */
   "tplConsStar" should "correctly cons n Obs with a Tuple" in {
-    val tup = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
+    val tup = Seq(Fixnum(4), Fixnum(5), Fixnum(6))
 
     val newCtxt =
-      ctxt.copy(nargs = 4,
-                argvec =
-                  Tuple.cons(RFixnum(1),
-                             Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(Tuple(tup))))))
+      ctxt.copy(
+        nargs = 4,
+        argvec =
+          Tuple.cons(Fixnum(1), Tuple.cons(Fixnum(2), Tuple.cons(Fixnum(3), Tuple(Tuple(tup))))))
 
     tplConsStar.fn(newCtxt) should be(
-      Right(Tuple.cons(RFixnum(1), Tuple.cons(RFixnum(2), Tuple.cons(RFixnum(3), Tuple(tup))))))
+      Right(Tuple.cons(Fixnum(1), Tuple.cons(Fixnum(2), Tuple.cons(Fixnum(3), Tuple(tup))))))
   }
 
   "tplConsStar" should "correctly cons 0 Obs with a Tuple" in {
-    val tup = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
+    val tup = Seq(Fixnum(4), Fixnum(5), Fixnum(6))
 
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
@@ -65,10 +65,10 @@ class TupleSpec extends FlatSpec with Matchers {
 
   /** tuple-rcons */
   "tplRcons" should "correctly rcons an Ob with a Tuple" in {
-    val tup = Seq(RFixnum(1), RFixnum(2), RFixnum(3))
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3))
     val newCtxt =
-      ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(Tuple(tup)), RFixnum(4)))
-    tplRcons.fn(newCtxt) should be(Right(Tuple.rcons(Tuple(tup), RFixnum(4))))
+      ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(4)))
+    tplRcons.fn(newCtxt) should be(Right(Tuple.rcons(Tuple(tup), Fixnum(4))))
   }
 
   it should "fail for non-tuple arguments" in {
@@ -78,12 +78,12 @@ class TupleSpec extends FlatSpec with Matchers {
 
   /** tuple-concat */
   "tplConcat" should "correctly concat n Tuples" in {
-    val tup1 = Seq(RFixnum(1), RFixnum(2))
-    val tup2 = Seq(RFixnum(3))
-    val tup3 = Seq(RFixnum(4), RFixnum(5), RFixnum(6))
+    val tup1 = Seq(Fixnum(1), Fixnum(2))
+    val tup2 = Seq(Fixnum(3))
+    val tup3 = Seq(Fixnum(4), Fixnum(5), Fixnum(6))
     val tups = Seq(Tuple(tup1), Tuple(tup2), Tuple(tup3))
 
-    val result = Seq(RFixnum(1), RFixnum(2), RFixnum(3), RFixnum(4), RFixnum(5), RFixnum(6))
+    val result = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
 
     val newCtxt =
       ctxt.copy(nargs = 3, argvec = Tuple(tups))
@@ -92,7 +92,7 @@ class TupleSpec extends FlatSpec with Matchers {
   }
 
   "tplConcat" should "correctly concat 1 Tuple" in {
-    val tup1 = Seq(RFixnum(1))
+    val tup1 = Seq(Fixnum(1))
     val tups = Seq(Tuple(tup1))
 
     val newCtxt =

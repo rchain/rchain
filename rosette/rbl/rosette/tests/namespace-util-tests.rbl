@@ -95,6 +95,4 @@
            [[data-list continuation-list] (tbl-get channel-subspace-table channel)]]
       (test-form continuation-list ['mock 'another-mock]))))
 
-(if (> failures 0)
-    (display "Successes: " successes ". Failures: " failures ".\n")
-    (display "All tests passed.\n"))
+(record-and-reset)
