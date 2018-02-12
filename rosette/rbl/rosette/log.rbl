@@ -58,7 +58,7 @@
         [dargs (concat args [#\\n])]]
     (seq
      (if prefix
-         (display stderr (log-time-string) " " (->string prefix) ": " & dargs))
+         (display stdout (log-time-string) " " (->string prefix) ": " & dargs))
      #niv)))
 
 ;;; Local Variables:
