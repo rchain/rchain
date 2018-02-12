@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.prim.rblfloat._
-import coop.rchain.rosette.{Ctxt, Fixnum => RFixnum, Ob, PC, RblBool, RblFloat => RFloat, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, RblFloat => RFloat, Tuple}
 import org.scalatest._
 
 class RblFloatSpec extends FlatSpec with Matchers {
@@ -12,7 +12,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
     pc = PC.PLACEHOLDER,
     rslt = null,
     trgt = null,
-    argvec = Tuple(1, RFixnum(1)),
+    argvec = Tuple(1, Fixnum(1)),
     env = null,
     code = null,
     ctxt = null,
@@ -119,7 +119,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
   }
 
   it should "fail for non-RblFloat arguments" in {
-    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFixnum(2)), Tuple(Ob.NIV)))
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
     flEq.fn(newCtxt) should be('left)
   }
 
@@ -256,7 +256,7 @@ class RblFloatSpec extends FlatSpec with Matchers {
 
   "flToFx" should "correctly convert the RblFloat value to Fixnum" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(2.1)))
-    flToFx.fn(newCtxt) should be(Right(RFixnum(2)))
+    flToFx.fn(newCtxt) should be(Right(Fixnum(2)))
   }
 
   it should "fail for non-RblFloat arguments" in {
