@@ -102,9 +102,9 @@ object tuple {
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val elem = ctxt.argvec.elem
 
-      checkTuple(0, elem).right.flatMap( // Ensure arg0 is a Tuple
+      checkTuple(0, elem).flatMap( // Ensure arg0 is a Tuple
         t =>
-          checkFixnum(1, elem).right.map( // Ensure arg1 is a Fixnum
+          checkFixnum(1, elem).map( // Ensure arg1 is a Fixnum
             n =>
               if (n.value < 0)
                 Fixnum(Int.MinValue)
