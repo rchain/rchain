@@ -205,14 +205,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     B("")(B(_abs)(B(_list)(Tag("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm)))))
   }
 
-  /* Proc */
-  override def visit( p : PPrint, arg : A ) : R = {
-    val pTerm : StrTermCtxt = p.proc_.accept(this, arg)._1
-    val printTerm = B("print")(pTerm)
-    val displayTerm = B("display")(Tag( "#\\\\n"))
-    B( "seq" )( printTerm, displayTerm )
-  }
-  override def visit( p : PNil, arg : A ) : R = {    
+  override def visit( p : PNil, arg : A ) : R = {
     Tag( "#niv" )
   }
   override def visit( p : PValue, arg : A ) : R = {
