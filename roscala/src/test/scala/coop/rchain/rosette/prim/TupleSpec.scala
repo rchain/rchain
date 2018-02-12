@@ -121,14 +121,14 @@ class TupleSpec extends FlatSpec with Matchers {
 
   /** tuple-safe-nth */
   "tplSafeNth" should "correctly return the nth element of a Tuple" in {
-    val tup = Seq(RFixnum(1), RFixnum(2), RFixnum(3), RFixnum(4), RFixnum(5), RFixnum(6))
-    val n   = RFixnum(3)
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val n   = Fixnum(3)
 
     val newCtxt =
       ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(Tuple(tup)), n))
 
     tplSafeNth.fn(newCtxt) should be(
-      Right(RFixnum(4))
+      Right(Fixnum(4))
     )
   }
 

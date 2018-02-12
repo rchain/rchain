@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Ob, Fixnum => RFixnum, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -99,24 +99,23 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RFixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val elem = ctxt.argvec.elem
 
-      checkTuple(0, elem).map { t =>
-        checkRFixnum(1, elem) match {
-          case Right(n) =>
-            if (n.value < 0)
-              RFixnum(Int.MinValue)
-            else if (n.value < t.elem.size) {
-              val value = t.nth(n.value) match {
-                case None             => RFixnum(Int.MaxValue)
-                case Some(v: RFixnum) => v
-              }
-              value
-            } else
-              RFixnum(Int.MaxValue)
-        }
-      }
+      checkTuple(0, elem).right.flatMap( // Ensure arg0 is a Tuple
+        t =>
+          checkFixnum(1, elem).right.map( // Ensure arg1 is a Fixnum
+            n =>
+              if (n.value < 0)
+                Fixnum(Int.MinValue)
+              else if (n.value < t.elem.size) {
+                val value = t.nth(n.value) match {
+                  case Some(v: Fixnum) => v
+                  case None            => Fixnum(Int.MaxValue)
+                }
+                value
+              } else
+                Fixnum(Int.MaxValue)))
     }
   }
 
@@ -133,14 +132,14 @@ object tuple {
     }
 
   /**
-    * Check the specified parameter for type RFixnum. Return a PrimError if it is
-    * not else return the RFixnum.
+    * Check the specified parameter for type Fixnum. Return a PrimError if it is
+    * not else return the Fixnum.
     */
-  private def checkRFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, RFixnum] =
-    if (!elem(n).isInstanceOf[RFixnum]) {
-      Left(TypeMismatch(n, RFixnum.getClass().getName()))
+  private def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
+    if (!elem(n).isInstanceOf[Fixnum]) {
+      Left(TypeMismatch(n, Fixnum.getClass().getName()))
     } else {
-      Right(elem(n).asInstanceOf[RFixnum])
+      Right(elem(n).asInstanceOf[Fixnum])
     }
 
 }
