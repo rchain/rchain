@@ -149,18 +149,13 @@ final case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolR
   * table that are closest to a given key.
   */
 final case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def lookupId: Option[Seq[Byte]] =
-    for {
-      lookup <- proto.message.lookup
-    } yield lookup.id.toByteArray
+  def lookupId: Option[Seq[Byte]] = proto.message.lookup.map(_.id.toByteArray)
 
   def response(src: ProtocolNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield
+    header.map { h =>
       LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
                             System.currentTimeMillis)
-
+    }
 }
 
 /**
