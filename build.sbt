@@ -3,7 +3,7 @@ import BNFC._
 
 def commonSettings: Seq[Setting[_]] =
   Seq[SettingsDefinition](
-    
+
     organization := "coop.rchain",
     scalaVersion := "2.12.4",
 
