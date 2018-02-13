@@ -48,6 +48,6 @@ object Secp256k1 {
   * @param pubkey ECDSA Public key, 33 or 65 bytes
   */
   def toPublic(seckey: Array[Byte]): Array[Byte] =
-    computePubkey(seckey)
+    NativeSecp256k1.computePubkey(seckey)
 
 }
