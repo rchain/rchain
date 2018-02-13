@@ -9,6 +9,7 @@ env:
   - SUBPROJECT=roscala
   - SUBPROJECT=rosette
   - SUBPROJECT=storage
+  - SUBPROJECT=node
 script:
   - ./scripts/build-subprojects.sh
 sudo: required
