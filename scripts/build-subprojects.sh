@@ -3,13 +3,13 @@
 if [ -f "build.sbt" ]; then
     case ${SUBPROJECT} in
 	rholang)
-	    sbt_commands="project\ ${SUBPROJECT} bnfc:generate compile assembly"
+	    sbt_commands=";project ${SUBPROJECT} ;bnfc:generate ;compile ;assembly"
 	    ;;
 	comm|storage)
-	    sbt_commands="project\ ${SUBPROJECT} compile assembly"
+	    sbt_commands=";project ${SUBPROJECT} ;compile ;assembly"
 	    ;;
 	node)
-	    sbt_commands="project\ rholang bnfc:generate assembly project\ ${SUBPROJECT} assembly docker"
+	    sbt_commands=";project rholang ;bnfc:generate ;assembly ;project ${SUBPROJECT} ;assembly ;docker"
 	    ;;
     esac
     if [ -z "$sbt_commands" ]; then
