@@ -256,7 +256,6 @@ object VarSortMatcher {
   def sortMatch(v : Var) : ScoredTerm[Var] = {
     v match {
       case bv : BoundVar => ScoredTerm(bv, Leaves(Score.BOUND_VAR, bv.level))
-      case wc : WildCard => ScoredTerm(wc, Leaf(Score.WILDCARD))
       case fv : FreeVar => ScoredTerm(fv, Leaves(Score.FREE_VAR, fv.level))
     }
   }
@@ -332,12 +331,12 @@ object ParSortMatcher {
   def sortMatch(p: Par) : ScoredTerm[Par] = {
     val sends = p.sends.map(s => SendSortMatcher.sortMatch(s)).sorted
     val receives = p.receives.map(r => ReceiveSortMatcher.sortMatch(r)).sorted
-    val exprs = p.expr.map(e => ExprSortMatcher.sortMatch(e)).sorted
+    val exprs = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
     val evals = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
     val news = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
     val sortedPar = Par(sends=sends.map(_.term),
                         receives=receives.map(_.term),
-                        expr=exprs.map(_.term),
+                        exprs=exprs.map(_.term),
                         evals=evals.map(_.term),
                         news=news.map(_.term))
     val parScore = Node(Score.PAR, sends.map(_.score) ++
