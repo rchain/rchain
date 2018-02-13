@@ -17,8 +17,7 @@ if [ -f "build.sbt" ]; then
     fi
     # Add coverage and any other common things here.
     # sbt_commands="$sbt_commands ..."
-    echo sbt -Dsbt.log.noformat=true project\ "${SUBPROJECT}" $sbt_commands
-    sbt -Dsbt.log.noformat=true project\ "${SUBPROJECT}" $sbt_commands
+    sbt -Dsbt.log.noformat=true "$sbt_commands"
 else
     echo "No build/test files found!"
     exit 1
