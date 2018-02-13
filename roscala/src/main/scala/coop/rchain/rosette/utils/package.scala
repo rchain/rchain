@@ -19,7 +19,7 @@ package object utils {
   class unsafeCastLens[B] {
     def apply[T, A](lens: Lens[T, A]): Lens[T, B] =
       new Lens[T, B] {
-        override def get(s: T): B = lens.get(s).asInstanceOf[B]
+        override def get(s: T): B       = lens.get(s).asInstanceOf[B]
         override def set(s: T)(b: B): T = lens.set(s)(b.asInstanceOf[A])
       }
   }

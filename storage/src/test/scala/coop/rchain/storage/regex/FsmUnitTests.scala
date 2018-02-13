@@ -1,11 +1,10 @@
 package coop.rchain.storage.regex
 
-import org.scalatest._
-
-import scala.util.Success
+import coop.rchain.storage.util
+import org.scalatest.{FlatSpec, Matchers}
 
 class FsmUnitTests extends FlatSpec with Matchers {
-  val _ob = -5
+  val _ob: Int = -5
 
   def createFsmA : Fsm = Fsm(
       Set('a', 'b'),
@@ -227,16 +226,16 @@ class FsmUnitTests extends FlatSpec with Matchers {
 
   "Cardinality" should "calculate length of the states set" in {
     val fsmA = createFsmA
-    assert(createFsmA.cardinality.contains(1))
+    assert(fsmA.cardinality.contains(1))
 
     val fsmAbc = createFsmAbc
-    assert(createFsmA.cardinality.contains(1))
+    assert(fsmAbc.cardinality.contains(1))
 
     val nullFsm = Fsm.nullFsm(Set('a'))
     assert(nullFsm.cardinality.contains(0))
 
     val epsFsm = Fsm.epsilonFsm(Set('a'))
-    assert(nullFsm.cardinality.contains(0))
+    assert(epsFsm.cardinality.contains(1))
 
     //check for recursion
     val brFsm = createBrzozowski
@@ -303,16 +302,16 @@ class FsmUnitTests extends FlatSpec with Matchers {
     assert(!concatAeA.accepts("aaa"))
 
     val concatAeeA = Fsm.concatenate(fsmA, epsA, epsA, fsmA)
-    assert(!concatAeA.accepts(""))
-    assert(!concatAeA.accepts("a"))
-    assert(concatAeA.accepts("aa"))
-    assert(!concatAeA.accepts("aaa"))
+    assert(!concatAeeA.accepts(""))
+    assert(!concatAeeA.accepts("a"))
+    assert(concatAeeA.accepts("aa"))
+    assert(!concatAeeA.accepts("aaa"))
 
     val concatEeAA = Fsm.concatenate(epsA, epsA, fsmA, fsmA)
-    assert(!concatAeA.accepts(""))
-    assert(!concatAeA.accepts("a"))
-    assert(concatAeA.accepts("aa"))
-    assert(!concatAeA.accepts("aaa"))
+    assert(!concatEeAA.accepts(""))
+    assert(!concatEeAA.accepts("a"))
+    assert(concatEeAA.accepts("aa"))
+    assert(!concatEeAA.accepts("aaa"))
   }
 
   /**
@@ -358,8 +357,8 @@ class FsmUnitTests extends FlatSpec with Matchers {
   }
 
   "Star" should "pass basic check" in {
-    var fsmA = createFsmA
-    var starA = fsmA.star
+    val fsmA = createFsmA
+    val starA = fsmA.star
 
     assert(starA.accepts(""))
     assert(starA.accepts("a"))
@@ -417,7 +416,6 @@ class FsmUnitTests extends FlatSpec with Matchers {
 
   "Derive" should "pass basic check" in {
     val fsmA = createFsmA
-    val fsmB = createFsmB
 
     assert(fsmA.derive("a").get == Fsm.epsilonFsm(Set('a','b')))
     assert(fsmA.derive("b").get == Fsm.nullFsm(Set('a','b')))
@@ -742,25 +740,25 @@ class FsmUnitTests extends FlatSpec with Matchers {
 
   "Invalid Fsm" should "fail if alphabet null" in {
     assertThrows[IllegalArgumentException] {
-      val fsm1 = Fsm(null, null, 0, null, null)
+      util.ignore{ Fsm(null, null, 0, null, null) }
     }
   }
 
   "Invalid Fsm" should "fail if initial state is not a state" in {
     assertThrows[IllegalArgumentException] {
-      val fsm1 = Fsm(Set('a'), Set(0), 1, Set(0), Map())
+      util.ignore { Fsm(Set('a'), Set(0), 1, Set(0), Map()) }
     }
   }
 
   "Invalid Fsm" should "fail if final state is not a state" in {
     assertThrows[IllegalArgumentException] {
-      val fsm1 = Fsm(Set('a'), Set(1), 1, Set(2), Map())
+      util.ignore { Fsm(Set('a'), Set(1), 1, Set(2), Map()) }
     }
   }
 
   "Invalid Fsm" should "fail if unexpected transition state detected" in {
     assertThrows[IllegalArgumentException] {
-      val fsm1 = Fsm(Set('a'), Set(1, 2), 1, Set(2), Map(1 -> Map('a' -> 3)))
+      util.ignore { Fsm(Set('a'), Set(1, 2), 1, Set(2), Map(1 -> Map('a' -> 3))) }
     }
   }
 }

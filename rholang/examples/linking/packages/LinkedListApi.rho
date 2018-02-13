@@ -1,0 +1,162 @@
+//an immutable linked list data structure
+export LinkedListApi in {
+  new 
+    EmptyList, Head, Tail, Prepend, PartialFold, Fold,
+    Reverse, Map, Foreach, Get, IndexOf, Length, Range,
+    LinkedList
+  in {
+    contract Head(list, return) = {
+      match list with [head, _] => { return(head) }
+    } | 
+    contract Tail(list, return) = {
+      match list with [_, tail] => { return(tail) }
+    } |
+    contract Prepend(value, tail, return) = {
+      return([value, tail])
+    } |
+    //A fold over the list which breaks early if a condition is met.
+    //both the condition and combinator are are combined into a single
+    //function which returns a [boolean, value] pair.
+    //Use cases: see Get and IndexOf
+    contract PartialFold(list, start, combinatorAndCondition, return) = {
+      new loop in {
+        contract loop(accumulatedValue, lst) = {
+          match lst == EmptyList with true => { return([false, accumulatedValue]) }
+          _ => {
+            match lst with [head, tail] => {
+              new result in {
+                combinatorAndCondition(head, accumulatedValue, result) |
+                for (r <- result) {
+                  match r with [true, _] => { return(r) }
+                  [false, newValue] => { loop(newValue, tail) }
+                }
+              }
+            }
+          }
+        } | loop(start, list)
+      }
+    } |
+    contract Fold(list, start, combinator, return) = {
+      new combinatorAndCondition in {
+        contract combinatorAndCondition(head, accumulatedValue, return) = {
+          new result in {
+            combinator(head, accumulatedValue, result) |
+            for(r <- result){ return([false, r]) }
+          }
+        } |
+        new result in {
+          PartialFold(list, start, combinatorAndCondition, result) |
+          for(r <- result) {
+            match r with [_, v] => { return(v) }
+          }
+        }
+      }
+    } |
+    contract Reverse(list, return) = {
+      new combinator in {
+        contract combinator(head, accumulatedValue, return) = {
+          Prepend(head, accumulatedValue, return)
+        } | Fold(list, EmptyList, combinator, return)
+      }
+    } |
+    contract Map(list, function, return) = {
+      new combinator in {
+        contract combinator(head, accumulatedValue, return) = {
+          new mappedHead in {
+            function(head, mappedHead) |
+            for(x <- mappedHead) {
+              Prepend(x, accumulatedValue, return)
+            }
+          }
+        } | new reversedMappedList in {
+          Fold(list, EmptyList, combinator, reversedMappedList) |
+          for (rml <- reversedMappedList) {
+            Reverse(rml, return)
+          }
+        }
+      }
+    } |
+    contract Foreach(list, proc, isDone) = {
+      new combinator, nilReturn in {
+        contract combinator(head, accumulatedValue, return) = {
+          //need return flag from `proc` in order to guarantee execution order
+          new isDone in { proc(head, isDone) | for(_ <- isDone){ return(Nil) } }
+        } | 
+        Fold(list, Nil, combinator, nilReturn) | for(_ <- nilReturn){ isDone(true) }
+      }
+    } |
+    contract Get(index, list, return) = {
+      new combinatorAndCondition in {
+        contract combinatorAndCondition(head, accumulatedValue, return) = {
+          match accumulatedValue with [i, _] => {
+            return([i == index, [i + 1, head]])
+          }
+        } |
+        new result in {
+          PartialFold(list, [0, Nil], combinatorAndCondition, result) |
+          for(r <- result) {
+            match r with [true, [_, v]] => { return(v) }
+            _ => { return(Nil) } //index out of bounds
+          }
+        }
+      }
+    } |
+    contract IndexOf(value, list, return) = {
+      new combinatorAndCondition in {
+        contract combinatorAndCondition(head, accumulatedValue, return) = {
+          return([head == value, accumulatedValue + 1])
+        } |
+        new result in {
+          PartialFold(list, -1, combinatorAndCondition, result) |
+          for(r <- result) {
+            match r with [true, i] => { return(i) }
+            _ => { return(-1) } //element not found
+          }
+        }
+      }
+    } |
+    contract Length(list, return) = {
+      new combinator in {
+        contract combinator(head, accumulatedValue, return) = {
+          return(accumulatedValue + 1)
+        } | 
+        Fold(list, 0, combinator, return)
+      }
+    } |
+    //create a LinkedList of integers from start (inclusive) to end (exclusive)
+    contract Range(start, end, return) = {
+      new loop in {
+        contract loop(i, list) = {
+          match i < start with true => { return(list) }
+          _ => {
+            new nextList in {
+              Prepend(i, list, nextList) |
+              for(l <- nextList) { loop(i - 1, l) }
+            }
+          }
+        } | loop(end - 1, EmptyList)
+      }
+    } |
+    //create a linked list with a single element
+    contract LinkedList(value, return) = {
+      Prepend(value, EmptyList, return)
+    } |
+    contract LinkedListApi(method, return) = {
+      match method with 
+        "EmptyList" => { return(EmptyList) }
+        "Head" => { return(Head) }
+        "Tail" => { return(Tail) }
+        "Prepend" => { return(Prepend) }
+        "Fold" => { return(Fold) }
+        "Reverse" => { return(Reverse) }
+        "Foreach" => { return(Foreach) }
+        "Map" => { return(Map) }
+        "Get" => { return(Get) }
+        "IndexOf" => { return(IndexOf) }
+        "Length" => { return(Length) }
+        "Range" => { return(Range) }
+        "LinkedList" => { return(LinkedList) }
+        _ => { "Method: ".display(method, " not found!") | return(Nil) }
+    }
+  }
+}

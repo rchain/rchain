@@ -1,6 +1,5 @@
 package coop.rchain.rosette
 
-import coop.rchain.rosette.Location.StoreCtxt
 import coop.rchain.rosette.VirtualMachine.loggerStrand
 import Location._
 
@@ -37,26 +36,23 @@ case class Ctxt(tag: Location,
   def prepare(): Ctxt = this.copy(argvec = argvec.makeSlice(0, nargs))
 
   def rcv(result: Ob, loc: Location)(state: VMState): (Boolean, VMState) = {
-    val storeResult = Location.store(loc, this, state.globalEnv, result)
+    val (ctxt, res) = Location.store(loc, result).run(this).value
 
-    storeResult match {
-      case StoreCtxt(newCtxt) =>
+    res match {
+      case Success =>
         val newState = state
-          .set(_ >> 'ctxt >> 'ctxt)(newCtxt)
+          .set(_ >> 'ctxt >> 'ctxt)(ctxt)
           .update(_ >> 'ctxt >> 'ctxt >> 'outstanding)(_ - 1)
-          .updateSelf(st =>
-            if (st.ctxt.ctxt.outstanding == 0) scheduleStrand(st) else st)
+          .updateSelf(st => if (st.ctxt.ctxt.outstanding == 0) scheduleStrand(st) else st)
 
         (false, newState)
 
-      // TODO: Add other store cases
-      case _ =>
-        (true, state)
+      case Failure => (true, state)
     }
   }
 
   def ret(result: Ob)(state: VMState): (Boolean, VMState) =
-    if (tag != LocLimbo) {
+    if (this.tag != Limbo) {
       applyK(result, this.tag)(state)
     } else {
       (false, state)
@@ -84,8 +80,8 @@ case class Ctxt(tag: Location,
 
   def vmError(state: VMState): (Result, VMState) = {
     val newArgvec = Tuple(this.prepare())
-    val newState = state.set(_ >> 'ctxt)(
-      Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor))
+    val newState =
+      state.set(_ >> 'ctxt)(Ctxt(OprnVmError, newArgvec).copy(monitor = state.systemMonitor))
 
     OprnVmError.dispatch(newState)
   }
@@ -115,34 +111,8 @@ object Ctxt {
   def apply(trgt: Ob, argvec: Tuple): Ctxt = PLACEHOLDER
 
   object NIV
-      extends Ctxt(null,
-                   0,
-                   0,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null)
+      extends Ctxt(null, 0, 0, null, null, null, null, null, null, null, null, null, null, null)
 
   object PLACEHOLDER
-      extends Ctxt(null,
-                   0,
-                   0,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null,
-                   null)
+      extends Ctxt(null, 0, 0, null, null, null, null, null, null, null, null, null, null, null)
 }

@@ -9,7 +9,7 @@ import com.google.protobuf.any.{Any => AnyProto}
 import com.typesafe.scalalogging.Logger
 
 sealed trait NetworkError
-case class ParseError(msg: String) extends NetworkError
+final case class ParseError(msg: String) extends NetworkError
 
 /*
  * Inspiration from ethereum:
@@ -20,7 +20,7 @@ case class ParseError(msg: String) extends NetworkError
  *
  *   rnode://<key>@<host>:<udp-port>
  */
-case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
+final case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
 
 case object NetworkAddress {
 
@@ -36,14 +36,14 @@ case object NetworkAddress {
       val addy =
         for {
           scheme <- uri.scheme
-          key <- uri.user
-          host <- uri.host
-          port <- uri.port
+          key    <- uri.user
+          host   <- uri.host
+          port   <- uri.port
         } yield NetworkAddress(scheme, key, host, port)
 
       addy match {
         case Some(NetworkAddress(scheme, key, host, port)) =>
-          Right(PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
+          Right(new PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
         case _ => Left(ParseError(s"bad address: $str"))
       }
     } catch {
@@ -51,13 +51,8 @@ case object NetworkAddress {
     }
 }
 
-case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.SocketAddress] {
+final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.SocketAddress] {
   val logger = Logger("p2p")
-
-  val local = NetworkAddress.parse(homeAddress) match {
-    case Right(node)           => node
-    case Left(ParseError(msg)) => throw new Exception(msg)
-  }
 
   val net = new UnicastNetwork(local, Some(this))
 
@@ -172,7 +167,7 @@ case class Network(homeAddress: String) extends ProtocolDispatcher[java.net.Sock
       }
     }
 
-  override def toString = s"#{Network $homeAddress}"
+  override def toString = s"#{Network ${local.toAddress}}"
 }
 
 object NetworkProtocol {
@@ -189,7 +184,7 @@ object NetworkProtocol {
     ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(ProtocolHandshakeResponse()))
 }
 
-case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
+final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
@@ -198,10 +193,10 @@ case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
       EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h),
                                          System.currentTimeMillis)
 }
-case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
+final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
 
-case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long)
+final case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
     for {
@@ -210,5 +205,5 @@ case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long)
       ProtocolHandshakeResponseMessage(NetworkProtocol.protocolHandshakeResponse(src, h),
                                        System.currentTimeMillis)
 }
-case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
+final case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
