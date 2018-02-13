@@ -29,6 +29,8 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/reader-iso-8859-1.ros
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/reader-utf-8.ros
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/fold-tests.rbl
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/consume-tests.rbl
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/produce-tests.rbl
