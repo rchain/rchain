@@ -34,11 +34,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 object Main {
   val logger = Logger("main")
 
-  /*
-   * Duration (in ms) to pause between successive queries for more peers.
-   */
-  val pauseTime = 5000L
-
   def whoami(port: Int): Option[InetAddress] = {
 
     val upnp = new UPnP(port)
@@ -81,11 +76,7 @@ object Main {
 
     val host = conf.host.toOption match {
       case Some(host) => host
-      case None =>
-        whoami(conf.port()) match {
-          case Some(addy) => addy.getHostAddress
-          case None       => "localhost"
-        }
+      case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
     }
 
     val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
@@ -93,13 +84,15 @@ object Main {
       case Left(p2p.ParseError(msg)) => throw new Exception(msg)
     }
 
+    // TODO consider closing this over IO
     val net = p2p.Network(addy)
     logger.info(s"Listening for traffic on $net.")
 
     if (!conf.standalone()) {
-      conf.bootstrap.foreach { address =>
-        logger.info(s"Bootstrapping from $address.")
-        net.connect(address)
+      conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
+        address =>
+          logger.info(s"Bootstrapping from $address.")
+          net.connect(address)
       }
     } else {
       logger.info(s"Starting stand-alone node.")
@@ -110,6 +103,7 @@ object Main {
       logger.info("Goodbye.")
     }
 
+    val pauseTime = 5000L
     var lastCount = 0
     while (true) {
       Thread.sleep(pauseTime)
