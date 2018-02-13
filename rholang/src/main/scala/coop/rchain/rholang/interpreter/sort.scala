@@ -102,8 +102,7 @@ object Score {
 
   // Vars
   final val BOUND_VAR = 50
-  final val WILDCARD = 51
-  final val FREE_VAR = 52
+  final val FREE_VAR = 51
 
   // Expr
   final val EVAR = 100
