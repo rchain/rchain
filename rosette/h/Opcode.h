@@ -219,10 +219,6 @@ enum Opcode {
 #define OP_f3_op1(x) GET_FW(x, 4, 4)
 #define OP_f3_op0(x) GET_FW(x, 8, 4)
 #define OP_f3_short(x) GET_FW(x, 12, 4)
-#define OP_f3_op2(x) GET_FW(x, 0, 4)
-#define OP_f3_op1(x) GET_FW(x, 4, 4)
-#define OP_f3_op0(x) GET_FW(x, 8, 4)
-#define OP_f3_short(x) GET_FW(x, 12, 4)
 
 #define OP_f4_op0(x) GET_FW(x, 0, 4)
 #define OP_f4_nargs(x) GET_FW(x, 4, 4)
@@ -266,10 +262,6 @@ enum Opcode {
 #define SET_OP_f2_op0(x, val) SET_FW(x, 8, 4, val)
 #define SET_OP_f2_short(x, val) SET_FW(x, 12, 4, val)
 
-#define SET_OP_f3_op2(x, val) SET_FW(x, 0, 4, val)
-#define SET_OP_f3_op1(x, val) SET_FW(x, 4, 4, val)
-#define SET_OP_f3_op0(x, val) SET_FW(x, 8, 4, val)
-#define SET_OP_f3_short(x, val) SET_FW(x, 12, 4, val)
 #define SET_OP_f3_op2(x, val) SET_FW(x, 0, 4, val)
 #define SET_OP_f3_op1(x, val) SET_FW(x, 4, 4, val)
 #define SET_OP_f3_op0(x, val) SET_FW(x, 8, 4, val)
