@@ -71,7 +71,7 @@
 (defRMethod NameSpace (consume ctxt-tuple & location)
   (let* [[[ctxt [code env]] ctxt-tuple]
          [[channels product-ptrns persistent] location]
-         [_ (display "INFO:  (consume) for (" product-ptrns " <- " channels ") called with " persistent " and " code #\\n)]
+         [_ (log:display 'DEBUG "(consume) for (" product-ptrns " <- " channels ") called with " persistent " and " code)]
          [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create channel-subspace-table channel)))]
          [candidates (extract-data-candidates subspaces product-ptrns)]
          [reductions (select-best-products candidates)]
@@ -80,14 +80,14 @@
       (if (null? products)
           ;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
           (seq
-            (display "DEBUG: (consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")" #\\n)
+            (log:display 'DEBUG "(consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")")
             (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels product-ptrns ctxt-tuple persistent)
             (update!))
           (seq
-            (display "DEBUG: (consume)" #\\t "ctxt-rtn(" products ", " persistent ")" #\\n)
+            (log:display 'DEBUG "(consume)" #\\t "ctxt-rtn(" products ", " persistent ")")
             (ctxt-rtn ctxt products)
             (update!)
             (if persistent
                 (seq
-                  (display "DEBUG: (consume) Re-posting continuation: " code #\\n)
+                  (log:display 'DEBUG "(consume) Re-posting continuation: " code)
                   (run-with-env code env))))))))
