@@ -104,6 +104,7 @@
 (load "tests/equiv.ros" 'silent)
 (load "tests/reader-iso-8859-1.ros" 'silent)
 (load "tests/reader-utf-8.ros" 'silent)
+(load "tests/fold-tests.rbl" 'silent)
 
 ;;; tests for tuplespace
 (load "tests/namespace-util-tests.rbl" 'silent)
