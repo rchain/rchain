@@ -52,6 +52,8 @@
 (test-form (any-null? [1 2 3 4]) #f)
 (test-form (any-null? [1 [] 3 4]) #t)
 (test-form (any-null? [1 [2] [3 4] 4]) #f)
+;;; null element at the end counts
+(test-form (any-null? [1 2 3 4 []]) #t)
 
 ;;; tests for append-product-at-channel
 (let* [[channel-subspace-table (new RblTable)]
@@ -95,6 +97,4 @@
            [[data-list continuation-list] (tbl-get channel-subspace-table channel)]]
       (test-form continuation-list ['mock 'another-mock]))))
 
-(if (> failures 0)
-    (display "Successes: " successes ". Failures: " failures ".\n")
-    (display "All tests passed.\n"))
+(record-and-reset)

@@ -139,17 +139,17 @@
 ;;; produce always resumes the calling thread at the end of the method.
 (defOprn produce)
 (defMethod NameSpace (produce channel & product)
-  (let* [[_ (display "INFO:  (produce) " (clean-fresh channel) "!(" product ") called" #\\n)]
+  (let* [[_ (log:display 'DEBUG "(produce) " (clean-fresh channel) "!(" product ") called")]
          [concat-channels (tbl-get channel-lookup-table channel)]
-         [_ (display "DEBUG: (produce)" #\\t "relevant channels: " concat-channels #\\n)]
+         [_ (log:display 'DEBUG "(produce)" #\\t "relevant channels: " concat-channels)]
          [candidates (extract-consume-candidates concat-channels channel-subspace-table channel
                                                  product reverse-channel-lookup-table)]
-         [_ (display "DEBUG: (produce)" #\\t "candidates: " candidates #\\n)]
+         [_ (log:display 'DEBUG "(produce)" #\\t "candidates: " candidates)]
          [candidate (select-best-consume candidates)]
-         [_ (display "DEBUG: (produce)" #\\t "candidate: " candidate #\\n)]]
+         [_ (log:display 'DEBUG "(produce)" #\\t "candidate: " candidate)]]
     (if (null? candidate)
         (seq
-          (display "DEBUG: (produce)" #\\t "storing(" product ")" #\\n)
+          (log:display 'DEBUG "(produce)" #\\t "storing(" product ")")
           (append-product-at-channel channel-subspace-table channel product)
           (update!))
         (let* [[[ctxt-tuple product-patterns product-list]
@@ -157,10 +157,10 @@
                                       reverse-channel-lookup-table product)]
                [[consume-ctxt [code env] persistent] ctxt-tuple]]
           (seq
-            (display "DEBUG: (produce)" #\\t "ctxt-rtn(" consume-ctxt ", " product-list ")" #\\n)
+            (log:display 'DEBUG "(produce)" #\\t "ctxt-rtn(" consume-ctxt ", " product-list ")")
             (ctxt-rtn consume-ctxt product-list)
             (update!)
             (if persistent
                 (seq
-                  (display "DEBUG: (produce) Re-posting continuation: " code #\\n)
+                  (log:display 'DEBUG "(produce) Re-posting continuation: " code)
                   (run-with-env code env))))))))

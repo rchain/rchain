@@ -1,0 +1,19 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Michael Birch <birch@pyrofex.net>
+;;; This file is licensed under the Apache License, version 2.0.
+
+(let [[sumproc (proc [hd acc iter] (iter (+ hd acc)))]]
+  (seq
+    (test-form (fold [] sumproc 0) 0)
+    (test-form (fold [1 2 3] sumproc 0) 6)
+  )
+)
+
+(let [[last (proc [list] (fold list (proc [hd acc iter] (iter hd)) #absent))]]
+  (seq
+    (test-form (absent? (last [])) #t)
+    (test-form (last [1 2 3]) 3)
+    (test-form (last [[1] [2] [3]]) [3])
+    (test-form (null? (last [[1] [2] [3] []])) #t)
+  )
+)

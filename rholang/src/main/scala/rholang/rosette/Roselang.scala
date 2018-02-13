@@ -106,9 +106,9 @@ object RosetteOps {
   val _rx = "RX"
   val _run = "run"
   val _compile = "compile"
-  var _if = "if"
-  var _match = "match?" // TODO: Adjust based on Rosette implementation. This operation checks for equality in the "match" implementation.
-  var _list = "list" // TODO: Extract into "temporary operations" set
+  val _if = "if"
+  val _match = "match-pattern" // TODO: Adjust based on Rosette implementation. This operation checks for equality in the "match" implementation.
+  val _list = "list" // TODO: Extract into "temporary operations" set
 }
 
 trait RholangASTToTerm 
@@ -205,14 +205,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     B("")(B(_abs)(B(_list)(Tag("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm)))))
   }
 
-  /* Proc */
-  override def visit( p : PPrint, arg : A ) : R = {
-    val pTerm : StrTermCtxt = p.proc_.accept(this, arg)._1
-    val printTerm = B("print")(pTerm)
-    val displayTerm = B("display")(Tag( "#\\\\n"))
-    B( "seq" )( printTerm, displayTerm )
-  }
-  override def visit( p : PNil, arg : A ) : R = {    
+  override def visit( p : PNil, arg : A ) : R = {
     Tag( "#niv" )
   }
   override def visit( p : PValue, arg : A ) : R = {

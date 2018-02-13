@@ -79,8 +79,8 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
 
     "store to environment" in {
       val lexVarOffset1 = LexVariable(indirect = false, level = 0, offset = 1)
-      val lexVarLevel0 = LexVariable(indirect = false, level = 0, offset = 0)
-      val lexVarLevel1 = LexVariable(indirect = false, level = 1, offset = 0)
+      val lexVarLevel0  = LexVariable(indirect = false, level = 0, offset = 0)
+      val lexVarLevel1  = LexVariable(indirect = false, level = 1, offset = 0)
 
       {
         val (ctxt, res) =
@@ -112,8 +112,7 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
     {
       val (ctxt, res) =
         Location
-          .store(LexVariable(indirect = false, level = 100, offset = 0),
-                 RblString("test"))
+          .store(LexVariable(indirect = false, level = 100, offset = 0), RblString("test"))
           .run(testCtxt)
           .value
 
@@ -124,8 +123,7 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
     {
       val (ctxt, res) =
         Location
-          .store(LexVariable(indirect = false, level = 0, offset = 100),
-                 RblString("test"))
+          .store(LexVariable(indirect = false, level = 0, offset = 100), RblString("test"))
           .run(testCtxt)
           .value
 
