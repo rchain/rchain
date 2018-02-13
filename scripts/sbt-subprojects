@@ -1,13 +1,8 @@
-comm / compile
-comm / assembly
 rholang / bnfc:generate
-rholang / compile
 rholang / assembly
-roscala / compile
-roscala / assembly
-storage / compile
+comm / assembly
 storage / assembly
-node / compile
+roscala / assembly
 node / assembly
 node / docker
 

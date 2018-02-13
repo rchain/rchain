@@ -34,9 +34,6 @@ def commonSettings: Seq[Setting[_]] =
 
   ).flatMap(_.settings)
 
-lazy val root = (project in file("."))
-  .aggregate(node, comm)
-
 lazy val comm = project
   .settings(
     commonSettings,
@@ -102,7 +99,7 @@ lazy val node = project
       }
     },
   )
-  .dependsOn(comm, storage, rholang) // Not really, but it will
+  .dependsOn(comm, storage, roscala, rholang) // Not really, but it will
 
 lazy val rholang = project
   .settings(
@@ -143,7 +140,7 @@ lazy val roscala = project //  = (project in file("roscala"))
     inThisBuild(List(
       addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies ++ Seq(
-      cats090,
+      cats,
       shapeless,
       scalaCheck)
   ).dependsOn(roscala_macros)
