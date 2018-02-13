@@ -19,24 +19,22 @@ mainClass in assembly := Some("coop.rchain.comm.Main")
 libraryDependencies += "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
 
 libraryDependencies ++= Seq(
-  "org.scalactic" %% "scalactic" % "3.0.1",
-  "org.scalatest" %% "scalatest" % "3.0.1" % "test",
-
+  "org.scalactic"              %% "scalactic"      % "3.0.1",
+  "org.scalatest"              %% "scalatest"      % "3.0.1" % "test",
   // URI Parsing
-  "io.lemonlabs" %% "scala-uri" % "0.5.0",
-
+  "io.lemonlabs"               %% "scala-uri"      % "0.5.0",
   // Command-line parsing
-  "org.rogach" %% "scallop" % "3.0.3",
-
+  "org.rogach"                 %% "scallop"        % "3.0.3",
   // Hashing
-  "org.scorexfoundation" %% "scrypto" % "2.0.0",
-
+  "org.scorexfoundation"       %% "scrypto"        % "2.0.0",
   // uPNP library
-  "org.bitlet" % "weupnp" % "0.1.+",
-
-  // Logging
-  "com.typesafe.scala-logging" %% "scala-logging" % "3.7.2",
-  "ch.qos.logback" % "logback-classic" % "1.2.3"
+  "org.bitlet"                 % "weupnp"          % "0.1.+",
+  "com.typesafe.scala-logging" %% "scala-logging"  % "3.7.2",
+  "ch.qos.logback"             % "logback-classic" % "1.2.3",
+  // hash generator
+  "com.roundeights"            %% "hasher"         % "1.2.0",
+  "org.typelevel"              %% "cats-core"      % "1.0.1",
+  "io.monix"                   %% "monix"          % "3.0.0-M3"
 )
 
 

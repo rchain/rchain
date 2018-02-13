@@ -7,3 +7,4 @@ final case class DatagramFramingError(ex: Exception) extends CommError
 final case class DatagramException(ex: Exception)    extends CommError
 final case class ProtocolException(ex: Exception)    extends CommError
 final case class UnknownProtocolError(msg: String)   extends CommError
+final case object KeysNotAvailable                   extends CommError
