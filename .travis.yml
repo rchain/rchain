@@ -11,9 +11,8 @@ env:
   - SUBPROJECT=storage
 script:
   - ./scripts/build-subprojects.sh
-  - ./scripts/install.sh
 sudo: required
-install: ./scripts/install.sh
+install: ./scripts/install-dependencies.sh
 cache:
   directories:
     - "$HOME/.ivy2/cache"
