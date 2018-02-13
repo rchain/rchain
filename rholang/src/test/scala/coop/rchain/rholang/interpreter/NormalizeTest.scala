@@ -4,35 +4,124 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, 
 import org.scalatest._
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
-  val matcher = BoolNormalizeMatcher
   "BoolTrue" should "Compile as GBool(true)" in {
     val btrue = new BoolTrue()
 
-    matcher.normalizeMatch(btrue) should be (GBool(true))
+    BoolNormalizeMatcher.normalizeMatch(btrue) should be (GBool(true))
   }
   "BoolFalse" should "Compile as GBool(false)" in {
     val bfalse = new BoolFalse()
 
-    matcher.normalizeMatch(bfalse) should be (GBool(false))
+    BoolNormalizeMatcher.normalizeMatch(bfalse) should be (GBool(false))
   }
 }
 
 class GroundMatcherSpec extends FlatSpec with Matchers {
-  val matcher = GroundNormalizeMatcher
   "GroundInt" should "Compile as GInt" in {
     val gi = new GroundInt(7)
 
-    matcher.normalizeMatch(gi) should be (GInt(7))
+    GroundNormalizeMatcher.normalizeMatch(gi) should be (GInt(7))
   }
   "GroundString" should "Compile as GString" in {
     val gs = new GroundString("String")
 
-    matcher.normalizeMatch(gs) should be (GString("String"))
+    GroundNormalizeMatcher.normalizeMatch(gs) should be (GString("String"))
   }
   "GroundUri" should "Compile as GUri" in {
     val gu = new GroundUri("Uri")
 
-    matcher.normalizeMatch(gu) should be (GUri("Uri"))
+    GroundNormalizeMatcher.normalizeMatch(gu) should be (GUri("Uri"))
+  }
+}
+
+class CollectMatcherSpec extends FlatSpec with Matchers {
+  val inputs = ProcVisitInputs(
+      Par(),
+      DebruijnLevelMap[VarSort]().newBindings(
+          List((Some("P"), ProcSort), (Some("x"), NameSort)))._1,
+      DebruijnLevelMap[VarSort]())
+
+  "List" should "delegate" in {
+    val listData = new ListProc()
+    listData.add(new PVar("P"))
+    listData.add(new PEval(new NameVar("x")))
+    listData.add(new PGround(new GroundInt(7)))
+    val list = new PCollect(new CollectList(listData))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(list, inputs)
+    result.par should be (inputs.par.copy(
+      exprs = EList(List(
+          Par().copy(exprs = List(EVar(BoundVar(0)))),
+          Par().copy(evals = List(Eval(ChanVar(BoundVar(1))))),
+          Par().copy(exprs = List(GInt(7))))
+      ) :: inputs.par.exprs))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "Tuple" should "delegate" in {
+    val tupleData = new ListProc()
+    tupleData.add(new PVar("Q"))
+    tupleData.add(new PEval(new NameVar("y")))
+    val tuple = new PCollect(new CollectTuple(tupleData))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(tuple, inputs)
+    result.par should be (inputs.par.copy(
+      exprs = ETuple(List(
+          Par().copy(exprs = List(EVar(FreeVar(0)))),
+          Par().copy(evals = List(Eval(ChanVar(FreeVar(1))))))
+      ) :: inputs.par.exprs))
+    result.knownFree should be (inputs.knownFree.newBindings(
+        List((Some("Q"), ProcSort), (Some("y"), NameSort)))._1
+    )
+  }
+  "Tuple" should "propgate free variables" in {
+    val tupleData = new ListProc()
+    tupleData.add(new PVar("Q"))
+    tupleData.add(new PGround(new GroundInt(7)))
+    tupleData.add(new PPar(new PGround(new GroundInt(7)), new PVar("Q")))
+    val tuple = new PCollect(new CollectTuple(tupleData))
+
+    an [Error] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch(tuple, inputs)
+    }
+  }
+
+  "Set" should "delegate" in {
+    val setData = new ListProc()
+    setData.add(new PAdd(new PVar("P"), new PVar("R")))
+    setData.add(new PGround(new GroundInt(7)))
+    setData.add(new PPar(new PGround(new GroundInt(8)), new PVar("Q")))
+    val set = new PCollect(new CollectSet(setData))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(set, inputs)
+    result.par should be (inputs.par.copy(
+      exprs = ESet(List(
+          Par().copy(exprs = List(EPlus(
+              Par().copy(exprs = List(EVar(BoundVar(0)))),
+              Par().copy(exprs = List(EVar(FreeVar(0))))))),
+          Par().copy(exprs = List(GInt(7))),
+          Par().copy(exprs = List(EVar(FreeVar(1)), GInt(8))))
+      ) :: inputs.par.exprs))
+    result.knownFree should be (inputs.knownFree.newBindings(
+        List((Some("R"), ProcSort), (Some("Q"), ProcSort)))._1
+    )
+  }
+
+  "Map" should "delegate" in {
+    val mapData = new ListKeyValuePair()
+    mapData.add(new KeyValuePairImpl(new PGround(new GroundInt(7)), new PGround(new GroundString("Seven"))))
+    mapData.add(new KeyValuePairImpl(new PVar("P"), new PEval(new NameVar("x"))))
+    val map = new PCollect(new CollectMap(mapData))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(map, inputs)
+    result.par should be (inputs.par.copy(
+      exprs = EMap(List(
+          (Par().copy(exprs = List(GInt(7))),
+          Par().copy(exprs = List(GString("Seven")))),
+          (Par().copy(exprs = List(EVar(BoundVar(0)))),
+          Par().copy(evals = List(Eval(ChanVar(BoundVar(1)))))))
+      ) :: inputs.par.exprs))
+    result.knownFree should be (inputs.knownFree)
   }
 }
 
