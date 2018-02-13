@@ -36,20 +36,20 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
       List(
         (
           List(
-            Quote(p.copy(expr=List(GInt(2))))),
-          Quote(p.copy(expr=List(GInt(3)))),
+            Quote(p.copy(exprs=List(GInt(2))))),
+          Quote(p.copy(exprs=List(GInt(3)))),
           emptyMap
         ),
         (
           List(
-            Quote(p.copy(expr=List(GInt(3))))),
-          Quote(p.copy(expr=List(GInt(2)))),
+            Quote(p.copy(exprs=List(GInt(3))))),
+          Quote(p.copy(exprs=List(GInt(2)))),
           emptyMap
         ),
         (
           List(
-            Quote(p.copy(expr=List(GInt(1))))),
-          Quote(p.copy(expr=List(GInt(3)))),
+            Quote(p.copy(exprs=List(GInt(1))))),
+          Quote(p.copy(exprs=List(GInt(3)))),
           emptyMap
         )
       )
@@ -57,20 +57,20 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
       List(
         (
           List(
-            Quote(p.copy(expr=List(GInt(3))))),
-          Quote(p.copy(expr=List(GInt(2)))),
+            Quote(p.copy(exprs=List(GInt(3))))),
+          Quote(p.copy(exprs=List(GInt(2)))),
           emptyMap
         ),
         (
           List(
-            Quote(p.copy(expr=List(GInt(1))))),
-          Quote(p.copy(expr=List(GInt(3)))),
+            Quote(p.copy(exprs=List(GInt(1))))),
+          Quote(p.copy(exprs=List(GInt(3)))),
           emptyMap
         ),
         (
           List(
-            Quote(p.copy(expr=List(GInt(2))))),
-          Quote(p.copy(expr=List(GInt(3)))),
+            Quote(p.copy(exprs=List(GInt(2))))),
+          Quote(p.copy(exprs=List(GInt(3)))),
           emptyMap
         )
       )
@@ -83,7 +83,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
   val p = Par()
   "Par" should "Sort so that smaller integers come first" in {
     val parGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           GInt(2),
           GInt(1),
@@ -91,7 +91,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           GInt(-2),
           GInt(0)))
     val sortedParGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           GInt(-2),
           GInt(-1),
@@ -104,7 +104,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort in order of boolean, int, string, uri, private" in {
     val parGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           GUri("https://www.rchain.coop/"),
           GInt(47),
@@ -112,7 +112,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           GBool(true),
           GPrivate("foo")))
     val sortedParGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           GBool(true),
           GInt(47),
@@ -125,39 +125,39 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort sets insides" in {
     val parGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           ESet(
             List(
-              p.copy(expr=List(GInt(2))),
-              p.copy(expr=List(GInt(1))),
-              p.copy(expr=List(
+              p.copy(exprs=List(GInt(2))),
+              p.copy(exprs=List(GInt(1))),
+              p.copy(exprs=List(
                 ESet(
                   List(
-                    p.copy(expr=List(GInt(1))),
-                    p.copy(expr=List(GInt(2))))))),
-              p.copy(expr=List(
+                    p.copy(exprs=List(GInt(1))),
+                    p.copy(exprs=List(GInt(2))))))),
+              p.copy(exprs=List(
                 ESet(
                   List(
-                    p.copy(expr=List(GInt(1))),
-                    p.copy(expr=List(GInt(1)))))))))))
+                    p.copy(exprs=List(GInt(1))),
+                    p.copy(exprs=List(GInt(1)))))))))))
     val sortedParGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           ESet(
             List(
-              p.copy(expr=List(GInt(1))),
-              p.copy(expr=List(GInt(2))),
-              p.copy(expr=List(
+              p.copy(exprs=List(GInt(1))),
+              p.copy(exprs=List(GInt(2))),
+              p.copy(exprs=List(
                 ESet(
                   List(
-                    p.copy(expr=List(GInt(1))),
-                    p.copy(expr=List(GInt(1))))))),
-              p.copy(expr=List(
+                    p.copy(exprs=List(GInt(1))),
+                    p.copy(exprs=List(GInt(1))))))),
+              p.copy(exprs=List(
                 ESet(
                   List(
-                    p.copy(expr=List(GInt(1))),
-                    p.copy(expr=List(GInt(2)))))))))))
+                    p.copy(exprs=List(GInt(1))),
+                    p.copy(exprs=List(GInt(2)))))))))))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be (sortedParGround)
   }
@@ -165,58 +165,58 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort map insides" in {
     val parGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EMap(
             List(
               (
-                p.copy(expr=List(GInt(2))),
-                p.copy(expr=List(GInt(1)))),
+                p.copy(exprs=List(GInt(2))),
+                p.copy(exprs=List(GInt(1)))),
               (
-                p.copy(expr=List(GInt(2))),
-                p.copy(expr=List(
+                p.copy(exprs=List(GInt(2))),
+                p.copy(exprs=List(
                   ESet(
                     List(
-                      p.copy(expr=List(GInt(2))),
-                      p.copy(expr=List(GInt(1)))))))),
+                      p.copy(exprs=List(GInt(2))),
+                      p.copy(exprs=List(GInt(1)))))))),
               (
-                p.copy(expr=List(GInt(1))),
-                p.copy(expr=List(GInt(1))))))))
+                p.copy(exprs=List(GInt(1))),
+                p.copy(exprs=List(GInt(1))))))))
     val sortedParGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EMap(
             List(
               (
-                p.copy(expr=List(GInt(1))),
-                p.copy(expr=List(GInt(1)))),
+                p.copy(exprs=List(GInt(1))),
+                p.copy(exprs=List(GInt(1)))),
               (
-                p.copy(expr=List(GInt(2))),
-                p.copy(expr=List(GInt(1)))),
+                p.copy(exprs=List(GInt(2))),
+                p.copy(exprs=List(GInt(1)))),
               (
-                p.copy(expr=List(GInt(2))),
-                p.copy(expr=List(
+                p.copy(exprs=List(GInt(2))),
+                p.copy(exprs=List(
                   ESet(
                     List(
-                      p.copy(expr=List(GInt(1))),
-                      p.copy(expr=List(GInt(2))))))))))))
+                      p.copy(exprs=List(GInt(1))),
+                      p.copy(exprs=List(GInt(2))))))))))))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be (sortedParGround)
   }
 
   "Par" should "Keep order when adding numbers" in {
     val parExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EPlus(
-            p.copy(expr=
+            p.copy(exprs=
               List(
                 EPlus(
-                  p.copy(expr=
+                  p.copy(exprs=
                     List(GInt(1))),
-                  p.copy(expr=
+                  p.copy(exprs=
                     List(GInt(3)))))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(2))))))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (parExpr)
@@ -224,50 +224,50 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort according to PEMDAS" in {
     val parExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EMinus(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(4))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           EDiv(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EPlus(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           EMult(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(6))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3))))))
     var sortedParExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EMult(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(6))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           EDiv(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EPlus(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           EMinus(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(4))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3))))))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
@@ -275,70 +275,70 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort comparisons in order of LT, LTE, GT, GTE, EQ, NEQ" in {
     val parExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EEq(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(4))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           ENeq(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           ELt(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EGt(
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(false))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(true)))),
           ELte(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EGte(
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(false))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(true))))))
     var sortedParExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           ELt(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           ELte(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EGt(
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(false))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(true)))),
           EGte(
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(false))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(true)))),
           EEq(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(4))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           ENeq(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5))))))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
@@ -349,26 +349,26 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       p.copy(sends=
         List(
           Send(
-            Quote(p.copy(expr=List(GInt(5)))),
-            List(p.copy(expr=List(GInt(3))))),
+            Quote(p.copy(exprs=List(GInt(5)))),
+            List(p.copy(exprs=List(GInt(3))))),
           Send(
-            Quote(p.copy(expr=List(GInt(4)))),
-            List(p.copy(expr=List(GInt(2))))),
+            Quote(p.copy(exprs=List(GInt(4)))),
+            List(p.copy(exprs=List(GInt(2))))),
           Send(
-            Quote(p.copy(expr=List(GInt(5)))),
-            List(p.copy(expr=List(GInt(2)))))))
+            Quote(p.copy(exprs=List(GInt(5)))),
+            List(p.copy(exprs=List(GInt(2)))))))
     val sortedParExpr =
       p.copy(sends=
         List(
           Send(
-            Quote(p.copy(expr=List(GInt(4)))),
-            List(p.copy(expr=List(GInt(2))))),
+            Quote(p.copy(exprs=List(GInt(4)))),
+            List(p.copy(exprs=List(GInt(2))))),
           Send(
-            Quote(p.copy(expr=List(GInt(5)))),
-            List(p.copy(expr=List(GInt(2))))),
+            Quote(p.copy(exprs=List(GInt(5)))),
+            List(p.copy(exprs=List(GInt(2))))),
           Send(
-            Quote(p.copy(expr=List(GInt(5)))),
-            List(p.copy(expr=List(GInt(3)))))))
+            Quote(p.copy(exprs=List(GInt(5)))),
+            List(p.copy(exprs=List(GInt(3)))))))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
   }
@@ -381,20 +381,20 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(
               (
                 List(
-                  Quote(p.copy(expr=List(GInt(1))))),
-                Quote(p.copy(expr=List(GInt(3))))))),
+                  Quote(p.copy(exprs=List(GInt(1))))),
+                Quote(p.copy(exprs=List(GInt(3))))))),
           Receive(
             List(
               (
                 List(
-                  Quote(p.copy(expr=List(GInt(0))))),
-                Quote(p.copy(expr=List(GInt(3))))))),
+                  Quote(p.copy(exprs=List(GInt(0))))),
+                Quote(p.copy(exprs=List(GInt(3))))))),
           Receive(
             List(
               (
                 List(
-                  Quote(p.copy(expr=List(GInt(100))))),
-                Quote(p.copy(expr=List(GInt(2)))))))))
+                  Quote(p.copy(exprs=List(GInt(100))))),
+                Quote(p.copy(exprs=List(GInt(2)))))))))
     val sortedParExpr =
       p.copy(receives=
         List(
@@ -402,34 +402,34 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(
               (
                 List(
-                  Quote(p.copy(expr=List(GInt(100))))),
-                Quote(p.copy(expr=List(GInt(2))))))),
+                  Quote(p.copy(exprs=List(GInt(100))))),
+                Quote(p.copy(exprs=List(GInt(2))))))),
           Receive(
             List(
               (
                 List(
-                  Quote(p.copy(expr=List(GInt(0))))),
-                Quote(p.copy(expr=List(GInt(3))))))),
+                  Quote(p.copy(exprs=List(GInt(0))))),
+                Quote(p.copy(exprs=List(GInt(3))))))),
           Receive(
             List(
               (
                 List(
-                  Quote(p.copy(expr=List(GInt(1))))),
-                Quote(p.copy(expr=List(GInt(3)))))))))
+                  Quote(p.copy(exprs=List(GInt(1))))),
+                Quote(p.copy(exprs=List(GInt(3)))))))))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
   }
 
   "Par" should "Sort EVars based on their type and then levels" in {
     val parGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EVar(FreeVar(level=2)),
           EVar(FreeVar(level=1)),
           EVar(BoundVar(level=2)),
           EVar(BoundVar(level=1))))
     val sortedParGround =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EVar(BoundVar(level=1)),
           EVar(BoundVar(level=2)),
@@ -439,46 +439,46 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be (sortedParGround)
   }
 
-  "Par" should "Sort exprs in order of ground, vars, arithmetic, comparisons, logical" in {
+  "Par" should "Sort exprss in order of ground, vars, arithmetic, comparisons, logical" in {
     val parExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           EEq(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(4))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           EDiv(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EVar(BoundVar(level=1)),
           EOr(
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(false))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(true)))),
           GInt(1)))
     var sortedParExpr =
-      p.copy(expr=
+      p.copy(exprs=
         List(
           GInt(1),
           EVar(BoundVar(level=1)),
           EDiv(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(1))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(5)))),
           EEq(
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(4))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GInt(3)))),
           EOr(
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(false))),
-            p.copy(expr=
+            p.copy(exprs=
               List(GBool(true))))))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
