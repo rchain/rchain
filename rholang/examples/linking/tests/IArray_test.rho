@@ -1,13 +1,13 @@
 import IArrayApi in {
   new 
     ArrayAppend, ArrayConcat, ArrayContains, ArrayDrop,
-    ArrayFold, ArrayForeach, ArrayGet, ArrayIndexOf,
+    ArrayFlatten, ArrayFold, ArrayForeach, ArrayGet, ArrayIndexOf,
     ArrayLength, ArrayPrint, ArrayMap, ArrayRemoveElement,
     ArrayRemoveAt, ArraySplitAt, ArrayTake
   in {
     IArrayApi("Append", ArrayAppend) | IArrayApi("Concat", ArrayConcat) |
     IArrayApi("Contains", ArrayContains) | IArrayApi("Drop", ArrayDrop) |
-    IArrayApi("Fold", ArrayFold) | IArrayApi("Foreach", ArrayForeach) | 
+    IArrayApi("Flatten", ArrayFlatten) | IArrayApi("Fold", ArrayFold) | IArrayApi("Foreach", ArrayForeach) | 
     IArrayApi("Get", ArrayGet) | IArrayApi("IndexOf", ArrayIndexOf) | 
     IArrayApi("Length", ArrayLength) | IArrayApi("Print", ArrayPrint) | 
     IArrayApi("Map", ArrayMap) | IArrayApi("RemoveElment", ArrayRemoveElement) |
@@ -15,13 +15,14 @@ import IArrayApi in {
     IArrayApi("Take", ArrayTake) |
     for(
         append <- ArrayAppend; concat <- ArrayConcat; contains <- ArrayContains;
-        drop <- ArrayDrop; fold <- ArrayFold; foreach <- ArrayForeach; get <- ArrayGet;
+        drop <- ArrayDrop; flatten <- ArrayFlatten; fold <- ArrayFold; 
+        foreach <- ArrayForeach; get <- ArrayGet;
         indexOf <- ArrayIndexOf; length <- ArrayLength; arrprint <- ArrayPrint;
         map <- ArrayMap; rmElement <- ArrayRemoveElement; rmAt <- ArrayRemoveAt; 
         splitAt <- ArraySplitAt; take <- ArrayTake
     ) {
       new
-        append_test, concat_test, contains_test, drop_test, fold_test,
+        append_test, concat_test, contains_test, drop_test, fold_test, flatten_test,
         foreach_test, get_test, indexOf_test, length_test, arrprint_test,
         map_test, rmElement_test, rmAt_test, splitAt_test, take_test
       in {
@@ -73,6 +74,17 @@ import IArrayApi in {
                 match arr1 == arr2 with true => { "Drop: Pass".display("\n") }
                 _ => { "Drop: Fail".display("\n") }
               }
+            }
+          }
+        } |
+        contract flatten_test(_) = {
+          //array of arrays to single array
+          new result, answer in {
+            flatten([[1, 2], [3, 4], [5], [6, 7, 8]], result) |
+            answer([1, 2, 3, 4, 5, 6, 7, 8]) |
+            for(arr1 <- result; arr2 <- answer) {
+              match arr1 == arr2 with true => { "Flatten: Pass".display("\n") }
+              _ => { "Flatten: Fail".display("\n") }
             }
           }
         } |
@@ -213,6 +225,7 @@ import IArrayApi in {
         concat_test(Nil) |
         contains_test(Nil) |
         drop_test(Nil) |
+        flatten_test(Nil) |
         fold_test(Nil) |
         foreach_test(Nil) |
         get_test(Nil) |
