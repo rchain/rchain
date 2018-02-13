@@ -88,7 +88,11 @@
 (defProc (non-niv-head list)
   (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
 
-(defProc (any-null? list) (any list null?))
+;;; Without appending a non-null element at the end, a null element at the end doesn't get detected.
+;;; As in the following fails
+;;;     (any [[1] [2] [3] []] null?)
+;;;     #f
+(defProc (any-null? list) (any (concat list ["a-random-non-null-element"]) null?))
 
 ;;; For debugging purposes only.
 (defProc (clean-fresh fresh)
