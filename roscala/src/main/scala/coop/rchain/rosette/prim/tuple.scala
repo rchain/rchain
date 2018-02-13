@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Ob, Fixnum => RFixnum, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -88,6 +88,36 @@ object tuple {
     }
   }
 
+  /**
+    * Define the "tuple-safe-nth" primitive.
+    * This safely returns the nth element of the specified Tuple
+    * e.g. (tuple-safe-nth [1 2 3 4 5] 3) ==> 4
+    */
+  object tplSafeNth extends Prim {
+    override val name: String = "tuple-safe-nth"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+      val elem = ctxt.argvec.elem
+
+      checkTuple(0, elem).flatMap( // Ensure arg0 is a Tuple
+        t =>
+          checkFixnum(1, elem).map( // Ensure arg1 is a Fixnum
+            n =>
+              if (n.value < 0)
+                Fixnum(Int.MinValue)
+              else if (n.value < t.elem.size) {
+                t.nth(n.value) match {
+                  case Some(v: Fixnum) => v
+                  case None            => Fixnum(Int.MaxValue)
+                }
+              } else
+                Fixnum(Int.MaxValue)))
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the specified parameter for type Tuple. Return a PrimError if it is
@@ -98,6 +128,17 @@ object tuple {
       Left(TypeMismatch(n, Tuple.getClass.getName))
     } else {
       Right(elem(n).asInstanceOf[Tuple])
+    }
+
+  /**
+    * Check the specified parameter for type Fixnum. Return a PrimError if it is
+    * not else return the Fixnum.
+    */
+  private def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
+    if (!elem(n).isInstanceOf[Fixnum]) {
+      Left(TypeMismatch(n, Fixnum.getClass().getName()))
+    } else {
+      Right(elem(n).asInstanceOf[Fixnum])
     }
 
 }

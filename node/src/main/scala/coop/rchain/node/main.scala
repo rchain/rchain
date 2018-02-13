@@ -1,11 +1,11 @@
-package coop.rchain.comm
+package coop.rchain.node
 
 import org.rogach.scallop._
 import java.util.UUID
-import java.nio.ByteBuffer
 import java.net.{InetAddress, NetworkInterface}
 import scala.collection.JavaConverters._
 import coop.rchain.p2p
+import coop.rchain.comm._
 import com.typesafe.scalalogging.Logger
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {

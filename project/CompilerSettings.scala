@@ -14,12 +14,12 @@ object CompilerSettings {
   private lazy val commonOptions =
     // format: off
     Seq(
-      "-Xfatal-warnings",
+      // "-Xfatal-warnings",
       "-Xfuture",
       "-Ypartial-unification",
       "-Ywarn-dead-code",
       "-Ywarn-numeric-widen",
-      "-deprecation",
+      // "-deprecation", // rholang's Term.scala uses some deprecated shit.  Kill it with fire.
       "-encoding", "UTF-8",
       "-feature",
       "-language:_",
@@ -52,7 +52,7 @@ object CompilerSettings {
     scalacOptions in (Compile, console) ~= {
       _.filterNot(
         Set(
-          "-Xfatal-warnings",
+          // "-Xfatal-warnings",
           "-Ywarn-unused-import",
           "-Ywarn-unused:imports"
         ))
