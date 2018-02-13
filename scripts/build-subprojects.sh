@@ -9,7 +9,7 @@ if [ -f "build.sbt" ]; then
 	    sbt_commands="compile assembly"
 	    ;;
 	node)
-	    sbt_commands="compile assembly docker"
+	    sbt_commands="bnfc:generate compile assembly docker"
 	    ;;
     esac
     if [ -z "$sbt_commands" ]; then
