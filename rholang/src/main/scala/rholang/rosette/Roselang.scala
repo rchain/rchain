@@ -10,8 +10,8 @@ package coop.rchain.rho2rose
 
 import coop.rchain.lib.term._
 import coop.rchain.rho2rose.StrTermCtorAbbrevs.StrTermCtxt
-import coop.rchain.syntax.rholang._
-import coop.rchain.syntax.rholang.Absyn._
+import coop.rchain.rholang.syntax.rholang._
+import coop.rchain.rholang.syntax.rholang.Absyn._
 
 import scala.language.implicitConversions
 import scala.language.postfixOps
@@ -106,9 +106,9 @@ object RosetteOps {
   val _rx = "RX"
   val _run = "run"
   val _compile = "compile"
-  var _if = "if"
-  var _match = "match?" // TODO: Adjust based on Rosette implementation. This operation checks for equality in the "match" implementation.
-  var _list = "list" // TODO: Extract into "temporary operations" set
+  val _if = "if"
+  val _match = "match-pattern" // TODO: Adjust based on Rosette implementation. This operation checks for equality in the "match" implementation.
+  val _list = "list" // TODO: Extract into "temporary operations" set
 }
 
 trait RholangASTToTerm 
@@ -161,7 +161,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     /*
      * [| contract <Name>( <formals> ) = { <body> } |]( t )
      * =
-     * (let [[ [[binding1] [[arg1 arg2 ...]]] (consume t [<Name>] [**wildcard**] [[<formals>]] #t) ]] // #t for persistent
+     * (let [[[products] (consume t [<Name>] [[<formals>]] #t) ]] // #t for persistent
      *     ((proc [[<formals>]] [| body |]) [products])
      * )
      *
@@ -194,27 +194,18 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     }
 
     val pTerm : StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
-    val wildcard = Var("**wildcard**")
-    val unificationFresh = Var(Fresh())
     val (formals, quotedFormals, productFreshes) = {
       val (formalsUnwrapped, quotedFormalsUnwrapped, productFreshesUnwrapped) = toListOfTuples(bindingsResults)
       (B(_list, formalsUnwrapped), B(_list, quotedFormalsUnwrapped), B(_list, productFreshesUnwrapped))
     }
 
-    val consumeTerm = B("consume")(TS, B(_list)( Tag(p.var_) ), B(_list)(wildcard), B(_list)(quotedFormals), Tag("#t"))
-    val letBindingsTerm = B(_list)(B(_list)(B(_list)(unificationFresh), B(_list)(productFreshes)), consumeTerm)
+    val consumeTerm = B("consume")(TS, B(_list)( Tag(p.var_) ), B(_list)(quotedFormals), Tag("#t"))
+    val letBindingsTerm = B(_list)(B(_list)(productFreshes), consumeTerm)
     val bodyTerm = B("")(B("proc")(B(_list)(formals), pTerm), productFreshes)
     B("")(B(_abs)(B(_list)(Tag("")), B(_run)(B(_compile)(B("let")(B(_list)(letBindingsTerm), bodyTerm)))))
   }
 
-  /* Proc */
-  override def visit( p : PPrint, arg : A ) : R = {
-    val pTerm : StrTermCtxt = p.proc_.accept(this, arg)._1
-    val printTerm = B("print")(pTerm)
-    val displayTerm = B("display")(Tag( "#\\\\n"))
-    B( "seq" )( printTerm, displayTerm )
-  }
-  override def visit( p : PNil, arg : A ) : R = {    
+  override def visit( p : PNil, arg : A ) : R = {
     Tag( "#niv" )
   }
   override def visit( p : PValue, arg : A ) : R = {
@@ -263,10 +254,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
       )
 
     val cTerm : StrTermCtxt = p.chan_.accept(this, arg )._1
-    // an explicit call to Leaf is necessary here, because rather than
-    // apply an implicit, instead scala simply infers a useless type for
-    // the list, and then fails to compile.
-    B( _produce, TS :: cTerm :: Leaf(Var("**wildcard**")) :: actls )
+    B( _produce, TS :: cTerm :: actls )
   }
 
   override def visit( p : PInput, bound : A ) : R = {
@@ -275,8 +263,8 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
     def forToConsume(bindings: List[Bind]) = {
       def toListOfTuples(bindingsResults: List[(List[StrTermCtxt], A)]) = {
         (bindingsResults map (x => x._1)) transpose match {
-          case List(a, b, c, d, e, f) => (a, b, c, d, e, f)
-          case List() => (List(), List(), List(), List(), List(), List())
+          case List(a, b, c, d) => (a, b, c, d)
+          case List() => (List(), List(), List(), List())
         }
       }
 
@@ -295,19 +283,17 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
           // apply an implicit, instead scala simply infers a useless type for
           // the list, and then fails to compile.
           val productFresh = Leaf(Var(Fresh()))
-          val unificationBindingFresh = Leaf(Var(Fresh()))
-          val wildcard = Leaf(Var("**wildcard**"))
           val quotedPtrnTerm = doQuote(ptrnTerm)._1
-          (List(chanTerm, ptrnTerm, quotedPtrnTerm, productFresh, unificationBindingFresh, wildcard), newlyBound)
+          (List(chanTerm, ptrnTerm, quotedPtrnTerm, productFresh), newlyBound)
         }
         case condBind: CondInputBind => throw new NotImplementedError("TODO: Handle condBind inside consume")
         case bind => throw new UnexpectedBindingType(bind)
       }
       val procTerm: StrTermCtxt = p.proc_.accept(this, collectBindings(bindingsResults))._1
-      val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes, unificationFreshes, wildcards) = toListOfTuples(bindingsResults)
-      val consumeTerm = B("consume")(TS, B(_list, chanTerms), B(_list, wildcards), B(_list, quotedPtrnTerms), Tag("#f")) // #f for persistent
+      val (chanTerms, ptrnTerms, quotedPtrnTerms, productFreshes) = toListOfTuples(bindingsResults)
+      val consumeTerm = B("consume")(TS, B(_list, chanTerms), B(_list, quotedPtrnTerms), Tag("#f")) // #f for persistent
       val wrappedPtrnTerms = ptrnTerms map (x => B(_list)(x))
-      val letBindingsTerm = B(_list)(B(_list)(B(_list, unificationFreshes), B(_list, productFreshes)), consumeTerm)
+      val letBindingsTerm = B(_list)(B(_list, productFreshes), consumeTerm)
       val bodyTerm = B("")(B("proc")(B(_list)(B(_list, wrappedPtrnTerms)), procTerm), B(_list, productFreshes))
       B("let")(B(_list)(letBindingsTerm), bodyTerm)
     }
@@ -320,8 +306,8 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         /*
          *  [[ for( ptrn <- chan; bindings )P ]]
          *  =
-         *  (let [[[[unification_binding1 unification_binding2 ... unification_bindingN] [product1 product2 ... productN]]
-         *    (consume t [chanTerm1 chanTerm2 ... chanTermN] [**wildcards** ... **wildcards**] [ptrnTerm1 ptrnTerm2 ... ptrnTermN])]]
+         *  (let [[[product1 product2 ... productN]
+         *    (consume t [chanTerm1 chanTerm2 ... chanTermN] [ptrnTerm1 ptrnTerm2 ... ptrnTermN])]]
          *      ((proc [[ptrnTerm1 ptrnTerm2 ... ptrnTermN]] bodyTerm) [product1 product2 ... productN])
          *  )
          */
@@ -494,7 +480,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
                   B("")(procTerm, pTerm) // TODO: Potentially allow StrTermPtdCtxtBr without Namespace ?
                 }
 
-                val matchTerm = B(_match)(TS, qPattern, pTerm)
+                val matchTerm = B(_match)(qPattern, pTerm)
                 val matchTrueTerm = if (hasVariable(pm.ppattern_)) {
                   createProcForPatternBindings
                 } else {
@@ -552,7 +538,7 @@ extends AllVisitor[VisitorTypes.R,VisitorTypes.A] {
         ( acc, e ) => e.accept( this, arg )._1 :: acc
       )
 
-    B( _produce, TS :: Leaf(Var(p.var_)) :: Leaf(Var("**wildcard**")) :: actls)
+    B( _produce, TS :: Leaf(Var(p.var_)) :: actls)
   }
 
   override def visit( p : PPar, arg : A ) : R = {

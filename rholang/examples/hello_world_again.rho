@@ -3,7 +3,7 @@
 new helloworld in {
     contract helloworld( world ) = {
         for( msg <- world ) {
-            print(msg)
+            msg.display("\n")
         }
     } |
     new world, world2 in {

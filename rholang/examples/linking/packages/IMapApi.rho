@@ -1,0 +1,80 @@
+//an immutable map data structure
+export IMapApi in {
+  import IArrayApi in {
+    new
+      ArrayIndexOf, ArrayAppend, ArrayRemoveAt,
+      ArrayGet, ArrayContains
+    in {
+      IArrayApi("IndexOf", ArrayIndexOf) | IArrayApi("Append", ArrayAppend) |
+      IArrayApi("RemoveAt", ArrayRemoveAt) | IArrayApi("Get", ArrayGet) |
+      IArrayApi("Contains", ArrayContains) |
+      for(
+          arrIndexOf <- ArrayIndexOf; arrAppend <- ArrayAppend;
+          arrRemoveAt <- ArrayRemoveAt; arrGet <- ArrayGet;
+          arrContains <- ArrayContains
+      ) {
+        new 
+          Contains, EmptyMap, Get, Keys, Updated
+        in {
+          contract Contains(map, key, return) = {
+            match map with [keys, _] => {
+              arrContains(keys, key, return)
+            }
+          } |
+          contract EmptyMap(return) = {
+            return([[], []])
+          } |
+          contract Get(key, map, return) = {
+            match map with [keys, values] => {
+              new result in {
+                arrIndexOf(key, keys, result) | for(i <- result) {
+                  match i >= 0 with true => {
+                    arrGet(i, values, return)
+                  }
+                  _ => { return(Nil) }
+                }
+              }
+            }
+          } | 
+          contract Keys(map, return) = {
+            match map with [keys, _] => { return(keys) }
+          } | 
+          contract Updated(map, key, value, return) = {
+            match map with [keys, values] => {
+              new result in {
+                arrIndexOf(key, keys, result) | for(i <- result) {
+                  match i >= 0 with
+                    true => {
+                      new removedKeys, removedValues in {
+                        arrRemoveAt(keys, i, removedKeys) | arrRemoveAt(values, i, removedValues) |
+                        for(newKeys <- removedKeys; newValues <- removedValues) {
+                          Updated([newKeys, newValues], key, value, return)
+                        }
+                      }
+                    }
+                    _ => {
+                      new appendedKeys, appendedValues in {
+                        arrAppend(key, keys, appendedKeys) | arrAppend(value, values, appendedValues) |
+                        for(newKeys <- appendedKeys; newValues <- appendedValues) {
+                          return([newKeys, newValues])
+                        }
+                      }
+                    }
+                }
+              }
+            }
+          } |
+          contract IMapApi(method, return) = {
+            match method with 
+              "Contains" => { return(Contains) }
+              "EmptyMap" => { return(EmptyMap) }
+              "Keys" => { return(Keys) }
+              "Get" => { return(Get) }
+              "Updated" => { return(Updated) }
+              _ => { "Method: ".display(method, " not found!") | return(Nil) }
+          }
+        }
+      }
+    }
+  }
+}

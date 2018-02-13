@@ -35,7 +35,7 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
         (value.toPath(args), expectedResult) match {
           case (Right(path), Right(expectedPath)) =>
             assert(expectedPath.contains(path))
-          case (Right(path), Left(expectedErr)) =>
+          case (Right(path), Left(_)) =>
             fail(s"Expected error instead of path: '$path'")
           case (Left(err), Left(expectedErr)) =>
             assert(err.getClass == expectedErr.getClass)
@@ -459,6 +459,7 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
         (Map(), Right("/route")),
         (Map("ext" -> Nil), Right("/route")),
         (Map("ext" -> List("123")), Left(new IllegalArgumentException)),
+        (Map("ext" -> List("abc", "123")), Left(new IllegalArgumentException)),
         (Map("ext" -> List("foobar")), Right("/route.foobar")),
         (Map("ext" -> List("foo", "bar")), Right("/route.foo.bar"))
       )
@@ -889,5 +890,244 @@ class PathRegexUnitTests extends FlatSpec with Matchers {
       )
   }
 
-  "Format and path params" should "support custom regex-es" in {}
+  "Format and path params" should "support custom regex-es" in {
+    parse("/test.:format(.*)z", PathRegexOptions.nonEnd)
+      .struct(
+        List(
+          PathToken("/test"),
+          PathToken(Some("format"),
+                    0,
+                    Some('.'),
+                    Some('.'),
+                    optional = false,
+                    repeat = false,
+                    partial = true,
+                    """.*"""),
+          PathToken("z")
+        ))
+      .accept(
+        ("/test.abc", Nil),
+        ("/test.z", List("/test.z", "")),
+        ("/test.abcz", List("/test.abcz", "abc"))
+      )
+      .build((Map(), Left(new IllegalArgumentException())),
+             (Map("format" -> List("")), Right("/test.z")),
+             (Map("format" -> List("foo")), Right("/test.fooz")))
+  }
+
+  "Unnamed params" should "work" in {
+    parse("/(\\d+)")
+      .struct(
+        List(
+          PathToken(None,
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """\d+""")))
+      .accept(("/123", List("/123", "123")), ("/abc", Nil), ("/123/abc", Nil))
+      .build((Map(), Left(new IllegalArgumentException())),
+             (Map("0" -> List("123")), Right("/123")))
+
+    parse("/(\\d+)", PathRegexOptions.nonEnd)
+      .struct(
+        List(
+          PathToken(None,
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """\d+""")))
+      .accept(("/123", List("/123", "123")),
+              ("/abc", Nil),
+              ("/123/abc", List("/123", "123")),
+              ("/123/", List("/123/", "123")))
+      .build((Map(), Left(new IllegalArgumentException())),
+             (Map("0" -> List("123")), Right("/123")))
+  }
+
+  "Optional unnamed parameter" should "work" in {
+    parse("/(\\d+)?")
+      .struct(
+        List(
+          PathToken(None,
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = true,
+                    repeat = false,
+                    partial = false,
+                    """\d+""")))
+      .accept(("/", List("/", null)), ("/123", List("/123", "123")))
+      .build((Map(), Right("")), (Map("0" -> List("123")), Right("/123")))
+  }
+
+  "Optional unnamed wildcard" should "work" in {
+    parse("/(.*)")
+      .struct(
+        List(
+          PathToken(None,
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """.*""")))
+      .accept(("/", List("/", "")),
+              ("/123", List("/123", "123")),
+              ("/route/nested", List("/route/nested", "route/nested")))
+      .build((Map("0" -> List("")), Right("/")), (Map("0" -> List("123")), Right("/123")))
+  }
+
+  "Escape sequences" should "work" in {
+    parse("""/route\(\\(\d+\\)\)""")
+      .struct(
+        List(PathToken("/route(\\"),
+             PathToken(None,
+                       0,
+                       None,
+                       Some('/'),
+                       optional = false,
+                       repeat = false,
+                       partial = false,
+                       """\d+\\"""),
+             PathToken(")")))
+      .accept(("/route(\\123\\)", List("/route(\\123\\)", "123\\")))
+  }
+
+  "Escaped characters" should "be supported" in {
+    parse("/\\(testing\\)")
+      .struct(List(PathToken("/(testing)")))
+      .accept(("/testing", Nil), ("/(testing)", List("/(testing)")))
+      .build((Map(), Right("/(testing)")))
+
+    parse("/.+*?=^!:${}[]|")
+      .struct(List(PathToken("/.+*?=^!:${}[]|")))
+      .accept(("/.+*?=^!:${}[]|", List("/.+*?=^!:${}[]|")))
+      .build((Map(), Right("/.+*?=^!:${}[]|")))
+  }
+
+  "Two optional parameters" should "be supported" in {
+    parse("/test\\/:uid(u\\d+)?:cid(c\\d+)?")
+      .struct(List(
+        PathToken("/test/"),
+        PathToken(Some("uid"),
+                  0,
+                  None,
+                  Some('/'),
+                  optional = true,
+                  repeat = false,
+                  partial = false,
+                  """u\d+"""),
+        PathToken(Some("cid"),
+                  1,
+                  None,
+                  Some('/'),
+                  optional = true,
+                  repeat = false,
+                  partial = false,
+                  """c\d+""")
+      ))
+      .accept(("/test", Nil),
+              ("/test/", List("/test/", null, null)),
+              ("/test/u123", List("/test/u123", "u123", null)),
+              ("/test/c123", List("/test/c123", null, "c123")))
+      .build(
+        (Map("uid" -> List("u123")), Right("/test/u123")),
+        (Map("cid" -> List("c123")), Right("/test/c123")),
+        (Map("cid" -> List("u123")), Left(new IllegalArgumentException()))
+      )
+  }
+
+  "Unnamed group prefix" should "work" in {
+    parse("/(apple-)?icon-:res(\\d+).png")
+      .struct(List(
+        PathToken(None,
+                  0,
+                  Some('/'),
+                  Some('/'),
+                  optional = true,
+                  repeat = false,
+                  partial = true,
+                  """apple-"""),
+        PathToken("icon-"),
+        PathToken(Some("res"),
+                  1,
+                  None,
+                  Some('/'),
+                  optional = false,
+                  repeat = false,
+                  partial = false,
+                  """\d+"""),
+        PathToken(".png")
+      ))
+      .accept(("/icon-240.png", List("/icon-240.png", null, "240")),
+              ("/apple-icon-240.png", List("/apple-icon-240.png", "apple-", "240")))
+  }
+
+  "Unicode characters" should "work" in {
+    parse("/:foo")
+      .struct(
+        List(
+          PathToken(Some("foo"),
+                    0,
+                    Some('/'),
+                    Some('/'),
+                    optional = false,
+                    repeat = false,
+                    partial = false,
+                    """[^\/]+?""")))
+      .accept(("/café", List("/café", "café")))
+      .build((Map("foo" -> List("café")), Right("/caf%C3%A9")))
+
+    parse("/café")
+      .struct(List(PathToken("/café")))
+      .accept(("/café", List("/café")))
+      .build((Map(), Right("/café")))
+  }
+
+  "Ends with" should "work" in {
+    parse("/test", PathRegexOptions(endsWith = List("?")))
+      .struct(List(PathToken("/test")))
+      .accept(("/test", List("/test")),
+              ("/test?query=string", List("/test")),
+              ("/test/?query=string", List("/test/")),
+              ("/testx", Nil))
+      .build((Map(), Right("/test")))
+
+    parse("/test", PathRegexOptions(endsWith = List("?"), strict = true))
+      .struct(List(PathToken("/test")))
+      .accept(("/test?query=string", List("/test")), ("/test/?query=string", Nil))
+      .build((Map(), Right("/test")))
+  }
+
+  "Custom delimiters" should "work" in {
+    parse("$:foo$:bar?", PathRegexOptions(delimiters = Set('$')))
+      .struct(List(
+        PathToken(Some("foo"),
+                  0,
+                  Some('$'),
+                  Some('$'),
+                  optional = false,
+                  repeat = false,
+                  partial = false,
+                  """[^\$]+?"""),
+        PathToken(Some("bar"),
+                  1,
+                  Some('$'),
+                  Some('$'),
+                  optional = true,
+                  repeat = false,
+                  partial = false,
+                  """[^\$]+?""")
+      ))
+      .accept(("$x", List("$x", "x", null)), ("$x$y", List("$x$y", "x", "y")))
+      .build((Map("foo" -> List("foo")), Right("$foo")),
+             (Map("foo" -> List("foo"), "bar" -> List("bar")), Right("$foo$bar")))
+  }
 }

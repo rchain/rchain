@@ -1,0 +1,243 @@
+import IArrayApi in {
+  new 
+    ArrayAppend, ArrayConcat, ArrayContains, ArrayDrop,
+    ArrayFlatten, ArrayFold, ArrayForeach, ArrayGet, ArrayIndexOf,
+    ArrayLength, ArrayPrint, ArrayMap, ArrayRemoveElement,
+    ArrayRemoveAt, ArraySplitAt, ArrayTake
+  in {
+    IArrayApi("Append", ArrayAppend) | IArrayApi("Concat", ArrayConcat) |
+    IArrayApi("Contains", ArrayContains) | IArrayApi("Drop", ArrayDrop) |
+    IArrayApi("Flatten", ArrayFlatten) | IArrayApi("Fold", ArrayFold) | IArrayApi("Foreach", ArrayForeach) | 
+    IArrayApi("Get", ArrayGet) | IArrayApi("IndexOf", ArrayIndexOf) | 
+    IArrayApi("Length", ArrayLength) | IArrayApi("Print", ArrayPrint) | 
+    IArrayApi("Map", ArrayMap) | IArrayApi("RemoveElment", ArrayRemoveElement) |
+    IArrayApi("RemoveAt", ArrayRemoveAt) | IArrayApi("SplitAt", ArraySplitAt) | 
+    IArrayApi("Take", ArrayTake) |
+    for(
+        append <- ArrayAppend; concat <- ArrayConcat; contains <- ArrayContains;
+        drop <- ArrayDrop; flatten <- ArrayFlatten; fold <- ArrayFold; 
+        foreach <- ArrayForeach; get <- ArrayGet;
+        indexOf <- ArrayIndexOf; length <- ArrayLength; arrprint <- ArrayPrint;
+        map <- ArrayMap; rmElement <- ArrayRemoveElement; rmAt <- ArrayRemoveAt; 
+        splitAt <- ArraySplitAt; take <- ArrayTake
+    ) {
+      new
+        append_test, concat_test, contains_test, drop_test, fold_test, flatten_test,
+        foreach_test, get_test, indexOf_test, length_test, arrprint_test,
+        map_test, rmElement_test, rmAt_test, splitAt_test, take_test
+      in {
+        contract append_test(_) = {
+          //should put the new element at the end of the array
+          new result, answer in {
+            append(4, [1, 2, 3], result) | answer([1, 2, 3, 4]) | 
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "Append: Pass".display("\n") }
+                _ => { "Append: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract concat_test(_) = {
+          //should concatenate two arrays
+          new result, answer in {
+            concat([1, 2, 3], [4, 5, 6], result) | answer([1, 2, 3, 4, 5, 6]) | 
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "Concat: Pass".display("\n") }
+                _ => { "Concat: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract contains_test(_) = {
+          //should return true when present and false when not
+          new result1, result2 in {
+            contains([1, 2, 3], 2, result1) | contains([1, 2, 3], 5, result2) | 
+            for(x <- result1; y <- result2) {
+              match x with true => {
+                match y with false => {
+                  "Contains: Pass".display("\n")
+                }
+                _ => { "Contains: Fail".display("\n") }
+              }
+              _ => { "Contains: Fail".display("\n") }
+            }
+          }
+        } |
+        contract drop_test(_) = {
+          //drops the specified number of elements from the front of the array
+          new result, answer in {
+            drop([1, 2, 3, 4], 2, result) | answer([3, 4]) |
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "Drop: Pass".display("\n") }
+                _ => { "Drop: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract flatten_test(_) = {
+          //array of arrays to single array
+          new result, answer in {
+            flatten([[1, 2], [3, 4], [5], [6, 7, 8]], result) |
+            answer([1, 2, 3, 4, 5, 6, 7, 8]) |
+            for(arr1 <- result; arr2 <- answer) {
+              match arr1 == arr2 with true => { "Flatten: Pass".display("\n") }
+              _ => { "Flatten: Fail".display("\n") }
+            }
+          }
+        } |
+        contract fold_test(_) = {
+          //left-associative fold (c.f. https://wiki.haskell.org/Fold )
+          new result, answer, combinator in {
+            contract combinator(elem, accValue, return) = {
+              return( elem + accValue )
+            } |
+            fold([1, 2, 3, 4], 0, combinator, result) | for(r <- result) {
+              match r == 10 with true => { "Fold: Pass".display("\n") }
+              _ => { "Fold: Fail".display("\n") }
+            }
+          }
+        } |
+        contract foreach_test(_) = {
+          //execute a procedure for each value in the array (in order of index)
+          new sendTrue, el1, el2, el3, el4, result in {
+            contract sendTrue(channel, isDone) = { channel(true) | isDone(true) } |
+            foreach([el1, el2, el3, el4], sendTrue, result) |
+            for(r <- result) {
+              for(a <- el1; b <- el2; c <- el3; d <- el4) {
+                "Foreach: Pass".display("\n")
+              }
+            }
+          }
+        } |
+        contract get_test(_) = {
+          //get the i-th element of the array (0-based index)
+          new result in {
+            get(2, [3, 4, 5, 6], result) | for(r <- result){
+              match r == 5 with true => { "Get: Pass".display("\n") }
+              _ => { "Get: Fail".display("\n") }
+            }
+          }
+        } |
+        contract indexOf_test(_) = {
+          //get the index in the array of the element, or -1 if not present
+          new result1, result2 in {
+            indexOf(5, [4, 5, 6], result1) |
+            indexOf(100, [1, 2, 3], result2) |
+            for(r1 <- result1; r2 <- result2) {
+              match r1 == 1 with true => {
+                match r2 == -1 with true => { "IndexOf: Pass".display("\n") }
+                _ => { "IndexOf: Fail".display("\n") }
+              }
+              _ => { "IndexOf: Fail".display("\n") }
+            }
+          }
+        } |
+        contract length_test(_) = {
+          //get the number of elements in the array
+          new result in {
+            length([1, 2, 3, 4], result) | for(r <- result) {
+              match r == 4 with true => { "IndexOf: Pass".display("\n") }
+              _ => { "IndexOf: Fail".display("\n") }
+            }
+          }
+        } |
+        contract arrprint_test(_) = {
+          //print out the array
+          new result in {
+            arrprint(["Testing", ":", "Print"], result) |
+            for(r <- result) { "Print: Pass".display("\n") }
+          }
+        } |
+        contract map_test(_) = {
+          //create a new array by applying the function to each element
+          new doubler, result, answer in {
+            contract doubler(x, return) = { return( 2 * x ) } |
+            map([1, 2, 3], doubler, result) | answer([2, 4, 6]) |
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "Map: Pass".display("\n") }
+                _ => { "Map: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract rmElement_test(_) = {
+          //remove the element from the array
+          new result, answer in {
+            rmElement([1, 2, 3], 2, result) | answer([1, 3]) |
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "RemoveElment: Pass".display("\n") }
+                _ => { "RemoveElment: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract rmAt_test(_) = {
+          //remove the element at the specified index from the array
+          new result, answer in {
+            rmAt([1, 2, 3], 2, result) | answer([1, 2]) |
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "RemoveAt: Pass".display("\n") }
+                _ => { "RemoveAt: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract splitAt_test(_) = {
+          //split the array into two arrays at the given index
+          new result, answer1, answer2 in {
+            splitAt([1, 2, 3, 4], 2, result) |
+            answer1([1, 2]) | answer2([3, 4]) |
+            for(r <- result) {
+              match r with [arr1, arr2] => {
+                for (ans1 <- answer1; ans2 <- answer2) {
+                  match arr1 == ans1 with true => {
+                    match arr2 == ans2 with true => {
+                      "SplitAt: Pass".display("\n")
+                    }
+                    _ => { "SplitAt: Fail".display("\n") }
+                  }
+                  _ => { "SplitAt: Fail".display("\n") }
+                }
+              }
+              _ => { "SplitAt: Fail".display("\n") }
+            }
+          }
+        } |
+        contract take_test(_) = {
+          //takes the first n elements of the array
+          new result, answer in {
+            take([1, 2, 3, 4, 5], 2, result) | answer([1, 2]) |
+            for(arr1 <- result) {
+              for(arr2 <- answer){ 
+                match arr1 == arr2 with true => { "Take: Pass".display("\n") }
+                _ => { "Take: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        append_test(Nil) | 
+        concat_test(Nil) |
+        contains_test(Nil) |
+        drop_test(Nil) |
+        flatten_test(Nil) |
+        fold_test(Nil) |
+        foreach_test(Nil) |
+        get_test(Nil) |
+        indexOf_test(Nil) |
+        length_test(Nil) |
+        arrprint_test(Nil) |
+        map_test(Nil) |
+        rmElement_test(Nil) |
+        rmAt_test(Nil) |
+        splitAt_test(Nil) |
+        take_test(Nil)
+      }
+    }
+  }
+}

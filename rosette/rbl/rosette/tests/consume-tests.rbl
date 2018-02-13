@@ -1,0 +1,109 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
+;;; Tests for the consume method.
+;;;
+;;; The general pattern for the tests is a Let expression that sets up the mock variables
+;;; followed by a call to the actual helper method that is being tested.
+
+;;; should return head of lists
+(test-form (select-best-products [[1 2 3] [#niv 4]]) [1 4])
+;;; should return empty list as one list is empty
+(test-form (select-best-products [[1 2] [#niv #niv] [3 4]]) [])
+;;; should return only items in list
+(test-form (select-best-products [[1] [2] [3]]) [1 2 3])
+
+;;; should return appropriate candidates
+(let* [[data-list [1 2 3 4 5]]
+       [continuation-list []]
+       [foo-subspace [data-list continuation-list]]
+
+       [data-list [3 3 3 3 3]]
+       [continuation-list []]
+       [bar-subspace [data-list continuation-list]]
+
+       [subspaces [foo-subspace bar-subspace]]
+
+       [product-patterns [2 3]]]
+
+  (let [[[foo-candidates bar-candidates] (extract-data-candidates subspaces product-patterns)]]
+    (seq
+      ;;; should only return the 2nd piece of data
+      (test-form foo-candidates [#niv [1 2] #niv #niv #niv])
+      ;;; should return everything as all pieces of data match
+      (test-form bar-candidates [[0 3] [1 3] [2 3] [3 3] [4 3]]))))
+
+;;; tests for consume-products
+(let* [[channel-subspace-table (new RblTable)]
+
+       [data-list [1 2 3 4 5]]
+       [continuation-list []]
+       [foo-subspace [data-list continuation-list]]
+
+       [data-list [1 2 3 4 2]]
+       [continuation-list []]
+       [bar-subspace [data-list continuation-list]]
+
+       [_ (tbl-add channel-subspace-table 'foo foo-subspace)]
+       [_ (tbl-add channel-subspace-table 'bar bar-subspace)]
+
+       [channels ['foo 'bar]]
+       [reductions [[1 2] [1 2]]]]
+  (seq
+    ;;; it returns an empty list if reductions is empty
+    (let* [[products (consume-products [] channel-subspace-table channels)]
+           [[foo-data-list _] (tbl-get channel-subspace-table 'foo)]
+           [[bar-data-list _] (tbl-get channel-subspace-table 'bar)]]
+      (seq
+        (test-form products [])
+        ;;; appropriately deletes nothing
+        (test-form foo-data-list [1 2 3 4 5])
+        (test-form bar-data-list [1 2 3 4 2])))
+    ;;; it works with multiple channels
+    (let* [[products (consume-products reductions channel-subspace-table channels)]
+           [[foo-data-list _] (tbl-get channel-subspace-table 'foo)]
+           [[bar-data-list _] (tbl-get channel-subspace-table 'bar)]]
+      (seq
+        (test-form products [2 2])
+        (test-form foo-data-list [1 3 4 5])
+        ;; appropriately deletes the former 2 instead of the latter
+        (test-form bar-data-list [1 3 4 2])))))
+
+;;; store-continuation works when channel-subspace-table is empty
+(let* [[channel-lookup-table (new RblTable)]
+       [reverse-channel-lookup-table (new RblTable)]
+       [channel-subspace-table (new RblTable)]
+       [channels ['foo 'bar]]]
+  (seq
+    (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels
+                        ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
+    (seq
+      (test-form (tbl-get channel-lookup-table 'foo) ['foo--bar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foo--bar])
+      (test-form (tbl-get reverse-channel-lookup-table 'foo--bar) ['foo 'bar])
+      (test-form
+       (tbl-get channel-subspace-table 'foo--bar)
+       [[] [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
+
+;;; store-continuation works when channel-subspace-table already contains subspace contents
+(let* [[channel-lookup-table (new RblTable)]
+       [reverse-channel-lookup-table (new RblTable)]
+       [channel-subspace-table (new RblTable)]
+       [channels ['foo 'bar]]]
+  (seq
+    (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels
+                        ['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock]] #t)
+    (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels
+                        [43 44] ['ctxt-mock ['code-mock 'env-mock]] #t)
+    (seq
+      (test-form (tbl-get channel-lookup-table 'foo) ['foo--bar])
+      (test-form (tbl-get channel-lookup-table 'bar) ['foo--bar])
+      (test-form (tbl-get reverse-channel-lookup-table 'foo--bar) ['foo 'bar])
+      (test-form
+       (tbl-get channel-subspace-table 'foo--bar)
+       [[]
+        [[['arbitrary-pattern 42] ['ctxt-mock ['code-mock 'env-mock] #t]]
+         [[43 44] ['ctxt-mock ['code-mock 'env-mock] #t]]]]))))
+
+(record-and-reset)

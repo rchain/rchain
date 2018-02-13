@@ -1,10 +1,12 @@
 // Rholang equivalent of the Simple Open Auction http://solidity.readthedocs.io/en/develop/solidity-by-example.html#simple-open-auction
 // The auction contract has three main actions: bid, withdraw, and auction_end (which ends the auction).
-// This contract demonstrates the use of the primitive inject-now,
+// This contract demonstrates the use of the primitive injectNow,
 // which injects the current system time into the channel.
 // The current time is then used to keep track of when
 // the auction started, when the bid has come in, and when
 // the call to end the auction has been made.
+
+// This contract has not been formally verified!
 
 new auction in {
     contract auction (beneficiary, bidding_time, return_channel) = {
@@ -12,21 +14,22 @@ new auction in {
             ended_channel!(false) |
             highest_bidder_channel!("no one") |
             highest_bid_channel!(-1) |
-            inject-now(auction_start_channel) |
+            auction_start_channel.injectNow() |
+            pending_returns_channel!(Map()) |
 
             new bid, withdraw, auction_end in {
 
                 contract bid(message_sender, amount, rtn) = {
-                    inject-now(now_channel) |
+                    now_channel.injectNow() |
                     for (now <- now_channel; highest_bidder <- highest_bidder_channel; highest_bid <- highest_bid_channel; auction_start <- auction_start_channel) {
                         match [now <= auction_start + bidding_time, amount > highest_bid] with
-                            <true, true> => {
+                            [true, true] => {
                                 match [highest_bidder != 0] with
-                                    <true> => {
+                                    [true] => {
                                         for (pending_returns <- pending_returns_channel) {
                                             pending_returns_channel!(
                                                 pending_returns.insert(highest_bidder,
-                                                    pending_returns.get(highest_bidder) + highest_bid)
+                                                    pending_returns.getOrElse(highest_bidder, 0) + highest_bid)
                                             )
                                         }
                                     }
@@ -65,10 +68,10 @@ new auction in {
                 } |
 
                 contract auction_end(message_sender, rtn) = {
-                    inject-now(now_channel) |
+                    now_channel.injectNow() |
                     for (now <- now_channel;  auction_start <- auction_start_channel; ended <- ended_channel; highest_bid <- highest_bid_channel) {
                         match [now >= auction_start + bidding_time, ended != true] with
-                            <true, true> => {
+                            [true, true] => {
                                 ended_channel!(true) |
                                 auction_start_channel!(auction_start) |
                                 highest_bid_channel!(highest_bid) |
@@ -92,11 +95,24 @@ new auction in {
         }
     } |
 
-    // Code to instantiate the auction contract and send in a bid
+    // Example code to
+    // (1) instantiate the auction contract
+    // (2) send in two bids
+    // (3) end the auction
+    // (4) check the beneficiaries' balance
+    //
+    // See tests/auction_tests.rho to see more calls
     new rtn, me, bidder_one, bidder_two, unused_rtn in {
-        auction!([me, 5, rtn]) |
+        auction!(me, 0, rtn) | // Note bidding time of 0 means anyone can immediately end the auction
         for (auction_contract <- rtn) {
-            @auction_contract.get("bid")!([bidder_one, 100, unused_rtn]) |
+            @auction_contract.get("bid")!(bidder_one, 100, unused_rtn) |
+            for (_ <- unused_rtn) { // Ensures sequential bid
+                @auction_contract.get("bid")!(bidder_two, 200, unused_rtn) |
+                for (_ <- unused_rtn) { // Ensures auction end happens after bids
+                    @auction_contract.get("auction_end")!(me, unused_rtn) |
+                    for (me_balance <- me) { me_balance.display("\n") }
+                }
+            } |
             rtn!(auction_contract)
         }
     }

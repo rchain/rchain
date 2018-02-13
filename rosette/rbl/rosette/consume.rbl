@@ -1,0 +1,93 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
+;;; File containing the reflective method consume and its helper methods
+
+(defProc (extract-data-candidates subspaces product-ptrns)
+  (map subspaces
+       (proc [i [data-list continuation-struct-list]]
+         (map data-list
+              (proc [data-index data]
+                (if (match-pattern (tuple-safe-nth product-ptrns i) data)
+                    [data-index data]))))))
+
+
+;;; This function would have roughly the following signature in Scala:
+;;;
+;;; def select-best-products(candidates: List[List[Candidate]]): Option[List[Candidate]]
+;;;
+;;; For each channel, we choose the product to match with.
+;;; The input is a list of list of potential candidates and from each inner list, a candidate is chosen.
+;;; The function currently just takes the first candidate for each channel but in the future
+;;; you will be able to pass in a ranking algorithm (see https://rchain.atlassian.net/browse/ROS-329) that will select candidates.
+;;; If any channels are missing candidates, it returns an empty list as that implies a incomplete match.
+(defProc (select-best-products candidates)
+  (let [[prefiltered-reductions
+         (map candidates (proc [i channel-candidates] (non-niv-head channel-candidates)))]]
+    (if (any-null? prefiltered-reductions) [] prefiltered-reductions)))
+
+
+;;; For each channel returned from the select-best-products function,
+;;; delete the matched products from the subspace and return a copy of the products.
+;;;
+;;; TODO: Remove data from extract-data-candidates and simply refetch data by the data-index.
+;;; Currently the data-index is only used to delete the data.
+(defProc (consume-products reductions channel-subspace-table channels)
+  (map reductions
+       (proc [i chosen-candidate]
+         (let* [[[data-index data] chosen-candidate]
+                [channel (tuple-safe-nth channels i)]
+                [[data-list continuation-struct-list] (tbl-get channel-subspace-table channel)]
+                [updated-data-list (delete-i data-list data-index)]]
+           (seq
+             (tbl-add channel-subspace-table channel [updated-data-list continuation-struct-list])
+             data)))))
+
+(defProc (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels product-ptrns ctxt-tuple persistent)
+  (let* [[[ctxt [code env]] ctxt-tuple]
+         [channels-concatenated (concat-symbol-list channels)]]
+    (seq
+      (walk channels (proc [i channel] (tbl-unique-append channel-lookup-table channel channels-concatenated)))
+      (tbl-add reverse-channel-lookup-table channels-concatenated channels)
+      (append-continuation-at-channel channel-subspace-table channels-concatenated
+                                      [product-ptrns [ctxt [code env] persistent]]))))
+
+;;; This reflective method would have roughly below signature in Scala
+;;;
+;;; def consume(ctxt-tuple: Tuple2[Continuation, Tuple2[Code, Any]],
+;;;             location: Tuple3[List[Channel], List[Pattern], Boolean]):
+;;;             Option[Tuple2[Continuation, List[Product]]]
+;;;
+;;; Note the ctxt-tuple is injected because this method is marked as reflective.
+;;;
+;;; While RBL is untyped, the following is some of the would be inferred types
+;;;
+;;;     type ContinuationStruct = Tuple2[List[Pattern], Tuple3[Continuation, Tuple2[Code, Env], Boolean]]
+;;;     type Subspace = Tuple2[List[Data], List[ContinuationStruct]]
+;;;     type Subspaces = List[Subspace]
+;;;     type Candidate = Tuple2[Int, Data]
+(defOprn consume)
+(defRMethod NameSpace (consume ctxt-tuple & location)
+  (let* [[[ctxt [code env]] ctxt-tuple]
+         [[channels product-ptrns persistent] location]
+         [_ (log:display 'DEBUG "(consume) for (" product-ptrns " <- " channels ") called with " persistent " and " code)]
+         [subspaces (map channels (proc [i channel] (tuplespace-tbl-get-or-create channel-subspace-table channel)))]
+         [candidates (extract-data-candidates subspaces product-ptrns)]
+         [reductions (select-best-products candidates)]
+         [products (consume-products reductions channel-subspace-table channels)]]
+    (seq
+      (if (null? products)
+          ;; If continuation was not consumed by a matching product (value function returned none), store it and suspend
+          (seq
+            (log:display 'DEBUG "(consume)" #\\t "storing(" ctxt ", " channels ", " product-ptrns ")")
+            (store-continuation channel-lookup-table reverse-channel-lookup-table channel-subspace-table channels product-ptrns ctxt-tuple persistent)
+            (update!))
+          (seq
+            (log:display 'DEBUG "(consume)" #\\t "ctxt-rtn(" products ", " persistent ")")
+            (ctxt-rtn ctxt products)
+            (update!)
+            (if persistent
+                (seq
+                  (log:display 'DEBUG "(consume) Re-posting continuation: " code)
+                  (run-with-env code env))))))))

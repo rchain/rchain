@@ -41,6 +41,7 @@ RblTable::RblTable(int max, Tuple* tbl)
     : BinaryOb(sizeof(RblTable), CLASS_META(RblTable), CLASS_SBO(RblTable)),
       maxEntries(max),
       numberOfEntries(0),
+      numberOfDeletedHashEntries(0),
       gcSensitiveKeys(false),
       registered(false),
       tbl(tbl),
@@ -69,6 +70,7 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
     : BinaryOb(sizeof(RblTable), CLASS_META(RblTable), CLASS_SBO(RblTable)),
       maxEntries(max),
       numberOfEntries(0),
+      numberOfDeletedHashEntries(0),
       gcSensitiveKeys(false),
       registered(false),
       tbl(tbl),
@@ -164,6 +166,7 @@ void RblTable::rehashCompletely() {
     assert(SIZE(tbl) == sizeof(Tuple) + maxEntries * sizeof(Entry));
     gcSensitiveKeys = false;
     numberOfEntries = 0;
+    numberOfDeletedHashEntries = 0;
     rehashCompletelyFrom(0);
 }
 
@@ -255,6 +258,7 @@ void RblTable::linearAdd(pOb key, pOb val) {
 }
 
 
+// See https://en.wikipedia.org/wiki/Linear_probing
 void RblTable::hashAdd(pOb key, pOb val) {
     int numberOfProbes = maxEntries;
     int probe = hash(key) % maxEntries;
@@ -265,11 +269,10 @@ void RblTable::hashAdd(pOb key, pOb val) {
             continue;
         }
 
-        if (val == ABSENT) {
-            if (p->val != ABSENT) {
-                p->val = ABSENT;
-                numberOfEntries--;
-            }
+        if (val == ABSENT && p->val != ABSENT) {
+            p->val = ABSENT;
+            numberOfEntries--;
+            numberOfDeletedHashEntries++;
             return;
         }
 
@@ -305,9 +308,11 @@ void RblTable::linearCheckSize() {
     }
 }
 
-
+// We need to keep track of the number of deleted entries separately
+// because until the table is rehashed, they still occupy space in the hash table.
 void RblTable::hashCheckSize() {
-    if (4 * numberOfEntries > 3 * maxEntries) {  // i.e., the table is 75% full
+    if (4 * (numberOfEntries+numberOfDeletedHashEntries) > 3 * maxEntries) {  // i.e., the table is
+        // 75% full
         hashResize();
     }
 }

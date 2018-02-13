@@ -45,3 +45,9 @@ rholang/src/main/java/coop/**
 ###################
 !rosette/bin/README
 rosette/src/*.o
+# Actual code editors
+*~
+\#*
+.ensime*
+ensime.sbt
+TAGS

@@ -6,9 +6,9 @@ import coop.rchain.rosette.prim.Prim.mismatchArgs
 import scala.reflect.{classTag, ClassTag}
 
 sealed trait PrimError
-case class ArgumentMismatch(msg: String) extends PrimError
+case class ArgumentMismatch(msg: String)               extends PrimError
 case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
-case object ArithmeticError extends PrimError
+case object ArithmeticError                            extends PrimError
 
 abstract class Prim extends Ob {
   val name: String
@@ -60,16 +60,16 @@ abstract class Prim extends Ob {
 }
 
 object Prim {
-  val MaxArgs = 255
+  val MaxArgs  = 255
   val MaxPrims = 1024
 
   def mismatchType[T <: Ob: ClassTag](ctxt: Ctxt): Option[TypeMismatch] = {
-    val n = ctxt.nargs
+    val n        = ctxt.nargs
     val typeName = classTag[T].runtimeClass.getName
 
     val nonT = ctxt.argvec.elem.take(n).find {
       case e: T => false
-      case _ => true
+      case _    => true
     }
 
     nonT.map(ob => TypeMismatch(ctxt.argvec.elem.indexOf(ob), typeName))
