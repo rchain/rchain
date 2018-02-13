@@ -34,6 +34,14 @@ def commonSettings: Seq[Setting[_]] =
 
   ).flatMap(_.settings)
 
+lazy val crypto = project
+  .settings(
+    name := "Crypto",
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      scrypto,
+      kalium)
+  )
+
 lazy val comm = project
   .settings(
     commonSettings,
