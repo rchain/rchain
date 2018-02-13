@@ -4,6 +4,18 @@ import org.abstractj.kalium.keys._
 
 object Ed25519 {
 
+  def newKeyPair: (Array[Byte], Array[Byte]) = {
+    val key = new SigningKey()
+    val sec = key.toBytes()
+    val pub = key.getVerifyKey().toBytes()
+    (sec,pub)
+  }
+
+  def toPublic(sec: Array[Byte]): Array[Byte] = {
+    val key = new SigningKey(sec)
+    key.getVerifyKey().toBytes()
+  }
+
   def verify(
     data: Array[Byte], signature: Array[Byte], pub: Array[Byte]
     ): Boolean =

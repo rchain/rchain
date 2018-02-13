@@ -47,7 +47,7 @@ object Secp256k1 {
   * Return values
   * @param pubkey ECDSA Public key, 33 or 65 bytes
   */
-  def computePubkey(seckey: Array[Byte]): Array[Byte] =
+  def toPublic(seckey: Array[Byte]): Array[Byte] =
     computePubkey(seckey)
 
 }
