@@ -33,12 +33,13 @@
 (defPure [] (fold p unit) unit)
 
 (defMethod Tuple (fold p unit)
-  (let [[[hd & tl] (self)]]
+  (let [[[hd & tl] (self)] [elemRemaining (size (self))]]
     (letrec [[iter (proc [acc]
 		     (seq
 		      (set! hd (head tl))
 		      (set! tl (tail tl))
-		      (if (and (null? hd) (null? tl))
+              (set! elemRemaining (- elemRemaining 1))
+		      (if (= elemRemaining 0)
 			  acc
 			  (p hd acc iter))))]]
       (p hd unit iter))))
