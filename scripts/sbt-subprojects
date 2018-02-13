@@ -3,6 +3,8 @@ comm / assembly
 rholang / bnfc:generate
 rholang / compile
 rholang / assembly
+roscala / compile
+roscala / assembly
 storage / compile
 storage / assembly
 node / compile
