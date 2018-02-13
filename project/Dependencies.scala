@@ -13,7 +13,9 @@ object Dependencies {
 
   val commonDependencies = loggingDependencies ++ testingDependencies
 
-  val crypto = "org.scorexfoundation" %% "scrypto" % "2.0.0"
+  val scrypto = "org.scorexfoundation" %% "scrypto" % "2.0.0"
+
+  val kalium = "org.abstractj.kalium" % "kalium" % "0.7.0"
 
   val argParsing = "org.rogach" %% "scallop" % "3.0.3"
 
