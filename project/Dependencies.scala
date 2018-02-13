@@ -30,6 +30,13 @@ object Dependencies {
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)
 
   val cats = "org.typelevel" %% "cats-core" % "1.0.1"
+  val cats090 = "org.typelevel" %% "cats-core" % "0.9.0"
 
   val lmdb = "org.lmdbjava" % "lmdbjava" % "0.6.0"
+
+  val shapeless = "com.chuusai" %% "shapeless" % "2.3.2"
+      // "org.typelevel" %% "cats" % "0.9.0",
+  // val scalaReflect = "org.scala-lang" % "scala-reflect" % "2.12.4" // scalaVersion.value
+  val scalaCheck = "org.scalacheck" %% "scalacheck" % "1.13.4" % "test"
+
 }

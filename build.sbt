@@ -128,4 +128,23 @@ lazy val rholang = project
     fork in Test := true
   )
 
+lazy val roscala_macros = (project in file("roscala/macros"))
+  .settings(
+    libraryDependencies ++= commonDependencies ++ Seq(
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value)
+  )
+
+lazy val roscala = project //  = (project in file("roscala"))
+  .settings(
+    name := "Rosette",
+    mainClass in assembly := Some("coop.rchain.rosette.Main"),
+    assemblyJarName in assembly := "rosette.jar",
+    // scalafmtOnCompile in Compile := true,
+    inThisBuild(List(
+      addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
+    libraryDependencies ++= commonDependencies ++ Seq(
+      cats090,
+      shapeless,
+      scalaCheck)
+  ).dependsOn(roscala_macros)
 

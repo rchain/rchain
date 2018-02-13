@@ -1,11 +1,14 @@
 #!/bin/bash
 
-if [ -f "build.sbt" ]; then
+if [ -f "${SUBPROJECT}/build.sh" ]; then
+    echo "${SUBPROJECT}/build.sh"
+    (cd "${SUBPROJECT}"; bash ./build.sh)
+elif [ -f "build.sbt" ]; then
     case ${SUBPROJECT} in
 	rholang)
 	    sbt_commands=";project ${SUBPROJECT} ;bnfc:generate ;compile ;assembly"
 	    ;;
-	comm|storage)
+	comm|storage|roscala)
 	    sbt_commands=";project ${SUBPROJECT} ;compile ;assembly"
 	    ;;
 	node)
