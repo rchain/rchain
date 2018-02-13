@@ -11,7 +11,7 @@ if [ -f "build.sbt" ]; then
 	node)
 	    sbt_commands="compile assembly docker"
 	    ;;
-    esac	
+    esac
     if [ -z "$sbt_commands" ]; then
 	exit 0
     fi
