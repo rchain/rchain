@@ -56,12 +56,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
   
     val result = ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
-    result.par should be (inputs.par.copy(expr = List(EVar(BoundVar(0)))))
+    result.par should be (inputs.par.copy(exprs = List(EVar(BoundVar(0)))))
     result.knownFree should be (inputs.knownFree)
   }
   "PVar" should "Compile as FreeVar if it's not in env" in {
     val result = ProcNormalizeMatcher.normalizeMatch(pvar, inputs)
-    result.par should be (inputs.par.copy(expr = List(EVar(FreeVar(0)))))
+    result.par should be (inputs.par.copy(exprs = List(EVar(FreeVar(0)))))
     result.knownFree shouldEqual
         (inputs.knownFree.newBindings(
             List((Some("x"), ProcSort)))._1)
@@ -83,6 +83,105 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
 
+  "PEval" should "Handle a bound name varible" in {
+    val pEval = new PEval(new NameVar("x"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
+    result.par should be (inputs.par.copy(evals = List(Eval(ChanVar(BoundVar(0))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+  "PEval" should "Collapse a quote" in {
+    val pEval = new PEval(new NameQuote(new PPar(new PVar("x"), new PVar("x"))))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
+    result.par should be (inputs.par.copy(exprs = List(EVar(BoundVar(0)), EVar(BoundVar(0)))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PNot" should "Delegate" in {
+    val pNot = new PNot(new PGround(new GroundBool(new BoolFalse())))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pNot, inputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(ENot(Par().copy(exprs = List(GBool(false)))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PNeg" should "Delegate" in {
+    val pNeg = new PNeg(new PVar("x"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pNeg, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(ENeg(Par().copy(exprs = List(EVar(BoundVar(0))))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PMult" should "Delegate" in {
+    val pMult = new PMult(new PVar("x"), new PVar("y"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pMult, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(EMult(
+                Par().copy(exprs = List(EVar(BoundVar(0)))),
+                Par().copy(exprs = List(EVar(FreeVar(0))))))))
+    result.knownFree should be (inputs.knownFree.newBindings(List((Some("y"), ProcSort)))._1)
+  }
+
+  "PDiv" should "Delegate" in {
+    val pDiv = new PDiv(new PGround(new GroundInt(7)), new PGround(new GroundInt(2)))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pDiv, inputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(EDiv(
+                Par().copy(exprs = List(GInt(7))),
+                Par().copy(exprs = List(GInt(2)))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PAdd" should "Delegate" in {
+    val pAdd = new PAdd(new PVar("x"), new PVar("y"))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort), (Some("y"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pAdd, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(EPlus(
+                Par().copy(exprs = List(EVar(BoundVar(0)))),
+                Par().copy(exprs = List(EVar(BoundVar(1))))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PMinus" should "Delegate" in {
+    val pMinus = new PMinus(new PVar("x"), new PMult(new PVar("y"), new PVar("z")))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), ProcSort),
+                                  (Some("y"), ProcSort),
+                                  (Some("z"), ProcSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pMinus, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            exprs = List(EMinus(
+                Par().copy(exprs = List(EVar(BoundVar(0)))),
+                Par().copy(exprs = List(EMult(
+                    Par().copy(exprs = List(EVar(BoundVar(1)))),
+                    Par().copy(exprs = List(EVar(BoundVar(2)))))))))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(
         new PGround(
@@ -91,10 +190,11 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             new GroundInt(8)))
     val result = ProcNormalizeMatcher.normalizeMatch(parGround, inputs)
     result.par should be (
-        inputs.par.copy(expr =
+        inputs.par.copy(exprs =
             List(GInt(8), GInt(7))))
     result.knownFree should be (inputs.knownFree)
   }
+
   "PPar" should "Compile both branches with the same environment" in {
     val parDoubleBound = new PPar(
         new PVar("x"),
@@ -104,7 +204,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch(parDoubleBound, boundInputs)
     result.par should be (
-        inputs.par.copy(expr =
+        inputs.par.copy(exprs =
             List(EVar(BoundVar(0)), EVar(BoundVar(0)))))
     result.knownFree should be (inputs.knownFree)
   }
@@ -171,20 +271,38 @@ class NameMatcherSpec extends FlatSpec with Matchers {
       inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
     val nqvar = new NameQuote(new PVar("x"))
     val result = NameNormalizeMatcher.normalizeMatch(nqvar, boundInputs)
-    result.chan should be (Quote(Par().copy(expr = List(EVar(BoundVar(0))))))
+    result.chan should be (Quote(Par().copy(exprs = List(EVar(BoundVar(0))))))
     result.knownFree should be (inputs.knownFree)
   }
 
   "NameQuote" should "return a free use if the quoted proc has a free var" in {
     val result = NameNormalizeMatcher.normalizeMatch(nqvar, inputs)
-    result.chan should be (Quote(Par().copy(expr = List(EVar(FreeVar(0))))))
+    result.chan should be (Quote(Par().copy(exprs = List(EVar(FreeVar(0))))))
     result.knownFree should be (inputs.knownFree.newBindings(List((Some("x"), ProcSort)))._1)
   }
 
   "NameQuote" should "compile to a quoted ground" in {
     val nqground = new NameQuote(new PGround(new GroundInt(7)))
     val result = NameNormalizeMatcher.normalizeMatch(nqground, inputs)
-    result.chan should be (Quote(Par().copy(expr = List(GInt(7)))))
+    result.chan should be (Quote(Par().copy(exprs = List(GInt(7)))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "NameQuote" should "collapse an eval" in {
+    val nqeval = new NameQuote(new PEval(new NameVar("x")))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+    val result = NameNormalizeMatcher.normalizeMatch(nqeval, boundInputs)
+    result.chan should be (ChanVar(BoundVar(0)))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "NameQuote" should "not collapse an eval | eval" in {
+    val nqeval = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+    val result = NameNormalizeMatcher.normalizeMatch(nqeval, boundInputs)
+    result.chan should be (Quote(Par().copy(evals = List(Eval(ChanVar(BoundVar(0))), Eval(ChanVar(BoundVar(0)))))))
     result.knownFree should be (inputs.knownFree)
   }
 }

@@ -1291,6 +1291,10 @@ DEF("random-number", randomNumber, 0, 0) {
     return FIXNUM(random_number);
 }
 
+DEF("now", now, 0, 0) {
+    // TODO: Return as epoch time
+    return FIXNUM((int) time(NULL));
+}
 
 DEF_OPRN(Sync, "expand", oprnExpand, obId);
 

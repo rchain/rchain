@@ -7,13 +7,13 @@ new test in {
   new x, y, z in {
     test(x, y, z) |
     for(_ <- x) {
-      print("x")
+      "x".display("\n")
     } |
     for(_ <- y) {
-      print("y")
+      "y".display("\n")
     } |
     for(_ <- x) {
-      print("z")
+      "z".display("\n")
     }
   }
 }

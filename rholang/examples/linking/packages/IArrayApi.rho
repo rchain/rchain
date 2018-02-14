@@ -5,7 +5,7 @@ export IArrayApi in {
   //efficiency one would expect from an array
   new 
     IsInBounds,
-    Append, Concat, Contains, Drop, Fold, Foreach, Get, 
+    Append, Concat, Contains, Drop, Flatten, Fold, Foreach, Get, 
     IndexOf, Length, Map, Print, RemoveElment, RemoveAt, SplitAt, Take
   in {
     contract IsInBounds(i, arr, return) = {
@@ -20,8 +20,8 @@ export IArrayApi in {
     } |
     contract Concat(arr, other, return) = {
       new pairCh in {
-        pairCh([other, arr]) | for(pair <- pairCh) {
-          return(pair.flatten())
+        pairCh([arr, other]) | for(pair <- pairCh) {
+          Flatten(pair, return)
         }
       }
     } |
@@ -41,6 +41,14 @@ export IArrayApi in {
             _ => { return( (arr.cut(n)).nth(1)  ) }
           }
         }
+      }
+    } |
+    contract Flatten(arr, return) = {
+      new combinator in {
+        contract combinator(head, accumulatedValue, return) = {
+          Fold(head, accumulatedValue, Append, return)
+        } |
+        Fold(arr, [], combinator, return)
       }
     } |
     contract Fold(arr, start, combinator, return) = {
@@ -155,6 +163,7 @@ export IArrayApi in {
         "Concat" => { return(Concat) }
         "Contains" => { return(Contains) }
         "Drop" => { return(Drop) }
+        "Flatten" => { return(Flatten) }
         "Fold" => { return(Fold) }
         "Foreach" => { return(Foreach) }
         "Get" => { return(Get) }

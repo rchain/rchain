@@ -41,7 +41,7 @@ object NameNormalizeMatcher {
               input.knownFree)
           }
           case Some((level, ProcSort)) => {
-            throw new Error("Proc variable used in process context.")
+            throw new Error("Proc variable used in name context.")
           }
           case None => {
             input.knownFree.get(n.var_) match {
@@ -58,10 +58,18 @@ object NameNormalizeMatcher {
         }
 
       case n: NameQuote => {
+        def collapseQuoteEval(p: Par): Channel = {
+          p.singleEval() match {
+            case Some(Eval(chanNew)) => chanNew
+            case _ => Quote(p)
+          }
+        }
+
         val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
             n.proc_,
             ProcVisitInputs(Par(), input.env, input.knownFree))
-        NameVisitOutputs(Quote(procVisitResult.par),
+
+        NameVisitOutputs(collapseQuoteEval(procVisitResult.par),
           procVisitResult.knownFree)
       }
     }
@@ -70,16 +78,36 @@ object NameNormalizeMatcher {
 
 object ProcNormalizeMatcher {
   def normalizeMatch(p: Proc, input: ProcVisitInputs): ProcVisitOutputs = {
+    def unaryExp(
+        subProc: Proc, input: ProcVisitInputs, constructor: Par => Expr): ProcVisitOutputs = {
+      val subResult = normalizeMatch(subProc, input.copy(par = Par()))
+      ProcVisitOutputs(
+          input.par.copy(exprs = constructor(subResult.par) :: input.par.exprs),
+          subResult.knownFree)
+    }
+    def binaryExp(
+        subProcLeft: Proc,
+        subProcRight: Proc,
+        input: ProcVisitInputs,
+        constructor: (Par, Par) => Expr): ProcVisitOutputs = {
+      val leftResult = normalizeMatch(subProcLeft, input.copy(par = Par()))
+      val rightResult = normalizeMatch(
+          subProcRight, input.copy(par = Par(), knownFree = leftResult.knownFree))
+      ProcVisitOutputs(
+          input.par.copy(exprs = constructor(leftResult.par, rightResult.par) :: input.par.exprs),
+          rightResult.knownFree)
+    }
+
     p match {
       case p: PGround => ProcVisitOutputs(
-          input.par.copy(expr = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.expr),
+          input.par.copy(exprs = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.exprs),
           input.knownFree)
 
       case p: PVar => input.env.get(p.var_) match {
         case Some((level, ProcSort)) => {
           ProcVisitOutputs(
-            input.par.copy(expr = EVar(BoundVar(level))
-                           :: input.par.expr),
+            input.par.copy(exprs = EVar(BoundVar(level))
+                           :: input.par.exprs),
             input.knownFree)
         }
         case Some((level, NameSort)) => {
@@ -91,8 +119,8 @@ object ProcNormalizeMatcher {
               val newBindingsPair = 
                 input.knownFree.newBindings(List((Some(p.var_), ProcSort)))
               ProcVisitOutputs(
-                input.par.copy(expr = EVar(FreeVar(newBindingsPair._2(0)))
-                               :: input.par.expr),
+                input.par.copy(exprs = EVar(FreeVar(newBindingsPair._2(0)))
+                               :: input.par.exprs),
                 newBindingsPair._1)
             case _ => throw new Error(
               "Free variable used as binder may not be used twice.")
@@ -101,6 +129,41 @@ object ProcNormalizeMatcher {
       }
 
       case p: PNil => ProcVisitOutputs(input.par, input.knownFree)
+
+      case p: PEval => {
+        def collapseEvalQuote(chan: Channel): Par = {
+          chan match {
+            case Quote(p) => p
+            case _ => Par().copy(evals = List(Eval(chan)))
+          }
+        }
+
+        val nameMatchResult = NameNormalizeMatcher.normalizeMatch(
+          p.name_,
+          NameVisitInputs(input.env, input.knownFree))
+        ProcVisitOutputs(
+          input.par.merge(collapseEvalQuote(nameMatchResult.chan)),
+          nameMatchResult.knownFree)
+      }
+
+      case p: PNot => unaryExp(p.proc_, input, ENot)
+      case p: PNeg => unaryExp(p.proc_, input, ENeg)
+
+      case p: PMult => binaryExp(p.proc_1, p.proc_2, input, EMult)
+      case p: PDiv => binaryExp(p.proc_1, p.proc_2, input, EDiv)
+      case p: PAdd => binaryExp(p.proc_1, p.proc_2, input, EPlus)
+      case p: PMinus => binaryExp(p.proc_1, p.proc_2, input, EMinus)
+
+      case p: PLt => binaryExp(p.proc_1, p.proc_2, input, ELt)
+      case p: PLte => binaryExp(p.proc_1, p.proc_2, input, ELte)
+      case p: PGt => binaryExp(p.proc_1, p.proc_2, input, EGt)
+      case p: PGte => binaryExp(p.proc_1, p.proc_2, input, EGte)
+
+      case p: PEq => binaryExp(p.proc_1, p.proc_2, input, EEq)
+      case p: PNeq => binaryExp(p.proc_1, p.proc_2, input, ENeq)
+
+      case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd)
+      case p: POr => binaryExp(p.proc_1, p.proc_2, input, EOr)
 
       case p: PPar => {
         val result = normalizeMatch(p.proc_1, input)

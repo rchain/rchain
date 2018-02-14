@@ -22,7 +22,7 @@ trait Capture[F[_]] {
   def fail[A](t: Throwable): F[A] = capture(throw t)
 
   def unattempt[A](fa: F[Either[Throwable, A]])(implicit F: Monad[F]): F[A] =
-    fa >>= (_.fold(fail, F.point(_)))
+    fa >>= (_.fold(fail, F.pure(_)))
 }
 
 object Capture extends CaptureInstances {
