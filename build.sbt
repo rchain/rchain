@@ -117,7 +117,7 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(scalaz),
+    libraryDependencies ++= commonDependencies,
     bnfcSettings,
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
