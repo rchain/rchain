@@ -5,33 +5,32 @@
 package coop.rchain.rholang.intepreter
 
 case class Par(
-  sends: List[Send],
-  receives: List[Receive],
-  // selects: List[Select],
-  evals: List[Eval],
-  news: List[New],
-  exprs: List[Expr]
-  // matches: List[Match]
+    sends: List[Send],
+    receives: List[Receive],
+    // selects: List[Select],
+    evals: List[Eval],
+    news: List[New],
+    exprs: List[Expr]
+    // matches: List[Match]
 ) {
   // TODO: write helper methods to append an X and return a new par
   def this() =
     this(List(), List(), List(), List(), List())
-  def singleEval(): Option[Eval] = {
+  def singleEval(): Option[Eval] =
     if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
       evals match {
         case List(single) => Some(single)
-        case _ => None
+        case _            => None
       }
     } else {
       None
     }
-  }
-  def merge(that: Par) = Par(
-      that.sends ++ sends,
-      that.receives ++ receives,
-      that.evals ++ evals,
-      that.news ++ news,
-      that.exprs ++ exprs)
+  def merge(that: Par) =
+    Par(that.sends ++ sends,
+        that.receives ++ receives,
+        that.evals ++ evals,
+        that.news ++ news,
+        that.exprs ++ exprs)
 }
 
 object Par {
@@ -39,7 +38,7 @@ object Par {
 }
 
 sealed trait Channel
-case class Quote(p: Par) extends Channel
+case class Quote(p: Par)      extends Channel
 case class ChanVar(cvar: Var) extends Channel
 
 // While we use vars in both positions, when producing the normalized
@@ -78,35 +77,35 @@ case class New(count: Int, p: Par)
 // Any process may be an operand to an expression.
 // Only processes equivalent to a ground process of compatible type will reduce.
 sealed trait Expr
-sealed trait Ground extends Expr
-case class EList(ps: List[Par]) extends Ground
-case class ETuple(ps: List[Par]) extends Ground
-case class ESet(ps: List[Par]) extends Ground
-case class EMap(kvs: List[(Par,Par)]) extends Ground
+sealed trait Ground                    extends Expr
+case class EList(ps: List[Par])        extends Ground
+case class ETuple(ps: List[Par])       extends Ground
+case class ESet(ps: List[Par])         extends Ground
+case class EMap(kvs: List[(Par, Par)]) extends Ground
 // A variable used as a var should be bound in a process context, not a name
 // context. For example:
 // for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
 // for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
-case class EVar(v: Var) extends Expr
-case class ENot(p: Par) extends Expr
-case class ENeg(p: Par) extends Expr
-case class EMult(p1: Par, p2: Par) extends Expr
-case class EDiv(p1: Par, p2: Par) extends Expr
-case class EPlus(p1: Par, p2: Par) extends Expr
+case class EVar(v: Var)             extends Expr
+case class ENot(p: Par)             extends Expr
+case class ENeg(p: Par)             extends Expr
+case class EMult(p1: Par, p2: Par)  extends Expr
+case class EDiv(p1: Par, p2: Par)   extends Expr
+case class EPlus(p1: Par, p2: Par)  extends Expr
 case class EMinus(p1: Par, p2: Par) extends Expr
-case class ELt(p1: Par, p2: Par) extends Expr
-case class ELte(p1: Par, p2: Par) extends Expr
-case class EGt(p1: Par, p2: Par) extends Expr
-case class EGte(p1: Par, p2: Par) extends Expr
-case class EEq(p1: Par, p2: Par) extends Expr
-case class ENeq(p1: Par, p2: Par) extends Expr
-case class EAnd(p1: Par, p2: Par) extends Expr
-case class EOr(p1: Par, p2: Par) extends Expr
+case class ELt(p1: Par, p2: Par)    extends Expr
+case class ELte(p1: Par, p2: Par)   extends Expr
+case class EGt(p1: Par, p2: Par)    extends Expr
+case class EGte(p1: Par, p2: Par)   extends Expr
+case class EEq(p1: Par, p2: Par)    extends Expr
+case class ENeq(p1: Par, p2: Par)   extends Expr
+case class EAnd(p1: Par, p2: Par)   extends Expr
+case class EOr(p1: Par, p2: Par)    extends Expr
 
-case class GBool(b: Boolean) extends Ground
-case class GInt(i: Integer) extends Ground
+case class GBool(b: Boolean)  extends Ground
+case class GInt(i: Integer)   extends Ground
 case class GString(s: String) extends Ground
-case class GUri(u: String) extends Ground
+case class GUri(u: String)    extends Ground
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
 case class GPrivate(p: String) extends Ground
