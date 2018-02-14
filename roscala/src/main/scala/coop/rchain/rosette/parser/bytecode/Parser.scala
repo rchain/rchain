@@ -309,7 +309,7 @@ object Parser {
             case byte => Right(OpUnknown())
         })
 
-        ops.sequenceU
+        ops.sequence[Either[ParseError, ?], Op]
 
       case None => Left(MissingArgument)
     }

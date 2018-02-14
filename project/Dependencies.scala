@@ -35,7 +35,7 @@ object Dependencies {
   // possible. Downgrading all projects for now so they agree.
   //
   // val cats = "org.typelevel" %% "cats-core" % "1.0.1"
-  val cats = "org.typelevel" %% "cats-core" % "0.9.0"
+  val cats = "org.typelevel" %% "cats-core" % "1.0.1"
 
   val lmdb = "org.lmdbjava" % "lmdbjava" % "0.6.0"
 
