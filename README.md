@@ -216,8 +216,6 @@ Invoking the above Docker image is simple enough:
 15:49:26.974 [main] DEBUG p2p - connect(): Connecting to #{PeerNode c12882b563fa47c9af297ce952ef7d94}
 [...]
 ```
-A single build.sbt file now resides at top level. This should be pretty easy to bust apart, should we decide to unconsolidate the repository.
- 
 Each scoped build is as similar to the original, per-project build process as possible, so assemblies should be produced in the same way as before:
 ```
 <computer:~/src/rchain (dev)> sbt "project rholang" assembly
