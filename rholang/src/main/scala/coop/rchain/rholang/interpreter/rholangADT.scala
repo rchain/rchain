@@ -59,7 +59,7 @@ case class FreeVar(level: Int) extends Var
 
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
-case class Send(chan: Channel, data: List[Par])
+case class Send(chan: Channel, data: List[Par], persistent: Boolean)
 
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.

@@ -153,6 +153,28 @@ object ProcNormalizeMatcher {
       case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd)
       case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr)
 
+      case p: PSend => {
+        import scala.collection.JavaConverters._
+        val nameMatchResult =
+          NameNormalizeMatcher.normalizeMatch(p.name_, NameVisitInputs(input.env, input.knownFree))
+        val initAcc = (List[Par](), ProcVisitInputs(Par(), input.env, nameMatchResult.knownFree))
+        val dataResults = (initAcc /: p.listproc_.asScala.toList.reverse)(
+          (acc, e) => {
+            val procMatchResult = normalizeMatch(e, acc._2)
+            (procMatchResult.par :: acc._1,
+             ProcVisitInputs(Par(), input.env, procMatchResult.knownFree))
+          }
+        )
+        val persistent = p.send_ match {
+          case _: SendSingle   => false
+          case _: SendMultiple => true
+        }
+        ProcVisitOutputs(
+          input.par.copy(
+            sends = Send(nameMatchResult.chan, dataResults._1, persistent) :: input.par.sends),
+          dataResults._2.knownFree)
+      }
+
       case p: PPar => {
         val result       = normalizeMatch(p.proc_1, input)
         val chainedInput = input.copy(knownFree = result.knownFree, par = result.par)

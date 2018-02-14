@@ -266,8 +266,12 @@ object SendSortMatcher {
   def sortMatch(s: Send): ScoredTerm[Send] = {
     val sortedChan = ChannelSortMatcher.sortMatch(s.chan)
     val sortedData = s.data.map(d => ParSortMatcher.sortMatch(d))
-    val sortedSend = Send(chan = sortedChan.term, data = sortedData.map(_.term))
-    val sendScore  = Node(Score.SEND, Seq(sortedChan.score) ++ sortedData.map(_.score): _*)
+    val sortedSend =
+      Send(chan = sortedChan.term, data = sortedData.map(_.term), persistent = s.persistent)
+    val persistentScore = if (s.persistent) 1 else 0
+    val sendScore = Node(
+      Score.SEND,
+      Seq(Leaf(persistentScore)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score): _*)
     ScoredTerm(sortedSend, sendScore)
   }
 }
