@@ -21,7 +21,7 @@ def commonSettings: Seq[Setting[_]] =
       (sourceManaged in Compile).value.getPath ++ "/.*"
     ).mkString(";"),
 
-    // scalafmtOnCompile := true // pretty destructive still
+    scalafmtOnCompile := true,
 
     /*
      * By default, tag docker images with organization and the
