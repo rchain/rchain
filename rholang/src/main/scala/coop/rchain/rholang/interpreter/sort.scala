@@ -157,6 +157,8 @@ object GroundSortMatcher {
       case gt: ETuple =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
         ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score):_*))
+      // Note ESet and EMap rely on the stableness of Scala's sort
+      // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case gs: ESet =>
         val sortedPars = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
         ScoredTerm(ESet(sortedPars.map(_.term)), Node(Score.ESET, sortedPars.map(_.score):_*))
@@ -165,8 +167,7 @@ object GroundSortMatcher {
           val (key, value) = kv
           val sortedKey = ParSortMatcher.sortMatch(key)
           val sortedValue = ParSortMatcher.sortMatch(value)
-          ScoredTerm((sortedKey.term, sortedValue.term),
-                     Node(Seq(sortedKey.score, sortedValue.score)))
+          ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
         }
         val sortedPars = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
         ScoredTerm(EMap(sortedPars.map(_.term)), Node(Score.EMAP, sortedPars.map(_.score):_*))

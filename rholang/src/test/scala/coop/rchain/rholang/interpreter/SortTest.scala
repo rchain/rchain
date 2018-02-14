@@ -163,7 +163,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
   }
 
 
-  "Par" should "Sort map insides" in {
+  "Par" should "Sort map insides by key and preserve ordering of values" in {
     val parGround =
       p.copy(exprs=
         List(
@@ -171,14 +171,14 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             List(
               (
                 p.copy(exprs=List(GInt(2))),
-                p.copy(exprs=List(GInt(1)))),
-              (
-                p.copy(exprs=List(GInt(2))),
                 p.copy(exprs=List(
                   ESet(
                     List(
                       p.copy(exprs=List(GInt(2))),
                       p.copy(exprs=List(GInt(1)))))))),
+              (
+                p.copy(exprs=List(GInt(2))),
+                p.copy(exprs=List(GInt(1)))),
               (
                 p.copy(exprs=List(GInt(1))),
                 p.copy(exprs=List(GInt(1))))))))
@@ -192,14 +192,14 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 p.copy(exprs=List(GInt(1)))),
               (
                 p.copy(exprs=List(GInt(2))),
-                p.copy(exprs=List(GInt(1)))),
-              (
-                p.copy(exprs=List(GInt(2))),
                 p.copy(exprs=List(
                   ESet(
                     List(
                       p.copy(exprs=List(GInt(1))),
-                      p.copy(exprs=List(GInt(2))))))))))))
+                      p.copy(exprs=List(GInt(2)))))))),
+              (
+                p.copy(exprs=List(GInt(2))),
+                p.copy(exprs=List(GInt(1))))))))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be (sortedParGround)
   }
