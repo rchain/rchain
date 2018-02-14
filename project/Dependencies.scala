@@ -44,7 +44,7 @@ object Dependencies {
 
   val hasher = "com.roundeights"            %% "hasher"         % "1.2.0"
 
-  val monix = "io.monix"                   %% "monix"          % "2.3.3"
+  val monix = "io.monix"                   %% "monix"          % "3.0.0-M3"
 
   val guava = "com.google.guava" % "guava" % "24.0-jre"
 }
