@@ -16,8 +16,8 @@ class ProtocolTest extends FlatSpec with Matchers {
     node should not be null
 
     val src = new ProtocolNode(node.id, node.endpoint, null)
-    val hs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src),
-                                        System.currentTimeMillis)
+    val hs =
+      EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src), System.currentTimeMillis)
     val result = hs.response(src)
 
     val upstream = result match {
