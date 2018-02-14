@@ -34,8 +34,59 @@ case class Par(
       that.exprs ++ exprs)
 }
 
+
 object Par {
   def apply(): Par = new Par()
+  // Allows calls of a Par with a single X such as Par(exprs=List(GInt(5))) and Par(exprs=List(GInt(5),GInt(5)))
+  // to be called with the shortcut of Par(GInt(5)) and Par(List(GInt(5),GInt(5))) respectively.
+  def apply(parMagnet: ParMagnet): Par = parMagnet()
+}
+
+sealed trait ParMagnet {
+  def apply(): Par
+}
+
+object ParMagnet {
+  implicit def fromSend(send: Send) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(send), receives=List(), evals=List(), news=List(), exprs=List())
+    }
+  implicit def fromSendList(sends: List[Send]) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=sends, receives=List(), evals=List(), news=List(), exprs=List())
+    }
+  implicit def fromReceive(receives: Receive) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(receives), evals=List(), news=List(), exprs=List())
+    }
+  implicit def fromReceiveList(receives: List[Receive]) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=receives, evals=List(), news=List(), exprs=List())
+    }
+  implicit def fromEval(eval: Eval) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(), evals=List(eval), news=List(), exprs=List())
+    }
+  implicit def fromEvalList(evals: List[Eval]) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(), evals=evals, news=List(), exprs=List())
+    }
+  implicit def fromNew(_new: New) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(), evals=List(), news=List(_new), exprs=List())
+    }
+  implicit def fromNewList(news: List[New]) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(), evals=List(), news=news, exprs=List())
+    }
+  implicit def fromExpr(expr: Expr) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(), evals=List(), news=List(), exprs=List(expr))
+    }
+  implicit def fromExprList(exprs: List[Expr]) =
+    new ParMagnet {
+      def apply(): Par = new Par(sends=List(), receives=List(), evals=List(), news=List(), exprs=exprs)
+    }
 }
 
 sealed trait Channel
