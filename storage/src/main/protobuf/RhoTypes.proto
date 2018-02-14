@@ -1,0 +1,235 @@
+syntax = "proto3";
+
+option java_package = "coop.rchain.storage.models";
+
+message Par {
+    repeated Send sends = 10;
+    repeated Receive receives = 20;
+    repeated Eval evals = 30;
+    repeated New news = 40;
+    repeated Expr exprs = 50;
+}
+
+message Channel {
+    oneof channel_instance {
+        Quote quote = 110;
+        ChanVar chanVar = 120;
+    }
+}
+
+message Quote {
+    Par p = 210;
+}
+
+message ChanVar {
+    Var cvar = 310;
+}
+
+// While we use vars in both positions, when producing the normalized
+// representation we need a discipline to track whether a var is a name or a
+// process.
+// These are DeBruijn levels
+message Var {
+    oneof var_instance {
+        BoundVar bound_var = 410;
+        FreeVar free_var = 420;
+    }
+}
+
+message BoundVar {
+    sint32 level = 510;
+}
+
+// Wildcards are represented as bound variables. The initial normalization will
+// not produce uses of the variable, but for (_ <- x) P is the same as
+// for (y <- x) P if y is not free in P. We model that equivalence by turning all
+// wildcards into bound variables.
+// Variables that occur free in Par used as a pattern or ChanVar are binders.
+// For the purpose of comparing patterns, we count just like BoundVars.
+
+// In the DeBruijn level paper, they use negatives, but this is more clear.
+message FreeVar {
+    sint32 level = 520;
+}
+
+// Upon send, all free variables in data are substituted with their values.
+// also if a process is sent, it is auto-quoted.
+message Send {
+    Channel chan = 610;
+    repeated Par data = 620;
+}
+
+message ReceiveBind {
+    repeated Channel channels = 710;
+    Channel channel = 720;
+}
+
+// [Par] is an n-arity Pattern.
+// It's an error for free Variable to occur more than once in a pattern.
+// Don't currently support conditional receive
+message Receive {
+    repeated ReceiveBind binds = 810;
+}
+
+message Eval {
+    Channel channel = 820;
+}
+
+// Number of variables bound in the new statement.
+// For normalized form, p should not contain solely another new.
+// Also for normalized form, the first use should be level+0, next use level+1
+// up to level+count for the last used variable.
+message New {
+    sint32 count = 910;
+    Par p = 920;
+}
+
+// Any process may be an operand to an expression.
+// Only processes equivalent to a ground process of compatible type will reduce.
+message Expr {
+    oneof expr_instance {
+        EList e_list = 1010;
+        ETuple e_tuple = 1020;
+        ESet e_set = 1030;
+        EMap e_map = 1040;
+        EVar e_var = 1050;
+        ENot e_not = 1060;
+        ENeg e_neg = 1070;
+        EMult e_mult = 1080;
+        EDiv e_div = 1090;
+        EPlus e_plus = 1100;
+        EMinus e_minus = 1110;
+        ELt e_lt = 1120;
+        ELte e_lte = 1130;
+        EGt e_gt = 1140;
+        EGte e_gte = 1150;
+        EEq e_eq = 1160;
+        ENeq e_neq = 1170;
+        EAnd e_and = 1180;
+        EOr e_or = 1190;
+        GBool g_bool = 1200;
+        GInt g_int = 1210;
+        GString g_string = 1220;
+        GUri g_uri = 1230;
+        GPrivate g_private = 1240;
+    }
+}
+
+message EList {
+    repeated Par ps = 2010;
+}
+
+message ETuple {
+    repeated Par ps = 2020;
+}
+
+message ESet {
+    repeated Par ps = 2030;
+}
+
+message EMap {
+    repeated ParTuple kvs = 2040;
+}
+
+message ParTuple {
+    Par p1 = 3010;
+    Par p2 = 3020;
+}
+
+// A variable used as a var should be bound in a process context, not a name
+// context. For example:
+// for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
+// for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
+message EVar {
+    Var v = 4010;
+}
+
+message ENot {
+    Par p = 4020;
+}
+
+message ENeg {
+    Par p = 4030;
+}
+
+message EMult {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EDiv {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EPlus {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EMinus {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message ELt {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message ELte {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EGt {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EGte {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EEq {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message ENeq {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EAnd {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message EOr {
+    Par p1 = 5010;
+    Par p2 = 5020;
+}
+
+message GBool {
+    bool b = 6010;
+}
+
+message GInt {
+    sint32 i = 6020;
+}
+
+message GString {
+    string s = 6030;
+}
+
+message GUri {
+    string u = 6040;
+}
+
+// These should only occur as the program is being evaluated. There is no way in
+// the grammar to construct them.
+message GPrivate {
+    string p = 6050;
+}
