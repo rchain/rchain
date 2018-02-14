@@ -24,11 +24,8 @@ import LinkedListApi in {
         length_test, range_test, LinkedList_test, and
       in {
         contract and(b1, b2, return) = {
-          match b1 with true => {
-            match b2 with true => {
-              return(true)
-            }
-            _ => { return(false) }
+          match [b1, b2] with [true, true] => {
+            return(true)
           }
           _ => { return(false) }
         } |
@@ -44,11 +41,8 @@ import LinkedListApi in {
                 head(list, result1) | head(emptyList, result2) |
                 answer1(1) | answer2(Nil) |
                 for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
-                  match r1 == a1 with true => {
-                    match r2 == a2 with true => {
-                      "Head: Pass".display("\n")
-                    }
-                    _ => { "Head: Fail".display("\n") }
+                  match [r1 == a1, r2 == a2] with [true, true] => {
+                    "Head: Pass".display("\n")
                   }
                   _ => { "Head: Fail".display("\n") }
                 }
@@ -65,11 +59,8 @@ import LinkedListApi in {
                   tail(list, result1) | tail(emptyList, result2) |
                   answer1(tl) | answer2(Nil) |
                   for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
-                    match r1 == a1 with true => {
-                      match r2 == a2 with true => {
-                        "Tail: Pass".display("\n")
-                      }
-                      _ => { "Tail: Fail".display("\n") }
+                    match [r1 == a1, r2 == a2] with [true, true] => {
+                      "Tail: Pass".display("\n")
                     }
                     _ => { "Tail: Fail".display("\n") }
                   }
@@ -87,11 +78,8 @@ import LinkedListApi in {
               prepend(h, l, result) | for(r <- result) {
                 head(r, hd) | tail(r, tl) | 
                 for(rh <- hd; rl <- tl) {
-                  match rh == h with true => {
-                    match rl == l with true => {
-                      "Prepend: Pass".display("\n")
-                    }
-                    _ => { "Prepend: Fail".display("\n") }
+                  match [rh == h, rl == l] with [true, true] => {
+                    "Prepend: Pass".display("\n")
                   }
                   _ => { "Prepend: Fail".display("\n") }
                 }
@@ -186,11 +174,8 @@ import LinkedListApi in {
               get(3, list, result1) | get(3, emptyList, result2) |
               answer1(3) | answer2(Nil) |
               for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
-                match r1 == a1 with true => {
-                  match r2 == a2 with true => {
-                    "Get: Pass".display("\n")
-                  }
-                  _ => { "Get: Fail".display("\n") }
+                match [r1 == a1, r2 == a2] with [true, true] => {
+                  "Get: Pass".display("\n")
                 }
                 _ => { "Get: Fail".display("\n") }
               }
@@ -204,11 +189,8 @@ import LinkedListApi in {
               indexOf(3, list, result1) | indexOf(3, emptyList, result2) |
               answer1(3) | answer2(-1) |
               for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
-                match r1 == a1 with true => {
-                  match r2 == a2 with true => {
-                    "IndexOf: Pass".display("\n")
-                  }
-                  _ => { "IndexOf: Fail".display("\n") }
+                match [r1 == a1, r2 == a2] with [true, true] => {
+                  "IndexOf: Pass".display("\n")
                 }
                 _ => { "IndexOf: Fail".display("\n") }
               }
@@ -222,11 +204,8 @@ import LinkedListApi in {
               length(list, result1) | length(emptyList, result2) |
               answer1(10) | answer2(0) |
               for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
-                match r1 == a1 with true => {
-                  match r2 == a2 with true => {
-                    "Length: Pass".display("\n")
-                  }
-                  _ => { "Length: Fail".display("\n") }
+                match [r1 == a1, r2 == a2] with [true, true] => {
+                  "Length: Pass".display("\n")
                 }
                 _ => { "Length: Fail".display("\n") }
               }
@@ -259,11 +238,8 @@ import LinkedListApi in {
           new result in {
             LinkedList(1, result) | for(r <- result) {
               match r with [hd, tl] => {
-                match hd == 1 with true => {
-                  match tl == emptyList with true => {
-                    "LinkedList: Pass".display("\n")
-                  }
-                  _ => { "LinkedList: Fail".display("\n") }
+                match [hd == 1, tl == emptyList] with [true, true] => {
+                  "LinkedList: Pass".display("\n")
                 }
                 _ => { "LinkedList: Fail".display("\n") }
               }
