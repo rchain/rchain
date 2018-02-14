@@ -1,0 +1,13 @@
+import IArrayApi in {
+  new ArrayForeach in {
+    IArrayApi("Foreach", ArrayForeach) |
+    for(arrfor <- ArrayForeach) {
+      new testArr, isRightBrace in {
+        contract isRightBrace(x, isDone) = { (x == "}").display("\n") | isDone(true) } |
+        testArr(["}", "}", "}", "}"]) | for(soManyRightBraces <- testArr) {
+          arrfor(soManyRightBraces, isRightBrace, Nil)
+        }
+      }
+    }
+  }
+}

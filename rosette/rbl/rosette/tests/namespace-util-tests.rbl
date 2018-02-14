@@ -1,0 +1,102 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+
+;;; tests for tbl-unique-append
+(let* [[channel-subspace-table (new RblTable)]]
+  (seq
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world]))
+    ;; adding another 'world should have no effect
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world]))
+    ;; adding a different value changes the channel-subspace-table
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world2)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world 'world2]))))
+
+(let* [[channel-subspace-table (new RblTable)]
+       [_ (tbl-add channel-subspace-table 'hello [])]]
+  (seq
+    ;; adding to an empty tuple works
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world]))
+    ;; adding a different value on top still works
+    (let [[_ (tbl-unique-append channel-subspace-table 'hello 'world2)]]
+      (test-form (tbl-get channel-subspace-table 'hello) ['world 'world2]))))
+
+;;; TODO: Discuss whether empty tuples should match
+(test-form (match-tuple-pattern [] []) #t)
+(test-form (match-tuple-pattern [1] []) #f)
+(test-form (match-tuple-pattern [1 2 3] [1 2 3]) #t)
+(test-form (match-tuple-pattern ['anything 2 3] [1 2 3]) #t)
+(test-form (match-tuple-pattern [42 2 3] [1 2 3]) #f)
+(test-form (match-tuple-pattern [0] [1]) #f)
+(test-form (match-tuple-pattern ["a"] ['foo]) #f)
+(test-form (match-tuple-pattern [0] ['foo]) #f)
+(test-form (match-tuple-pattern ['foo] [2]) #t)
+(test-form (match-tuple-pattern ['y 'z] ['a]) #f)
+;; Doesn't match not a tuple
+(test-form (match-tuple-pattern [1] 1) #f)
+
+(test-form (concat-symbol-list []) ')
+(test-form (concat-symbol-list ['hello 'world]) 'hello--world)
+(test-form (concat-symbol-list ['hello 'world 'again]) 'hello--world--again)
+
+(test-form (append-tuples []) [])
+(test-form (append-tuples [[1 2] [3 4] [5 6]]) [1 2 3 4 5 6])
+(test-form (append-tuples [['a 'b] ['c 'd] ['e ['f 'g]]]) ['a 'b 'c 'd 'e ['f 'g]])
+
+;;; should return empty list if no values
+(test-form (non-niv-head []) [])
+(test-form (non-niv-head [#niv #niv #niv]) [])
+(test-form (non-niv-head [#niv #niv 2 3]) 2)
+
+(test-form (any-null? [1 2 3 4]) #f)
+(test-form (any-null? [1 [] 3 4]) #t)
+(test-form (any-null? [1 [2] [3 4] 4]) #f)
+;;; null element at the end counts
+(test-form (any-null? [1 2 3 4 []]) #t)
+
+;;; tests for append-product-at-channel
+(let* [[channel-subspace-table (new RblTable)]
+
+       [data-list [42]]
+       [continuation-list []]
+       [foo-subspace [data-list continuation-list]]
+       [_ (tbl-add channel-subspace-table 'foo foo-subspace)]
+
+       [channel 'foo]
+       [empty-channel 'empty]
+       [product 88]]
+  (seq
+    ;; it works for currently empty subspaces
+    (let* [[_ (append-product-at-channel channel-subspace-table empty-channel product)]
+           [[data-list continuation-list] (tbl-get channel-subspace-table empty-channel)]]
+      (test-form data-list [88]))
+    ;; it works for subspaces that contain a non-empty data-list
+    (let* [[_ (append-product-at-channel channel-subspace-table channel product)]
+           [[data-list continuation-list] (tbl-get channel-subspace-table channel)]]
+      (test-form data-list [42 88]))))
+
+;;; tests for append-continuation-at-channel
+(let* [[channel-subspace-table (new RblTable)]
+
+       [data-list []]
+       [continuation-list ['mock]]
+       [foo-subspace [data-list continuation-list]]
+       [_ (tbl-add channel-subspace-table 'foo foo-subspace)]
+
+       [channel 'foo]
+       [empty-channel 'empty]
+       [continuation 'another-mock]]
+  (seq
+    ;; it works for currently empty subspaces
+    (let* [[_ (append-continuation-at-channel channel-subspace-table empty-channel continuation)]
+           [[data-list continuation-list] (tbl-get channel-subspace-table empty-channel)]]
+      (test-form continuation-list ['another-mock]))
+    ;; it works for subspaces that contain a non-empty continuation-list
+    (let* [[_ (append-continuation-at-channel channel-subspace-table channel continuation)]
+           [[data-list continuation-list] (tbl-get channel-subspace-table channel)]]
+      (test-form continuation-list ['mock 'another-mock]))))
+
+(record-and-reset)

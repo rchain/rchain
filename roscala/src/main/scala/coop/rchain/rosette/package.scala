@@ -10,23 +10,22 @@ import scala.reflect.ClassTag
 
 package object rosette {
   sealed trait RblError
-  case object DeadThread extends RblError
-  case object Invalid extends RblError
-  case object Suspend extends RblError
-  case object Absent extends RblError
-  case object Upcall extends RblError
+  case object DeadThread                        extends RblError
+  case object Invalid                           extends RblError
+  case object Suspend                           extends RblError
+  case object Absent                            extends RblError
+  case object Upcall                            extends RblError
   case class PrimErrorWrapper(value: PrimError) extends RblError
-  case class RuntimeError(msg: String) extends RblError
+  case class RuntimeError(msg: String)          extends RblError
 
   type Result = Either[RblError, Ob]
 
   implicit class RichOb(ob: Ob) {
-    def as[T <: Ob : ClassTag]: Option[T] = {
+    def as[T <: Ob: ClassTag]: Option[T] =
       ob match {
         case t: T => Some(t)
-        case _ => None
+        case _    => None
       }
-    }
   }
 
   implicit class OptionOps[R](opt: Option[R]) {

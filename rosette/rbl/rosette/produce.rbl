@@ -1,0 +1,166 @@
+;;; Copyright (c) 2018, RChain Cooperative
+;;; Author: Kent Shikama <kent@kentshikama.com>
+;;; This file is licensed under the Apache License, version 2.0.
+;;;
+;;; File containing the method produce and its helper methods
+
+;;; Fetches the first product that matches the pattern at `product-patterns[channel-index]`.
+;;; It returns the channel where the product was found along with the index of the product.
+;;; If the channel-index is the current channel-position, then we don't want to consume the product
+;;; as it is the currently passed in product, so we return NOT-STORED.
+(define NOT-STORED -1)
+(defProc (fetch-channel-pattern-and-product channel-subspace-table channel
+                                            product-patterns channel-index channel-position)
+  (if (= channel-index channel-position)
+      [channel NOT-STORED]
+      (let [[[data-list continuation-struct-list] (tbl-get channel-subspace-table channel)]
+           [product-pattern (tuple-safe-nth product-patterns channel-index)]]
+        (if (null? data-list)
+            []
+            (iterate loop [[[data & r] data-list] [data-index 0]]
+                     (if (match-pattern product-pattern data)
+                         [channel data-index]
+                         (loop r (inc data-index))))))))
+
+(defProc (fetch-pattern-and-product channel-subspace-table channels product-patterns channel-position)
+  (map channels
+       (proc [i channel]
+         (fetch-channel-pattern-and-product channel-subspace-table channel product-patterns i channel-position))))
+
+;;; Roughly dual to extract-data-candidates.
+;;; However, it is more complicated as it has to gather candidates across multiple channels.
+;;;
+;;; We first check whether the currently passed in product matches one of the patterns in a
+;;; candidate consume. If it does match one of the patterns, then we attempt to fetch products for
+;;; the rest of the channels in the candidate consume. We repeat this for every potential candidate
+;;; consume.
+;;;
+;;; The following is some python based pseudo-code.
+;;;
+;;; def extract-consume-candidates(concat-channels, channel-subspace-table, channel,
+;;;                                product, reverse-channel-lookup-table):
+;;;     candidates =
+;;;         map-with-index _, concat-channel in concat-channels:
+;;;             channels = reverse-lookup(concat-channel)
+;;;             channel-position = channels.index-of(channel)
+;;;             data-list, continuation-struct-list = channel-subspace-table.get(concat-channel)
+;;;             map-with-index continuation-struct-index, \
+;;;                            continuation-struct in continuation-struct-list:
+;;;                 product-patterns, ctxt-stuff = continuation-struct
+;;;                 if match-pattern(product-patterns[channel-position], product):
+;;;                     # fetch-channel-pattern-and-product is documented above
+;;;                     candidate = map-with-index(fetch-channel-pattern-and-product, channels)
+;;;                     [] if any-null?(candidate) \
+;;;                        else (candidate, [concat-channel continuation-struct-index])
+;;;     return append-tuples(candidates)
+;;;
+;;; While RBL is untyped, the following is some of the would be inferred types
+;;;
+;;;     type Candidate = Tuple2[List[Option[Tuple2[String, Int]]], Tuple2[String, Int]]
+;;;     type Candidates = List[Candidate]
+;;;
+;;;     return type = List[Option[Tuple2[List[Option[Tuple2[String, Int]]], Tuple2[String,
+;;;                   Int]]]]
+(defProc (extract-consume-candidates concat-channels channel-subspace-table channel
+                                     product reverse-channel-lookup-table)
+  (if (absent? concat-channels)
+      []
+      (let [[candidates
+             (map concat-channels
+                  (proc [_ concat-channel]
+                    (let* [[channels (tbl-get reverse-channel-lookup-table concat-channel)]
+                           [channel-position (position channels channel)]
+                           [[_ continuation-struct-list] (tbl-get channel-subspace-table concat-channel)]]
+                      (map continuation-struct-list
+                           (proc [continuation-struct-index continuation-struct]
+                             (let [[[product-patterns ctxt-stuff] continuation-struct]]
+                               (if (match-pattern (tuple-safe-nth product-patterns channel-position)
+                                                  product)
+                                   (let [[candidate (fetch-pattern-and-product channel-subspace-table channels
+                                                                               product-patterns
+                                                                               channel-position)]]
+                                     (if (any-null? candidate)
+                                         []
+                                         [candidate
+                                          [concat-channel continuation-struct-index]])))))))))]]
+        (append-tuples candidates))))
+
+
+;;; Dual to select-best-products in consume.rbl
+(defProc (select-best-consume candidates)
+  (head
+    (filter candidates
+            (proc [candidate]
+              (if (null? candidate)
+                  #f
+                  (not (any-null? (tuple-safe-nth candidate 0))))))))
+
+
+(defProc (delete-product channel-subspace-table channel data-index product)
+  (if (= data-index NOT-STORED)
+      product
+      (let* [[[data-list continuation-struct-list] (tbl-get channel-subspace-table channel)]
+             [data (tuple-safe-nth data-list data-index)]
+             [updated-data-list (delete-i data-list data-index)]]
+        (seq
+          (tbl-add channel-subspace-table channel [updated-data-list continuation-struct-list])
+          data))))
+
+
+;;; Dual to consume-products.
+;;; This method deletes channels from channel-lookup-table and reverse-channel-lookup-table
+;;; if the corresponding channel continuation-struct-list's are empty.
+(defProc (consume-continuation candidate channel-subspace-table
+                               channel-lookup-table reverse-channel-lookup-table product)
+  (let* [[[channel-data-list [concat-channel continuation-struct-index]] candidate]
+         [product-list
+          (map channel-data-list
+               (proc [i [channel data-index]] (delete-product channel-subspace-table channel data-index product)))]
+         [[data-list continuation-struct-list] (tbl-get channel-subspace-table concat-channel)]
+         [[product-patterns ctxt-tuple]
+          (tuple-safe-nth continuation-struct-list continuation-struct-index)]
+         [updated-continuation-struct-list
+          (delete-i continuation-struct-list continuation-struct-index)]
+         [_ (tbl-add channel-subspace-table concat-channel [data-list updated-continuation-struct-list])] ]
+    (seq
+      (if (null? updated-continuation-struct-list)
+          (let* [[channels-to-delete (tbl-get reverse-channel-lookup-table concat-channel)]]
+            (seq
+              (walk channels-to-delete
+                    (proc [i channel]
+                      (let* [[channels (tbl-get channel-lookup-table channel)]
+                             [updated-channels (delete channels concat-channel)]]
+                        (tbl-add channel-lookup-table channel updated-channels))))
+              (tbl-del reverse-channel-lookup-table concat-channel))))
+      [ctxt-tuple product-patterns product-list])))
+
+
+;;; While consume can suspend the thread of execution,
+;;; produce always resumes the calling thread at the end of the method.
+(defOprn produce)
+(defMethod NameSpace (produce channel & product)
+  (let* [[_ (log:display 'DEBUG "(produce) " (clean-fresh channel) "!(" product ") called")]
+         [concat-channels (tbl-get channel-lookup-table channel)]
+         [_ (log:display 'DEBUG "(produce)" #\\t "relevant channels: " concat-channels)]
+         [candidates (extract-consume-candidates concat-channels channel-subspace-table channel
+                                                 product reverse-channel-lookup-table)]
+         [_ (log:display 'DEBUG "(produce)" #\\t "candidates: " candidates)]
+         [candidate (select-best-consume candidates)]
+         [_ (log:display 'DEBUG "(produce)" #\\t "candidate: " candidate)]]
+    (if (null? candidate)
+        (seq
+          (log:display 'DEBUG "(produce)" #\\t "storing(" product ")")
+          (append-product-at-channel channel-subspace-table channel product)
+          (update!))
+        (let* [[[ctxt-tuple product-patterns product-list]
+                (consume-continuation candidate channel-subspace-table channel-lookup-table
+                                      reverse-channel-lookup-table product)]
+               [[consume-ctxt [code env] persistent] ctxt-tuple]]
+          (seq
+            (log:display 'DEBUG "(produce)" #\\t "ctxt-rtn(" consume-ctxt ", " product-list ")")
+            (ctxt-rtn consume-ctxt product-list)
+            (update!)
+            (if persistent
+                (seq
+                  (log:display 'DEBUG "(produce) Re-posting continuation: " code)
+                  (run-with-env code env))))))))

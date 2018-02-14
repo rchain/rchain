@@ -49,6 +49,7 @@ class RblTable : public BinaryOb {
 
     int maxEntries;
     int numberOfEntries;
+    int numberOfDeletedHashEntries;
     bool gcSensitiveKeys;
     bool registered;
 

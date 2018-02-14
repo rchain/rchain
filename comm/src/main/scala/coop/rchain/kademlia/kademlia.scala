@@ -32,9 +32,9 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
-case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
-  var pinging = false
-  override def key = entry.key
+final case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
+  var pinging           = false
+  override def key      = entry.key
   override def toString = s"#{PeerTableEntry $entry}"
 }
 
@@ -72,9 +72,9 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-case class PeerTable[A <: Peer](home: A,
-                                val k: Int = PeerTable.Redundancy,
-                                val alpha: Int = PeerTable.Alpha) {
+final case class PeerTable[A <: Peer](home: A,
+                                      val k: Int = PeerTable.Redundancy,
+                                      val alpha: Int = PeerTable.Alpha) {
 
   type Entry = PeerTableEntry[A]
 
@@ -107,7 +107,7 @@ case class PeerTable[A <: Peer](home: A,
   }
 
   def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
-  def distance(other: A): Option[Int] = distance(other.key)
+  def distance(other: A): Option[Int]            = distance(other.key)
 
   private val pool = Executors.newFixedThreadPool(alpha)
   private def ping(ps: mutable.ListBuffer[Entry], older: Entry, newer: A): Unit =

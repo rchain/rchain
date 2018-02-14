@@ -86,9 +86,9 @@
   } |
   match 2 == 2 with
     true => {
-      print("Pass")
+      "Pass".display("\n")
     }
     _ => {
-      print("Fail")
+      "Fail".display("\n")
     }
 } 

@@ -1,16 +1,17 @@
 package coop.rchain.rosette
 
+import coop.rchain.rosette.Ob.setLex
 import org.scalatest.{Matchers, WordSpec}
 
 class ObSpec extends WordSpec with Matchers {
-  val meta = new Ob {}
+  val meta   = new Ob {}
   val parent = new Ob {}
 
   "forwardingAddress" should {
 
     "return meta" in {
       val newMeta = createOb()
-      val ob = createOb(Seq(newMeta))
+      val ob      = createOb(Seq(newMeta))
       ob.forwardingAddress shouldBe newMeta
     }
   }
@@ -18,10 +19,10 @@ class ObSpec extends WordSpec with Matchers {
   "getLex" should {
 
     "return element by offset" in {
-      val third = createOb()
+      val third  = createOb()
       val parent = parentWithThreeSlots(third)
 
-      val ob = createOb(Seq(meta, parent))
+      val ob  = createOb(Seq(meta, parent))
       val lex = ob.getLex(indirect = true, level = 1, offset = 2)
 
       lex shouldEqual third
@@ -29,11 +30,9 @@ class ObSpec extends WordSpec with Matchers {
 
     "return INVALID when offset is out of bounds" in {
       val parent = parentWithThreeSlots()
-      val ob = createOb(Seq(meta, parent))
+      val ob     = createOb(Seq(meta, parent))
       val lex =
-        ob.getLex(indirect = true,
-                  level = 1,
-                  offset = parent.numberOfSlots() + 1)
+        ob.getLex(indirect = true, level = 1, offset = parent.numberOfSlots() + 1)
 
       lex shouldEqual Ob.INVALID
     }
@@ -42,14 +41,14 @@ class ObSpec extends WordSpec with Matchers {
   "setLex" should {
 
     "set an extension slot by offset" in {
-      val ext = createExtension(twoSlots)
-      val value = createOb()
+      val ext        = createExtension(twoSlots)
+      val value      = createOb()
       val parent: Ob = parentWithThreeSlots(extension = Some(ext))
-      val ob = createOb(Seq(meta, parent))
-      val offset = 1
+      val ob         = createOb(Seq(meta, parent))
+      val offset     = 1
 
-      val (newOb, newValue) =
-        ob.setLex(indirect = true, level = 1, offset = offset, value = value)
+      val newOb =
+        setLex(indirect = true, level = 1, offset = offset, value = value).runS(ob).value
 
       val actorParent = newOb.parent.asInstanceOf[Actor]
 
@@ -66,14 +65,14 @@ class ObSpec extends WordSpec with Matchers {
   }
 
   def twoSlots: Seq[Ob] = {
-    val first = createOb()
+    val first  = createOb()
     val second = createOb()
     Seq(first, second)
   }
 
   def createActor(ext: StdExtension, slots: Seq[Ob]): Actor =
     new Actor {
-      override val extension = ext
+      override val extension     = ext
       override val slot: Seq[Ob] = slots
     }
 

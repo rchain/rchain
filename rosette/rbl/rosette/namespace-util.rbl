@@ -1,0 +1,117 @@
+;;; TODO: Remove unused methods in Tuplespace and add tests for the rest
+
+;;; TODO: Add tag for whether persistent
+;;; TODO: Translate match in compiler
+
+(random-number-init)
+;;; The debugSymbol is inserted so that the output is easier to read
+(defOprn generateFresh)
+(defProc (generateFresh debugSymbol)
+  (->symbol
+   (string-concat "Rholang-" debugSymbol "-" (->string (random-number)))))
+
+(defOprn append)
+(defPure Tuple (append item)
+  (concat (self) [item]))
+
+;;; Deletes element at position i in Tuple
+(defOprn delete-i)
+(defPure Tuple (delete-i p)
+  (concat (prim-sub-object (self) 0 p)
+          (prim-sub-object (self) (fx+ p 1)
+                           (fx- (prim-size (self)) (fx+ p 1)))))
+
+;;; Concatenates a list of symbols to a single long symbol
+;;;
+;;; Note that with
+;;; https://rchain.atlassian.net/browse/ROS-340 this function will be removed anyways.
+(define concat-separator "--")
+(defOprn concat-symbol-list)
+(defPure Tuple (concat-symbol-list)
+  (->symbol
+    (fold (self)
+          (proc [e acc k]
+            (if (= acc "")
+                (k (->string e))
+                (k (string-concat acc concat-separator (->string e)))))
+          "")))
+
+;;; Equivalent to a depth of one "flatten"
+(defOprn append-tuples)
+(defPure Nil (append-tuples) [])
+(defPure Tuple (append-tuples) (concat & (self)))
+
+;;; TODO: Eliminate with implementation of https://rchain.atlassian.net/browse/ROS-340
+;;;
+;;; Appends [value] to the current tuple referenced by key, treating absent/null as [],
+;;; unless [value] is already in the tuple.
+(defOprn tbl-unique-append)
+(defPure RblTable (tbl-unique-append key value)
+  (let [[current-value (tbl-get (self) key)]]
+    (if (or (absent? current-value) (null? current-value))
+        (tbl-add (self) key [value])
+        (if (type? current-value Tuple)
+            (tbl-add (self) key (remove-duplicates (concat [value] current-value)))
+            (RuntimeError (self) "Value " current-value " at key " key " not a Tuple")))))
+
+;;; See namespace.rbl for a description of the structure of the channel-subspace-table
+(defOprn tuplespace-tbl-get-or-create)
+(defPure RblTable (tuplespace-tbl-get-or-create channel)
+  (let [[subspace (tbl-get (self) channel)]]
+    (if (absent? subspace)
+      (seq
+        (tbl-add (self) channel [[] []])
+        (tbl-get (self) channel))
+      subspace)))
+
+;;; Predicate to test whether a pattern matches with a product.
+;;; By default we just try a strict equality test between the pattern and the product.
+;;; For patterns that are type symbol, they are treated as wildcard patterns.
+;;; For tuples, the pattern and product must match element-wise.
+(defOprn match-pattern)
+(defOprn match-tuple-pattern)
+(defProc (match-pattern ptrn product)
+  (cond ((type? ptrn Symbol) #t)
+        ((type? ptrn Tuple) (match-tuple-pattern ptrn product))
+        (else (= ptrn product))))
+
+(defPure Tuple (match-tuple-pattern other)
+  (if (or (type? other Tuple) (null? other))
+      (if (or (null? (self)) (null? other))
+          (same? (self) other)
+          (let  [[[i & r1] (self)]
+                 [[j & r2] other]]
+            (if (match-pattern i j)
+                (match-tuple-pattern r1 r2)
+                #f)))
+      #f))
+
+;;; Equivalent to (head (drop-while list niv?)) - see Haskell dropWhile
+(defProc (non-niv-head list)
+  (fold list (proc [item acc k] (if (niv? item) (k acc) item)) []))
+
+(defProc (any-null? list) (any list null?))
+
+;;; For debugging purposes only.
+(defProc (clean-fresh fresh)
+  (let [[[rholang name & r] (string-split (->string fresh) "-")]]
+    name))
+
+;;; TODO: Refactor as methods in namespace.rbl so channel-subspace-table doesn't have to be passed
+;;; in.
+(defProc (append-product-at-channel channel-subspace-table channel product)
+  (let [[subspace (tbl-get channel-subspace-table channel)]]
+    (if (absent? subspace)
+        (tbl-add channel-subspace-table channel [[product] []])
+        (let [[[data-list continuation-struct-list] subspace]]
+          (tbl-add channel-subspace-table channel [(append data-list product)
+                                                   continuation-struct-list])))))
+
+(defProc (append-continuation-at-channel channel-subspace-table channel continuation-struct)
+  (let [[subspace (tbl-get channel-subspace-table channel)]]
+    (if (absent? subspace)
+        (let [[new-subspace [[] [continuation-struct]]]]
+          (tbl-add channel-subspace-table channel new-subspace))
+        (let* [[[data-list continuation-struct-list] subspace]
+               [updated-subspace [data-list (append continuation-struct-list continuation-struct)]]]
+          (tbl-add channel-subspace-table channel updated-subspace)))))

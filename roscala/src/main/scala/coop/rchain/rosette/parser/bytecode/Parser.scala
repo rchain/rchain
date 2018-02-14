@@ -34,7 +34,7 @@ object Parser {
               Right(OpExtend(seq(1)))
 
             case byte if byte.matches("000010pp") =>
-              val pHighTwo = byte.slice(0, 2)
+              val pHighTwo  = byte.slice(0, 2)
               val pLowEight = seq(1)
 
               val p = pHighTwo.concat(pLowEight)
@@ -177,7 +177,7 @@ object Parser {
               Right(OpUpcallResume())
 
             case byte if byte.matches("011000nn") =>
-              val nHighTwo = byte.slice(0, 2)
+              val nHighTwo  = byte.slice(0, 2)
               val nLowEight = seq(1)
 
               val n = nHighTwo.concat(nLowEight)
@@ -185,7 +185,7 @@ object Parser {
               Right(OpJmp(n))
 
             case byte if byte.matches("011001nn") =>
-              val nHighTwo = byte.slice(0, 2)
+              val nHighTwo  = byte.slice(0, 2)
               val nLowEight = seq(1)
 
               val n = nHighTwo.concat(nLowEight)
@@ -193,7 +193,7 @@ object Parser {
               Right(OpJmpFalse(n))
 
             case byte if byte.matches("011010nn") =>
-              val nHighTwo = byte.slice(0, 2)
+              val nHighTwo  = byte.slice(0, 2)
               val nLowEight = seq(1)
 
               val n = nHighTwo.concat(nLowEight)
