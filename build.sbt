@@ -34,6 +34,14 @@ def commonSettings: Seq[Setting[_]] =
 
   ).flatMap(_.settings)
 
+lazy val crypto = project
+  .settings(
+    name := "Crypto",
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      scrypto,
+      kalium)
+  )
+
 lazy val comm = project
   .settings(
     commonSettings,
@@ -139,6 +147,7 @@ lazy val roscala_macros = (project in file("roscala/macros"))
 lazy val roscala = project //  = (project in file("roscala"))
   .settings(
     name := "Rosette",
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
     // scalafmtOnCompile in Compile := true,

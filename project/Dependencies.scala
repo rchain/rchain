@@ -13,7 +13,9 @@ object Dependencies {
 
   val commonDependencies = loggingDependencies ++ testingDependencies
 
-  val crypto = "org.scorexfoundation" %% "scrypto" % "2.0.0"
+  val scrypto = "org.scorexfoundation" %% "scrypto" % "2.0.0"
+
+  val kalium = "org.abstractj.kalium" % "kalium" % "0.7.0"
 
   val argParsing = "org.rogach" %% "scallop" % "3.0.3"
 
@@ -33,7 +35,7 @@ object Dependencies {
   // possible. Downgrading all projects for now so they agree.
   //
   // val cats = "org.typelevel" %% "cats-core" % "1.0.1"
-  val cats = "org.typelevel" %% "cats-core" % "0.9.0"
+  val cats = "org.typelevel" %% "cats-core" % "1.0.1"
 
   val lmdb = "org.lmdbjava" % "lmdbjava" % "0.6.0"
 
