@@ -59,10 +59,10 @@ object VirtualMachine {
     State { state =>
       optPrim match {
         case Some(prim) =>
-          if (unwind) {
-            val (res, st) = unwindAndApplyPrim(prim, state)
-            (st, res)
-          } else (state, prim.dispatchHelper(state.ctxt))
+          if (unwind)
+            unwindAndApplyPrim(prim, state).swap
+          else
+            (state, prim.dispatchHelper(state.ctxt))
 
         case None =>
           (state, Left(PrimNotFound))
@@ -854,10 +854,7 @@ object VirtualMachine {
   def execute(op: OpUnknown, state: VMState): VMState =
     state.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(1)
 
-  def inspect[A](f: VMState => A): State[VMState, A] =
-    State.inspect[VMState, A](f)
+  def inspect[A] = State.inspect[VMState, A] _
 
-  def modify(f: VMState => VMState): State[VMState, Unit] =
-    State.modify[VMState](f)
-
+  val modify = State.modify[VMState] _
 }
