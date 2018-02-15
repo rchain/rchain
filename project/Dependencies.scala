@@ -23,6 +23,7 @@ object Dependencies {
   val shapeless            = "com.chuusai"            %% "shapeless"       % "2.3.2"
   val monix                = "io.monix"               %% "monix"           % "3.0.0-M3"
   val guava                = "com.google.guava"       % "guava"            % "24.0-jre"
+  val hasher               = "com.roundeights"        %% "hasher"          % "1.2.0"
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
