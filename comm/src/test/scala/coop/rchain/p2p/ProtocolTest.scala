@@ -23,7 +23,7 @@ class ProtocolTest extends FlatSpec with Matchers {
     val hs =
       EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, keys),
                                  System.currentTimeMillis)
-    val result = hs.response(src)
+    val result = hs.response(src, keys)
 
     val upstream = result match {
       case Right(message: ProtocolMessage) =>

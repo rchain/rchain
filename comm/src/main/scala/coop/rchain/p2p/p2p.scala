@@ -96,7 +96,7 @@ final case class Network(
 
   private def handleEncryptionHandshake(sender: PeerNode,
                                         handshake: EncryptionHandshakeMessage): Unit =
-    handshake.response(net.local).map { resp =>
+    handshake.response(net.local, keys).map { resp =>
       net.comm.send(resp.toByteSeq, sender) match {
         case Right(_) =>
           logger.info(s"Responded to encryption handshake request from $sender.")
