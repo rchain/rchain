@@ -6,11 +6,11 @@ package coop.rchain.storage.regex
 private[regex] object Multiplier {
   val Inf: Option[Int] = None
 
-  val presetZero: Multiplier = Multiplier(Some(0), Some(0))
+  val presetZero: Multiplier     = Multiplier(Some(0), Some(0))
   val presetQuestion: Multiplier = Multiplier(Some(0), Some(1))
-  val presetOne: Multiplier = Multiplier(Some(1), Some(1))
-  val presetStar: Multiplier = Multiplier(Some(0), Inf)
-  val presetPlus: Multiplier = Multiplier(Some(1), Inf)
+  val presetOne: Multiplier      = Multiplier(Some(1), Some(1))
+  val presetStar: Multiplier     = Multiplier(Some(0), Inf)
+  val presetPlus: Multiplier     = Multiplier(Some(1), Inf)
 
   def apply(min: Int, max: Int): Multiplier = new Multiplier(Some(min), Some(max))
 
@@ -106,7 +106,7 @@ final case class Multiplier(min: Option[Int], max: Option[Int]) {
     */
   def common(that: Multiplier): Multiplier = {
     val newMandatory = minVal(mandatory, that.mandatory)
-    val newOptional = minVal(optional, that.optional)
+    val newOptional  = minVal(optional, that.optional)
     Multiplier(newMandatory, newMandatory + newOptional)
   }
 
@@ -165,7 +165,7 @@ final case class Multiplier(min: Option[Int], max: Option[Int]) {
     if (first >= second) first else second
 
   def mandatory: Option[Int] = min
-  def optional: Option[Int] = max - min
+  def optional: Option[Int]  = max - min
 
   override def toString: String = (min, max) match {
     case (Some(x), Some(0))           => s"{$x,0}"
@@ -215,7 +215,7 @@ final case class Multiplier(min: Option[Int], max: Option[Int]) {
     */
   def -(that: Multiplier): Multiplier = {
     val diffMandatory = mandatory - that.mandatory
-    val diffOptional = optional - that.optional
+    val diffOptional  = optional - that.optional
     Multiplier(diffMandatory, diffMandatory + diffOptional)
   }
 

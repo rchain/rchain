@@ -79,8 +79,7 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       CharClassPattern.parse("[^\\t\\[]").contains(CharClassPattern("\t[", negateCharSet = true)))
 
     assert(CharClassPattern.parse("a").contains(CharClassPattern("a")))
-    assert(
-      CharClassPattern.parse("\\s").contains(CharClassPattern(CharClassPattern.spacesCharSet)))
+    assert(CharClassPattern.parse("\\s").contains(CharClassPattern(CharClassPattern.spacesCharSet)))
     assert(
       CharClassPattern
         .parse("\\S")
@@ -103,14 +102,12 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
                            negateCharSet = true)))
     assert(CharClassPattern.parse(".").contains(~CharClassPattern("")))
     assert(CharClassPattern.parse("[abc]").contains(CharClassPattern("abc")))
-    assert(
-      CharClassPattern.parse("[^abc]").contains(CharClassPattern("abc", negateCharSet = true)))
+    assert(CharClassPattern.parse("[^abc]").contains(CharClassPattern("abc", negateCharSet = true)))
 
     assert(CharClassPattern.parse("[\\x41]").contains(CharClassPattern("A")))
     assert(CharClassPattern.parse("[\\x41-\\x44]").contains(CharClassPattern("ABCD")))
 
-    assert(
-      CharClassPattern.parse("[^\\x41]").contains(CharClassPattern("A", negateCharSet = true)))
+    assert(CharClassPattern.parse("[^\\x41]").contains(CharClassPattern("A", negateCharSet = true)))
     assert(
       CharClassPattern
         .parse("[^\\x41-\\x44]")
@@ -180,8 +177,8 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
       MultPattern(CharClassPattern("a"), Multiplier(Some(2), Some(2))) == a.multiply(
         Multiplier(Some(2), Some(2))))
     assert(
-      MultPattern(CharClassPattern("a"), Multiplier.presetPlus).multiply(
-        Multiplier(Some(3), Some(4))) == a.multiply(Multiplier(Some(3), Multiplier.Inf)))
+      MultPattern(CharClassPattern("a"), Multiplier.presetPlus)
+        .multiply(Multiplier(Some(3), Some(4))) == a.multiply(Multiplier(Some(3), Multiplier.Inf)))
   }
 
   "RegexPattern parse" should "parse groups" in {
@@ -322,7 +319,7 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
   }
 
   "MultPattern" should "produce good Fsm" in {
-    val a = CharClassPattern("a")
+    val a  = CharClassPattern("a")
     val a1 = a * 1
     assert(a1.accepts("a"))
     assert(!a1.accepts("b"))
@@ -494,8 +491,7 @@ class RegexPatternUnitTests extends FlatSpec with Matchers {
     assert(CharClassPattern.parse("[^\\dABCD]").get.toString == "[^0-9A-D]")
     //char codes
     assert(CharClassPattern.parse("[\\uFFF1-\\uFFF80-9]").get.toString == "[0-9\\uFFF1-\\uFFF8]")
-    assert(
-      CharClassPattern.parse("[^\\uFFF1-\\uFFF80-9]").get.toString == "[^0-9\\uFFF1-\\uFFF8]")
+    assert(CharClassPattern.parse("[^\\uFFF1-\\uFFF80-9]").get.toString == "[^0-9\\uFFF1-\\uFFF8]")
     //empty and anythingElse sets
     assert(CharClassPattern.parse(".").get.toString == ".")
     assert(CharClassPattern.parse(".").get.negated.toString == "")

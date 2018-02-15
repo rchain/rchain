@@ -68,8 +68,7 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
     val remote = new ProtocolNode(peer, this.net)
     net.roundTrip(ehs, remote) match {
       case Right(resp) => {
-        logger.debug(
-          s"connect(): Received encryption handshake response from ${resp.sender.get}.")
+        logger.debug(s"connect(): Received encryption handshake response from ${resp.sender.get}.")
         val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
                                            System.currentTimeMillis)
         net.roundTrip(phs, remote) match {
@@ -104,8 +103,7 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
       }
     }
 
-  private def handleProtocolHandshake(sender: PeerNode,
-                                      handshake: ProtocolHandshakeMessage): Unit =
+  private def handleProtocolHandshake(sender: PeerNode, handshake: ProtocolHandshakeMessage): Unit =
     for {
       resp <- handshake.response(net.local)
     } {

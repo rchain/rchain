@@ -182,6 +182,53 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be (inputs.knownFree)
   }
 
+  "PSend" should "handle a basic send" in {
+    val sentData = new ListProc()
+    sentData.add(new PGround(new GroundInt(7)))
+    sentData.add(new PGround(new GroundInt(8)))
+    val pSend = new PSend(new NameQuote(new PNil()), new SendSingle(), sentData)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pSend, inputs)
+    result.par should be (
+        inputs.par.copy(
+            sends = List(Send(
+                Quote(Par()),
+                List(Par().copy(exprs = List(GInt(7))),
+                     Par().copy(exprs = List(GInt(8)))),
+                false))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PSend" should "handle a name var" in {
+    val sentData = new ListProc()
+    sentData.add(new PGround(new GroundInt(7)))
+    sentData.add(new PGround(new GroundInt(8)))
+    val pSend = new PSend(new NameVar("x"), new SendSingle(), sentData)
+    val boundInputs = inputs.copy(env =
+      inputs.env.newBindings(List((Some("x"), NameSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pSend, boundInputs)
+    result.par should be (
+        inputs.par.copy(
+            sends = List(Send(
+                ChanVar(BoundVar(0)),
+                List(Par().copy(exprs = List(GInt(7))),
+                     Par().copy(exprs = List(GInt(8)))),
+                false))))
+    result.knownFree should be (inputs.knownFree)
+  }
+
+  "PSend" should "propagate knownFree" in {
+    val sentData = new ListProc()
+    sentData.add(new PGround(new GroundInt(7)))
+    sentData.add(new PVar("x"))
+    val pSend = new PSend(new NameQuote(new PVar("x")), new SendSingle(), sentData)
+
+    an [Error] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch(pSend, inputs)
+    }
+  }
+
   "PPar" should "Compile both branches into a par object" in {
     val parGround = new PPar(
         new PGround(
