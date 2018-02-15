@@ -222,11 +222,10 @@ Each scoped build is as similar to the original, per-project build process as po
 [info] Loading settings from plugins.sbt ...
 [... compiling, testing, jarring ...]
 [info] Packaging /home/kirkwood/src/rchain/rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar ...
-<computer:~/src/rchain (dev)> java -jar rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar rholang/examples/hello_world_again.rho 
+<computer:~/src/rchain (dev)> rholang/rho2rbl rholang/examples/hello_world_again.rho 
 compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_again.rbl
 <computer:~/src/rchain (dev)> cat rholang/examples/hello_world_again.rbl; echo
 (let [[helloworld (generateFresh "helloworld")]] (block ( (proc [] (run (compile (let [[[[Rholanga4716fe347be]] (consume t [helloworld] [['world]] #t)]] ( (proc [[world]] (let [[[Rholang5401f0efc120] (consume t [world] ['msg] #f)]] ( (proc [[[msg]]] ( display msg "
 ")) [Rholang5401f0efc120]))) [Rholanga4716fe347be])))))) (let [[world (generateFresh "world")] [world2 (generateFresh "world2")]] (block (block (block (produce t helloworld world) (produce t world "Hello World")) (produce t helloworld world2)) (produce t world2 "Hello World again")))))
 <computer:~/src/rchain (dev)> 
 ```
-
