@@ -8,3 +8,6 @@ final case class DatagramException(ex: Exception)    extends CommError
 final case class ProtocolException(ex: Exception)    extends CommError
 final case class UnknownProtocolError(msg: String)   extends CommError
 final case object KeysNotAvailable                   extends CommError
+final case class ParseError(msg: String)             extends CommError
+
+// TODO add Show instance

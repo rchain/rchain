@@ -6,7 +6,9 @@ import java.net.{InetAddress, NetworkInterface}
 import scala.collection.JavaConverters._
 import coop.rchain.p2p
 import coop.rchain.comm._
+import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
+import cats._, cats.data._, cats.implicits._
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("RChain Communications Library version 0.1")
@@ -65,7 +67,21 @@ object Main {
     }
   }
 
+  /** Those instances have no sens whatsoever however we keep them for now
+    * to adjust to imperative side of the code base in main. Once p2p.Network
+    * gets a monadic API we will remove this and main will run on a single
+    * type that binds all possbile efffects
+    */
+  object TempInstances {
+    implicit val eitherCapture: Capture[Either[CommError, ?]] =
+      new Capture[Either[CommError, ?]] {
+        def capture[A](a: => A): Either[CommError, A] = Right(a)
+      }
+  }
+
   def main(args: Array[String]): Unit = {
+
+    import encryption._
 
     val conf = Conf(args)
 
@@ -79,43 +95,62 @@ object Main {
       case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
     }
 
-    val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
-      case Right(node)               => node
-      case Left(p2p.ParseError(msg)) => throw new Exception(msg)
+    /** TODO This is using Either for the effect which obviously is a temp solution. Will use
+      * proper type once p2p.Network gets a monadic API
+      */
+    import TempInstances._
+
+    /** This is essentially a final effect that will accumulate all effects from the system */
+    type Effect[A] = Either[CommError, A]
+
+    val calculateKeys: Effect[PublicPrivateKeys] = for {
+      inDb <- keysAvailable[Effect]
+      ks   <- if (inDb) fetchKeys[Effect] else generate.pure[Effect]
+    } yield ks
+
+    val recipe: Effect[Unit] = for {
+      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}")
+      keys <- calculateKeys
+    } yield {
+      val net = p2p.Network(addy, keys)
+      logger.info(s"Listening for traffic on $net.")
+
+      if (!conf.standalone()) {
+        conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
+          address =>
+            logger.info(s"Bootstrapping from $address.")
+            net.connect(address)
+        }
+      } else {
+        logger.info(s"Starting stand-alone node.")
+      }
+
+      sys.addShutdownHook {
+        net.disconnect
+        logger.info("Goodbye.")
+      }
+
+      val pauseTime = 5000L
+      var lastCount = 0
+      while (true) {
+        Thread.sleep(pauseTime)
+        for (peer <- net.net.findMorePeers(10)) {
+          logger.info(s"Possibly new peer: $peer.")
+          net.connect(peer)
+        }
+        val thisCount = net.net.table.peers.size
+        if (thisCount != lastCount) {
+          lastCount = thisCount
+          logger.info(s"Peers: $thisCount.")
+        }
+      }
     }
 
-    // TODO consider closing this over IO
-    val net = p2p.Network(addy)
-    logger.info(s"Listening for traffic on $net.")
-
-    if (!conf.standalone()) {
-      conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
-        address =>
-          logger.info(s"Bootstrapping from $address.")
-          net.connect(address)
-      }
-    } else {
-      logger.info(s"Starting stand-alone node.")
-    }
-
-    sys.addShutdownHook {
-      net.disconnect
-      logger.info("Goodbye.")
-    }
-
-    val pauseTime = 5000L
-    var lastCount = 0
-    while (true) {
-      Thread.sleep(pauseTime)
-      for (peer <- net.net.findMorePeers(10)) {
-        logger.info(s"Possibly new peer: $peer.")
-        net.connect(peer)
-      }
-      val thisCount = net.net.table.peers.size
-      if (thisCount != lastCount) {
-        lastCount = thisCount
-        logger.info(s"Peers: $thisCount.")
-      }
+    // TODO this will eventually disappear
+    recipe match {
+      case Right(node) => node
+      case Left(commError) =>
+        throw new Exception(commError.toString) // TODO use Show instance instead
     }
   }
 }
