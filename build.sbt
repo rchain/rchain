@@ -39,7 +39,8 @@ lazy val crypto = project
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       scrypto,
-      kalium)
+      kalium),
+    doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
 lazy val comm = project
