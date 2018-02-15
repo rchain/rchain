@@ -441,7 +441,7 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.ctxt.rslt shouldBe Fixnum(5)
   }
 
-  """Executing bytecode from expression (let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) x)))""" should "result in RBLFALSE" in {
+  """Executing bytecode from expression "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) x)))"""" should "result in RBLFALSE" in {
 
     /**
       * litvec:
@@ -494,6 +494,40 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Ob.RBLFALSE
+  }
+
+  """Executing bytecode from expression (fx+ 1 (fx+ 2 3))""" should "result in Fixnum(6)" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      * codevec:
+      *   0:   alloc 2
+      *   1:   lit 2,arg[0]
+      *   2:   lit 3,arg[1]
+      *   3:   fx+ 2,arg[1]
+      *   5:   lit 1,arg[0]
+      *   6:   fx+ 2,rslt
+      *   8:   rtn/nxt
+      */
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'ctxt >> 'argvec)(Tuple(Seq(Ob.NIV, Ob.NIV, Ob.NIV)))
+        .set(_ >> 'code >> 'litvec)(Tuple(RequestExpr))
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpImmediateLitToArg(value = 2, arg = 0),
+      OpImmediateLitToArg(value = 3, arg = 1),
+      OpApplyPrimArg(unwind = false, next = false, nargs = 2, primNum = 226, arg = 1), // fx+
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpApplyPrimReg(unwind = false, next = false, nargs = 2, primNum = 226, reg = 0), // fx+
+      OpRtn(next = true)
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.rslt shouldBe Fixnum(6)
   }
 
   "OpRtnReg" should "copy ctxt.rslt to given register" in {

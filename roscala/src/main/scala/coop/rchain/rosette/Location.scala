@@ -3,6 +3,7 @@ package coop.rchain.rosette
 import cats.data.State
 import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
+import coop.rchain.rosette.Ctxt.setReg
 
 sealed trait Location                                               extends Ob
 case class ArgRegister(argReg: Int)                                 extends Location
@@ -55,18 +56,7 @@ object Location {
     val pure = State.pure[Ctxt, StoreResult] _
 
     loc match {
-      case CtxtRegister(reg) =>
-        for {
-          ctxt <- State.get[Ctxt]
-          optCtxt = ctxt.setReg(reg, value)
-          storeRes <- optCtxt match {
-            case Some(newCtxt) =>
-              for {
-                _ <- State.set[Ctxt](newCtxt)
-              } yield Success
-            case None => pure(Failure)
-          }
-        } yield storeRes
+      case CtxtRegister(reg) => setReg(reg, value)
 
       case ArgRegister(argReg) =>
         State { ctxt: Ctxt =>

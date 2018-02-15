@@ -25,11 +25,10 @@ abstract class Prim extends Ob {
   def dispatchHelper(ctxt: Ctxt): Result = {
     val n = ctxt.nargs
 
-    if (minArgs <= n && n <= maxArgs) {
+    if (minArgs <= n && n <= maxArgs)
       fn(ctxt).left.map(PrimErrorWrapper)
-    } else {
+    else
       Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
-    }
   }
 
   override def dispatch(state: VMState): (Result, VMState) = {
