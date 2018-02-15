@@ -1,0 +1,5 @@
+//this is a test for the circular imports/exports present
+//in packages X and Y
+import X in {
+  X(0, 10)
+}

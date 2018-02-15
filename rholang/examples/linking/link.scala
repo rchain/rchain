@@ -14,8 +14,7 @@ import scala.util.Try
  * be INVALID). Also note that `export` and `import` declarations can only
  * appear at the "top level" of a file -- i.e. NOT inside `contract` definitions,
  * bodies of `for` statements or `match` cases, etc. `export`s can 
- * use `import`s from other packages so long as there is not a loop of `import`s
- * (e.g. if Y imports X then X cannot import Y or anything that depends on Y).
+ * use `import`s from other packages.
  *
  * When this linker is used on a Rholang source containing the
  * `import` keyword, the import is mapped into a standard `new` statement, but with
@@ -147,7 +146,7 @@ object RholangLinker {
     }
   }
   
-  def readPackages(dir: String): Vector[NamedBlock] = {
+  def readPackages(dir: String): (Vector[NamedBlock], Map[String, Vector[String]]) = {
     val d = new File(dir)
     
     val rhoFiles = if(d.exists && d.isDirectory) {
@@ -156,7 +155,7 @@ object RholangLinker {
       throw new Exception(s"$dir is not a directory!")
     }
     
-    resolvePackageImports(
+    processPackageDependencies(
       rhoFiles.flatMap(f => {
         val code = parseRholang(readRhoFile(f))
         findPackages(code)
@@ -164,47 +163,70 @@ object RholangLinker {
     )
   }
   
-  def mapImports(code: Code, packages: Vector[NamedBlock]): Code = {
-    def f(c: Code): Code = {
-      c match {
-        case im: NamedBlock if im.typ == "import" =>
-          val names = im.name.split(",").map(_.trim).toVector
-          val packageCode = names.flatMap(n => packages.find(_.name == n).map(_.code))
-          if (packageCode.length != names.length) {
-            println("Warning! The following packages were not found in lib. directory:")
-            println(names.filter(n => packages.find(_.name == n).isEmpty).mkString(", "))
-          }
-          val inBlockCode = f(im.code)
-          val fullCode = Par(packageCode ++ Vector(inBlockCode))
-          NamedBlock("new", im.name, fullCode)
-        
-        case im: NamedBlock => NamedBlock(im.typ, im.name, f(im.code))
-        
-        case par: Par => Par(par.processes.map(f))
-        
-        case b: Base => b
+  def mapImports(
+    code: Code, 
+    packages: Vector[NamedBlock],
+    dependencies: Map[String, Vector[String]]
+  ): Code = {
+    @tailrec
+    def minimalDep(resolving: Iterator[String], dep: Set[String]): Set[String] = {
+      val newDeps = resolving
+        .filter(n => !dep.contains(n))
+        .flatMap(n => n +: dependencies(n))
+        .toSet
+      
+      if(newDeps.nonEmpty) {
+        minimalDep(newDeps.iterator, dep ++ newDeps)
+      } else {
+        dep
       }
     }
+    val (unpackedCode, deps) = unpackImports(code)
+    val minDep = minimalDep(deps.iterator, Set.empty[String]).toVector
+    val packageCode = minDep.flatMap(n => packages.find(_.name == n).map(_.code))
     
-    f(code)
+    if (packageCode.length != minDep.length) {
+      println("Warning! The following packages were not found in lib. directory:")
+      println(minDep.filter(n => packages.find(_.name == n).isEmpty).mkString(", "))
+    }
+    
+    NamedBlock("new", minDep.mkString(", "), Par(packageCode :+ unpackedCode))
   }
   
-  @tailrec
-  def resolvePackageImports(packages: Vector[NamedBlock], count: Int = 0): Vector[NamedBlock] = {
-    val (basePackages, packagesWithImports) = packages.partition(_.numImports == 0)
-    
-    if(packagesWithImports.isEmpty) {
-      basePackages
-    } else if (basePackages.isEmpty || count > 10) {
-      throw new Exception(
-        "Could not resolve dependencies within exports. Likely cause: exports which mutually import each other."
-      )
-    } else {
-      resolvePackageImports(
-        basePackages ++ packagesWithImports.map(p => mapImports(p, basePackages).asInstanceOf[NamedBlock]), 
-        count + 1
-      )
+  //Get at the core code -- leaving the imports as unbound names,
+  //rather than bound by the import. Return the new code as
+  //well as the names which are now unbound.
+  def unpackImports(code:Code, unboundNames: Vector[String] = Vector.empty[String]): (Code, Vector[String]) = {
+    code match {
+      case im: NamedBlock if im.typ == "import" =>
+        val names = im.name.split(",").map(_.trim).toVector
+        unpackImports(im.code, unboundNames ++ names)
+        
+      case im: NamedBlock => 
+        val (unpackedCode, names) = unpackImports(im.code)
+        (NamedBlock(im.typ, im.name, unpackedCode), unboundNames ++ names)
+      
+      case par: Par => 
+        val mappedParts = par.processes.map(p => unpackImports(p))
+        val totalNames = mappedParts.iterator.map(_._2).reduce(_ ++ _)
+        val newCode = Par(mappedParts.map(_._1))
+        (newCode, unboundNames ++ totalNames)
+        
+      case b: Base => (b, unboundNames)
     }
+  }
+  
+  def processPackageDependencies(packages: Vector[NamedBlock]): (Vector[NamedBlock], Map[String, Vector[String]]) = {
+    val pkgAndDep = packages.map(p => {
+      val (code, dependencies) = unpackImports(p)
+      (code.asInstanceOf[NamedBlock], dependencies)
+    })
+    val pkgs = pkgAndDep.map(_._1)
+    val dependencyMap = pkgAndDep.iterator.map{
+      case (code, dependencies) => (code.name, dependencies)
+    }.toMap
+    
+    (pkgs, dependencyMap)
   }
  
   def printUsage(): Unit = {
@@ -217,14 +239,14 @@ object RholangLinker {
       printUsage()
     } else {
       val Array(filename, libDir) = args
-      val packages = readPackages(libDir)
+      val (packages, dependencies) = readPackages(libDir)
       
-      if (packages.iterator.map(_.name).toSet.size != packages.length) {
+      if (dependencies.size != packages.length) {
         throw new Exception("Error! Cannot have duplicate exports!")
       }
       
       val parsedInput = parseRholang(readRhoFile(new File(filename)))
-      val subedCode = mapImports(parsedInput, packages)
+      val subedCode = mapImports(parsedInput, packages, dependencies)
  
       val outFilename = filename + ".linked"
       val output = new PrintWriter(outFilename)
