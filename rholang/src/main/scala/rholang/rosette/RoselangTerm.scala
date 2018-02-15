@@ -1,21 +1,19 @@
 /**
   * Term classes specifically used in Rholang to Rosette Base Language source to source compiler. *
   */
-
 package coop.rchain.rho2rose
 
 import coop.rchain.lib.term._
 
 trait RosetteSerialization[Namespace, VarType, TagType] {
-  def rosetteSerializeOperation: String = {
+  def rosetteSerializeOperation: String =
     this match {
-      case leaf: StrTermPtdCtxtLf => ""
+      case leaf: StrTermPtdCtxtLf   => ""
       case branch: StrTermPtdCtxtBr => branch.rosetteSerializeOperation
-      case _ => throw new Exception("unexpected CCL type")
+      case _                        => throw new Exception("unexpected CCL type")
     }
-  }
 
-  def rosetteSerialize: String = {
+  def rosetteSerialize: String =
     this match {
       case leaf: StrTermPtdCtxtLf =>
         leaf.rosetteSerialize
@@ -23,22 +21,24 @@ trait RosetteSerialization[Namespace, VarType, TagType] {
         branch.rosetteSerialize
       case _ => throw new Exception("unexpected CCL type")
     }
-  }
 }
 
 case class StrTermPtdCtxtLf(override val tag: TagOrVar[String, String])
-  extends TermCtxtLeaf[String, String, String](tag) with RosetteSerialization[String, String, String] {
-  override def rosetteSerialize: String = {
+    extends TermCtxtLeaf[String, String, String](tag)
+    with RosetteSerialization[String, String, String] {
+  override def rosetteSerialize: String =
     tag match {
       case Tag(t) => "" + t
       case Var(v) => "" + v
     }
-  }
 }
 
-case class StrTermPtdCtxtBr(override val nameSpace: String,
-                            override val labels: List[TermCtxt[String, String, String] with RosetteSerialization[String, String, String]]
-                           ) extends TermCtxtBranch[String, String, String](nameSpace, labels) with RosetteSerialization[String, String, String] {
+case class StrTermPtdCtxtBr(
+    override val nameSpace: String,
+    override val labels: List[
+      TermCtxt[String, String, String] with RosetteSerialization[String, String, String]])
+    extends TermCtxtBranch[String, String, String](nameSpace, labels)
+    with RosetteSerialization[String, String, String] {
   override def rosetteSerializeOperation: String = {
     val result = labels match {
       case (albl: StrTermPtdCtxtBr) :: rlbls => {
@@ -48,18 +48,18 @@ case class StrTermPtdCtxtBr(override val nameSpace: String,
         } else {
           ""
         }
-        (seed /: rlbls) (
-          {
-            (acc, lbl) => {
+        (seed /: rlbls)(
+          { (acc, lbl) =>
+            {
               acc + lbl.rosetteSerializeOperation
             }
           }
         )
       }
       case _ :: rlbls => {
-        ("" /: rlbls) (
-          {
-            (acc, lbl) => {
+        ("" /: rlbls)(
+          { (acc, lbl) =>
+            {
               acc + lbl.rosetteSerializeOperation
             }
           }
@@ -76,14 +76,15 @@ case class StrTermPtdCtxtBr(override val nameSpace: String,
         case _ :: _ => {
           var acc = ""
 
-
-          def serializeExpr(lbl: TermCtxt[String, String, String] with RosetteSerialization[String, String, String], i: Int) = {
+          def serializeExpr(lbl: TermCtxt[String, String, String] with RosetteSerialization[String,
+                                                                                            String,
+                                                                                            String],
+                            i: Int) =
             if (i == 0) {
               acc = lbl.rosetteSerialize
             } else {
               acc = acc + " " + lbl.rosetteSerialize
             }
-          }
 
           for ((lbl, i) <- labels.zipWithIndex) {
             serializeExpr(lbl, i)

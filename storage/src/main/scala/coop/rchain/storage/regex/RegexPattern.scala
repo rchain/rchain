@@ -195,7 +195,7 @@ private[regex] object RangeState extends Enumeration {
   * Companion object for the CharClassPattern, used only for easy testing
   */
 object CharClassPattern extends ParsedPattern {
-  def apply(charSet: String): CharClassPattern = new CharClassPattern(charSet.toSet)
+  def apply(charSet: String): CharClassPattern    = new CharClassPattern(charSet.toSet)
   def apply(charSet: Seq[Char]): CharClassPattern = new CharClassPattern(charSet.toSet)
   def apply(charSet: Set[Char]): CharClassPattern = new CharClassPattern(charSet)
   def apply(charSet: String, negateCharSet: Boolean): CharClassPattern =
@@ -472,15 +472,15 @@ final case class CharClassPattern(charSet: Set[Char], negateCharSet: Boolean = f
 
     def unknownSetToString: String = {
       def listToString(lst: List[Char]): String = lst.size match {
-        case 0 => ""
-        case 1 => singleCharToString(lst.head)
+        case 0     => ""
+        case 1     => singleCharToString(lst.head)
         case 2 | 3 =>
           //sequence like "abc", no sense to convert to "a-c"
           lst.map(singleCharToString).mkString
         case _ =>
           //sequence of 4 chars or more "abcd" -> "a-d"
           val startChar = singleCharToString(lst.last)
-          val endChar = singleCharToString(lst.head)
+          val endChar   = singleCharToString(lst.head)
           s"$startChar-$endChar"
       }
 
@@ -646,7 +646,7 @@ object ConcPattern extends ParsedPattern {
       MultPattern.tryParse(str.subSequence(startPosition, str.length)) match {
         case Some((mult, pos)) => {
           val nextMults = mult :: parsed
-          val nextPos = startPosition + pos
+          val nextPos   = startPosition + pos
           if (nextPos < str.length) {
             //we have one more alternation option
             parseRecursive(nextPos, nextMults)
@@ -738,7 +738,7 @@ final case class ConcPattern(mults: List[MultPattern]) extends RegexPattern {
 }
 
 object AltPattern extends ParsedPattern {
-  def apply(pattern: ConcPattern): AltPattern = new AltPattern(Set(pattern))
+  def apply(pattern: ConcPattern): AltPattern        = new AltPattern(Set(pattern))
   def apply(patterns: List[ConcPattern]): AltPattern = new AltPattern(patterns.toSet)
   def apply(patterns: CharClassPattern*): AltPattern =
     new AltPattern(patterns.map(cp => ConcPattern(cp)).toSet)
@@ -749,7 +749,7 @@ object AltPattern extends ParsedPattern {
       ConcPattern.tryParse(str.subSequence(startPosition, str.length)) match {
         case Some((conc, pos)) => {
           val nextConcs = conc :: parsed
-          val nextPos = startPosition + pos
+          val nextPos   = startPosition + pos
           if ((nextPos < str.length) && (str.charAt(nextPos) == '|')) {
             //we have one more alternation option
             parseRecursive(nextPos + 1, nextConcs)
