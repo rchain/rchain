@@ -85,7 +85,7 @@ lazy val node = project
     commonSettings,
 
     version := "0.1",
-
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
