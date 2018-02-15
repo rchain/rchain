@@ -30,7 +30,7 @@ object Dependencies {
     "org.http4s" %% "http4s-blaze-client" % http4sVersion,
     "org.http4s" %% "http4s-circe"        % http4sVersion)
 
-  val circeVersion = "0.8.0"
+  val circeVersion = "0.9.1"
   val circeDependencies = Seq(
     // Optional for auto-derivation of JSON codecs
     // "io.circe" %% "circe-core" % circeVersion,
@@ -39,7 +39,7 @@ object Dependencies {
     "io.circe" %% "circe-literal" % circeVersion,
   )
 
-  val apiServerDependencies = http4sDependencies // ++ circeDependencies
+  val apiServerDependencies = http4sDependencies ++ circeDependencies
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)

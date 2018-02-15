@@ -78,7 +78,7 @@ lazy val node = project
   .enablePlugins(DockerPlugin)
   .settings(
     commonSettings,
-
+    scalacOptions ++= Seq("-Ywarn-unused-import"),
     version := "0.1",
 
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
@@ -146,7 +146,6 @@ lazy val roscala = project //  = (project in file("roscala"))
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
-    // scalafmtOnCompile in Compile := true,
     inThisBuild(List(
       addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies ++ Seq(

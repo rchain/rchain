@@ -9,7 +9,7 @@ import coop.rchain.comm._
 import com.typesafe.scalalogging.Logger
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  version("RChain Communications Library version 0.1")
+  version("RChain Node version 0.1")
 
   val name =
     opt[String](default = None, short = 'n', descr = "Node name or key.")
@@ -53,10 +53,10 @@ object Main {
           Some(addresses(false).head)
         } else {
           val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-          if (addresses.contains(false)) {
-            Some(addresses(false).head)
-          } else if (addresses.contains(true)) {
-            Some(addresses(true).head)
+          if (locals.contains(false)) {
+            Some(locals(false).head)
+          } else if (locals.contains(true)) {
+            Some(locals(true).head)
           } else {
             None
           }
@@ -102,8 +102,8 @@ object Main {
     http.start
 
     sys.addShutdownHook {
-      http.stop
-      net.disconnect
+      http.stop()
+      net.disconnect()
       logger.info("Goodbye.")
     }
 
