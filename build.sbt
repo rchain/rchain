@@ -112,7 +112,7 @@ lazy val node = project
       }
     },
   )
-  .dependsOn(comm, storage, roscala, rholang) // Not really, but it will
+  .dependsOn(comm)
 
 lazy val rholang = project
   .settings(
