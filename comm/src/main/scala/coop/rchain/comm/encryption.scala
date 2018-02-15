@@ -23,6 +23,9 @@ object encryption {
     */
   def sign(priv: Array[Byte], hash: Array[Byte]): Array[Byte] = hash
 
+  /** FIX-ME  */
+  def verify(pub: Array[Byte], signature: Array[Byte], hash: Array[Byte]): Boolean = true
+
   val hashIt: String => Array[Byte] = (str: String) =>
     BaseEncoding.base16().lowerCase.decode(str.sha256.hex)
 
