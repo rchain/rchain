@@ -86,6 +86,7 @@ lazy val node = project
       argParsing,
       uriParsing
     ),
+    libraryDependencies ++= apiServerDependencies ++ Seq(cats),
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 

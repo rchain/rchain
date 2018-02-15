@@ -98,7 +98,11 @@ object Main {
       logger.info(s"Starting stand-alone node.")
     }
 
+    val http = HttpServer(8080)
+    http.start
+
     sys.addShutdownHook {
+      http.stop
       net.disconnect
       logger.info("Goodbye.")
     }
