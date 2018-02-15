@@ -65,9 +65,8 @@ final case class Network(
     */
   def connect(peer: PeerNode): Unit = {
     logger.debug(s"connect(): Connecting to $peer")
-    // EncryptionHandshakeMessage is redundant
     val ehs = EncryptionHandshakeMessage(
-      NetworkProtocol.encryptionHandshake(net.local, keys),
+      encryptionHandshake(net.local, keys),
       System.currentTimeMillis,
     )
     val remote = new ProtocolNode(peer, this.net)
