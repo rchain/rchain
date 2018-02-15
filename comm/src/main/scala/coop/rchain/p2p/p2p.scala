@@ -177,11 +177,10 @@ object NetworkProtocol {
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
   def response(src: ProtocolNode): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield
+    header.map { h =>
       EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h),
                                          System.currentTimeMillis)
+    }
 }
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
