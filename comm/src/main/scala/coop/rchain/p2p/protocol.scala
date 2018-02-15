@@ -6,6 +6,7 @@ import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib.instances._
 
 object NetworkProtocol {
 
@@ -31,11 +32,27 @@ object NetworkProtocol {
 
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
-    header.map { h =>
+
+  private def toEncryptionHandshake(
+      proto: routing.Protocol): Either[CommError, EncryptionHandshake] =
+    proto.message match {
+      case routing.Protocol.Message.Upstream(upstream) =>
+        Right(upstream.unpack(EncryptionHandshake))
+      case a => Left(UnknownProtocolError(s"Was expecting EncryptionHandshake, got $a"))
+    }
+
+  def response(src: ProtocolNode): Either[CommError, ProtocolMessage] =
+    for {
+      h         <- header.toRight(HeaderNotAvailable)
+      handshake <- toEncryptionHandshake(proto)
+      pub       = handshake.publicKey.toByteArray
+      signature = handshake.hello.toByteArray
+      hash      = encryption.hashIt(NetworkProtocol.ENCRYPTION_HELLO)
+      verified  = encryption.verify(pub, signature, hash)
+      _ <- verified.either(()).or(EncryptionHandshakeIncorrectlySigned)
+    } yield
       EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h),
                                          System.currentTimeMillis)
-    }
 }
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
