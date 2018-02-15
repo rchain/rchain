@@ -5,6 +5,9 @@ import coop.rchain.comm._
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
 
+/**
+  * TODO rethink how the protocol is being tested
+  */
 class ProtocolTest extends FlatSpec with Matchers {
   "An EncryptionHandshake message" should "be answered by an EncryptionHandshakeResponse message" in {
     val uri = "rnode://abcde@localhost:12345"
