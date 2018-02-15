@@ -1,4 +1,4 @@
-package coop.rchain.storage
+package coop.rchain.models
 
 /**
   * Type class for serializing/deserializing values

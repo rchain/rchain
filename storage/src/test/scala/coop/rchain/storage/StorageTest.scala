@@ -2,6 +2,7 @@ package coop.rchain.storage
 
 import java.security.MessageDigest
 
+import coop.rchain.models.NotFound
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
 
 //noinspection ScalaUnnecessaryParentheses

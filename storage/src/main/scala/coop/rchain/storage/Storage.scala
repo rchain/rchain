@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import cats.syntax.either._
+import coop.rchain.models.{Error, NotFound, Serialize, StorageError}
 import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Dbi, Env, Txn}

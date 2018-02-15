@@ -1,28 +1,28 @@
 syntax = "proto3";
 
-option java_package = "coop.rchain.storage.models";
+option java_package = "coop.rchain.models";
 
 message Par {
-    repeated Send sends = 10;
-    repeated Receive receives = 20;
-    repeated Eval evals = 30;
-    repeated New news = 40;
-    repeated Expr exprs = 50;
+    repeated Send sends = 1;
+    repeated Receive receives = 2;
+    repeated Eval evals = 3;
+    repeated New news = 4;
+    repeated Expr exprs = 5;
 }
 
 message Channel {
     oneof channel_instance {
-        Quote quote = 110;
-        ChanVar chanVar = 120;
+        Quote quote = 1;
+        ChanVar chanVar = 2;
     }
 }
 
 message Quote {
-    Par p = 210;
+    Par p = 1;
 }
 
 message ChanVar {
-    Var cvar = 310;
+    Var cvar = 2;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -31,13 +31,13 @@ message ChanVar {
 // These are DeBruijn levels
 message Var {
     oneof var_instance {
-        BoundVar bound_var = 410;
-        FreeVar free_var = 420;
+        BoundVar bound_var = 1;
+        FreeVar free_var = 2;
     }
 }
 
 message BoundVar {
-    sint32 level = 510;
+    sint32 level = 1;
 }
 
 // Wildcards are represented as bound variables. The initial normalization will
@@ -49,30 +49,30 @@ message BoundVar {
 
 // In the DeBruijn level paper, they use negatives, but this is more clear.
 message FreeVar {
-    sint32 level = 520;
+    sint32 level = 1;
 }
 
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
 message Send {
-    Channel chan = 610;
-    repeated Par data = 620;
+    Channel chan = 1;
+    repeated Par data = 2;
 }
 
 message ReceiveBind {
-    repeated Channel channels = 710;
-    Channel channel = 720;
+    repeated Channel channels = 1;
+    Channel channel = 2;
 }
 
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
 // Don't currently support conditional receive
 message Receive {
-    repeated ReceiveBind binds = 810;
+    repeated ReceiveBind binds = 1;
 }
 
 message Eval {
-    Channel channel = 820;
+    Channel channel = 1;
 }
 
 // Number of variables bound in the new statement.
@@ -80,60 +80,61 @@ message Eval {
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
 message New {
-    sint32 count = 910;
-    Par p = 920;
+    sint32 count = 1;
+    Par p = 2;
 }
 
 // Any process may be an operand to an expression.
 // Only processes equivalent to a ground process of compatible type will reduce.
 message Expr {
     oneof expr_instance {
-        EList e_list = 1010;
-        ETuple e_tuple = 1020;
-        ESet e_set = 1030;
-        EMap e_map = 1040;
-        EVar e_var = 1050;
-        ENot e_not = 1060;
-        ENeg e_neg = 1070;
-        EMult e_mult = 1080;
-        EDiv e_div = 1090;
-        EPlus e_plus = 1100;
-        EMinus e_minus = 1110;
-        ELt e_lt = 1120;
-        ELte e_lte = 1130;
-        EGt e_gt = 1140;
-        EGte e_gte = 1150;
-        EEq e_eq = 1160;
-        ENeq e_neq = 1170;
-        EAnd e_and = 1180;
-        EOr e_or = 1190;
-        GBool g_bool = 1200;
-        GInt g_int = 1210;
-        GString g_string = 1220;
-        GUri g_uri = 1230;
-        GPrivate g_private = 1240;
+        EList e_list = 1;
+        ETuple e_tuple = 2;
+        ESet e_set = 3;
+        EMap e_map = 4;
+        EVar e_var = 5;
+        ENot e_not = 6;
+        ENeg e_neg = 7;
+        EMult e_mult = 8;
+        EDiv e_div = 9;
+        EPlus e_plus = 10;
+        EMinus e_minus = 11;
+        ELt e_lt = 12;
+        ELte e_lte = 13;
+        EGt e_gt = 14;
+        EGte e_gte = 15;
+        EEq e_eq = 16;
+        ENeq e_neq = 17;
+        EAnd e_and = 18;
+        EOr e_or = 19;
+
+        GBool g_bool = 20;
+        GInt g_int = 21;
+        GString g_string = 22;
+        GUri g_uri = 23;
+        GPrivate g_private = 24;
     }
 }
 
 message EList {
-    repeated Par ps = 2010;
+    repeated Par ps = 1;
 }
 
 message ETuple {
-    repeated Par ps = 2020;
+    repeated Par ps = 1;
 }
 
 message ESet {
-    repeated Par ps = 2030;
+    repeated Par ps = 1;
 }
 
 message EMap {
-    repeated ParTuple kvs = 2040;
+    repeated ParTuple kvs = 1;
 }
 
 message ParTuple {
-    Par p1 = 3010;
-    Par p2 = 3020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 // A variable used as a var should be bound in a process context, not a name
@@ -141,95 +142,95 @@ message ParTuple {
 // for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
 // for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
 message EVar {
-    Var v = 4010;
+    Var v = 1;
 }
 
 message ENot {
-    Par p = 4020;
+    Par p = 1;
 }
 
 message ENeg {
-    Par p = 4030;
+    Par p = 1;
 }
 
 message EMult {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EDiv {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EPlus {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EMinus {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message ELt {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message ELte {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EGt {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EGte {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EEq {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message ENeq {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EAnd {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message EOr {
-    Par p1 = 5010;
-    Par p2 = 5020;
+    Par p1 = 1;
+    Par p2 = 2;
 }
 
 message GBool {
-    bool b = 6010;
+    bool b = 1;
 }
 
 message GInt {
-    sint32 i = 6020;
+    sint32 i = 1;
 }
 
 message GString {
-    string s = 6030;
+    string s = 1;
 }
 
 message GUri {
-    string u = 6040;
+    string u = 1;
 }
 
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
 message GPrivate {
-    string p = 6050;
+    string p = 1;
 }
