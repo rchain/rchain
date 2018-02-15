@@ -7,9 +7,11 @@ export LinkedListApi in {
   in {
     contract Head(list, return) = {
       match list with [head, _] => { return(head) }
+      _ => { return(Nil) }
     } | 
     contract Tail(list, return) = {
       match list with [_, tail] => { return(tail) }
+      _ => { return(Nil) }
     } |
     contract Prepend(value, tail, return) = {
       return([value, tail])
