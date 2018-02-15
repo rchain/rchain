@@ -36,10 +36,9 @@ trait ProtocolHandler {
     * Send a message to a single, remote node, and wait up to the
     * specified duration for a response.
     */
-  def roundTrip(
-      msg: ProtocolMessage,
-      remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
+  def roundTrip(msg: ProtocolMessage,
+                remote: ProtocolNode,
+                timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
 
   /**
     * Asynchronously broadcast a message to all known peers.
@@ -153,8 +152,7 @@ final case class LookupMessage(proto: Protocol, timestamp: Long) extends Protoco
 
   def response(src: ProtocolNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
     header.map { h =>
-      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
-                            System.currentTimeMillis)
+      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes), System.currentTimeMillis)
     }
 }
 
