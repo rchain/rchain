@@ -15,7 +15,7 @@ trait Capture[F[_]] {
   def capture[A](a: => A): F[A]
 
   /** Alias for `capture`. */
-  def apply[A](a: => A): F[A] = capture(a)
+  def apply[A] = capture[A]
 
   /** Construct a failed computation described by the given `Throwable`. */
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
