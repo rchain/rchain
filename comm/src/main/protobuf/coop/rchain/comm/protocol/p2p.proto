@@ -21,6 +21,8 @@ message EncryptionHandshake {
 }
 
 message EncryptionHandshakeResponse {
+  bytes  publicKey     = 1;
+  bytes  helloBack     = 2;
 }
 
 message ProtocolHandshake {
