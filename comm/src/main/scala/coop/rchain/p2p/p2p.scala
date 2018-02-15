@@ -96,12 +96,9 @@ final case class Network(
     ()
   }
 
-  // TODO move response to this function and remove repakaging to EncryptionHandshakeMessage
   private def handleEncryptionHandshake(sender: PeerNode,
                                         handshake: EncryptionHandshakeMessage): Unit =
-    for {
-      resp <- handshake.response(net.local)
-    } {
+    handshake.response(net.local).map { resp =>
       net.comm.send(resp.toByteSeq, sender) match {
         case Right(_) =>
           logger.info(s"Responded to encryption handshake request from $sender.")
@@ -111,9 +108,7 @@ final case class Network(
     }
 
   private def handleProtocolHandshake(sender: PeerNode, handshake: ProtocolHandshakeMessage): Unit =
-    for {
-      resp <- handshake.response(net.local)
-    } {
+    handshake.response(net.local).map { resp =>
       net.comm.send(resp.toByteSeq, sender) match {
         case Right(_) =>
           logger.info(s"Responded to protocol handshake request from $sender.")
@@ -127,9 +122,7 @@ final case class Network(
     }
 
   override def dispatch(sock: java.net.SocketAddress, msg: ProtocolMessage): Unit =
-    for {
-      sndr <- msg.sender
-    } {
+    msg.sender.map { sndr =>
       val sender =
         sock match {
           case (s: java.net.InetSocketAddress) =>
