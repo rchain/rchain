@@ -17,4 +17,11 @@ trait SerializeInstances {
         .catchNonFatal(new String(bytes, StandardCharsets.UTF_8))
         .leftMap(SerializeError.apply)
   }
+
+  implicit object bytesInstance extends Serialize[Array[Byte]] {
+
+    def encode(a: Array[Byte]): Array[Byte] = a
+
+    def decode(bytes: Array[Byte]): Either[SerializeError, Array[Byte]] = Right(bytes)
+  }
 }
