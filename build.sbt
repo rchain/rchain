@@ -38,7 +38,8 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      scrypto,
+      bouncyCastle,
+      guava,
       kalium),
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )

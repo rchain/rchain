@@ -11,7 +11,7 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.0.1" % "test"
   )
 
-  val scrypto              = "org.scorexfoundation"   %% "scrypto"         % "2.0.0"
+  val bouncyCastle         = "org.bouncycastle"       % "bcprov-jdk15on"   % "1.58"
   val kalium               = "org.abstractj.kalium"   % "kalium"           % "0.7.0"
   val argParsing           = "org.rogach"             %% "scallop"         % "3.0.3"
   val uriParsing           = "io.lemonlabs"           %% "scala-uri"       % "0.5.0"
@@ -22,6 +22,7 @@ object Dependencies {
   val lmdb                 = "org.lmdbjava"           % "lmdbjava"         % "0.6.0"
   val shapeless            = "com.chuusai"            %% "shapeless"       % "2.3.2"
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
+  val guava                = "com.google.guava"       % "guava"            % "16.0"
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)
