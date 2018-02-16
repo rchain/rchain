@@ -24,6 +24,7 @@ Springsprout.iml
 # OS generated files
 ####################
 .DS_Store?
+.DS_Store
 ehthumbs.db
 Icon?
 Thumbs.db
