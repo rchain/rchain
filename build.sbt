@@ -41,6 +41,8 @@ lazy val crypto = project
       bouncyCastle,
       guava,
       kalium),
+    // fork := true,
+    // javaOptions += "-Djava.library.path=crypto/src/main/resources",
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
