@@ -171,8 +171,8 @@ object RholangLinker {
     @tailrec
     def minimalDep(resolving: Iterator[String], dep: Set[String]): Set[String] = {
       val newDeps = resolving
-        .filter(n => !dep.contains(n))
         .flatMap(n => n +: dependencies(n))
+        .filter(n => !dep.contains(n))
         .toSet
       
       if(newDeps.nonEmpty) {
