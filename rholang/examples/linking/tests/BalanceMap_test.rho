@@ -23,7 +23,7 @@ import BalanceMap, TestSet in {
                     TestSet("Sub", [ [sub, ["account0", 200], false] ], result) |
                     for(_ <- result) {
                       //transfer behaves as expected
-                      TestSet( //why does this not run?
+                      TestSet(
                         "Transfer", 
                         [
                           [transfer, ["account0", "account1", 10], true],
