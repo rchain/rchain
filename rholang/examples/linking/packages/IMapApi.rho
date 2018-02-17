@@ -3,18 +3,22 @@ export IMapApi in {
   import IArrayApi in {
     new
       ArrayIndexOf, ArrayAppend, ArrayRemoveAt,
-      ArrayGet, ArrayContains
+      ArrayGet, ArrayContains, ArrayFold, ArrayMap,
+      ArrayLength
     in {
       IArrayApi("IndexOf", ArrayIndexOf) | IArrayApi("Append", ArrayAppend) |
       IArrayApi("RemoveAt", ArrayRemoveAt) | IArrayApi("Get", ArrayGet) |
-      IArrayApi("Contains", ArrayContains) |
+      IArrayApi("Contains", ArrayContains) | IArrayApi("Fold", ArrayFold) |
+      IArrayApi("Map", ArrayMap) | IArrayApi("Length", ArrayLength) |
       for(
           arrIndexOf <- ArrayIndexOf; arrAppend <- ArrayAppend;
           arrRemoveAt <- ArrayRemoveAt; arrGet <- ArrayGet;
-          arrContains <- ArrayContains
+          arrContains <- ArrayContains; arrFold <- ArrayFold;
+          arrMap <- ArrayMap; arrLength <- ArrayLength
       ) {
         new 
-          Contains, EmptyMap, Get, Keys, Updated
+          Contains, EmptyMap, Get, GetOrElse, Keys,
+          MapPairs, MapValues, Updated, UpdatedByPairs, Values
         in {
           contract Contains(map, key, return) = {
             match map with [keys, _] => {
@@ -36,9 +40,55 @@ export IMapApi in {
               }
             }
           } | 
+          contract GetOrElse(key, map, default, return) = {
+            new nilCh, result in {
+              Get(key, map, result) | nilCh(Nil) |
+              for(r <- result; nil <- nilCh) {
+                match r == nil with true => { return(default) }
+                _ => { return(r) }
+              }
+            }
+          } |
           contract Keys(map, return) = {
             match map with [keys, _] => { return(keys) }
           } | 
+          contract MapPairs(map, f, return) = {
+            match map with [keys, values] => {
+              new sizeCh, applyFunc in {
+                arrLength(keys, sizeCh) | for(size <- sizeCh) {
+                  contract applyFunc(currMap, i) = {
+                    match i == size with true => { return(currMap) }
+                    _ => {
+                      new keyCh, valueCh, kvPairCh, result in {
+                        arrGet(i, keys, keyCh) | arrGet(i, values, valueCh) |
+                        for(key <- keyCh; value <- valueCh) {
+                          f([key, value], kvPairCh) | for(kvPair <- kvPairCh) {
+                            match kvPair with [newKey, newValue] => {
+                              Updated(currMap, newKey, newValue, result) |
+                              for(r <- result) { applyFunc(r, i + 1) }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } |
+                  new emCh in {
+                    EmptyMap(emCh) | for(em <- emCh) { applyFunc(em, 0) }
+                  }
+                }
+              }
+            }
+          } |
+          contract MapValues(map, f, return) = {
+            match map with [keys, values] => {
+              new mappedValuesCh in {
+                arrMap(values, f, mappedValuesCh) |
+                for(mappedValues <- mappedValuesCh) {
+                  return([keys, mappedValues])
+                }
+              }
+            }
+          } |
           contract Updated(map, key, value, return) = {
             match map with [keys, values] => {
               new result in {
@@ -64,13 +114,32 @@ export IMapApi in {
               }
             }
           } |
+          contract UpdatedByPairs(map, kvPairs, return) = {
+            new combinator in {
+              contract combinator(kvPair, currMap, return) = {
+                match kvPair with [key, value] => {
+                  Updated(currMap, key, value, return)
+                }
+                _ => { return(currMap) }
+              } |
+              arrFold(kvPairs, map, combinator, return)
+            }
+          } |
+          contract Values(map, return) = {
+            match map with [_, values] => { return(values) }
+          } | 
           contract IMapApi(method, return) = {
             match method with 
               "Contains" => { return(Contains) }
               "EmptyMap" => { return(EmptyMap) }
-              "Keys" => { return(Keys) }
               "Get" => { return(Get) }
+              "GetOrElse" => { return(GetOrElse) }
+              "Keys" => { return(Keys) }
+              "MapPairs" => { return(MapPairs) }
+              "MapValues" => { return(MapValues) }
               "Updated" => { return(Updated) }
+              "UpdatedByPairs" => { return(UpdatedByPairs) }
+              "Values" => { return(Values) }
               _ => { "Method: ".display(method, " not found!") | return(Nil) }
           }
         }
