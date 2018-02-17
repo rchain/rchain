@@ -5,9 +5,9 @@ import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Queue, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
-object PrimQueue {
+object queue {
 
-  object QueueNew extends Prim {
+  object queueNew extends Prim {
     override val name: String = "queue-new"
     override val minArgs: Int = 0
     override val maxArgs: Int = 0
@@ -17,7 +17,7 @@ object PrimQueue {
       Right(Queue.create())
   }
 
-  object QueueDepth extends Prim {
+  object queueDepth extends Prim {
     override val name: String = "queue-depth"
     override val minArgs: Int = 1
     override val maxArgs: Int = 1
@@ -26,11 +26,11 @@ object PrimQueue {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      Right(q.nElem.asInstanceOf[Fixnum])
+      Right(q.nElems.asInstanceOf[Fixnum])
     }
   }
 
-  object QueueEmpty extends Prim {
+  object queueIsEmpty extends Prim {
     override val name: String = "queue-empty?"
     override val minArgs: Int = 1
     override val maxArgs: Int = 1
@@ -39,43 +39,46 @@ object PrimQueue {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      Right(RblBool(q.empty()))
+      Right(RblBool(q.isEmpty()))
     }
   }
 
-
-  object QueueEnQueue extends Prim {
+  object queueEnqueue extends Prim {
     override val name: String = "queue-enqueue"
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Ob]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Queue] = {
-      val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      val ob = ctxt.argvec.elem(1)
-      q.enQueue(ob)
-      Right(q)
-    }
+    override def fn(ctxt: Ctxt): Either[PrimError, Queue] =
+      ctxt.argvec.elem.head match {
+        case q: Queue =>
+          val ob = ctxt.argvec.elem(1)
+          Right(q.enQueue(ob))
+        case _ =>
+          Left(ArgumentMismatch("The first element should be a Queue"))
+      }
   }
 
-  object QueueDeQueue extends Prim {
+  object queueDeQueue extends Prim {
     override val name: String = "queue-dequeue"
     override val minArgs: Int = 1
     override val maxArgs: Int = 1
 
-    @checkTypeMismatch[Ob]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
-      val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      if(q.empty()) {
-        Left(QueueEmptyError("queue is empty"))
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] =
+      ctxt.argvec.elem.head match {
+        case q: Queue =>
+          if (q.isEmpty()) {
+            Left(QueueEmptyError)
+          } else {
+            Right(q.deQueue().get)
+          }
+        case _ =>
+          Left(ArgumentMismatch("The first element should be a Queue"))
       }
-      Right(q.deQueue())
-    }
   }
 
-  object QueueRead extends Prim {
+  object queueRead extends Prim {
     override val name: String = "queue-read"
     override val minArgs: Int = 1
     override val maxArgs: Int = 1
@@ -84,92 +87,100 @@ object PrimQueue {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      if(q.empty()) {
-        Left(QueueEmptyError("queue is empty"))
+      if (q.isEmpty()) {
+        Left(QueueEmptyError)
       }
       Right(q.head)
     }
   }
 
-  object QueuePatDeQueue extends Prim {
+  object queuePDequeue extends Prim {
     override val name: String = "queue-pat-dequeue"
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Ob]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
-      val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      val pat = ctxt.argvec.elem(1).asInstanceOf[Tuple]
-      if(q.empty()) {
-        Left(QueueEmptyError("queue is empty"))
-      } else if(pat == Tuple.NIL) {
-        Right(q.deQueue())
-      } else {
-        Right(q.patternDequeue(pat).getOrElse(ABSENT))
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] =
+      (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
+        case (q: Queue, pat: Tuple) =>
+          if (q.isEmpty) {
+            Left(QueueEmptyError)
+          } else if (pat == Tuple.NIL) {
+            Right(q.deQueue().get)
+          } else {
+            q.patternDequeue(pat)
+              .map(Right(_))
+              .getOrElse(Left(PatternMatchError))
+          }
+        case _ =>
+          Left(ArgumentMismatch(
+            "The first element should be a queue and second element should be a tuple"))
       }
-    }
   }
 
-  object QueuePatRead extends Prim {
+  object queuePatRead extends Prim {
     override val name: String = "queue-pat-read"
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Ob]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
-      val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      val pat = ctxt.argvec.elem(1).asInstanceOf[Tuple]
-      if(q.empty()) {
-        Left(QueueEmptyError("queue is empty"))
-      } else if(pat == Tuple.NIL) {
-        val e = q.elems.elem.head
-        Right(e)
-      } else {
-        Right(q.patternRead(pat).getOrElse(ABSENT))
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] =
+      (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
+        case (q: Queue, pat: Tuple) =>
+          if (q.isEmpty()) {
+            Left(QueueEmptyError)
+          } else if (pat == Tuple.NIL) {
+            val e = q.elems.elem.head
+            Right(e)
+          } else {
+            Right(q.patternRead(pat).getOrElse(ABSENT))
+          }
+        case _ =>
+          Left(ArgumentMismatch(
+            "The first element should be a queue and second element should be a tuple"))
       }
-    }
   }
 
-  object QueueReadNth extends Prim {
+  object queueReadNth extends Prim {
     override val name: String = "queue-read-nth"
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Ob]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
-      val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum].value
-      if(q.empty()) {
-        Left(QueueEmptyError("queue is empty"))
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] =
+      (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
+        case (q: Queue, num: Fixnum) =>
+          val n = num.value
+          if (q.isEmpty()) {
+            Left(QueueEmptyError)
+          }
+          if (n > q.depth() || n < 0) {
+            Left(ArgumentMismatch)
+          }
+          Right(q.elems.elem(n))
+        case _ =>
+          Left(ArgumentMismatch(
+            "The first element should be a queue and second element should be a tuple"))
       }
-      if(n > q.depth() || n < 0) {
-        Left(ArgumentMismatch)
-      }
-      Right(q.elems.elem(n))
-    }
   }
 
-  object QueueDequeueNth extends Prim {
+  object queueDequeueNth extends Prim {
     override val name: String = "queue-dequeue-nth"
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[Ob]
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum].value
-      if(q.empty()) {
-        Left(QueueEmptyError("queue is empty"))
+      if (q.isEmpty()) {
+        Left(QueueEmptyError)
       }
       Right(q.dequeueNth(n).getOrElse(ABSENT))
     }
   }
 
-  object QueueReset extends Prim {
+  object queueReset extends Prim {
     override val name: String = "queue-reset"
     override val minArgs: Int = 1
     override val maxArgs: Int = 1
@@ -178,8 +189,7 @@ object PrimQueue {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Queue] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      q.reset()
-      Right(q)
+      Right(q.reset())
     }
   }
 
