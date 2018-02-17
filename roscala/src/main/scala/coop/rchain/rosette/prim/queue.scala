@@ -53,7 +53,7 @@ object queue {
       ctxt.argvec.elem.head match {
         case q: Queue =>
           val ob = ctxt.argvec.elem(1)
-          Right(q.enQueue(ob))
+          Right(q.enqueue(ob))
         case _ =>
           Left(ArgumentMismatch("The first element should be a Queue"))
       }
@@ -71,7 +71,7 @@ object queue {
           if (q.isEmpty()) {
             Left(QueueEmptyError)
           } else {
-            Right(q.deQueue().get)
+            Right(q.dequeue().get)
           }
         case _ =>
           Left(ArgumentMismatch("The first element should be a Queue"))
@@ -106,7 +106,7 @@ object queue {
           if (q.isEmpty) {
             Left(QueueEmptyError)
           } else if (pat == Tuple.NIL) {
-            Right(q.deQueue().get)
+            Right(q.dequeue().get)
           } else {
             q.patternDequeue(pat)
               .map(Right(_))

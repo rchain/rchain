@@ -14,10 +14,10 @@ case class Queue(elems: Tuple) extends Ob {
   def isEmpty(): Boolean =
     (nElems.asInstanceOf[Fixnum] == Fixnum(0)).value
 
-  def enQueue(ele: Ob): Queue =
+  def enqueue(ele: Ob): Queue =
     Queue(Tuple(elems.elem :+ ele))
 
-  def deQueue(): Option[Queue] =
+  def dequeue(): Option[Queue] =
     if (isEmpty()) {
       None
     } else {

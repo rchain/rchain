@@ -43,7 +43,7 @@ class PrimQueueSpec extends FlatSpec with Matchers {
     val newQueue = Queue(Tuple(2, Some(Number(0))))
     val ret = queueEnqueue.fn(newCtxt)
 
-     ret should be(Right( newQueue.enQueue(Number(1))))
+     ret should be(Right( newQueue.enqueue(Number(1))))
   }
 
   "queue-dequeue" should "correctly dequeue a ob" in {
@@ -62,7 +62,7 @@ class PrimQueueSpec extends FlatSpec with Matchers {
     val newCtxt1 = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue1, Tuple(Tuple(Number(0)))))
     queuePDequeue.fn(newCtxt1) should be(Right(Queue(Tuple.Placeholder)))
 
-    val newQueue2 = Queue(Tuple(1, Some(Number(0)))).enQueue(Tuple(1, Some(Number(0))))
+    val newQueue2 = Queue(Tuple(1, Some(Number(0)))).enqueue(Tuple(1, Some(Number(0))))
     val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue2, Tuple(Tuple(Number(0)))))
     queuePDequeue.fn(newCtxt2) should be(Right(Queue(Tuple(Number(0)))))
   }
