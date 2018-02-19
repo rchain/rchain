@@ -38,17 +38,29 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      scrypto,
-      kalium)
+      bouncyCastle,
+      guav,
+      kalium,
+      jaxb),
+    fork := true,
+    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
+    javaOptions += "-Djava.library.path=secp256k1/.libs",
+    doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
 lazy val comm = project
   .settings(
     commonSettings,
     version := "0.1",
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
-      uPnP),
+      uPnP,
+      hasher,
+      cats,
+      monix,
+      guava
+    ),
     PB.targets in Compile := Seq(
       PB.gens.java -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
@@ -80,7 +92,7 @@ lazy val node = project
     commonSettings,
     scalacOptions ++= Seq("-Ywarn-unused-import"),
     version := "0.1",
-
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,

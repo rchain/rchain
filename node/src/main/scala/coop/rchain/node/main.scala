@@ -6,7 +6,23 @@ import java.net.{InetAddress, NetworkInterface}
 import scala.collection.JavaConverters._
 import coop.rchain.p2p
 import coop.rchain.comm._
+import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
+import cats._, cats.data._, cats.implicits._
+import monix.eval.Task
+import monix.execution.Scheduler
+import coop.rchain.catscontrib._, Catscontrib._
+
+object TaskContrib {
+  implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
+    def unsafeRunSync(handle: A => Unit): Unit =
+      // TODO this will eventually disappear
+      task.coeval.value match {
+        case Left(future) => throw new Exception("could not run in sync")
+        case Right(a)     => handle(a)
+      }
+  }
+}
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("RChain Node version 0.1")
@@ -65,7 +81,21 @@ object Main {
     }
   }
 
+  /** Those instances have no sens whatsoever however we keep them for now
+    * to adjust to imperative side of the code base in main. Once p2p.Network
+    * gets a monadic API we will remove this and main will run on a single
+    * type that binds all possbile efffects
+    */
+  object TempInstances {
+    implicit val eitherCapture: Capture[Either[CommError, ?]] =
+      new Capture[Either[CommError, ?]] {
+        def capture[A](a: => A): Either[CommError, A] = Right(a)
+      }
+  }
+
   def main(args: Array[String]): Unit = {
+
+    import encryption._
 
     val conf = Conf(args)
 
@@ -79,47 +109,71 @@ object Main {
       case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
     }
 
-    val addy = p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}") match {
-      case Right(node)               => node
-      case Left(p2p.ParseError(msg)) => throw new Exception(msg)
-    }
+    /** TODO This is using Either for the effect which obviously is a temp solution. Will use
+      * proper type once p2p.Network gets a monadic API
+      */
+    import TempInstances._
 
-    // TODO consider closing this over IO
-    val net = p2p.Network(addy)
-    logger.info(s"Listening for traffic on $net.")
+    /** This is essentially a final effect that will accumulate all effects from the system */
+    type Effect[A] = EitherT[Task, CommError, A]
 
-    if (!conf.standalone()) {
-      conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
-        address =>
-          logger.info(s"Bootstrapping from $address.")
-          net.connect(address)
-      }
-    } else {
-      logger.info(s"Starting stand-alone node.")
+    implicit class EitherOps[A](e: Either[CommError, A]) {
+      def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
     }
 
     val http = HttpServer(8080)
     http.start
 
-    sys.addShutdownHook {
-      http.stop()
-      net.disconnect()
-      logger.info("Goodbye.")
+    val calculateKeys: Effect[PublicPrivateKeys] = for {
+      inDb <- keysAvailable[Effect]
+      ks   <- if (inDb) fetchKeys[Effect] else generate.pure[Effect]
+    } yield ks
+
+    val recipe: Effect[Unit] = for {
+      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
+      keys <- calculateKeys
+    } yield {
+      val net = p2p.Network(addy, keys)
+      logger.info(s"Listening for traffic on $net.")
+
+      if (!conf.standalone()) {
+        conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
+          address =>
+            logger.info(s"Bootstrapping from $address.")
+            net.connect(address)
+        }
+      } else {
+        logger.info(s"Starting stand-alone node.")
+      }
+
+      sys.addShutdownHook {
+        net.disconnect
+        logger.info("Goodbye.")
+      }
+
+      val pauseTime = 5000L
+      var lastCount = 0
+      while (true) {
+        Thread.sleep(pauseTime)
+        for (peer <- net.net.findMorePeers(10)) {
+          logger.info(s"Possibly new peer: $peer.")
+          net.connect(peer)
+        }
+        val thisCount = net.net.table.peers.size
+        if (thisCount != lastCount) {
+          lastCount = thisCount
+          logger.info(s"Peers: $thisCount.")
+        }
+      }
     }
 
-    val pauseTime = 5000L
-    var lastCount = 0
-    while (true) {
-      Thread.sleep(pauseTime)
-      for (peer <- net.net.findMorePeers(10)) {
-        logger.info(s"Possibly new peer: $peer.")
-        net.connect(peer)
-      }
-      val thisCount = net.net.table.peers.size
-      if (thisCount != lastCount) {
-        lastCount = thisCount
-        logger.info(s"Peers: $thisCount.")
-      }
+    import monix.execution.Scheduler.Implicits.global
+    import TaskContrib._
+    recipe.value.unsafeRunSync {
+      case Right(_) => ()
+      case Left(commError) =>
+        throw new Exception(commError.toString) // TODO use Show instance instead
     }
+
   }
 }

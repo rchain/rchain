@@ -16,11 +16,13 @@ message Hello {
 }
 
 message EncryptionHandshake {
-    // Temporary field included to test serialization.
-    uint64 number = 1;
+  bytes  publicKey = 1;
+  bytes  hello     = 2;
 }
 
 message EncryptionHandshakeResponse {
+  bytes  publicKey     = 1;
+  bytes  helloBack     = 2;
 }
 
 message ProtocolHandshake {

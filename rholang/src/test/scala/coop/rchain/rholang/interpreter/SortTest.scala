@@ -30,7 +30,7 @@ class ScoredTermSpec extends FlatSpec with Matchers {
 
 class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
   val emptyMap = DebruijnLevelMap[VarSort]()
-  var p = Par()
+  val p = Par()
   "Binds" should "Presort based on their channel and then pattern" in {
     val binds =
       List(
@@ -246,7 +246,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               List(GInt(6))),
             p.copy(exprs=
               List(GInt(3))))))
-    var sortedParExpr =
+    val sortedParExpr =
       p.copy(exprs=
         List(
           EMult(
@@ -307,7 +307,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               List(GBool(false))),
             p.copy(exprs=
               List(GBool(true))))))
-    var sortedParExpr =
+    val sortedParExpr =
       p.copy(exprs=
         List(
           ELt(
@@ -474,7 +474,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
             p.copy(exprs=
               List(GBool(true)))),
           GInt(1)))
-    var sortedParExpr =
+    val sortedParExpr =
       p.copy(exprs=
         List(
           GInt(1),

@@ -24,6 +24,7 @@ Springsprout.iml
 # OS generated files
 ####################
 .DS_Store?
+.DS_Store
 ehthumbs.db
 Icon?
 Thumbs.db
@@ -40,6 +41,10 @@ boot/
 ###################
 rholang/bnfc/
 rholang/src/main/java/coop/**
+
+# Secp256k1
+###################
+crypto/secp256k1/
 
 # Rosette
 ###################
