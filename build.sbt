@@ -38,8 +38,14 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      scrypto,
-      kalium)
+      bouncyCastle,
+      guav,
+      kalium,
+      jaxb),
+    fork := true,
+    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
+    javaOptions += "-Djava.library.path=secp256k1/.libs",
+    doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
 lazy val comm = project
