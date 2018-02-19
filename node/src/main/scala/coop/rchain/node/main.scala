@@ -115,10 +115,12 @@ object Main {
     import TempInstances._
 
     /** This is essentially a final effect that will accumulate all effects from the system */
-    type Effect[A] = EitherT[Task, CommError, A]
+    type LogT[F[_], A]     = WriterT[F, Vector[String], A]
+    type CommErrT[F[_], A] = EitherT[F, CommError, A]
+    type Effect[A]         = CommErrT[LogT[Task, ?], A]
 
     implicit class EitherOps[A](e: Either[CommError, A]) {
-      def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
+      def toEffect: Effect[A] = EitherT[LogT[Task, ?], CommError, A](e.pure[LogT[Task, ?]])
     }
 
     val calculateKeys: Effect[PublicPrivateKeys] = for {
@@ -166,7 +168,7 @@ object Main {
 
     import monix.execution.Scheduler.Implicits.global
     import TaskContrib._
-    recipe.value.unsafeRunSync {
+    recipe.value.value.unsafeRunSync {
       case Right(_) => ()
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
