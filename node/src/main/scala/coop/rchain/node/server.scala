@@ -1,17 +1,11 @@
 package coop.rchain.node
 
 import cats.effect._
-// import org.http4s._
-// import org.http4s.dsl.io._
 import org.http4s.server._
 import org.http4s.server.blaze._
 import com.typesafe.scalalogging.Logger
 
 import coop.rchain.node.service._
-
-// @JsonCodec case class KVPair(key: String, value: String)
-
-// case class HttpRoot[E](host: String, route: String, service: HttpService[E])
 
 case class HttpServer(port: Int) {
 
@@ -30,7 +24,8 @@ case class HttpServer(port: Int) {
     server = Some(bld.unsafeRunSync())
   }
 
-  def stop(): Unit =
+  def stop(): Unit = {
     server.foreach(_.shutdown.unsafeRunSync())
-  logger.info("HTTP server stopped.")
+    logger.info("HTTP server stopped.")
+  }
 }

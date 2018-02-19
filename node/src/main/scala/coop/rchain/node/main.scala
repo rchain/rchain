@@ -147,6 +147,7 @@ object Main {
       }
 
       sys.addShutdownHook {
+        http.stop
         net.disconnect
         logger.info("Goodbye.")
       }
