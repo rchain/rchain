@@ -71,6 +71,21 @@ lazy val comm = project
     ).map(_.getPath ++ "/.*").mkString(";")
   )
 
+lazy val models = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      cats,
+      scalaCheck
+    ),
+    connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
+  )
+
 lazy val storage = project
   .settings(
     commonSettings,
@@ -84,7 +99,7 @@ lazy val storage = project
     ),
     crossScalaVersions := Seq("2.11.12", scalaVersion.value),
     exportJars := true
-  )
+  ).dependsOn(models)
 
 lazy val node = project
   .enablePlugins(DockerPlugin)
@@ -143,7 +158,7 @@ lazy val rholang = project
 
     // Fix up root directory so tests find relative files they need
     fork in Test := true
-  )
+  ).dependsOn(models)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(

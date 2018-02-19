@@ -3,6 +3,7 @@ package coop.rchain.storage
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
+import coop.rchain.models.Serialize
 import coop.rchain.storage.util.withResource
 
 trait StorageFixtures {
