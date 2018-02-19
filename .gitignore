@@ -45,7 +45,6 @@ rholang/src/main/java/coop/**
 # Secp256k1
 ###################
 crypto/secp256k1/
-crypto/src/main/resources/lib
 
 # Rosette
 ###################
