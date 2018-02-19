@@ -15,6 +15,7 @@ package object rosette {
   case object Suspend                           extends RblError
   case object Absent                            extends RblError
   case object Upcall                            extends RblError
+  case object PrimNotFound                      extends RblError
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
 

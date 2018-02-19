@@ -42,7 +42,7 @@ trait Ob extends Base with Cloneable {
       .getOrElse(Ob.INVALID)
   }
 
-  def is(value: Ob.ObTag): Boolean = true
+  def is(value: Ob.ObTag): Boolean = false
 
   def lookup(key: Ob, ctxt: Ctxt): Result =
     Right(null)

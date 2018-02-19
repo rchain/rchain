@@ -344,31 +344,45 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be (sortedParExpr)
   }
 
-  "Par" should "Sort Sends based on their channel and then data" in {
+  "Par" should "Sort Sends based on their persistence, channel, data" in {
     val parExpr =
       p.copy(sends=
         List(
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
-            List(p.copy(exprs=List(GInt(3))))),
-          Send(
-            Quote(p.copy(exprs=List(GInt(4)))),
-            List(p.copy(exprs=List(GInt(2))))),
+            List(p.copy(exprs=List(GInt(3)))),
+            false),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
-            List(p.copy(exprs=List(GInt(2)))))))
+            List(p.copy(exprs=List(GInt(3)))),
+            true),
+          Send(
+            Quote(p.copy(exprs=List(GInt(4)))),
+            List(p.copy(exprs=List(GInt(2)))),
+            false),
+          Send(
+            Quote(p.copy(exprs=List(GInt(5)))),
+            List(p.copy(exprs=List(GInt(2)))),
+            false)))
     val sortedParExpr =
       p.copy(sends=
         List(
           Send(
             Quote(p.copy(exprs=List(GInt(4)))),
-            List(p.copy(exprs=List(GInt(2))))),
+            List(p.copy(exprs=List(GInt(2)))),
+            false),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
-            List(p.copy(exprs=List(GInt(2))))),
+            List(p.copy(exprs=List(GInt(2)))),
+            false),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
-            List(p.copy(exprs=List(GInt(3)))))))
+            List(p.copy(exprs=List(GInt(3)))),
+            false),
+          Send(
+            Quote(p.copy(exprs=List(GInt(5)))),
+            List(p.copy(exprs=List(GInt(3)))),
+            true)))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
   }
