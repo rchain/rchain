@@ -46,9 +46,15 @@ lazy val comm = project
   .settings(
     commonSettings,
     version := "0.1",
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
-      uPnP),
+      uPnP,
+      hasher,
+      cats,
+      monix,
+      guava
+    ),
     PB.targets in Compile := Seq(
       PB.gens.java -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
@@ -80,7 +86,7 @@ lazy val node = project
     commonSettings,
 
     version := "0.1",
-
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
