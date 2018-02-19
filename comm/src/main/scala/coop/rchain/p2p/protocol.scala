@@ -6,7 +6,7 @@ import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib.instances._
+import coop.rchain.catscontrib._, Catscontrib._
 
 object NetworkProtocol {
 

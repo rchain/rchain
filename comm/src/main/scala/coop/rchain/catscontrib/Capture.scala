@@ -29,8 +29,19 @@ object Capture extends CaptureInstances {
   def apply[F[_]](implicit F: Capture[F]): Capture[F] = F
 }
 
-sealed abstract class CaptureInstances {
+trait CaptureInstances extends CaptureInstances0 {
   implicit val taskCapture: Capture[Task] = new Capture[Task] {
     def capture[A](a: => A): Task[A] = Task.delay(a)
   }
+}
+
+sealed trait CaptureInstances0 {
+  import eitherT._
+  implicit def eitherTCapture[F[_]: Monad: Capture, E]: Capture[EitherT[F, E, ?]] =
+    new TransCapture[F, EitherT[?[_], E, ?]]
+}
+
+private class TransCapture[F[_]: Monad: Capture, T[_[_], _]: MonadTrans] extends Capture[T[F, ?]] {
+  def capture[A](a: => A) =
+    MonadTrans[T].liftM(Capture[F].capture(a))
 }
