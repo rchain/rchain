@@ -7,5 +7,5 @@ trait Serialize[A] {
 
   def encode(a: A): Array[Byte]
 
-  def decode(bytes: Array[Byte]): Either[SerializeError, A]
+  def decode(bytes: Array[Byte]): Either[Throwable, A]
 }

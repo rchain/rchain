@@ -9,10 +9,8 @@ trait SerializeInstances {
       extends Serialize[T] {
     override def encode(a: T): Array[Byte] = companion.toByteArray(a)
 
-    override def decode(bytes: Array[Byte]): Either[SerializeError, T] =
-      Either
-        .catchNonFatal(companion.parseFrom(bytes))
-        .leftMap(SerializeError.apply)
+    override def decode(bytes: Array[Byte]): Either[Throwable, T] =
+      Either.catchNonFatal(companion.parseFrom(bytes))
   }
 
   implicit object parInstance      extends rhoInstanceWrapper(Par)

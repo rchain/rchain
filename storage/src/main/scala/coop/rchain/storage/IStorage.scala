@@ -1,7 +1,6 @@
 package coop.rchain.storage
 
 import coop.rchain.models.Serialize
-import coop.rchain.models.Error
 
 /**
   * Interface for the Storage Layer

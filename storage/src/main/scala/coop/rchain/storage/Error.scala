@@ -1,4 +1,4 @@
-package coop.rchain.models
+package coop.rchain.storage
 
 /**
   * Represents an error that can occur in the storage layer

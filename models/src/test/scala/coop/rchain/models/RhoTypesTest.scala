@@ -5,15 +5,14 @@ import org.scalatest.{Matchers, PropSpec}
 import org.scalatest.prop.PropertyChecks
 
 class RhoTypesTest extends PropSpec with PropertyChecks with Matchers {
-  def rtt[T](msg: T, serializeInstance: Serialize[T]): Boolean = {
+  def rtt[T](msg: T, serializeInstance: Serialize[T]): Unit = {
     val bytes = serializeInstance.encode(msg)
     val msg2  = serializeInstance.decode(bytes)
     assert(msg2.isRight && msg == msg2.right.get)
 
     val errBytes = Array[Byte](1, 2, 3, 4)
     val msg3     = serializeInstance.decode(errBytes)
-    assert(msg3.isLeft && msg3.left.get.isInstanceOf[SerializeError])
-    true
+    assert(msg3.isLeft)
   }
 
   property("complex value should pass round-trip serialization") {
@@ -32,7 +31,7 @@ class RhoTypesTest extends PropSpec with PropertyChecks with Matchers {
 
         val outerPar = Par().withExprs(List(expr))
 
-        rtt(outerPar, parInstance) should be(true)
+        rtt(outerPar, parInstance)
       }
     }
   }

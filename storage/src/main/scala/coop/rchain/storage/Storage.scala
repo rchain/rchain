@@ -38,7 +38,7 @@ class Storage[K, V] private (env: Env[ByteBuffer], db: Dbi[ByteBuffer])(implicit
             val fetchedBuff = txn.`val`()
             val fetched     = new Array[Byte](fetchedBuff.remaining())
             ignore { fetchedBuff.get(fetched) }
-            sb.decode(fetched)
+            sb.decode(fetched).leftMap(SerializeError.apply)
           } else {
             Left[Error, V](NotFound)
           }
