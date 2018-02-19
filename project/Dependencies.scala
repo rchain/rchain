@@ -23,8 +23,9 @@ object Dependencies {
   val shapeless            = "com.chuusai"            %% "shapeless"       % "2.3.2"
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
 
-  val http4sVersion = "0.18.0" // 15.16a"
+  val http4sVersion = "0.18.0"
   val http4sDependencies = Seq(
+    // "org.http4s" %% "rho-swagger"         % http4sVersion,
     "org.http4s" %% "http4s-dsl"          % http4sVersion,
     "org.http4s" %% "http4s-blaze-server" % http4sVersion,
     "org.http4s" %% "http4s-blaze-client" % http4sVersion,
@@ -32,8 +33,7 @@ object Dependencies {
 
   val circeVersion = "0.9.1"
   val circeDependencies = Seq(
-    // Optional for auto-derivation of JSON codecs
-    // "io.circe" %% "circe-core" % circeVersion,
+    "io.circe" %% "circe-core"    % circeVersion,
     "io.circe" %% "circe-generic" % circeVersion,
     "io.circe" %% "circe-parser"  % circeVersion,
     "io.circe" %% "circe-literal" % circeVersion,

@@ -1,7 +1,9 @@
-package coop.rchain.node
+/**
+package coop.rchain.node.service
 
 // import io.circe._
 import io.circe.generic.auto._
+// import io.circe.generic.JsonCodec
 // import io.circe.parser._
 import io.circe.syntax._
 
@@ -20,5 +22,7 @@ object JsonRpc {
   val resp0 = Response("2.0", "foo")
   val resp1 = Response("2.0", 33)
   override def toString(): String =
-    Array(resp0, resp1).asJson.noSpaces
+    resp0.asJson.noSpaces + " -- " + resp1.asJson.noSpaces
+  // List[JsonRPCResponse](resp0, resp1).asJson.noSpaces
 }
+  */
