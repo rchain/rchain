@@ -22,7 +22,7 @@ object Dependencies {
   val lmdb                 = "org.lmdbjava"           % "lmdbjava"         % "0.6.0"
   val shapeless            = "com.chuusai"            %% "shapeless"       % "2.3.2"
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
-  val guava                = "com.google.guava"       % "guava"            % "16.0"
+  val guav                 = "com.google.guava"       % "guava"            % "16.0"
   val jaxb                 = "javax.xml.bind"         % "jaxb-api"         % "2.1"
 
   val commonDependencies   = loggingDependencies ++ testingDependencies

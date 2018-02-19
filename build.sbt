@@ -39,7 +39,7 @@ lazy val crypto = project
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       bouncyCastle,
-      guava,
+      guav,
       kalium,
       jaxb),
     fork := true,
