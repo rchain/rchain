@@ -9,6 +9,20 @@ import coop.rchain.comm._
 import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
 import cats._, cats.data._, cats.implicits._
+import monix.eval.Task
+import monix.execution.Scheduler
+import coop.rchain.catscontrib._, Catscontrib._
+
+object TaskContrib {
+  implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
+    def unsafeRunSync(handle: A => Unit): Unit =
+      // TODO this will eventually disappear
+      task.coeval.value match {
+        case Left(future) => throw new Exception("could not run in sync")
+        case Right(a)     => handle(a)
+      }
+  }
+}
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("RChain Communications Library version 0.1")
@@ -101,7 +115,11 @@ object Main {
     import TempInstances._
 
     /** This is essentially a final effect that will accumulate all effects from the system */
-    type Effect[A] = Either[CommError, A]
+    type Effect[A] = EitherT[Task, CommError, A]
+
+    implicit class EitherOps[A](e: Either[CommError, A]) {
+      def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
+    }
 
     val calculateKeys: Effect[PublicPrivateKeys] = for {
       inDb <- keysAvailable[Effect]
@@ -109,7 +127,7 @@ object Main {
     } yield ks
 
     val recipe: Effect[Unit] = for {
-      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}")
+      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
       keys <- calculateKeys
     } yield {
       val net = p2p.Network(addy, keys)
@@ -146,11 +164,13 @@ object Main {
       }
     }
 
-    // TODO this will eventually disappear
-    recipe match {
-      case Right(node) => node
+    import monix.execution.Scheduler.Implicits.global
+    import TaskContrib._
+    recipe.value.unsafeRunSync {
+      case Right(_) => ()
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
     }
+
   }
 }
