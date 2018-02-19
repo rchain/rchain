@@ -27,10 +27,11 @@ trait StorageFixtures {
   private def recursivelyDeletePath(p: Path): Path =
     Files.walkFileTree(p, makeDeleteFileVisitor)
 
-  def withTestStorage[A](f: Storage => A): A = {
+  def withTestStorage[A, K, V](f: Storage[K, V] => A)(implicit sk: Serialize[K],
+                                                      sv: Serialize[V]): A = {
     val tmpDir = Files.createTempDirectory("rchain-storage-test-")
     try {
-      val storage = Storage.create(tmpDir, "test", 500000L)
+      val storage = Storage.create[K, V](tmpDir, "test", 500000L)
       withResource(storage)(f)
     } finally {
       recursivelyDeletePath(tmpDir)

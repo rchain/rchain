@@ -2,6 +2,7 @@ package coop.rchain.rosette
 
 import coop.rchain.rosette.VirtualMachine.loggerStrand
 import Location._
+import cats.data.State
 
 case class Ctxt(tag: Location,
                 nargs: Int,
@@ -63,21 +64,6 @@ case class Ctxt(tag: Location,
     state.update(_ >> 'strandPool)(_ :+ state.ctxt.ctxt)
   }
 
-  def setReg(r: Int, ob: Ob): Option[Ctxt] =
-    r match {
-      case 0 => Some(copy(rslt = ob))
-      case 1 => Some(copy(trgt = ob))
-      case 2 => Some(copy(argvec = ob.asInstanceOf[Tuple]))
-      case 3 => Some(copy(env = ob))
-      case 4 => Some(copy(code = ob.asInstanceOf[Code]))
-      case 5 => Some(copy(ctxt = ob.asInstanceOf[Ctxt]))
-      case 6 => Some(copy(self2 = ob))
-      case 7 => Some(copy(selfEnv = ob))
-      case 8 => Some(copy(rcvr = ob))
-      case 9 => Some(copy(monitor = ob.asInstanceOf[Monitor]))
-      case _ => None
-    }
-
   def vmError(state: VMState): (Result, VMState) = {
     val newArgvec = Tuple(this.prepare())
     val newState =
@@ -109,6 +95,26 @@ object Ctxt {
   }
 
   def apply(trgt: Ob, argvec: Tuple): Ctxt = PLACEHOLDER
+
+  def setReg(r: Int, ob: Ob): State[Ctxt, StoreResult] = {
+    def modify(f: Ctxt => Ctxt): State[Ctxt, StoreResult] =
+      State.apply[Ctxt, StoreResult](f andThen ((_, Success)))
+    lazy val pure = State.pure[Ctxt, StoreResult](Failure)
+
+    r match {
+      case 0 => modify(_.copy(rslt = ob))
+      case 1 => modify(_.copy(trgt = ob))
+      case 2 => modify(_.copy(argvec = ob.asInstanceOf[Tuple]))
+      case 3 => modify(_.copy(env = ob))
+      case 4 => modify(_.copy(code = ob.asInstanceOf[Code]))
+      case 5 => modify(_.copy(ctxt = ob.asInstanceOf[Ctxt]))
+      case 6 => modify(_.copy(self2 = ob))
+      case 7 => modify(_.copy(selfEnv = ob))
+      case 8 => modify(_.copy(rcvr = ob))
+      case 9 => modify(_.copy(monitor = ob.asInstanceOf[Monitor]))
+      case _ => pure
+    }
+  }
 
   object NIV
       extends Ctxt(null, 0, 0, null, null, null, null, null, null, null, null, null, null, null)

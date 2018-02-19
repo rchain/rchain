@@ -1,40 +1,27 @@
 package coop.rchain.storage.models
 
+import java.nio.charset.StandardCharsets
+
 import cats.syntax.either._
 import coop.rchain.storage.{Serialize, SerializeError}
 
 trait SerializeInstances {
 
-  implicit object blockInstance extends Serialize[Block] {
+  implicit object stringInstance extends Serialize[String] {
 
-    def encode(a: Block): Array[Byte] =
-      a.toByteArray
+    def encode(s: String): Array[Byte] =
+      s.getBytes(StandardCharsets.UTF_8)
 
-    def decode(bytes: Array[Byte]): Either[SerializeError, Block] =
+    def decode(bytes: Array[Byte]): Either[SerializeError, String] =
       Either
-        .catchNonFatal(Block.parseFrom(bytes))
+        .catchNonFatal(new String(bytes, StandardCharsets.UTF_8))
         .leftMap(SerializeError.apply)
   }
 
-  implicit object contractInstance extends Serialize[Contract] {
+  implicit object bytesInstance extends Serialize[Array[Byte]] {
 
-    def encode(a: Contract): Array[Byte] =
-      a.toByteArray
+    def encode(a: Array[Byte]): Array[Byte] = a
 
-    def decode(bytes: Array[Byte]): Either[SerializeError, Contract] =
-      Either
-        .catchNonFatal(Contract.parseFrom(bytes))
-        .leftMap(SerializeError.apply)
-  }
-
-  implicit object systemContractInstance extends Serialize[SystemContract] {
-
-    def encode(a: SystemContract): Array[Byte] =
-      a.toByteArray
-
-    def decode(bytes: Array[Byte]): Either[SerializeError, SystemContract] =
-      Either
-        .catchNonFatal(SystemContract.parseFrom(bytes))
-        .leftMap(SerializeError.apply)
+    def decode(bytes: Array[Byte]): Either[SerializeError, Array[Byte]] = Right(bytes)
   }
 }
