@@ -41,7 +41,7 @@ lazy val crypto = project
       bouncyCastle,
       guava,
       kalium,
-      "javax.xml.bind" % "jaxb-api" % "2.1"),
+      jaxb),
     fork := true,
     unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
     javaOptions += "-Djava.library.path=secp256k1/.libs",
