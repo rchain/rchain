@@ -40,9 +40,11 @@ lazy val crypto = project
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       bouncyCastle,
       guava,
-      kalium),
+      kalium,
+      "javax.xml.bind" % "jaxb-api" % "2.1"),
     fork := true,
-    javaOptions += "-Djava.library.path=crypto/src/main/resources",
+    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
+    javaOptions += "-Djava.library.path=secp256k1/.libs",
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
