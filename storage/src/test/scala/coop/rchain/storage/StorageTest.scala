@@ -11,22 +11,21 @@ class StorageTest extends FlatSpec with Matchers with EitherValues with StorageF
   behavior of "A Storage instance"
 
   it should "allow a String value to be round-tripped and then removed" in withTestStorage {
-    (storage: Storage) =>
+    (storage: Storage[Array[Byte], String]) =>
       val bytes: Array[Byte] = Array(0xDE, 0xAD, 0xBE, 0xEF).map(_.toByte)
       val hash: Array[Byte]  = MessageDigest.getInstance("SHA-256").digest(bytes)
-      val testKey: Key       = Hash(hash)
       val testValue: String  = "Fiery the angels fell"
 
       val Right((putResult, getResult, removeResult)) = for {
-        pr <- storage.put(testKey, testValue)
-        gr <- storage.get[String](testKey)
-        yr <- storage.remove(testKey)
+        pr <- storage.put(hash, testValue)
+        gr <- storage.get(hash)
+        yr <- storage.remove(hash)
       } yield (pr, gr, yr)
 
       putResult shouldBe (())
       getResult shouldBe testValue
       removeResult shouldBe true
 
-      storage.get[String](testKey).left.value shouldBe NotFound
+      storage.get(hash).left.value shouldBe NotFound
   }
 }

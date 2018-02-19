@@ -1,0 +1,8 @@
+export Y in {
+  import X in {
+    contract Y(i, n) = {
+      "y".display("\n") |
+      match i < n with true => { X(i + 1, n) }
+    }
+  }
+}
