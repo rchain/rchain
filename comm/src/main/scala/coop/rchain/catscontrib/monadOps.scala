@@ -11,6 +11,8 @@ final class MonadOps[F[_], A](val self: F[A])(implicit val F: Monad[F]) {
 object MonadOps {
   def forever[F[_]: Monad, A](fa: F[A]): F[A] =
     fa >>= κ(forever(fa))
+  def forever[F[_]: Monad, A](fa: A => F[A], a: A): F[A] =
+    fa(a) >>= (na => forever(fa, na))
 }
 
 trait ToMonadOps {

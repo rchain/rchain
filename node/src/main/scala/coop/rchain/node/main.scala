@@ -151,21 +151,22 @@ object Main {
       }
     }
 
-    def temp(net: p2p.Network): Task[Unit] =
-      for {
-        _ <- IOUtil.sleep[Task](5000L)
-        peers <- Task.delay {
-          net.net.findMorePeers(limit = 10)
-        }
-        _ <- peers.toList.traverse(p => net.connect[Task](p))
-        _ <- Task.delay {
-          val thisCount = net.net.table.peers.size
-          // if (thisCount != lastCount) {
-          // lastCount = thisCount
-          logger.info(s"Peers: $thisCount.")
-          // }
-        }
-      } yield ()
+    def findAndConnect(net: p2p.Network): Long => Task[Long] =
+      (lastCount: Long) =>
+        (for {
+          _ <- IOUtil.sleep[Task](5000L)
+          peers <- Task.delay { // TODO lift findMorePeers to return IO
+            net.net.findMorePeers(limit = 10)
+          }
+          _ <- peers.toList.traverse(p => net.connect[Task](p))
+          tc <- Task.delay { // TODO refactor once findMorePeers return IO
+            val thisCount = net.net.table.peers.size
+            if (thisCount != lastCount) {
+              logger.info(s"Peers: $thisCount.")
+            }
+            thisCount
+          }
+        } yield tc)
 
     val recipe: Effect[Unit] = for {
       addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
@@ -175,7 +176,7 @@ object Main {
       _    <- iologger.info[Effect](s"Listening for traffic on $net.")
       _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
       else connectToBootstrap(net)
-      _ <- temp(net).forever.toEffect
+      _ <- MonadOps.forever(findAndConnect(net), 0L).toEffect
     } yield ()
 
     import monix.execution.Scheduler.Implicits.global

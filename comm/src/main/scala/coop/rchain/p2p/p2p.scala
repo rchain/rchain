@@ -73,6 +73,7 @@ final case class Network(
       ehs    = EncryptionHandshakeMessage(proto, ts)
       remote = new ProtocolNode(peer, this.net)
     } yield {
+      // TODO roundTrip should return IO, then it can become part of this expression
       net.roundTrip(ehs, remote) match {
         case Right(resp) => {
           logger.debug(
