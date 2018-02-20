@@ -64,7 +64,7 @@ $ sbt "project storage" clean compile test
 ```
 or
 ```
-$ sbt "storage / clean" "storage / compile" "storage / test"
+$ sbt storage/clean storage/compile storage/test
 ```
 
 ### Building
@@ -91,7 +91,7 @@ sbt:rchain> projects
 In most cases, simply building the project you care about is enough:
 
 ```
-sbt:rchain> storage / compile
+sbt:rchain> storage/compile
 [info] Updating storage...
 [info] Done updating.
 [info] Compiling 3 protobuf files to /home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main
