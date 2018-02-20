@@ -132,31 +132,24 @@ object tuple {
     override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
 
+      def wrapper[A, B](f: Int => Option[Ob], v: Int, size: Int): Either[PrimError, Ob] =
+        f(v).toRight(IndexOutOfBounds(v, size))
+
       // Check and get arguments: Tuple, Fixnum, Fixnum
       checkTuple(0, elem).flatMap(
         t => // Ensure arg0 is a Tuple
           checkFixnum(1, elem).flatMap(n => // Ensure arg1 is a Fixnum
             checkFixnum(2, elem).flatMap { m => // Ensure arg2 is a Fixnum
 
-              t.nth(n.value) match { // Extract nth
-                case Some(nv: Fixnum) =>
-                  t.nth(m.value) match { // Extract mth
-                    case Some(mv: Fixnum) =>
-                      t.setNth(n.value, mv) match { //  set mth
-                        case Some(t1: Tuple) =>
-                          t1.setNth(m.value, nv) match { // Set nth
-                            case Some(ret: Tuple) => Right(ret) // Success
-                            case None =>
-                              Left(IndexOutOfBounds(m.value, t.elem.size)) // Fail set nth
-                          }
-                        case None => Left(IndexOutOfBounds(n.value, t.elem.size)) // Fail set mth
-                      }
-                    case None => Left(IndexOutOfBounds(m.value, t.elem.size)) // Fail extract mth
-                  }
-                case None => Left(IndexOutOfBounds(n.value, t.elem.size)) // Fail extract nth
-              }
-
+              val f = wrapper(_: Int => Option[Ob], _: Int, t.elem.size)
+              for {
+                nv  <- f(t.nth, n.value)
+                mv  <- f(t.nth, m.value)
+                t1  <- f(t.setNth(_, mv), n.value)
+                res <- f(t1.setNth(_, nv), m.value)
+              } yield res.asInstanceOf[Tuple]
           }))
+
     }
   }
 
