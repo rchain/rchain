@@ -74,7 +74,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
         List((Some("Q"), ProcSort), (Some("y"), NameSort)))._1
     )
   }
-  "Tuple" should "propgate free variables" in {
+  "Tuple" should "propagate free variables" in {
     val tupleData = new ListProc()
     tupleData.add(new PVar("Q"))
     tupleData.add(new PGround(new GroundInt(7)))
