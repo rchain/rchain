@@ -236,7 +236,7 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)]) {
 
   def absorbFree(binders: DebruijnLevelMap[T]): DebruijnLevelMap[T] = {
     val finalNext = next + binders.next
-    val adjustNext = this.next
+    val adjustNext = next
     binders.env.foldLeft(this) {
       case (db: DebruijnLevelMap[T], (k: String, (level: Int, varType: T @unchecked))) =>
         DebruijnLevelMap(finalNext, db.env + (k -> ((level + adjustNext, varType))))
