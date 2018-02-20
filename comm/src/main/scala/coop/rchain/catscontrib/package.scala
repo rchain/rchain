@@ -1,5 +1,3 @@
 package coop.rchain
 
-package object catscontrib {
-  object instances extends CaptureInstances with EitherTInstances
-}
+package object catscontrib extends CaptureInstances with EitherTInstances with WriterTInstances
