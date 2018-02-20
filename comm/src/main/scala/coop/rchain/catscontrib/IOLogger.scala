@@ -10,6 +10,11 @@ class IOLogger(name: String) {
   def info[F[_]: Capture](msg: String): F[Unit] = Capture[F].capture {
     logger.info(msg)
   }
+
+  def debug[F[_]: Capture](msg: String): F[Unit] = Capture[F].capture {
+    logger.debug(msg)
+  }
+
 }
 
 object IOLogger {
