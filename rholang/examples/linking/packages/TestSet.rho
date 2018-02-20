@@ -69,7 +69,9 @@ export TestSet in {
               }
             }
           } |
-          loop(tests)
+          //push tests to execution stack in reverse order so
+          //that they are executed in declaration order
+          loop(tests.reverse())
         }
       } |
       new lock in {
