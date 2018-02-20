@@ -87,7 +87,7 @@ export LinkedListApi in {
         Fold(list, Nil, combinator, nilReturn) | for(_ <- nilReturn){ isDone(true) }
       }
     } |
-    contract Get(index, list, return) = {
+    contract Get(list, index, return) = {
       new combinatorAndCondition in {
         contract combinatorAndCondition(head, accumulatedValue, return) = {
           match accumulatedValue with [i, _] => {
@@ -103,7 +103,7 @@ export LinkedListApi in {
         }
       }
     } |
-    contract IndexOf(value, list, return) = {
+    contract IndexOf(list, value, return) = {
       new combinatorAndCondition in {
         contract combinatorAndCondition(head, accumulatedValue, return) = {
           return([head == value, accumulatedValue + 1])

@@ -29,7 +29,7 @@ import IArrayApi in {
         contract append_test(_) = {
           //should put the new element at the end of the array
           new result, answer in {
-            append(4, [1, 2, 3], result) | answer([1, 2, 3, 4]) | 
+            append([1, 2, 3], 4, result) | answer([1, 2, 3, 4]) | 
             for(arr1 <- result) {
               for(arr2 <- answer){ 
                 match arr1 == arr2 with true => { "Append: Pass".display("\n") }
@@ -115,7 +115,7 @@ import IArrayApi in {
         contract get_test(_) = {
           //get the i-th element of the array (0-based index)
           new result in {
-            get(2, [3, 4, 5, 6], result) | for(r <- result){
+            get([3, 4, 5, 6], 2, result) | for(r <- result){
               match r == 5 with true => { "Get: Pass".display("\n") }
               _ => { "Get: Fail".display("\n") }
             }
@@ -124,8 +124,8 @@ import IArrayApi in {
         contract indexOf_test(_) = {
           //get the index in the array of the element, or -1 if not present
           new result1, result2 in {
-            indexOf(5, [4, 5, 6], result1) |
-            indexOf(100, [1, 2, 3], result2) |
+            indexOf([4, 5, 6], 5, result1) |
+            indexOf([1, 2, 3], 100, result2) |
             for(r1 <- result1; r2 <- result2) {
               match r1 == 1 with true => {
                 match r2 == -1 with true => { "IndexOf: Pass".display("\n") }
@@ -139,8 +139,8 @@ import IArrayApi in {
           //get the number of elements in the array
           new result in {
             length([1, 2, 3, 4], result) | for(r <- result) {
-              match r == 4 with true => { "IndexOf: Pass".display("\n") }
-              _ => { "IndexOf: Fail".display("\n") }
+              match r == 4 with true => { "Length: Pass".display("\n") }
+              _ => { "Length: Fail".display("\n") }
             }
           }
         } |
