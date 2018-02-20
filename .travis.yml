@@ -4,14 +4,14 @@ scala:
 sbt_args: -no-colors
 dist: trusty
 env:
-  - SUBPROJECT=comm
-  - SUBPROJECT=rholang
-  - SUBPROJECT=roscala
   - SUBPROJECT=rosette
-  - SUBPROJECT=storage
-script: ./scripts/build-subproject.sh
+  - SUBPROJECT=core
+script:
+  - ./scripts/build-subprojects.sh
 sudo: required
-install: ./scripts/install.sh
+install:
+  - ./scripts/install_secp.sh
+  - ./scripts/install.sh
 cache:
   directories:
     - "$HOME/.ivy2/cache"

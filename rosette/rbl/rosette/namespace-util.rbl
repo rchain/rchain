@@ -76,13 +76,15 @@
         (else (= ptrn product))))
 
 (defPure Tuple (match-tuple-pattern other)
-  (if (or (null? (self)) (null? other))
-      (same? (self) other)
-      (let  [[[i & r1] (self)]
-             [[j & r2] other]]
-        (if (match-pattern i j)
-            (match-tuple-pattern r1 r2)
-            #f))))
+  (if (or (type? other Tuple) (null? other))
+      (if (or (null? (self)) (null? other))
+          (same? (self) other)
+          (let  [[[i & r1] (self)]
+                 [[j & r2] other]]
+            (if (match-pattern i j)
+                (match-tuple-pattern r1 r2)
+                #f)))
+      #f))
 
 ;;; Equivalent to (head (drop-while list niv?)) - see Haskell dropWhile
 (defProc (non-niv-head list)

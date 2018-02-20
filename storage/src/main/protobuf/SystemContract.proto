@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-option java_package = "coop.rchain.storage.models";
-
-message SystemContract {
-  bytes value = 1;
-}

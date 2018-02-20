@@ -1,22 +1,24 @@
 package coop.rchain.storage
 
+import coop.rchain.models.Serialize
+
 /**
   * Interface for the Storage Layer
   */
-trait IStorage {
+trait IStorage[K, V] {
 
   /**
     * Puts a given key-value pair in LMDB
     */
-  def put[A](key: Key, value: A)(implicit s: Serialize[A]): Either[Error, Unit]
+  def put(key: K, value: V): Either[Error, Unit]
 
   /**
     * Retrieves the value for a given key from LMDB
     */
-  def get[A](key: Key)(implicit s: Serialize[A]): Either[Error, A]
+  def get(key: K): Either[Error, V]
 
   /**
     * Removes a the key-value pair for a given key from LMDB
     */
-  def remove(key: Key): Either[Error, Boolean]
+  def remove(key: K): Either[Error, Boolean]
 }

@@ -12,17 +12,15 @@ import scala.util.{Failure, Success}
 /**
   * Implements the lower levels of the network protocol.
   */
-final case class UnicastNetwork(id: NodeIdentifier,
-                                endpoint: Endpoint,
+final case class UnicastNetwork(peer: PeerNode,
                                 next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
     with ProtocolDispatcher[SocketAddress] {
 
   val logger = Logger("network-overlay")
 
-  // TODO use factory method in companion object instead
-  def this(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]]) =
-    this(peer.id, peer.endpoint, next)
+  val id: NodeIdentifier = peer.id
+  val endpoint: Endpoint = peer.endpoint
 
   @SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass")) // SI-4440
   case class PendingKey(remote: Seq[Byte], timestamp: Long, seq: Long)
@@ -31,7 +29,7 @@ final case class UnicastNetwork(id: NodeIdentifier,
     new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
   val local = new ProtocolNode(id, endpoint, this)
-  val comm  = UnicastComm(local)
+  val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
   private val receiver = new Thread {

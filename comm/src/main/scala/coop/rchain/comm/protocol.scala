@@ -36,10 +36,9 @@ trait ProtocolHandler {
     * Send a message to a single, remote node, and wait up to the
     * specified duration for a response.
     */
-  def roundTrip(
-      msg: ProtocolMessage,
-      remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
+  def roundTrip(msg: ProtocolMessage,
+                remote: ProtocolNode,
+                timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage]
 
   /**
     * Asynchronously broadcast a message to all known peers.
@@ -149,18 +148,12 @@ final case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolR
   * table that are closest to a given key.
   */
 final case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def lookupId: Option[Seq[Byte]] =
-    for {
-      lookup <- proto.message.lookup
-    } yield lookup.id.toByteArray
+  def lookupId: Option[Seq[Byte]] = proto.message.lookup.map(_.id.toByteArray)
 
   def response(src: ProtocolNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield
-      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes),
-                            System.currentTimeMillis)
-
+    header.map { h =>
+      LookupResponseMessage(ProtocolMessage.lookupResponse(src, h, nodes), System.currentTimeMillis)
+    }
 }
 
 /**

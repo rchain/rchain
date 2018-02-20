@@ -39,8 +39,7 @@ object Fsm {
     */
   private[this] def sortAlphabet(alphabet: Set[Char]): Seq[Char] =
     if (alphabet.contains(anythingElse)) {
-      alphabet.toList.sortBy(sym =>
-        if (sym == anythingElse) Int.MaxValue else sym.toInt)
+      alphabet.toList.sortBy(sym => if (sym == anythingElse) Int.MaxValue else sym.toInt)
     } else {
       alphabet.toSeq
     }
@@ -56,14 +55,13 @@ object Fsm {
                               isFinal: T => Boolean,
                               follow: (T, Char) => Option[T]): Fsm = {
     //actual type of the 'states' is deducted from 'initial' => ArrayBuffer[T]
-    val states = mutable.ArrayBuffer(initial)
+    val states      = mutable.ArrayBuffer(initial)
     val transitions = mutable.Map[Int, Map[Char, Int]]()
 
     val sortedAlphabet = sortAlphabet(alphabet)
     //we can't use any kind of range loop or iterators here, since collection is growing
     @tailrec
-    def iterate(currentStateIdx: Int = 0,
-                currentFinals: Set[Int] = Set()): Set[Int] = {
+    def iterate(currentStateIdx: Int = 0, currentFinals: Set[Int] = Set()): Set[Int] = {
       val currentState = states(currentStateIdx)
       //add to finals if needed
       val nextFinals = if (isFinal(currentState)) {
@@ -109,8 +107,7 @@ object Fsm {
       case (fsm, fsmIndex) => fsmIndex -> fsm.initialState
     }.toMap
 
-    def follow(currentState: Map[Int, Int],
-               symbol: Char): Option[Map[Int, Int]] = {
+    def follow(currentState: Map[Int, Int], symbol: Char): Option[Map[Int, Int]] = {
       val next = fsms.zipWithIndex.flatMap {
         case (fsm, fsmIdx) =>
           currentState
@@ -160,9 +157,7 @@ object Fsm {
     * recognised by the first FSM in the list, but none of the others.
     */
   def difference(fsms: Fsm*): Fsm =
-    parallel(finalityStates =>
-               finalityStates.head && !finalityStates.drop(1).forall(x => x),
-             fsms)
+    parallel(finalityStates => finalityStates.head && !finalityStates.drop(1).forall(x => x), fsms)
 
   /**
     * Treat `fsms` as a collection of sets of strings and compute the symmetric
@@ -188,10 +183,8 @@ object Fsm {
         if ((currentFsmIdx < fsms.size - 1)
             && fsms(currentFsmIdx).finalStates.contains(currentState)) {
           val nextFsmIdx = currentFsmIdx + 1
-          val nextState = fsms(nextFsmIdx).initialState
-          updateIndexes(nextFsmIdx,
-                        nextState,
-                        currentSet + (nextFsmIdx -> nextState))
+          val nextState  = fsms(nextFsmIdx).initialState
+          updateIndexes(nextFsmIdx, nextState, currentSet + (nextFsmIdx -> nextState))
         } else {
           currentSet
         }
@@ -217,8 +210,7 @@ object Fsm {
     // Follow the collection of states through all FSMs at once, jumping to the
     // next FSM if we reach the end of the current one
     // TODO: improve all follow() implementations to allow for dead metastates?
-    def follow(currentStates: Set[(Int, Int)],
-               currentSymbol: Char): Option[Set[(Int, Int)]] = {
+    def follow(currentStates: Set[(Int, Int)], currentSymbol: Char): Option[Set[(Int, Int)]] = {
       val nextStates = currentStates.flatMap {
         case (fsmIndex, fsmState) =>
           fsms(fsmIndex)
@@ -255,23 +247,19 @@ case class Fsm(alphabet: Set[Char],
   require(finalStates != null, "finals can't be null")
   require(transitions != null, "map can't be null")
 
-  require(states.contains(initialState),
-          "Initial state " + initialState + " must be one of states")
+  require(states.contains(initialState), "Initial state " + initialState + " must be one of states")
   require(finalStates.forall(fin => states.contains(fin)),
           "Final states must be a subset of states")
 
   for {
     (mapEntry, stateTransitionEntry) <- transitions
-    (nextSymbol, nextState) <- stateTransitionEntry
+    (nextSymbol, nextState)          <- stateTransitionEntry
   } {
-    require(states.contains(mapEntry),
-            "Map state " + mapEntry + " must be one of states")
-    require(
-      alphabet.contains(nextSymbol),
-      "Transition symbol " + nextSymbol + " -> " + nextState + " must be one of alphabet")
-    require(
-      states.contains(nextState),
-      "Transition state  " + nextSymbol + " -> " + nextState + " must be one of states")
+    require(states.contains(mapEntry), "Map state " + mapEntry + " must be one of states")
+    require(alphabet.contains(nextSymbol),
+            "Transition symbol " + nextSymbol + " -> " + nextState + " must be one of alphabet")
+    require(states.contains(nextState),
+            "Transition state  " + nextSymbol + " -> " + nextState + " must be one of states")
   }
 
   /**
@@ -284,7 +272,7 @@ case class Fsm(alphabet: Set[Char],
     */
   def isLive(state: Int): Boolean = {
     val reachable = mutable.Queue(state)
-    val checked = mutable.Set(state)
+    val checked   = mutable.Set(state)
     //can't use any functional iterator here (like reachable.exists), since queue is modified
     while (reachable.nonEmpty) {
       val reachableState = reachable.dequeue
@@ -376,11 +364,10 @@ case class Fsm(alphabet: Set[Char],
     val resInitials = finalStates
     //Find every possible way to reach the current state-set
     //using this symbol.
-    def follow(currentStates: Set[Int],
-               currentSymbol: Char): Option[Set[Int]] = {
+    def follow(currentStates: Set[Int], currentSymbol: Char): Option[Set[Int]] = {
       val nextStates = (for {
         (transitionState, transitionMap) <- transitions
-        currentState <- currentStates
+        currentState                     <- currentStates
         if transitionMap.get(currentSymbol).contains(currentState)
       } yield transitionState).toSet
 
@@ -401,8 +388,7 @@ case class Fsm(alphabet: Set[Char],
   def everythingBut: Fsm = {
     def resInitial = initialState :: Nil
 
-    def follow(currentState: List[Int],
-               currentSymbol: Char): Option[List[Int]] =
+    def follow(currentState: List[Int], currentSymbol: Char): Option[List[Int]] =
       Some(
         currentState.headOption
           .flatMap(headState => nextState(headState, currentSymbol))
@@ -434,9 +420,9 @@ case class Fsm(alphabet: Set[Char],
     // state that this input string leads to. This means we don't have to run the
     // state machine from the very beginning every time we want to check a new
     // string.
-    val pending = mutable.Queue[(String, Int)]()
+    val pending       = mutable.Queue[(String, Int)]()
     val pendingFinals = mutable.Queue[String]()
-    var needInitial = true
+    var needInitial   = true
 
     def nextStr: Option[String] =
       if (pendingFinals.nonEmpty) {
@@ -498,8 +484,7 @@ case class Fsm(alphabet: Set[Char],
     //here we always work with "currentState -> iteration" pairs
     def initial = Set(this.initialState -> 0)
 
-    def follow(crawlState: Set[(Int, Int)],
-               symbol: Char): Option[Set[(Int, Int)]] = {
+    def follow(crawlState: Set[(Int, Int)], symbol: Char): Option[Set[(Int, Int)]] = {
 
       val next = crawlState
         .filter { case (_, iteration) => iteration < multiplier }
