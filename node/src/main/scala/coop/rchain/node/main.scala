@@ -48,7 +48,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 }
 
 object Main {
-  val logger = Logger("main")
+  val logger   = Logger("main")
+  val iologger = IOLogger("main")
 
   def whoami(port: Int): Option[InetAddress] = {
 
@@ -119,8 +120,12 @@ object Main {
     type CommErrT[F[_], A] = EitherT[F, CommError, A]
     type Effect[A]         = CommErrT[LogT[Task, ?], A]
 
-    implicit class EitherOps[A](e: Either[CommError, A]) {
+    implicit class EitherEffectOps[A](e: Either[CommError, A]) {
       def toEffect: Effect[A] = EitherT[LogT[Task, ?], CommError, A](e.pure[LogT[Task, ?]])
+    }
+
+    implicit class TaskEffectOps[A](t: Task[A]) {
+      def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
     val calculateKeys: Effect[PublicPrivateKeys] = for {
@@ -128,43 +133,50 @@ object Main {
       ks   <- if (inDb) fetchKeys[Effect] else generate.pure[Effect]
     } yield ks
 
-    val recipe: Effect[Unit] = for {
-      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
-      keys <- calculateKeys
-    } yield {
-      val net = p2p.Network(addy, keys)
-      logger.info(s"Listening for traffic on $net.")
+    // move to p2p.Network
+    def connectToBootstrap(net: p2p.Network): Effect[Unit] =
+      for {
+        bootstrapAddrStr <- conf.bootstrap.toOption
+          .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+          .toEffect
+        bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
+        _             <- iologger.info[Effect](s"Bootstrapping from $bootstrapAddr.")
+        _             <- net.connect[Effect](bootstrapAddr)
+      } yield ()
 
-      if (!conf.standalone()) {
-        conf.bootstrap.toOption.flatMap(p2p.NetworkAddress.parse _ andThen (_.toOption)).foreach {
-          address =>
-            logger.info(s"Bootstrapping from $address.")
-            net.connect(address)
-        }
-      } else {
-        logger.info(s"Starting stand-alone node.")
-      }
-
+    def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
         net.disconnect
         logger.info("Goodbye.")
       }
-
-      val pauseTime = 5000L
-      var lastCount = 0
-      while (true) {
-        Thread.sleep(pauseTime)
-        for (peer <- net.net.findMorePeers(10)) {
-          logger.info(s"Possibly new peer: $peer.")
-          net.connect(peer)
-        }
-        val thisCount = net.net.table.peers.size
-        if (thisCount != lastCount) {
-          lastCount = thisCount
-          logger.info(s"Peers: $thisCount.")
-        }
-      }
     }
+
+    def temp(net: p2p.Network): Task[Unit] =
+      for {
+        _ <- IOUtil.sleep[Task](5000L)
+        peers <- Task.delay {
+          net.net.findMorePeers(limit = 10)
+        }
+        _ <- peers.toList.traverse(p => net.connect[Task](p))
+        _ <- Task.delay {
+          val thisCount = net.net.table.peers.size
+          // if (thisCount != lastCount) {
+          // lastCount = thisCount
+          logger.info(s"Peers: $thisCount.")
+          // }
+        }
+      } yield ()
+
+    val recipe: Effect[Unit] = for {
+      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
+      keys <- calculateKeys
+      net  <- p2p.Network(addy, keys).pure[Effect]
+      _    <- addShutdownHook(net).toEffect
+      _    <- iologger.info[Effect](s"Listening for traffic on $net.")
+      _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
+      else connectToBootstrap(net)
+      _ <- temp(net).forever.toEffect
+    } yield ()
 
     import monix.execution.Scheduler.Implicits.global
     import TaskContrib._

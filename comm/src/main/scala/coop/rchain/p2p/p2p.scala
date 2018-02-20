@@ -6,6 +6,7 @@ import coop.rchain.comm.protocol.rchain._
 import scala.util.control.NonFatal
 import com.typesafe.scalalogging.Logger
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
 
 /*
  * Inspiration from ethereum:
@@ -38,7 +39,7 @@ case object NetworkAddress {
         } yield NetworkAddress(scheme, key, host, port)
 
       addy match {
-        case Some(NetworkAddress(scheme, key, host, port)) =>
+        case Some(NetworkAddress(_, key, host, port)) =>
           Right(new PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
         case _ => Left(ParseError(s"bad address: $str"))
       }
@@ -54,7 +55,8 @@ final case class Network(
 
   import NetworkProtocol._
 
-  val logger = Logger("p2p")
+  val logger   = Logger("p2p")
+  val iologger = IOLogger("p2p")
 
   val net = new UnicastNetwork(local, Some(this))
 
@@ -63,30 +65,32 @@ final case class Network(
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
     * the same language.
     */
-  def connect(peer: PeerNode): Unit = {
-    logger.debug(s"connect(): Connecting to $peer")
-    val ehs = EncryptionHandshakeMessage(
-      encryptionHandshake(net.local, keys),
-      System.currentTimeMillis,
-    )
-    val remote = new ProtocolNode(peer, this.net)
-    net.roundTrip(ehs, remote) match {
-      case Right(resp) => {
-        logger.debug(s"connect(): Received encryption handshake response from ${resp.sender.get}.")
-        val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
-                                           System.currentTimeMillis)
-        net.roundTrip(phs, remote) match {
-          case Right(resp) => {
-            logger.debug(
-              s"connect(): Received protocol handshake response from ${resp.sender.get}.")
-            net.add(remote)
+  def connect[F[_]: Capture: FlatMap](peer: PeerNode): F[Unit] =
+    for {
+      _  <- iologger.debug[F](s"connect(): Connecting to $peer")
+      ts <- IOUtil.currentMilis[F]
+      proto  = encryptionHandshake(net.local, keys)
+      ehs    = EncryptionHandshakeMessage(proto, ts)
+      remote = new ProtocolNode(peer, this.net)
+    } yield {
+      net.roundTrip(ehs, remote) match {
+        case Right(resp) => {
+          logger.debug(
+            s"connect(): Received encryption handshake response from ${resp.sender.get}.")
+          val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
+                                             System.currentTimeMillis)
+          net.roundTrip(phs, remote) match {
+            case Right(resp) => {
+              logger.debug(
+                s"connect(): Received protocol handshake response from ${resp.sender.get}.")
+              net.add(remote)
+            }
+            case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
           }
-          case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
         }
+        case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
       }
-      case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
     }
-  }
 
   def disconnect(): Unit = {
     net.broadcast(
