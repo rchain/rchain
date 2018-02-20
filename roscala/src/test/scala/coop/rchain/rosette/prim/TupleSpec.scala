@@ -137,4 +137,29 @@ class TupleSpec extends FlatSpec with Matchers {
     tplSafeNth.fn(newCtxt) should be('left)
   }
 
+  /** tuple-xchg */
+  "tplXchg" should "correctly exchange elements of a Tuple" in {
+    val tup    = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val result = Seq(Fixnum(1), Fixnum(4), Fixnum(3), Fixnum(2), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 3,
+                argvec = Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(1)), Fixnum(3)))
+
+    tplXchg.fn(newCtxt) should be(Right(Tuple(result)))
+  }
+
+  it should "fail for out of bounds arguments" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val newCtxt =
+      ctxt.copy(nargs = 3,
+                argvec = Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(-100)), Fixnum(100)))
+    tplXchg.fn(newCtxt) should be('left)
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplXchg.fn(newCtxt) should be('left)
+  }
+
 }
