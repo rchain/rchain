@@ -118,6 +118,41 @@ object tuple {
     }
   }
 
+  /**
+    * Define the "tuple-xchg" primitive.
+    * This exchanges the nth and mth elements of the specified Tuple
+    * e.g. (tuple-xchg [1 2 3 4 5] 1 3) ==> [1 4 3 2 5]
+    */
+  object tplXchg extends Prim {
+    override val name: String = "tuple-xchg"
+    override val minArgs: Int = 3
+    override val maxArgs: Int = 3
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem = ctxt.argvec.elem
+
+      def wrapper[A, B](f: Int => Option[Ob], v: Int, size: Int): Either[PrimError, Ob] =
+        f(v).toRight(IndexOutOfBounds(v, size))
+
+      // Check and get arguments: Tuple, Fixnum, Fixnum
+      checkTuple(0, elem).flatMap(
+        t => // Ensure arg0 is a Tuple
+          checkFixnum(1, elem).flatMap(n => // Ensure arg1 is a Fixnum
+            checkFixnum(2, elem).flatMap { m => // Ensure arg2 is a Fixnum
+
+              val f = wrapper(_: Int => Option[Ob], _: Int, t.elem.size)
+              for {
+                nv  <- f(t.nth, n.value)
+                mv  <- f(t.nth, m.value)
+                t1  <- f(t.setNth(_, mv), n.value)
+                res <- f(t1.setNth(_, nv), m.value)
+              } yield res.asInstanceOf[Tuple]
+          }))
+
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the specified parameter for type Tuple. Return a PrimError if it is

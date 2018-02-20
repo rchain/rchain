@@ -12,4 +12,5 @@ final case class UnknownProtocolError(msg: String)     extends CommError
 final case object KeysNotAvailable                     extends CommError
 final case class ParseError(msg: String)               extends CommError
 final case object EncryptionHandshakeIncorrectlySigned extends CommError
+final case object BootstrapNotProvided                 extends CommError
 // TODO add Show instance

@@ -153,20 +153,45 @@ object GroundSortMatcher {
         ScoredTerm(EList(pars.map(_.term)), Node(Score.ELIST, pars.map(_.score): _*))
       case gt: ETuple =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score): _*))
+        ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score):_*))
+      // Note ESet and EMap rely on the stableness of Scala's sort
+      // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case gs: ESet =>
-        val sortedPars = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
-        ScoredTerm(ESet(sortedPars.map(_.term)), Node(Score.ESET, sortedPars.map(_.score): _*))
+        def deduplicate(scoredTerms: List[ScoredTerm[Par]]) =
+          scoredTerms.filterNot {
+            var set = Set[Par]()
+            scoredTerm =>
+              {
+                val exists = set(scoredTerm.term)
+                set += scoredTerm.term
+                exists
+              }
+          }
+        val sortedPars       = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
+        val deduplicatedPars = deduplicate(sortedPars)
+        ScoredTerm(ESet(deduplicatedPars.map(_.term)),
+                   Node(Score.ESET, deduplicatedPars.map(_.score): _*))
       case gm: EMap =>
         def sortKeyValuePair(kv: (Par, Par)): ScoredTerm[Tuple2[Par, Par]] = {
           val (key, value) = kv
-          val sortedKey    = ParSortMatcher.sortMatch(key)
-          val sortedValue  = ParSortMatcher.sortMatch(value)
-          ScoredTerm((sortedKey.term, sortedValue.term),
-                     Node(Seq(sortedKey.score, sortedValue.score)))
+          val sortedKey = ParSortMatcher.sortMatch(key)
+          val sortedValue = ParSortMatcher.sortMatch(value)
+          ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
         }
-        val sortedPars = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
-        ScoredTerm(EMap(sortedPars.map(_.term)), Node(Score.EMAP, sortedPars.map(_.score): _*))
+        def deduplicateLastWriteWins(scoredTerms: List[ScoredTerm[Tuple2[Par, Par]]]) =
+          scoredTerms.reverse.filterNot {
+            var set = Set[Par]()
+            scoredTerm =>
+              {
+                val exists = set(scoredTerm.term._1)
+                set += scoredTerm.term._1
+                exists
+              }
+          }.reverse
+        val sortedPars       = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
+        val deduplicatedPars = deduplicateLastWriteWins(sortedPars)
+        ScoredTerm(EMap(deduplicatedPars.map(_.term)),
+                   Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
     }
 }
 
