@@ -1,5 +1,7 @@
 package coop.rchain.storage
 
+import coop.rchain.models.Serialize
+
 /**
   * Interface for the Storage Layer
   */

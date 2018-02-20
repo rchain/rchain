@@ -38,17 +38,29 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      scrypto,
-      kalium)
+      bouncyCastle,
+      guav,
+      kalium,
+      jaxb),
+    fork := true,
+    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
+    javaOptions += "-Djava.library.path=secp256k1/.libs",
+    doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
 lazy val comm = project
   .settings(
     commonSettings,
     version := "0.1",
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
-      uPnP),
+      uPnP,
+      hasher,
+      cats,
+      monix,
+      guava
+    ),
     PB.targets in Compile := Seq(
       PB.gens.java -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
@@ -57,6 +69,21 @@ lazy val comm = project
       (javaSource in Compile).value,
       (sourceManaged in Compile).value
     ).map(_.getPath ++ "/.*").mkString(";")
+  )
+
+lazy val models = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      cats,
+      scalaCheck
+    ),
+    connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
   )
 
 lazy val storage = project
@@ -72,7 +99,7 @@ lazy val storage = project
     ),
     crossScalaVersions := Seq("2.11.12", scalaVersion.value),
     exportJars := true
-  )
+  ).dependsOn(models)
 
 lazy val node = project
   .enablePlugins(DockerPlugin)
@@ -80,7 +107,7 @@ lazy val node = project
     commonSettings,
 
     version := "0.1",
-
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
@@ -131,7 +158,7 @@ lazy val rholang = project
 
     // Fix up root directory so tests find relative files they need
     fork in Test := true
-  )
+  ).dependsOn(models)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(

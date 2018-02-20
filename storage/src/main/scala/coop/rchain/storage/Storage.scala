@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import cats.syntax.either._
+import coop.rchain.models.Serialize
 import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Dbi, Env, Txn}
@@ -37,7 +38,7 @@ class Storage[K, V] private (env: Env[ByteBuffer], db: Dbi[ByteBuffer])(implicit
             val fetchedBuff = txn.`val`()
             val fetched     = new Array[Byte](fetchedBuff.remaining())
             ignore { fetchedBuff.get(fetched) }
-            sb.decode(fetched)
+            sb.decode(fetched).leftMap(SerializeError.apply)
           } else {
             Left[Error, V](NotFound)
           }

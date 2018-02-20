@@ -142,54 +142,10 @@ sbt:storage>
 
 #### Whole-project Build
 
-Everything that can be stitched together can be done so with the `node` project. `sbt` will even make a Docker image you can run:
+Everything that can be stitched together can be done so with the `node` project. `sbt` will even make a Docker image you can run. A single-line build command that does the trick is
 ```
-sbt:rchain> bnfc:generate
-[info] Compiling 234 Java sources to /home/kirkwood/src/rchain/rholang/target/scala-2.12/bnfc-classes ...
-[info] /home/kirkwood/src/rchain/rholang/src/main/java/rholang/parsing/delimc/parser.java: Some input files use or override a deprecated API.
-[info] /home/kirkwood/src/rchain/rholang/src/main/java/rholang/parsing/delimc/parser.java: Recompile with -Xlint:deprecation for details.
-[info] /home/kirkwood/src/rchain/rholang/src/main/java/JLex/Main.java: /home/kirkwood/src/rchain/rholang/src/main/java/JLex/Main.java uses unchecked or unsafe operations.
-[info] /home/kirkwood/src/rchain/rholang/src/main/java/JLex/Main.java: Recompile with -Xlint:unchecked for details.
-[info] Done compiling.
-
-97 rules accepted
-
-   (Tested with  JFlex 1.4.3 )
-   (Parser created only for category Contr)
-   (Tested with  CUP 0.10k )
-writing new file /home/kirkwood/src/rchain/rholang/src/main/java/coop/rchain/rholang/syntax/rholang/Absyn/Contr.java
-[... lots of parser generator stuff snipped ...]
-[info] Done compiling.
-[info] Compiling 1 Scala source to /home/kirkwood/src/rchain/node/target/scala-2.12/classes ...
-[...]
-[info] Packaging /home/kirkwood/src/rchain/node/target/scala-2.12/node-assembly-0.1.jar ...
-[info] Done packaging.
-[info] Sending build context to Docker daemon  40.83MB
-[info] Step 1/5 : FROM openjdk:8u151-jre-alpine
-[info]  ---> a7441b26c41b
-[info] Step 2/5 : ADD 0/node-assembly-0.1.jar /node-assembly-0.1.jar
-[info]  ---> e0839c75738a
-[info] Step 3/5 : ENV RCHAIN_TARGET_JAR="/node-assembly-0.1.jar"
-[info]  ---> Running in 0b45d96d1afc
-[info] Removing intermediate container 0b45d96d1afc
-[info]  ---> 596c9fcbc8fc
-[info] Step 4/5 : ADD 1/main.sh /bin
-[info]  ---> ee310eb8b156
-[info] Step 5/5 : ENTRYPOINT ["\/bin\/main.sh"]
-[info]  ---> Running in d2874d6b814a
-[info] Removing intermediate container d2874d6b814a
-[info]  ---> 08e1d3b9f33a
-[info] Successfully built 08e1d3b9f33a
-[info] Tagging image 08e1d3b9f33a with name: coop.rchain/coop.rchain-node:latest
-[info] Tagging image 08e1d3b9f33a with name: coop.rchain/coop.rchain-node:v0.1
-[success] Total time: 17 s, completed Feb 13, 2018 4:39:20 PM
-sbt:rchain>
-```
-
-A single-line build command that does the trick is
-```
-<computer:~/src/rchain (dev)> sbt clean bnfc:generate compile docker
-[... lots of output snipped ...]
+<computer:~/src/rchain (dev)> sbt clean bnfc:clean bnfc:generate compile docker
+[... tons of output snipped ...]
 [info] Step 5/5 : ENTRYPOINT ["\/bin\/main.sh"]
 [info]  ---> Running in 015ae98a7ea7
 [info] Removing intermediate container 015ae98a7ea7
@@ -217,19 +173,16 @@ Invoking the above Docker image is simple enough:
 15:49:26.974 [main] DEBUG p2p - connect(): Connecting to #{PeerNode c12882b563fa47c9af297ce952ef7d94}
 [...]
 ```
-A single build.sbt file now resides at top level. This should be pretty easy to bust apart, should we decide to unconsolidate the repository.
- 
 Each scoped build is as similar to the original, per-project build process as possible, so assemblies should be produced in the same way as before:
 ```
 <computer:~/src/rchain (dev)> sbt "project rholang" assembly
 [info] Loading settings from plugins.sbt ...
 [... compiling, testing, jarring ...]
 [info] Packaging /home/kirkwood/src/rchain/rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar ...
-<computer:~/src/rchain (dev)> java -jar rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar rholang/examples/hello_world_again.rho 
+<computer:~/src/rchain (dev)> rholang/rho2rbl rholang/examples/hello_world_again.rho 
 compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_again.rbl
 <computer:~/src/rchain (dev)> cat rholang/examples/hello_world_again.rbl; echo
 (let [[helloworld (generateFresh "helloworld")]] (block ( (proc [] (run (compile (let [[[[Rholanga4716fe347be]] (consume t [helloworld] [['world]] #t)]] ( (proc [[world]] (let [[[Rholang5401f0efc120] (consume t [world] ['msg] #f)]] ( (proc [[[msg]]] ( display msg "
 ")) [Rholang5401f0efc120]))) [Rholanga4716fe347be])))))) (let [[world (generateFresh "world")] [world2 (generateFresh "world2")]] (block (block (block (produce t helloworld world) (produce t world "Hello World")) (produce t helloworld world2)) (produce t world2 "Hello World again")))))
 <computer:~/src/rchain (dev)> 
 ```
-

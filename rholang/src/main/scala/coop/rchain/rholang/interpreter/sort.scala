@@ -30,8 +30,8 @@ case class ScoreAtom(value: Either[Int, String]) {
   def compare(that: ScoreAtom): Int =
     (this.value, that.value) match {
       case (Left(i1), Left(i2))   => i1.compare(i2)
-      case (Left(i), Right(s))    => -1
-      case (Right(s), Left(i))    => 1
+      case (Left(_), Right(_))    => -1
+      case (Right(_), Left(_))    => 1
       case (Right(s1), Right(s2)) => s1.compare(s2)
     }
 }
@@ -63,8 +63,8 @@ case class ScoredTerm[T](term: T, score: Tree[ScoreAtom]) extends Ordered[Scored
     def compareScore(s1: Tree[ScoreAtom], s2: Tree[ScoreAtom]): Int =
       (s1, s2) match {
         case (Leaf(a), Leaf(b)) => a.compare(b)
-        case (Leaf(a), Node(b)) => -1
-        case (Node(a), Leaf(b)) => 1
+        case (Leaf(_), Node(_)) => -1
+        case (Node(_), Leaf(_)) => 1
         case (Node(a), Node(b)) =>
           (a, b) match {
             case (Nil, Nil) => 0
