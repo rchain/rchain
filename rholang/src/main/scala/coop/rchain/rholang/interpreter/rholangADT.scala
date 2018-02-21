@@ -64,7 +64,11 @@ case class Send(chan: Channel, data: List[Par], persistent: Boolean)
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
 // Don't currently support conditional receive
-case class Receive(binds: List[(List[Channel], Channel)], body: Par, persistent: Boolean)
+// Count is the number of free variables in the formals
+case class Receive(count: Int,
+                   binds: List[(List[Channel], Channel)],
+                   body: Par,
+                   persistent: Boolean)
 
 case class Eval(channel: Channel)
 

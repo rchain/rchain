@@ -153,7 +153,7 @@ object GroundSortMatcher {
         ScoredTerm(EList(pars.map(_.term)), Node(Score.ELIST, pars.map(_.score): _*))
       case gt: ETuple =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score):_*))
+        ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score): _*))
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case gs: ESet =>
@@ -174,8 +174,8 @@ object GroundSortMatcher {
       case gm: EMap =>
         def sortKeyValuePair(kv: (Par, Par)): ScoredTerm[Tuple2[Par, Par]] = {
           val (key, value) = kv
-          val sortedKey = ParSortMatcher.sortMatch(key)
-          val sortedValue = ParSortMatcher.sortMatch(value)
+          val sortedKey    = ParSortMatcher.sortMatch(key)
+          val sortedValue  = ParSortMatcher.sortMatch(value)
           ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
         }
         def deduplicateLastWriteWins(scoredTerms: List[ScoredTerm[Tuple2[Par, Par]]]) =
@@ -329,9 +329,10 @@ object ReceiveSortMatcher {
     val persistentScore = if (r.persistent) 1 else 0
     val sortedBody      = ParSortMatcher.sortMatch(r.body)
     ScoredTerm(
-      Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent),
+      Receive(r.count, sortedBinds.map(_.term), sortedBody.term, r.persistent),
       Node(Score.RECEIVE,
-           Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
+           Seq(Leaf(r.count)) ++ Seq(Leaf(persistentScore)) ++
+             sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
     )
   }
 }

@@ -410,11 +410,12 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be (sortedParExpr)
   }
 
-  "Par" should "Sort Receives based on persistence and then channels and then patterns and then body" in {
+  "Par" should "Sort Receives based on count, persistence, channels, patterns and then body" in {
     val parExpr =
       p.copy(receives=
         List(
           Receive(
+            0,
             List(
               (
                 List(
@@ -422,6 +423,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             Par(), false),
           Receive(
+            0,
             List(
               (
                 List(
@@ -429,6 +431,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             p.copy(exprs = List(EVar(BoundVar(0)))), false),
           Receive(
+            0,
             List(
               (
                 List(
@@ -436,6 +439,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             Par(), false),
           Receive(
+            0,
             List(
               (
                 List(
@@ -443,6 +447,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             Par(), true),
           Receive(
+            0,
             List(
               (
                 List(
@@ -453,6 +458,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
       p.copy(receives=
         List(
           Receive(
+            0,
             List(
               (
                 List(
@@ -460,6 +466,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(2)))))),
             Par(), false),
           Receive(
+            0,
             List(
               (
                 List(
@@ -467,6 +474,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             Par(), false),
           Receive(
+            0,
             List(
               (
                 List(
@@ -474,6 +482,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             p.copy(exprs = List(EVar(BoundVar(0)))), false),
           Receive(
+            0,
             List(
               (
                 List(
@@ -481,6 +490,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 Quote(p.copy(exprs=List(GInt(3)))))),
             Par(), false),
           Receive(
+            0,
             List(
               (
                 List(
