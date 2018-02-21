@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.intepreter._
 import org.scalatest._
 
 class ScoredTermSpec extends FlatSpec with Matchers {

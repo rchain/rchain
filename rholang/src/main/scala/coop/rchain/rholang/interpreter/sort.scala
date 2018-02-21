@@ -14,8 +14,6 @@
   */
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.intepreter._
-
 sealed trait Tree[T] {
   def size: Int
 }
