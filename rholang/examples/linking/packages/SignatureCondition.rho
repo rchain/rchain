@@ -1,0 +1,13 @@
+export SignatureCondition in {
+  import VerifySignature in {
+    contract SignatureCondition(publicKey, return) = {
+      new condition in {
+        //evidence = channel where data can be sent for signature verification
+        contract condition(evidence, return) = {
+          VerifySignature(publicKey, evidence, return)
+        } |
+        return(condition)
+      }
+    }
+  }
+}

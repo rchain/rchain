@@ -1,0 +1,36 @@
+//Contracts for proving one's identity using public key/private key pairs.
+export VerifySignature in {
+  new GenerateData, ConfirmResult in {
+    
+    //`GenerateData` is some utility function that randomly 
+    //generates something to be signed using a private key.
+    contract GenerateData(return) = {
+      //TODO: complete function properly
+      return(true)
+    } |
+    
+    //`ConfirmResult` does the necessary crypto stuff to verify that 
+    //a result must have been created using private key corresponding
+    //to a public key, returning `true` when everything checks out 
+    //and `false` otherwise.    
+    contract ConfirmResult(publicKey, data, signature, return) = {
+      //TODO: complete function properly
+      return(true)
+    } |
+    
+    //Generate random data, send it for signing, confirm the signature is correct
+    contract VerifySignature(publicKey, requestChannel, returnChannel) = {
+      new verifierChannel, dataChannel in {
+        GenerateData(dataChannel) |
+        for(data <- dataChannel) {
+          //send the data to be signed and the channel where 
+          //to send the result back
+          requestChannel([data, verifierChannel]) |
+          for(result <- verifierChannel) {
+            ConfirmResult(publicKey, data, result, returnChannel)
+          }
+        }
+      }
+    }
+  }
+}

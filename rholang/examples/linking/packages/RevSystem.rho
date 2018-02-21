@@ -1,0 +1,64 @@
+export RevSystem in {
+  import ConditionedToken, SecretName, SignatureCondition in {
+    new result, revTokenCh in {
+      SecretName(result) | for(r <- result) {
+        match r with [revSupplyKey, revSupplyLock] => {
+          ConditionedToken("supply", revSupplyLock, 1000000, revTokenCh) |
+          for(revApi <- revTokenCh) {
+            new 
+              balanceOfCh, transferCh, newAccountCh,
+              NewBasicRevAccount, NewNameLockedRevAccount
+            in {
+              revApi("BalanceOf", balanceOfCh) | 
+              revApi("ConditionedTransfer", transferCh) | 
+              revApi("NewAccount", newAccountCh) |
+              for(
+                  revBalance <- balanceOfCh; revTransfer <- transferCh;
+                  newRevAccount <- newAccountCh
+              ) {
+                
+                contract NewBasicRevAccount(publicKey, sourceAccount, endowment, evidence, return) = {
+                  new conditionCh in {
+                    SignatureCondition(publicKey, conditionCh) |
+                    for(condition <- conditionCh) {
+                      newRevAccount(publicKey, condition, sourceAccount, endowment, evidence, return)
+                    }
+                  }
+                } |
+                contract NewNameLockedRevAccount(publicName, sourceAccount, endowment, evidence, return) = {
+                  new conditionCh, result in {
+                    SecretName(conditionCh) |
+                    for(x <- conditionCh) {
+                      match x with [privateName, condition] => {
+                        newRevAccount(publicName, condition, sourceAccount, endowment, evidence, result) |
+                        for(r <- result) {
+                          return([r, privateName])
+                        }
+                      }
+                    }
+                  }
+                } |
+                
+                //Initialization will happen here -- i.e. rev accounts which exist from genesis will be defined here.
+                //New accounts with funds coming directly from the original "supply" would have to
+                //also be created here by parring in new code which does this. This is one example of why
+                //parring in new code needs to be controlled in some way.
+                NewBasicRevAccount("0xsamplepublickey", "supply", 500, revSupplyKey, Nil) |
+                
+                contract RevSystem(method, return) = {
+                  match method with 
+                    "RevBalance" => { return(revBalance) }
+                    "RevTransfer" => { return(revTransfer) }
+                    "NewRevAccount" => { return(newRevAccount) }
+                    "NewBasicRevAccount" => { return(NewBasicRevAccount) }
+                    "NewNameLockedRevAccount" => { return(NewNameLockedRevAccount) }
+                    _ => { "Method: ".display(method, " not found!") | return(Nil) }
+                }
+              } 
+            }
+          }
+        }
+      }
+    }
+  }
+}
