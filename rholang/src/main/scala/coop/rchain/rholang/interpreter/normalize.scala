@@ -29,27 +29,27 @@ object CollectionNormalizeMatcher {
   import scala.collection.JavaConverters._
   def normalizeMatch(c: Collection, input: CollectVisitInputs): CollectVisitOutputs = {
     def foldMatch(listproc: List[Proc], constructor: List[Par] => Expr): CollectVisitOutputs = {
-      val folded = ((List[Par](), input.knownFree) /: listproc) (
+      val folded = ((List[Par](), input.knownFree) /: listproc)(
         (acc, e) => {
-          val result = ProcNormalizeMatcher.normalizeMatch(
-              e, ProcVisitInputs(Par(), input.env, acc._2))
+          val result =
+            ProcNormalizeMatcher.normalizeMatch(e, ProcVisitInputs(Par(), input.env, acc._2))
           (result.par :: acc._1, result.knownFree)
         }
       )
       CollectVisitOutputs(constructor(folded._1.reverse), folded._2)
     }
 
-    def foldMatchMap(listproc: List[KeyValuePair], constructor: List[(Par,Par)] => Expr): CollectVisitOutputs = {
-      val folded = ((List[(Par, Par)](), input.knownFree) /: listproc) (
+    def foldMatchMap(listproc: List[KeyValuePair],
+                     constructor: List[(Par, Par)] => Expr): CollectVisitOutputs = {
+      val folded = ((List[(Par, Par)](), input.knownFree) /: listproc)(
         (acc, e) => {
           e match {
             case e: KeyValuePairImpl => {
-              val keyResult = ProcNormalizeMatcher.normalizeMatch(
-                  e.proc_1,
-                  ProcVisitInputs(Par(), input.env, acc._2))
-              val valResult = ProcNormalizeMatcher.normalizeMatch(
-                  e.proc_2,
-                  ProcVisitInputs(Par(), input.env, keyResult.knownFree))
+              val keyResult =
+                ProcNormalizeMatcher.normalizeMatch(e.proc_1,
+                                                    ProcVisitInputs(Par(), input.env, acc._2))
+              val valResult = ProcNormalizeMatcher
+                .normalizeMatch(e.proc_2, ProcVisitInputs(Par(), input.env, keyResult.knownFree))
               ((keyResult.par, valResult.par) :: acc._1, valResult.knownFree)
             }
           }
@@ -58,10 +58,10 @@ object CollectionNormalizeMatcher {
       CollectVisitOutputs(constructor(folded._1.reverse), folded._2)
     }
     c match {
-      case cl: CollectList => foldMatch(cl.listproc_.asScala.toList, EList)
+      case cl: CollectList  => foldMatch(cl.listproc_.asScala.toList, EList)
       case ct: CollectTuple => foldMatch(ct.listproc_.asScala.toList, ETuple)
-      case cs: CollectSet => foldMatch(cs.listproc_.asScala.toList, ESet)
-      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList, EMap)
+      case cs: CollectSet   => foldMatch(cs.listproc_.asScala.toList, ESet)
+      case cm: CollectMap   => foldMatchMap(cm.listkeyvaluepair_.asScala.toList, EMap)
     }
   }
 }
@@ -137,10 +137,10 @@ object ProcNormalizeMatcher {
 
       case p: PCollect => {
         val collectResult = CollectionNormalizeMatcher.normalizeMatch(
-            p.collection_, CollectVisitInputs(input.env, input.knownFree))
-        ProcVisitOutputs(
-            input.par.copy(exprs = collectResult.expr :: input.par.exprs),
-            collectResult.knownFree)
+          p.collection_,
+          CollectVisitInputs(input.env, input.knownFree))
+        ProcVisitOutputs(input.par.copy(exprs = collectResult.expr :: input.par.exprs),
+                         collectResult.knownFree)
       }
 
       case p: PVar =>
@@ -334,9 +334,5 @@ case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
 case class NameVisitInputs(env: DebruijnLevelMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class NameVisitOutputs(chan: Channel, knownFree: DebruijnLevelMap[VarSort])
 
-case class CollectVisitInputs(
-  env: DebruijnLevelMap[VarSort],
-  knownFree: DebruijnLevelMap[VarSort])
-case class CollectVisitOutputs(
-  expr: Expr,
-  knownFree: DebruijnLevelMap[VarSort])
+case class CollectVisitInputs(env: DebruijnLevelMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
+case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])
