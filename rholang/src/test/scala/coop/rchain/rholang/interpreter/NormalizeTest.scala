@@ -287,7 +287,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be (
         inputs.par.copy(receives = 
             List(Receive(
-                freeCount,
                 List(
                     (List(
                         ChanVar(FreeVar(0)),
@@ -300,7 +299,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                         Par().copy(exprs = List(EVar(BoundVar(2)))),
                         Par().copy(exprs = List(EVar(BoundVar(3)))))))),
                     false))),
-                true)))) // persistent
+                true, // persistent
+                freeCount))))
     result.knownFree should be (inputs.knownFree)
   }
   "PContr" should "Not count ground values in the formals towards the free count" in {
@@ -326,7 +326,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be (
       inputs.par.copy(receives =
         List(Receive(
-          freeCount,
           List(
             (List(
               ChanVar(FreeVar(0)),
@@ -336,7 +335,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
             ChanVar(BoundVar(1)),
             List(Par().copy(exprs = List(GInt(5)))),
             false))),
-          true)))) // persistent
+          true, // persistent
+          freeCount))))
     result.knownFree should be (inputs.knownFree)
   }
 }

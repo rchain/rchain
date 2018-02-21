@@ -194,16 +194,16 @@ object ProcNormalizeMatcher {
           }
         )
         val newEnv       = input.env.absorbFree(formalsResults._2)
-        val newFreeCount = formalsResults._2.next - input.knownFree.next
+        val newFreeCount = formalsResults._2.next
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
         ProcVisitOutputs(
           input.par.copy(
-            receives = Receive(newFreeCount,
-                               List((formalsResults._1.reverse, nameMatchResult.chan)),
+            receives = Receive(List((formalsResults._1.reverse, nameMatchResult.chan)),
                                bodyResult.par,
-                               true) :: input.par.receives),
+                               true,
+                               newFreeCount) :: input.par.receives),
           bodyResult.knownFree
         )
       }
