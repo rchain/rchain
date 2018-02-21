@@ -25,6 +25,47 @@ object GroundNormalizeMatcher {
     }
 }
 
+object CollectionNormalizeMatcher {
+  import scala.collection.JavaConverters._
+  def normalizeMatch(c: Collection, input: CollectVisitInputs): CollectVisitOutputs = {
+    def foldMatch(listproc: List[Proc], constructor: List[Par] => Expr): CollectVisitOutputs = {
+      val folded = ((List[Par](), input.knownFree) /: listproc)(
+        (acc, e) => {
+          val result =
+            ProcNormalizeMatcher.normalizeMatch(e, ProcVisitInputs(Par(), input.env, acc._2))
+          (result.par :: acc._1, result.knownFree)
+        }
+      )
+      CollectVisitOutputs(constructor(folded._1.reverse), folded._2)
+    }
+
+    def foldMatchMap(listproc: List[KeyValuePair],
+                     constructor: List[(Par, Par)] => Expr): CollectVisitOutputs = {
+      val folded = ((List[(Par, Par)](), input.knownFree) /: listproc)(
+        (acc, e) => {
+          e match {
+            case e: KeyValuePairImpl => {
+              val keyResult =
+                ProcNormalizeMatcher.normalizeMatch(e.proc_1,
+                                                    ProcVisitInputs(Par(), input.env, acc._2))
+              val valResult = ProcNormalizeMatcher
+                .normalizeMatch(e.proc_2, ProcVisitInputs(Par(), input.env, keyResult.knownFree))
+              ((keyResult.par, valResult.par) :: acc._1, valResult.knownFree)
+            }
+          }
+        }
+      )
+      CollectVisitOutputs(constructor(folded._1.reverse), folded._2)
+    }
+    c match {
+      case cl: CollectList  => foldMatch(cl.listproc_.asScala.toList, EList)
+      case ct: CollectTuple => foldMatch(ct.listproc_.asScala.toList, ETuple)
+      case cs: CollectSet   => foldMatch(cs.listproc_.asScala.toList, ESet)
+      case cm: CollectMap   => foldMatchMap(cm.listkeyvaluepair_.asScala.toList, EMap)
+    }
+  }
+}
+
 object NameNormalizeMatcher {
   def normalizeMatch(n: Name, input: NameVisitInputs): NameVisitOutputs =
     n match {
@@ -93,6 +134,14 @@ object ProcNormalizeMatcher {
           input.par.copy(
             exprs = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.exprs),
           input.knownFree)
+
+      case p: PCollect => {
+        val collectResult = CollectionNormalizeMatcher.normalizeMatch(
+          p.collection_,
+          CollectVisitInputs(input.env, input.knownFree))
+        ProcVisitOutputs(input.par.copy(exprs = collectResult.expr :: input.par.exprs),
+                         collectResult.knownFree)
+      }
 
       case p: PVar =>
         input.env.get(p.var_) match {
@@ -282,9 +331,8 @@ case class ProcVisitInputs(par: Par,
 // Returns the update Par and an updated map of free variables.
 case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
 
-sealed trait ChanPosition
-case object BindingPosition extends ChanPosition
-case object UsePosition     extends ChanPosition
-
 case class NameVisitInputs(env: DebruijnLevelMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class NameVisitOutputs(chan: Channel, knownFree: DebruijnLevelMap[VarSort])
+
+case class CollectVisitInputs(env: DebruijnLevelMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
+case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])
