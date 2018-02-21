@@ -162,4 +162,21 @@ class TupleSpec extends FlatSpec with Matchers {
     tplXchg.fn(newCtxt) should be('left)
   }
 
+/** tuple-head */
+  "tplHead" should "correctly return the 0th element of a Tuple" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+
+    tplHead.fn(newCtxt) should be(
+      Right(Fixnum(1))
+    )
+  }
+
+    it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplHead.fn(newCtxt) should be('left)
+  }
+
 }

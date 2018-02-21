@@ -153,6 +153,31 @@ object tuple {
     }
   }
 
+  /**
+    * Define the tuple-head primitive.
+    * This returns the first element of a Tuple
+    * e.g. (tuple-head [1 2 3 4 5 6]) ==> 1
+    */
+  object tplHead extends Prim {
+    override val name: String = "tuple-head"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[Tuple] // Only arg must be a Tuple
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+      val elem = ctxt.argvec.elem
+
+      checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
+
+        t.nth(0) match {
+          case None        => None.asInstanceOf[Ob]
+          case Some(v: Ob) => v
+        }
+      }
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the specified parameter for type Tuple. Return a PrimError if it is
