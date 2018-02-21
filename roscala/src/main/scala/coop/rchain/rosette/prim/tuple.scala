@@ -171,8 +171,8 @@ object tuple {
       checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
 
         t.nth(0) match {
-          case None        => None.asInstanceOf[Ob]
           case Some(v: Ob) => v
+          case None        => None.asInstanceOf[Ob]
         }
       }
     }
