@@ -10,7 +10,7 @@ script:
   - ./scripts/build-subprojects.sh
 sudo: required
 before_install:
-  - sudo add-apt-repository ppa:chris-lea/libsodium
+  - sudo add-apt-repository -y ppa:chris-lea/libsodium
   - apt update -q 
   - sudo apt install -y libsodium
 install:
