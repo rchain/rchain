@@ -9,11 +9,9 @@ env:
 script:
   - ./scripts/build-subprojects.sh
 sudo: required
-before_install:
-  - sudo add-apt-repository -y ppa:chris-lea/libsodium
-  - sudo apt install -y libsodium
 install:
   - ./scripts/install_secp.sh
+  - ./scripts/install_sodium.sh
   - ./scripts/install.sh
 cache:
   directories:
