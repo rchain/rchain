@@ -230,29 +230,34 @@ object RholangLinker {
   }
  
   def printUsage(): Unit = {
-    val usage = "USAGE: scala link.scala <rholangSource> <libraryDirectory>"
+    val usage = "USAGE: scala link.scala <libraryDirectory> <rholangSource> [<rholangSource>, ...]"
     println(usage)
   }
  
+  def link(filename: String, packages: Vector[NamedBlock], dependencies: Map[String, Vector[String]]): Unit = {
+    val parsedInput = parseRholang(readRhoFile(new File(filename)))
+    val subedCode = mapImports(parsedInput, packages, dependencies)
+
+    val outFilename = filename + ".linked"
+    val output = new PrintWriter(outFilename)
+    output.println(subedCode.toString)
+    output.close()
+    println(s"Wrote $outFilename")
+  }
+ 
   def main(args: Array[String]) : Unit = {
-    if (args.length != 2) {
+    if (args.length < 2) {
       printUsage()
     } else {
-      val Array(filename, libDir) = args
+      val libDir = args.head
       val (packages, dependencies) = readPackages(libDir)
       
       if (dependencies.size != packages.length) {
         throw new Exception("Error! Cannot have duplicate exports!")
       }
       
-      val parsedInput = parseRholang(readRhoFile(new File(filename)))
-      val subedCode = mapImports(parsedInput, packages, dependencies)
- 
-      val outFilename = filename + ".linked"
-      val output = new PrintWriter(outFilename)
-      output.println(subedCode.toString)
-      output.close()
-      println(s"Wrote $outFilename")
+      val filenames = args.tail
+      filenames.foreach(f => link(f, packages, dependencies))
     }
   }
 }

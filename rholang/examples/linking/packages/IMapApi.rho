@@ -28,21 +28,21 @@ export IMapApi in {
           contract EmptyMap(return) = {
             return([[], []])
           } |
-          contract Get(key, map, return) = {
+          contract Get(map, key, return) = {
             match map with [keys, values] => {
               new result in {
-                arrIndexOf(key, keys, result) | for(i <- result) {
+                arrIndexOf(keys, key, result) | for(i <- result) {
                   match i >= 0 with true => {
-                    arrGet(i, values, return)
+                    arrGet(values, i, return)
                   }
                   _ => { return(Nil) }
                 }
               }
             }
           } | 
-          contract GetOrElse(key, map, default, return) = {
+          contract GetOrElse(map, key, default, return) = {
             new nilCh, result in {
-              Get(key, map, result) | nilCh(Nil) |
+              Get(map, key, result) | nilCh(Nil) |
               for(r <- result; nil <- nilCh) {
                 match r == nil with true => { return(default) }
                 _ => { return(r) }
@@ -60,7 +60,7 @@ export IMapApi in {
                     match i == size with true => { return(currMap) }
                     _ => {
                       new keyCh, valueCh, kvPairCh, result in {
-                        arrGet(i, keys, keyCh) | arrGet(i, values, valueCh) |
+                        arrGet(keys, i, keyCh) | arrGet(values, i, valueCh) |
                         for(key <- keyCh; value <- valueCh) {
                           f([key, value], kvPairCh) | for(kvPair <- kvPairCh) {
                             match kvPair with [newKey, newValue] => {
@@ -92,7 +92,7 @@ export IMapApi in {
           contract Updated(map, key, value, return) = {
             match map with [keys, values] => {
               new result in {
-                arrIndexOf(key, keys, result) | for(i <- result) {
+                arrIndexOf(keys, key, result) | for(i <- result) {
                   match i >= 0 with
                     true => {
                       new removedKeys, removedValues in {
@@ -104,7 +104,7 @@ export IMapApi in {
                     }
                     _ => {
                       new appendedKeys, appendedValues in {
-                        arrAppend(key, keys, appendedKeys) | arrAppend(value, values, appendedValues) |
+                        arrAppend(keys, key, appendedKeys) | arrAppend(values, value, appendedValues) |
                         for(newKeys <- appendedKeys; newValues <- appendedValues) {
                           return([newKeys, newValues])
                         }
