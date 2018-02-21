@@ -99,7 +99,7 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).flatMap( // Ensure arg0 is a Tuple
@@ -110,7 +110,7 @@ object tuple {
                 Fixnum(Int.MinValue)
               else if (n.value < t.elem.size) {
                 t.nth(n.value) match {
-                  case Some(v: Fixnum) => v
+                  case Some(v: Ob) => v
                   case None            => Fixnum(Int.MaxValue)
                 }
               } else
@@ -172,11 +172,37 @@ object tuple {
 
         t.nth(0) match {
           case Some(v: Ob) => v
-          case None        => None.asInstanceOf[Ob]
+          case None        => Ob.NIV
         }
       }
     }
   }
+
+  /**
+    * Define the tuple-last primitive.
+    * This returns the last element of a Tuple
+    * e.g. (tuple-last [1 2 3 4 5 6]) ==> 6
+    */
+  object tplLast extends Prim {
+    override val name: String = "tuple-last"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[Tuple] // Only arg must be a Tuple
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+      val elem = ctxt.argvec.elem
+
+      checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
+
+        t.nth(t.elem.size - 1) match {
+          case Some(v: Ob) => v
+          case None        => Ob.NIV
+        }
+      }
+    }
+  }
+
 
   /** Helper functions begin here */
   /**
