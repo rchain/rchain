@@ -111,7 +111,7 @@ object tuple {
               else if (n.value < t.elem.size) {
                 t.nth(n.value) match {
                   case Some(v: Ob) => v
-                  case None            => Fixnum(Int.MaxValue)
+                  case None        => Fixnum(Int.MaxValue)
                 }
               } else
                 Fixnum(Int.MaxValue)))
@@ -218,12 +218,11 @@ object tuple {
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
-      val t = elem(0).asInstanceOf[Tuple]
+      val t    = elem(0).asInstanceOf[Tuple]
 
       Right(t.makeTail(1))
     }
   }
-
 
   /** Helper functions begin here */
   /**
