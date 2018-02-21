@@ -207,4 +207,36 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
     tplLast.fn(newCtxt) should be(Right(Ob.NIV))
   }
+
+/** tuple-tail */
+  "tplTail" should "correctly return the 2nd through last element of a Tuple" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val tail = Seq(Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+
+    tplTail.fn(newCtxt) should be(
+      Right(Tuple(tail))
+    )
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplTail.fn(newCtxt) should be('left)
+  }
+
+  it should "return empty Tuple for an empty Tuple input" in {
+    val empty = Seq.empty
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(empty)))
+    tplTail.fn(newCtxt) should be(Right(Tuple(empty)))
+  }
+
+  it should "return empty Tuple for a single element Tuple input" in {
+    val tup = Seq(Fixnum(1))
+    val empty = Seq.empty
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+    tplTail.fn(newCtxt) should be(Right(Tuple(empty)))
+  }
+
 }

@@ -203,6 +203,27 @@ object tuple {
     }
   }
 
+  /**
+    * Define the tuple-tail primitive.
+    * This returns the Tuple consisting of the 2nd through the nth
+    * elements of the provided Tuple
+    * e.g. (tuple-tail [1 2 3 4 5 6]) ==> [2 3 4 5 6]
+    */
+  object tplTail extends Prim {
+    override val name: String = "tuple-tail"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[Tuple] // Only arg must be a Tuple
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem = ctxt.argvec.elem
+      val t = elem(0).asInstanceOf[Tuple]
+
+      Right(t.makeTail(1))
+    }
+  }
+
 
   /** Helper functions begin here */
   /**
