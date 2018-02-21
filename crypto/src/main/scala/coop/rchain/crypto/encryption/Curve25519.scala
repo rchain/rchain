@@ -2,6 +2,7 @@ package coop.rchain.crypto.encryption
 
 import org.abstractj.kalium.crypto._
 import org.abstractj.kalium.keys._
+import org.abstractj.kalium.NaCl.Sodium.{CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES}
 /**
 Curve25519 elliptic curve cryptography
   * {{{
@@ -36,9 +37,10 @@ object Curve25519 {
   }
 
   def newNonce: Array[Byte] = {
-    var bytes = new Array[Byte](20)
-    scala.util.Random.nextBytes(bytes)
-    bytes
+    import org.abstractj.kalium.NaCl.Sodium._
+    var nonce = new Array[Byte](CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES)
+    scala.util.Random.nextBytes(nonce)
+    nonce
   }
 
   def toPublic(sec: Array[Byte]): Array[Byte] = {
