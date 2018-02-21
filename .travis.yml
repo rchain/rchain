@@ -30,5 +30,6 @@ addons:
             - sbt
             - jflex
             - haskell-platform
+            - libsodium
 
 
