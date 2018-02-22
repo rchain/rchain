@@ -31,7 +31,9 @@ def commonSettings: Seq[Setting[_]] =
     imageNames in docker := Seq(
       ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
       ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
-    )
+    ),
+
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
   ).flatMap(_.settings)
 
@@ -53,7 +55,6 @@ lazy val comm = project
   .settings(
     commonSettings,
     version := "0.1",
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
       uPnP,
@@ -108,7 +109,6 @@ lazy val node = project
     commonSettings,
     scalacOptions ++= Seq("-Ywarn-unused-import"),
     version := "0.1",
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
@@ -148,7 +148,6 @@ lazy val rholang = project
     ),
     libraryDependencies ++= commonDependencies,
     bnfcSettings,
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -164,14 +163,15 @@ lazy val rholang = project
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(
+    commonSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value)
   )
 
-lazy val roscala = project //  = (project in file("roscala"))
+lazy val roscala = project
   .settings(
+    commonSettings,
     name := "Rosette",
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(List(
