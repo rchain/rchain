@@ -333,6 +333,22 @@ object ProcNormalizeMatcher {
         normalizeMatch(p.proc_2, chainedInput)
       }
 
+      case p: PNew => {
+        import scala.collection.JavaConverters._
+        // TODO: bindings within a single new shouldn't have overlapping names.
+        val newBindings = p.listnamedecl_.asScala.toList.map {
+          case n: NameDeclSimpl => (Some(n.var_), NameSort)
+        }
+        val newEnv     = input.env.newBindings(newBindings)._1
+        val newCount   = newEnv.next - input.env.next
+        val bodyResult = normalizeMatch(p.proc_, ProcVisitInputs(Par(), newEnv, input.knownFree))
+        val foldedNew = bodyResult.par.singleNew() match {
+          case Some(New(count, body)) => New(newCount + count, body)
+          case _                      => New(newCount, bodyResult.par)
+        }
+        ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
+      }
+
       case _ => throw new Error("Compilation of construct not yet supported.")
     }
   }

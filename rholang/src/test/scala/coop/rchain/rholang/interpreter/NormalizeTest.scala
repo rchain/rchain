@@ -430,6 +430,37 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch(pInput, inputs)
     }
   }
+
+  "PNew" should "Bind new variables" in {
+    val listNameDecl = new ListNameDecl()
+    listNameDecl.add(new NameDeclSimpl("x"))
+    listNameDecl.add(new NameDeclSimpl("y"))
+    listNameDecl.add(new NameDeclSimpl("z"))
+    val listData1 = new ListProc()
+    listData1.add(new PGround(new GroundInt(7)))
+    val listData2 = new ListProc()
+    listData2.add(new PGround(new GroundInt(8)))
+    val listData3 = new ListProc()
+    listData3.add(new PGround(new GroundInt(9)))
+    val pNew = new PNew(
+      listNameDecl,
+      new PPar(
+        new PPar(new PSend(new NameVar("x"), new SendSingle(), listData1),
+                 new PSend(new NameVar("y"), new SendSingle(), listData2)),
+        new PSend(new NameVar("z"), new SendSingle(), listData3)
+      )
+    )
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pNew, inputs)
+    result.par should be(
+      inputs.par.prepend(New(
+        3,
+        Par(Send(ChanVar(BoundVar(0)), List[Par](GInt(7)), false))
+          .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(8)), false))
+          .prepend(Send(ChanVar(BoundVar(2)), List[Par](GInt(9)), false))
+      )))
+    result.knownFree should be(inputs.knownFree)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
