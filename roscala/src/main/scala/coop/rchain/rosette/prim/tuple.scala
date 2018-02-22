@@ -172,7 +172,7 @@ object tuple {
 
         t.nth(0) match {
           case Some(v: Ob) => v
-          case None        => Ob.NIV
+          case None        => Tuple.NIL
         }
       }
     }
@@ -197,7 +197,7 @@ object tuple {
 
         t.nth(t.elem.size - 1) match {
           case Some(v: Ob) => v
-          case None        => Ob.NIV
+          case None        => Tuple.NIL
         }
       }
     }
@@ -219,8 +219,10 @@ object tuple {
     override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
       val t    = elem(0).asInstanceOf[Tuple]
-
-      Right(t.makeTail(1))
+      if (t.elem.size > 0)
+        Right(t.makeTail(1))
+      else
+        Right(Tuple.NIL)
     }
   }
 
