@@ -15,14 +15,14 @@ export BalanceMap in {
             emptyMap(dataStore) |
             contract query(key, return) = {
               for(map <- dataStore) {
-                dataStore(map) | getOrElse(key, map, 0, return)
+                dataStore(map) | getOrElse(map, key, 0, return)
               }
             } |
             contract sub(key, amount, success) = {
               match amount > 0 with true => {
                 new balanceCh in {
                   for(map <- dataStore) {
-                    getOrElse(key, map, 0, balanceCh) | for(balance <- balanceCh) {
+                    getOrElse(map, key, 0, balanceCh) | for(balance <- balanceCh) {
                       match balance >= amount with true => {
                         updated(map, key, balance - amount, dataStore) |
                         success(true)
@@ -38,7 +38,7 @@ export BalanceMap in {
               match amount > 0 with true => {
                 new balanceCh in {
                   for(map <- dataStore) {
-                    getOrElse(key, map, 0, balanceCh) | for(balance <- balanceCh) {
+                    getOrElse(map, key, 0, balanceCh) | for(balance <- balanceCh) {
                       updated(map, key, balance + amount, dataStore) |
                       success(true)
                     }

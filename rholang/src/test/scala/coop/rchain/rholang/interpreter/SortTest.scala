@@ -410,7 +410,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be (sortedParExpr)
   }
 
-  "Par" should "Sort Receives based on their channel and then pattern" in {
+  "Par" should "Sort Receives based on persistence, channels, patterns and then body" in {
     val parExpr =
       p.copy(receives=
         List(
@@ -419,19 +419,36 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(1))))),
-                Quote(p.copy(exprs=List(GInt(3))))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            Par(), false, 0),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
-                Quote(p.copy(exprs=List(GInt(3))))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            p.copy(exprs = List(EVar(BoundVar(0)))), false, 0),
+          Receive(
+            List(
+              (
+                List(
+                  Quote(p.copy(exprs=List(GInt(0))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            Par(), false, 0),
+          Receive(
+            List(
+              (
+                List(
+                  Quote(p.copy(exprs=List(GInt(0))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            Par(), true, 0),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(100))))),
-                Quote(p.copy(exprs=List(GInt(2)))))))))
+                Quote(p.copy(exprs=List(GInt(2)))))),
+            Par(), false, 0)))
     val sortedParExpr =
       p.copy(receives=
         List(
@@ -440,19 +457,36 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(100))))),
-                Quote(p.copy(exprs=List(GInt(2))))))),
+                Quote(p.copy(exprs=List(GInt(2)))))),
+            Par(), false, 0),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
-                Quote(p.copy(exprs=List(GInt(3))))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            Par(), false, 0),
+          Receive(
+            List(
+              (
+                List(
+                  Quote(p.copy(exprs=List(GInt(0))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            p.copy(exprs = List(EVar(BoundVar(0)))), false, 0),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(1))))),
-                Quote(p.copy(exprs=List(GInt(3)))))))))
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            Par(), false, 0),
+          Receive(
+            List(
+              (
+                List(
+                  Quote(p.copy(exprs=List(GInt(0))))),
+                Quote(p.copy(exprs=List(GInt(3)))))),
+            Par(), true, 0)))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
   }

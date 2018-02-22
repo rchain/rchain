@@ -171,7 +171,7 @@ import LinkedListApi in {
           //get the element at (0-based) index i -- return Nil if out of bounds
           new rangeList, result1, result2, answer1, answer2 in {
             range(0, 10, rangeList) | for(list <- rangeList) {
-              get(3, list, result1) | get(3, emptyList, result2) |
+              get(list, 3, result1) | get(emptyList, 3, result2) |
               answer1(3) | answer2(Nil) |
               for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
                 match [r1 == a1, r2 == a2] with [true, true] => {
@@ -186,7 +186,7 @@ import LinkedListApi in {
           //return the index of the given element in the list or -1 if not present
           new rangeList, result1, result2, answer1, answer2 in {
             range(0, 10, rangeList) | for(list <- rangeList) {
-              indexOf(3, list, result1) | indexOf(3, emptyList, result2) |
+              indexOf(list, 3, result1) | indexOf(emptyList, 3, result2) |
               answer1(3) | answer2(-1) |
               for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
                 match [r1 == a1, r2 == a2] with [true, true] => {

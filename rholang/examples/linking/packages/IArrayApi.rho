@@ -8,14 +8,14 @@ export IArrayApi in {
     Append, Concat, Contains, Drop, Flatten, Fold, Foreach, Get, 
     IndexOf, Length, Map, Print, RemoveElment, RemoveAt, SplitAt, Take
   in {
-    contract IsInBounds(i, arr, return) = {
+    contract IsInBounds(arr, i, return) = {
       new nch in {
         Length(arr, nch) | for(n <- nch) {
           return(i < n)
         }
       }
     } |
-    contract Append(value, arr, return) = {
+    contract Append(arr, value, return) = {
       return(arr.append(value))
     } |
     contract Concat(arr, other, return) = {
@@ -27,7 +27,7 @@ export IArrayApi in {
     } |
     contract Contains(arr, value, return) = {
       new result in {
-        IndexOf(value, arr, result) | for(r <- result){
+        IndexOf(arr, value, result) | for(r <- result){
           return(r >= 0)
         }
       }
@@ -44,9 +44,12 @@ export IArrayApi in {
       }
     } |
     contract Flatten(arr, return) = {
-      new combinator in {
+      new combinator, appendCombinator in {
+        contract appendCombinator(head, accumulatedValue, return) = {
+          Append(accumulatedValue, head, return)
+        } |
         contract combinator(head, accumulatedValue, return) = {
-          Fold(head, accumulatedValue, Append, return)
+          Fold(head, accumulatedValue, appendCombinator, return)
         } |
         Fold(arr, [], combinator, return)
       }
@@ -56,7 +59,7 @@ export IArrayApi in {
         Length(arr, len) | for(n <- len) {
           contract loop(index, accumulatedValue) = {
             match index < n with true => {
-              Get(index, arr, elem) | for(e <- elem) {
+              Get(arr, index, elem) | for(e <- elem) {
                 combinator(e, accumulatedValue, nextVal) | for(v <- nextVal) {
                   loop(index + 1, v)
                 }
@@ -77,9 +80,9 @@ export IArrayApi in {
         Fold(arr, Nil, combinator, nilReturn) | for(_ <- nilReturn){ isDone(true) }
       }
     } |
-    contract Get(i, arr, return) = {
+    contract Get(arr, i, return) = {
       new isInBoundsCh in {
-        IsInBounds(i, arr, isInBoundsCh) | for(isInBounds <- isInBoundsCh) {
+        IsInBounds(arr, i, isInBoundsCh) | for(isInBounds <- isInBoundsCh) {
           match isInBounds with true => {
             return( arr.nth(i) )
           }
@@ -87,13 +90,13 @@ export IArrayApi in {
         }
       }
     } |
-    contract IndexOf(value, arr, return) = {
+    contract IndexOf(arr, value, return) = {
       new searchAt, len in {
         Length(arr, len) | for(n <- len) {
           contract searchAt(i, return) = {
             match i < n with true => {
               new result in {
-                Get(i, arr, result) | for(elem <- result) {
+                Get(arr, i, result) | for(elem <- result) {
                   match elem == value with true => { return(i) }
                   _ => { searchAt(i + 1, return) }
                 }
@@ -114,7 +117,7 @@ export IArrayApi in {
           new mappedElem in {
             function(elem, mappedElem) | 
             for(mElem <- mappedElem) {
-              Append(mElem, accumulatedValue, return)
+              Append(accumulatedValue, mElem, return)
             }
           }
         } | 

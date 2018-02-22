@@ -4,6 +4,8 @@
 
 package coop.rchain.rholang.intepreter
 
+import scala.language.implicitConversions
+
 case class Par(
     sends: List[Send],
     receives: List[Receive],
@@ -13,9 +15,27 @@ case class Par(
     exprs: List[Expr]
     // matches: List[Match]
 ) {
-  // TODO: write helper methods to append an X and return a new par
   def this() =
     this(List(), List(), List(), List(), List())
+  // Single element convenience constructors
+  def this(s: Send) =
+    this(List(s), List(), List(), List(), List())
+  def this(r: Receive) =
+    this(List(), List(r), List(), List(), List())
+  def this(e: Eval) =
+    this(List(), List(), List(e), List(), List())
+  def this(n: New) =
+    this(List(), List(), List(), List(n), List())
+  def this(e: Expr) =
+    this(List(), List(), List(), List(), List(e))
+
+  // Convenience prepend methods
+  def prepend(s: Send): Par    = this.copy(sends = s :: this.sends)
+  def prepend(r: Receive): Par = this.copy(receives = r :: this.receives)
+  def prepend(e: Eval): Par    = this.copy(evals = e :: this.evals)
+  def prepend(n: New): Par     = this.copy(news = n :: this.news)
+  def prepend(e: Expr): Par    = this.copy(exprs = e :: this.exprs)
+
   def singleEval(): Option[Eval] =
     if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
       evals match {
@@ -34,7 +54,18 @@ case class Par(
 }
 
 object Par {
-  def apply(): Par = new Par()
+  def apply(): Par           = new Par()
+  def apply(s: Send): Par    = new Par(s)
+  def apply(r: Receive): Par = new Par(r)
+  def apply(e: Eval): Par    = new Par(e)
+  def apply(n: New): Par     = new Par(n)
+  def apply(e: Expr): Par    = new Par(e)
+
+  implicit def fromSend(s: Send): Par       = apply(s)
+  implicit def fromReceive(r: Receive): Par = apply(r)
+  implicit def fromEval(e: Eval): Par       = apply(e)
+  implicit def fromNew(n: New): Par         = apply(n)
+  implicit def fromExpr(e: Expr): Par       = apply(e)
 }
 
 sealed trait Channel
@@ -64,7 +95,11 @@ case class Send(chan: Channel, data: List[Par], persistent: Boolean)
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
 // Don't currently support conditional receive
-case class Receive(binds: List[(List[Channel], Channel)])
+// Count is the number of free variables in the formals
+case class Receive(binds: List[(List[Channel], Channel)],
+                   body: Par,
+                   persistent: Boolean,
+                   count: Int)
 
 case class Eval(channel: Channel)
 

@@ -58,10 +58,10 @@ import IMapApi, TestSet in {
               TestSet(
                 "Get",
                 [
-                  [get, ["one", map], 1],
-                  [get, ["two", map], 2],
-                  [get, ["zero", map], Nil],
-                  [get, ["any", emap], Nil]
+                  [get, [map, "one"], 1],
+                  [get, [map, "two"], 2],
+                  [get, [map, "zero"], Nil],
+                  [get, [emap, "any"], Nil]
                 ],
                 Nil
               )
@@ -78,10 +78,10 @@ import IMapApi, TestSet in {
               TestSet(
                 "GetOrElse",
                 [
-                  [getOrElse, ["one", map, 0], 1],
-                  [getOrElse, ["two", map, 0], 2],
-                  [getOrElse, ["zero", map, 0], 0],
-                  [getOrElse, ["any", emap, "!"], "!"]
+                  [getOrElse, [map, "one", 0], 1],
+                  [getOrElse, [map, "two", 0], 2],
+                  [getOrElse, [map, "zero", 0], 0],
+                  [getOrElse, [emap, "any", "!"], "!"]
                 ],
                 Nil
               )
