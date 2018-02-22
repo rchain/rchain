@@ -327,9 +327,10 @@ object ReceiveSortMatcher {
     val persistentScore = if (r.persistent) 1 else 0
     val sortedBody      = ParSortMatcher.sortMatch(r.body)
     ScoredTerm(
-      Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent),
+      Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent, r.count),
       Node(Score.RECEIVE,
-           Seq(Leaf(persistentScore)) ++ sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
+           Seq(Leaf(persistentScore)) ++
+             sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
     )
   }
 }

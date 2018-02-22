@@ -298,7 +298,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("ret"))
     listBindings.add(new NameQuote(new PVar("x")))
     listBindings.add(new NameQuote(new PVar("y")))
-    val listSend = new ListProc()
+    val freeCount = 3
+    val listSend  = new ListProc()
     listSend.add(new PAdd(new PVar("x"), new PVar("y")))
     val pBasicContr = new PContr(new NameVar("add"),
                                  listBindings,
@@ -311,8 +312,40 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         List((List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1))), Quote(EVar(FreeVar(2)))),
               ChanVar(BoundVar(0)))),
         Send(ChanVar(BoundVar(1)), List[Par](EPlus(EVar(BoundVar(2)), EVar(BoundVar(3)))), false),
-        true // persistent
+        true, // persistent
+        freeCount
       )))
+    result.knownFree should be(inputs.knownFree)
+  }
+  "PContr" should "Not count ground values in the formals towards the free count" in {
+    /*  new ret5 in {
+          contract ret5(ret, @5) = {
+            ret!(5)
+          }
+        }
+        // new is simulated by bindings.
+     */
+    val listBindings = new ListName()
+    listBindings.add(new NameVar("ret"))
+    listBindings.add(new NameQuote(new PGround(new GroundInt(5))))
+    val freeCount = 1
+    val listSend  = new ListProc()
+    listSend.add(new PGround(new GroundInt(5)))
+    val pBasicContr = new PContr(new NameVar("ret5"),
+                                 listBindings,
+                                 new PSend(new NameVar("ret"), new SendSingle(), listSend))
+    val boundInputs = inputs.copy(env = inputs.env.newBindings(List((Some("ret5"), NameSort)))._1)
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pBasicContr, boundInputs)
+    result.par should be(
+      inputs.par.copy(receives = List(Receive(
+        List((List(ChanVar(FreeVar(0)), Quote(Par().copy(exprs = List(GInt(5))))),
+              ChanVar(BoundVar(0)))),
+        Par().copy(
+          sends = List(Send(ChanVar(BoundVar(1)), List(Par().copy(exprs = List(GInt(5)))), false))),
+        true, // persistent
+        freeCount
+      ))))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -329,17 +362,18 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listSend.add(new PEval(new NameVar("y")))
     val body       = new PSend(new NameVar("x"), new SendSingle(), listSend)
     val basicInput = new PInput(receipt, body)
+    val freeCount  = 2
 
     val result = ProcNormalizeMatcher.normalizeMatch(basicInput, inputs)
     result.par should be(
       inputs.par.prepend(Receive(
         List((List(ChanVar(FreeVar(0)), ChanVar(FreeVar(1))), Quote(Par()))),
         Send(ChanVar(BoundVar(0)), List[Par](Eval(ChanVar(BoundVar(1)))), false),
-        false // persistent
+        false, // persistent
+        freeCount
       )))
     result.knownFree should be(inputs.knownFree)
   }
-
   "PInput" should "Handle a more complicated receive" in {
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x1"))
@@ -360,7 +394,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listSend2.add(new PVar("y1"))
     val body = new PPar(new PSend(new NameVar("x1"), new SendSingle(), listSend1),
                         new PSend(new NameVar("x2"), new SendSingle(), listSend2))
-    val pInput = new PInput(receipt, body)
+    val pInput    = new PInput(receipt, body)
+    val freeCount = 4
 
     val result = ProcNormalizeMatcher.normalizeMatch(pInput, inputs)
     result.par should be(
@@ -369,7 +404,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
              (List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1)))), Quote(GInt(1)))),
         Par().copy(sends = List(Send(ChanVar(BoundVar(2)), List[Par](EVar(BoundVar(1))), false),
                                 Send(ChanVar(BoundVar(0)), List[Par](EVar(BoundVar(3))), false))),
-        false // persistent
+        false, // persistent
+        freeCount
       )))
     result.knownFree should be(inputs.knownFree)
   }

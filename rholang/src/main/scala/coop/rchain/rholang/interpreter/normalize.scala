@@ -242,7 +242,8 @@ object ProcNormalizeMatcher {
             (result.chan :: acc._1, result.knownFree)
           }
         )
-        val newEnv = input.env.absorbFree(formalsResults._2)._1
+        val newEnv       = input.env.absorbFree(formalsResults._2)._1
+        val newFreeCount = formalsResults._2.next
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
@@ -250,8 +251,10 @@ object ProcNormalizeMatcher {
           input.par.copy(
             receives = Receive(List((formalsResults._1.reverse, nameMatchResult.chan)),
                                bodyResult.par,
-                               true) :: input.par.receives),
-          bodyResult.knownFree)
+                               true,
+                               newFreeCount) :: input.par.receives),
+          bodyResult.knownFree
+        )
       }
 
       case p: PInput => {
@@ -315,10 +318,12 @@ object ProcNormalizeMatcher {
             case _ =>
               throw new Error("Free variable used as binder may not be used twice.")
         })
+        val freeCount  = groupedFrees.next
         val binds      = receipts.map((receipt) => (receipt._1, receipt._2))
         val updatedEnv = input.env.absorbFree(groupedFrees)._1
-        val bodyResult = normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
-        ProcVisitOutputs(input.par.prepend(Receive(binds, bodyResult.par, persistent)),
+        val bodyResult =
+          normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
+        ProcVisitOutputs(input.par.prepend(Receive(binds, bodyResult.par, persistent, freeCount)),
                          bodyResult.knownFree)
       }
 
