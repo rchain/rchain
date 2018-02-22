@@ -47,8 +47,6 @@ object Dependencies {
 
   val scalaJsonRpc = "com.dhpcs" %% "scala-json-rpc" % "2.0.1"
 
-  // val circeJsonRPC = "io.github.shogowada" %% "scala-json-rpc-circe-json-serializer" % "0.9.3"
-
   val apiServerDependencies = http4sDependencies ++ circeDependencies ++ Seq(scalaJsonRpc)
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
