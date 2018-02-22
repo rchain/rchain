@@ -99,7 +99,7 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).flatMap( // Ensure arg0 is a Tuple
@@ -110,8 +110,8 @@ object tuple {
                 Fixnum(Int.MinValue)
               else if (n.value < t.elem.size) {
                 t.nth(n.value) match {
-                  case Some(v: Fixnum) => v
-                  case None            => Fixnum(Int.MaxValue)
+                  case Some(v: Ob) => v
+                  case None        => Fixnum(Int.MaxValue)
                 }
               } else
                 Fixnum(Int.MaxValue)))
@@ -150,6 +150,79 @@ object tuple {
               } yield res.asInstanceOf[Tuple]
           }))
 
+    }
+  }
+
+  /**
+    * Define the tuple-head primitive.
+    * This returns the first element of a Tuple
+    * e.g. (tuple-head [1 2 3 4 5 6]) ==> 1
+    */
+  object tplHead extends Prim {
+    override val name: String = "tuple-head"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[Tuple] // Only arg must be a Tuple
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+      val elem = ctxt.argvec.elem
+
+      checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
+
+        t.nth(0) match {
+          case Some(v: Ob) => v
+          case None        => Tuple.NIL
+        }
+      }
+    }
+  }
+
+  /**
+    * Define the tuple-last primitive.
+    * This returns the last element of a Tuple
+    * e.g. (tuple-last [1 2 3 4 5 6]) ==> 6
+    */
+  object tplLast extends Prim {
+    override val name: String = "tuple-last"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[Tuple] // Only arg must be a Tuple
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+      val elem = ctxt.argvec.elem
+
+      checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
+
+        t.nth(t.elem.size - 1) match {
+          case Some(v: Ob) => v
+          case None        => Tuple.NIL
+        }
+      }
+    }
+  }
+
+  /**
+    * Define the tuple-tail primitive.
+    * This returns the Tuple consisting of the 2nd through the nth
+    * elements of the provided Tuple
+    * e.g. (tuple-tail [1 2 3 4 5 6]) ==> [2 3 4 5 6]
+    */
+  object tplTail extends Prim {
+    override val name: String = "tuple-tail"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[Tuple] // Only arg must be a Tuple
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem = ctxt.argvec.elem
+      val t    = elem(0).asInstanceOf[Tuple]
+      if (t.elem.size > 0)
+        Right(t.makeTail(1))
+      else
+        Right(Tuple.NIL)
     }
   }
 
