@@ -113,8 +113,7 @@ object ProcNormalizeMatcher {
                  input: ProcVisitInputs,
                  constructor: Par => Expr): ProcVisitOutputs = {
       val subResult = normalizeMatch(subProc, input.copy(par = Par()))
-      ProcVisitOutputs(input.par.copy(exprs = constructor(subResult.par) :: input.par.exprs),
-                       subResult.knownFree)
+      ProcVisitOutputs(input.par.prepend(constructor(subResult.par)), subResult.knownFree)
     }
     def binaryExp(subProcLeft: Proc,
                   subProcRight: Proc,
@@ -123,33 +122,26 @@ object ProcNormalizeMatcher {
       val leftResult = normalizeMatch(subProcLeft, input.copy(par = Par()))
       val rightResult =
         normalizeMatch(subProcRight, input.copy(par = Par(), knownFree = leftResult.knownFree))
-      ProcVisitOutputs(
-        input.par.copy(exprs = constructor(leftResult.par, rightResult.par) :: input.par.exprs),
-        rightResult.knownFree)
+      ProcVisitOutputs(input.par.prepend(constructor(leftResult.par, rightResult.par)),
+                       rightResult.knownFree)
     }
 
     p match {
       case p: PGround =>
-        ProcVisitOutputs(
-          input.par.copy(
-            exprs = GroundNormalizeMatcher.normalizeMatch(p.ground_) :: input.par.exprs),
-          input.knownFree)
+        ProcVisitOutputs(input.par.prepend(GroundNormalizeMatcher.normalizeMatch(p.ground_)),
+                         input.knownFree)
 
       case p: PCollect => {
         val collectResult = CollectionNormalizeMatcher.normalizeMatch(
           p.collection_,
           CollectVisitInputs(input.env, input.knownFree))
-        ProcVisitOutputs(input.par.copy(exprs = collectResult.expr :: input.par.exprs),
-                         collectResult.knownFree)
+        ProcVisitOutputs(input.par.prepend(collectResult.expr), collectResult.knownFree)
       }
 
       case p: PVar =>
         input.env.get(p.var_) match {
           case Some((level, ProcSort)) => {
-            ProcVisitOutputs(input.par.copy(
-                               exprs = EVar(BoundVar(level))
-                                 :: input.par.exprs),
-                             input.knownFree)
+            ProcVisitOutputs(input.par.prepend(EVar(BoundVar(level))), input.knownFree)
           }
           case Some((level, NameSort)) => {
             throw new Error("Name variable used in process context.")
@@ -159,9 +151,7 @@ object ProcNormalizeMatcher {
               case None =>
                 val newBindingsPair =
                   input.knownFree.newBindings(List((Some(p.var_), ProcSort)))
-                ProcVisitOutputs(input.par.copy(
-                                   exprs = EVar(FreeVar(newBindingsPair._2(0)))
-                                     :: input.par.exprs),
+                ProcVisitOutputs(input.par.prepend(EVar(FreeVar(newBindingsPair._2(0)))),
                                  newBindingsPair._1)
               case _ => throw new Error("Free variable used as binder may not be used twice.")
             }
@@ -174,7 +164,7 @@ object ProcNormalizeMatcher {
         def collapseEvalQuote(chan: Channel): Par =
           chan match {
             case Quote(p) => p
-            case _        => Par().copy(evals = List(Eval(chan)))
+            case _        => Eval(chan)
           }
 
         val nameMatchResult =
@@ -218,10 +208,8 @@ object ProcNormalizeMatcher {
           case _: SendSingle   => false
           case _: SendMultiple => true
         }
-        ProcVisitOutputs(
-          input.par.copy(
-            sends = Send(nameMatchResult.chan, dataResults._1, persistent) :: input.par.sends),
-          dataResults._2.knownFree)
+        ProcVisitOutputs(input.par.prepend(Send(nameMatchResult.chan, dataResults._1, persistent)),
+                         dataResults._2.knownFree)
       }
 
       case p: PContr => {
@@ -248,11 +236,11 @@ object ProcNormalizeMatcher {
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
         ProcVisitOutputs(
-          input.par.copy(
-            receives = Receive(List((formalsResults._1.reverse, nameMatchResult.chan)),
-                               bodyResult.par,
-                               true,
-                               newFreeCount) :: input.par.receives),
+          input.par.prepend(
+            Receive(List((formalsResults._1.reverse, nameMatchResult.chan)),
+                    bodyResult.par,
+                    true,
+                    newFreeCount)),
           bodyResult.knownFree
         )
       }
