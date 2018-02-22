@@ -113,8 +113,9 @@ object queue {
               .getOrElse(Left(PatternMatchError))
           }
         case _ =>
-          Left(ArgumentMismatch(
-            "The first element should be a queue and second element should be a tuple"))
+          Left(
+            ArgumentMismatch(
+              "The first element should be a queue and second element should be a tuple"))
       }
   }
 
@@ -136,8 +137,9 @@ object queue {
             Right(q.patternRead(pat).getOrElse(ABSENT))
           }
         case _ =>
-          Left(ArgumentMismatch(
-            "The first element should be a queue and second element should be a tuple"))
+          Left(
+            ArgumentMismatch(
+              "The first element should be a queue and second element should be a tuple"))
       }
   }
 
@@ -159,8 +161,9 @@ object queue {
           }
           Right(q.elems.elem(n))
         case _ =>
-          Left(ArgumentMismatch(
-            "The first element should be a queue and second element should be a tuple"))
+          Left(
+            ArgumentMismatch(
+              "The first element should be a queue and second element should be a tuple"))
       }
   }
 

@@ -8,9 +8,9 @@ import scala.reflect.{classTag, ClassTag}
 sealed trait PrimError
 case class ArgumentMismatch(msg: String)               extends PrimError
 case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
-case object ArithmeticError extends PrimError
-case object QueueEmptyError extends PrimError
-case object PatternMatchError extends PrimError
+case object ArithmeticError                            extends PrimError
+case object QueueEmptyError                            extends PrimError
+case object PatternMatchError                          extends PrimError
 
 abstract class Prim extends Ob {
   val name: String

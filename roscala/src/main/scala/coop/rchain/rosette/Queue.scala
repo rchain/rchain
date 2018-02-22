@@ -51,8 +51,7 @@ case class Queue(elems: Tuple) extends Ob {
       e match {
         case msg: Tuple =>
           if (pat.matches(msg)) {
-            val newElems = elems.elem.slice(0, i) ++: elems.elem.slice(i + 1,
-                                                                       len)
+            val newElems = elems.elem.slice(0, i) ++: elems.elem.slice(i + 1, len)
             return Some(Queue(Tuple(newElems)))
           }
         case _ =>
@@ -79,7 +78,7 @@ case class Queue(elems: Tuple) extends Ob {
     if (i < 0 || i > len) {
       return None
     }
-    val msg = elems.elem(i)
+    val msg      = elems.elem(i)
     val newElems = elems.elem.slice(0, i) ++: elems.elem.slice(i + 1, len)
     Some(Queue(Tuple(newElems)))
   }
