@@ -44,7 +44,12 @@ object Dependencies {
     "io.circe" %% "circe-literal" % circeVersion,
   )
 
-  val apiServerDependencies = http4sDependencies ++ circeDependencies
+
+  val scalaJsonRpc = "com.dhpcs" %% "scala-json-rpc" % "2.0.1"
+
+  // val circeJsonRPC = "io.github.shogowada" %% "scala-json-rpc-circe-json-serializer" % "0.9.3"
+
+  val apiServerDependencies = http4sDependencies ++ circeDependencies ++ Seq(scalaJsonRpc)
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)

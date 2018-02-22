@@ -15,17 +15,13 @@ case class HttpServer(port: Int) {
 
   val bld = BlazeBuilder[IO]
     .bindHttp(port, "localhost")
-    .mountService(JsonRPC.service, "/")
+    .mountService(JsonRpc.service, "/")
     .mountService(Lykke.service, "/lykke")
     .start
 
-  def start(): Unit = {
-    logger.info(s"HTTP server started on port $port.")
-    server = Some(bld.unsafeRunSync())
-  }
+  def start(): Unit =
+    server = Some(bld.unsafeRunSync)
 
-  def stop(): Unit = {
-    server.foreach(_.shutdown.unsafeRunSync())
-    logger.info("HTTP server stopped.")
-  }
+  def stop(): Unit =
+    server.foreach(_.shutdown.unsafeRunSync)
 }
