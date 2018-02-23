@@ -1,26 +1,20 @@
 package coop.rchain.node.service
 
+import cats._
 import cats.effect._
-import cats.syntax.functor._
-import cats.data.EitherT
-import org.http4s._
-import org.http4s.client._
-import org.http4s.circe._
-import org.http4s.client.dsl.io._
-import org.http4s.{Request => HttpRequest}
-import org.http4s.dsl.io._
 import io.circe._
-import io.circe.parser._
+import io.circe.generic.auto._
+import io.circe.generic.extras.Configuration
+import io.circe.generic.extras._
 import io.circe.literal._
 import io.circe.syntax._
-import io.circe.generic.auto._
-import io.circe.generic.semiauto._
-import io.circe.generic.extras._
-import io.circe.generic.extras.Configuration
-
-import io.circe.generic.JsonCodec
+import org.http4s._
+import org.http4s.circe._
+import org.http4s.dsl.io._
 
 import shapeless._
+
+import coop.rchain.catscontrib._
 
 object JsonRpc {
   implicit val config: Configuration = Configuration.default.withSnakeCaseMemberNames
@@ -40,11 +34,7 @@ object JsonRpc {
     final def apply(c: HCursor): Decoder.Result[IdType] = {
       val v = c.value
       if (v.isNumber) {
-        v.as[Long] match {
-          case Right(i) => Right(Coproduct[IdType](i))
-          case _ =>
-            Left(DecodingFailure("id must be Number or String", c.history))
-        }
+        v.as[Long].flatMap(i => Right(Coproduct[IdType](i)))
       } else if (v.isString) {
         Right(Coproduct[IdType](v.asString.getOrElse("")))
       } else {
@@ -61,22 +51,14 @@ object JsonRpc {
   sealed trait JsonResponse
   @ConfiguredJsonCodec case class Response(jsonrpc: String, id: IdType, result: JsonResult)
       extends JsonResponse
-  @ConfiguredJsonCodec case class StandardError(code: Int, message: String) extends JsonResponse
-  @ConfiguredJsonCodec case class ExtendedError(code: Int, message: String, data: ErrorData)
+  @ConfiguredJsonCodec case class Error(jsonrpc: String, id: IdType, error: ErrorData)
       extends JsonResponse
 
   object JsonResponse {
     implicit val encodeJsonResponse: Encoder[JsonResponse] = Encoder.instance {
-      case response @ Response(_, _, _)   => response.asJson
-      case error @ StandardError(_, _)    => error.asJson
-      case error @ ExtendedError(_, _, _) => error.asJson
+      case response @ Response(_, _, _) => response.asJson
+      case error @ Error(_, _, _)       => error.asJson
     }
-
-    val parseError          = StandardError(-32700, "Parse error")
-    val invalidRequestError = StandardError(-32600, "Invalid Request")
-    val methodNotFoundError = StandardError(-32601, "Method not found")
-    val invalidParamsError  = StandardError(-32602, "Invalid params")
-    val internalError       = StandardError(-32603, "Internal error")
   }
 
   sealed trait JsonResult
@@ -93,26 +75,49 @@ object JsonRpc {
   }
 
   sealed trait ErrorData
-  case class SomethingBroke(what: String) extends ErrorData
+  @ConfiguredJsonCodec case class StandardError(code: Int, message: String) extends ErrorData
+  @ConfiguredJsonCodec case class ExtendedError(code: Int, message: String, data: ErrorDetail)
+      extends ErrorData
+
+  sealed trait ErrorDetail
+  @ConfiguredJsonCodec case class SomethingBroke(what: String) extends ErrorDetail
 
   object ErrorData {
     implicit val encodeErrorData: Encoder[ErrorData] = Encoder.instance {
+      case standard @ StandardError(_, _)    => standard.asJson
+      case extended @ ExtendedError(_, _, _) => extended.asJson
+    }
+
+    val parseError          = StandardError(-32700, "Parse error")
+    val invalidRequestError = StandardError(-32600, "Invalid Request")
+    val methodNotFoundError = StandardError(-32601, "Method not found")
+    val invalidParamsError  = StandardError(-32602, "Invalid params")
+    val internalError       = StandardError(-32603, "Internal error")
+  }
+
+  object ErrorDetail {
+    implicit val encodeErrorDetail: Encoder[ErrorDetail] = Encoder.instance {
       case broke @ SomethingBroke(_) => broke.asJson
     }
+
   }
 
   def handle(req: Request): JsonResponse =
-    req.method match {
-      case "node_version" =>
-        Response("2.0", req.id, NodeVersionResult("0.1", "0.2"))
-      case _ =>
-        JsonResponse.methodNotFoundError // Error(-32601, "Method not found", SomethingBroke("sorry"))
+    req.jsonrpc match {
+      case "2.0" =>
+        req.method match {
+          case "node_version" =>
+            Response("2.0", req.id, NodeVersionResult("0.1", "0.2"))
+          case "node_status" =>
+            Response("2.0", req.id, NodeStatusResult("up", "<timestamp>"))
+          case _ =>
+            Error("2.0", req.id, ErrorData.methodNotFoundError)
+        }
+      case _ => Error("2.0", req.id, ErrorData.invalidRequestError)
     }
 
   val service = HttpService[IO] {
     case req @ POST -> Root => {
-      println(s"   req: $req")
-
       val response =
         for {
           request <- req.as[Request]
