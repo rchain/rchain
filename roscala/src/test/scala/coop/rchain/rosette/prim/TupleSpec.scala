@@ -162,4 +162,81 @@ class TupleSpec extends FlatSpec with Matchers {
     tplXchg.fn(newCtxt) should be('left)
   }
 
+  /** tuple-head */
+  "tplHead" should "correctly return the 0th element of a Tuple" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+
+    tplHead.fn(newCtxt) should be(
+      Right(Fixnum(1))
+    )
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplHead.fn(newCtxt) should be('left)
+  }
+
+  it should "return NIL for an empty Tuple" in {
+    val tup     = Seq()
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+    tplHead.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  /** tuple-last */
+  "tplLast" should "correctly return the last element of a Tuple" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+
+    tplLast.fn(newCtxt) should be(
+      Right(Fixnum(6))
+    )
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplLast.fn(newCtxt) should be('left)
+  }
+
+  it should "return NIL for an empty Tuple" in {
+    val tup     = Seq()
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+    tplLast.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  /** tuple-tail */
+  "tplTail" should "correctly return the 2nd through last element of a Tuple" in {
+    val tup  = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val tail = Seq(Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+
+    tplTail.fn(newCtxt) should be(
+      Right(Tuple(tail))
+    )
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplTail.fn(newCtxt) should be('left)
+  }
+
+  it should "return empty Tuple for an empty Tuple input" in {
+    val empty   = Seq.empty
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(empty)))
+    tplTail.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  it should "return empty Tuple for a single element Tuple input" in {
+    val tup     = Seq(Fixnum(1))
+    val empty   = Seq.empty
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
+    tplTail.fn(newCtxt) should be(Right(Tuple(empty)))
+  }
+
 }
