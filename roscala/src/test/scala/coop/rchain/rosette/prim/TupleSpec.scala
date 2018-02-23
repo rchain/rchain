@@ -239,4 +239,52 @@ class TupleSpec extends FlatSpec with Matchers {
     tplTail.fn(newCtxt) should be(Right(Tuple(empty)))
   }
 
+  /** tuple-new */
+  "tplNew" should "correctly create a new Tuple with n Obs" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(
+        nargs = 7,
+        argvec = Tuple.cons(Fixnum(1), Tuple(tup))
+      )
+
+    tplNew.fn(newCtxt) should be(Right(Tuple(tup)))
+  }
+
+  it should "correctly create a new Tuple with 0 Obs" in {
+    val empty = Seq.empty
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(empty)))
+
+    tplNew.fn(newCtxt) should be(Right(Tuple(empty)))
+  }
+
+  /** tuple-new-n */
+  "tplNewN" should "correctly create a new Tuple with n duplicate Obs" in {
+    val tup = Tuple(6, Fixnum(1))
+    val newCtxt =
+      ctxt.copy(
+        nargs = 3,
+        argvec = Tuple(Seq(Fixnum(0), Fixnum(6), Fixnum(1)))
+      )
+    tplNewN.fn(newCtxt) should be(Right(tup))
+  }
+
+  it should "return NIL for n<=0" in {
+    val newCtxt =
+      ctxt.copy(
+        nargs = 3,
+        argvec = Tuple(Seq(Fixnum(0), Fixnum(0), Fixnum(1)))
+      )
+
+    tplNewN.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplNewN.fn(newCtxt) should be('left)
+  }
+
 }
