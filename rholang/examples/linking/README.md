@@ -23,7 +23,7 @@ and that Y.rho contains
 Then linking Y.rho would result in the file Y.rho.linked with the contents
 ```
    new X in {
-     contract X(input, return) = { return( 2input ) } | 
+     contract X(input, return) = { return( 2 * input ) } | 
      new Y in { contract Y(return) = { X(5, return) } }
    }
 ```
