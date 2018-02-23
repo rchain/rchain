@@ -255,7 +255,7 @@ object tuple {
       val elem  = ctxt.argvec.elem
       val nargs = ctxt.nargs
 
-      Right(Tuple(elem.slice(1, nargs - 1)))
+      Right(Tuple(elem).makeSlice(1, nargs - 1))
     }
   }
 

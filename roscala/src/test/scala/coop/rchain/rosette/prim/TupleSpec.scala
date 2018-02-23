@@ -245,7 +245,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
     val newCtxt =
       ctxt.copy(
-        nargs = 8,
+        nargs = 7,
         argvec = Tuple.cons(Fixnum(1), Tuple(tup))
       )
 
