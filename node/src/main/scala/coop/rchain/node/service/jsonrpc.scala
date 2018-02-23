@@ -1,6 +1,5 @@
 package coop.rchain.node.service
 
-import cats._
 import cats.effect._
 import io.circe._
 import io.circe.generic.auto._
@@ -13,8 +12,6 @@ import org.http4s.circe._
 import org.http4s.dsl.io._
 
 import shapeless._
-
-import coop.rchain.catscontrib._
 
 object JsonRpc {
   implicit val config: Configuration = Configuration.default.withSnakeCaseMemberNames

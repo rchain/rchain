@@ -10,7 +10,6 @@ def commonSettings: Seq[Setting[_]] =
     version := "0.1.0-SNAPSHOT",
 
     resolvers += Resolver.sonatypeRepo("releases"),
-    resolvers += Resolver.bintrayRepo("dhpcs", "maven"),
 
     CompilerSettings.options,
     logBuffered in Test := false,
@@ -107,7 +106,6 @@ lazy val node = project
   .enablePlugins(DockerPlugin)
   .settings(
     commonSettings,
-    scalacOptions ++= Seq("-Ywarn-unused-import"),
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(

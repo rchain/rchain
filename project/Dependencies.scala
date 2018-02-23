@@ -45,9 +45,6 @@ object Dependencies {
     "io.circe" %% "circe-literal"        % circeVersion,
   )
 
-
-  val scalaJsonRpc = "com.dhpcs" %% "scala-json-rpc" % "2.0.1"
-
   val apiServerDependencies = http4sDependencies ++ circeDependencies ++ Seq(scalaJsonRpc)
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
