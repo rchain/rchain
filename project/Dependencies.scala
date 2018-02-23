@@ -38,10 +38,11 @@ object Dependencies {
 
   val circeVersion = "0.9.1"
   val circeDependencies = Seq(
-    "io.circe" %% "circe-core"    % circeVersion,
-    "io.circe" %% "circe-generic" % circeVersion,
-    "io.circe" %% "circe-parser"  % circeVersion,
-    "io.circe" %% "circe-literal" % circeVersion,
+    "io.circe" %% "circe-core"           % circeVersion,
+    "io.circe" %% "circe-generic"        % circeVersion,
+    "io.circe" %% "circe-generic-extras" % circeVersion,
+    "io.circe" %% "circe-parser"         % circeVersion,
+    "io.circe" %% "circe-literal"        % circeVersion,
   )
 
 
