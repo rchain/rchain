@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -284,6 +284,41 @@ object tuple {
         else
           Right(Tuple(n.value, elem(2)))
       }
+    }
+  }
+
+  object tplMemQ extends Prim {
+    override val name: String = "tuple-mem?"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem  = ctxt.argvec.elem
+      val nargs = ctxt.nargs
+
+      checkTuple(0, elem).map { t =>
+        for (el <- t.elem) {
+          if (el == elem(1))
+            return Right(RblBool(true))
+        }
+        return Right(RblBool(false))
+      }
+    }
+  }
+
+  object tplMatchesP extends Prim {
+    override val name: String = "tuple-matches?"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkTypeMismatch[Tuple] // Args must be Tuples
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem = ctxt.argvec.elem
+      val pat  = elem(0).asInstanceOf[Tuple]
+      val tup  = elem(1).asInstanceOf[Tuple]
+      Right(RblBool(pat.matches(tup)))
     }
   }
 
