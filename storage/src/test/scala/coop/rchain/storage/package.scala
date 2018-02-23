@@ -1,12 +1,9 @@
-package coop.rchain.storage
+package coop.rchain
 
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-import coop.rchain.models.Serialize
-import coop.rchain.storage.util.withResource
-
-trait StorageFixtures {
+package object storage {
 
   /**
     * Makes a SimpleFileVisitor to delete files and the directories that contained them
@@ -25,17 +22,6 @@ trait StorageFixtures {
       }
     }
 
-  private def recursivelyDeletePath(p: Path): Path =
+  def recursivelyDeletePath(p: Path): Path =
     Files.walkFileTree(p, makeDeleteFileVisitor)
-
-  def withTestStorage[A, K, V](f: Storage[K, V] => A)(implicit sk: Serialize[K],
-                                                      sv: Serialize[V]): A = {
-    val tmpDir = Files.createTempDirectory("rchain-storage-test-")
-    try {
-      val storage = Storage.create[K, V](tmpDir, "test", 500000L)
-      withResource(storage)(f)
-    } finally {
-      recursivelyDeletePath(tmpDir)
-    }
-  }
 }
