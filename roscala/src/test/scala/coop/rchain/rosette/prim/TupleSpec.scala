@@ -263,9 +263,7 @@ class TupleSpec extends FlatSpec with Matchers {
 
   /** tuple-new-n */
   "tplNewN" should "correctly create a new Tuple with n duplicate Obs" in {
-    val tup   = Tuple(6, Fixnum(1))
-    val empty = Seq.empty
-
+    val tup = Tuple(6, Fixnum(1))
     val newCtxt =
       ctxt.copy(
         nargs = 3,
@@ -275,8 +273,6 @@ class TupleSpec extends FlatSpec with Matchers {
   }
 
   it should "return NIL for n<=0" in {
-    val empty = Tuple(Seq.empty)
-
     val newCtxt =
       ctxt.copy(
         nargs = 3,

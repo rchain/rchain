@@ -266,7 +266,7 @@ object tuple {
     * See warning in tplNew about the rationale for ignoring ARG(0).
     * 	(tplNewN dummy n init)
     *
-    * e.g.(tplNewN [] 3 'a) ===>	['a 'a 'a]
+    * e.g.(tuple-new-n [] 3 'a) ===>	['a 'a 'a]
     */
   object tplNewN extends Prim {
     override val name: String = "tuple-new-n"
