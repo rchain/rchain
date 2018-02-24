@@ -42,8 +42,7 @@ object VirtualMachine {
   def handleVirtualMachineError(state: VMState): VMState =
     state.ctxt.vmError(state)._2
 
-  def handlePrimResult(primResult: Result,
-                       save: Ob => State[VMState, Unit]): State[VMState, Unit] =
+  def handlePrimResult(primResult: Result, save: Ob => State[VMState, Unit]): State[VMState, Unit] =
     primResult match {
       case Right(ob) => save(ob)
 
@@ -243,8 +242,7 @@ object VirtualMachine {
 
       currentState = currentState
         .update(_ >> 'pc >> 'relative)(_ + 1)
-        .update(_ >> 'bytecodes)(
-          _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1))
+        .update(_ >> 'bytecodes)(_.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1))
 
       currentState = runFlags(executeDispatch(op, currentState))
 
@@ -788,8 +786,7 @@ object VirtualMachine {
     setCtxtReg(op.reg, state.globalEnv.entry(op.global))(state)
 
   def execute(op: OpXferArgToArg, state: VMState): VMState =
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.dest, state.ctxt.argvec.elem(op.src)))
+    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.dest, state.ctxt.argvec.elem(op.src)))
 
   def execute(op: OpXferRsltToArg, state: VMState): VMState =
     state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.ctxt.rslt))
