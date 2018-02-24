@@ -45,7 +45,12 @@ object Dependencies {
     "io.circe" %% "circe-literal"        % circeVersion,
   )
 
-  val apiServerDependencies = http4sDependencies ++ circeDependencies
+  val kamonDependencies = Seq(
+    "io.kamon" %% "kamon-core"       % "1.0.0",
+    "io.kamon" %% "kamon-prometheus" % "1.0.0"
+  )
+
+  val apiServerDependencies = http4sDependencies ++ circeDependencies ++ kamonDependencies
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)

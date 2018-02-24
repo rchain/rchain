@@ -128,6 +128,8 @@ object Main {
       def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
+    val metrics = Metrics().start
+
     val http = HttpServer(8080)
     http.start
 
