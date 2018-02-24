@@ -128,7 +128,7 @@ object Main {
       def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
-    val metrics = Metrics().start
+    val metrics = Metrics()
 
     val http = HttpServer(8080)
     http.start
@@ -151,6 +151,7 @@ object Main {
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
+        metrics.stop
         http.stop
         net.disconnect
         logger.info("Goodbye.")
