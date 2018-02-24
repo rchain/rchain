@@ -15,7 +15,7 @@ case class HttpServer(port: Int) {
 
   val bld = BlazeBuilder[IO]
     .bindHttp(port, "localhost")
-    .mountService(JsonRpc.service, "/")
+    .mountService(jsonrpc.service, "/")
     .mountService(Lykke.service, "/lykke")
     .start
 

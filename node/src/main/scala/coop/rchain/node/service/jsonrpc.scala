@@ -13,7 +13,7 @@ import org.http4s.dsl.io._
 
 import shapeless._
 
-object JsonRpc {
+object jsonrpc {
   implicit val config: Configuration = Configuration.default.withSnakeCaseMemberNames
 
   type IdType = Long :+: String :+: CNil
