@@ -20,12 +20,6 @@ import coop.rchain.catscontrib._, Catscontrib._
 final case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
 
 case object NetworkAddress {
-
-  /**
-    * Parse a string address into a [[coop.rchain.comm.PeerNode]] or
-    * an error indicating that the string could not be parsed into a
-    * node address.
-    */
   def parse(str: String): Either[CommError, PeerNode] =
     try {
       val uri = Uri.parse(str)
