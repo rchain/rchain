@@ -61,15 +61,7 @@ ${sudo} apt-get update -yqq
 # ${sudo} apt-get install default-jdk -yqq # alternate jdk install 
 ${sudo} apt-get install openjdk-8-jdk -yqq
 
-## Install Scala 2.12.4
-scala_version="2.12.4"
-${sudo} apt-get remove scala-library scala -yqq
-curl --location --output /tmp/scala-${scala_version}.deb http://scala-lang.org/files/archive/scala-${scala_version}.deb 
-${sudo} dpkg -i /tmp/scala-${scala_version}.deb
-${sudo} apt-get update -yqq
-${sudo} apt-get install scala -yqq
-
-## Install sbt 
+## Install sbt
 ${sudo} apt-get install apt-transport-https -yqq
 echo "deb https://dl.bintray.com/sbt/debian /" | ${sudo} tee -a /etc/apt/sources.list.d/sbt.list
 ${sudo} apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
