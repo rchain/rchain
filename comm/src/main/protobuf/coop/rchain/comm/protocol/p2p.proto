@@ -23,6 +23,11 @@ message EncryptionHandshakeResponse {
   bytes  publicKey     = 1;
 }
 
+message Frame {
+  bytes nounce   = 1;
+  bytes msg      = 2;
+}
+
 message ProtocolHandshake {
     // Temporary field included to test serialization.
     uint64 number = 1;
