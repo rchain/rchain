@@ -28,6 +28,7 @@ object CompilerSettings {
     // format: on
 
   lazy val options = Seq(
+    javacOptions ++= Seq("-encoding", "UTF-8"),
     scalacOptions ++= commonOptions ++ {
       CrossVersion.partialVersion(scalaVersion.value) match {
         case Some((2, major)) if major >= 12 =>

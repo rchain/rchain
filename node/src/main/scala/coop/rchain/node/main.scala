@@ -25,7 +25,7 @@ object TaskContrib {
 }
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  version("RChain Communications Library version 0.1")
+  version("RChain Node version 0.1")
 
   val name =
     opt[String](default = None, short = 'n', descr = "Node name or key.")
@@ -70,10 +70,10 @@ object Main {
           Some(addresses(false).head)
         } else {
           val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-          if (addresses.contains(false)) {
-            Some(addresses(false).head)
-          } else if (addresses.contains(true)) {
-            Some(addresses(true).head)
+          if (locals.contains(false)) {
+            Some(locals(false).head)
+          } else if (locals.contains(true)) {
+            Some(locals(true).head)
           } else {
             None
           }
@@ -128,6 +128,9 @@ object Main {
       def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
+    val http = HttpServer(8080)
+    http.start
+
     val calculateKeys: Effect[PublicPrivateKeys] = for {
       inDb <- keysAvailable[Effect]
       ks   <- if (inDb) fetchKeys[Effect] else generate.pure[Effect]
@@ -146,6 +149,7 @@ object Main {
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
+        http.stop
         net.disconnect
         logger.info("Goodbye.")
       }
