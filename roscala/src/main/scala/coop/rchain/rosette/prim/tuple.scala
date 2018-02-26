@@ -298,11 +298,7 @@ object tuple {
       val nargs = ctxt.nargs
 
       checkTuple(0, elem).map { t =>
-        for (el <- t.elem) {
-          if (el == elem(1))
-            return Right(RblBool(true))
-        }
-        return Right(RblBool(false))
+        RblBool(t.elem.exists(el => (el == elem(1))))
       }
     }
   }
