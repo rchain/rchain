@@ -31,6 +31,9 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val port =
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
+  val httpPort =
+    opt[Int](default = Some(8080), short = 'x', descr = "HTTP port.")
+
   val bootstrap =
     opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
                 short = 'b',
@@ -126,7 +129,7 @@ object Main {
       def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
-    val http = HttpServer(8080)
+    val http = HttpServer(conf.httpPort())
     http.start
 
     val calculateKeys: Effect[PublicPrivateKeys] = for {
