@@ -8,9 +8,9 @@ import coop.rchain.p2p
 import coop.rchain.comm._
 import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
-import cats._, cats.data._, cats.implicits._
 import monix.eval.Task
 import monix.execution.Scheduler
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
 object TaskContrib {
@@ -82,18 +82,6 @@ object Main {
     }
   }
 
-  /** Those instances have no sens whatsoever however we keep them for now
-    * to adjust to imperative side of the code base in main. Once p2p.Network
-    * gets a monadic API we will remove this and main will run on a single
-    * type that binds all possbile efffects
-    */
-  object TempInstances {
-    implicit val eitherCapture: Capture[Either[CommError, ?]] =
-      new Capture[Either[CommError, ?]] {
-        def capture[A](a: => A): Either[CommError, A] = Right(a)
-      }
-  }
-
   def main(args: Array[String]): Unit = {
 
     import encryption._
@@ -110,10 +98,7 @@ object Main {
       case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
     }
 
-    /** TODO This is using Either for the effect which obviously is a temp solution. Will use
-      * proper type once p2p.Network gets a monadic API
-      */
-    import TempInstances._
+    import ApplicativeError_._
 
     /** This is essentially a final effect that will accumulate all effects from the system */
     type LogT[F[_], A]     = WriterT[F, Vector[String], A]
@@ -151,32 +136,32 @@ object Main {
       }
     }
 
-    def findAndConnect(net: p2p.Network): Long => Task[Long] =
+    def findAndConnect(net: p2p.Network): Long => Effect[Long] =
       (lastCount: Long) =>
         (for {
-          _ <- IOUtil.sleep[Task](5000L)
+          _ <- IOUtil.sleep[Effect](5000L)
           peers <- Task.delay { // TODO lift findMorePeers to return IO
             net.net.findMorePeers(limit = 10)
-          }
-          _ <- peers.toList.traverse(p => net.connect[Task](p))
+          }.toEffect
+          _ <- peers.toList.traverse(p => net.connect[Effect](p))
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
             val thisCount = net.net.table.peers.size
             if (thisCount != lastCount) {
               logger.info(s"Peers: $thisCount.")
             }
             thisCount
-          }
+          }.toEffect
         } yield tc)
 
     val recipe: Effect[Unit] = for {
       addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
       keys <- calculateKeys
-      net  <- p2p.Network(addy, keys).pure[Effect]
+      net  <- (new p2p.Network(addy, keys)).pure[Effect]
       _    <- addShutdownHook(net).toEffect
       _    <- iologger.info[Effect](s"Listening for traffic on $net.")
       _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
       else connectToBootstrap(net)
-      _ <- MonadOps.forever(findAndConnect(net), 0L).toEffect
+      _ <- MonadOps.forever(findAndConnect(net), 0L)
     } yield ()
 
     import monix.execution.Scheduler.Implicits.global

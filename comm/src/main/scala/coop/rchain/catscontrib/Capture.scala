@@ -33,6 +33,11 @@ trait CaptureInstances extends CaptureInstances0 {
   implicit val taskCapture: Capture[Task] = new Capture[Task] {
     def capture[A](a: => A): Task[A] = Task.delay(a)
   }
+
+  /** TEMP REMOVE once comm no longer imperative*/
+  implicit def eitherCapture[E]: Capture[Either[E, ?]] = new Capture[Either[E, ?]] {
+    def capture[A](a: => A): Either[E, ?][A] = Right(a)
+  }
 }
 
 sealed trait CaptureInstances0 {

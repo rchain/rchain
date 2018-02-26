@@ -59,32 +59,23 @@ class Network(
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
     * the same language.
     */
-  def connect[F[_]: Capture: FlatMap](peer: PeerNode): F[Unit] =
+  def connect[F[_]: Capture: Monad: ApplicativeError_[?[_], CommError]](peer: PeerNode): F[Unit] =
     for {
-      _  <- iologger.debug[F](s"connect(): Connecting to $peer")
-      ts <- IOUtil.currentMilis[F]
-      proto  = encryptionHandshake(net.local, keys)
-      ehs    = EncryptionHandshakeMessage(proto, ts)
-      remote = new ProtocolNode(peer, this.net)
+      _       <- iologger.debug[F](s"connect(): Connecting to $peer")
+      ts1     <- IOUtil.currentMilis[F]
+      proto   <- encryptionHandshake(net.local, keys).pure[F]
+      ehs     <- EncryptionHandshakeMessage(proto, ts1).pure[F]
+      remote  <- new ProtocolNode(peer, this.net).pure[F]
+      ehsresp <- net.roundTrip[F](ehs, remote)
+      _ <- iologger.debug[F](
+        s"connect(): Received encryption handshake response from ${ehsresp.sender.get}.")
+      ts2     <- IOUtil.currentMilis[F]
+      phs     <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
+      phsresp <- net.roundTrip[F](phs, remote)
+      _ <- iologger.debug[F](
+        s"connect(): Received protocol handshake response from ${phsresp.sender.get}.")
     } yield {
-      // TODO roundTrip should return IO, then it can become part of this expression
-      net.roundTrip(ehs, remote) match {
-        case Right(resp) => {
-          logger.debug(
-            s"connect(): Received encryption handshake response from ${resp.sender.get}.")
-          val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
-                                             System.currentTimeMillis)
-          net.roundTrip(phs, remote) match {
-            case Right(resp) => {
-              logger.debug(
-                s"connect(): Received protocol handshake response from ${resp.sender.get}.")
-              net.add(remote)
-            }
-            case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
-          }
-        }
-        case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
-      }
+      net.add(remote)
     }
 
   def disconnect(): Unit = {
