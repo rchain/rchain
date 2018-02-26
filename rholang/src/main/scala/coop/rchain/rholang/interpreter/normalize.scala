@@ -260,8 +260,8 @@ object ProcNormalizeMatcher {
       case p: PInput => {
         import scala.collection.JavaConverters._
         // To handle the most common case where we can sort the binds because
-        // they're from different sources, Each channel read starts its free variables at 0.
-        // We check for overlap at the end before sorting.
+        // they're from different sources, Each channel's list of patterns starts its free variables at 0.
+        // We check for overlap at the end after sorting. We could check before, but it'd be an extra step.
 
         // We split this into parts. First we process all the sources, then we process all the bindings.
         def processSources(bindings: List[(List[Name], Name)])
@@ -312,15 +312,15 @@ object ProcNormalizeMatcher {
         }
         val (sources, thisLevelFree) = processSources(bindings)
         val receipts                 = ReceiveSortMatcher.preSortBinds(processBindings(sources))
-        val groupedFrees = (DebruijnLevelMap[VarSort]() /: receipts)((env, receipt) =>
+        val mergedFrees = (DebruijnLevelMap[VarSort]() /: receipts)((env, receipt) =>
           env.absorbFree(receipt._3) match {
             case (newEnv, Nil) => newEnv
             case _ =>
               throw new Error("Free variable used as binder may not be used twice.")
         })
-        val freeCount  = groupedFrees.next
+        val freeCount  = mergedFrees.next
         val binds      = receipts.map((receipt) => (receipt._1, receipt._2))
-        val updatedEnv = input.env.absorbFree(groupedFrees)._1
+        val updatedEnv = input.env.absorbFree(mergedFrees)._1
         val bodyResult =
           normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
         ProcVisitOutputs(input.par.prepend(Receive(binds, bodyResult.par, persistent, freeCount)),

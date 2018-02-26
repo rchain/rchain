@@ -350,6 +350,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PInput" should "Handle a simple receive" in {
+    // for ( x, y <- @Nil ) { x!(*y) }
     val listBindings = new ListName()
     listBindings.add(new NameVar("x"))
     listBindings.add(new NameVar("y"))
@@ -375,6 +376,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
   "PInput" should "Handle a more complicated receive" in {
+    // for ( (x1, @y1) <- @Nil ; (x2, @y2) <- @1) { x1!(y2) | x2!(y1) }
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x1"))
     listBindings1.add(new NameQuote(new PVar("y1")))
@@ -410,6 +412,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
   "PInput" should "Fail if a free variable is used in 2 different receives" in {
+    // for ( (x1, @y1) <- @Nil ; (x2, @y1) <- @1) { Nil }
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x1"))
     listBindings1.add(new NameQuote(new PVar("y1")))
