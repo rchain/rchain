@@ -13,6 +13,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import coop.rchain.catscontrib._, Catscontrib._
 
+import kamon._
+
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     def unsafeRunSync(handle: A => Unit): Unit =
@@ -158,6 +160,8 @@ object Main {
       }
     }
 
+    val peerCounter = Kamon.gauge("peers")
+
     def findAndConnect(net: p2p.Network): Long => Task[Long] =
       (lastCount: Long) =>
         (for {
@@ -168,6 +172,7 @@ object Main {
           _ <- peers.toList.traverse(p => net.connect[Task](p))
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
             val thisCount = net.net.table.peers.size
+            peerCounter.set(thisCount)
             if (thisCount != lastCount) {
               logger.info(s"Peers: $thisCount.")
             }
