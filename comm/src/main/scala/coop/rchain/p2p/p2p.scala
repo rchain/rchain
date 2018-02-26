@@ -48,7 +48,7 @@ case object NetworkAddress {
     }
 }
 
-final case class Network(
+class Network(
     local: PeerNode,
     keys: PublicPrivateKeys
 ) extends ProtocolDispatcher[java.net.SocketAddress] {
