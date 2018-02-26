@@ -8,6 +8,8 @@ import com.typesafe.scalalogging.Logger
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
+import kamon._
+
 /*
  * Inspiration from ethereum:
  *
@@ -60,6 +62,8 @@ final case class Network(
 
   val net = new UnicastNetwork(local, Some(this))
 
+  val counter = Kamon.counter("connects")
+
   /**
     * This method (eventually) will initiate the two-part RChain handshake protocol. First, encryption keys are exchanged,
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
@@ -74,6 +78,7 @@ final case class Network(
       remote = new ProtocolNode(peer, this.net)
     } yield {
       // TODO roundTrip should return IO, then it can become part of this expression
+      counter.increment
       net.roundTrip(ehs, remote) match {
         case Right(resp) => {
           logger.debug(

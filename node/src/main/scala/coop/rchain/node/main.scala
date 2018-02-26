@@ -13,6 +13,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import coop.rchain.catscontrib._, Catscontrib._
 
+import kamon._
+
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     def unsafeRunSync(handle: A => Unit): Unit =
@@ -128,6 +130,8 @@ object Main {
       def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
+    val metrics = Metrics()
+
     val http = HttpServer(8080)
     http.start
 
@@ -149,11 +153,14 @@ object Main {
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
+        metrics.stop
         http.stop
         net.disconnect
         logger.info("Goodbye.")
       }
     }
+
+    val peerCounter = Kamon.gauge("peers")
 
     def findAndConnect(net: p2p.Network): Long => Task[Long] =
       (lastCount: Long) =>
@@ -165,6 +172,7 @@ object Main {
           _ <- peers.toList.traverse(p => net.connect[Task](p))
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
             val thisCount = net.net.table.peers.size
+            peerCounter.set(thisCount)
             if (thisCount != lastCount) {
               logger.info(s"Peers: $thisCount.")
             }
