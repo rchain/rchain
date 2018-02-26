@@ -8,19 +8,17 @@ import coop.rchain.p2p
 import coop.rchain.comm._
 import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
-import cats._, cats.data._, cats.implicits._
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     def unsafeRunSync(handle: A => Unit): Unit =
-      // TODO this will eventually disappear
-      task.coeval.value match {
-        case Left(future) => throw new Exception("could not run in sync")
-        case Right(a)     => handle(a)
-      }
+      Await.result(task.runAsync, Duration.Inf)
   }
 }
 
