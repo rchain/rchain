@@ -17,12 +17,10 @@ message Hello {
 
 message EncryptionHandshake {
   bytes  publicKey = 1;
-  bytes  hello     = 2;
 }
 
 message EncryptionHandshakeResponse {
   bytes  publicKey     = 1;
-  bytes  helloBack     = 2;
 }
 
 message ProtocolHandshake {

@@ -14,21 +14,14 @@ object NetworkProtocol {
   val ENCRYPTION_HELLO_BACK = "hello_back"
 
   def encryptionHandshake(src: ProtocolNode, keys: PublicPrivateKeys): routing.Protocol = {
-    val signIt: Array[Byte] => Array[Byte] = encryption.sign(keys.priv, _)
-    val prepare: String => Array[Byte]     = encryption.hashIt >>> signIt
-    val msg = EncryptionHandshake(publicKey = ByteString.copyFrom(keys.pub),
-                                  hello = ByteString.copyFrom(prepare(ENCRYPTION_HELLO)))
+    val msg = EncryptionHandshake(publicKey = ByteString.copyFrom(keys.pub))
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(msg))
   }
 
   def encryptionHandshakeResponse(src: ProtocolNode,
                                   h: routing.Header,
                                   keys: PublicPrivateKeys): routing.Protocol = {
-    val signIt: Array[Byte] => Array[Byte] = encryption.sign(keys.priv, _)
-    val prepare: String => Array[Byte]     = encryption.hashIt >>> signIt
-    val msg = EncryptionHandshakeResponse(publicKey = ByteString.copyFrom(keys.pub),
-                                          helloBack =
-                                            ByteString.copyFrom(prepare(ENCRYPTION_HELLO_BACK)))
+    val msg = EncryptionHandshakeResponse(publicKey = ByteString.copyFrom(keys.pub))
 
     ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
   }
@@ -55,14 +48,14 @@ final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: 
     for {
       h         <- header.toRight(HeaderNotAvailable)
       handshake <- toEncryptionHandshake(proto)
-      pub       = handshake.publicKey.toByteArray
-      signature = handshake.hello.toByteArray
-      hash      = encryption.hashIt(NetworkProtocol.ENCRYPTION_HELLO)
-      verified  = encryption.verify(pub, signature, hash)
-      _ <- verified.either(()).or(EncryptionHandshakeIncorrectlySigned)
-    } yield
-      EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h, keys),
-                                         System.currentTimeMillis)
+      pub = handshake.publicKey.toByteArray
+    } yield {
+      val message = EncryptionHandshakeResponseMessage(
+        NetworkProtocol.encryptionHandshakeResponse(src, h, keys),
+        System.currentTimeMillis)
+      message
+    }
+
 }
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
