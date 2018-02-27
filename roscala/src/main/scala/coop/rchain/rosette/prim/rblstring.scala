@@ -6,186 +6,65 @@ import coop.rchain.rosette.prim.Prim._
 
 object rblstring {
 
-  /** Case sensitive comparisons */
-  object stringEq extends Prim {
-    override val name: String = "string="
+  /** Base RblString Binary operation routine.
+    * It checks parameter types and returns a PrimError if the first parameter is not
+    * an RblString, RblBool(false) if the second parameter is not an RblString, or the
+    * result of the comparison as an RblBool if both parameters are an RblString.
+    */
+  case class strBinOp(name: String, f: (String, String) => Boolean) extends Prim {
     override val minArgs: Int = 2
     override val maxArgs: Int = 2
 
-    @checkTypeMismatch[RblString] // Args must be strings
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value == s2.value))
+
+      checkRblStringFirst(elem(0)).flatMap { s1 =>
+        checkRblStringSecond(elem(1)) match {
+          case Right(s2) => Right(RblBool(f(s1.value, s2.value)))
+          case Left(res) => Right(res)
+        }
+      }
     }
   }
 
-  object stringNEq extends Prim {
-    override val name: String = "string!="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
+  /** case sensitive */
+  object stringEq   extends strBinOp("string=", (_ == _))
+  object stringNEq  extends strBinOp("string!=", (_ != _))
+  object stringLess extends strBinOp("string<", (_ < _))
+  object stringLEq  extends strBinOp("string<=", (_ <= _))
+  object stringGtr  extends strBinOp("string>", (_ > _))
+  object stringGEq  extends strBinOp("string>=", (_ >= _))
 
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value != s2.value))
+  /** case insensitive */
+  object stringCiEq   extends strBinOp("string-ci=", (_.toLowerCase == _.toLowerCase))
+  object stringCiNEq  extends strBinOp("string-ci!=", (_.toLowerCase != _.toLowerCase))
+  object stringCiLess extends strBinOp("string-ci<", (_.toLowerCase < _.toLowerCase))
+  object stringCiLEq  extends strBinOp("string-ci<=", (_.toLowerCase <= _.toLowerCase))
+  object stringCiGtr  extends strBinOp("string-ci>", (_.toLowerCase > _.toLowerCase))
+  object stringCiGEq  extends strBinOp("string-ci>=", (_.toLowerCase >= _.toLowerCase))
+
+  /** Helper functions begin here */
+  /**
+    * Check the parameter for type RblString. Return a PrimError if it is
+    * not else return the RblString.
+    */
+  private def checkRblStringFirst(parm: Ob): Either[PrimError, RblString] =
+    if (!parm.isInstanceOf[RblString]) {
+      Left(TypeMismatch(0, RblString.getClass.getName))
+    } else {
+      Right(parm.asInstanceOf[RblString])
     }
-  }
 
-  object stringLess extends Prim {
-    override val name: String = "string<"
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value < s2.value))
+  /**
+    * Check the specified parameter for type RblString. Return RblBool(false) if it is
+    * not else return the RblString.
+    */
+  private def checkRblStringSecond(parm: Ob): Either[RblBool, RblString] =
+    if (!parm.isInstanceOf[RblString]) {
+      Left(RblBool(false))
+    } else {
+      Right(parm.asInstanceOf[RblString])
     }
-  }
-
-  object stringLEq extends Prim {
-    override val name: String = "string<="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value <= s2.value))
-    }
-  }
-
-  object stringGtr extends Prim {
-    override val name: String = "string>"
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value > s2.value))
-    }
-  }
-
-  object stringGEq extends Prim {
-    override val name: String = "string<="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value >= s2.value))
-    }
-  }
-
-  /** Case Insensitive conparisons */
-  object stringCiEq extends Prim {
-    override val name: String = "string-ci="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value.toLowerCase == s2.value.toLowerCase))
-    }
-  }
-
-  object stringCiNEq extends Prim {
-    override val name: String = "string-ci!="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value.toLowerCase != s2.value.toLowerCase))
-    }
-  }
-
-  object stringCiLess extends Prim {
-    override val name: String = "string-ci<"
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value.toLowerCase < s2.value.toLowerCase))
-    }
-  }
-
-  object stringCiLEq extends Prim {
-    override val name: String = "string-ci<="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value.toLowerCase <= s2.value.toLowerCase))
-    }
-  }
-
-  object stringCiGtr extends Prim {
-    override val name: String = "string-ci>"
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value.toLowerCase > s2.value.toLowerCase))
-    }
-  }
-
-  object stringCiGEq extends Prim {
-    override val name: String = "string-ci<="
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 2
-
-    @checkTypeMismatch[RblString] // Args must be strings
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem = ctxt.argvec.elem
-      val s1   = elem(0).asInstanceOf[RblString]
-      val s2   = elem(1).asInstanceOf[RblString]
-      Right(RblBool(s1.value.toLowerCase >= s2.value.toLowerCase))
-    }
-  }
 
 }

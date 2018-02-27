@@ -50,6 +50,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringEq.fn(newCtxt) should be('left)
@@ -79,6 +84,11 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
+    stringNEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
     stringNEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
@@ -127,6 +137,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringLess.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringLess.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringLess.fn(newCtxt) should be('left)
@@ -169,6 +184,11 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
+    stringLEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
     stringLEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
@@ -217,6 +237,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringGtr.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringGtr.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringGtr.fn(newCtxt) should be('left)
@@ -262,6 +287,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringGEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringGEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringGEq.fn(newCtxt) should be('left)
@@ -295,6 +325,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringCiEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringCiEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringCiEq.fn(newCtxt) should be('left)
@@ -324,6 +359,11 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
+    stringCiNEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
     stringCiNEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
@@ -372,6 +412,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringCiLess.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringCiLess.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringCiLess.fn(newCtxt) should be('left)
@@ -414,6 +459,11 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
+    stringCiLEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
     stringCiLEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
@@ -462,6 +512,11 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringCiGtr.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
+    stringCiGtr.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringCiGtr.fn(newCtxt) should be('left)
@@ -504,6 +559,11 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
+    stringCiGEq.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return RblBool(false) for invalid right side argument" in {
+    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
     stringCiGEq.fn(newCtxt) should be(Right(RblBool(false)))
   }
 
