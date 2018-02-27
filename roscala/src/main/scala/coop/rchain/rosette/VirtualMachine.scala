@@ -241,10 +241,10 @@ object VirtualMachine {
       loggerOpcode.info("PC: " + pc + " Opcode: " + op)
 
       val tmpState = for {
-        _ <- modify(_
-          .update(_ >> 'pc >> 'relative)(_ + 1)
-          .update(_ >> 'bytecodes)(
-            _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1)))
+        _ <- modify(
+          _.update(_ >> 'pc >> 'relative)(_ + 1)
+            .update(_ >> 'bytecodes)(
+              _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1)))
 
         _ <- executeDispatch(op)
         _ <- runFlags
@@ -310,8 +310,8 @@ object VirtualMachine {
 
   def getCtxtReg(reg: Int): State[VMState, Option[Ob]] = State { state =>
     state.ctxt.getReg(reg) match {
-      case someOb@Some(_) => (state, someOb)
-      case None => (die(unknownRegister(reg))(state), None)
+      case someOb @ Some(_) => (state, someOb)
+      case None             => (die(unknownRegister(reg))(state), None)
     }
   }
 
@@ -399,15 +399,17 @@ object VirtualMachine {
 
   def execute(op: OpHalt): VMTransition = modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0))
 
-  def execute(op: OpPush): VMTransition = modify( state => state.set(_ >> 'ctxt)(Ctxt(None, state.ctxt)))
+  def execute(op: OpPush): VMTransition =
+    modify(state => state.set(_ >> 'ctxt)(Ctxt(None, state.ctxt)))
 
-  def execute(op: OpPop): VMTransition = modify( state => state.set(_ >> 'ctxt)(state.ctxt.ctxt))
+  def execute(op: OpPop): VMTransition = modify(state => state.set(_ >> 'ctxt)(state.ctxt.ctxt))
 
   def execute(op: OpNargs): VMTransition = modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
   def execute(op: OpAlloc): VMTransition = modify(_.set(_ >> 'ctxt >> 'argvec)(Tuple(op.n, NIV)))
 
-  def execute(op: OpPushAlloc): VMTransition = modify(_.update(_ >> 'ctxt)(Ctxt(Some(Tuple(op.n, None)), _)))
+  def execute(op: OpPushAlloc): VMTransition =
+    modify(_.update(_ >> 'ctxt)(Ctxt(Some(Tuple(op.n, None)), _)))
 
   def execute(op: OpExtend): VMTransition = modify { state =>
     def getTemplate = state.code.lit(op.lit).as[Template]
@@ -434,69 +436,79 @@ object VirtualMachine {
     stateOrDie.merge
   }
 
-  def execute(op: OpOutstanding): VMTransition = modify(_.set(_ >> 'ctxt >> 'pc)(PC(op.pc)).set(_ >> 'ctxt >> 'outstanding)(op.n))
+  def execute(op: OpOutstanding): VMTransition =
+    modify(_.set(_ >> 'ctxt >> 'pc)(PC(op.pc)).set(_ >> 'ctxt >> 'outstanding)(op.n))
 
-  def execute(op: OpFork): VMTransition = for {
-    ctxt <- inspect[Ctxt](_.ctxt.copy(pc = PC(op.pc)))
-    _ <- modify(_.update(_ >> 'strandPool)(ctxt +: _))
-  } yield ()
+  def execute(op: OpFork): VMTransition =
+    for {
+      ctxt <- inspect[Ctxt](_.ctxt.copy(pc = PC(op.pc)))
+      _    <- modify(_.update(_ >> 'strandPool)(ctxt +: _))
+    } yield ()
 
-  def execute(op: OpXmitTag): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true)
-  )
+  def execute(op: OpXmitTag): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+          .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
+          .set(_ >> 'xmitData)((op.unwind, op.next))
+          .set(_ >> 'doXmitFlag)(true))
 
-  def execute(op: OpXmitArg): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true)
-  )
+  def execute(op: OpXmitArg): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+          .set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
+          .set(_ >> 'xmitData)((op.unwind, op.next))
+          .set(_ >> 'doXmitFlag)(true))
 
-  def execute(op: OpXmitReg): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(CtxtRegister(op.reg))
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true)
-  )
+  def execute(op: OpXmitReg): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+          .set(_ >> 'ctxt >> 'tag)(CtxtRegister(op.reg))
+          .set(_ >> 'xmitData)((op.unwind, op.next))
+          .set(_ >> 'doXmitFlag)(true))
 
-  def execute(op: OpXmit): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true)
-  )
+  def execute(op: OpXmit): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+          .set(_ >> 'xmitData)((op.unwind, op.next))
+          .set(_ >> 'doXmitFlag)(true))
 
-  def execute(op: OpXmitTagXtnd): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true)
-  )
+  def execute(op: OpXmitTagXtnd): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+          .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
+          .set(_ >> 'xmitData)((op.unwind, op.next))
+          .set(_ >> 'doXmitFlag)(true))
 
   def execute(op: OpXmitArgXtnd): VMTransition =
-    modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true))
+    modify(
+      _.set(_ >> 'ctxt >> 'nargs)(op.nargs)
+        .set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
+        .set(_ >> 'xmitData)((op.unwind, op.next))
+        .set(_ >> 'doXmitFlag)(true))
 
   def execute(op: OpXmitRegXtnd): VMTransition =
-    modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'ctxt >> 'tag)(CtxtRegister(op.reg))
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true))
+    modify(
+      _.set(_ >> 'ctxt >> 'nargs)(op.nargs)
+        .set(_ >> 'ctxt >> 'tag)(CtxtRegister(op.reg))
+        .set(_ >> 'xmitData)((op.unwind, op.next))
+        .set(_ >> 'doXmitFlag)(true))
 
   def execute(op: OpSend): VMTransition =
-    modify(_.set(_ >> 'ctxt >> 'ctxt)(Ctxt.NIV)
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'xmitData)((op.unwind, op.next))
-      .set(_ >> 'doXmitFlag)(true))
+    modify(
+      _.set(_ >> 'ctxt >> 'ctxt)(Ctxt.NIV)
+        .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+        .set(_ >> 'xmitData)((op.unwind, op.next))
+        .set(_ >> 'doXmitFlag)(true))
 
   def execute(op: OpApplyPrimTag): VMTransition = modify { state =>
     val location = state.code.lit(op.lit).asInstanceOf[Location]
@@ -544,7 +556,8 @@ object VirtualMachine {
       })
   }
 
-  def execute(op: OpApplyPrimArg): VMTransition = for {
+  def execute(op: OpApplyPrimArg): VMTransition =
+    for {
       _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
       prim = Prim.nthPrim(op.primNum)
@@ -568,7 +581,8 @@ object VirtualMachine {
       )
     } yield ()
 
-  def execute(op: OpApplyPrimReg): VMTransition = for {
+  def execute(op: OpApplyPrimReg): VMTransition =
+    for {
       _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
       prim = Prim.nthPrim(op.primNum)
@@ -590,62 +604,67 @@ object VirtualMachine {
       )
     } yield ()
 
-  def execute(op: OpApplyCmd): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+  def execute(op: OpApplyCmd): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
+          .updateSelf(state => {
+            val prim = Prim.nthPrim(op.primNum)
 
-        val (result, newState) =
-          if (op.unwind) {
-            unwindAndApplyPrim(prim.get, state)
-          } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+            val (result, newState) =
+              if (op.unwind) {
+                unwindAndApplyPrim(prim.get, state)
+              } else {
+                // TODO: Fix
+                (prim.get.dispatchHelper(state.ctxt), state)
+              }
 
-        result match {
-          case Right(ob) =>
-            if (ob.is(Ob.OTsysval)) {
-              handleException(ob, op, Limbo)
-              newState.set(_ >> 'doNextThreadFlag)(true)
-            } else {
-              newState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
+            result match {
+              case Right(ob) =>
+                if (ob.is(Ob.OTsysval)) {
+                  handleException(ob, op, Limbo)
+                  newState.set(_ >> 'doNextThreadFlag)(true)
+                } else {
+                  newState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
+                }
+              case Left(DeadThread) =>
+                newState.set(_ >> 'doNextThreadFlag)(true)
             }
-          case Left(DeadThread) =>
-            newState.set(_ >> 'doNextThreadFlag)(true)
-        }
-      })
-  )
+          }))
 
-  def execute(op: OpRtn): VMTransition = modify(_.set(_ >> 'doRtnData)(op.next).set(_ >> 'doRtnFlag)(true))
+  def execute(op: OpRtn): VMTransition =
+    modify(_.set(_ >> 'doRtnData)(op.next).set(_ >> 'doRtnFlag)(true))
 
-  def execute(op: OpRtnTag): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
-      .set(_ >> 'doRtnData)(op.next)
-      .set(_ >> 'doRtnFlag)(true)
-  )
+  def execute(op: OpRtnTag): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
+          .set(_ >> 'doRtnData)(op.next)
+          .set(_ >> 'doRtnFlag)(true))
 
   def execute(op: OpRtnArg): VMTransition =
-    modify(_
-      .set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
-      .set(_ >> 'doRtnData)(op.next)
-      .set(_ >> 'doRtnFlag)(true))
+    modify(
+      _.set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
+        .set(_ >> 'doRtnData)(op.next)
+        .set(_ >> 'doRtnFlag)(true))
 
   def execute(op: OpRtnReg): VMTransition =
-    modify(_
-      .set(_ >> 'ctxt >> 'tag)(CtxtRegister(op.reg))
-      .set(_ >> 'doRtnData)(op.next)
-      .set(_ >> 'doRtnFlag)(true))
+    modify(
+      _.set(_ >> 'ctxt >> 'tag)(CtxtRegister(op.reg))
+        .set(_ >> 'doRtnData)(op.next)
+        .set(_ >> 'doRtnFlag)(true))
 
-  def execute(op: OpUpcallRtn): VMTransition = modify ( state =>
-    state
-      .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
-      .updateSelf(state => {
-        val ctxt = state.ctxt
+  def execute(op: OpUpcallRtn): VMTransition =
+    modify(
+      state =>
+        state
+          .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
+          .updateSelf(state => {
+            val ctxt = state.ctxt
 
-        /*
+            /*
         import Location._
 
         Location.store(ctxt.tag, ctxt.ctxt, state.globalEnv, ctxt.rslt) match {
@@ -658,21 +677,21 @@ object VirtualMachine {
 
           case StoreGlobal(env) => state.set(_ >> 'globalEnv)(env)
         }
-         */
-        state
-      })
-  )
+             */
+            state
+          }))
 
-  def execute(op: OpUpcallResume): VMTransition = modify ( state =>
-    state.ctxt.ctxt
-      .scheduleStrand(state)
-      .set(_ >> 'doNextThreadFlag)(true)
-  )
+  def execute(op: OpUpcallResume): VMTransition =
+    modify(
+      state =>
+        state.ctxt.ctxt
+          .scheduleStrand(state)
+          .set(_ >> 'doNextThreadFlag)(true))
 
   def execute(op: OpNxt): VMTransition =
     for {
       exit <- getNextStrand
-      _ <- if (exit) modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0)) else pure
+      _    <- if (exit) modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0)) else pure
     } yield ()
 
   def execute(op: OpJmp): VMTransition = modify(_.set(_ >> 'pc >> 'relative)(op.pc))
@@ -687,9 +706,9 @@ object VirtualMachine {
       .set(_ >> 'pc >> 'relative)(op.pc)
   }
 
-  def execute(op: OpJmpFalse): VMTransition = modify ( state =>
-    state.update(_ >> 'pc >> 'relative)(if (state.ctxt.rslt == Ob.RBLFALSE) op.pc else _)
-  )
+  def execute(op: OpJmpFalse): VMTransition =
+    modify(state =>
+      state.update(_ >> 'pc >> 'relative)(if (state.ctxt.rslt == Ob.RBLFALSE) op.pc else _))
 
   def execute(op: OpLookupToArg): VMTransition = modify { state =>
     val argno = op.arg
@@ -767,44 +786,45 @@ object VirtualMachine {
 
   }
 
-  def execute(op: OpXferGlobalToArg): VMTransition = modify ( state =>
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.arg, state.globalEnv.entry(op.global)))
-  )
+  def execute(op: OpXferGlobalToArg): VMTransition =
+    modify(
+      state =>
+        state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
+          _.updated(op.arg, state.globalEnv.entry(op.global))))
 
-  def execute(op: OpXferGlobalToReg): VMTransition = modify ( state =>
-    setCtxtReg(op.reg, state.globalEnv.entry(op.global))(state)
-  )
+  def execute(op: OpXferGlobalToReg): VMTransition =
+    modify(state => setCtxtReg(op.reg, state.globalEnv.entry(op.global))(state))
 
-  def execute(op: OpXferArgToArg): VMTransition = modify ( state =>
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
-      _.updated(op.dest, state.ctxt.argvec.elem(op.src)))
-  )
+  def execute(op: OpXferArgToArg): VMTransition =
+    modify(
+      state =>
+        state.update(_ >> 'ctxt >> 'argvec >> 'elem)(
+          _.updated(op.dest, state.ctxt.argvec.elem(op.src))))
 
-  def execute(op: OpXferRsltToArg): VMTransition = modify ( state =>
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.ctxt.rslt))
-  )
+  def execute(op: OpXferRsltToArg): VMTransition =
+    modify(
+      state => state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.ctxt.rslt)))
 
-  def execute(op: OpXferArgToRslt): VMTransition = modify ( state =>
-    state.set(_ >> 'ctxt >> 'rslt)(state.ctxt.argvec.elem(op.arg))
-  )
+  def execute(op: OpXferArgToRslt): VMTransition =
+    modify(state => state.set(_ >> 'ctxt >> 'rslt)(state.ctxt.argvec.elem(op.arg)))
 
-  def execute(op: OpXferRsltToReg): VMTransition = modify ( state =>
-    setCtxtReg(op.reg, state.ctxt.rslt)(state)
-  )
+  def execute(op: OpXferRsltToReg): VMTransition =
+    modify(state => setCtxtReg(op.reg, state.ctxt.rslt)(state))
 
-  def execute(op: OpXferRegToRslt): VMTransition = for {
-    optOb <- getCtxtReg(op.reg)
-    _ <- optOb match {
-      case Some(ob) => modify(_.set(_ >> 'ctxt >> 'rslt)(ob))
-      case None => pure
-    }
-  } yield ()
+  def execute(op: OpXferRegToRslt): VMTransition =
+    for {
+      optOb <- getCtxtReg(op.reg)
+      _ <- optOb match {
+        case Some(ob) => modify(_.set(_ >> 'ctxt >> 'rslt)(ob))
+        case None     => pure
+      }
+    } yield ()
 
-  def execute(op: OpXferRsltToDest): VMTransition = for {
+  def execute(op: OpXferRsltToDest): VMTransition =
+    for {
       location <- inspect[Location](_.code.lit(op.lit).asInstanceOf[Location])
-      _     <- modify(_.copy(loc = location))
-      rslt  <- inspect[Ob](_.ctxt.rslt)
+      _        <- modify(_.copy(loc = location))
+      rslt     <- inspect[Ob](_.ctxt.rslt)
 
       _ <- Location
         .store(location, rslt)
@@ -817,35 +837,33 @@ object VirtualMachine {
         }
     } yield ()
 
-  def execute(op: OpXferSrcToRslt): VMTransition = for {
-    location <- inspect[Location](_.code.lit(op.lit).asInstanceOf[Location])
-    globalEnv <- inspect[TblObject](_.globalEnv)
-    _     <- modify(_.copy(loc = location))
-    _ <- Location
-      .fetch(location, globalEnv)
-      .transform((ctxt, optRes) => (ctxt.copy(rslt = optRes.getOrElse(Ob.INVALID)), ()))
+  def execute(op: OpXferSrcToRslt): VMTransition =
+    for {
+      location  <- inspect[Location](_.code.lit(op.lit).asInstanceOf[Location])
+      globalEnv <- inspect[TblObject](_.globalEnv)
+      _         <- modify(_.copy(loc = location))
+      _ <- Location
+        .fetch(location, globalEnv)
+        .transform((ctxt, optRes) => (ctxt.copy(rslt = optRes.getOrElse(Ob.INVALID)), ()))
         .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
-  } yield ()
+    } yield ()
 
-  def execute(op: OpIndLitToArg): VMTransition = modify ( state =>
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.code.lit(op.lit)))
-  )
+  def execute(op: OpIndLitToArg): VMTransition =
+    modify(state =>
+      state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, state.code.lit(op.lit))))
 
-  def execute(op: OpIndLitToReg): VMTransition = modify ( state =>
-    setCtxtReg(op.reg, state.code.lit(op.lit))(state)
-  )
+  def execute(op: OpIndLitToReg): VMTransition =
+    modify(state => setCtxtReg(op.reg, state.code.lit(op.lit))(state))
 
-  def execute(op: OpIndLitToRslt): VMTransition = modify ( state =>
-    state.set(_ >> 'ctxt >> 'rslt)(state.code.lit(op.lit))
-  )
+  def execute(op: OpIndLitToRslt): VMTransition =
+    modify(state => state.set(_ >> 'ctxt >> 'rslt)(state.code.lit(op.lit)))
 
-  def execute(op: OpImmediateLitToArg): VMTransition = modify ( state =>
-    state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, vmLiterals(op.value)))
-  )
+  def execute(op: OpImmediateLitToArg): VMTransition =
+    modify(state =>
+      state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, vmLiterals(op.value))))
 
-  def execute(op: OpImmediateLitToReg): VMTransition = modify ( state =>
-    setCtxtReg(op.reg, vmLiterals(op.lit))(state)
-  )
+  def execute(op: OpImmediateLitToReg): VMTransition =
+    modify(state => setCtxtReg(op.reg, vmLiterals(op.lit))(state))
 
   def execute(op: OpUnknown): VMTransition =
     modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(1))
@@ -854,5 +872,5 @@ object VirtualMachine {
 
   val modify = State.modify[VMState] _
 
-  lazy val pure = State.pure[VMState, Unit]()
+  lazy val pure = State.pure[VMState, Unit](())
 }
