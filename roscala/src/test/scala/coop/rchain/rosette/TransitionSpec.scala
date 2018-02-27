@@ -649,7 +649,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpImmediateLitToArg(value = 2, arg = 0),
       OpImmediateLitToArg(value = 2, arg = 1),
       OpXferGlobalToReg(reg = 1, global = 668),
-      OpXmitReg(unwind = false, next = true, nargs = 2, reg = 1),
+      OpXmitReg(unwind = false, next = true, nargs = 2, reg = 0),
       OpJmpFalse(15),
       OpAlloc(2),
       OpImmediateLitToArg(value = 2, arg = 0),
