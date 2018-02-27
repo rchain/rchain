@@ -1,4 +1,4 @@
-package coop.rchain.rholang.intepreter
+package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.syntax.rholang_mercury
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
@@ -230,7 +230,7 @@ object ProcNormalizeMatcher {
             (result.chan :: acc._1, result.knownFree)
           }
         )
-        val newEnv       = input.env.absorbFree(formalsResults._2)
+        val newEnv       = input.env.absorbFree(formalsResults._2)._1
         val newFreeCount = formalsResults._2.next
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
@@ -243,6 +243,76 @@ object ProcNormalizeMatcher {
                     newFreeCount)),
           bodyResult.knownFree
         )
+      }
+
+      case p: PInput => {
+        import scala.collection.JavaConverters._
+        // To handle the most common case where we can sort the binds because
+        // they're from different sources, Each channel's list of patterns starts its free variables at 0.
+        // We check for overlap at the end after sorting. We could check before, but it'd be an extra step.
+
+        // We split this into parts. First we process all the sources, then we process all the bindings.
+        def processSources(bindings: List[(List[Name], Name)])
+          : (List[(List[Name], Channel)], DebruijnLevelMap[VarSort]) = {
+          val initAcc = (List[(List[Name], Channel)](), input.knownFree)
+          val foldResult = (initAcc /: bindings)((acc, e) => {
+            val sourceResult =
+              NameNormalizeMatcher.normalizeMatch(e._2, NameVisitInputs(input.env, acc._2))
+            ((e._1, sourceResult.chan) :: acc._1, sourceResult.knownFree)
+          })
+          (foldResult._1.reverse, foldResult._2)
+        }
+        def processBindings(bindings: List[(List[Name], Channel)])
+          : List[(List[Channel], Channel, DebruijnLevelMap[VarSort])] =
+          bindings map {
+            case (names: List[Name], chan: Channel) => {
+              val initAcc = (List[Channel](), DebruijnLevelMap[VarSort]())
+              val formalsResults = (initAcc /: names)(
+                (acc, n: Name) => {
+                  val result =
+                    NameNormalizeMatcher.normalizeMatch(n,
+                                                        NameVisitInputs(DebruijnLevelMap(), acc._2))
+                  (result.chan :: acc._1, result.knownFree)
+                }
+              )
+              (formalsResults._1.reverse, chan, formalsResults._2)
+            }
+          }
+        val (bindings, persistent) = p.receipt_ match {
+          case rl: ReceiptLinear =>
+            rl.receiptlinearimpl_ match {
+              case ls: LinearSimple =>
+                (ls.listlinearbind_.asScala.toList.map {
+                  case lbi: LinearBindImpl => (lbi.listname_.asScala.toList, lbi.name_)
+                  case _                   => throw new Error("Unexpected LinearBind production.")
+                }, false)
+              case _ => throw new Error("Unexpected LinearReceipt production.")
+            }
+          case rl: ReceiptRepeated =>
+            rl.receiptrepeatedimpl_ match {
+              case ls: RepeatedSimple =>
+                (ls.listrepeatedbind_.asScala.toList.map {
+                  case lbi: RepeatedBindImpl => (lbi.listname_.asScala.toList, lbi.name_)
+                  case _                     => throw new Error("Unexpected RepeatedBind production.")
+                }, true)
+              case _ => throw new Error("Unexpected RepeatedReceipt production.")
+            }
+        }
+        val (sources, thisLevelFree) = processSources(bindings)
+        val receipts                 = ReceiveSortMatcher.preSortBinds(processBindings(sources))
+        val mergedFrees = (DebruijnLevelMap[VarSort]() /: receipts)((env, receipt) =>
+          env.absorbFree(receipt._3) match {
+            case (newEnv, Nil) => newEnv
+            case _ =>
+              throw new Error("Free variable used as binder may not be used twice.")
+        })
+        val freeCount  = mergedFrees.next
+        val binds      = receipts.map((receipt) => (receipt._1, receipt._2))
+        val updatedEnv = input.env.absorbFree(mergedFrees)._1
+        val bodyResult =
+          normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
+        ProcVisitOutputs(input.par.prepend(Receive(binds, bodyResult.par, persistent, freeCount)),
+                         bodyResult.knownFree)
       }
 
       case p: PPar => {
@@ -274,12 +344,15 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)]) {
     (result._1, result._2.reverse)
   }
 
-  def absorbFree(binders: DebruijnLevelMap[T]): DebruijnLevelMap[T] = {
+  // Returns the new map, and a list of the shadowed variables.
+  def absorbFree(binders: DebruijnLevelMap[T]): (DebruijnLevelMap[T], List[String]) = {
     val finalNext  = next + binders.next
     val adjustNext = next
-    binders.env.foldLeft(this) {
-      case (db: DebruijnLevelMap[T], (k: String, (level: Int, varType: T @unchecked))) =>
-        DebruijnLevelMap(finalNext, db.env + (k -> ((level + adjustNext, varType))))
+    binders.env.foldLeft((this, List[String]())) {
+      case ((db: DebruijnLevelMap[T], shadowed: List[String]),
+            (k: String, (level: Int, varType: T @unchecked))) =>
+        val shadowedNew = if (db.env.contains(k)) k :: shadowed else shadowed
+        (DebruijnLevelMap(finalNext, db.env + (k -> ((level + adjustNext, varType)))), shadowedNew)
     }
   }
 

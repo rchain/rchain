@@ -2,7 +2,7 @@
 // Normalization requires the evaluation of everything that doesn't go through
 // the tuplespace, so the top level of a normalized process must have everything
 
-package coop.rchain.rholang.intepreter
+package coop.rchain.rholang.interpreter
 
 import scala.language.implicitConversions
 
