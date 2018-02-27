@@ -1,0 +1,18 @@
+//based on sealer/unsealer pattern in http://erights.org/elib/capability/ode/ode-capabilities.html
+export MakeBrandPair in {
+  contract MakeBrandPair(return) = {
+    new seal, unseal, key in {
+      contract seal(data, return) = {
+        new sealedData in {
+          contract sealedData(input, return) = {
+            match input == key with true => { return(data) }
+            _ => { return(Nil) }
+          } |
+          return(sealedData)
+        }
+      } |
+      contract unseal(sealedData, return) = { sealedData(key, return) } |
+      return([seal, unseal])
+    }
+  }
+}
