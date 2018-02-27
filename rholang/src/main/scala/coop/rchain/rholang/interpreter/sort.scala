@@ -14,8 +14,6 @@
   */
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.intepreter._
-
 sealed trait Tree[T] {
   def size: Int
 }
@@ -23,7 +21,7 @@ case class Leaf[T](item: T) extends Tree[T] {
   def size = 1
 }
 case class Node[T](children: Seq[Tree[T]]) extends Tree[T] {
-  def size = children.map(_.size).sum
+  def size: Int = children.map(_.size).sum
 }
 
 case class ScoreAtom(value: Either[Int, String]) {
@@ -361,9 +359,10 @@ object ParSortMatcher {
     val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
     val sortedPar = Par(sends = sends.map(_.term),
                         receives = receives.map(_.term),
-                        exprs = exprs.map(_.term),
                         evals = evals.map(_.term),
-                        news = news.map(_.term))
+                        news = news.map(_.term),
+                        exprs = exprs.map(_.term),
+                        id = p.id)
     val parScore = Node(Score.PAR,
                         sends.map(_.score) ++
                           receives.map(_.score) ++ exprs.map(_.score) ++

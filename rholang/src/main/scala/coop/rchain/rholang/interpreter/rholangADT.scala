@@ -2,7 +2,7 @@
 // Normalization requires the evaluation of everything that doesn't go through
 // the tuplespace, so the top level of a normalized process must have everything
 
-package coop.rchain.rholang.intepreter
+package coop.rchain.rholang.interpreter
 
 import scala.language.implicitConversions
 
@@ -12,22 +12,25 @@ case class Par(
     // selects: List[Select],
     evals: List[Eval],
     news: List[New],
-    exprs: List[Expr]
+    exprs: List[Expr],
     // matches: List[Match]
+    id: Option[GPrivate]
 ) {
   def this() =
-    this(List(), List(), List(), List(), List())
+    this(List(), List(), List(), List(), List(), None)
   // Single element convenience constructors
   def this(s: Send) =
-    this(List(s), List(), List(), List(), List())
+    this(List(s), List(), List(), List(), List(), None)
   def this(r: Receive) =
-    this(List(), List(r), List(), List(), List())
+    this(List(), List(r), List(), List(), List(), None)
   def this(e: Eval) =
-    this(List(), List(), List(e), List(), List())
+    this(List(), List(), List(e), List(), List(), None)
   def this(n: New) =
-    this(List(), List(), List(), List(n), List())
+    this(List(), List(), List(), List(n), List(), None)
   def this(e: Expr) =
-    this(List(), List(), List(), List(), List(e))
+    this(List(), List(), List(), List(), List(e), None)
+  def this(g: GPrivate) =
+    this(List(), List(), List(), List(), List(), Some(g))
 
   // Convenience prepend methods
   def prepend(s: Send): Par    = this.copy(sends = s :: this.sends)
@@ -45,21 +48,60 @@ case class Par(
     } else {
       None
     }
+
   def merge(that: Par) =
     Par(that.sends ++ sends,
         that.receives ++ receives,
         that.evals ++ evals,
         that.news ++ news,
-        that.exprs ++ exprs)
+        that.exprs ++ exprs,
+        Some(GPrivate(java.util.UUID.randomUUID.toString))
+    )
+
+  def procCount: Int =
+    sends.length +
+      receives.length +
+      evals.length +
+      news.length +
+      exprs.length
+
+  def isEmpty: Boolean =
+    sends.isEmpty &&
+      receives.isEmpty &&
+      evals.isEmpty &&
+      news.isEmpty &&
+      exprs.isEmpty &&
+      id.isEmpty
+
+  def isIdentifier: Boolean =
+    sends.isEmpty &&
+      receives.isEmpty &&
+      evals.isEmpty &&
+      news.isEmpty &&
+      exprs.isEmpty &&
+      id.nonEmpty
+
+  override def toString: String =
+    if (isEmpty) "Nil"
+    else if (isIdentifier) id.get.p.substring(0, 8)
+    else {
+      val collect = List(sends, receives, evals, news, if (id.isDefined) List(id) else Nil)
+      (for { xs <- collect; if xs.nonEmpty } yield {
+        xs.mkString(" | ")
+      }).mkString(" | ")
+    }
 }
 
 object Par {
-  def apply(): Par           = new Par()
-  def apply(s: Send): Par    = new Par(s)
-  def apply(r: Receive): Par = new Par(r)
-  def apply(e: Eval): Par    = new Par(e)
-  def apply(n: New): Par     = new Par(n)
-  def apply(e: Expr): Par    = new Par(e)
+  def apply(): Par            = new Par()
+  def apply(s: Send): Par     = new Par(s)
+  def apply(r: Receive): Par  = new Par(r)
+  def apply(e: Eval): Par     = new Par(e)
+  def apply(n: New): Par      = new Par(n)
+  def apply(e: Expr): Par     = new Par(e)
+
+  def fromGPrivate: Quote     = Quote(apply(GPrivate(uuid)))
+  def uuid: String            = java.util.UUID.randomUUID.toString
 
   implicit def fromSend(s: Send): Par       = apply(s)
   implicit def fromReceive(r: Receive): Par = apply(r)
@@ -69,8 +111,14 @@ object Par {
 }
 
 sealed trait Channel
-case class Quote(p: Par)      extends Channel
-case class ChanVar(cvar: Var) extends Channel
+
+case class Quote(p: Par) extends Channel {
+  override def toString: String = "@{" + p + "}"
+}
+
+case class ChanVar(cvar: Var) extends Channel {
+  override def toString: String = cvar.toString
+}
 
 // While we use vars in both positions, when producing the normalized
 // representation we need a discipline to track whether a var is a name or a
@@ -87,10 +135,13 @@ case class BoundVar(level: Int) extends Var
 
 // In the DeBruijn level paper, they use negatives, but this is more clear.
 case class FreeVar(level: Int) extends Var
-
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
-case class Send(chan: Channel, data: List[Par], persistent: Boolean)
+case class Send(chan: Channel, data: List[Par], persistent: Boolean) {
+  override def toString: String =
+    if (persistent) chan.toString + "!!" + data.mkString("{ ", ", ", " }")
+    else chan.toString + "!" + data.mkString("{ ", ", ", " }")
+}
 
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
@@ -99,15 +150,25 @@ case class Send(chan: Channel, data: List[Par], persistent: Boolean)
 case class Receive(binds: List[(List[Channel], Channel)],
                    body: Par,
                    persistent: Boolean,
-                   count: Int)
+                   count: Int) {
+  override def toString: String =
+    (for { (xs, chan) <- binds; if binds.nonEmpty } yield {
+      xs.mkString(", ") + " <- " + chan.toString
+    }).mkString("for( ", " ; ", " )") + "{ " + body + " }"
+}
 
-case class Eval(channel: Channel)
+case class Eval(channel: Channel) {
+  override def toString: String = "*" + channel
+}
 
 // Number of variables bound in the new statement.
 // For normalized form, p should not contain solely another new.
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
-case class New(count: Int, p: Par)
+case class New(count: Int, p: Par) {
+  override def toString: String =
+    "new " + (0 until count).toList.mkString(", ") + " in { " + p.toString + " }"
+}
 
 // Any process may be an operand to an expression.
 // Only processes equivalent to a ground process of compatible type will reduce.
@@ -136,11 +197,10 @@ case class EEq(p1: Par, p2: Par)    extends Expr
 case class ENeq(p1: Par, p2: Par)   extends Expr
 case class EAnd(p1: Par, p2: Par)   extends Expr
 case class EOr(p1: Par, p2: Par)    extends Expr
-
-case class GBool(b: Boolean)  extends Ground
-case class GInt(i: Integer)   extends Ground
-case class GString(s: String) extends Ground
-case class GUri(u: String)    extends Ground
+case class GBool(b: Boolean)        extends Ground
+case class GInt(i: Integer)         extends Ground
+case class GString(s: String)       extends Ground
+case class GUri(u: String)          extends Ground
 // These should only occur as the program is being evaluated. There is no way in
-// the grammar to construct them.
+// the grammar to construct them.*/
 case class GPrivate(p: String) extends Ground

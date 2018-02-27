@@ -1,7 +1,8 @@
-package coop.rchain.rholang.intepreter
+package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.syntax.rholang_mercury
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
+
+//RosetteBaseLanguage
 
 sealed trait VarSort
 case object ProcSort extends VarSort
@@ -298,7 +299,6 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)]) {
   // Returns the new map, and the starting level of the newly "bound" wildcards
   def setWildcardUsed(count: Int): (DebruijnLevelMap[T], Int) =
     (DebruijnLevelMap(next + count, env), next)
-
   def getBinding(varName: String): Option[T] =
     for (pair <- env.get(varName)) yield pair._2
   def getLevel(varName: String): Option[Int] =

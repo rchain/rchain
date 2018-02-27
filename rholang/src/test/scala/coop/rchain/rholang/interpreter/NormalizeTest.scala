@@ -1,4 +1,4 @@
-package coop.rchain.rholang.intepreter
+package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 import org.scalatest._

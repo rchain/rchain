@@ -57,8 +57,7 @@ object TypeMismatchMacro {
           }"""
 
         case _ =>
-          c.abort(c.enclosingPosition,
-                  "Annotation @checkTypeMismatch can only be used on Prim.fn")
+          c.abort(c.enclosingPosition, "Annotation @checkTypeMismatch can only be used on Prim.fn")
       }
 
     c.Expr[Any](result)
