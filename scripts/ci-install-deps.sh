@@ -5,6 +5,8 @@
 ## Set BASH environment so it will fail properly throwing exit code
 set -euxo pipefail
 
+project_root=$(pwd)
+
 ## setup tmp directory
 tmp_dir="deps-tmp"
 if [ ! -d "${tmp_dir}" ]; then
@@ -42,9 +44,17 @@ ${sudo} apt-get install g++-multilib -yqq
 ## Install misc tools 
 ${sudo} apt-get install cmake curl git -yqq
 
+## Install Java OpenJDK 8
+${sudo} apt-get update -yqq
+# ${sudo} apt-get install default-jdk -yqq # alternate jdk install 
+${sudo} apt-get install openjdk-8-jdk -yqq
+
 ## Install needed crypto
 ${sudo} apt-get install autoconf libtool -yqq
 cd crypto
+if [ -d "secp256k1" ]; then
+    rm -rf secp256k1 
+fi
 git clone https://github.com/bitcoin-core/secp256k1
 cd secp256k1
 ./autogen.sh
@@ -64,11 +74,6 @@ git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
 ${sudo} cabal install --global
 cd ../../../
-
-## Install Java OpenJDK 8
-${sudo} apt-get update -yqq
-# ${sudo} apt-get install default-jdk -yqq # alternate jdk install 
-${sudo} apt-get install openjdk-8-jdk -yqq
 
 ## Install sbt
 ${sudo} apt-get install apt-transport-https -yqq
