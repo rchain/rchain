@@ -101,6 +101,26 @@ object Main {
 
     import ApplicativeError_._
 
+    /** will use database or file system */
+    implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
+      new Kvs[Task, PeerNode, Array[Byte]] {
+        var mem: Map[PeerNode, Array[Byte]] = Map.empty[PeerNode, Array[Byte]]
+
+        def keys: Task[Vector[PeerNode]] = Task.delay {
+          mem.keys.toVector
+        }
+        def get(k: PeerNode): Task[Option[Array[Byte]]] = Task.delay {
+          mem.get(k)
+        }
+        def put(k: PeerNode, v: Array[Byte]): Task[Unit] = Task.delay {
+          mem = mem + (k -> v)
+        }
+
+        def delete(k: PeerNode): Task[Unit] = Task.delay {
+          mem = mem - k
+        }
+      }
+
     /** This is essentially a final effect that will accumulate all effects from the system */
     type LogT[F[_], A]     = WriterT[F, Vector[String], A]
     type CommErrT[F[_], A] = EitherT[F, CommError, A]
