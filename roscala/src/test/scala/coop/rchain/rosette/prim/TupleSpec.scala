@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.prim.tuple._
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, Tuple}
 import org.scalatest._
 
 class TupleSpec extends FlatSpec with Matchers {
@@ -237,6 +237,137 @@ class TupleSpec extends FlatSpec with Matchers {
     val empty   = Seq.empty
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
     tplTail.fn(newCtxt) should be(Right(Tuple(empty)))
+  }
+
+  /** tuple-new */
+  "tplNew" should "correctly create a new Tuple with n Obs" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+
+    val newCtxt =
+      ctxt.copy(
+        nargs = 7,
+        argvec = Tuple.cons(Fixnum(1), Tuple(tup))
+      )
+
+    tplNew.fn(newCtxt) should be(Right(Tuple(tup)))
+  }
+
+  it should "correctly create a new Tuple with 0 Obs" in {
+    val empty = Seq.empty
+
+    val newCtxt =
+      ctxt.copy(nargs = 1, argvec = Tuple(Tuple(empty)))
+
+    tplNew.fn(newCtxt) should be(Right(Tuple(empty)))
+  }
+
+  /** tuple-new-n */
+  "tplNewN" should "correctly create a new Tuple with n duplicate Obs" in {
+    val tup = Tuple(6, Fixnum(1))
+    val newCtxt =
+      ctxt.copy(
+        nargs = 3,
+        argvec = Tuple(Seq(Fixnum(0), Fixnum(6), Fixnum(1)))
+      )
+    tplNewN.fn(newCtxt) should be(Right(tup))
+  }
+
+  it should "return NIL for n<=0" in {
+    val newCtxt =
+      ctxt.copy(
+        nargs = 3,
+        argvec = Tuple(Seq(Fixnum(0), Fixnum(0), Fixnum(1)))
+      )
+
+    tplNewN.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplNewN.fn(newCtxt) should be('left)
+  }
+
+  /** tuple-mem? */
+  "tplMemQ" should "return true if the Ob exists in the Tuple" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val newCtxt =
+      ctxt.copy(
+        nargs = 2,
+        argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(4))
+      )
+    tplMemQ.fn(newCtxt) should be(Right(RblBool(true)))
+  }
+
+  it should "return false if the Ob is not in the Tuple" in {
+    val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val newCtxt =
+      ctxt.copy(
+        nargs = 2,
+        argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(17))
+      )
+
+    tplMemQ.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return false for an empty Tuple" in {
+    val tup = Seq.empty
+    val newCtxt =
+      ctxt.copy(
+        nargs = 2,
+        argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(17))
+      )
+
+    tplMemQ.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplMemQ.fn(newCtxt) should be('left)
+  }
+
+  /** tuple-matches? */
+  "tplMatchesP" should "return true if the Tuple matches the pattern" in {
+    val pat  = Seq(Fixnum(1), Fixnum(2), Fixnum(3))
+    val tup  = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val tups = Seq(Tuple(pat), Tuple(tup))
+
+    val newCtxt =
+      ctxt.copy(
+        nargs = 2,
+        argvec = Tuple(tups)
+      )
+    tplMatchesP.fn(newCtxt) should be(Right(RblBool(true)))
+  }
+
+  it should "return false if the Tuple does not match the pattern" in {
+    val pat  = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val tup  = Seq(Fixnum(1), Fixnum(2), Fixnum(3))
+    val tups = Seq(Tuple(pat), Tuple(tup))
+
+    val newCtxt =
+      ctxt.copy(
+        nargs = 2,
+        argvec = Tuple(tups)
+      )
+    tplMatchesP.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "return false for an empty Tuple" in {
+    val pat  = Seq(Fixnum(1), Fixnum(2), Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))
+    val tup  = Seq.empty
+    val tups = Seq(Tuple(pat), Tuple(tup))
+
+    val newCtxt =
+      ctxt.copy(
+        nargs = 2,
+        argvec = Tuple(tups)
+      )
+    tplMatchesP.fn(newCtxt) should be(Right(RblBool(false)))
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    tplMemQ.fn(newCtxt) should be('left)
   }
 
 }

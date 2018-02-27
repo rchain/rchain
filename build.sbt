@@ -106,13 +106,13 @@ lazy val node = project
   .enablePlugins(DockerPlugin)
   .settings(
     commonSettings,
-
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
       uriParsing
     ),
+    libraryDependencies ++= apiServerDependencies ++ Seq(cats),
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 
