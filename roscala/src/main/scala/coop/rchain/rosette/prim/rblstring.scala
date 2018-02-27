@@ -22,7 +22,7 @@ object rblstring {
       checkRblStringFirst(elem(0)).flatMap { s1 =>
         checkRblStringSecond(elem(1)) match {
           case Right(s2) => Right(RblBool(f(s1.value, s2.value)))
-          case Left(res) => Right(res)
+          case Left(_)   => Right(RblBool(false))
         }
       }
     }
