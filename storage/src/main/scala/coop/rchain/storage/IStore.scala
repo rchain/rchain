@@ -1,41 +1,57 @@
 package coop.rchain.storage
 
-import java.nio.ByteBuffer
+import coop.rchain.models.Serialize
 
-import org.lmdbjava.Txn
+/** The interface for the underlying store
+  *
+  * @tparam C a type representing a channel
+  * @tparam P a type representing a pattern
+  * @tparam A a type representing an arbitrary piece of data
+  * @tparam K a type representing a continuation
+  * @tparam T a type representing a transaction
+  */
+trait IStore[C, P, A, K, T] {
 
-trait IStore[C, P, A, K] {
+  /**
+    * The type of hashes
+    */
+  type H
 
-  private[storage] def hashC(cs: List[C]): String
+  private[storage] def hashC(channels: List[C])(implicit sc: Serialize[C]): H
 
-  private[storage] def putCs(txn: Txn[ByteBuffer], channels: List[C]): Unit
+  private[storage] def putCs(txn: T, channels: List[C]): Unit
 
-  private[storage] def getKey(txn: Txn[ByteBuffer], s: String): List[C]
+  private[storage] def getKey(txn: T, hash: H): List[C]
 
-  def getTxnRead(): Txn[ByteBuffer]
+  def createTxnRead(): T
 
-  def getTxnWrite(): Txn[ByteBuffer]
+  def createTxnWrite(): T
 
-  def putA(txn: Txn[ByteBuffer], channels: List[C], a: A): Unit
+  def putA(txn: T, channels: List[C], a: A): Unit
 
-  def putK(txn: Txn[ByteBuffer], channels: List[C], patterns: List[P], k: K): Unit
+  def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit
 
-  def getPs(txn: Txn[ByteBuffer], channels: List[C]): List[P]
+  def getPs(txn: T, channels: List[C]): List[P]
 
-  def getAs(txn: Txn[ByteBuffer], channels: List[C]): List[A]
+  def getAs(txn: T, channels: List[C]): List[A]
 
-  def getK(txn: Txn[ByteBuffer], curr: List[C]): Option[(List[P], K)]
+  def getK(txn: T, curr: List[C]): Option[(List[P], K)]
 
-  def removeA(txn: Txn[ByteBuffer], channels: List[C], index: Int): Unit
+  def removeA(txn: T, channels: List[C], index: Int): Unit
 
-  def removeK(txn: Txn[ByteBuffer], channels: List[C], index: Int): Unit
+  def removeK(txn: T, channels: List[C], index: Int): Unit
 
-  // compare to joinMap.addBinding
-  def addJoin(c: C, cs: List[C]): Unit
+  // compare to store.joinMap.addBinding
+  def addJoin(txn: T, c: C, cs: List[C]): Unit
 
-  // compare to joinMap.removeBinding
-  def removeJoin(c: C, cs: List[C]): Unit
+  // compare to store.joinMap.get(c).toList.flatten
+  def getJoin(txn: T, c: C): List[List[C]]
 
-  // compare to joinMap.remove
-  def removeAllJoins(c: C): Unit
+  // compare to store.joinMap.removeBinding
+  def removeJoin(txn: T, c: C, cs: List[C]): Unit
+
+  // compare to store.joinMap.remove
+  def removeAllJoins(txn: T, c: C): Unit
+
+  def close()
 }
