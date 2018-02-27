@@ -20,7 +20,7 @@ package object rosette {
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
 
-  type VMTransition = State[VMState, Unit]
+  type VMTransition[A] = State[VMState, A]
 
   type Result = Either[RblError, Ob]
 
