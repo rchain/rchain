@@ -146,8 +146,8 @@ object Main {
     def connectToBootstrap(net: p2p.Network): Effect[Unit] =
       for {
         bootstrapAddrStr <- conf.bootstrap.toOption
-          .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-          .toEffect
+                             .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                             .toEffect
         bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
         _             <- iologger.info[Effect](s"Bootstrapping from $bootstrapAddr.")
         _             <- net.connect[Effect](bootstrapAddr)
@@ -166,16 +166,16 @@ object Main {
         (for {
           _ <- IOUtil.sleep[Effect](5000L)
           peers <- Task.delay { // TODO lift findMorePeers to return IO
-            net.net.findMorePeers(limit = 10)
-          }.toEffect
+                    net.net.findMorePeers(limit = 10)
+                  }.toEffect
           _ <- peers.toList.traverse(p => net.connect[Effect](p))
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
-            val thisCount = net.net.table.peers.size
-            if (thisCount != lastCount) {
-              logger.info(s"Peers: $thisCount.")
-            }
-            thisCount
-          }.toEffect
+                 val thisCount = net.net.table.peers.size
+                 if (thisCount != lastCount) {
+                   logger.info(s"Peers: $thisCount.")
+                 }
+                 thisCount
+               }.toEffect
         } yield tc)
 
     val recipe: Effect[Unit] = for {
@@ -185,7 +185,7 @@ object Main {
       _    <- addShutdownHook(net).toEffect
       _    <- iologger.info[Effect](s"Listening for traffic on $net.")
       _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
-      else connectToBootstrap(net)
+          else connectToBootstrap(net)
       _ <- MonadOps.forever(findAndConnect(net), 0L)
     } yield ()
 

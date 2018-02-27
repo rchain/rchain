@@ -55,7 +55,7 @@ final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: 
     for {
       h         <- header.toRight(HeaderNotAvailable)
       handshake <- NetworkProtocol.toEncryptionHandshake(proto)
-      pub = handshake.publicKey.toByteArray
+      pub       = handshake.publicKey.toByteArray
     } yield {
       val message = EncryptionHandshakeResponseMessage(
         NetworkProtocol.encryptionHandshakeResponse(src, h, keys),

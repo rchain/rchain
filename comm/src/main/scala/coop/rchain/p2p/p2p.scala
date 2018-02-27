@@ -69,15 +69,15 @@ class Network(
       remote     <- new ProtocolNode(peer, this.net).pure[F]
       ehsrespmsg <- net.roundTrip[F](ehs, remote)
       ehsresp <- ApplicativeError_[F, CommError].fromEither(
-        NetworkProtocol.toEncryptionHandshakeResponse(ehsrespmsg.proto))
+                  NetworkProtocol.toEncryptionHandshakeResponse(ehsrespmsg.proto))
       _ <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
       _ <- iologger.debug[F](
-        s"connect(): Received encryption handshake response from ${ehsrespmsg.sender.get}.")
+            s"connect(): Received encryption handshake response from ${ehsrespmsg.sender.get}.")
       ts2     <- IOUtil.currentMilis[F]
       phs     <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
       phsresp <- net.roundTrip[F](phs, remote)
       _ <- iologger.debug[F](
-        s"connect(): Received protocol handshake response from ${phsresp.sender.get}.")
+            s"connect(): Received protocol handshake response from ${phsresp.sender.get}.")
     } yield {
       net.add(remote)
     }
