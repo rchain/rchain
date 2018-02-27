@@ -7,14 +7,6 @@ set -euxo pipefail
 
 project_root=$(pwd)
 
-## setup tmp directory
-tmp_dir="deps-tmp"
-if [ ! -d "${tmp_dir}" ]; then
-    mkdir ${tmp_dir}
-else
-    rm -rf ${tmp_dir}
-fi
-
 ## Detect if running in docker container - setup using sudo accordingly
 if [[ $(cat /proc/self/cgroup  | grep docker) = *docker* ]]; then
     echo "Running in docker container!"
@@ -60,7 +52,7 @@ cd secp256k1
 ./autogen.sh
 ./configure --enable-jni --enable-experimental --enable-module-schnorr --enable-module-ecdh --prefix=$PWD/.tmp
 make install
-cd ../../
+cd ${project_root}
 
 ## Install Haskell Platform
 # ref: https://www.haskell.org/platform/#linux-ubuntu
@@ -69,11 +61,12 @@ ${sudo} apt-get install haskell-platform -yqq
 
 ## Install BNFC Converter 
 # ref: http://bnfc.digitalgrammars.com/
-cd ${tmp_dir}
+bnfc_tmp_dir="$(mktemp -dt bnfcbuild.XXXXXX)"
+cd ${bnfc_tmp_dir}
 git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
 ${sudo} cabal install --global
-cd ../../../
+cd ${project_root}
 
 ## Install sbt
 ${sudo} apt-get install apt-transport-https -yqq
@@ -85,5 +78,5 @@ ${sudo} apt-get install sbt -yqq
 ## Install JFlex 
 ${sudo} apt-get install jflex -yqq
 
-## Cleanup
-rm -rf ${tmp_dir}
+## Remove temporary files 
+rm -rf ${bnfc_tmp_dir}
