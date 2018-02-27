@@ -4,9 +4,6 @@
 # Set BASH environment so it will properly fail throwing exit code
 set -euxo pipefail
 
-## Set java options
-JAVA_OPTS=-Dfile.encoding=UTF8 
-
 subprojects="rosette core" 
 for subproject in $subprojects; do
     if [ -d "${subproject}" -a -f "${subproject}/build.sh" ]; then
