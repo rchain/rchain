@@ -27,4 +27,17 @@ package object util {
     } finally {
       a.close()
     }
+
+  def withTransaction[A, B](txn: A)(f: A => B)(implicit t: Transaction[A]): B =
+    try {
+      val ret: B = f(txn)
+      t.commit(txn)
+      ret
+    } catch {
+      case ex: Throwable =>
+        t.abort(txn)
+        throw ex
+    } finally {
+      t.close(txn)
+    }
 }

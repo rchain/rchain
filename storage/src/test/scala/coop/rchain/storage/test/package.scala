@@ -1,9 +1,9 @@
-package coop.rchain
+package coop.rchain.storage
 
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
-package object storage {
+package object test {
 
   /**
     * Makes a SimpleFileVisitor to delete files and the directories that contained them
@@ -24,4 +24,11 @@ package object storage {
 
   def recursivelyDeletePath(p: Path): Path =
     Files.walkFileTree(p, makeDeleteFileVisitor)
+
+  /** Drops the 'i'th element of a list.
+    */
+  def dropIndex[T](xs: List[T], n: Int): List[T] = {
+    val (l1, l2) = xs splitAt n
+    l1 ++ (l2 drop 1)
+  }
 }
