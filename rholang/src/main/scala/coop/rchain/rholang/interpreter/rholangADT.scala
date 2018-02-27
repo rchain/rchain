@@ -45,6 +45,17 @@ case class Par(
     } else {
       None
     }
+
+  def singleNew(): Option[New] =
+    if (sends.isEmpty && receives.isEmpty && evals.isEmpty && exprs.isEmpty) {
+      news match {
+        case List(single) => Some(single)
+        case _            => None
+      }
+    } else {
+      None
+    }
+
   def merge(that: Par) =
     Par(that.sends ++ sends,
         that.receives ++ receives,
