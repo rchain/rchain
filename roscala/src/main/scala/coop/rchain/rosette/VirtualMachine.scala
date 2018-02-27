@@ -261,6 +261,7 @@ object VirtualMachine {
     currentState
   }
 
+  // TODO: Use state monad here
   def runFlags: VMTransition = modify { state =>
     var mState = state
 
