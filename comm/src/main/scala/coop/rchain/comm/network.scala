@@ -11,6 +11,7 @@ import scala.collection.mutable
 import scala.util.{Failure, Success}
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import cats._, cats.data._, cats.implicits._
 
 /**
   * Implements the lower levels of the network protocol.
@@ -18,7 +19,8 @@ import coop.rchain.catscontrib._, Catscontrib._
 final case class UnicastNetwork(peer: PeerNode,
                                 next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
-    with ProtocolDispatcher[SocketAddress] {
+    // with ProtocolDispatcher[SocketAddress] TODO consider bringing back or remove
+    {
 
   val logger = Logger("network-overlay")
 
@@ -35,27 +37,24 @@ final case class UnicastNetwork(peer: PeerNode,
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  private val receiver = new Thread {
-    override def run =
-      while (true) {
-        comm.recv match {
-          case Right((sock, res)) =>
-            for {
-              msg <- ProtocolMessage.parse(res)
-            } dispatch(sock, msg)
-          case Left(err: CommError) =>
-            err match {
-              case DatagramException(ex: SocketTimeoutException) => ()
-              // These next ones may ding a node's reputation; just
-              // printing for now.
-              case err @ DatagramSizeError(sz)    => logger.warn(s"bad datagram size $sz")
-              case err @ DatagramFramingError(ex) => ex.printStackTrace
-              case err @ DatagramException(ex)    => ex.printStackTrace
+  def receiver[F[_]: Capture] = Capture[F].capture {
+    comm.recv match {
+      case Right((sock, res)) =>
+        for {
+          msg <- ProtocolMessage.parse(res)
+        } dispatch(sock, msg)
+      case Left(err: CommError) =>
+        err match {
+          case DatagramException(ex: SocketTimeoutException) => ()
+          // These next ones may ding a node's reputation; just
+          // printing for now.
+          case err @ DatagramSizeError(sz)    => logger.warn(s"bad datagram size $sz")
+          case err @ DatagramFramingError(ex) => ex.printStackTrace
+          case err @ DatagramException(ex)    => ex.printStackTrace
 
-              case _ => ()
-            }
+          case _ => ()
         }
-      }
+    }
   }
 
   /**
@@ -213,8 +212,6 @@ final case class UnicastNetwork(peer: PeerNode,
     } yield message
 
   }
-
-  receiver.start
 
   override def toString = s"#{Network $local ${local.endpoint.udpSocketAddress}}"
 }
