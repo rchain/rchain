@@ -68,8 +68,7 @@ class Network(
     for {
       _          <- debug[F](s"Connecting to $peer")
       ts1        <- IOUtil.currentMilis[F]
-      proto      = encryptionHandshake(net.local, keys)
-      ehs        = EncryptionHandshakeMessage(proto, ts1)
+      ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
       remote     = new ProtocolNode(peer, this.net)
       ehsrespmsg <- net.roundTrip[F](ehs, remote)
       ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
