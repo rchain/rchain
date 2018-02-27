@@ -6,13 +6,12 @@
 set -euxo pipefail
 
 ## setup tmp directory
-tmp_dir="/deps-tmp"
+tmp_dir="deps-tmp"
 if [ ! -d "${tmp_dir}" ]; then
     mkdir ${tmp_dir}
 else
     rm -rf ${tmp_dir}
 fi
-cd ${tmp_dir}
 
 ## Detect if running in docker container - setup using sudo accordingly
 if [[ $(cat /proc/self/cgroup  | grep docker) = *docker* ]]; then
@@ -41,9 +40,17 @@ ${sudo} apt-get update -yqq
 ${sudo} apt-get install g++-multilib -yqq
 
 ## Install misc tools 
-${sudo} apt-get install cmake -yqq
-${sudo} apt-get install git -yqq
-${sudo} apt-get install curl -yqq
+${sudo} apt-get install cmake curl git -yqq
+
+## Install needed crypto
+${sudo} apt-get install autoconf libtool -yqq
+cd crypto
+git clone https://github.com/bitcoin-core/secp256k1
+cd secp256k1
+./autogen.sh
+./configure --enable-jni --enable-experimental --enable-module-schnorr --enable-module-ecdh --prefix=$PWD/.tmp
+make install
+cd ../../
 
 ## Install Haskell Platform
 # ref: https://www.haskell.org/platform/#linux-ubuntu
@@ -52,9 +59,11 @@ ${sudo} apt-get install haskell-platform -yqq
 
 ## Install BNFC Converter 
 # ref: http://bnfc.digitalgrammars.com/
+cd ${tmp_dir}
 git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
 ${sudo} cabal install --global
+cd ../../../
 
 ## Install Java OpenJDK 8
 ${sudo} apt-get update -yqq
@@ -68,7 +77,7 @@ ${sudo} apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40
 ${sudo} apt-get update -yqq
 ${sudo} apt-get install sbt -yqq
 
-## Install jflex
+## Install JFlex 
 ${sudo} apt-get install jflex -yqq
 
 ## Cleanup
