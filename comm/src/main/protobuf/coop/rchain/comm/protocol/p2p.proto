@@ -24,7 +24,7 @@ message EncryptionHandshakeResponse {
 }
 
 message Frame {
-  bytes nounce   = 1;
+  bytes nonce    = 1;
   bytes msg      = 2;
 }
 
