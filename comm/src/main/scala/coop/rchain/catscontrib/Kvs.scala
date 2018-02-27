@@ -7,7 +7,6 @@ trait Kvs[F[_], K, V] {
   def keys: F[Vector[K]]
   def get(k: K): F[Option[V]]
   def put(k: K, v: V): F[Unit]
-  def compareAndPut(k: K, expect: Option[V], update: V): F[Boolean]
   def delete(k: K): F[Unit]
 }
 
@@ -17,11 +16,10 @@ object Kvs extends KvsInstances {
   def forTrans[F[_]: Monad, K, V, T[_[_], _]: MonadTrans](
       implicit K: Kvs[F, K, V]): Kvs[T[F, ?], K, V] =
     new Kvs[T[F, ?], K, V] {
-      def keys                                    = K.keys.liftM[T]
-      def get(k: K)                               = K.get(k).liftM[T]
-      def put(k: K, v: V)                         = K.put(k, v).liftM[T]
-      def compareAndPut(k: K, e: Option[V], u: V) = K.compareAndPut(k, e, u).liftM[T]
-      def delete(k: K)                            = K.delete(k).liftM[T]
+      def keys            = K.keys.liftM[T]
+      def get(k: K)       = K.get(k).liftM[T]
+      def put(k: K, v: V) = K.put(k, v).liftM[T]
+      def delete(k: K)    = K.delete(k).liftM[T]
     }
 }
 
