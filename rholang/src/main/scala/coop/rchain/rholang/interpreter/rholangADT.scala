@@ -2,7 +2,7 @@
 // Normalization requires the evaluation of everything that doesn't go through
 // the tuplespace, so the top level of a normalized process must have everything
 
-package coop.rchain.rholang.intepreter
+package coop.rchain.rholang.interpreter
 
 import scala.language.implicitConversions
 
@@ -45,6 +45,17 @@ case class Par(
     } else {
       None
     }
+
+  def singleNew(): Option[New] =
+    if (sends.isEmpty && receives.isEmpty && evals.isEmpty && exprs.isEmpty) {
+      news match {
+        case List(single) => Some(single)
+        case _            => None
+      }
+    } else {
+      None
+    }
+
   def merge(that: Par) =
     Par(that.sends ++ sends,
         that.receives ++ receives,
