@@ -59,28 +59,31 @@ class Network(
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
     * the same language.
     */
-  def connect[F[_]: Capture: Monad: ApplicativeError_[?[_], CommError]](peer: PeerNode)(
-      implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
+  def connect[F[_]: Capture: Monad](peer: PeerNode)(
+      implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
+      err: ApplicativeError_[F, CommError]): F[Unit] = {
+
+    import iologger._
+
     for {
-      _          <- iologger.debug[F](s"connect(): Connecting to $peer")
+      _          <- debug[F](s"Connecting to $peer")
       ts1        <- IOUtil.currentMilis[F]
-      proto      <- encryptionHandshake(net.local, keys).pure[F]
-      ehs        <- EncryptionHandshakeMessage(proto, ts1).pure[F]
-      remote     <- new ProtocolNode(peer, this.net).pure[F]
+      proto      = encryptionHandshake(net.local, keys)
+      ehs        = EncryptionHandshakeMessage(proto, ts1)
+      remote     = new ProtocolNode(peer, this.net)
       ehsrespmsg <- net.roundTrip[F](ehs, remote)
-      ehsresp <- ApplicativeError_[F, CommError].fromEither(
-                  NetworkProtocol.toEncryptionHandshakeResponse(ehsrespmsg.proto))
-      _ <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
-      _ <- iologger.debug[F](
-            s"connect(): Received encryption handshake response from ${ehsrespmsg.sender.get}.")
-      ts2     <- IOUtil.currentMilis[F]
-      phs     <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
-      phsresp <- net.roundTrip[F](phs, remote)
-      _ <- iologger.debug[F](
-            s"connect(): Received protocol handshake response from ${phsresp.sender.get}.")
+      ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
+      _          <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
+      _          <- debug[F](s"Received encryption response from ${ehsrespmsg.sender.get}.")
+      ts2        <- IOUtil.currentMilis[F]
+      phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
+      phsresp    <- net.roundTrip[F](phs, remote)
+      _          <- debug[F](s"Received protocol handshake response from ${phsresp.sender.get}.")
     } yield {
       net.add(remote)
     }
+
+  }
 
   def disconnect(): Unit = {
     net.broadcast(
