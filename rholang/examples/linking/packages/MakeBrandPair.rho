@@ -6,14 +6,19 @@
 //some situations. For example one could seal the method on a "purse" object which
 //extracts the tokens inside, thus allowing only those with the unsealer to 
 //take coins out of the purse.
+//
+//Note: This only works if process destructuring cannot be used. Otherwise,
+//the `key` could be extracting by destructuring `sealedData`. Therefore,
+//when matching on processes is introduced an `opaque` keyword will need to
+//be added to the definition of `sealedData`.
 export MakeBrandPair in {
   contract MakeBrandPair(return) = {
     new seal, unseal, key in {
       contract seal(data, return) = {
         new sealedData in {
           contract sealedData(input, return) = {
-            match input == key with true => { return(data) }
-            _ => { return(Nil) }
+            match input == key with true => { return([data]) }
+            _ => { return([]) }
           } |
           return(sealedData)
         }
