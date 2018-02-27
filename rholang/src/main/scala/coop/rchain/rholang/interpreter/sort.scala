@@ -125,6 +125,7 @@ object Score {
   final val RECEIVE = 301
   final val EVAL    = 302
   final val NEW     = 303
+  final val MATCH   = 304
 
   final val PAR = 999
 }
@@ -350,6 +351,23 @@ object NewSortMatcher {
   }
 }
 
+object MatchSortMatcher {
+  def sortMatch(m: Match): ScoredTerm[Match] = {
+    def sortCase(matchCase: Tuple2[Par, Par]): ScoredTerm[Tuple2[Par, Par]] = {
+      val (pattern, body) = matchCase
+      val sortedPattern   = ParSortMatcher.sortMatch(pattern)
+      val sortedBody      = ParSortMatcher.sortMatch(body)
+      ScoredTerm((sortedPattern.term, sortedBody.term),
+        Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
+    }
+
+    val sortedValue = ParSortMatcher.sortMatch(m.value)
+    val scoredCases = m.cases.map(_case => sortCase(_case))
+    ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term)),
+               Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
+  }
+}
+
 object ParSortMatcher {
   def sortMatch(p: Par): ScoredTerm[Par] = {
     val sends    = p.sends.map(s => SendSortMatcher.sortMatch(s)).sorted
@@ -357,11 +375,15 @@ object ParSortMatcher {
     val exprs    = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
     val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
     val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
-    val sortedPar = Par(sends = sends.map(_.term),
-                        receives = receives.map(_.term),
-                        exprs = exprs.map(_.term),
-                        evals = evals.map(_.term),
-                        news = news.map(_.term))
+    val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+    val sortedPar = Par(
+      sends = sends.map(_.term),
+      receives = receives.map(_.term),
+      exprs = exprs.map(_.term),
+      evals = evals.map(_.term),
+      news = news.map(_.term),
+      matches = matches.map(_.term)
+    )
     val parScore = Node(Score.PAR,
                         sends.map(_.score) ++
                           receives.map(_.score) ++ exprs.map(_.score) ++
