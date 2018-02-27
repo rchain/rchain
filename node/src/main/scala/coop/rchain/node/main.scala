@@ -8,30 +8,31 @@ import coop.rchain.p2p
 import coop.rchain.comm._
 import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
-import cats._, cats.data._, cats.implicits._
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     def unsafeRunSync(handle: A => Unit): Unit =
-      // TODO this will eventually disappear
-      task.coeval.value match {
-        case Left(future) => throw new Exception("could not run in sync")
-        case Right(a)     => handle(a)
-      }
+      Await.result(task.runAsync, Duration.Inf)
   }
 }
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  version("RChain Communications Library version 0.1")
+  version("RChain Node version 0.1")
 
   val name =
     opt[String](default = None, short = 'n', descr = "Node name or key.")
 
   val port =
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
+
+  val httpPort =
+    opt[Int](default = Some(8080), short = 'x', descr = "HTTP port.")
 
   val bootstrap =
     opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
@@ -70,10 +71,10 @@ object Main {
           Some(addresses(false).head)
         } else {
           val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-          if (addresses.contains(false)) {
-            Some(addresses(false).head)
-          } else if (addresses.contains(true)) {
-            Some(addresses(true).head)
+          if (locals.contains(false)) {
+            Some(locals(false).head)
+          } else if (locals.contains(true)) {
+            Some(locals(true).head)
           } else {
             None
           }
@@ -128,6 +129,9 @@ object Main {
       def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
     }
 
+    val http = HttpServer(conf.httpPort())
+    http.start
+
     val calculateKeys: Effect[PublicPrivateKeys] = for {
       inDb <- keysAvailable[Effect]
       ks   <- if (inDb) fetchKeys[Effect] else generate.pure[Effect]
@@ -146,6 +150,7 @@ object Main {
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
+        http.stop
         net.disconnect
         logger.info("Goodbye.")
       }

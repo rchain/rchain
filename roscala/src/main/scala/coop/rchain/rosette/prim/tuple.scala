@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -223,6 +223,98 @@ object tuple {
         Right(t.makeTail(1))
       else
         Right(Tuple.NIL)
+    }
+  }
+
+  /**
+    * Define the tuple-new primitive.
+    * This returns a new Tuple containing the specified n Obs
+    * e.g. (new Tuple 1 2 3 4 5 6) ==> [1 2 3 4 5 6]
+    *
+    * WARNING: this primitive (like tplNewN, tplexprNew and tplexprNewN)
+    * takes an extra argument in the leading slot, allowing these
+    * primitives to be bound directly to operations.  That is, the
+    * operation new is bound to tplNew in a prototypical tuple Tuple,
+    * then the expression
+    *
+    * 	(new Tuple a b c)
+    *
+    * will be equivalent to
+    *
+    * 	(tplNew Tuple a b c)
+    *
+    * Since we want to produce [a b c], we need to ignore the first arg.
+    */
+  object tplNew extends Prim {
+    override val name: String = "tuple-new"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = MaxArgs
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem  = ctxt.argvec.elem
+      val nargs = ctxt.nargs
+
+      Right(Tuple(elem).makeSlice(1, nargs - 1))
+    }
+  }
+
+  /**
+    * Define the tuple-new-n primitive.
+    * This returns a new Tuple containing the specified n duplicated Obs
+    *
+    * See warning in tplNew about the rationale for ignoring ARG(0).
+    * 	(tplNewN dummy n init)
+    *
+    * e.g.(tuple-new-n [] 3 'a) ===>	['a 'a 'a]
+    */
+  object tplNewN extends Prim {
+    override val name: String = "tuple-new-n"
+    override val minArgs: Int = 3
+    override val maxArgs: Int = 3
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+      val elem  = ctxt.argvec.elem
+      val nargs = ctxt.nargs
+
+      checkFixnum(1, elem).flatMap { n => // Ensure arg1 is a Fixnum
+        if (n.value <= 0)
+          Right(Tuple.NIL)
+        else
+          Right(Tuple(n.value, elem(2)))
+      }
+    }
+  }
+
+  object tplMemQ extends Prim {
+    override val name: String = "tuple-mem?"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem  = ctxt.argvec.elem
+      val nargs = ctxt.nargs
+
+      checkTuple(0, elem).map { t =>
+        RblBool(t.elem.exists(el => (el == elem(1))))
+      }
+    }
+  }
+
+  object tplMatchesP extends Prim {
+    override val name: String = "tuple-matches?"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkTypeMismatch[Tuple] // Args must be Tuples
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem = ctxt.argvec.elem
+      val pat  = elem(0).asInstanceOf[Tuple]
+      val tup  = elem(1).asInstanceOf[Tuple]
+      Right(RblBool(pat.matches(tup)))
     }
   }
 

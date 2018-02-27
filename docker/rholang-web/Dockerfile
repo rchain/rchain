@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y openjdk-8-jre-headless libstdc++6:i386
 ENV ESS_SYSDIR /usr/local/lib/rosette
 ENV ROSETTE_LIB /usr/local/lib/rosette
 
-ENV RHOLANG_JAR /usr/local/lib/rholang-assembly-0.1-SNAPSHOT.jar
-COPY rholang/target/scala-2.12/rholang-assembly-0.1-SNAPSHOT.jar /usr/local/lib
+ENV RHOLANG_JAR /usr/local/lib/rholang-assembly-0.1.0-SNAPSHOT.jar
+COPY rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar /usr/local/lib
 
 COPY rosette/rbl/rosette /usr/local/lib/rosette
 COPY rosette/build.out/src/rosette /usr/local/bin/rosette
@@ -25,7 +25,7 @@ ENV RHOLANGWEB_VM_PROGRAM /usr/local/bin/rosette
 ENV RHOLANGWEB_VM_LIBRARY /usr/local/lib/rosette
 
 RUN apt-get install -y python3-pip && pip3 install --upgrade pip
-ENV RHOLANGWEB_COMPILER_JAR /usr/local/lib/rholang-assembly-0.1-SNAPSHOT.jar
+ENV RHOLANGWEB_COMPILER_JAR /usr/local/lib/rholang-assembly-0.1.0-SNAPSHOT.jar
 
 COPY rholang/examples /opt/rholang/lib/examples
 ENV RHOLANGWEB_EXAMPLES_DIR /opt/rholang/lib/examples

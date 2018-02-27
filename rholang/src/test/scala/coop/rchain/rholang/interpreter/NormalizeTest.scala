@@ -285,6 +285,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch(parDoubleFree, inputs)
     }
   }
+
   "PContr" should "Handle a basic contract" in {
     /*  new add in {
           contract add(ret, @x, @y) = {
@@ -316,7 +317,6 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )))
     result.knownFree should be(inputs.knownFree)
   }
-
   "PContr" should "Not count ground values in the formals towards the free count" in {
     /*  new ret5 in {
           contract ret5(ret, @5) = {
@@ -346,6 +346,122 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         true, // persistent
         freeCount
       ))))
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PInput" should "Handle a simple receive" in {
+    // for ( x, y <- @Nil ) { x!(*y) }
+    val listBindings = new ListName()
+    listBindings.add(new NameVar("x"))
+    listBindings.add(new NameVar("y"))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(new LinearBindImpl(listBindings, new NameQuote(new PNil())))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt      = new ReceiptLinear(linearSimple)
+
+    val listSend = new ListProc()
+    listSend.add(new PEval(new NameVar("y")))
+    val body       = new PSend(new NameVar("x"), new SendSingle(), listSend)
+    val basicInput = new PInput(receipt, body)
+    val freeCount  = 2
+
+    val result = ProcNormalizeMatcher.normalizeMatch(basicInput, inputs)
+    result.par should be(
+      inputs.par.prepend(Receive(
+        List((List(ChanVar(FreeVar(0)), ChanVar(FreeVar(1))), Quote(Par()))),
+        Send(ChanVar(BoundVar(0)), List[Par](Eval(ChanVar(BoundVar(1)))), false),
+        false, // persistent
+        freeCount
+      )))
+    result.knownFree should be(inputs.knownFree)
+  }
+  "PInput" should "Handle a more complicated receive" in {
+    // for ( (x1, @y1) <- @Nil ; (x2, @y2) <- @1) { x1!(y2) | x2!(y1) }
+    val listBindings1 = new ListName()
+    listBindings1.add(new NameVar("x1"))
+    listBindings1.add(new NameQuote(new PVar("y1")))
+    val listBindings2 = new ListName()
+    listBindings2.add(new NameVar("x2"))
+    listBindings2.add(new NameQuote(new PVar("y2")))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(new LinearBindImpl(listBindings1, new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings2, new NameQuote(new PGround(new GroundInt(1)))))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt      = new ReceiptLinear(linearSimple)
+
+    val listSend1 = new ListProc()
+    listSend1.add(new PVar("y2"))
+    val listSend2 = new ListProc()
+    listSend2.add(new PVar("y1"))
+    val body = new PPar(new PSend(new NameVar("x1"), new SendSingle(), listSend1),
+                        new PSend(new NameVar("x2"), new SendSingle(), listSend2))
+    val pInput    = new PInput(receipt, body)
+    val freeCount = 4
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pInput, inputs)
+    result.par should be(
+      inputs.par.prepend(Receive(
+        List((List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1)))), Quote(Par())),
+             (List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1)))), Quote(GInt(1)))),
+        Par().copy(sends = List(Send(ChanVar(BoundVar(2)), List[Par](EVar(BoundVar(1))), false),
+                                Send(ChanVar(BoundVar(0)), List[Par](EVar(BoundVar(3))), false))),
+        false, // persistent
+        freeCount
+      )))
+    result.knownFree should be(inputs.knownFree)
+  }
+  "PInput" should "Fail if a free variable is used in 2 different receives" in {
+    // for ( (x1, @y1) <- @Nil ; (x2, @y1) <- @1) { Nil }
+    val listBindings1 = new ListName()
+    listBindings1.add(new NameVar("x1"))
+    listBindings1.add(new NameQuote(new PVar("y1")))
+    val listBindings2 = new ListName()
+    listBindings2.add(new NameVar("x2"))
+    listBindings2.add(new NameQuote(new PVar("y1")))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(new LinearBindImpl(listBindings1, new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings2, new NameQuote(new PGround(new GroundInt(1)))))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt      = new ReceiptLinear(linearSimple)
+
+    val body   = new PNil()
+    val pInput = new PInput(receipt, body)
+
+    an[Error] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch(pInput, inputs)
+    }
+  }
+
+  "PNew" should "Bind new variables" in {
+    val listNameDecl = new ListNameDecl()
+    listNameDecl.add(new NameDeclSimpl("x"))
+    listNameDecl.add(new NameDeclSimpl("y"))
+    listNameDecl.add(new NameDeclSimpl("z"))
+    val listData1 = new ListProc()
+    listData1.add(new PGround(new GroundInt(7)))
+    val listData2 = new ListProc()
+    listData2.add(new PGround(new GroundInt(8)))
+    val listData3 = new ListProc()
+    listData3.add(new PGround(new GroundInt(9)))
+    val pNew = new PNew(
+      listNameDecl,
+      new PPar(
+        new PPar(new PSend(new NameVar("x"), new SendSingle(), listData1),
+                 new PSend(new NameVar("y"), new SendSingle(), listData2)),
+        new PSend(new NameVar("z"), new SendSingle(), listData3)
+      )
+    )
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pNew, inputs)
+    result.par should be(
+      inputs.par.prepend(New(
+        3,
+        Par(Send(ChanVar(BoundVar(0)), List[Par](GInt(7)), false))
+          .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(8)), false))
+          .prepend(Send(ChanVar(BoundVar(2)), List[Par](GInt(9)), false))
+      )))
     result.knownFree should be(inputs.knownFree)
   }
 }
