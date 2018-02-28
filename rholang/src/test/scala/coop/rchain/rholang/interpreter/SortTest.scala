@@ -546,7 +546,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be (sortedParGround)
   }
 
-  "Par" should "Sort exprss in order of ground, vars, arithmetic, comparisons, logical" in {
+  "Par" should "Sort exprs in order of ground, vars, arithmetic, comparisons, logical" in {
     val parExpr =
       p.copy(exprs=
         List(
