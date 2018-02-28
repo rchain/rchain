@@ -337,6 +337,32 @@ object ProcNormalizeMatcher {
         ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
       }
 
+      case p: PMatch => {
+        import scala.collection.JavaConverters._
+
+        val value = normalizeMatch(p.proc_, input)
+        val cases = p.listcase_.asScala.toList.map {
+          case ci: CaseImpl => (ci.proc_1, ci.proc_2)
+          case _            => throw new Error("Unexpected Case implementation.")
+        }
+
+        val initAcc = (List[Tuple2[Par, Par]](), input.knownFree)
+        val casesResult = (initAcc /: cases) { (acc, caseImpl) =>
+          caseImpl match {
+            case (pattern, caseBody) => {
+              val patternResult =
+                normalizeMatch(pattern, ProcVisitInputs(Par(), input.env, input.knownFree))
+              val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
+              val caseBodyResult =
+                normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
+              ((patternResult.par, caseBodyResult.par) :: acc._1, caseBodyResult.knownFree)
+            }
+          }
+        }
+        ProcVisitOutputs(input.par.prepend(Match(value.par, casesResult._1.reverse)),
+                         casesResult._2)
+      }
+
       case _ => throw new Error("Compilation of construct not yet supported.")
     }
   }

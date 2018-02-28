@@ -464,6 +464,44 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )))
     result.knownFree should be(inputs.knownFree)
   }
+
+  "PMatch" should "Handle a match inside a for comprehension" in {
+    // for (@x <- @Nil) { match x { case 42 => Nil ; case 47 => Nil } | @Nil!(47)
+    val listBindings = new ListName()
+    listBindings.add(new NameQuote(new PVar("x")))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(new LinearBindImpl(listBindings, new NameQuote(new PNil())))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt      = new ReceiptLinear(linearSimple)
+
+    val listCases = new ListCase()
+    listCases.add(new CaseImpl(new PGround(new GroundInt(42)), new PNil()))
+    listCases.add(new CaseImpl(new PGround(new GroundInt(47)), new PNil()))
+    val body = new PMatch(new PVar("x"), listCases)
+
+    val listData = new ListProc()
+    listData.add(new PGround(new GroundInt(47)))
+    val send47OnNil = new PSend(new NameQuote(new PNil()), new SendSingle(), listData)
+
+    val pPar = new PPar(
+      new PInput(receipt, body),
+      send47OnNil
+    )
+    val result    = ProcNormalizeMatcher.normalizeMatch(pPar, inputs)
+    val freeCount = 1
+
+    val expectedResult =
+      inputs.par.copy(
+        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false)),
+        receives = List(
+          Receive(List((List(Quote(EVar(FreeVar(0)))), Quote(Par()))),
+                  Match(EVar(BoundVar(0)), List((GInt(42), Par()), (GInt(47), Par()))),
+                  false,
+                  freeCount))
+      )
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
