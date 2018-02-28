@@ -362,8 +362,9 @@ object ProcNormalizeMatcher {
           caseImpl match {
             case (pattern, caseBody) => {
               val patternResult =
-                normalizeMatch(pattern,
-                               ProcVisitInputs(Par(), input.env, DebruijnLevelMap[VarSort]()))
+                normalizeMatch(
+                  pattern,
+                  ProcVisitInputs(Par(), DebruijnLevelMap(), DebruijnLevelMap[VarSort]()))
               val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
               val caseBodyResult =
                 normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
