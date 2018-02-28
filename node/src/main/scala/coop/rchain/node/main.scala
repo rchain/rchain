@@ -83,18 +83,6 @@ object Main {
     }
   }
 
-  /** Those instances have no sens whatsoever however we keep them for now
-    * to adjust to imperative side of the code base in main. Once p2p.Network
-    * gets a monadic API we will remove this and main will run on a single
-    * type that binds all possbile efffects
-    */
-  object TempInstances {
-    implicit val eitherCapture: Capture[Either[CommError, ?]] =
-      new Capture[Either[CommError, ?]] {
-        def capture[A](a: => A): Either[CommError, A] = Right(a)
-      }
-  }
-
   def main(args: Array[String]): Unit = {
 
     import encryption._
@@ -111,10 +99,27 @@ object Main {
       case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
     }
 
-    /** TODO This is using Either for the effect which obviously is a temp solution. Will use
-      * proper type once p2p.Network gets a monadic API
-      */
-    import TempInstances._
+    import ApplicativeError_._
+
+    /** will use database or file system */
+    implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
+      new Kvs[Task, PeerNode, Array[Byte]] {
+        var mem: Map[PeerNode, Array[Byte]] = Map.empty[PeerNode, Array[Byte]]
+
+        def keys: Task[Vector[PeerNode]] = Task.delay {
+          mem.keys.toVector
+        }
+        def get(k: PeerNode): Task[Option[Array[Byte]]] = Task.delay {
+          mem.get(k)
+        }
+        def put(k: PeerNode, v: Array[Byte]): Task[Unit] = Task.delay {
+          mem = mem + (k -> v)
+        }
+
+        def delete(k: PeerNode): Task[Unit] = Task.delay {
+          mem = mem - k
+        }
+      }
 
     /** This is essentially a final effect that will accumulate all effects from the system */
     type LogT[F[_], A]     = WriterT[F, Vector[String], A]
@@ -141,8 +146,8 @@ object Main {
     def connectToBootstrap(net: p2p.Network): Effect[Unit] =
       for {
         bootstrapAddrStr <- conf.bootstrap.toOption
-          .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-          .toEffect
+                             .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                             .toEffect
         bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
         _             <- iologger.info[Effect](s"Bootstrapping from $bootstrapAddr.")
         _             <- net.connect[Effect](bootstrapAddr)
@@ -156,32 +161,32 @@ object Main {
       }
     }
 
-    def findAndConnect(net: p2p.Network): Long => Task[Long] =
+    def findAndConnect(net: p2p.Network): Long => Effect[Long] =
       (lastCount: Long) =>
         (for {
-          _ <- IOUtil.sleep[Task](5000L)
+          _ <- IOUtil.sleep[Effect](5000L)
           peers <- Task.delay { // TODO lift findMorePeers to return IO
-            net.net.findMorePeers(limit = 10)
-          }
-          _ <- peers.toList.traverse(p => net.connect[Task](p))
+                    net.net.findMorePeers(limit = 10)
+                  }.toEffect
+          _ <- peers.toList.traverse(p => net.connect[Effect](p))
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
-            val thisCount = net.net.table.peers.size
-            if (thisCount != lastCount) {
-              logger.info(s"Peers: $thisCount.")
-            }
-            thisCount
-          }
+                 val thisCount = net.net.table.peers.size
+                 if (thisCount != lastCount) {
+                   logger.info(s"Peers: $thisCount.")
+                 }
+                 thisCount
+               }.toEffect
         } yield tc)
 
     val recipe: Effect[Unit] = for {
       addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
       keys <- calculateKeys
-      net  <- p2p.Network(addy, keys).pure[Effect]
+      net  <- (new p2p.Network(addy, keys)).pure[Effect]
       _    <- addShutdownHook(net).toEffect
       _    <- iologger.info[Effect](s"Listening for traffic on $net.")
       _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
-      else connectToBootstrap(net)
-      _ <- MonadOps.forever(findAndConnect(net), 0L).toEffect
+          else connectToBootstrap(net)
+      _ <- MonadOps.forever(findAndConnect(net), 0L)
     } yield ()
 
     import monix.execution.Scheduler.Implicits.global
