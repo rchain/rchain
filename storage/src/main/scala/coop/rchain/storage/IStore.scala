@@ -8,9 +8,8 @@ import coop.rchain.models.Serialize
   * @tparam P a type representing a pattern
   * @tparam A a type representing an arbitrary piece of data
   * @tparam K a type representing a continuation
-  * @tparam T a type representing a transaction
   */
-trait IStore[C, P, A, K, T] {
+trait IStore[C, P, A, K] {
 
   /**
     * The type of hashes
@@ -23,9 +22,16 @@ trait IStore[C, P, A, K, T] {
 
   private[storage] def getKey(txn: T, hash: H): List[C]
 
+  /**
+    * The type of transactions
+    */
+  type T
+
   def createTxnRead(): T
 
   def createTxnWrite(): T
+
+  def withTxn[R](txn: T)(f: T => R): R
 
   def putA(txn: T, channels: List[C], a: A): Unit
 
