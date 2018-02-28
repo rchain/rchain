@@ -358,7 +358,7 @@ object MatchSortMatcher {
       val sortedPattern   = ParSortMatcher.sortMatch(pattern)
       val sortedBody      = ParSortMatcher.sortMatch(body)
       ScoredTerm((sortedPattern.term, sortedBody.term),
-        Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
+                 Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
     }
 
     val sortedValue = ParSortMatcher.sortMatch(m.value)
