@@ -1,0 +1,32 @@
+import NonNegativeNumber, TestSet in {
+  new xCh, add, sub, value, result in {
+    NonNegativeNumber(100, xCh) | for(x <- xCh) {
+      contract add(y, return) = { x("add", y, return) } |
+      contract sub(y, return) = { x("sub", y, return) } |
+      contract value(return) = { x("value", Nil, return) } |
+      TestSet(
+        "Add",
+        [
+          [add, [-10], false], //adding a negative fails
+          [add, [10], true], //adding positive succeeds
+          [value, [], 110] //and updates the value appropriately
+        ],
+        result
+      ) |
+      for(_ <- result) {
+        TestSet(
+          "Sub",
+          [
+            [sub, [-10], false], //subtracting a negative fails
+            [sub, [200], false], //overdrawing fails
+            [sub, [60], true], //regular subtracting works as expected
+            [value, [], 50],
+            [sub, [50], true],
+            [value, [], 0]
+          ],
+          Nil
+        )
+      }
+    }
+  }
+}

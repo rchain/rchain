@@ -12,22 +12,24 @@ case class Par(
     // selects: List[Select],
     evals: List[Eval],
     news: List[New],
-    exprs: List[Expr]
-    // matches: List[Match]
+    exprs: List[Expr],
+    matches: List[Match]
 ) {
   def this() =
-    this(List(), List(), List(), List(), List())
+    this(List(), List(), List(), List(), List(), List())
   // Single element convenience constructors
   def this(s: Send) =
-    this(List(s), List(), List(), List(), List())
+    this(List(s), List(), List(), List(), List(), List())
   def this(r: Receive) =
-    this(List(), List(r), List(), List(), List())
+    this(List(), List(r), List(), List(), List(), List())
   def this(e: Eval) =
-    this(List(), List(), List(e), List(), List())
+    this(List(), List(), List(e), List(), List(), List())
   def this(n: New) =
-    this(List(), List(), List(), List(n), List())
+    this(List(), List(), List(), List(n), List(), List())
   def this(e: Expr) =
-    this(List(), List(), List(), List(), List(e))
+    this(List(), List(), List(), List(), List(e), List())
+  def this(m: Match) =
+    this(List(), List(), List(), List(), List(), List(m))
 
   // Convenience prepend methods
   def prepend(s: Send): Par    = this.copy(sends = s :: this.sends)
@@ -35,6 +37,7 @@ case class Par(
   def prepend(e: Eval): Par    = this.copy(evals = e :: this.evals)
   def prepend(n: New): Par     = this.copy(news = n :: this.news)
   def prepend(e: Expr): Par    = this.copy(exprs = e :: this.exprs)
+  def prepend(m: Match): Par   = this.copy(matches = m :: this.matches)
 
   def singleEval(): Option[Eval] =
     if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
@@ -61,7 +64,8 @@ case class Par(
         that.receives ++ receives,
         that.evals ++ evals,
         that.news ++ news,
-        that.exprs ++ exprs)
+        that.exprs ++ exprs,
+        that.matches ++ matches)
 }
 
 object Par {
@@ -71,12 +75,14 @@ object Par {
   def apply(e: Eval): Par    = new Par(e)
   def apply(n: New): Par     = new Par(n)
   def apply(e: Expr): Par    = new Par(e)
+  def apply(m: Match): Par   = new Par(m)
 
   implicit def fromSend(s: Send): Par       = apply(s)
   implicit def fromReceive(r: Receive): Par = apply(r)
   implicit def fromEval(e: Eval): Par       = apply(e)
   implicit def fromNew(n: New): Par         = apply(n)
   implicit def fromExpr(e: Expr): Par       = apply(e)
+  implicit def fromMatch(m: Match): Par     = apply(m)
 }
 
 sealed trait Channel
@@ -119,6 +125,8 @@ case class Eval(channel: Channel)
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
 case class New(count: Int, p: Par)
+
+case class Match(value: Par, cases: List[(Par, Par)])
 
 // Any process may be an operand to an expression.
 // Only processes equivalent to a ground process of compatible type will reduce.

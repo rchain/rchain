@@ -1,0 +1,41 @@
+//this is a contract to explicitly implement the int >= 0 behavioural type
+export NonNegativeNumber in {
+  contract NonNegativeNumber(init, return) = {
+    new valueStore, value, add, sub, api in {
+      contract add(x, success) = {
+        match x >= 0 with true => {
+          for(v <- valueStore){
+            valueStore(v + x) | success(true)
+          }
+        }
+        _ => { success(false)  }
+      } |
+      contract sub(x, success) = {
+        match x >= 0 with true => {
+          for(v <- valueStore) {
+            match x <= v with true => {
+              valueStore(v - x) | success(true)
+            }
+            _ => { valueStore(v) | success(false) }
+          }
+        }
+        _ => { success(false) }
+      } |
+      contract value(return) = {
+        for(v <- valueStore) {
+          valueStore(v) | return(v)
+        }
+      } |
+      contract api(method, arg, return) = {
+        match method with 
+          "add" => { add(arg, return) }
+          "sub" => { sub(arg, return) }
+          "value" => { value(return) }
+          _ => {"Method: ".display(method, " not found!\n") | return(Nil) }
+      } |
+      return(api) |
+      match init >= 0 with true => { valueStore(init) }
+      _ => { valueStore(0) } //initial balance is zero if given is negative
+    }
+  }
+}
