@@ -364,7 +364,7 @@ object ProcNormalizeMatcher {
               val patternResult =
                 normalizeMatch(
                   pattern,
-                  ProcVisitInputs(Par(), DebruijnLevelMap(), DebruijnLevelMap[VarSort]()))
+                  ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]()))
               val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
               val caseBodyResult =
                 normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
