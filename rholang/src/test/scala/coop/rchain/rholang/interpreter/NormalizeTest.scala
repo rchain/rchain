@@ -466,7 +466,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PMatch" should "Handle a match inside a for comprehension" in {
-    // for (@x <- @Nil) { match x { case 42 => Nil ; case 47 => Nil } | @Nil!(47)
+    // for (@x <- @Nil) { match x { case 42 => Nil ; case y => Nil } | @Nil!(47)
     val listBindings = new ListName()
     listBindings.add(new NameQuote(new PVar("x")))
     val listLinearBinds = new ListLinearBind()
@@ -476,7 +476,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val listCases = new ListCase()
     listCases.add(new CaseImpl(new PGround(new GroundInt(42)), new PNil()))
-    listCases.add(new CaseImpl(new PGround(new GroundInt(47)), new PNil()))
+    listCases.add(new CaseImpl(new PVar("y"), new PNil()))
     val body = new PMatch(new PVar("x"), listCases)
 
     val listData = new ListProc()
@@ -495,12 +495,22 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         sends = List(Send(Quote(Par()), List[Par](GInt(47)), false)),
         receives = List(
           Receive(List((List(Quote(EVar(FreeVar(0)))), Quote(Par()))),
-                  Match(EVar(BoundVar(0)), List((GInt(42), Par()), (GInt(47), Par()))),
+                  Match(EVar(BoundVar(0)), List((GInt(42), Par()), (EVar(FreeVar(0)), Par()))),
                   false,
                   freeCount))
       )
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
+  }
+  "PMatch" should "Fail if a free variable is used twice in the target" in {
+    // match 47 { case (y | y) => Nil }
+    val listCases = new ListCase()
+    listCases.add(new CaseImpl(new PPar(new PVar("y"), new PVar("y")), new PNil()))
+    val pMatch = new PMatch(new PGround(new GroundInt(47)), listCases)
+
+    an[Error] should be thrownBy {
+      ProcNormalizeMatcher.normalizeMatch(pMatch, inputs)
+    }
   }
 }
 

@@ -340,7 +340,7 @@ object ProcNormalizeMatcher {
       case p: PMatch => {
         import scala.collection.JavaConverters._
 
-        val value = normalizeMatch(p.proc_, input)
+        val targetResult = normalizeMatch(p.proc_, input)
         val cases = p.listcase_.asScala.toList.map {
           case ci: CaseImpl => (ci.proc_1, ci.proc_2)
           case _            => throw new Error("Unexpected Case implementation.")
@@ -351,7 +351,8 @@ object ProcNormalizeMatcher {
           caseImpl match {
             case (pattern, caseBody) => {
               val patternResult =
-                normalizeMatch(pattern, ProcVisitInputs(Par(), input.env, input.knownFree))
+                normalizeMatch(pattern,
+                               ProcVisitInputs(Par(), input.env, DebruijnLevelMap[VarSort]()))
               val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
               val caseBodyResult =
                 normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
@@ -359,7 +360,7 @@ object ProcNormalizeMatcher {
             }
           }
         }
-        ProcVisitOutputs(input.par.prepend(Match(value.par, casesResult._1.reverse)),
+        ProcVisitOutputs(input.par.prepend(Match(targetResult.par, casesResult._1.reverse)),
                          casesResult._2)
       }
 
