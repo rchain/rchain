@@ -128,21 +128,15 @@ object ProcNormalizeMatcher {
     def normalizeIfElse(valueProc: Proc, trueBodyProc: Proc, falseBodyProc: Proc) = {
       import scala.collection.JavaConverters._
 
-      val value = normalizeMatch(valueProc, input)
-      val trueCasePattern = normalizeMatch(new PGround(new GroundBool(new BoolTrue())),
-                                           ProcVisitInputs(Par(), input.env, input.knownFree))
+      val targetResult = normalizeMatch(valueProc, input)
       val trueCaseBody =
         normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, input.knownFree))
-
-      val falseCasePattern = normalizeMatch(new PGround(new GroundBool(new BoolFalse())),
-                                            ProcVisitInputs(Par(), input.env, input.knownFree))
       val falseCaseBody =
         normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
 
       val desugaredIf = Match(
-        value.par,
-        List((trueCasePattern.par, trueCaseBody.par), (falseCasePattern.par, falseCaseBody.par)))
-
+        targetResult.par,
+        List((GBool(true), trueCaseBody.par), (GBool(false), falseCaseBody.par)))
       ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
     }
 
