@@ -181,7 +181,7 @@ object Main {
       addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
       keys <- calculateKeys
       net  <- (new p2p.Network(addy, keys)).pure[Effect]
-      _    <- Task.fork(MonadOps.forever(net.net.receiver[Task])).start.toEffect
+      _    <- Task.fork(MonadOps.forever(net.net.receiver[Effect].value.void)).start.toEffect
       _    <- addShutdownHook(net).toEffect
       _    <- iologger.info[Effect](s"Listening for traffic on $net.")
       _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
