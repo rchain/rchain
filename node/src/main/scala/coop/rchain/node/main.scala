@@ -122,16 +122,15 @@ object Main {
       }
 
     /** This is essentially a final effect that will accumulate all effects from the system */
-    type LogT[F[_], A]     = WriterT[F, Vector[String], A]
     type CommErrT[F[_], A] = EitherT[F, CommError, A]
-    type Effect[A]         = CommErrT[LogT[Task, ?], A]
+    type Effect[A]         = CommErrT[Task, A]
 
     implicit class EitherEffectOps[A](e: Either[CommError, A]) {
-      def toEffect: Effect[A] = EitherT[LogT[Task, ?], CommError, A](e.pure[LogT[Task, ?]])
+      def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
     }
 
     implicit class TaskEffectOps[A](t: Task[A]) {
-      def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
+      def toEffect: Effect[A] = t.liftM[CommErrT]
     }
 
     val http = HttpServer(conf.httpPort())
@@ -192,7 +191,7 @@ object Main {
 
     import monix.execution.Scheduler.Implicits.global
     import TaskContrib._
-    recipe.value.value.unsafeRunSync {
+    recipe.value.unsafeRunSync {
       case Right(_) => ()
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
