@@ -14,7 +14,7 @@ class InMemoryStore[C, P, A, K] private (
     _ps: mutable.HashMap[String, List[P]],
     _as: mutable.HashMap[String, List[A]],
     _k: mutable.HashMap[String, K],
-    val joinMap: mutable.MultiMap[C, String]
+    _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K] {
 
@@ -83,16 +83,16 @@ class InMemoryStore[C, P, A, K] private (
   }
 
   def addJoin(txn: Unit, c: C, cs: List[C]): Unit =
-    joinMap.addBinding(c, hashC(cs))
+    _joinMap.addBinding(c, hashC(cs))
 
   def getJoin(txn: Unit, c: C): List[List[C]] =
-    joinMap.get(c).toList.flatten.map(getKey(txn, _))
+    _joinMap.get(c).toList.flatten.map(getKey(txn, _))
 
   def removeJoin(txn: Unit, c: C, cs: List[C]): Unit =
-    joinMap.removeBinding(c, hashC(cs))
+    _joinMap.removeBinding(c, hashC(cs))
 
   def removeAllJoins(txn: Unit, c: C): Unit =
-    joinMap.remove(c)
+    _joinMap.remove(c)
 
   def close(): Unit = ()
 }
@@ -111,6 +111,6 @@ object InMemoryStore {
       _ps = mutable.HashMap.empty[String, List[P]],
       _as = mutable.HashMap.empty[String, List[A]],
       _k = mutable.HashMap.empty[String, K],
-      joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
+      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
     )
 }
