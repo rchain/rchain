@@ -3,7 +3,7 @@ package coop.rchain.storage.test
 import java.nio.charset.StandardCharsets
 
 import coop.rchain.models.Serialize
-import coop.rchain.storage.{Match, Transaction}
+import coop.rchain.storage.Match
 
 object implicits {
 
@@ -18,14 +18,5 @@ object implicits {
 
     def decode(bytes: Array[Byte]): Either[Throwable, String] =
       Right(new String(bytes, StandardCharsets.UTF_8))
-  }
-
-  implicit object dummyTransactionTransaction extends Transaction[DummyTransaction] {
-
-    def commit(t: DummyTransaction): Unit = ()
-
-    def abort(t: DummyTransaction): Unit = ()
-
-    def close(t: DummyTransaction): Unit = ()
   }
 }

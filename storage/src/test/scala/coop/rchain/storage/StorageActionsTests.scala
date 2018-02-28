@@ -4,19 +4,17 @@ import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.storage.test._
 import coop.rchain.storage.test.implicits._
-import coop.rchain.storage.util.{ignore => ign, _}
+import coop.rchain.storage.util.{ignore => ign}
 import org.scalatest._
 
 import scala.collection.mutable
 
-class StorageActionsTests[T](
-    createStore: () => IStore[String, Pattern, String, List[String] => Unit, T])(
-    implicit t: Transaction[T])
+class StorageActionsTests(createStore: () => IStore[String, Pattern, String, List[String] => Unit])
     extends FlatSpec
     with Matchers
     with OptionValues {
 
-  val logger: Logger = Logger[StorageActionsTests[T]]
+  val logger: Logger = Logger[StorageActionsTests]
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
@@ -25,8 +23,8 @@ class StorageActionsTests[T](
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestStore(f: IStore[String, Pattern, String, List[String] => Unit, T] => Unit): Unit = {
-    val store: IStore[String, Pattern, String, List[String] => Unit, T] = createStore()
+  def withTestStore(f: IStore[String, Pattern, String, List[String] => Unit] => Unit): Unit = {
+    val store: IStore[String, Pattern, String, List[String] => Unit] = createStore()
     try {
       f(store)
     } finally {
@@ -55,7 +53,7 @@ class StorageActionsTests[T](
 
     val r = produce(store, key.head, "hello")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("hello")
@@ -72,7 +70,7 @@ class StorageActionsTests[T](
 
     val r1 = produce(store, key.head, "hello")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("hello")
@@ -83,7 +81,7 @@ class StorageActionsTests[T](
 
     val r2 = produce(store, key.head, "goodbye")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("goodbye", "hello")
@@ -102,7 +100,7 @@ class StorageActionsTests[T](
 
     val r = consume(store, key, patterns, capture(results))
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe List("ch1")
       store.getPs(txn, key) shouldBe patterns
       store.getAs(txn, key) shouldBe Nil
@@ -129,7 +127,7 @@ class StorageActionsTests[T](
 
     val r = consume(store, key, patterns, capture(results))
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe patterns
       store.getAs(txn, key) shouldBe Nil
@@ -147,7 +145,7 @@ class StorageActionsTests[T](
 
     val r1 = produce(store, key.head, "world")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("world")
@@ -158,7 +156,7 @@ class StorageActionsTests[T](
 
     val r2 = consume(store, key, List(Wildcard), capture(results))
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
@@ -187,7 +185,7 @@ class StorageActionsTests[T](
 
     val r1 = produce(store, produceKey1.head, "world")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List("world")
@@ -198,7 +196,7 @@ class StorageActionsTests[T](
 
     val r2 = produce(store, produceKey2.head, "hello")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey2Hash) shouldBe produceKey2
       store.getPs(txn, produceKey2) shouldBe Nil
       store.getAs(txn, produceKey2) shouldBe List("hello")
@@ -209,7 +207,7 @@ class StorageActionsTests[T](
 
     val r3 = produce(store, produceKey3.head, "goodbye")
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey3Hash) shouldBe produceKey3
       store.getPs(txn, produceKey3) shouldBe Nil
       store.getAs(txn, produceKey3) shouldBe List("goodbye")
@@ -220,7 +218,7 @@ class StorageActionsTests[T](
 
     val r4 = consume(store, List("ch1", "ch2", "ch3"), patterns, capture(results))
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, consumeKeyHash) shouldBe Nil
       store.getPs(txn, consumeKey) shouldBe Nil
       store.getAs(txn, consumeKey) shouldBe Nil
@@ -251,7 +249,7 @@ class StorageActionsTests[T](
 
     test.foreach(runK)
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, store.hashC(key)) shouldBe key
       store.getAs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
@@ -320,7 +318,7 @@ class StorageActionsTests[T](
 
     test.foreach(runK)
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("hello", "world")) shouldBe Nil
       store.getAs(txn, List("hello")) shouldBe Nil
     }
@@ -343,7 +341,7 @@ class StorageActionsTests[T](
 
     test.foreach(runK)
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("hello")) shouldBe Nil
       store.getAs(txn, List("world")) shouldBe Nil
     }
@@ -370,7 +368,7 @@ class StorageActionsTests[T](
 
       List(r3, r4).foreach(runK)
 
-      withTransaction(store.createTxnRead()) { txn =>
+      store.withTxn(store.createTxnRead()) { txn =>
         store.getAs(txn, List("hello")) shouldBe Nil
         store.getAs(txn, List("goodbye")) shouldBe Nil
       }
@@ -393,7 +391,7 @@ class StorageActionsTests[T](
 
     test(testConsumer(capture(results)))
 
-    withTransaction(store.createTxnRead()) { txn =>
+    store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("helloworld")) shouldBe Nil
     }
 
@@ -402,5 +400,4 @@ class StorageActionsTests[T](
 }
 
 class InMemoryStoreStorageActionsTests
-    extends StorageActionsTests[DummyTransaction](
-      InMemoryStore.create[String, Pattern, String, List[String] => Unit])
+    extends StorageActionsTests(InMemoryStore.create[String, Pattern, String, List[String] => Unit])

@@ -16,31 +16,36 @@ class InMemoryStore[C, P, A, K] private (
     _k: mutable.HashMap[String, K],
     val joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
-    extends IStore[C, P, A, K, DummyTransaction] {
+    extends IStore[C, P, A, K] {
 
   type H = String
 
   private[storage] def hashC(cs: List[C])(implicit sc: Serialize[C]): H =
     printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
 
-  private[storage] def putCs(txn: DummyTransaction, channels: List[C]): Unit =
+  private[storage] def putCs(txn: Unit, channels: List[C]): Unit =
     _keys.update(hashC(channels), channels)
 
-  private[storage] def getKey(txn: DummyTransaction, s: String) =
+  private[storage] def getKey(txn: Unit, s: String) =
     _keys.get(s).toList.flatten
 
-  def createTxnRead(): DummyTransaction = DummyTransaction()
+  type T = Unit
 
-  def createTxnWrite(): DummyTransaction = DummyTransaction()
+  def createTxnRead(): Unit = ()
 
-  def putA(txn: DummyTransaction, channels: List[C], a: A): Unit = {
+  def createTxnWrite(): Unit = ()
+
+  def withTxn[R](txn: Unit)(f: Unit => R): R =
+    f(txn)
+
+  def putA(txn: Unit, channels: List[C], a: A): Unit = {
     val key = hashC(channels)
     putCs(txn, channels)
     val as = _as.getOrElseUpdate(key, List.empty[A])
     _as.update(key, a +: as)
   }
 
-  def putK(txn: DummyTransaction, channels: List[C], patterns: List[P], k: K): Unit = {
+  def putK(txn: Unit, channels: List[C], patterns: List[P], k: K): Unit = {
     val key = hashC(channels)
     putCs(txn, channels)
     val ps = _ps.getOrElseUpdate(key, List.empty[P])
@@ -48,13 +53,13 @@ class InMemoryStore[C, P, A, K] private (
     _k.update(key, k)
   }
 
-  def getPs(txn: DummyTransaction, channels: List[C]): List[P] =
+  def getPs(txn: Unit, channels: List[C]): List[P] =
     _ps.getOrElse(hashC(channels), Nil)
 
-  def getAs(txn: DummyTransaction, channels: List[C]): List[A] =
+  def getAs(txn: Unit, channels: List[C]): List[A] =
     _as.getOrElse(hashC(channels), Nil)
 
-  def getK(txn: DummyTransaction, curr: List[C]): Option[(List[P], K)] = {
+  def getK(txn: Unit, curr: List[C]): Option[(List[P], K)] = {
     val key = hashC(curr)
     for {
       ps <- _ps.get(key)
@@ -62,14 +67,14 @@ class InMemoryStore[C, P, A, K] private (
     } yield (ps, k)
   }
 
-  def removeA(txn: DummyTransaction, channels: List[C], index: Int): Unit = {
+  def removeA(txn: Unit, channels: List[C], index: Int): Unit = {
     val key = hashC(channels)
     for (as <- _as.get(key)) {
       _as.update(key, dropIndex(as, index))
     }
   }
 
-  def removeK(txn: DummyTransaction, channels: List[C], index: Int): Unit = {
+  def removeK(txn: Unit, channels: List[C], index: Int): Unit = {
     val key = hashC(channels)
     for (ps <- _ps.get(key)) {
       _ps.update(key, dropIndex(ps, index))
@@ -77,16 +82,16 @@ class InMemoryStore[C, P, A, K] private (
     }
   }
 
-  def addJoin(txn: DummyTransaction, c: C, cs: List[C]): Unit =
+  def addJoin(txn: Unit, c: C, cs: List[C]): Unit =
     joinMap.addBinding(c, hashC(cs))
 
-  def getJoin(txn: DummyTransaction, c: C): List[List[C]] =
+  def getJoin(txn: Unit, c: C): List[List[C]] =
     joinMap.get(c).toList.flatten.map(getKey(txn, _))
 
-  def removeJoin(txn: DummyTransaction, c: C, cs: List[C]): Unit =
+  def removeJoin(txn: Unit, c: C, cs: List[C]): Unit =
     joinMap.removeBinding(c, hashC(cs))
 
-  def removeAllJoins(txn: DummyTransaction, c: C): Unit =
+  def removeAllJoins(txn: Unit, c: C): Unit =
     joinMap.remove(c)
 
   def close(): Unit = ()
