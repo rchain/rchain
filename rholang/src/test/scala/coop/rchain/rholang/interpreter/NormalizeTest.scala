@@ -515,16 +515,20 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       send47OnNil
     )
     val result    = ProcNormalizeMatcher.normalizeMatch(pPar, inputs)
-    val freeCount = 1
+    val bindCount = 1
+    val freeCount = 0
 
     val expectedResult =
       inputs.par.copy(
-        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false)),
+        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false, 0)),
         receives = List(
-          Receive(List((List(Quote(EVar(FreeVar(0)))), Quote(Par()))),
-                  Match(EVar(BoundVar(0)), List((GInt(42), Par()), (EVar(FreeVar(0)), Par()))),
-                  false,
-                  freeCount))
+          Receive(
+            List((List(Quote(EVar(FreeVar(0)))), Quote(Par()))),
+            Match(EVar(BoundVar(0)), List((GInt(42), Par()), (EVar(FreeVar(0)), Par())), 0),
+            false,
+            bindCount,
+            freeCount
+          ))
       )
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)

@@ -371,8 +371,10 @@ object ProcNormalizeMatcher {
             }
           }
         }
-        ProcVisitOutputs(input.par.prepend(Match(targetResult.par, casesResult._1.reverse)),
-                         casesResult._2)
+        val freeCount = casesResult._2.next - input.knownFree.next
+        ProcVisitOutputs(
+          input.par.prepend(Match(targetResult.par, casesResult._1.reverse, freeCount)),
+          casesResult._2)
       }
 
       case _ => throw new Error("Compilation of construct not yet supported.")
