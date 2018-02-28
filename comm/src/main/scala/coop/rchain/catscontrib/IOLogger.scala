@@ -3,6 +3,7 @@ package coop.rchain.catscontrib
 import com.typesafe.scalalogging.Logger
 import cats._, cats.data._, cats.implicits._
 
+// TODO remove, use Log effect instead
 class IOLogger(name: String) {
 
   val logger = Logger(name)

@@ -101,6 +101,12 @@ object Main {
 
     import ApplicativeError_._
 
+    implicit def ioLog: Log[Task] = new Log[Task] {
+      def info(msg: String): Task[Unit]  = Task.delay(logger.info(msg))
+      def warn(msg: String): Task[Unit]  = Task.delay(logger.warn(msg))
+      def error(msg: String): Task[Unit] = Task.delay(logger.error(msg))
+    }
+
     /** will use database or file system */
     implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
       new Kvs[Task, PeerNode, Array[Byte]] {
