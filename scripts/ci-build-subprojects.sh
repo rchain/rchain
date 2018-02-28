@@ -21,6 +21,3 @@ for subproject in $subprojects; do
         exit 1
     fi
 done 
-
-## Remove temporary files 
-rm -rf ${project_root}/crypto/secp256k1
