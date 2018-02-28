@@ -21,7 +21,7 @@ def commonSettings: Seq[Setting[_]] =
       (sourceManaged in Compile).value.getPath ++ "/.*"
     ).mkString(";"),
 
-    // scalafmtOnCompile := true // pretty destructive still
+    scalafmtOnCompile := true,
 
     /*
      * By default, tag docker images with organization and the
@@ -30,7 +30,9 @@ def commonSettings: Seq[Setting[_]] =
     imageNames in docker := Seq(
       ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
       ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
-    )
+    ),
+
+    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
   ).flatMap(_.settings)
 
@@ -38,8 +40,14 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      scrypto,
-      kalium)
+      bouncyCastle,
+      guav,
+      kalium,
+      jaxb),
+    fork := true,
+    unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
+    javaOptions += "-Djava.library.path=secp256k1/.libs",
+    doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
 lazy val comm = project
@@ -48,7 +56,12 @@ lazy val comm = project
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
-      uPnP),
+      uPnP,
+      hasher,
+      cats,
+      monix,
+      guava
+    ),
     PB.targets in Compile := Seq(
       PB.gens.java -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
@@ -57,6 +70,21 @@ lazy val comm = project
       (javaSource in Compile).value,
       (sourceManaged in Compile).value
     ).map(_.getPath ++ "/.*").mkString(";")
+  )
+
+lazy val models = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      cats,
+      scalaCheck
+    ),
+    connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
   )
 
 lazy val storage = project
@@ -72,20 +100,19 @@ lazy val storage = project
     ),
     crossScalaVersions := Seq("2.11.12", scalaVersion.value),
     exportJars := true
-  )
+  ).dependsOn(models)
 
 lazy val node = project
   .enablePlugins(DockerPlugin)
   .settings(
     commonSettings,
-
     version := "0.1",
-
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
       uriParsing
     ),
+    libraryDependencies ++= apiServerDependencies ++ Seq(cats),
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 
@@ -107,7 +134,7 @@ lazy val node = project
       }
     },
   )
-  .dependsOn(comm, storage, roscala, rholang) // Not really, but it will
+  .dependsOn(comm)
 
 lazy val rholang = project
   .settings(
@@ -117,9 +144,8 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(scalaz),
+    libraryDependencies ++= commonDependencies,
     bnfcSettings,
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -131,20 +157,21 @@ lazy val rholang = project
 
     // Fix up root directory so tests find relative files they need
     fork in Test := true
-  )
+  ).dependsOn(models)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(
+    commonSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value)
   )
 
-lazy val roscala = project //  = (project in file("roscala"))
+lazy val roscala = project
   .settings(
+    commonSettings,
     name := "Rosette",
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
-    // scalafmtOnCompile in Compile := true,
     inThisBuild(List(
       addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
     libraryDependencies ++= commonDependencies ++ Seq(

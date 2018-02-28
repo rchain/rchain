@@ -8,6 +8,7 @@ import scala.reflect.{classTag, ClassTag}
 sealed trait PrimError
 case class ArgumentMismatch(msg: String)               extends PrimError
 case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
+case class IndexOutOfBounds(argNum: Int, size: Int)    extends PrimError
 case object ArithmeticError                            extends PrimError
 
 abstract class Prim extends Ob {
@@ -25,11 +26,10 @@ abstract class Prim extends Ob {
   def dispatchHelper(ctxt: Ctxt): Result = {
     val n = ctxt.nargs
 
-    if (minArgs <= n && n <= maxArgs) {
+    if (minArgs <= n && n <= maxArgs)
       fn(ctxt).left.map(PrimErrorWrapper)
-    } else {
+    else
       Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
-    }
   }
 
   override def dispatch(state: VMState): (Result, VMState) = {

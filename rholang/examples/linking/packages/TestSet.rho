@@ -1,0 +1,83 @@
+export TestSet in {
+  contract TestSet(name, tests, return) = {
+    new addTest, addTests, execTests, testsCh in {
+      testsCh([]) |
+      contract addTest(function, input, answer, isDone) = {
+        new test in {
+          contract test(return) = {
+            new result in {
+              //allow multiple arguments to be specified as a list
+              match input with
+                [] => { function(result) } //function with no arguments
+                [a] => { function(a, result) } //function of one variable
+                [a, b] => { function(a, b, result) } //function of two variables
+                [a, b, c] => { function(a, b, c, result) } //function of three variables
+                [a, b, c, d] => { function(a, b, c, d, result) } //function of four variables
+                _ => { function(input, result) } //function of many variables
+              |
+              for(r <- result) {
+                return(r == answer)
+              }
+            }
+          } |
+          for(tests <- testsCh) { 
+            testsCh([test, tests]) | isDone(true)
+          }
+        }
+      } |
+      contract execTests(return) = {
+        new loop in {
+          contract loop(result) = {
+            for(tests <- testsCh) {
+              match tests with [nxtTest, remTests] => {
+                testsCh(remTests) |
+                new testResult in {
+                  nxtTest(testResult) | 
+                  for(r <- testResult) {
+                    match [r, result] with [true, true] => { loop(true) }
+                    _ => { loop(false) }
+                  }
+                }
+              }
+              _ => {
+                return(result) |
+                match result with true => { name.display(": Pass\n") }
+                _ => { name.display(": Fail\n") }
+              }
+            }
+          } |
+          loop(true)
+        }
+      } |
+      contract addTests(tests, isDone) = {
+        //this ought to be replaced by the IArray Foreach,
+        //but I keep having problems with the VM crashing
+        //when I do too much with imports
+        new loop in {
+          contract loop(arr) = {
+            match arr with [] => {
+              isDone(true)
+            }
+            _ => {
+              match [arr.head(), arr.tail()] with [test, remTests] => {
+                match test with [function, input, answer] => {
+                  new lock in {
+                    addTest(function, input, answer, lock) |
+                    for(_ <- lock){ loop(remTests) }
+                  }
+                }
+              }
+            }
+          } |
+          //push tests to execution stack in reverse order so
+          //that they are executed in declaration order
+          loop(tests.reverse())
+        }
+      } |
+      new lock in {
+        addTests(tests, lock) |
+        for(_ <- lock){ execTests(return) }
+      }
+    }
+  }
+}

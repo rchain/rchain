@@ -1,0 +1,265 @@
+import LinkedListApi in {
+  new 
+    EmptyList, LinkedListHead, LinkedListTail, LinkedListPrepend,
+    LinkedListFold, LinkedListReverse, LinkedListForeach, LinkedListMap, LinkedListGet,
+    LinkedListIndexOf, LinkedListLength, LinkedListRange, LinkedListConstructor
+  in {
+    LinkedListApi("EmptyList", EmptyList) | LinkedListApi("Head", LinkedListHead) |
+    LinkedListApi("Tail", LinkedListTail) | LinkedListApi("Prepend", LinkedListPrepend) |
+    LinkedListApi("Fold", LinkedListFold) | LinkedListApi("Reverse", LinkedListReverse) | 
+    LinkedListApi("Foreach", LinkedListForeach) | LinkedListApi("Map", LinkedListMap) | 
+    LinkedListApi("Get", LinkedListGet) | LinkedListApi("IndexOf", LinkedListIndexOf) | 
+    LinkedListApi("Length", LinkedListLength) | LinkedListApi("Range", LinkedListRange) |
+    LinkedListApi("LinkedList", LinkedListConstructor) |
+    for(
+        emptyList <- EmptyList; head <- LinkedListHead; tail <- LinkedListTail;
+        prepend <- LinkedListPrepend; fold <- LinkedListFold; reverse <- LinkedListReverse;
+        foreach <- LinkedListForeach; map <- LinkedListMap; get <- LinkedListGet; 
+        indexOf <- LinkedListIndexOf; length <- LinkedListLength; range <- LinkedListRange;
+        LinkedList <- LinkedListConstructor
+    ) {
+      new
+        emptyList_test, head_test, tail_test, prepend_test, fold_test,
+        reverse_test, foreach_test, map_test, get_test, indexOf_test,
+        length_test, range_test, LinkedList_test, and
+      in {
+        contract and(b1, b2, return) = {
+          match [b1, b2] with [true, true] => {
+            return(true)
+          }
+          _ => { return(false) }
+        } |
+        contract emptyList_test(_) = {
+          //nothing much to test here, should just be the empty list constant
+          match emptyList == emptyList with true => { "EmptyList: Pass".display("\n") }
+          _ => { "EmptyList: Fail".display("\n") }
+        } |
+        contract head_test(_) = {
+          new NonEmptyList in {
+            LinkedList(1, NonEmptyList) | for(list <- NonEmptyList) {
+              new result1, result2, answer1, answer2 in {
+                head(list, result1) | head(emptyList, result2) |
+                answer1(1) | answer2(Nil) |
+                for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
+                  match [r1 == a1, r2 == a2] with [true, true] => {
+                    "Head: Pass".display("\n")
+                  }
+                  _ => { "Head: Fail".display("\n") }
+                }
+              }
+            }
+          }
+        } |
+        contract tail_test(_) = {
+          //return the tail of the list
+          new NonEmptyList in {
+            LinkedList(1, NonEmptyList) | for(tl <- NonEmptyList) {
+              prepend(2, tl, NonEmptyList) | for(list <- NonEmptyList) {
+                new result1, result2, answer1, answer2 in {
+                  tail(list, result1) | tail(emptyList, result2) |
+                  answer1(tl) | answer2(Nil) |
+                  for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
+                    match [r1 == a1, r2 == a2] with [true, true] => {
+                      "Tail: Pass".display("\n")
+                    }
+                    _ => { "Tail: Fail".display("\n") }
+                  }
+                }
+              }
+            }
+          }
+        } |
+        contract prepend_test(_) = {
+          //create a new list with the supplied head attached
+          //to the supplied tail
+          new hd, tl, result in {
+            hd(1) | tl(emptyList) |
+            for(h <- hd; l <- tl) {
+              prepend(h, l, result) | for(r <- result) {
+                head(r, hd) | tail(r, tl) | 
+                for(rh <- hd; rl <- tl) {
+                  match [rh == h, rl == l] with [true, true] => {
+                    "Prepend: Pass".display("\n")
+                  }
+                  _ => { "Prepend: Fail".display("\n") }
+                }
+              }
+            }
+          }
+        } |
+        contract fold_test(_) = {
+          //left associative fold
+          new sum, rList, result in {
+            contract sum(head, accVal, return) = {
+              return(head + accVal)
+            } |
+            range(1, 10, rList) | for(list <- rList) {
+              fold(list, 0, sum, result) |
+              for(r <- result) {
+                match r == 45 with true => { "Fold: Pass".display("\n") }
+                _ => { "Fold: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract reverse_test(_) = {
+          //reverse the order of the elements in the list
+          new rangeList, reverseList, verifier in {
+            range(0, 10, rangeList) |  for(list <- rangeList) {
+              reverse(list, reverseList) | for(list2 <- reverseList) {
+                contract verifier(head, accVal, return) = {
+                  match accVal with [i, result] => {
+                    new newResult in {
+                      and(head == (9 - i), result, newResult) |
+                      for(nr <- newResult){ return([i + 1, nr]) }
+                    }
+                  }
+                } |
+                new vResult in {
+                  fold(list2, [0, true], verifier, vResult) |
+                  for(r <- vResult) {
+                    match r with [_, true] => { "Reverse: Pass".display("\n") }
+                    _ => { "Reverse: Fail".display("\n") }
+                  }
+                }
+              }
+            }
+          }
+        } |
+        contract foreach_test(_) = {
+          //run a procedure for each element in the list
+          new rangeList, increment, value, result in {
+            value(0) |
+            contract increment(x, isDone) = {
+              for(v <- value) {
+                value(v + x) | isDone(true)
+              }
+            } |
+            range(0, 10, rangeList) | for(list <- rangeList) {
+              foreach(list, increment, result) | for(r <- result; v <- value) {
+                match v == 45 with true => { "Foreach: Pass".display("\n") }
+                _ => { "Foreach: Pass".display("\n") }
+              }
+            }
+          }
+        } |
+        contract map_test(_) = {
+          //apply a function to each element in the list
+          new rangeList, verifier, vResult, doubler, mappedList in {
+            range(0, 10, rangeList) | 
+            contract doubler(x, return) = { return(2 * x) } |
+            contract verifier(head, accVal, return) = {
+              match accVal with [i, result] => {
+                new newResult in {
+                  and(head == (2 * i), result, newResult) |
+                  for(nr <- newResult){ return([i + 1, nr]) }
+                }
+              }
+            } |
+            for(list <- rangeList) {
+              map(list, doubler, mappedList) | for(mlist <- mappedList) {
+                fold(mlist, [0, true], verifier, vResult) |
+                for(r <- vResult) {
+                  match r with [_, true] => { "Map: Pass".display("\n") }
+                  _ => { "Map: Fail".display("\n") }
+                }
+              }
+            }
+          }
+        } |
+        contract get_test(_) = {
+          //get the element at (0-based) index i -- return Nil if out of bounds
+          new rangeList, result1, result2, answer1, answer2 in {
+            range(0, 10, rangeList) | for(list <- rangeList) {
+              get(list, 3, result1) | get(emptyList, 3, result2) |
+              answer1(3) | answer2(Nil) |
+              for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
+                match [r1 == a1, r2 == a2] with [true, true] => {
+                  "Get: Pass".display("\n")
+                }
+                _ => { "Get: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract indexOf_test(_) = {
+          //return the index of the given element in the list or -1 if not present
+          new rangeList, result1, result2, answer1, answer2 in {
+            range(0, 10, rangeList) | for(list <- rangeList) {
+              indexOf(list, 3, result1) | indexOf(emptyList, 3, result2) |
+              answer1(3) | answer2(-1) |
+              for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
+                match [r1 == a1, r2 == a2] with [true, true] => {
+                  "IndexOf: Pass".display("\n")
+                }
+                _ => { "IndexOf: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract length_test(_) = {
+          //return the number of elements in the list
+          new rangeList, result1, result2, answer1, answer2 in {
+            range(0, 10, rangeList) | for(list <- rangeList) {
+              length(list, result1) | length(emptyList, result2) |
+              answer1(10) | answer2(0) |
+              for(r1 <- result1; r2 <- result2; a1 <- answer1; a2 <- answer2) {
+                match [r1 == a1, r2 == a2] with [true, true] => {
+                  "Length: Pass".display("\n")
+                }
+                _ => { "Length: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract range_test(_) = {
+          //create a list of numbers from start (inclusive) to end (exclusive)
+          new rangeList, verifier, vResult in {
+            range(0, 10, rangeList) | 
+            contract verifier(head, accVal, return) = {
+              match accVal with [i, result] => {
+                new newResult in {
+                  and(head == i, result, newResult) |
+                  for(nr <- newResult){ return([i + 1, nr]) }
+                }
+              }
+            } |
+            for(list <- rangeList) {
+              fold(list, [0, true], verifier, vResult) |
+              for(r <- vResult) {
+                match r with [_, true] => { "Range: Pass".display("\n") }
+                _ => { "Range: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        contract LinkedList_test(_) = {
+          //should construct a list consisting of the given element
+          new result in {
+            LinkedList(1, result) | for(r <- result) {
+              match r with [hd, tl] => {
+                match [hd == 1, tl == emptyList] with [true, true] => {
+                  "LinkedList: Pass".display("\n")
+                }
+                _ => { "LinkedList: Fail".display("\n") }
+              }
+            }
+          }
+        } |
+        emptyList_test(Nil) |
+        head_test(Nil) |
+        tail_test(Nil) |
+        prepend_test(Nil) |
+        fold_test(Nil) |
+        reverse_test(Nil) |
+        foreach_test(Nil) |
+        map_test(Nil) |
+        get_test(Nil) |
+        indexOf_test(Nil) |
+        length_test(Nil) |
+        range_test(Nil) |
+        LinkedList_test(Nil)
+      }
+    }
+  }
+}

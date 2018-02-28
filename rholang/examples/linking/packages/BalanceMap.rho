@@ -1,0 +1,75 @@
+export BalanceMap in {
+  import IMapApi in {
+    new 
+      IMapEmptyMap, IMapUpdated, IMapGetOrElse
+    in {
+      IMapApi("EmptyMap", IMapEmptyMap) | IMapApi("GetOrElse", IMapGetOrElse) |
+      IMapApi("Updated", IMapUpdated) | 
+      for(
+          emptyMap <- IMapEmptyMap; getOrElse <- IMapGetOrElse;
+          updated <- IMapUpdated
+      ){
+        
+        contract BalanceMap(return) = {
+          new query, sub, add, transfer, dataStore, api in {
+            emptyMap(dataStore) |
+            contract query(key, return) = {
+              for(map <- dataStore) {
+                dataStore(map) | getOrElse(map, key, 0, return)
+              }
+            } |
+            contract sub(key, amount, success) = {
+              match amount > 0 with true => {
+                new balanceCh in {
+                  for(map <- dataStore) {
+                    getOrElse(map, key, 0, balanceCh) | for(balance <- balanceCh) {
+                      match balance >= amount with true => {
+                        updated(map, key, balance - amount, dataStore) |
+                        success(true)
+                      }
+                      _ => { dataStore(map) | success(false) }
+                    }
+                  }
+                }
+              }
+              _ => { success(false) }
+            } |
+            contract add(key, amount, success) = {
+              match amount > 0 with true => {
+                new balanceCh in {
+                  for(map <- dataStore) {
+                    getOrElse(map, key, 0, balanceCh) | for(balance <- balanceCh) {
+                      updated(map, key, balance + amount, dataStore) |
+                      success(true)
+                    }
+                  }
+                }
+              }
+              _ => { success(false) }
+            } |
+            contract transfer(from, to, amount, success) = {
+              new result in{
+                sub(from, amount, result) | for(r <- result) {
+                  match r with true => {
+                    add(to, amount, success)
+                  }
+                  _ => { success(false) }
+                }
+              }
+            } |
+            contract api(method, return) = {
+              match method with 
+                "BalanceOf" => { return(query) }
+                "Sub" => { return(sub) }
+                "Add" => { return(add) }
+                "Transfer" => { return(transfer) }
+                _ => { "Method: ".display(method, " not found!") | return(Nil) }
+            } |
+            return(api)
+          }
+        }
+      
+      }
+    }
+  }
+}

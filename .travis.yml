@@ -9,7 +9,9 @@ env:
 script:
   - ./scripts/build-subprojects.sh
 sudo: required
-install: ./scripts/install.sh
+install:
+  - ./scripts/install_secp.sh
+  - ./scripts/install.sh
 cache:
   directories:
     - "$HOME/.ivy2/cache"

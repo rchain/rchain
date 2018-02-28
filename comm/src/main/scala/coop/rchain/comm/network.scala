@@ -5,9 +5,12 @@ import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.kademlia.PeerTable
+import coop.rchain.comm.protocol.routing.Header
 import com.typesafe.scalalogging.Logger
 import scala.collection.mutable
 import scala.util.{Failure, Success}
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
 
 /**
   * Implements the lower levels of the network protocol.
@@ -181,28 +184,35 @@ final case class UnicastNetwork(peer: PeerNode,
     *
     * This method should be called in its own thread.
     */
-  override def roundTrip(
-      msg: ProtocolMessage,
-      remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage] =
-    msg.header match {
-      case Some(header) => {
+  override def roundTrip[F[_]: Capture: Monad](msg: ProtocolMessage,
+                                               remote: ProtocolNode,
+                                               timeout: Duration = Duration(500, MILLISECONDS))(
+      implicit err: ApplicativeError_[F, CommError]): F[ProtocolMessage] = {
+
+    def send(header: Header): F[ProtocolMessage] =
+      Capture[F].capture {
         val bytes   = msg.toByteSeq
         val pend    = PendingKey(remote.key, header.timestamp, header.seq)
         val promise = Promise[Either[CommError, ProtocolMessage]]
         pending.put(pend, promise)
-        try {
-          comm.send(bytes, remote)
-          Await.result(promise.future, timeout)
-        } catch {
-          case ex: Exception => Left(ProtocolException(ex))
-        } finally {
-          pending.remove(pend)
-          ()
-        }
-      }
-      case None => Left(UnknownProtocolError("malformed message"))
-    }
+        // TODO used to be in try
+        comm.send(bytes, remote)
+        val result = Await.result(promise.future, timeout)
+        // TODO used to by in finally
+        pending.remove(pend)
+        err.fromEither(result)
+      }.flatten
+
+    def fetchHeader(maybeHeader: Option[Header]): F[Header] =
+      maybeHeader.fold[F[Header]](
+        err.raiseError[Header](UnknownProtocolError("malformed message")))(_.pure[F])
+
+    for {
+      header  <- fetchHeader(msg.header)
+      message <- send(header)
+    } yield message
+
+  }
 
   receiver.start
 

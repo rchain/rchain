@@ -11,6 +11,15 @@ object Secp256k1 {
   * @param data The data which was signed, must be exactly 32 bytes
   * @param signature The signature
   * @param pub The public key which did the signing
+  * {{{
+  * >>> import coop.rchain.crypto.hash._
+  * >>> import coop.rchain.crypto.codec._
+  * >>> val data = Sha256.hash("testing".getBytes)
+  * >>> val sig = Base16.decode("3044022079BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F817980220294F14E883B3F525B5367756C2A11EF6CF84B730B36C17CB0C56F0AAB2C98589")
+  * >>> val pub = Base16.decode("040A629506E1B65CD9D2E0BA9C75DF9C4FED0DB16DC9625ED14397F0AFC836FAE595DC53F8B0EFE61E703075BD9B143BAC75EC0E19F82A2208CAEB32BE53414C40")
+  * >>> Secp256k1.verify(data, sig, pub)
+  * true
+  * }}}
   */
   def verify(
     data: Array[Byte], signature: Array[Byte], pub: Array[Byte]

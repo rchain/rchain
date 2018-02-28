@@ -7,9 +7,11 @@ export LinkedListApi in {
   in {
     contract Head(list, return) = {
       match list with [head, _] => { return(head) }
+      _ => { return(Nil) }
     } | 
     contract Tail(list, return) = {
       match list with [_, tail] => { return(tail) }
+      _ => { return(Nil) }
     } |
     contract Prepend(value, tail, return) = {
       return([value, tail])
@@ -85,7 +87,7 @@ export LinkedListApi in {
         Fold(list, Nil, combinator, nilReturn) | for(_ <- nilReturn){ isDone(true) }
       }
     } |
-    contract Get(index, list, return) = {
+    contract Get(list, index, return) = {
       new combinatorAndCondition in {
         contract combinatorAndCondition(head, accumulatedValue, return) = {
           match accumulatedValue with [i, _] => {
@@ -101,7 +103,7 @@ export LinkedListApi in {
         }
       }
     } |
-    contract IndexOf(value, list, return) = {
+    contract IndexOf(list, value, return) = {
       new combinatorAndCondition in {
         contract combinatorAndCondition(head, accumulatedValue, return) = {
           return([head == value, accumulatedValue + 1])

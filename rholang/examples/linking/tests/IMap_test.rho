@@ -1,0 +1,209 @@
+import IMapApi, TestSet in {
+  new 
+    IMapContains, IMapEmptyMap, IMapGet, IMapGetOrElse, IMapKeys,
+    IMapMapPairs, IMapMapValues, IMapUpdated, IMapUpdatedByPairs,
+    IMapValues
+  in {
+    IMapApi("Contains", IMapContains) | IMapApi("EmptyMap", IMapEmptyMap) | 
+    IMapApi("Get", IMapGet) | IMapApi("GetOrElse", IMapGetOrElse) | 
+    IMapApi("Keys", IMapKeys) | IMapApi("MapPairs", IMapMapPairs) | 
+    IMapApi("MapValues", IMapMapValues) | IMapApi("Updated", IMapUpdated) | 
+    IMapApi("UpdatedByPairs", IMapUpdatedByPairs) | IMapApi("Values", IMapValues) |
+    for(
+        contains <- IMapContains; emptyMap <- IMapEmptyMap; 
+        get <- IMapGet; getOrElse <- IMapGetOrElse; keys <- IMapKeys;
+        mapPairs <- IMapMapPairs; mapValues <- IMapMapValues; 
+        updated <- IMapUpdated; updatedByPairs <- IMapUpdatedByPairs; 
+        values <- IMapValues
+    ) {
+      new 
+        contains_test, emptyMap_test, get_test, getOrElse_test, keys_test,
+        mapPairs_test, mapValues_test, updated_test, updatedByPairs_test, values_test
+      in {
+        contract contains_test(_) = {
+          //returns true when the key is present in the map,
+          //false otherwise
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "Contains",
+                [
+                  [contains, [map, "one"], true],
+                  [contains, [map, "zero"], false],
+                  [contains, [map, 1], false],
+                  [contains, [emap, "any"], false]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract emptyMap_test(_) = {
+          ////EmptyMap == [[], []]
+          TestSet(
+            "EmptyMap",
+            [ [emptyMap, [], [[], []]] ],
+            Nil
+          )
+        } |
+        contract get_test(_) = {
+          //returns the value associated with the key,
+          //or Nil if the key is not present
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "Get",
+                [
+                  [get, [map, "one"], 1],
+                  [get, [map, "two"], 2],
+                  [get, [map, "zero"], Nil],
+                  [get, [emap, "any"], Nil]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract getOrElse_test(_) = {
+          //returns the value associated with the key,
+          //or the given default if the key is not present
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "GetOrElse",
+                [
+                  [getOrElse, [map, "one", 0], 1],
+                  [getOrElse, [map, "two", 0], 2],
+                  [getOrElse, [map, "zero", 0], 0],
+                  [getOrElse, [emap, "any", "!"], "!"]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract keys_test(_) = {
+          //returns the list of keys in the map
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "Keys",
+                [
+                  [keys, [map], ["one", "two", "three"]],
+                  [keys, [emap], []]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract mapPairs_test(_) = {
+          //apply a function to each key/value pair
+          //to create new key/value pairs
+          new mapCh, emapCh, f in {
+            contract f(x, return) = { match x with [k, v] => { return( [2 * k, 3 * v] ) } } |
+            mapCh([[1, 2, 3], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "MapPairs",
+                [
+                  [ mapPairs, [map, f], [[2, 4, 6], [3, 6, 9]] ],
+                  [ mapPairs, [emap, f], emap ]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract mapValues_test(_) = {
+          //apply a function to all the values in the map
+          new mapCh, emapCh, f in {
+            contract f(x, return) = { return(2 * x) } |
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "MapValues",
+                [
+                  [ mapValues, [map, f], [["one", "two", "three"], [2, 4, 6]] ],
+                  [ mapValues, [emap, f], emap ]
+                ],
+                Nil
+              )
+            }
+          }          
+        } |
+        contract updated_test(_) = {
+          //change the value of an existing key or
+          //add a new key with value
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "Updated",
+                [
+                  [ updated, [map, "two", 100], [["one", "three", "two"], [1, 3, 100]] ],
+                  [ updated, [emap, "zero", 0], [["zero"], [0]] ]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract updatedByPairs_test(_) = {
+          //repeated apply `updated` to a list of key/value pairs
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "UpdatedByPairs",
+                [
+                  [ updatedByPairs, [emap, [["one", 1], ["two", 2], ["three", 3]]], map ]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contract values_test(_) = {
+          //returns the list of values in the map
+          new mapCh, emapCh in {
+            mapCh([["one", "two", "three"], [1, 2, 3]]) |
+            emptyMap(emapCh) |
+            for(map <- mapCh; emap <- emapCh) {
+              TestSet(
+                "Values",
+                [
+                  [values, [map], [1, 2, 3]],
+                  [values, [emap], []]
+                ],
+                Nil
+              )
+            }
+          }
+        } |
+        contains_test(Nil) |
+        emptyMap_test(Nil) |
+        get_test(Nil) |
+        getOrElse_test(Nil) |
+        keys_test(Nil) |
+        mapPairs_test(Nil) |
+        mapValues_test(Nil) |
+        updated_test(Nil) |
+        updatedByPairs_test(Nil) |
+        values_test(Nil)
+      }
+    }
+  }
+}

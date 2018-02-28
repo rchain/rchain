@@ -3,13 +3,10 @@ package coop.rchain.p2p
 import coop.rchain.comm._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
-import coop.rchain.comm.protocol.routing
 import scala.util.control.NonFatal
-import com.google.protobuf.any.{Any => AnyProto}
 import com.typesafe.scalalogging.Logger
-
-sealed trait NetworkError
-final case class ParseError(msg: String) extends NetworkError
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
 
 /*
  * Inspiration from ethereum:
@@ -23,13 +20,7 @@ final case class ParseError(msg: String) extends NetworkError
 final case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
 
 case object NetworkAddress {
-
-  /**
-    * Parse a string address into a [[coop.rchain.comm.PeerNode]] or
-    * an error indicating that the string could not be parsed into a
-    * node address.
-    */
-  def parse(str: String): Either[ParseError, PeerNode] =
+  def parse(str: String): Either[CommError, PeerNode] =
     try {
       val uri = Uri.parse(str)
 
@@ -42,7 +33,7 @@ case object NetworkAddress {
         } yield NetworkAddress(scheme, key, host, port)
 
       addy match {
-        case Some(NetworkAddress(scheme, key, host, port)) =>
+        case Some(NetworkAddress(_, key, host, port)) =>
           Right(new PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
         case _ => Left(ParseError(s"bad address: $str"))
       }
@@ -51,8 +42,15 @@ case object NetworkAddress {
     }
 }
 
-final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.SocketAddress] {
-  val logger = Logger("p2p")
+class Network(
+    local: PeerNode,
+    keys: PublicPrivateKeys
+) extends ProtocolDispatcher[java.net.SocketAddress] {
+
+  import NetworkProtocol._
+
+  val logger   = Logger("p2p")
+  val iologger = IOLogger("p2p")
 
   val net = new UnicastNetwork(local, Some(this))
 
@@ -61,28 +59,29 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
     * the same language.
     */
-  def connect(peer: PeerNode): Unit = {
-    logger.debug(s"connect(): Connecting to $peer")
-    val ehs = EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(net.local),
-                                         System.currentTimeMillis)
-    val remote = new ProtocolNode(peer, this.net)
-    net.roundTrip(ehs, remote) match {
-      case Right(resp) => {
-        logger.debug(
-          s"connect(): Received encryption handshake response from ${resp.sender.get}.")
-        val phs = ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local),
-                                           System.currentTimeMillis)
-        net.roundTrip(phs, remote) match {
-          case Right(resp) => {
-            logger.debug(
-              s"connect(): Received protocol handshake response from ${resp.sender.get}.")
-            net.add(remote)
-          }
-          case Left(ex) => logger.warn(s"connect(): No phs response: $ex")
-        }
-      }
-      case Left(ex) => logger.warn(s"connect(): No ehs response: $ex")
+  def connect[F[_]: Capture: Monad](peer: PeerNode)(
+      implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
+      err: ApplicativeError_[F, CommError]): F[Unit] = {
+
+    import iologger._
+
+    for {
+      _          <- debug[F](s"Connecting to $peer")
+      ts1        <- IOUtil.currentMilis[F]
+      ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
+      remote     = new ProtocolNode(peer, this.net)
+      ehsrespmsg <- net.roundTrip[F](ehs, remote)
+      ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
+      _          <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
+      _          <- debug[F](s"Received encryption response from ${ehsrespmsg.sender.get}.")
+      ts2        <- IOUtil.currentMilis[F]
+      phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
+      phsresp    <- net.roundTrip[F](phs, remote)
+      _          <- debug[F](s"Received protocol handshake response from ${phsresp.sender.get}.")
+    } yield {
+      net.add(remote)
     }
+
   }
 
   def disconnect(): Unit = {
@@ -93,9 +92,7 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
 
   private def handleEncryptionHandshake(sender: PeerNode,
                                         handshake: EncryptionHandshakeMessage): Unit =
-    for {
-      resp <- handshake.response(net.local)
-    } {
+    handshake.response(net.local, keys).map { resp =>
       net.comm.send(resp.toByteSeq, sender) match {
         case Right(_) =>
           logger.info(s"Responded to encryption handshake request from $sender.")
@@ -104,11 +101,8 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
       }
     }
 
-  private def handleProtocolHandshake(sender: PeerNode,
-                                      handshake: ProtocolHandshakeMessage): Unit =
-    for {
-      resp <- handshake.response(net.local)
-    } {
+  private def handleProtocolHandshake(sender: PeerNode, handshake: ProtocolHandshakeMessage): Unit =
+    handshake.response(net.local).map { resp =>
       net.comm.send(resp.toByteSeq, sender) match {
         case Right(_) =>
           logger.info(s"Responded to protocol handshake request from $sender.")
@@ -122,9 +116,7 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
     }
 
   override def dispatch(sock: java.net.SocketAddress, msg: ProtocolMessage): Unit =
-    for {
-      sndr <- msg.sender
-    } {
+    msg.sender.map { sndr =>
       val sender =
         sock match {
           case (s: java.net.InetSocketAddress) =>
@@ -134,14 +126,16 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
 
       msg match {
         case upstream @ UpstreamMessage(proto, _) =>
-          for {
-            msg <- proto.message.upstream
-          } {
+          proto.message.upstream.map { msg =>
             msg.typeUrl match {
+              // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
+                val eh = msg.unpack(EncryptionHandshake)
+
                 handleEncryptionHandshake(
                   sender,
-                  EncryptionHandshakeMessage(proto, System.currentTimeMillis))
+                  EncryptionHandshakeMessage(proto, System.currentTimeMillis)) //FIX-ME
+              // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
                 handleProtocolHandshake(sender,
                                         ProtocolHandshakeMessage(proto, System.currentTimeMillis))
@@ -161,41 +155,3 @@ final case class Network(local: PeerNode) extends ProtocolDispatcher[java.net.So
 
   override def toString = s"#{Network ${local.toAddress}}"
 }
-
-object NetworkProtocol {
-  def encryptionHandshake(src: ProtocolNode): routing.Protocol =
-    ProtocolMessage.upstreamMessage(src, AnyProto.pack(EncryptionHandshake()))
-
-  def encryptionHandshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(EncryptionHandshakeResponse()))
-
-  def protocolHandshake(src: ProtocolNode): routing.Protocol =
-    ProtocolMessage.upstreamMessage(src, AnyProto.pack(ProtocolHandshake()))
-
-  def protocolHandshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(ProtocolHandshakeResponse()))
-}
-
-final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield
-      EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h),
-                                         System.currentTimeMillis)
-}
-final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse
-
-final case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
-    for {
-      h <- header
-    } yield
-      ProtocolHandshakeResponseMessage(NetworkProtocol.protocolHandshakeResponse(src, h),
-                                       System.currentTimeMillis)
-}
-final case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse
