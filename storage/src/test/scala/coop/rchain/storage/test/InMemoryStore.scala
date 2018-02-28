@@ -42,7 +42,7 @@ class InMemoryStore[C, P, A, K] private (
     val key = hashC(channels)
     putCs(txn, channels)
     val as = _as.getOrElseUpdate(key, List.empty[A])
-    _as.update(key, a +: as)
+    _as.update(key, scala.util.Random.shuffle(a +: as))
   }
 
   def putK(txn: Unit, channels: List[C], patterns: List[P], k: K): Unit = {

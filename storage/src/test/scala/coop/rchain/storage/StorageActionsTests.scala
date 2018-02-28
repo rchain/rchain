@@ -84,7 +84,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("goodbye", "hello")
+      store.getAs(txn, key) should contain theSameElementsAs List("goodbye", "hello")
       store.getK(txn, key) shouldBe None
     }
 
@@ -167,7 +167,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     runK(r2)
 
-    results.toList shouldBe List(List("world"))
+    results should contain theSameElementsAs List(List("world"))
   }
 
   "producing on three different channels and then consuming once on all three" should
@@ -229,7 +229,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     runK(r4)
 
-    results.toList shouldBe List(List("world", "hello", "goodbye"))
+    results should contain theSameElementsAs List(List("world", "hello", "goodbye"))
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
@@ -262,7 +262,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getK(txn, key) shouldBe None
     }
 
-    results shouldBe List(List("goodbye"), List("hello"), List("world"))
+    results should contain theSameElementsAs List(List("goodbye"), List("hello"), List("world"))
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
@@ -278,7 +278,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     List(r1, r2, r3).foreach(runK)
 
-    results shouldBe List(List("world"))
+    results should contain theSameElementsAs List(List("world"))
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
@@ -302,7 +302,8 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
       List(r2, r3).foreach(runK)
 
-      results.toList shouldBe List(List("This is some data"), List("This is some other data"))
+      results should contain theSameElementsAs List(List("This is some data"),
+                                                    List("This is some other data"))
   }
 
   "consuming and producing with non-trivial matches" should
@@ -323,7 +324,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getAs(txn, List("hello")) shouldBe Nil
     }
 
-    results.toList shouldBe List(List("This is some data"))
+    results should contain theSameElementsAs List(List("This is some data"))
   }
 
   "consuming twice and producing twice with non-trivial matches" should
@@ -346,8 +347,8 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getAs(txn, List("world")) shouldBe Nil
     }
 
-    results1.toList shouldBe List(List("This is some data"))
-    results2.toList shouldBe List(List("This is some other data"))
+    results1 should contain theSameElementsAs List(List("This is some data"))
+    results2 should contain theSameElementsAs List(List("This is some other data"))
   }
 
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels" should
@@ -373,8 +374,8 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
         store.getAs(txn, List("goodbye")) shouldBe Nil
       }
 
-      results1.toList shouldBe List(List("This is some data"))
-      results2.toList shouldBe List(List("This is some other data"))
+      results1 should contain theSameElementsAs List(List("This is some data"))
+      results2 should contain theSameElementsAs List(List("This is some other data"))
     }
 
   "the hello world example" should "work" in withTestStore { store =>
@@ -395,7 +396,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getAs(txn, List("helloworld")) shouldBe Nil
     }
 
-    results.toList shouldBe List(List("Hello World"))
+    results should contain theSameElementsAs List(List("Hello World"))
   }
 }
 
