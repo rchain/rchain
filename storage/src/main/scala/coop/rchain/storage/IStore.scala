@@ -59,5 +59,5 @@ trait IStore[C, P, A, K] {
   // compare to store.joinMap.remove
   def removeAllJoins(txn: T, c: C): Unit
 
-  def close()
+  def close(): Unit
 }
