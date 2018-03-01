@@ -115,12 +115,11 @@ final case class UnicastNetwork(peer: PeerNode,
       for {
         _ <- Capture[F].capture(table.observe(new ProtocolNode(sender, this), next == None))
         _ <- msg match {
-              case ping @ PingMessage(_, _)     => Capture[F].capture(handlePing(sender, ping))
-              case lookup @ LookupMessage(_, _) => Capture[F].capture(handleLookup(sender, lookup))
-              case disconnect @ DisconnectMessage(_, _) =>
-                Capture[F].capture(handleDisconnect(sender, disconnect))
-              case resp: ProtocolResponse => handleResponse[F](sock, sender, resp)
-              case _                      => next.traverse(d => d.dispatch[F](sock, msg)).void
+              case ping @ PingMessage(_, _)             => Capture[F].capture(handlePing(sender, ping))
+              case lookup @ LookupMessage(_, _)         => Capture[F].capture(handleLookup(sender, lookup))
+              case disconnect @ DisconnectMessage(_, _) => handleDisconnect[F](sender, disconnect)
+              case resp: ProtocolResponse               => handleResponse[F](sock, sender, resp)
+              case _                                    => next.traverse(d => d.dispatch[F](sock, msg)).void
             }
       } yield ()
 
@@ -177,10 +176,12 @@ final case class UnicastNetwork(peer: PeerNode,
   /**
     * Remove sending peer from table.
     */
-  private def handleDisconnect(sender: PeerNode, disconnect: DisconnectMessage): Unit = {
-    logger.info(s"Forgetting about $sender.")
-    table.remove(sender.key)
-  }
+  private def handleDisconnect[F[_]: Monad: Capture: Log](sender: PeerNode,
+                                                          disconnect: DisconnectMessage): F[Unit] =
+    for {
+      _ <- Log[F].info(s"Forgetting about $sender.")
+      _ <- Capture[F].capture(table.remove(sender.key))
+    } yield ()
 
   /**
     * Broadcast a message to all peers in the Kademlia table.
