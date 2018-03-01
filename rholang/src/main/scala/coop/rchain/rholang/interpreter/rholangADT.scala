@@ -4,6 +4,7 @@
 
 package coop.rchain.rholang.interpreter
 
+import scala.collection.immutable.BitSet
 import scala.language.implicitConversions
 
 case class Par(
@@ -14,40 +15,53 @@ case class Par(
     news: List[New],
     exprs: List[Expr],
     matches: List[Match],
-    freeCount: Int // Makes pattern matching faster.
+    freeCount: Int, // Makes pattern matching faster.
+    locallyFree: BitSet
 ) {
   def this() =
-    this(List(), List(), List(), List(), List(), List(), 0)
+    this(List(), List(), List(), List(), List(), List(), 0, BitSet())
   // Single element convenience constructors
   def this(s: Send) =
-    this(List(s), List(), List(), List(), List(), List(), s.freeCount)
+    this(List(s), List(), List(), List(), List(), List(), s.freeCount, s.locallyFree)
   def this(r: Receive) =
-    this(List(), List(r), List(), List(), List(), List(), r.freeCount)
+    this(List(), List(r), List(), List(), List(), List(), r.freeCount, r.locallyFree)
   def this(e: Eval) =
-    this(List(), List(), List(e), List(), List(), List(), e.freeCount)
+    this(List(), List(), List(e), List(), List(), List(), e.freeCount, e.locallyFree)
   def this(n: New) =
-    this(List(), List(), List(), List(n), List(), List(), n.freeCount)
+    this(List(), List(), List(), List(n), List(), List(), n.freeCount, n.locallyFree)
   def this(e: Expr) =
-    this(List(), List(), List(), List(), List(e), List(), e.freeCount)
+    this(List(), List(), List(), List(), List(e), List(), e.freeCount, e.locallyFree)
   def this(m: Match) =
-    this(List(), List(), List(), List(), List(), List(m), m.freeCount)
+    this(List(), List(), List(), List(), List(), List(m), m.freeCount, m.locallyFree)
 
   // Convenience prepend methods
   def prepend(s: Send): Par =
-    this.copy(sends = s :: this.sends, freeCount = this.freeCount + s.freeCount)
+    this.copy(sends = s :: this.sends,
+              freeCount = this.freeCount + s.freeCount,
+              locallyFree = this.locallyFree | s.locallyFree)
   def prepend(r: Receive): Par =
-    this.copy(receives = r :: this.receives, freeCount = this.freeCount + r.freeCount)
+    this.copy(receives = r :: this.receives,
+              freeCount = this.freeCount + r.freeCount,
+              locallyFree = this.locallyFree | r.locallyFree)
   def prepend(e: Eval): Par =
-    this.copy(evals = e :: this.evals, freeCount = this.freeCount + e.freeCount)
+    this.copy(evals = e :: this.evals,
+              freeCount = this.freeCount + e.freeCount,
+              locallyFree = this.locallyFree | e.locallyFree)
   def prepend(n: New): Par =
-    this.copy(news = n :: this.news, freeCount = this.freeCount + n.freeCount)
+    this.copy(news = n :: this.news,
+              freeCount = this.freeCount + n.freeCount,
+              locallyFree = this.locallyFree | n.locallyFree)
   def prepend(e: Expr): Par =
-    this.copy(exprs = e :: this.exprs, freeCount = this.freeCount + e.freeCount)
+    this.copy(exprs = e :: this.exprs,
+              freeCount = this.freeCount + e.freeCount,
+              locallyFree = this.locallyFree | e.locallyFree)
   def prepend(m: Match): Par =
-    this.copy(matches = m :: this.matches, freeCount = this.freeCount + m.freeCount)
+    this.copy(matches = m :: this.matches,
+              freeCount = this.freeCount + m.freeCount,
+              locallyFree = this.locallyFree | m.locallyFree)
 
   def singleEval(): Option[Eval] =
-    if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
+    if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty && matches.isEmpty) {
       evals match {
         case List(single) => Some(single)
         case _            => None
@@ -57,7 +71,7 @@ case class Par(
     }
 
   def singleNew(): Option[New] =
-    if (sends.isEmpty && receives.isEmpty && evals.isEmpty && exprs.isEmpty) {
+    if (sends.isEmpty && receives.isEmpty && evals.isEmpty && exprs.isEmpty && matches.isEmpty) {
       news match {
         case List(single) => Some(single)
         case _            => None
@@ -67,13 +81,16 @@ case class Par(
     }
 
   def merge(that: Par) =
-    Par(that.sends ++ sends,
-        that.receives ++ receives,
-        that.evals ++ evals,
-        that.news ++ news,
-        that.exprs ++ exprs,
-        that.matches ++ matches,
-        that.freeCount + freeCount)
+    Par(
+      that.sends ++ sends,
+      that.receives ++ receives,
+      that.evals ++ evals,
+      that.news ++ news,
+      that.exprs ++ exprs,
+      that.matches ++ matches,
+      that.freeCount + freeCount,
+      that.locallyFree | locallyFree
+    )
 }
 
 object Par {
@@ -95,12 +112,15 @@ object Par {
 
 sealed trait Channel {
   def freeCount: Int
+  def locallyFree: BitSet
 }
 case class Quote(p: Par) extends Channel {
-  def freeCount: Int = p.freeCount
+  def freeCount: Int      = p.freeCount
+  def locallyFree: BitSet = p.locallyFree
 }
 case class ChanVar(cvar: Var) extends Channel {
-  def freeCount: Int = cvar.freeCount
+  def freeCount: Int      = cvar.freeCount
+  def locallyFree: BitSet = cvar.locallyFree
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -109,9 +129,11 @@ case class ChanVar(cvar: Var) extends Channel {
 // These are DeBruijn levels
 sealed trait Var {
   def freeCount: Int
+  def locallyFree: BitSet
 }
 case class BoundVar(level: Int) extends Var {
-  def freeCount: Int = 0
+  def freeCount: Int      = 0
+  def locallyFree: BitSet = BitSet(level)
 }
 // Wildcards are represented as bound variables. The initial normalization will
 // not produce uses of the variable, but for (_ <- x) P is the same as
@@ -122,12 +144,17 @@ case class BoundVar(level: Int) extends Var {
 
 // In the DeBruijn level paper, they use negatives, but this is more clear.
 case class FreeVar(level: Int) extends Var {
-  def freeCount: Int = 1
+  def freeCount: Int      = 1
+  def locallyFree: BitSet = BitSet()
 }
 
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
-case class Send(chan: Channel, data: List[Par], persistent: Boolean, freeCount: Int)
+case class Send(chan: Channel,
+                data: List[Par],
+                persistent: Boolean,
+                freeCount: Int,
+                locallyFree: BitSet)
 
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
@@ -137,96 +164,119 @@ case class Receive(binds: List[(List[Channel], Channel)],
                    body: Par,
                    persistent: Boolean,
                    bindCount: Int,
-                   freeCount: Int)
+                   freeCount: Int,
+                   locallyFree: BitSet)
 
 case class Eval(channel: Channel) {
-  def freeCount: Int = channel.freeCount
+  def freeCount: Int      = channel.freeCount
+  def locallyFree: BitSet = channel.locallyFree
 }
 
 // Number of variables bound in the new statement.
 // For normalized form, p should not contain solely another new.
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
-case class New(bindCount: Int, p: Par) {
+case class New(bindCount: Int, p: Par, locallyFree: BitSet) {
   def freeCount: Int = p.freeCount
 }
 
-case class Match(value: Par, cases: List[(Par, Par)], freeCount: Int)
+case class Match(value: Par, cases: List[(Par, Par)], freeCount: Int, locallyFree: BitSet)
 
 // Any process may be an operand to an expression.
 // Only processes equivalent to a ground process of compatible type will reduce.
 sealed trait Expr {
   def freeCount: Int
+  def locallyFree: BitSet
 }
-sealed trait Ground                                    extends Expr
-case class EList(ps: List[Par], freeCount: Int)        extends Ground
-case class ETuple(ps: List[Par], freeCount: Int)       extends Ground
-case class ESet(ps: List[Par], freeCount: Int)         extends Ground
-case class EMap(kvs: List[(Par, Par)], freeCount: Int) extends Ground
+sealed trait Ground                                                         extends Expr
+case class EList(ps: List[Par], freeCount: Int, locallyFree: BitSet)        extends Ground
+case class ETuple(ps: List[Par], freeCount: Int, locallyFree: BitSet)       extends Ground
+case class ESet(ps: List[Par], freeCount: Int, locallyFree: BitSet)         extends Ground
+case class EMap(kvs: List[(Par, Par)], freeCount: Int, locallyFree: BitSet) extends Ground
 // A variable used as a var should be bound in a process context, not a name
 // context. For example:
 // for (@x <- c1; @y <- c2) { z!(x + y) } is fine, but
 // for (x <- c1; y <- c2) { z!(x + y) } should raise an error.
 case class EVar(v: Var) extends Expr {
-  def freeCount: Int = v.freeCount
+  def freeCount: Int      = v.freeCount
+  def locallyFree: BitSet = v.locallyFree
 }
 case class ENot(p: Par) extends Expr {
-  def freeCount: Int = p.freeCount
+  def freeCount: Int      = p.freeCount
+  def locallyFree: BitSet = p.locallyFree
 }
 case class ENeg(p: Par) extends Expr {
-  def freeCount: Int = p.freeCount
+  def freeCount: Int      = p.freeCount
+  def locallyFree: BitSet = p.locallyFree
 }
 case class EMult(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EDiv(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EPlus(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EMinus(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class ELt(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class ELte(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EGt(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EGte(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EEq(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class ENeq(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EAnd(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 case class EOr(p1: Par, p2: Par) extends Expr {
-  def freeCount: Int = p1.freeCount + p2.freeCount
+  def freeCount: Int      = p1.freeCount + p2.freeCount
+  def locallyFree: BitSet = p1.locallyFree | p2.locallyFree
 }
 
 case class GBool(b: Boolean) extends Ground {
-  def freeCount: Int = 0
+  def freeCount: Int      = 0
+  def locallyFree: BitSet = BitSet()
 }
 case class GInt(i: Integer) extends Ground {
-  def freeCount: Int = 0
+  def freeCount: Int      = 0
+  def locallyFree: BitSet = BitSet()
 }
 case class GString(s: String) extends Ground {
-  def freeCount: Int = 0
+  def freeCount: Int      = 0
+  def locallyFree: BitSet = BitSet()
 }
 case class GUri(u: String) extends Ground {
-  def freeCount: Int = 0
+  def freeCount: Int      = 0
+  def locallyFree: BitSet = BitSet()
 }
 // These should only occur as the program is being evaluated. There is no way in
 // the grammar to construct them.
 case class GPrivate(p: String) extends Ground {
-  def freeCount: Int = 0
+  def freeCount: Int      = 0
+  def locallyFree: BitSet = BitSet()
 }

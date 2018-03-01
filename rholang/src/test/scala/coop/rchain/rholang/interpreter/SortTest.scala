@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import org.scalatest._
+import scala.collection.immutable.BitSet
 
 class ScoredTermSpec extends FlatSpec with Matchers {
   "ScoredTerm" should "Sort so that shorter nodes come first" in {
@@ -134,12 +135,12 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 ESet(
                   List(
                     p.copy(exprs=List(GInt(1))),
-                    p.copy(exprs=List(GInt(2)))), 0))),
+                    p.copy(exprs=List(GInt(2)))), 0, BitSet()))),
               p.copy(exprs=List(
                 ESet(
                   List(
                     p.copy(exprs=List(GInt(1))),
-                    p.copy(exprs=List(GInt(1)))), 0)))), 0)))
+                    p.copy(exprs=List(GInt(1)))), 0, BitSet())))), 0, BitSet())))
     val sortedParGround =
       p.copy(exprs=
         List(
@@ -150,12 +151,12 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               p.copy(exprs=List(
                 ESet(
                   List(
-                    p.copy(exprs=List(GInt(1)))), 0))),
+                    p.copy(exprs=List(GInt(1)))), 0, BitSet()))),
               p.copy(exprs=List(
                 ESet(
                   List(
                     p.copy(exprs=List(GInt(1))),
-                    p.copy(exprs=List(GInt(2)))), 0)))), 0)))
+                    p.copy(exprs=List(GInt(2)))), 0, BitSet())))), 0, BitSet())))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be (sortedParGround)
   }
@@ -171,13 +172,13 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 ESet(
                   List(
                     p.copy(exprs=List(GInt(1))),
-                    p.copy(exprs=List(GInt(1)))), 0))),
+                    p.copy(exprs=List(GInt(1)))), 0, BitSet()))),
               p.copy(exprs=List(GInt(2))),
               p.copy(exprs=List(
                 ESet(
                   List(
                     p.copy(exprs=List(GInt(1))),
-                    p.copy(exprs=List(GInt(1)))), 0)))), 0)))
+                    p.copy(exprs=List(GInt(1)))), 0, BitSet())))), 0, BitSet())))
     val deduplicatedParGround =
       p.copy(exprs=
         List(
@@ -187,7 +188,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               p.copy(exprs=List(
                 ESet(
                   List(
-                    p.copy(exprs=List(GInt(1)))), 0)))), 0)))
+                    p.copy(exprs=List(GInt(1)))), 0, BitSet())))), 0, BitSet())))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be (deduplicatedParGround)
   }
@@ -204,13 +205,13 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                   ESet(
                     List(
                       p.copy(exprs=List(GInt(2))),
-                      p.copy(exprs=List(GInt(1)))), 0)))),
+                      p.copy(exprs=List(GInt(1)))), 0, BitSet())))),
               (
                 p.copy(exprs=List(GInt(2))),
                 p.copy(exprs=List(GInt(1)))),
               (
                 p.copy(exprs=List(GInt(1))),
-                p.copy(exprs=List(GInt(1))))), 0)))
+                p.copy(exprs=List(GInt(1))))), 0, BitSet())))
     val sortedParGround =
       p.copy(exprs=
         List(
@@ -221,7 +222,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 p.copy(exprs=List(GInt(1)))),
               (
                 p.copy(exprs=List(GInt(2))),
-                p.copy(exprs=List(GInt(1))))), 0)))
+                p.copy(exprs=List(GInt(1))))), 0, BitSet())))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be (sortedParGround)
   }
@@ -373,38 +374,38 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
             List(p.copy(exprs=List(GInt(3)))),
-            false, 0),
+            false, 0, BitSet()),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
             List(p.copy(exprs=List(GInt(3)))),
-            true, 0),
+            true, 0, BitSet()),
           Send(
             Quote(p.copy(exprs=List(GInt(4)))),
             List(p.copy(exprs=List(GInt(2)))),
-            false, 0),
+            false, 0, BitSet()),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
             List(p.copy(exprs=List(GInt(2)))),
-            false, 0)))
+            false, 0, BitSet())))
     val sortedParExpr =
       p.copy(sends=
         List(
           Send(
             Quote(p.copy(exprs=List(GInt(4)))),
             List(p.copy(exprs=List(GInt(2)))),
-            false, 0),
+            false, 0, BitSet()),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
             List(p.copy(exprs=List(GInt(2)))),
-            false, 0),
+            false, 0, BitSet()),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
             List(p.copy(exprs=List(GInt(3)))),
-            false, 0),
+            false, 0, BitSet()),
           Send(
             Quote(p.copy(exprs=List(GInt(5)))),
             List(p.copy(exprs=List(GInt(3)))),
-            true, 0)))
+            true, 0, BitSet())))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
   }
@@ -419,35 +420,35 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 List(
                   Quote(p.copy(exprs=List(GInt(1))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            Par(), false, 0, 0),
+            Par(), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            p.copy(exprs = List(EVar(BoundVar(0)))), false, 0, 0),
+            p.copy(exprs = List(EVar(BoundVar(0)))), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            Par(), false, 0, 0),
+            Par(), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            Par(), true, 0, 0),
+            Par(), true, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(100))))),
                 Quote(p.copy(exprs=List(GInt(2)))))),
-            Par(), false, 0, 0)))
+            Par(), false, 0, 0, BitSet())))
     val sortedParExpr =
       p.copy(receives=
         List(
@@ -457,35 +458,35 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
                 List(
                   Quote(p.copy(exprs=List(GInt(100))))),
                 Quote(p.copy(exprs=List(GInt(2)))))),
-            Par(), false, 0, 0),
+            Par(), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            Par(), false, 0, 0),
+            Par(), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            p.copy(exprs = List(EVar(BoundVar(0)))), false, 0, 0),
+            p.copy(exprs = List(EVar(BoundVar(0)))), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(1))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            Par(), false, 0, 0),
+            Par(), false, 0, 0, BitSet()),
           Receive(
             List(
               (
                 List(
                   Quote(p.copy(exprs=List(GInt(0))))),
                 Quote(p.copy(exprs=List(GInt(3)))))),
-            Par(), true, 0, 0)))
+            Par(), true, 0, 0, BitSet())))
     val result = ParSortMatcher.sortMatch(parExpr)
     result.term should be (sortedParExpr)
   }
@@ -497,15 +498,15 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Match(
             GInt(5),
             List((GInt(5), GInt(5)),
-                 (GInt(4), GInt(4))), 0),
+                 (GInt(4), GInt(4))), 0, BitSet()),
           Match(
             GBool(true),
             List((GInt(5), GInt(5)),
-                 (GInt(4), GInt(4))), 0),
+                 (GInt(4), GInt(4))), 0, BitSet()),
           Match(
             GBool(true),
             List((GInt(4), GInt(4)),
-                 (GInt(3), GInt(3))), 0)
+                 (GInt(3), GInt(3))), 0, BitSet())
           ))
     val sortedParMatch =
       p.copy(matches=
@@ -513,15 +514,15 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Match(
             GBool(true),
             List((GInt(4), GInt(4)),
-              (GInt(3), GInt(3))), 0),
+              (GInt(3), GInt(3))), 0, BitSet()),
           Match(
             GBool(true),
             List((GInt(5), GInt(5)),
-              (GInt(4), GInt(4))), 0),
+              (GInt(4), GInt(4))), 0, BitSet()),
           Match(
             GInt(5),
             List((GInt(5), GInt(5)),
-              (GInt(4), GInt(4))), 0)
+              (GInt(4), GInt(4))), 0, BitSet())
         ))
     val result = ParSortMatcher.sortMatch(parMatch)
     result.term should be (sortedParMatch)
