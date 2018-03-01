@@ -116,7 +116,7 @@ final case class UnicastNetwork(peer: PeerNode,
         _ <- Capture[F].capture(table.observe(new ProtocolNode(sender, this), next == None))
         _ <- msg match {
               case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
-              case lookup @ LookupMessage(_, _)         => Capture[F].capture(handleLookup(sender, lookup))
+              case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
               case disconnect @ DisconnectMessage(_, _) => handleDisconnect[F](sender, disconnect)
               case resp: ProtocolResponse               => handleResponse[F](sock, sender, resp)
               case _                                    => next.traverse(d => d.dispatch[F](sock, msg)).void
@@ -128,6 +128,7 @@ final case class UnicastNetwork(peer: PeerNode,
     dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender"))
   }
 
+  // TODO duplicated in p2p.scala, unify
   def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
 
   /*
@@ -164,13 +165,13 @@ final case class UnicastNetwork(peer: PeerNode,
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup(sender: PeerNode, lookup: LookupMessage): Unit =
-    for {
+  private def handleLookup[F[_]: Monad: Capture: Log](sender: PeerNode,
+                                                      lookup: LookupMessage): F[Unit] =
+    (for {
       id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
-    } {
-      comm.send(resp.toByteSeq, sender)
-    }
+    } yield Capture[F].capture(comm.send(resp.toByteSeq, sender)).void)
+      .getOrElse(Log[F].error(s"lookupId or resp not available for lookup: $lookup"))
 
   /**
     * Remove sending peer from table.
