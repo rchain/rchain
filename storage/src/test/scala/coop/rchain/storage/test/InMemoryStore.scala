@@ -105,7 +105,7 @@ object InMemoryStore {
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
 
-  def create[C, P, A, K]()(implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _keys = mutable.HashMap.empty[String, List[C]],
       _ps = mutable.HashMap.empty[String, List[P]],

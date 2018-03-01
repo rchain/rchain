@@ -401,4 +401,5 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 }
 
 class InMemoryStoreStorageActionsTests
-    extends StorageActionsTests(InMemoryStore.create[String, Pattern, String, List[String] => Unit])
+    extends StorageActionsTests(
+      () => InMemoryStore.create[String, Pattern, String, List[String] => Unit])
