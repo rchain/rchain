@@ -514,51 +514,34 @@ object VirtualMachine {
         .set(_ >> 'xmitData)((op.unwind, op.next))
         .set(_ >> 'doXmitFlag)(true))
 
-  def execute(op: OpApplyPrimTag): VMTransition[Unit] = modify { state =>
-    val location = state.code.lit(op.lit).asInstanceOf[Location]
+  def execute(op: OpApplyPrimTag): VMTransition[Unit] =
+    for {
+      state <- State.get[VMState]
+      loc = state.code.lit(op.lit).asInstanceOf[Location]
 
-    state
-      .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-      .set(_ >> 'loc)(location)
-      .updateSelf(state => {
-        val prim = Prim.nthPrim(op.primNum)
+      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
+      _ <- modify(_.set(_ >> 'loc)(loc))
 
-        val (result, st0) =
-          // TODO: Remove get
-          if (op.unwind) {
-            unwindAndApplyPrim(prim.get, state)
-          } else {
-            // TODO: Fix
-            (prim.get.dispatchHelper(state.ctxt), state)
-          }
+      prim = Prim.nthPrim(op.primNum)
+      result <- runPrim(op.unwind, prim)
 
-        result match {
-          case Right(ob) =>
-            if (ob.is(Ob.OTsysval)) {
-              handleException(ob, op, st0.loc)
-              st0.set(_ >> 'doNextThreadFlag)(true)
-            } else {
-              /*
-              Location
-                .store(newState.loc, newState.ctxt, newState.globalEnv, ob) match {
-                case StoreFail => newState.set(_ >> 'vmErrorFlag)(true)
-
-                case StoreCtxt(ctxt) =>
-                  newState
-                    .set(_ >> 'ctxt)(ctxt)
-                    .update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
-
-                case StoreGlobal(env) => newState.set(_ >> 'globalEnv)(env)
+      _ <- handlePrimResult(
+        result,
+        ob =>
+          Location
+            .store(loc, ob)
+            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+            .transform { (vmState, storeResult) =>
+              storeResult match {
+                case Success =>
+                  (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
+                case Failure =>
+                  (vmState.copy(exitFlag = true, exitCode = 1), ())
               }
-               */
-              st0
-            }
+          }
+      )
 
-          case Left(DeadThread) =>
-            st0.set(_ >> 'doNextThreadFlag)(true)
-        }
-      })
-  }
+    } yield ()
 
   def execute(op: OpApplyPrimArg): VMTransition[Unit] =
     for {
