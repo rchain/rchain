@@ -78,8 +78,8 @@ class InMemoryStore[C, P, A, K] private (
     val key = hashC(channels)
     for (ps <- _ps.get(key)) {
       _ps.update(key, dropIndex(ps, index))
-      _k.remove(key)
     }
+    _k.remove(key)
   }
 
   def addJoin(txn: T, c: C, cs: List[C]): Unit =
