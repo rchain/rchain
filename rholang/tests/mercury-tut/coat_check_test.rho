@@ -1,0 +1,59 @@
+new testResult, updateTestResult in {
+  testResult!(true) |
+  contract updateTestResult(@bool, return) = {
+    for(r <- testResult) {
+      match [r, bool] with [true, true] => { testResult!(true) | return!(true) }
+      _ => { testResult!(false) | return!(false) }
+    }
+  } |
+  contract @"CoatCheckDemo"(_) = new MakeCoatCheck in {
+    contract MakeCoatCheck(ret) = {
+      new port, table in {
+        ret!(*port) |
+        for (@method, @arg1, @arg2, ack <= port) {
+          match method with 
+            "new" => new ticket in {
+              ack!(*ticket) |
+              @(*ticket | *table)!(arg1)
+            }
+            "get" => {
+              for (@value <- @(*arg1 | *table)) {
+                @(*arg1 | *table)!(value) |
+                ack!(value)
+              }
+            }
+            "set" => {
+              for (_ <- @(*arg1 | *table)) {
+                @(*arg1 | *table)!(arg2) |
+                ack!(true)
+              }
+            }
+        }
+      }
+    } |
+
+    // Usage
+    new ret in {
+      MakeCoatCheck(ret) |
+      for (cc <- ret) {
+        // Creates new cell with initial value 0
+        cc!("new", 0, Nil, *ret) |
+        for (ticket <- ret) {
+          contract get(return) = { cc!("get", *ticket, Nil, *return) } |
+          contract set(@value, return) = { cc!("set", *ticket, value, *return) } |
+          
+          get(*ret) | for(@r <- ret) {
+            updateTestResult!(r == 0, *ret) | for(_ <- ret){
+              set(1, *ret) | for(_ <- ret) {
+                get(*ret) | for(@r <- ret) {
+                  updateTestResult!(r == 1, *ret)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } |
+  @"CoatCheckDemo"!(Nil)
+}
