@@ -14,23 +14,26 @@ case class Par(
     news: List[New],
     exprs: List[Expr],
     matches: List[Match],
-    freeCount: Int // Makes pattern matching faster.
+    id: List[GPrivate],
+    freeCount: Int // Makes pattern matching faster.,
 ) {
   def this() =
-    this(List(), List(), List(), List(), List(), List(), 0)
+    this(List(), List(), List(), List(), List(), List(), List(), 0)
   // Single element convenience constructors
   def this(s: Send) =
-    this(List(s), List(), List(), List(), List(), List(), s.freeCount)
+    this(List(s), List(), List(), List(), List(), List(), List(), s.freeCount)
   def this(r: Receive) =
-    this(List(), List(r), List(), List(), List(), List(), r.freeCount)
+    this(List(), List(r), List(), List(), List(), List(), List(), r.freeCount)
   def this(e: Eval) =
-    this(List(), List(), List(e), List(), List(), List(), e.freeCount)
+    this(List(), List(), List(e), List(), List(), List(), List(), e.freeCount)
   def this(n: New) =
-    this(List(), List(), List(), List(n), List(), List(), n.freeCount)
+    this(List(), List(), List(), List(n), List(), List(), List(), n.freeCount)
   def this(e: Expr) =
-    this(List(), List(), List(), List(), List(e), List(), e.freeCount)
+    this(List(), List(), List(), List(), List(e), List(), List(), e.freeCount)
   def this(m: Match) =
-    this(List(), List(), List(), List(), List(), List(m), m.freeCount)
+    this(List(), List(), List(), List(), List(), List(m), List(), m.freeCount)
+  def this(gPrivate: GPrivate) =
+    this(List(), List(), List(), List(), List(), List(), List(gPrivate), 0)
 
   // Convenience prepend methods
   def prepend(s: Send): Par =
@@ -45,6 +48,24 @@ case class Par(
     this.copy(exprs = e :: this.exprs, freeCount = this.freeCount + e.freeCount)
   def prepend(m: Match): Par =
     this.copy(matches = m :: this.matches, freeCount = this.freeCount + m.freeCount)
+  def prepend(g: GPrivate): Par =
+    this.copy(id = g :: this.id)
+
+  // Convenience append methods
+  def :+(s: Send): Par =
+    this.copy(sends = this.sends :+ s, freeCount = this.freeCount + s.freeCount)
+  def :+(r: Receive): Par =
+    this.copy(receives = this.receives :+ r, freeCount = this.freeCount + r.freeCount)
+  def :+(e: Eval): Par =
+    this.copy(evals = this.evals :+ e, freeCount = this.freeCount + e.freeCount)
+  def :+(n: New): Par =
+    this.copy(news = this.news :+ n, freeCount = this.freeCount + n.freeCount)
+  def :+(e: Expr): Par =
+    this.copy(exprs = this.exprs :+ e, freeCount = this.freeCount + e.freeCount)
+  def :+(m: Match): Par =
+    this.copy(matches = this.matches :+ m, freeCount = this.freeCount + m.freeCount)
+  def :+(g: GPrivate): Par =
+    this.copy(id = this.id :+ g)
 
   def singleEval(): Option[Eval] =
     if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
@@ -66,14 +87,46 @@ case class Par(
       None
     }
 
-  def merge(that: Par) =
-    Par(that.sends ++ sends,
-        that.receives ++ receives,
-        that.evals ++ evals,
-        that.news ++ news,
-        that.exprs ++ exprs,
-        that.matches ++ matches,
-        that.freeCount + freeCount)
+  def ++(that: Par) =
+    Par(
+      sends ++ that.sends,
+      receives ++ that.receives,
+      evals ++ that.evals,
+      news ++ that.news,
+      exprs ++ that.exprs,
+      matches ++ that.matches,
+      id ++ that.id,
+      that.freeCount + freeCount
+    )
+
+  def procCount: Int =
+    sends.length +
+      receives.length +
+      evals.length +
+      news.length +
+      matches.length +
+      exprs.length +
+      id.length
+
+  def isEmpty: Boolean =
+    sends.isEmpty &&
+      receives.isEmpty &&
+      evals.isEmpty &&
+      news.isEmpty &&
+      matches.isEmpty &&
+      exprs.isEmpty &&
+      id.isEmpty
+
+  def nonEmpty: Boolean = !isEmpty
+
+  def isIdentifier: Boolean =
+    sends.isEmpty &&
+      receives.isEmpty &&
+      evals.isEmpty &&
+      news.isEmpty &&
+      matches.isEmpty &&
+      exprs.isEmpty &&
+      id.nonEmpty
 }
 
 object Par {
@@ -85,12 +138,16 @@ object Par {
   def apply(e: Expr): Par    = new Par(e)
   def apply(m: Match): Par   = new Par(m)
 
-  implicit def fromSend(s: Send): Par       = apply(s)
-  implicit def fromReceive(r: Receive): Par = apply(r)
-  implicit def fromEval(e: Eval): Par       = apply(e)
-  implicit def fromNew(n: New): Par         = apply(n)
-  implicit def fromExpr(e: Expr): Par       = apply(e)
-  implicit def fromMatch(m: Match): Par     = apply(m)
+  def forge: Par   = apply(GPrivate(uuid))
+  def uuid: String = java.util.UUID.randomUUID.toString
+
+  implicit def fromSend(s: Send): Par                = apply(s)
+  implicit def fromReceive(r: Receive): Par          = apply(r)
+  implicit def fromEval(e: Eval): Par                = apply(e)
+  implicit def fromNew(n: New): Par                  = apply(n)
+  implicit def fromExpr(e: Expr): Par                = apply(e)
+  implicit def fromMatch(m: Match): Par              = apply(m)
+  implicit def fromGPrivate(gPrivate: GPrivate): Par = apply(gPrivate)
 }
 
 sealed trait Channel {
