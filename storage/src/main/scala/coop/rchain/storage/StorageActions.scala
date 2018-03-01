@@ -77,16 +77,16 @@ trait StorageActions {
   private[storage] def extractProduceCandidates[C, P, A, K](
       store: IStore[C, P, A, K],
       groupedKeys: List[List[C]],
-      channel: C,
-      data: A)(txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)])] =
-    groupedKeys.foldRight(None: Option[(K, List[(A, C, Int)])]) { (cs: List[C], acc) =>
-      store.getK(txn, cs).flatMap {
-        case (ps, k) =>
-          extractDataCandidates(store, channel.pure[List], ps)(txn) match {
-            case None       => acc
-            case Some(acis) => Some((k, acis))
-          }
-      }
+      data: A)(txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)], List[C])] =
+    groupedKeys.foldRight(None: Option[(K, List[(A, C, Int)], List[C])]) {
+      (cs: List[C], acc: Option[(K, List[(A, C, Int)], List[C])]) =>
+        store.getK(txn, cs).flatMap {
+          case (ps, k) =>
+            extractDataCandidates(store, cs, ps)(txn) match {
+              case None       => acc
+              case Some(acis) => Some((k, acis, cs))
+            }
+        }
     }
 
   /** `produce` does the "produce" thing
@@ -104,13 +104,13 @@ trait StorageActions {
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedKeys: List[List[C]] = store.getJoin(txn, channel)
       store.putA(txn, channel.pure[List], data)
-      extractProduceCandidates(store, groupedKeys, channel, data)(txn).map {
-        case (k, acis) =>
+      extractProduceCandidates(store, groupedKeys, data)(txn).map {
+        case (k, acis, cs) =>
           acis.foreach {
             case (_, c, i) =>
               store.removeA(txn, c.pure[List], i)
-              store.removeK(txn, c.pure[List], i)
-              ignore { store.removeAllJoins(txn, c) }
+              store.removeK(txn, cs, i)
+              ignore { store.removeJoin(txn, c, cs) }
           }
           (k, acis.map(_._1))
       }

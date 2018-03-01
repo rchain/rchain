@@ -170,6 +170,69 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     results should contain theSameElementsAs List(List("world"))
   }
 
+  "producing on channel, consuming on that channel and another, and then producing on the other channel" should
+    "return a continuation and all the data" in withTestStore { store =>
+    val produceKey1     = List("ch1")
+    val produceKey1Hash = store.hashC(produceKey1)
+
+    val r1 = produce(store, produceKey1.head, "world")
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getKey(txn, produceKey1Hash) shouldBe produceKey1
+      store.getPs(txn, produceKey1) shouldBe Nil
+      store.getAs(txn, produceKey1) shouldBe List("world")
+      store.getK(txn, produceKey1) shouldBe None
+    }
+
+    r1 shouldBe None
+
+    val consumeKey     = List("ch1", "ch2")
+    val consumeKeyHash = store.hashC(consumeKey)
+    val consumePattern = List(Wildcard, Wildcard)
+    val results        = mutable.ListBuffer.empty[List[String]]
+
+    val r2 = consume(store, consumeKey, consumePattern, capture(results))
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getKey(txn, produceKey1Hash) shouldBe produceKey1
+      store.getPs(txn, produceKey1) shouldBe Nil
+      store.getAs(txn, produceKey1) shouldBe List("world")
+      store.getK(txn, produceKey1) shouldBe None
+      store.getKey(txn, consumeKeyHash) shouldBe consumeKey
+      store.getPs(txn, consumeKey) shouldBe consumePattern
+      store.getAs(txn, consumeKey) shouldBe Nil
+      store.getK(txn, consumeKey) shouldBe defined
+    }
+
+    r2 shouldBe None
+
+    val produceKey2     = List("ch2")
+    val produceKey2Hash = store.hashC(produceKey2)
+
+    val r3 = produce(store, produceKey2.head, "hello")
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getKey(txn, produceKey1Hash) shouldBe produceKey1
+      store.getPs(txn, produceKey1) shouldBe Nil
+      store.getAs(txn, produceKey1) shouldBe Nil
+      store.getK(txn, produceKey1) shouldBe None
+      store.getKey(txn, consumeKeyHash) shouldBe consumeKey
+      store.getPs(txn, consumeKey) shouldBe Nil
+      store.getAs(txn, consumeKey) shouldBe Nil
+      store.getK(txn, consumeKey) shouldBe None
+      store.getKey(txn, produceKey2Hash) shouldBe produceKey2
+      store.getPs(txn, produceKey2) shouldBe Nil
+      store.getAs(txn, produceKey2) shouldBe Nil
+      store.getK(txn, produceKey2) shouldBe None
+    }
+
+    r3 shouldBe defined
+
+    runK(r3)
+
+    results should contain theSameElementsAs List(List("world", "hello"))
+  }
+
   "producing on three different channels and then consuming once on all three" should
     "return the continuation and all the data" in withTestStore { store =>
     val produceKey1     = List("ch1")
@@ -282,28 +345,27 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
-    "return two separate continuations, each paired with separate pieces of data" in withTestStore {
-    store =>
-      val key     = List("ch1", "ch2")
-      val pattern = List(Wildcard, Wildcard)
-      val results = mutable.ListBuffer.empty[List[String]]
+    "return a continuation with both pieces of data" in withTestStore { store =>
+    val key     = List("ch1", "ch2")
+    val pattern = List(Wildcard, Wildcard)
+    val results = mutable.ListBuffer.empty[List[String]]
 
-      val r1 = consume(store, key, pattern, capture(results))
+    val r1 = consume(store, key, pattern, capture(results))
 
-      r1 shouldBe None
+    r1 shouldBe None
 
-      val r2 = produce(store, "ch1", "This is some data")
+    val r2 = produce(store, "ch1", "This is some data")
 
-      r2 shouldBe defined
+    r2 shouldBe None
 
-      val r3 = produce(store, "ch2", "This is some other data")
+    val r3 = produce(store, "ch2", "This is some other data")
 
-      r3 shouldBe defined
+    r3 shouldBe defined
 
-      List(r2, r3).foreach(runK)
+    runK(r3)
 
-      results should contain theSameElementsAs List(List("This is some data"),
-                                                    List("This is some other data"))
+    results should contain theSameElementsAs List(
+      List("This is some data", "This is some other data"))
   }
 
   "consuming and producing with non-trivial matches" should
@@ -321,10 +383,10 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("hello", "world")) shouldBe Nil
-      store.getAs(txn, List("hello")) shouldBe Nil
+      store.getAs(txn, List("hello")) shouldBe List("This is some data")
     }
 
-    results should contain theSameElementsAs List(List("This is some data"))
+    results shouldBe empty
   }
 
   "consuming twice and producing twice with non-trivial matches" should
@@ -364,17 +426,19 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       consume(store, consumeKey2, List(Wildcard), capture(results2))
 
       val r3 = produce(store, "goodbye", "This is some data")
-
       val r4 = produce(store, "hello", "This is some other data")
-
-      List(r3, r4).foreach(runK)
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getAs(txn, List("hello")) shouldBe Nil
-        store.getAs(txn, List("goodbye")) shouldBe Nil
+        store.getAs(txn, List("goodbye")) shouldBe List("This is some data")
       }
 
-      results1 should contain theSameElementsAs List(List("This is some data"))
+      r3 shouldBe None
+      r4 shouldBe defined
+
+      runK(r4)
+
+      results1 shouldBe empty
       results2 should contain theSameElementsAs List(List("This is some other data"))
     }
 
