@@ -135,13 +135,15 @@ object ProcNormalizeMatcher {
 
       val targetResult = normalizeMatch(valueProc, input)
       val trueCaseBody =
-        normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, input.knownFree))
+        normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, targetResult.knownFree))
       val falseCaseBody =
         normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
+      val freeCount = falseCaseBody.knownFree.next - input.knownFree.next
 
       val desugaredIf = Match(
         targetResult.par,
-        List((GBool(true), trueCaseBody.par), (GBool(false), falseCaseBody.par)))
+        List((GBool(true), trueCaseBody.par), (GBool(false), falseCaseBody.par)),
+        freeCount)
       ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
     }
 
