@@ -85,25 +85,25 @@ object rblstring {
     override val name: String = "string-join"
     override val minArgs: Int = 3
     override val maxArgs: Int = 3
+
     @checkArgumentMismatch
     override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
       val elem = ctxt.argvec.elem
 
-      checkFixnum(0, elem).flatMap( // Ensure arg0 is a Fixnum
-        code =>
-          checkRblString(1, elem).flatMap( // Ensure arg1 is a RblString
-            sep =>
-              checkTupleString(2, elem).flatMap { // Ensure arg2 is a Tuple containing RblStrings
-                tup =>
-                  val strings = tup.elem.foldLeft(List[String]()) { (list, ob) =>
-                    list :+ ob.asInstanceOf[RblString].value
-                  }
+      for {
+        code <- checkFixnum(0, elem)      // Ensure arg0 is a Fixnum
+        sep  <- checkRblString(1, elem)   // Ensure arg1 is a RblString
+        tup  <- checkTupleString(2, elem) // Ensure arg2 is a Tuple containing RblStrings
+      } yield {
+        val strings = tup.elem.foldLeft(List[String]()) { (list, ob) =>
+          list :+ ob.asInstanceOf[RblString].value
+        }
 
-                  def codeString(mask: Int) =
-                    (if (((code.value & mask) != 0) && (tup.elem.size > 0)) sep.value else "")
+        def codeString(mask: Int) =
+          (if (((code.value & mask) != 0) && (tup.elem.size > 0)) sep.value else "")
 
-                  Right(RblString(codeString(0x1) + strings.mkString(sep.value) + codeString(0x2)))
-            }))
+        RblString(codeString(0x1) + strings.mkString(sep.value) + codeString(0x2))
+      }
     }
   }
 
