@@ -51,12 +51,12 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val key     = List("ch1")
     val keyHash = store.hashC(key)
 
-    val r = produce(store, key.head, "hello")
+    val r = produce(store, key.head, "datum")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("hello")
+      store.getAs(txn, key) shouldBe List("datum")
       store.getK(txn, key) shouldBe None
     }
 
@@ -68,23 +68,23 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val key     = List("ch1")
     val keyHash = store.hashC(key)
 
-    val r1 = produce(store, key.head, "hello")
+    val r1 = produce(store, key.head, "datum1")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("hello")
+      store.getAs(txn, key) shouldBe List("datum1")
       store.getK(txn, key) shouldBe None
     }
 
     r1 shouldBe None
 
-    val r2 = produce(store, key.head, "goodbye")
+    val r2 = produce(store, key.head, "datum2")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) should contain theSameElementsAs List("goodbye", "hello")
+      store.getAs(txn, key) should contain theSameElementsAs List("datum1", "datum2")
       store.getK(txn, key) shouldBe None
     }
 
@@ -143,12 +143,12 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val keyHash = store.hashC(key)
     val results = mutable.ListBuffer.empty[List[String]]
 
-    val r1 = produce(store, key.head, "world")
+    val r1 = produce(store, key.head, "datum")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("world")
+      store.getAs(txn, key) shouldBe List("datum")
       store.getK(txn, key) shouldBe None
     }
 
@@ -167,7 +167,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     runK(r2)
 
-    results should contain theSameElementsAs List(List("world"))
+    results should contain theSameElementsAs List(List("datum"))
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
@@ -175,12 +175,12 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val produceKey1     = List("ch1")
     val produceKey1Hash = store.hashC(produceKey1)
 
-    val r1 = produce(store, produceKey1.head, "world")
+    val r1 = produce(store, produceKey1.head, "datum1")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List("world")
+      store.getAs(txn, produceKey1) shouldBe List("datum1")
       store.getK(txn, produceKey1) shouldBe None
     }
 
@@ -196,7 +196,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List("world")
+      store.getAs(txn, produceKey1) shouldBe List("datum1")
       store.getK(txn, produceKey1) shouldBe None
       store.getKey(txn, consumeKeyHash) shouldBe consumeKey
       store.getPs(txn, consumeKey) shouldBe consumePattern
@@ -209,7 +209,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val produceKey2     = List("ch2")
     val produceKey2Hash = store.hashC(produceKey2)
 
-    val r3 = produce(store, produceKey2.head, "hello")
+    val r3 = produce(store, produceKey2.head, "datum2")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
@@ -230,7 +230,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     runK(r3)
 
-    results should contain theSameElementsAs List(List("world", "hello"))
+    results should contain theSameElementsAs List(List("datum1", "datum2"))
   }
 
   "producing on three different channels and then consuming once on all three" should
@@ -246,34 +246,34 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val consumeKeyHash  = store.hashC(consumeKey)
     val results         = mutable.ListBuffer.empty[List[String]]
 
-    val r1 = produce(store, produceKey1.head, "world")
+    val r1 = produce(store, produceKey1.head, "datum1")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List("world")
+      store.getAs(txn, produceKey1) shouldBe List("datum1")
       store.getK(txn, produceKey1) shouldBe None
     }
 
     r1 shouldBe None
 
-    val r2 = produce(store, produceKey2.head, "hello")
+    val r2 = produce(store, produceKey2.head, "datum2")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey2Hash) shouldBe produceKey2
       store.getPs(txn, produceKey2) shouldBe Nil
-      store.getAs(txn, produceKey2) shouldBe List("hello")
+      store.getAs(txn, produceKey2) shouldBe List("datum2")
       store.getK(txn, produceKey2) shouldBe None
     }
 
     r2 shouldBe None
 
-    val r3 = produce(store, produceKey3.head, "goodbye")
+    val r3 = produce(store, produceKey3.head, "datum3")
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey3Hash) shouldBe produceKey3
       store.getPs(txn, produceKey3) shouldBe Nil
-      store.getAs(txn, produceKey3) shouldBe List("goodbye")
+      store.getAs(txn, produceKey3) shouldBe List("datum3")
       store.getK(txn, produceKey3) shouldBe None
     }
 
@@ -292,40 +292,41 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
     runK(r4)
 
-    results should contain theSameElementsAs List(List("world", "hello", "goodbye"))
+    results should contain theSameElementsAs List(List("datum1", "datum2", "datum3"))
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
-    "return " in withTestStore { store =>
+    "return three pairs of continuations and data" in withTestStore { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
     val key = List("ch1")
 
-    val wk1 = produce(store, key.head, "world")
-    val wk2 = produce(store, key.head, "hello")
-    val wk3 = produce(store, key.head, "goodbye")
-    val wk4 = consume(store, key, List(Wildcard), capture(results))
-    val wk5 = consume(store, key, List(Wildcard), capture(results))
-    val wk6 = consume(store, key, List(Wildcard), capture(results))
+    val r1 = produce(store, key.head, "datum1")
+    val r2 = produce(store, key.head, "datum2")
+    val r3 = produce(store, key.head, "datum3")
 
-    val test = List(wk1, wk2, wk3, wk4, wk5, wk6)
+    r1 shouldBe None
+    r2 shouldBe None
+    r3 shouldBe None
 
-    test.foreach(runK)
+    val r4 = consume(store, key, List(Wildcard), capture(results))
+    val r5 = consume(store, key, List(Wildcard), capture(results))
+    val r6 = consume(store, key, List(Wildcard), capture(results))
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, store.hashC(key)) shouldBe key
       store.getAs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
-      store.getPs(txn, key) shouldBe Nil
-      store.getPs(txn, key) shouldBe Nil
-      store.getK(txn, key) shouldBe None
-      store.getK(txn, key) shouldBe None
       store.getK(txn, key) shouldBe None
     }
 
-    results should contain theSameElementsAs List(List("goodbye"), List("hello"), List("world"))
+    val continuations = List(r4, r5, r6)
+
+    continuations.forall(_.isDefined) shouldBe true
+
+    continuations.foreach(runK)
+
+    results should contain theSameElementsAs List(List("datum3"), List("datum2"), List("datum1"))
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
@@ -335,13 +336,17 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     consume(store, List("ch1"), List(Wildcard), capture(results))
     consume(store, List("ch1"), List(Wildcard), capture(results))
     consume(store, List("ch1"), List(Wildcard), capture(results))
-    val r1 = produce(store, "ch1", "world")
-    val r2 = produce(store, "ch1", "hello")
-    val r3 = produce(store, "ch1", "goodbye")
+    val r1 = produce(store, "ch1", "datum1")
+    val r2 = produce(store, "ch1", "datum2")
+    val r3 = produce(store, "ch1", "datum3")
 
-    List(r1, r2, r3).foreach(runK)
+    r1 shouldBe defined
+    r2 shouldBe None
+    r3 shouldBe None
 
-    results should contain theSameElementsAs List(List("world"))
+    runK(r1)
+
+    results should contain theSameElementsAs List(List("datum1"))
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
@@ -351,39 +356,35 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val results = mutable.ListBuffer.empty[List[String]]
 
     val r1 = consume(store, key, pattern, capture(results))
+    val r2 = produce(store, "ch1", "datum1")
+    val r3 = produce(store, "ch2", "datum2")
 
     r1 shouldBe None
-
-    val r2 = produce(store, "ch1", "This is some data")
-
     r2 shouldBe None
-
-    val r3 = produce(store, "ch2", "This is some other data")
-
     r3 shouldBe defined
 
     runK(r3)
 
-    results should contain theSameElementsAs List(
-      List("This is some data", "This is some other data"))
+    results should contain theSameElementsAs List(List("datum1", "datum2"))
   }
 
   "consuming and producing with non-trivial matches" should
     "work" in withTestStore { store =>
     val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 = consume(store,
-                      List("hello", "world"),
-                      List(Wildcard, StringMatch("This is some data")),
-                      capture(results))
-    val wk2  = produce(store, "hello", "This is some data")
-    val test = List(wk1, wk2)
+    val r1 = consume(
+      store,
+      List("ch1", "ch2"),
+      List(Wildcard, StringMatch("datum1")),
+      capture(results)
+    )
+    val r2 = produce(store, "ch1", "datum1")
 
-    test.foreach(runK)
+    List(r1, r2).foreach(runK)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("hello", "world")) shouldBe Nil
-      store.getAs(txn, List("hello")) shouldBe List("This is some data")
+      store.getAs(txn, List("ch1", "ch2")) shouldBe Nil
+      store.getAs(txn, List("ch1")) shouldBe List("datum1")
     }
 
     results shouldBe empty
@@ -394,52 +395,49 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
     val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
     val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    val wk1 =
-      consume(store, List("hello"), List(StringMatch("This is some data")), capture(results1))
-    val wk2 =
-      consume(store, List("world"), List(StringMatch("This is some other data")), capture(results2))
-    val wk3  = produce(store, "hello", "This is some data")
-    val wk4  = produce(store, "world", "This is some other data")
-    val test = List(wk1, wk2, wk3, wk4)
+    val r1 = consume(store, List("ch1"), List(StringMatch("datum1")), capture(results1))
+    val r2 = consume(store, List("ch2"), List(StringMatch("datum2")), capture(results2))
+    val r3 = produce(store, "ch1", "datum1")
+    val r4 = produce(store, "ch2", "datum2")
 
-    test.foreach(runK)
+    List(r1, r2, r3, r4).foreach(runK)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("hello")) shouldBe Nil
-      store.getAs(txn, List("world")) shouldBe Nil
+      store.getAs(txn, List("ch1")) shouldBe Nil
+      store.getAs(txn, List("ch2")) shouldBe Nil
     }
 
-    results1 should contain theSameElementsAs List(List("This is some data"))
-    results2 should contain theSameElementsAs List(List("This is some other data"))
+    results1 should contain theSameElementsAs List(List("datum1"))
+    results2 should contain theSameElementsAs List(List("datum2"))
   }
 
-  "consuming on two channels, consuming on one of those channels, and then producing on both of those channels" should
-    "return a continuations paired with one piece of data along with another continuation paired with the other piece of data" in
+  "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
+    "return a continuation paired with one piece of data" in
     withTestStore { store =>
-      val consumeKey1 = List("hello", "goodbye")
-      val consumeKey2 = List("hello")
-
       val results1 = mutable.ListBuffer.empty[List[String]]
       val results2 = mutable.ListBuffer.empty[List[String]]
 
-      consume(store, consumeKey1, List(Wildcard, Wildcard), capture(results1))
-      consume(store, consumeKey2, List(Wildcard), capture(results2))
+      consume(store, List("ch1", "ch2"), List(Wildcard, Wildcard), capture(results1))
+      consume(store, List("ch1"), List(Wildcard), capture(results2))
 
-      val r3 = produce(store, "goodbye", "This is some data")
-      val r4 = produce(store, "hello", "This is some other data")
+      val r3 = produce(store, "ch1", "datum1")
+      val r4 = produce(store, "ch2", "datum2")
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("hello")) shouldBe Nil
-        store.getAs(txn, List("goodbye")) shouldBe List("This is some data")
+        store.getK(txn, List("ch1", "ch2")) shouldBe defined
+        store.getK(txn, List("ch1")) shouldBe None
+        store.getK(txn, List("ch2")) shouldBe None
+        store.getAs(txn, List("ch1")) shouldBe Nil
+        store.getAs(txn, List("ch2")) shouldBe List("datum2")
       }
 
-      r3 shouldBe None
-      r4 shouldBe defined
+      r3 shouldBe defined
+      r4 shouldBe None
 
-      runK(r4)
+      runK(r3)
 
       results1 shouldBe empty
-      results2 should contain theSameElementsAs List(List("This is some other data"))
+      results2 should contain theSameElementsAs List(List("datum1"))
     }
 
   "the hello world example" should "work" in withTestStore { store =>
