@@ -115,7 +115,7 @@ final case class UnicastNetwork(peer: PeerNode,
       for {
         _ <- Capture[F].capture(table.observe(new ProtocolNode(sender, this), next == None))
         _ <- msg match {
-              case ping @ PingMessage(_, _)             => Capture[F].capture(handlePing(sender, ping))
+              case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
               case lookup @ LookupMessage(_, _)         => Capture[F].capture(handleLookup(sender, lookup))
               case disconnect @ DisconnectMessage(_, _) => handleDisconnect[F](sender, disconnect)
               case resp: ProtocolResponse               => handleResponse[F](sock, sender, resp)
@@ -151,15 +151,14 @@ final case class UnicastNetwork(peer: PeerNode,
     handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
   }
 
-  /**
-    * Validate incoming PING and send responding PONG.
-    */
-  private def handlePing(sender: PeerNode, ping: PingMessage): Unit =
-    for {
-      pong <- ping.response(local)
-    } {
-      comm.send(pong.toByteSeq, sender)
-    }
+  private def handlePing[F[_]: Functor: Capture: Log](sender: PeerNode,
+                                                      ping: PingMessage): F[Unit] =
+    ping
+      .response(local)
+      .map { pong =>
+        Capture[F].capture(comm.send(pong.toByteSeq, sender)).void
+      }
+      .getOrElse(Log[F].error(s"Response was not available for ping: $ping"))
 
   /**
     * Validate incoming LOOKUP message and return an answering
