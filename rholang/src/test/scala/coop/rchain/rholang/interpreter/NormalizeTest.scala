@@ -544,7 +544,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     }
   }
   "PMatch" should "Handle a match inside a for pattern" in {
-    // for (@(match (x | y) { case 47 => Nil }) <- @Nil) { Nil }
+    // for (@{match {x | y} { 47 => Nil }} <- @Nil) { Nil }
 
     val listCases = new ListCase()
     listCases.add(new CaseImpl(new PGround(new GroundInt(47)), new PNil()))
