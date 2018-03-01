@@ -537,17 +537,82 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val expectedResult =
       inputs.par.copy(
-        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false, 0)),
+        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false, 0, BitSet())),
         receives = List(
           Receive(
             List((List(Quote(EVar(FreeVar(0)))), Quote(Par()))),
-            Match(EVar(BoundVar(0)), List((GInt(42), Par()), (EVar(FreeVar(0)), Par())), 0),
+            Match(EVar(BoundVar(0)),
+                  List((GInt(42), Par()), (EVar(FreeVar(0)), Par())),
+                  0,
+                  BitSet(0)),
             false,
             bindCount,
-            freeCount
+            freeCount,
+            BitSet()
           ))
       )
     result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PIf" should "Desugar to match with true/false cases" in {
+    // if (true) { @Nil!(47) }
+    val condition = new PGround(new GroundBool(new BoolTrue()))
+    val listSend  = new ListProc()
+    listSend.add(new PGround(new GroundInt(47)))
+    val body       = new PSend(new NameQuote(new PNil()), new SendSingle(), listSend)
+    val basicInput = new PIf(condition, body)
+    val freeCount  = 0
+
+    val result = ProcNormalizeMatcher.normalizeMatch(basicInput, inputs)
+    result.par should be(
+      inputs.par.prepend(Match(
+        GBool(true),
+        List((GBool(true), Send(Quote(Par()), List[Par](GInt(47)), false, 0, BitSet())),
+             (GBool(false), Par())
+             // TODO: Fill in type error case
+        ),
+        freeCount,
+        BitSet()
+      )))
+    result.knownFree should be(inputs.knownFree)
+  }
+  "PIfElse" should "Handle a more complicated if statement with an else clause" in {
+    // if (47 == 47) { new x in { x!(47) } } else { new y in { y!(47) } }
+    val condition = new PEq(new PGround(new GroundInt(47)), new PGround(new GroundInt(47)))
+    val xNameDecl = new ListNameDecl()
+    xNameDecl.add(new NameDeclSimpl("x"))
+    val xSendData = new ListProc()
+    xSendData.add(new PGround(new GroundInt(47)))
+    val pNewIf = new PNew(
+      xNameDecl,
+      new PSend(new NameVar("x"), new SendSingle(), xSendData)
+    )
+    val yNameDecl = new ListNameDecl()
+    yNameDecl.add(new NameDeclSimpl("y"))
+    val ySendData = new ListProc()
+    ySendData.add(new PGround(new GroundInt(47)))
+    val pNewElse = new PNew(
+      yNameDecl,
+      new PSend(new NameVar("y"), new SendSingle(), ySendData)
+    )
+    val basicInput = new PIfElse(condition, pNewIf, pNewElse)
+    val freeCount  = 0
+
+    val result = ProcNormalizeMatcher.normalizeMatch(basicInput, inputs)
+    result.par should be(
+      inputs.par.prepend(Match(
+        EEq(GInt(47), GInt(47)),
+        List(
+          (GBool(true),
+           New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, 0, BitSet(0)), BitSet())),
+          (GBool(false),
+           New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, 0, BitSet(0)), BitSet()))
+          // TODO: Fill in type error case
+        ),
+        freeCount,
+        BitSet()
+      )))
     result.knownFree should be(inputs.knownFree)
   }
   "PMatch" should "Fail if a free variable is used twice in the target" in {

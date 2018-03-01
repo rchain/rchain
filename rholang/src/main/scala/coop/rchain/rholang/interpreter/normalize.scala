@@ -133,6 +133,24 @@ object ProcNormalizeMatcher {
       ProcVisitOutputs(input.par.prepend(constructor(leftResult.par, rightResult.par)),
                        rightResult.knownFree)
     }
+    def normalizeIfElse(valueProc: Proc, trueBodyProc: Proc, falseBodyProc: Proc) = {
+      import scala.collection.JavaConverters._
+
+      val targetResult = normalizeMatch(valueProc, input)
+      val trueCaseBody =
+        normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, targetResult.knownFree))
+      val falseCaseBody =
+        normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
+      val freeCount = falseCaseBody.knownFree.next - input.knownFree.next
+
+      val desugaredIf = Match(
+        targetResult.par,
+        List((GBool(true), trueCaseBody.par), (GBool(false), falseCaseBody.par)),
+        freeCount,
+        targetResult.par.locallyFree | trueCaseBody.par.locallyFree | falseCaseBody.par.locallyFree
+      )
+      ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
+    }
 
     p match {
       case p: PGround =>
@@ -382,7 +400,7 @@ object ProcNormalizeMatcher {
           case _            => throw new Error("Unexpected Case implementation.")
         }
 
-        val initAcc = (List[Tuple2[Par, Par]](), input.knownFree)
+        val initAcc = (List[Tuple2[Par, Par]](), input.knownFree, BitSet())
         val casesResult = (initAcc /: cases) { (acc, caseImpl) =>
           caseImpl match {
             case (pattern, caseBody) => {
@@ -393,15 +411,25 @@ object ProcNormalizeMatcher {
               val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
               val caseBodyResult =
                 normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
-              ((patternResult.par, caseBodyResult.par) :: acc._1, caseBodyResult.knownFree)
+              ((patternResult.par, caseBodyResult.par) :: acc._1,
+               caseBodyResult.knownFree,
+               acc._3 | caseBodyResult.par.locallyFree)
             }
           }
         }
         val freeCount = casesResult._2.next - input.knownFree.next
         ProcVisitOutputs(
-          input.par.prepend(Match(targetResult.par, casesResult._1.reverse, freeCount)),
-          casesResult._2)
+          input.par.prepend(
+            Match(targetResult.par,
+                  casesResult._1.reverse,
+                  freeCount,
+                  (casesResult._3 | targetResult.par.locallyFree).until(input.env.next))),
+          casesResult._2
+        )
       }
+
+      case p: PIf     => normalizeIfElse(p.proc_1, p.proc_2, new PNil())
+      case p: PIfElse => normalizeIfElse(p.proc_1, p.proc_2, p.proc_3)
 
       case _ => throw new Error("Compilation of construct not yet supported.")
     }
