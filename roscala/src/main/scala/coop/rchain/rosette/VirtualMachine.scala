@@ -516,11 +516,9 @@ object VirtualMachine {
 
   def execute(op: OpApplyPrimTag): VMTransition[Unit] =
     for {
-      state <- State.get[VMState]
-      loc = state.code.lit(op.lit).asInstanceOf[Location]
-
-      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
-      _ <- modify(_.set(_ >> 'loc)(loc))
+      loc <- inspect(_.code.lit(op.lit).asInstanceOf[Location])
+      _   <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
+      _   <- modify(_.set(_ >> 'loc)(loc))
 
       prim = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
