@@ -156,6 +156,7 @@ object Main {
         bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
         _             <- iologger.info[Effect](s"Bootstrapping from $bootstrapAddr.")
         _             <- net.connect[Effect](bootstrapAddr)
+        _             <- iologger.info[Effect](s"Connected $bootstrapAddr.")
       } yield ()
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
