@@ -19,8 +19,7 @@ import cats._, cats.data._, cats.implicits._
 final case class UnicastNetwork(peer: PeerNode,
                                 next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
-    // with ProtocolDispatcher[SocketAddress] TODO consider bringing back or remove
-    {
+    with ProtocolDispatcher[SocketAddress] {
 
   val logger = Logger("network-overlay")
 
