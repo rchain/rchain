@@ -14,24 +14,32 @@ object NetworkProtocol {
   val ENCRYPTION_HELLO_BACK = "hello_back"
 
   def encryptionHandshake(src: ProtocolNode, keys: PublicPrivateKeys): routing.Protocol = {
-    val signIt: Array[Byte] => Array[Byte] = encryption.sign(keys.priv, _)
-    val prepare: String => Array[Byte]     = encryption.hashIt >>> signIt
-    val msg = EncryptionHandshake(publicKey = ByteString.copyFrom(keys.pub),
-                                  hello = ByteString.copyFrom(prepare(ENCRYPTION_HELLO)))
+    val msg = EncryptionHandshake(publicKey = ByteString.copyFrom(keys.pub))
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(msg))
   }
 
   def encryptionHandshakeResponse(src: ProtocolNode,
                                   h: routing.Header,
                                   keys: PublicPrivateKeys): routing.Protocol = {
-    val signIt: Array[Byte] => Array[Byte] = encryption.sign(keys.priv, _)
-    val prepare: String => Array[Byte]     = encryption.hashIt >>> signIt
-    val msg = EncryptionHandshakeResponse(publicKey = ByteString.copyFrom(keys.pub),
-                                          helloBack =
-                                            ByteString.copyFrom(prepare(ENCRYPTION_HELLO_BACK)))
+    val msg = EncryptionHandshakeResponse(publicKey = ByteString.copyFrom(keys.pub))
 
     ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
   }
+
+  def toEncryptionHandshakeResponse(
+      proto: routing.Protocol): Either[CommError, EncryptionHandshakeResponse] =
+    proto.message match {
+      case routing.Protocol.Message.Upstream(upstream) =>
+        Right(upstream.unpack(EncryptionHandshakeResponse))
+      case a => Left(UnknownProtocolError(s"Was expecting EncryptionHandshakeResponse, got $a"))
+    }
+
+  def toEncryptionHandshake(proto: routing.Protocol): Either[CommError, EncryptionHandshake] =
+    proto.message match {
+      case routing.Protocol.Message.Upstream(upstream) =>
+        Right(upstream.unpack(EncryptionHandshake))
+      case a => Left(UnknownProtocolError(s"Was expecting EncryptionHandshake, got $a"))
+    }
 
   def protocolHandshake(src: ProtocolNode): routing.Protocol =
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(ProtocolHandshake()))
@@ -43,26 +51,18 @@ object NetworkProtocol {
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
 
-  private def toEncryptionHandshake(
-      proto: routing.Protocol): Either[CommError, EncryptionHandshake] =
-    proto.message match {
-      case routing.Protocol.Message.Upstream(upstream) =>
-        Right(upstream.unpack(EncryptionHandshake))
-      case a => Left(UnknownProtocolError(s"Was expecting EncryptionHandshake, got $a"))
-    }
-
   def response(src: ProtocolNode, keys: PublicPrivateKeys): Either[CommError, ProtocolMessage] =
     for {
       h         <- header.toRight(HeaderNotAvailable)
-      handshake <- toEncryptionHandshake(proto)
+      handshake <- NetworkProtocol.toEncryptionHandshake(proto)
       pub       = handshake.publicKey.toByteArray
-      signature = handshake.hello.toByteArray
-      hash      = encryption.hashIt(NetworkProtocol.ENCRYPTION_HELLO)
-      verified  = encryption.verify(pub, signature, hash)
-      _ <- verified.either(()).or(EncryptionHandshakeIncorrectlySigned)
-    } yield
-      EncryptionHandshakeResponseMessage(NetworkProtocol.encryptionHandshakeResponse(src, h, keys),
-                                         System.currentTimeMillis)
+    } yield {
+      val message = EncryptionHandshakeResponseMessage(
+        NetworkProtocol.encryptionHandshakeResponse(src, h, keys),
+        System.currentTimeMillis)
+      message
+    }
+
 }
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
