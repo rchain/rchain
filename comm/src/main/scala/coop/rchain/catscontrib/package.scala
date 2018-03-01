@@ -5,4 +5,3 @@ package object catscontrib
     with EitherTInstances
     with WriterTInstances
     with ApplicativeError_Instances
-    with Traverse_Instances
