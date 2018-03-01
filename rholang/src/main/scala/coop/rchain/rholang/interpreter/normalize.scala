@@ -357,7 +357,7 @@ object ProcNormalizeMatcher {
           case _            => throw new Error("Unexpected Case implementation.")
         }
 
-        val initAcc = (List[Tuple2[Par, Par]](), input.knownFree)
+        val initAcc = (List[Tuple2[Par, Par]](), targetResult.knownFree)
         val casesResult = (initAcc /: cases) { (acc, caseImpl) =>
           caseImpl match {
             case (pattern, caseBody) => {
