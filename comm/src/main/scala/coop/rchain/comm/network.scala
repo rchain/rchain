@@ -119,7 +119,7 @@ final case class UnicastNetwork(peer: PeerNode,
               case lookup @ LookupMessage(_, _) => Capture[F].capture(handleLookup(sender, lookup))
               case disconnect @ DisconnectMessage(_, _) =>
                 Capture[F].capture(handleDisconnect(sender, disconnect))
-              case resp: ProtocolResponse => Capture[F].capture(handleResponse(sock, sender, resp))
+              case resp: ProtocolResponse => handleResponse[F](sock, sender, resp)
               case _                      => next.traverse(d => d.dispatch[F](sock, msg)).void
             }
       } yield ()
@@ -135,15 +135,22 @@ final case class UnicastNetwork(peer: PeerNode,
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
-  private def handleResponse(sock: SocketAddress, sender: PeerNode, msg: ProtocolResponse): Unit =
-    for {
-      ret <- msg.returnHeader
-    } {
-      pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)) match {
-        case Some(promise) => promise.success(Right(msg))
-        // case None          => next.foreach(_.dispatch(sock, msg))
-      }
+  private def handleResponse[F[_]: Monad: Capture: Log](sock: SocketAddress,
+                                                        sender: PeerNode,
+                                                        msg: ProtocolResponse): F[Unit] = {
+    val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
+      for {
+        result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
+        _ <- result match {
+              case Some(promise) => Capture[F].capture(promise.success(Right(msg)))
+              case None          => next.traverse(_.dispatch[F](sock, msg)).void
+            }
+
+      } yield ()
+
     }
+    handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
+  }
 
   /**
     * Validate incoming PING and send responding PONG.
