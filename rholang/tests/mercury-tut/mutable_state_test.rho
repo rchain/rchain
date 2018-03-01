@@ -2,8 +2,10 @@ new testResult, updateTestResult in {
   testResult!(true) |
   contract updateTestResult(@bool, return) = {
     for(r <- testResult) {
-      match [r, bool] with [true, true] => { testResult!(true) | return!(true) }
-      _ => { testResult!(false) | return!(false) }
+      match [r, bool] {
+        case [true, true] => { testResult!(true) | return!(true) }
+        case _ => { testResult!(false) | return!(false) }
+      }
     }
   } |
   contract @"CellDemo"(_) = new MakeCell in {

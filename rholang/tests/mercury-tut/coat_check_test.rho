@@ -2,8 +2,10 @@ new testResult, updateTestResult in {
   testResult!(true) |
   contract updateTestResult(@bool, return) = {
     for(r <- testResult) {
-      match [r, bool] with [true, true] => { testResult!(true) | return!(true) }
-      _ => { testResult!(false) | return!(false) }
+      match [r, bool] {
+        case [true, true] => { testResult!(true) | return!(true) }
+        case _ => { testResult!(false) | return!(false) }
+      }
     }
   } |
   contract @"CoatCheckDemo"(_) = new MakeCoatCheck in {
@@ -11,23 +13,24 @@ new testResult, updateTestResult in {
       new port, table in {
         ret!(*port) |
         for (@method, @arg1, @arg2, ack <= port) {
-          match method with 
-            "new" => new ticket in {
+          match method {
+            case "new" => new ticket in {
               ack!(*ticket) |
               @(*ticket | *table)!(arg1)
             }
-            "get" => {
+            case "get" => {
               for (@value <- @(*arg1 | *table)) {
                 @(*arg1 | *table)!(value) |
                 ack!(value)
               }
             }
-            "set" => {
+            case "set" => {
               for (_ <- @(*arg1 | *table)) {
                 @(*arg1 | *table)!(arg2) |
                 ack!(true)
               }
             }
+          }
         }
       }
     } |
