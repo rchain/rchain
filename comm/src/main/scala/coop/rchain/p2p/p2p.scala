@@ -49,39 +49,32 @@ class Network(
 
   import NetworkProtocol._
 
-  val logger   = Logger("p2p")
-  val iologger = IOLogger("p2p")
-
-  val net = new UnicastNetwork(local, Some(this))
+  val logger = Logger("p2p")
+  val net    = new UnicastNetwork(local, Some(this))
 
   /**
     * This method (eventually) will initiate the two-part RChain handshake protocol. First, encryption keys are exchanged,
     * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
     * the same language.
     */
-  def connect[F[_]: Capture: Monad](peer: PeerNode)(
+  def connect[F[_]: Capture: Monad: Log](peer: PeerNode)(
       implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
-      err: ApplicativeError_[F, CommError]): F[Unit] = {
-
-    import iologger._
-
+      err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
-      _          <- debug[F](s"Connecting to $peer")
+      _          <- Log[F].debug(s"Connecting to $peer")
       ts1        <- IOUtil.currentMilis[F]
       ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
       remote     = new ProtocolNode(peer, this.net)
       ehsrespmsg <- net.roundTrip[F](ehs, remote)
       ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
       _          <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
-      _          <- debug[F](s"Received encryption response from ${ehsrespmsg.sender.get}.")
+      _          <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
       ts2        <- IOUtil.currentMilis[F]
       phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
       phsresp    <- net.roundTrip[F](phs, remote)
-      _          <- debug[F](s"Received protocol handshake response from ${phsresp.sender.get}.")
+      _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- addNode[F](remote)
     } yield ()
-
-  }
 
   def disconnect(): Unit = {
     net.broadcast(

@@ -49,9 +49,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 }
 
 object Main {
-  val logger   = Logger("main")
-  val iologger = IOLogger("main")
-
+  val logger = Logger("main")
   def whoami(port: Int): Option[InetAddress] = {
 
     val upnp = new UPnP(port)
@@ -102,6 +100,8 @@ object Main {
     import ApplicativeError_._
 
     implicit def ioLog: Log[Task] = new Log[Task] {
+
+      def debug(msg: String): Task[Unit] = Task.delay(logger.debug(msg))
       def info(msg: String): Task[Unit]  = Task.delay(logger.info(msg))
       def warn(msg: String): Task[Unit]  = Task.delay(logger.warn(msg))
       def error(msg: String): Task[Unit] = Task.delay(logger.error(msg))
@@ -154,9 +154,9 @@ object Main {
                              .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
                              .toEffect
         bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
-        _             <- iologger.info[Effect](s"Bootstrapping from $bootstrapAddr.")
+        _             <- Log[Effect].info(s"Bootstrapping from $bootstrapAddr.")
         _             <- net.connect[Effect](bootstrapAddr)
-        _             <- iologger.info[Effect](s"Connected $bootstrapAddr.")
+        _             <- Log[Effect].info(s"Connected $bootstrapAddr.")
       } yield ()
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
@@ -190,8 +190,8 @@ object Main {
       net  <- (new p2p.Network(addy, keys)).pure[Effect]
       _    <- Task.fork(MonadOps.forever(net.net.receiver[Effect].value.void)).start.toEffect
       _    <- addShutdownHook(net).toEffect
-      _    <- iologger.info[Effect](s"Listening for traffic on $net.")
-      _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
+      _    <- Log[Effect].info(s"Listening for traffic on $net.")
+      _ <- if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
           else connectToBootstrap(net)
       _ <- MonadOps.forever(findAndConnect(net), 0L)
     } yield ()
