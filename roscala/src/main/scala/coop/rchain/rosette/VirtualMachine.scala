@@ -242,9 +242,9 @@ object VirtualMachine {
 
       val tmpState = for {
         _ <- modify(
-          _.update(_ >> 'pc >> 'relative)(_ + 1)
-            .update(_ >> 'bytecodes)(
-              _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1)))
+              _.update(_ >> 'pc >> 'relative)(_ + 1)
+                .update(_ >> 'bytecodes)(
+                  _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1)))
 
         _ <- executeDispatch(op)
         _ <- runFlags
@@ -423,12 +423,12 @@ object VirtualMachine {
 
     val stateOrDie = for {
       template <- getTemplate or die(s"OpExtend: No template in state.code.litvec(${op.lit})")(
-        state)
+                   state)
 
       tuple <- matchActuals(template) or
-        // TODO: Revisit
-        //handleFormalsMismatch(formals)
-        state.set(_ >> 'doNextThreadFlag)(true)
+                // TODO: Revisit
+                //handleFormalsMismatch(formals)
+                state.set(_ >> 'doNextThreadFlag)(true)
 
       env <- getStdExtension or die("OpExtend: state.ctxt.env needs to be a StdExtension")(state)
 
@@ -564,48 +564,48 @@ object VirtualMachine {
     for {
       _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim = Prim.nthPrim(op.primNum)
+      prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
 
       _ <- handlePrimResult(
-        result,
-        ob =>
-          State { vmState: VMState =>
-            if (ob.is(Ob.OTsysval))
-              //handleException(ob, op, vmState.loc)
-              (vmState.copy(doNextThreadFlag = true), ())
-            else if (op.arg >= vmState.ctxt.argvec.elem.size)
-              (vmState.copy(vmErrorFlag = true), ())
-            else
-              (vmState
-                 .update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, ob))
-                 .update(_ >> 'doNextThreadFlag)(if (op.next) true else _),
-               ())
-        }
-      )
+            result,
+            ob =>
+              State { vmState: VMState =>
+                if (ob.is(Ob.OTsysval))
+                  //handleException(ob, op, vmState.loc)
+                  (vmState.copy(doNextThreadFlag = true), ())
+                else if (op.arg >= vmState.ctxt.argvec.elem.size)
+                  (vmState.copy(vmErrorFlag = true), ())
+                else
+                  (vmState
+                     .update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, ob))
+                     .update(_ >> 'doNextThreadFlag)(if (op.next) true else _),
+                   ())
+            }
+          )
     } yield ()
 
   def execute(op: OpApplyPrimReg): VMTransition[Unit] =
     for {
       _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim = Prim.nthPrim(op.primNum)
+      prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
 
       _ <- handlePrimResult(
-        result,
-        ob =>
-          setReg(op.reg, ob)
-            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
-            .transform { (vmState, storeResult) =>
-              storeResult match {
-                case Success =>
-                  (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
-                case Failure =>
-                  (vmState.copy(exitFlag = true, exitCode = 1), ())
+            result,
+            ob =>
+              setReg(op.reg, ob)
+                .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+                .transform { (vmState, storeResult) =>
+                  storeResult match {
+                    case Success =>
+                      (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
+                    case Failure =>
+                      (vmState.copy(exitFlag = true, exitCode = 1), ())
+                  }
               }
-          }
-      )
+          )
     } yield ()
 
   def execute(op: OpApplyCmd): VMTransition[Unit] =
@@ -819,9 +819,9 @@ object VirtualMachine {
     for {
       optOb <- getCtxtReg(op.reg)
       _ <- optOb match {
-        case Some(ob) => modify(_.set(_ >> 'ctxt >> 'rslt)(ob))
-        case None     => pure
-      }
+            case Some(ob) => modify(_.set(_ >> 'ctxt >> 'rslt)(ob))
+            case None     => pure
+          }
     } yield ()
 
   def execute(op: OpXferRsltToDest): VMTransition[Unit] =
@@ -831,14 +831,14 @@ object VirtualMachine {
       rslt     <- inspect[Ob](_.ctxt.rslt)
 
       _ <- Location
-        .store(location, rslt)
-        .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
-        .transform { (vmState, storeRes) =>
-          storeRes match {
-            case Success => (vmState, ())
-            case Failure => (vmState.copy(vmErrorFlag = true), ())
-          }
-        }
+            .store(location, rslt)
+            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+            .transform { (vmState, storeRes) =>
+              storeRes match {
+                case Success => (vmState, ())
+                case Failure => (vmState.copy(vmErrorFlag = true), ())
+              }
+            }
     } yield ()
 
   def execute(op: OpXferSrcToRslt): VMTransition[Unit] =
@@ -847,9 +847,9 @@ object VirtualMachine {
       globalEnv <- inspect[TblObject](_.globalEnv)
       _         <- modify(_.copy(loc = location))
       _ <- Location
-        .fetch(location, globalEnv)
-        .transform((ctxt, optRes) => (ctxt.copy(rslt = optRes.getOrElse(Ob.INVALID)), ()))
-        .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+            .fetch(location, globalEnv)
+            .transform((ctxt, optRes) => (ctxt.copy(rslt = optRes.getOrElse(Ob.INVALID)), ()))
+            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
     } yield ()
 
   def execute(op: OpIndLitToArg): VMTransition[Unit] =
