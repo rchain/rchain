@@ -130,6 +130,22 @@ object ProcNormalizeMatcher {
       ProcVisitOutputs(input.par.prepend(constructor(leftResult.par, rightResult.par)),
                        rightResult.knownFree)
     }
+    def normalizeIfElse(valueProc: Proc, trueBodyProc: Proc, falseBodyProc: Proc) = {
+      import scala.collection.JavaConverters._
+
+      val targetResult = normalizeMatch(valueProc, input)
+      val trueCaseBody =
+        normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, targetResult.knownFree))
+      val falseCaseBody =
+        normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
+      val freeCount = falseCaseBody.knownFree.next - input.knownFree.next
+
+      val desugaredIf = Match(
+        targetResult.par,
+        List((GBool(true), trueCaseBody.par), (GBool(false), falseCaseBody.par)),
+        freeCount)
+      ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
+    }
 
     p match {
       case p: PGround =>
@@ -377,6 +393,9 @@ object ProcNormalizeMatcher {
           input.par.prepend(Match(targetResult.par, casesResult._1.reverse, freeCount)),
           casesResult._2)
       }
+
+      case p: PIf     => normalizeIfElse(p.proc_1, p.proc_2, new PNil())
+      case p: PIfElse => normalizeIfElse(p.proc_1, p.proc_2, p.proc_3)
 
       case _ => throw new Error("Compilation of construct not yet supported.")
     }
