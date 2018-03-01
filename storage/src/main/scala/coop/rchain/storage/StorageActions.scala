@@ -52,7 +52,7 @@ trait StorageActions {
                           patterns: List[P],
                           continuation: K)(implicit m: Match[P, A]): Option[(K, List[A])] = {
     if (channels.length =!= patterns.length)
-      throw new IllegalArgumentException("cs.length must equal ps.length")
+      throw new IllegalArgumentException("channels.length must equal patterns.length")
     store.withTxn(store.createTxnWrite()) { txn =>
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
