@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.Ob.ABSENT
-import coop.rchain.rosette.{Absent, Ctxt, Fixnum, Ob, PrimErrorWrapper, Queue, RblBool, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PrimErrorWrapper, Queue, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -88,7 +88,7 @@ object queue {
     override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
       if (q.isEmpty()) {
-        Left(Absent)
+        Right(ABSENT)
       }
       Right(q.head)
     }
@@ -154,7 +154,7 @@ object queue {
         case (q: Queue, num: Fixnum) =>
           val n = num.value
           if (q.isEmpty()) {
-            Left(Absent)
+            Right(ABSENT)
           }
           if (n > q.depth() || n < 0) {
             Left(ArgumentMismatch)
