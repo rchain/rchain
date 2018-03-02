@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.Ob.ABSENT
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Queue, RblBool, Tuple}
+import coop.rchain.rosette.{Absent, Ctxt, Fixnum, Ob, PrimErrorWrapper, Queue, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -55,7 +55,7 @@ object queue {
           val ob = ctxt.argvec.elem(1)
           Right(q.enqueue(ob))
         case _ =>
-          Left(ArgumentMismatch("The first element should be a Queue"))
+          Left(ArgumentMismatch("The first element should be a queue"))
       }
   }
 
@@ -69,12 +69,12 @@ object queue {
       ctxt.argvec.elem.head match {
         case q: Queue =>
           if (q.isEmpty()) {
-            Left(QueueEmptyError)
+            Right(ABSENT)
           } else {
             Right(q.dequeue().get)
           }
         case _ =>
-          Left(ArgumentMismatch("The first element should be a Queue"))
+          Left(ArgumentMismatch("The first element should be a queue"))
       }
   }
 
@@ -88,7 +88,7 @@ object queue {
     override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
       if (q.isEmpty()) {
-        Left(QueueEmptyError)
+        Left(Absent)
       }
       Right(q.head)
     }
@@ -104,7 +104,7 @@ object queue {
       (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
         case (q: Queue, pat: Tuple) =>
           if (q.isEmpty) {
-            Left(QueueEmptyError)
+            Right(ABSENT)
           } else if (pat == Tuple.NIL) {
             Right(q.dequeue().get)
           } else {
@@ -129,7 +129,7 @@ object queue {
       (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
         case (q: Queue, pat: Tuple) =>
           if (q.isEmpty()) {
-            Left(QueueEmptyError)
+            Right(ABSENT)
           } else if (pat == Tuple.NIL) {
             val e = q.elems.elem.head
             Right(e)
@@ -154,7 +154,7 @@ object queue {
         case (q: Queue, num: Fixnum) =>
           val n = num.value
           if (q.isEmpty()) {
-            Left(QueueEmptyError)
+            Left(Absent)
           }
           if (n > q.depth() || n < 0) {
             Left(ArgumentMismatch)
@@ -173,14 +173,18 @@ object queue {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
-      val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
-      val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum].value
-      if (q.isEmpty()) {
-        Left(QueueEmptyError)
+    override def fn(ctxt: Ctxt): Either[PrimError, Ob] =
+      (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
+        case (q: Queue, n: Fixnum) =>
+          if (q.isEmpty()) {
+            Right(ABSENT)
+          }
+          Right(q.dequeueNth(n.value).getOrElse(ABSENT))
+        case _ =>
+          Left(
+            ArgumentMismatch(
+              "The first element should be a queue and second element should be a fixnum"))
       }
-      Right(q.dequeueNth(n).getOrElse(ABSENT))
-    }
   }
 
   object queueReset extends Prim {
