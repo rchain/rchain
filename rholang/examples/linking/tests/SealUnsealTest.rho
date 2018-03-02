@@ -1,0 +1,47 @@
+import MakeBrandPair, TestSet in {
+  new p1, p2, identity, mismatch in {
+    MakeBrandPair(p1) | MakeBrandPair(p2) |
+    for(r1 <- p1; r2 <- p2) {
+      match [r1, r2] with [[seal, unseal], [otherSeal, otherUnseal]] => {
+        //seal composed with unseal == identity (modulo that it is now a single element list)
+        contract identity(input, return) = {
+          new sealed in {
+            seal(input, sealed) | for(s <- sealed) {
+              unseal(s, return)
+            }
+          }
+        } |
+        //mismatched sealers and unsealers do not return results
+        contract mismatch(input, return) = {
+          new sealed in {
+            seal(input, sealed) | for(s <- sealed) {
+              otherUnseal(s, return)
+            }
+          }
+        } |
+        TestSet(
+          "Identity",
+          [
+            [identity, 1, [1]],
+            [identity, "x", ["x"]],
+            [identity, true, [true]],
+            [identity, false, [false]],
+            [identity, seal, [seal]]
+          ],
+          Nil
+        ) |
+        TestSet(
+          "Mismatch",
+          [
+            [mismatch, 1, []],
+            [mismatch, "x", []],
+            [mismatch, true, []],
+            [mismatch, false, []],
+            [mismatch, seal, []]
+          ],
+          Nil
+        )
+      }
+    }
+  }
+}

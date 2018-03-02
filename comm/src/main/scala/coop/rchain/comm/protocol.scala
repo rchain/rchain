@@ -38,10 +38,10 @@ trait ProtocolHandler {
     * Send a message to a single, remote node, and wait up to the
     * specified duration for a response.
     */
-  def roundTrip[F[_]: Capture: Monad](msg: ProtocolMessage,
-                                      remote: ProtocolNode,
-                                      timeout: Duration = Duration(500, MILLISECONDS))(
-      implicit err: ApplicativeError_[F, CommError]): F[ProtocolMessage]
+  def roundTrip[F[_]: Capture: Monad](
+      msg: ProtocolMessage,
+      remote: ProtocolNode,
+      timeout: Duration = Duration(500, MILLISECONDS)): F[Either[CommError, ProtocolMessage]]
 
   /**
     * Asynchronously broadcast a message to all known peers.
@@ -68,7 +68,7 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
 
   override def ping: Try[Duration] = {
     val req = PingMessage(ProtocolMessage.ping(handler.local), System.currentTimeMillis)
-    handler.roundTrip[Either[CommError, ?]](req, this) match {
+    handler.roundTrip[Id](req, this) match {
       case Right(resp) =>
         req.header match {
           case Some(incoming) =>
@@ -85,7 +85,7 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
 
   def lookup(key: Seq[Byte]): Try[Seq[PeerNode]] = {
     val req = LookupMessage(ProtocolMessage.lookup(handler.local, key), System.currentTimeMillis)
-    handler.roundTrip[Either[CommError, ?]](req, this) match {
+    handler.roundTrip[Id](req, this) match {
       case Right(LookupResponseMessage(proto, _)) =>
         proto.message.lookupResponse match {
           case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))

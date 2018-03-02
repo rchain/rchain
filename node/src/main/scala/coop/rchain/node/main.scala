@@ -167,14 +167,22 @@ object Main {
       }
     }
 
-    def findAndConnect(net: p2p.Network): Long => Effect[Long] =
+    def findAndConnect(net: p2p.Network): Long => Effect[Long] = {
+
+      val err: ApplicativeError_[Effect, CommError] = ApplicativeError_[Effect, CommError]
+
       (lastCount: Long) =>
         (for {
           _ <- IOUtil.sleep[Effect](5000L)
           peers <- Task.delay { // TODO lift findMorePeers to return IO
                     net.net.findMorePeers(limit = 10)
                   }.toEffect
-          _ <- peers.toList.traverse(p => net.connect[Effect](p))
+          _ <- peers.toList.traverse(p => err.attempt(net.connect[Effect](p))).map { attempts =>
+                attempts.filter {
+                  case Left(err) => false
+                  case right     => true
+                }
+              }
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
                  val thisCount = net.net.table.peers.size
                  if (thisCount != lastCount) {
@@ -183,6 +191,8 @@ object Main {
                  thisCount
                }.toEffect
         } yield tc)
+
+    }
 
     val recipe: Effect[Unit] = for {
       addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect

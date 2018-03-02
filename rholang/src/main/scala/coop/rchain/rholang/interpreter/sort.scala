@@ -125,6 +125,7 @@ object Score {
   final val RECEIVE = 301
   final val EVAL    = 302
   final val NEW     = 303
+  final val MATCH   = 304
 
   final val PAR = 999
 }
@@ -148,10 +149,11 @@ object GroundSortMatcher {
       case gp: GPrivate => ScoredTerm(gp, Node(Score.PRIVATE, Leaf(gp.p)))
       case gl: EList =>
         val pars = gl.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(EList(pars.map(_.term)), Node(Score.ELIST, pars.map(_.score): _*))
+        ScoredTerm(EList(pars.map(_.term), gl.freeCount), Node(Score.ELIST, pars.map(_.score): _*))
       case gt: ETuple =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETuple(pars.map(_.term)), Node(Score.ETUPLE, pars.map(_.score): _*))
+        ScoredTerm(ETuple(pars.map(_.term), gt.freeCount),
+                   Node(Score.ETUPLE, pars.map(_.score): _*))
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case gs: ESet =>
@@ -167,7 +169,7 @@ object GroundSortMatcher {
           }
         val sortedPars       = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
         val deduplicatedPars = deduplicate(sortedPars)
-        ScoredTerm(ESet(deduplicatedPars.map(_.term)),
+        ScoredTerm(ESet(deduplicatedPars.map(_.term), gs.freeCount),
                    Node(Score.ESET, deduplicatedPars.map(_.score): _*))
       case gm: EMap =>
         def sortKeyValuePair(kv: (Par, Par)): ScoredTerm[Tuple2[Par, Par]] = {
@@ -188,7 +190,7 @@ object GroundSortMatcher {
           }.reverse
         val sortedPars       = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
         val deduplicatedPars = deduplicateLastWriteWins(sortedPars)
-        ScoredTerm(EMap(deduplicatedPars.map(_.term)),
+        ScoredTerm(EMap(deduplicatedPars.map(_.term), gm.freeCount),
                    Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
     }
 }
@@ -290,7 +292,10 @@ object SendSortMatcher {
     val sortedChan = ChannelSortMatcher.sortMatch(s.chan)
     val sortedData = s.data.map(d => ParSortMatcher.sortMatch(d))
     val sortedSend =
-      Send(chan = sortedChan.term, data = sortedData.map(_.term), persistent = s.persistent)
+      Send(chan = sortedChan.term,
+           data = sortedData.map(_.term),
+           persistent = s.persistent,
+           freeCount = s.freeCount)
     val persistentScore = if (s.persistent) 1 else 0
     val sendScore = Node(
       Score.SEND,
@@ -327,7 +332,7 @@ object ReceiveSortMatcher {
     val persistentScore = if (r.persistent) 1 else 0
     val sortedBody      = ParSortMatcher.sortMatch(r.body)
     ScoredTerm(
-      Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent, r.count),
+      Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent, r.bindCount, r.freeCount),
       Node(Score.RECEIVE,
            Seq(Leaf(persistentScore)) ++
              sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
@@ -345,8 +350,25 @@ object EvalSortMatcher {
 object NewSortMatcher {
   def sortMatch(n: New): ScoredTerm[New] = {
     val sortedPar = ParSortMatcher.sortMatch(n.p)
-    ScoredTerm(New(count = n.count, p = sortedPar.term),
-               Node(Score.NEW, Leaf(n.count), sortedPar.score))
+    ScoredTerm(New(bindCount = n.bindCount, p = sortedPar.term),
+               Node(Score.NEW, Leaf(n.bindCount), sortedPar.score))
+  }
+}
+
+object MatchSortMatcher {
+  def sortMatch(m: Match): ScoredTerm[Match] = {
+    def sortCase(matchCase: Tuple2[Par, Par]): ScoredTerm[Tuple2[Par, Par]] = {
+      val (pattern, body) = matchCase
+      val sortedPattern   = ParSortMatcher.sortMatch(pattern)
+      val sortedBody      = ParSortMatcher.sortMatch(body)
+      ScoredTerm((sortedPattern.term, sortedBody.term),
+                 Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
+    }
+
+    val sortedValue = ParSortMatcher.sortMatch(m.value)
+    val scoredCases = m.cases.map(_case => sortCase(_case))
+    ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.freeCount),
+               Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
   }
 }
 
@@ -357,11 +379,16 @@ object ParSortMatcher {
     val exprs    = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
     val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
     val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
-    val sortedPar = Par(sends = sends.map(_.term),
-                        receives = receives.map(_.term),
-                        exprs = exprs.map(_.term),
-                        evals = evals.map(_.term),
-                        news = news.map(_.term))
+    val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+    val sortedPar = Par(
+      sends = sends.map(_.term),
+      receives = receives.map(_.term),
+      exprs = exprs.map(_.term),
+      evals = evals.map(_.term),
+      news = news.map(_.term),
+      matches = matches.map(_.term),
+      freeCount = p.freeCount
+    )
     val parScore = Node(Score.PAR,
                         sends.map(_.score) ++
                           receives.map(_.score) ++ exprs.map(_.score) ++

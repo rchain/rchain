@@ -42,7 +42,7 @@ object RholangLinker {
 
   def readRhoFile(f: File): String = {
     Source.fromFile(f).getLines()
-      .map(_.split("//").head) //ignore comments
+      .map(_.split("//").headOption.getOrElse("")) //ignore comments
       .map(_.trim)
       .filter(_.nonEmpty)
       .mkString("\n")

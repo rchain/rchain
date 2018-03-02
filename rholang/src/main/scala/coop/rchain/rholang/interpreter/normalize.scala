@@ -10,8 +10,8 @@ case object NameSort extends VarSort
 object BoolNormalizeMatcher {
   def normalizeMatch(b: Bool): GBool =
     b match {
-      case b: BoolTrue  => GBool(true)
-      case b: BoolFalse => GBool(false)
+      case _: BoolTrue  => GBool(true)
+      case _: BoolFalse => GBool(false)
     }
 }
 
@@ -28,7 +28,8 @@ object GroundNormalizeMatcher {
 object CollectionNormalizeMatcher {
   import scala.collection.JavaConverters._
   def normalizeMatch(c: Collection, input: CollectVisitInputs): CollectVisitOutputs = {
-    def foldMatch(listproc: List[Proc], constructor: List[Par] => Expr): CollectVisitOutputs = {
+    def foldMatch(listproc: List[Proc],
+                  constructor: (List[Par], Int) => Expr): CollectVisitOutputs = {
       val folded = ((List[Par](), input.knownFree) /: listproc)(
         (acc, e) => {
           val result =
@@ -36,11 +37,13 @@ object CollectionNormalizeMatcher {
           (result.par :: acc._1, result.knownFree)
         }
       )
-      CollectVisitOutputs(constructor(folded._1.reverse), folded._2)
+      val resultKnownFree = folded._2
+      val freeCount       = resultKnownFree.next - input.knownFree.next
+      CollectVisitOutputs(constructor(folded._1.reverse, freeCount), resultKnownFree)
     }
 
     def foldMatchMap(listproc: List[KeyValuePair],
-                     constructor: List[(Par, Par)] => Expr): CollectVisitOutputs = {
+                     constructor: (List[(Par, Par)], Int) => Expr): CollectVisitOutputs = {
       val folded = ((List[(Par, Par)](), input.knownFree) /: listproc)(
         (acc, e) => {
           e match {
@@ -55,7 +58,9 @@ object CollectionNormalizeMatcher {
           }
         }
       )
-      CollectVisitOutputs(constructor(folded._1.reverse), folded._2)
+      val resultKnownFree = folded._2
+      val freeCount       = resultKnownFree.next - input.knownFree.next
+      CollectVisitOutputs(constructor(folded._1.reverse, freeCount), resultKnownFree)
     }
     c match {
       case cl: CollectList  => foldMatch(cl.listproc_.asScala.toList, EList)
@@ -69,7 +74,7 @@ object CollectionNormalizeMatcher {
 object NameNormalizeMatcher {
   def normalizeMatch(n: Name, input: NameVisitInputs): NameVisitOutputs =
     n match {
-      case n: NameWildcard =>
+      case _: NameWildcard =>
         val wildcardBindResult = input.knownFree.setWildcardUsed(1)
         NameVisitOutputs(ChanVar(FreeVar(wildcardBindResult._2)), wildcardBindResult._1)
       case n: NameVar =>
@@ -77,7 +82,7 @@ object NameNormalizeMatcher {
           case Some((level, NameSort)) => {
             NameVisitOutputs(ChanVar(BoundVar(level)), input.knownFree)
           }
-          case Some((level, ProcSort)) => {
+          case Some((_, ProcSort)) => {
             throw new Error("Proc variable used in name context.")
           }
           case None => {
@@ -125,6 +130,22 @@ object ProcNormalizeMatcher {
       ProcVisitOutputs(input.par.prepend(constructor(leftResult.par, rightResult.par)),
                        rightResult.knownFree)
     }
+    def normalizeIfElse(valueProc: Proc, trueBodyProc: Proc, falseBodyProc: Proc) = {
+      import scala.collection.JavaConverters._
+
+      val targetResult = normalizeMatch(valueProc, input)
+      val trueCaseBody =
+        normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, targetResult.knownFree))
+      val falseCaseBody =
+        normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
+      val freeCount = falseCaseBody.knownFree.next - input.knownFree.next
+
+      val desugaredIf = Match(
+        targetResult.par,
+        List((GBool(true), trueCaseBody.par), (GBool(false), falseCaseBody.par)),
+        freeCount)
+      ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
+    }
 
     p match {
       case p: PGround =>
@@ -143,7 +164,7 @@ object ProcNormalizeMatcher {
           case Some((level, ProcSort)) => {
             ProcVisitOutputs(input.par.prepend(EVar(BoundVar(level))), input.knownFree)
           }
-          case Some((level, NameSort)) => {
+          case Some((_, NameSort)) => {
             throw new Error("Name variable used in process context.")
           }
           case None => {
@@ -158,7 +179,7 @@ object ProcNormalizeMatcher {
           }
         }
 
-      case p: PNil => ProcVisitOutputs(input.par, input.knownFree)
+      case _: PNil => ProcVisitOutputs(input.par, input.knownFree)
 
       case p: PEval => {
         def collapseEvalQuote(chan: Channel): Par =
@@ -208,8 +229,10 @@ object ProcNormalizeMatcher {
           case _: SendSingle   => false
           case _: SendMultiple => true
         }
-        ProcVisitOutputs(input.par.prepend(Send(nameMatchResult.chan, dataResults._1, persistent)),
-                         dataResults._2.knownFree)
+        val freeCount = dataResults._2.knownFree.next - input.knownFree.next
+        ProcVisitOutputs(
+          input.par.prepend(Send(nameMatchResult.chan, dataResults._1, persistent, freeCount)),
+          dataResults._2.knownFree)
       }
 
       case p: PContr => {
@@ -230,17 +253,19 @@ object ProcNormalizeMatcher {
             (result.chan :: acc._1, result.knownFree)
           }
         )
-        val newEnv       = input.env.absorbFree(formalsResults._2)._1
-        val newFreeCount = formalsResults._2.next
+        val newEnv     = input.env.absorbFree(formalsResults._2)._1
+        val boundCount = formalsResults._2.next
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
+        val freeCount = bodyResult.knownFree.next - input.knownFree.next
         ProcVisitOutputs(
           input.par.prepend(
             Receive(List((formalsResults._1.reverse, nameMatchResult.chan)),
                     bodyResult.par,
                     true,
-                    newFreeCount)),
+                    boundCount,
+                    freeCount)),
           bodyResult.knownFree
         )
       }
@@ -306,13 +331,15 @@ object ProcNormalizeMatcher {
             case _ =>
               throw new Error("Free variable used as binder may not be used twice.")
         })
-        val freeCount  = mergedFrees.next
+        val bindCount  = mergedFrees.next
         val binds      = receipts.map((receipt) => (receipt._1, receipt._2))
         val updatedEnv = input.env.absorbFree(mergedFrees)._1
         val bodyResult =
           normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
-        ProcVisitOutputs(input.par.prepend(Receive(binds, bodyResult.par, persistent, freeCount)),
-                         bodyResult.knownFree)
+        val freeCount = bodyResult.knownFree.next - input.knownFree.next
+        ProcVisitOutputs(
+          input.par.prepend(Receive(binds, bodyResult.par, persistent, bindCount, freeCount)),
+          bodyResult.knownFree)
       }
 
       case p: PPar => {
@@ -336,6 +363,39 @@ object ProcNormalizeMatcher {
         }
         ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
       }
+
+      case p: PMatch => {
+        import scala.collection.JavaConverters._
+
+        val targetResult = normalizeMatch(p.proc_, input)
+        val cases = p.listcase_.asScala.toList.map {
+          case ci: CaseImpl => (ci.proc_1, ci.proc_2)
+          case _            => throw new Error("Unexpected Case implementation.")
+        }
+
+        val initAcc = (List[Tuple2[Par, Par]](), targetResult.knownFree)
+        val casesResult = (initAcc /: cases) { (acc, caseImpl) =>
+          caseImpl match {
+            case (pattern, caseBody) => {
+              val patternResult =
+                normalizeMatch(
+                  pattern,
+                  ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]()))
+              val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
+              val caseBodyResult =
+                normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
+              ((patternResult.par, caseBodyResult.par) :: acc._1, caseBodyResult.knownFree)
+            }
+          }
+        }
+        val freeCount = casesResult._2.next - input.knownFree.next
+        ProcVisitOutputs(
+          input.par.prepend(Match(targetResult.par, casesResult._1.reverse, freeCount)),
+          casesResult._2)
+      }
+
+      case p: PIf     => normalizeIfElse(p.proc_1, p.proc_2, new PNil())
+      case p: PIfElse => normalizeIfElse(p.proc_1, p.proc_2, p.proc_3)
 
       case _ => throw new Error("Compilation of construct not yet supported.")
     }

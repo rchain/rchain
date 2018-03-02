@@ -1,5 +1,6 @@
 package coop.rchain
 
+import cats.data.State
 import coop.rchain.rosette.parser.bytecode.ParseError
 import coop.rchain.rosette.prim.PrimError
 
@@ -18,6 +19,8 @@ package object rosette {
   case object PrimNotFound                      extends RblError
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
+
+  type VMTransition[A] = State[VMState, A]
 
   type Result = Either[RblError, Ob]
 
