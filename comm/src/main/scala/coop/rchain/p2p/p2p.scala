@@ -53,7 +53,8 @@ class Network(
   val net    = new UnicastNetwork(local, Some(this))
 
   def connect[F[_]: Capture: Monad: Log](peer: PeerNode)(
-      implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
+      implicit
+      keysStore: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
       _          <- Log[F].debug(s"Connecting to $peer")
@@ -62,7 +63,7 @@ class Network(
       remote     = new ProtocolNode(peer, this.net)
       ehsrespmsg <- net.roundTrip[F](ehs, remote).map(err.fromEither).flatten
       ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
-      _          <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
+      _          <- keysStore.put(peer, ehsresp.publicKey.toByteArray)
       _          <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
       ts2        <- IOUtil.currentMilis[F]
       phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
