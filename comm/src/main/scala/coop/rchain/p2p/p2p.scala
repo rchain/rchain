@@ -89,7 +89,8 @@ class Network(
 
   private def handleEncryptionHandshake[F[_]: Monad: Capture: Log](
       sender: PeerNode,
-      handshake: EncryptionHandshakeMessage): F[Unit] =
+      handshake: EncryptionHandshakeMessage)(
+      implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
     for {
       result <- handshake
                  .response(net.local, keys)
@@ -114,8 +115,9 @@ class Network(
       _ <- addNode[F](sender)
     } yield ()
 
-  override def dispatch[F[_]: Monad: Capture: Log](sock: java.net.SocketAddress,
-                                                   msg: ProtocolMessage): F[Unit] = {
+  override def dispatch[F[_]: Monad: Capture: Log: Kvs[?[_], PeerNode, Array[Byte]]](
+      sock: java.net.SocketAddress,
+      msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
