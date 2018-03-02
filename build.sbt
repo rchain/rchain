@@ -144,7 +144,7 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies,
+    libraryDependencies ++= commonDependencies ++ Seq(monix),
     bnfcSettings,
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
@@ -179,4 +179,3 @@ lazy val roscala = project
       shapeless,
       scalaCheck)
   ).dependsOn(roscala_macros)
-
