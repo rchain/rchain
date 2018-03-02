@@ -55,7 +55,7 @@ class ProtocolTest extends FlatSpec with Matchers {
     val result = hs.response(src)
 
     val upstream = result match {
-      case Some(message: ProtocolMessage) =>
+      case Right(message: ProtocolMessage) =>
         message.proto.message match {
           case routing.Protocol.Message.Upstream(upstream) => upstream
           case _                                           => null
