@@ -9,8 +9,10 @@ import coop.rchain.comm.protocol.routing.Header
 import com.typesafe.scalalogging.Logger
 import scala.collection.mutable
 import scala.util.{Failure, Success}
+import CommError._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import scala.util.Try
 
 /**
   * Implements the lower levels of the network protocol.
@@ -184,33 +186,37 @@ final case class UnicastNetwork(peer: PeerNode,
     *
     * This method should be called in its own thread.
     */
-  override def roundTrip[F[_]: Capture: Monad](msg: ProtocolMessage,
-                                               remote: ProtocolNode,
-                                               timeout: Duration = Duration(500, MILLISECONDS))(
-      implicit err: ApplicativeError_[F, CommError]): F[ProtocolMessage] = {
+  override def roundTrip[F[_]: Capture: Monad](
+      msg: ProtocolMessage,
+      remote: ProtocolNode,
+      timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] = {
 
-    def send(header: Header): F[ProtocolMessage] =
-      Capture[F].capture {
-        val bytes   = msg.toByteSeq
-        val pend    = PendingKey(remote.key, header.timestamp, header.seq)
-        val promise = Promise[Either[CommError, ProtocolMessage]]
-        pending.put(pend, promise)
-        // TODO used to be in try
-        comm.send(bytes, remote)
-        val result = Await.result(promise.future, timeout)
-        // TODO used to by in finally
-        pending.remove(pend)
-        err.fromEither(result)
-      }.flatten
+    def send(header: Header): CommErrT[F, ProtocolMessage] = {
+      val sendIt: F[CommErr[ProtocolMessage]] = for {
+        promise <- Capture[F].capture(Promise[Either[CommError, ProtocolMessage]])
+        bytes   = msg.toByteSeq
+        pend    = PendingKey(remote.key, header.timestamp, header.seq)
+        result <- Capture[F].capture {
+                   pending.put(pend, promise)
+                   comm.send(bytes, remote)
+                   Try(Await.result(promise.future, timeout)).toEither
+                     .leftMap(protocolException)
+                     .flatten
+                 }
+        _ <- Capture[F].capture(pending.remove(pend))
+      } yield result
+      EitherT(sendIt)
+    }
 
-    def fetchHeader(maybeHeader: Option[Header]): F[Header] =
-      maybeHeader.fold[F[Header]](
-        err.raiseError[Header](UnknownProtocolError("malformed message")))(_.pure[F])
+    def fetchHeader(maybeHeader: Option[Header]): CommErrT[F, Header] =
+      maybeHeader.fold[CommErrT[F, Header]](
+        EitherT(unknownProtocol("malformed message").asLeft[Header].pure[F]))(
+        _.pure[CommErrT[F, ?]])
 
-    for {
-      header  <- fetchHeader(msg.header)
-      message <- send(header)
-    } yield message
+    (for {
+      header     <- fetchHeader(msg.header)
+      messageErr <- send(header)
+    } yield messageErr).value
 
   }
 
