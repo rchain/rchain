@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 
+//RosetteBaseLanguage
+
 sealed trait VarSort
 case object ProcSort extends VarSort
 case object NameSort extends VarSort
