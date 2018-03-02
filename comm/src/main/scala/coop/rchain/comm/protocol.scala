@@ -19,7 +19,7 @@ trait ProtocolDispatcher[A] {
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch(extra: A, msg: ProtocolMessage): Unit
+  def dispatch[F[_]: Monad: Capture: Log](extra: A, msg: ProtocolMessage): F[Unit]
 }
 
 /**
