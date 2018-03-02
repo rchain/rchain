@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, RblString, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, RblChar, RblString, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -107,6 +107,108 @@ object rblstring {
     }
   }
 
+  /**
+    * Define the string-set-nth primitive.
+    * This replaces the n element of a String
+    *
+    * examples:
+    *  (string-set-nth "abcdef" 2 #\C) ===> "abCdef"
+    */
+  object stringSetNth extends Prim {
+    override val name: String = "string-set-nth"
+    override val minArgs: Int = 3
+    override val maxArgs: Int = 3
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem = ctxt.argvec.elem
+
+      for {
+        str <- checkRblString(0, elem)                      // Ensure arg0 is a RblString
+        n   <- checkFixnumBounds(1, elem, str.value.length) // Ensure arg1 is a Fixnum
+        ch  <- checkChar(2, elem)                           // Ensure arg2 is a Char
+      } yield {
+        RblString(str.value.updated(n, ch.value).toString)
+      }
+    }
+  }
+
+  /**
+    * Define the string-length primitive.
+    * Returns the length of the string
+    * e.g. (string-length "abcdefghi") ==> 9
+    */
+  object stringLength extends Prim {
+    override val name: String = "string-length"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[RblString] // All args must be strings
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+      val elem = ctxt.argvec.elem
+
+      Right(Fixnum(elem(0).asInstanceOf[RblString].value.length))
+    }
+  }
+
+  /**
+    * Define the string-new primitive.
+    * This creates a new RblString of length n. It is filled with
+    * either spaces ' ' or an optionally specified character.
+    *
+    * examples:
+    *  (string-new 5) ===> "     "
+    *  (string-new 4 #\A) ===> "AAAA"
+    */
+  object stringNew extends Prim {
+    override val name: String = "string-new"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem  = ctxt.argvec.elem
+      val nargs = ctxt.nargs
+
+      checkFixnum(0, elem).flatMap { n => // Ensure arg0 is a Fixnum
+        if (nargs == 1) {
+          Right(RblString(" " * n.value)) // No char specified. Use ' '
+        } else {
+          checkChar(1, elem).flatMap { ch => // Ensure arg1 is a RblChar
+            Right(RblString(ch.value.toString * n.value))
+          }
+        }
+      }
+    }
+  }
+
+  /**
+    * Define the string-mem? primitive.
+    * This returns #t if the specified character is in the string else #f
+    *
+    * examples:
+    *  (string-mem? "abcdef" #\c) ===> #t
+    *  (string-mem? "abcdef" #\z) ===> #f
+    */
+  object stringMemQ extends Prim {
+    override val name: String = "string-mem?"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem = ctxt.argvec.elem
+
+      for {
+        str <- checkRblString(0, elem) // Ensure arg0 is a RblString
+        ch  <- checkChar(1, elem)      // Ensure arg1 is a Char
+      } yield {
+        RblBool(str.value.contains(ch.value))
+      }
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the parameter for type RblString. Return a PrimError if it is
@@ -159,6 +261,17 @@ object rblstring {
     }
 
   /**
+    * Check the specified parameter for type Char. Return a PrimError if it is
+    * not else return the Char.
+    */
+  private def checkChar(n: Int, elem: Seq[Ob]): Either[PrimError, RblChar] =
+    if (!elem(n).isInstanceOf[RblChar]) {
+      Left(TypeMismatch(n, RblChar.getClass().getName()))
+    } else {
+      Right(elem(n).asInstanceOf[RblChar])
+    }
+
+  /**
     * Check the specified parameter for type RblString. Return a PrimError if it is
     * not else return the RblString.
     */
@@ -169,4 +282,20 @@ object rblstring {
       Right(elem(n).asInstanceOf[RblString])
     }
 
+  /**
+    * Check the specified parameter for type Fixnum. Return a PrimError if it is
+    * not a Fixnum or if it is out of bounds of 0 <= n <= size. Otherwise return the
+    * value of the Fixnum as an Int.
+    */
+  private def checkFixnumBounds(n: Int, elem: Seq[Ob], size: Int): Either[PrimError, Int] =
+    if (!elem(n).isInstanceOf[Fixnum]) {
+      Left(TypeMismatch(n, Fixnum.getClass().getName()))
+    } else {
+      val i = elem(n).asInstanceOf[Fixnum].value
+      if ((i < 0) || (i > size)) {
+        Left(IndexOutOfBounds(i, size))
+      } else {
+        Right(i)
+      }
+    }
 }
