@@ -3,43 +3,27 @@ package coop.rchain.rholang.interpreter
 import org.scalatest.{FlatSpec, Matchers}
 import Substitute._
 import scala.collection.immutable.HashMap
+import ExprTest._
 
-object ExprTest extends App {
+object ExprTest {
   val chan0: Channel = ChanVar(BoundVar(0))
   val name0: Quote = Quote(Par.forge)
   val chan1: Channel = ChanVar(BoundVar(1))
   val name1: Quote = Quote(Par.forge)
   val chan2: Channel = ChanVar(BoundVar(2))
   val name2: Quote = Quote(Par.forge)
-  val chan3: Channel = ChanVar(BoundVar(3))
-  val name3: Quote = Quote(Par.forge)
   val send0: Send = Send(chan0, List(Par()),false,0)
   val send1: Send = Send(chan1, List(Par()),false,0)
   val send2: Send = Send(chan2, List(Par()),false,0)
   val sendQ: Send = Send(Quote(send0),List(Par()),false,0)
-
-  val source0 = Par.forge
-  val source1 = Par.forge
-
-  val source = Par.forge
-  val target = Send(chan0, List(Par(send0)),false,0)
-  val _target = Send(Quote(source),List(Par(Send(Quote(source),List(Par()),false,0))),false,0)
-  val env = HashMap(0 -> source)
-  val result = substitute(target)(env)
-  println(env)
-  println(target)
-  println(result)
-  println(_target)
 }
 
-class ChannelSub extends FlatSpec with Matchers {
-
-  import ExprTest._
+class VarSub extends FlatSpec with Matchers {
 
   "FreeVar" should "throw an error" in {
     val env = HashMap(0 -> Par.forge)
     an [Error] should be thrownBy subOrDec(FreeVar(0))(env)
-   }
+  }
 
   "BoundVar" should "be substituted for process" in {
     val source = Par.forge
@@ -50,8 +34,8 @@ class ChannelSub extends FlatSpec with Matchers {
 
   // BoundVar(0), Env := { 0 -> Par(BoundVar(0)) --> Par(BoundVar(1)), Env := { 0 -> Par(BoundVar(0)) }
   "BoundVar" should "be substituted with renamed expression" in {
-    val source = Par(Send(ChanVar(BoundVar(0)),List(Par()),false,0))
-    val _source = Par(Send(ChanVar(BoundVar(1)),List(Par()),false,0))
+    val source = Par(send0)
+    val _source = Par(send1)
     val env = HashMap(0 -> source)
     val result = subOrDec(BoundVar(0))(env)
     result should be (Right(_source))
@@ -67,6 +51,9 @@ class ChannelSub extends FlatSpec with Matchers {
     val result = subOrDec(BoundVar(2))(env)
     result should be (Left(BoundVar(0)))
   }
+}
+
+class ChannelSub extends FlatSpec with Matchers {
 
   "ChanVar" should "be decremented by environment level" in {
     val env = HashMap(0 -> Par.forge, 1 -> Par.forge)
@@ -76,7 +63,6 @@ class ChannelSub extends FlatSpec with Matchers {
 
   "Quote" should "substitute quoted process" in {
     val env = HashMap(0 -> Par.forge)
-    // @{1!{Nil} | 0} ==> @{0!{Nil} | 0}
     val par = Par(send1)
     val target = Quote(par)
     val result = substitute(target)(env)
@@ -91,9 +77,7 @@ class ChannelSub extends FlatSpec with Matchers {
   }
 }
 
-class ParSub extends FlatSpec with Matchers {
-
-  import ExprTest._
+class SendSub extends FlatSpec with Matchers {
 
   "Send" should "decrement subject Channel and substitute object processes" in {
     val env = HashMap(0 -> Par.forge, 1 -> Par.forge)
@@ -105,8 +89,6 @@ class ParSub extends FlatSpec with Matchers {
     val source0 = Par.forge
     val source1 = Par.forge
     val env = HashMap(0 -> source0, 1 -> source1)
-
-    // sendQ := @{0!{Nil}}!{Nil}, Env := { 0 -> G0 } ==> @{@{G0}!{Nil}}!{Nil}, Env := { 0 -> G0 } NOT @{@{G0}}!{Nil}
     val result = substitute(sendQ)(env)
     result should be (
       Send(
@@ -117,8 +99,6 @@ class ParSub extends FlatSpec with Matchers {
       )
     )
   }
-
-  // 0!{0!{Nil}}, Env := { 0 -> G0 } ==> @{G0}!{@{G0}!{Nil}}, Env := { 0 -> G0 }
 
   "Send" should "substitute all Channels for Quotes" in {
     val source = Par.forge
@@ -152,6 +132,9 @@ class ParSub extends FlatSpec with Matchers {
       )
     )
   }
+}
+
+class NewSub extends FlatSpec with Matchers {
 
   "New" should "only substitute body of expression" in {
     val source = Par.forge
