@@ -52,11 +52,12 @@ class Network(
   val logger = Logger("p2p")
   val net    = new UnicastNetwork(local, Some(this))
 
-  def connect[F[_]: Capture: Monad: Log](peer: PeerNode)(
+  def connect[F[_]: Capture: Monad: Log: Metrics](peer: PeerNode)(
       implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
       _          <- Log[F].debug(s"Connecting to $peer")
+      _          <- Metrics[F].incrementCounter("connects")
       ts1        <- IOUtil.currentMilis[F]
       ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
       remote     = new ProtocolNode(peer, this.net)
@@ -69,6 +70,7 @@ class Network(
       phsresp    <- net.roundTrip[F](phs, remote).map(err.fromEither).flatten
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- addNode[F](remote)
+      _          <- Metrics[F].incrementCounter("peers")
     } yield ()
 
   def disconnect(): Unit = {

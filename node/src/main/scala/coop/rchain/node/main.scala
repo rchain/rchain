@@ -15,6 +15,8 @@ import scala.concurrent.duration._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
+import kamon._
+
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     def unsafeRunSync(handle: A => Unit): Unit =
@@ -107,6 +109,22 @@ object Main {
       def error(msg: String): Task[Unit] = Task.delay(logger.error(msg))
     }
 
+    implicit def metrics: Metrics[Task] = new Metrics[Task] {
+      val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
+
+      def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
+          case (c: metric.Counter) => c.increment(delta)
+        }
+      }
+
+      def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
+          case (c: metric.Gauge) => c.set(value)
+        }
+      }
+    }
+
     /** will use database or file system */
     implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
       new Kvs[Task, PeerNode, Array[Byte]] {
@@ -139,6 +157,8 @@ object Main {
       def toEffect: Effect[A] = t.liftM[CommErrT]
     }
 
+    val metricsServer = MetricsServer()
+
     val http = HttpServer(conf.httpPort())
     http.start
 
@@ -161,6 +181,7 @@ object Main {
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
+        metricsServer.stop
         http.stop
         net.disconnect
         logger.info("Goodbye.")

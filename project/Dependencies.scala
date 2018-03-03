@@ -49,4 +49,10 @@ object Dependencies {
 
   val commonDependencies   = loggingDependencies ++ testingDependencies
   val protobufDependencies = Seq(protobufCompiler, protobufRuntime)
+
+  val kamonDependencies = Seq(
+    "io.kamon" %% "kamon-core"       % "1.0.0",
+    "io.kamon" %% "kamon-prometheus" % "1.0.0"
+  )
+
 }
