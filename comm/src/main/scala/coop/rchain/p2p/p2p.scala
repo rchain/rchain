@@ -71,6 +71,8 @@ class Network(
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- addNode[F](remote)
       _          <- Metrics[F].incrementCounter("peers")
+      tsf        <- IOUtil.currentMilis[F]
+      _          <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
   def disconnect(): Unit = {
@@ -84,7 +86,7 @@ class Network(
       net.comm.send(data, peer)
     }
 
-  private def addNode[F[_]: Capture](node: PeerNode): F[Unit] = Capture[F].capture {
+  private def addNode[F[_]: Capture: Metrics](node: PeerNode): F[Unit] = Capture[F].capture {
     net.add(node)
   }
 
@@ -101,7 +103,7 @@ class Network(
           }
     } yield ()
 
-  private def handleProtocolHandshake[F[_]: Monad: Capture: Log](
+  private def handleProtocolHandshake[F[_]: Monad: Capture: Log: Metrics](
       sender: PeerNode,
       handshake: ProtocolHandshakeMessage): F[Unit] =
     for {
@@ -115,8 +117,8 @@ class Network(
       _ <- addNode[F](sender)
     } yield ()
 
-  override def dispatch[F[_]: Monad: Capture: Log](sock: java.net.SocketAddress,
-                                                   msg: ProtocolMessage): F[Unit] = {
+  override def dispatch[F[_]: Monad: Capture: Log: Metrics](sock: java.net.SocketAddress,
+                                                            msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
