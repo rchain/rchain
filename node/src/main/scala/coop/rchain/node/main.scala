@@ -118,9 +118,27 @@ object Main {
         }
       }
 
+      def incrementSampler(name: String, delta: Long): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
+          case (c: metric.RangeSampler) => c.increment(delta)
+        }
+      }
+
+      def sample(name: String): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
+          case (c: metric.RangeSampler) => c.sample
+        }
+      }
+
       def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
         m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
           case (c: metric.Gauge) => c.set(value)
+        }
+      }
+
+      def record(name: String, value: Long, count: Long = 1): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.histogram(name) }) match {
+          case (c: metric.Histogram) => c.record(value, count)
         }
       }
     }
