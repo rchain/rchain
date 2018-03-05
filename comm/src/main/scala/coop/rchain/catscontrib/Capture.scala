@@ -38,6 +38,11 @@ trait CaptureInstances extends CaptureInstances0 {
   implicit def eitherCapture[E]: Capture[Either[E, ?]] = new Capture[Either[E, ?]] {
     def capture[A](a: => A): Either[E, ?][A] = Right(a)
   }
+
+  implicit def idCapture: Capture[Id] = new Capture[Id] {
+    def capture[A](a: => A): Id[A] = a
+  }
+  /** TEMP REMOVE END */
 }
 
 sealed trait CaptureInstances0 {

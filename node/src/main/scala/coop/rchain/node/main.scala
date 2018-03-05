@@ -15,6 +15,8 @@ import scala.concurrent.duration._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
+import kamon._
+
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
     def unsafeRunSync(handle: A => Unit): Unit =
@@ -49,9 +51,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 }
 
 object Main {
-  val logger   = Logger("main")
-  val iologger = IOLogger("main")
-
+  val logger = Logger("main")
   def whoami(port: Int): Option[InetAddress] = {
 
     val upnp = new UPnP(port)
@@ -101,6 +101,48 @@ object Main {
 
     import ApplicativeError_._
 
+    implicit def ioLog: Log[Task] = new Log[Task] {
+
+      def debug(msg: String): Task[Unit] = Task.delay(logger.debug(msg))
+      def info(msg: String): Task[Unit]  = Task.delay(logger.info(msg))
+      def warn(msg: String): Task[Unit]  = Task.delay(logger.warn(msg))
+      def error(msg: String): Task[Unit] = Task.delay(logger.error(msg))
+    }
+
+    implicit def metrics: Metrics[Task] = new Metrics[Task] {
+      val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
+
+      def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
+          case (c: metric.Counter) => c.increment(delta)
+        }
+      }
+
+      def incrementSampler(name: String, delta: Long): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
+          case (c: metric.RangeSampler) => c.increment(delta)
+        }
+      }
+
+      def sample(name: String): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
+          case (c: metric.RangeSampler) => c.sample
+        }
+      }
+
+      def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
+          case (c: metric.Gauge) => c.set(value)
+        }
+      }
+
+      def record(name: String, value: Long, count: Long = 1): Task[Unit] = Task.delay {
+        m.getOrElseUpdate(name, { Kamon.histogram(name) }) match {
+          case (c: metric.Histogram) => c.record(value, count)
+        }
+      }
+    }
+
     /** will use database or file system */
     implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
       new Kvs[Task, PeerNode, Array[Byte]] {
@@ -122,17 +164,18 @@ object Main {
       }
 
     /** This is essentially a final effect that will accumulate all effects from the system */
-    type LogT[F[_], A]     = WriterT[F, Vector[String], A]
     type CommErrT[F[_], A] = EitherT[F, CommError, A]
-    type Effect[A]         = CommErrT[LogT[Task, ?], A]
+    type Effect[A]         = CommErrT[Task, A]
 
     implicit class EitherEffectOps[A](e: Either[CommError, A]) {
-      def toEffect: Effect[A] = EitherT[LogT[Task, ?], CommError, A](e.pure[LogT[Task, ?]])
+      def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
     }
 
     implicit class TaskEffectOps[A](t: Task[A]) {
-      def toEffect: Effect[A] = t.liftM[LogT].liftM[CommErrT]
+      def toEffect: Effect[A] = t.liftM[CommErrT]
     }
+
+    val metricsServer = MetricsServer()
 
     val http = HttpServer(conf.httpPort())
     http.start
@@ -149,26 +192,36 @@ object Main {
                              .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
                              .toEffect
         bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
-        _             <- iologger.info[Effect](s"Bootstrapping from $bootstrapAddr.")
+        _             <- Log[Effect].info(s"Bootstrapping from $bootstrapAddr.")
         _             <- net.connect[Effect](bootstrapAddr)
+        _             <- Log[Effect].info(s"Connected $bootstrapAddr.")
       } yield ()
 
     def addShutdownHook(net: p2p.Network): Task[Unit] = Task.delay {
       sys.addShutdownHook {
+        metricsServer.stop
         http.stop
         net.disconnect
         logger.info("Goodbye.")
       }
     }
 
-    def findAndConnect(net: p2p.Network): Long => Effect[Long] =
+    def findAndConnect(net: p2p.Network): Long => Effect[Long] = {
+
+      val err: ApplicativeError_[Effect, CommError] = ApplicativeError_[Effect, CommError]
+
       (lastCount: Long) =>
         (for {
           _ <- IOUtil.sleep[Effect](5000L)
           peers <- Task.delay { // TODO lift findMorePeers to return IO
                     net.net.findMorePeers(limit = 10)
                   }.toEffect
-          _ <- peers.toList.traverse(p => net.connect[Effect](p))
+          _ <- peers.toList.traverse(p => err.attempt(net.connect[Effect](p))).map { attempts =>
+                attempts.filter {
+                  case Left(err) => false
+                  case right     => true
+                }
+              }
           tc <- Task.delay { // TODO refactor once findMorePeers return IO
                  val thisCount = net.net.table.peers.size
                  if (thisCount != lastCount) {
@@ -178,20 +231,23 @@ object Main {
                }.toEffect
         } yield tc)
 
+    }
+
     val recipe: Effect[Unit] = for {
       addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
       keys <- calculateKeys
       net  <- (new p2p.Network(addy, keys)).pure[Effect]
+      _    <- Task.fork(MonadOps.forever(net.net.receiver[Effect].value.void)).start.toEffect
       _    <- addShutdownHook(net).toEffect
-      _    <- iologger.info[Effect](s"Listening for traffic on $net.")
-      _ <- if (conf.standalone()) iologger.info[Effect](s"Starting stand-alone node.")
+      _    <- Log[Effect].info(s"Listening for traffic on $net.")
+      _ <- if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
           else connectToBootstrap(net)
       _ <- MonadOps.forever(findAndConnect(net), 0L)
     } yield ()
 
     import monix.execution.Scheduler.Implicits.global
     import TaskContrib._
-    recipe.value.value.unsafeRunSync {
+    recipe.value.unsafeRunSync {
       case Right(_) => ()
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
