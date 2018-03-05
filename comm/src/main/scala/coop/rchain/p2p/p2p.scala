@@ -52,11 +52,12 @@ class Network(
   val logger = Logger("p2p")
   val net    = new UnicastNetwork(local, Some(this))
 
-  def connect[F[_]: Capture: Monad: Log](peer: PeerNode)(
+  def connect[F[_]: Capture: Monad: Log: Metrics](peer: PeerNode)(
       implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
       _          <- Log[F].debug(s"Connecting to $peer")
+      _          <- Metrics[F].incrementCounter("connects")
       ts1        <- IOUtil.currentMilis[F]
       ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
       remote     = new ProtocolNode(peer, this.net)
@@ -69,6 +70,9 @@ class Network(
       phsresp    <- net.roundTrip[F](phs, remote).map(err.fromEither).flatten
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- addNode[F](remote)
+      _          <- Metrics[F].incrementCounter("peers")
+      tsf        <- IOUtil.currentMilis[F]
+      _          <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
   def disconnect(): Unit = {
@@ -82,7 +86,7 @@ class Network(
       net.comm.send(data, peer)
     }
 
-  private def addNode[F[_]: Capture](node: PeerNode): F[Unit] = Capture[F].capture {
+  private def addNode[F[_]: Capture: Metrics](node: PeerNode): F[Unit] = Capture[F].capture {
     net.add(node)
   }
 
@@ -99,7 +103,7 @@ class Network(
           }
     } yield ()
 
-  private def handleProtocolHandshake[F[_]: Monad: Capture: Log](
+  private def handleProtocolHandshake[F[_]: Monad: Capture: Log: Metrics](
       sender: PeerNode,
       handshake: ProtocolHandshakeMessage): F[Unit] =
     for {
@@ -113,8 +117,8 @@ class Network(
       _ <- addNode[F](sender)
     } yield ()
 
-  override def dispatch[F[_]: Monad: Capture: Log](sock: java.net.SocketAddress,
-                                                   msg: ProtocolMessage): F[Unit] = {
+  override def dispatch[F[_]: Monad: Capture: Log: Metrics](sock: java.net.SocketAddress,
+                                                            msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
