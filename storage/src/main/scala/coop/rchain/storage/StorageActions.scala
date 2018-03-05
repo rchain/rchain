@@ -73,19 +73,22 @@ trait StorageActions {
 
   /* Produce */
 
-  // TODO(ht): write a recursive version with early return
-  private[storage] def extractProduceCandidates[C, P, A, K](
-      store: IStore[C, P, A, K],
-      groupedKeys: List[List[C]],
-      data: A)(txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)], List[C])] =
-    groupedKeys.foldRight(None: Option[(K, List[(A, C, Int)], List[C])]) {
-      (cs: List[C], acc: Option[(K, List[(A, C, Int)], List[C])]) =>
-        store.getK(txn, cs).flatMap {
-          case (ps, k) =>
-            extractDataCandidates(store, cs, ps)(txn) match {
-              case None       => acc
-              case Some(acis) => Some((k, acis, cs))
-            }
+  @tailrec
+  private[storage] final def extractProduceCandidates[C, P, A, K](store: IStore[C, P, A, K],
+                                                                  groupedChannels: List[List[C]])(
+      txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)], List[C])] =
+    groupedChannels match {
+      case Nil =>
+        None
+      case channels :: remaining =>
+        val candidates: Option[(K, List[(A, C, Int)], List[C])] =
+          store.getK(txn, channels).flatMap {
+            case (ps, k) =>
+              extractDataCandidates(store, channels, ps)(txn).map(acis => (k, acis, channels))
+          }
+        candidates match {
+          case None => extractProduceCandidates(store, remaining)(txn)
+          case res  => res
         }
     }
 
@@ -102,9 +105,9 @@ trait StorageActions {
   def produce[C, P, A, K, T](store: IStore[C, P, A, K], channel: C, data: A)(
       implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
-      val groupedKeys: List[List[C]] = store.getJoin(txn, channel)
+      val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
       store.putA(txn, channel.pure[List], data)
-      extractProduceCandidates(store, groupedKeys, data)(txn).map {
+      extractProduceCandidates(store, groupedChannels)(txn).map {
         case (k, acis, cs) =>
           acis.foreach {
             case (_, c, i) =>
