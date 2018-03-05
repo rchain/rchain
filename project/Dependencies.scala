@@ -27,6 +27,8 @@ object Dependencies {
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
   val guav                 = "com.google.guava"       % "guava"            % "16.0"
   val jaxb                 = "javax.xml.bind"         % "jaxb-api"         % "2.1"
+  val cbor                 = "co.nstant.in"           % "cbor"             % "0.8"
+
 
   val http4sVersion = "0.18.0"
   val http4sDependencies = Seq(

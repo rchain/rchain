@@ -1,7 +1,5 @@
 package coop.rchain.storage
 
-import coop.rchain.models.Serialize
-
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
