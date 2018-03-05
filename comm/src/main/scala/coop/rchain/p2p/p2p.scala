@@ -4,7 +4,6 @@ import coop.rchain.comm._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import scala.util.control.NonFatal
-import com.typesafe.scalalogging.Logger
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
@@ -49,8 +48,7 @@ class Network(
 
   import NetworkProtocol._
 
-  val logger = Logger("p2p")
-  val net    = new UnicastNetwork(local, Some(this))
+  val net = new UnicastNetwork(local, Some(this))
 
   def connect[F[_]: Capture: Monad: Log: Time](peer: PeerNode)(
       implicit
