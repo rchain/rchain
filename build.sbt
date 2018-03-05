@@ -100,7 +100,7 @@ lazy val storage = project
     ),
     crossScalaVersions := Seq("2.11.12", scalaVersion.value),
     exportJars := true
-  ).dependsOn(models, crypto)
+  ).dependsOn(models)
 
 lazy val node = project
   .enablePlugins(DockerPlugin)
