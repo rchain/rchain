@@ -107,6 +107,12 @@ object Main {
       def error(msg: String): Task[Unit] = Task.delay(logger.error(msg))
     }
 
+    implicit def time: Time[Task] = new Time[Task] {
+      def currentMillis: Task[Long] = Task.delay {
+        System.currentTimeMillis
+      }
+    }
+
     /** will use database or file system */
     implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
       new Kvs[Task, PeerNode, Array[Byte]] {

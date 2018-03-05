@@ -12,6 +12,7 @@ import coop.rchain.catscontrib._, Catscontrib._
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
 
+// TODO REMOVE inheritance hierarchy for composition
 trait ProtocolDispatcher[A] {
 
   /**
@@ -19,7 +20,7 @@ trait ProtocolDispatcher[A] {
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch[F[_]: Monad: Capture: Log: Kvs[?[_], PeerNode, Array[Byte]]](
+  def dispatch[F[_]: Monad: Capture: Log: Time: Kvs[?[_], PeerNode, Array[Byte]]](
       extra: A,
       msg: ProtocolMessage): F[Unit]
 }

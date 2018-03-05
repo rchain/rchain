@@ -52,20 +52,20 @@ class Network(
   val logger = Logger("p2p")
   val net    = new UnicastNetwork(local, Some(this))
 
-  def connect[F[_]: Capture: Monad: Log](peer: PeerNode)(
+  def connect[F[_]: Capture: Monad: Log: Time](peer: PeerNode)(
       implicit
       keysStore: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
       _          <- Log[F].debug(s"Connecting to $peer")
-      ts1        <- IOUtil.currentMilis[F]
+      ts1        <- Time[F].currentMillis
       ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
       remote     = new ProtocolNode(peer, this.net)
       ehsrespmsg <- net.roundTrip[F](ehs, remote).map(err.fromEither).flatten
       ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
       _          <- keysStore.put(peer, ehsresp.publicKey.toByteArray)
       _          <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
-      ts2        <- IOUtil.currentMilis[F]
+      ts2        <- Time[F].currentMillis
       phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
       phsresp    <- net.roundTrip[F](phs, remote).map(err.fromEither).flatten
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
@@ -115,7 +115,7 @@ class Network(
       _ <- addNode[F](sender)
     } yield ()
 
-  override def dispatch[F[_]: Monad: Capture: Log: Kvs[?[_], PeerNode, Array[Byte]]](
+  override def dispatch[F[_]: Monad: Capture: Log: Time: Kvs[?[_], PeerNode, Array[Byte]]](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
