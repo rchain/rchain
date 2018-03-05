@@ -50,12 +50,13 @@ class Network(
 
   val net = new UnicastNetwork(local, Some(this))
 
-  def connect[F[_]: Capture: Monad: Log: Time](peer: PeerNode)(
+  def connect[F[_]: Capture: Monad: Log: Time: Metrics](peer: PeerNode)(
       implicit
       keysStore: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
       _          <- Log[F].debug(s"Connecting to $peer")
+      _          <- Metrics[F].incrementCounter("connects")
       ts1        <- Time[F].currentMillis
       ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
       remote     = new ProtocolNode(peer, this.net)
@@ -68,6 +69,9 @@ class Network(
       phsresp    <- net.roundTrip[F](phs, remote).map(err.fromEither).flatten
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- addNode[F](remote)
+      _          <- Metrics[F].incrementCounter("peers")
+      tsf        <- Time[F].currentMillis
+      _          <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
   def disconnect(): Unit = {
@@ -81,7 +85,7 @@ class Network(
       net.comm.send(data, peer)
     }
 
-  private def addNode[F[_]: Capture](node: PeerNode): F[Unit] = Capture[F].capture {
+  private def addNode[F[_]: Capture: Metrics](node: PeerNode): F[Unit] = Capture[F].capture {
     net.add(node)
   }
 
@@ -99,7 +103,7 @@ class Network(
           }
     } yield ()
 
-  private def handleProtocolHandshake[F[_]: Monad: Capture: Log](
+  private def handleProtocolHandshake[F[_]: Monad: Capture: Log: Metrics](
       sender: PeerNode,
       handshake: ProtocolHandshakeMessage): F[Unit] =
     for {
@@ -113,7 +117,7 @@ class Network(
       _ <- addNode[F](sender)
     } yield ()
 
-  override def dispatch[F[_]: Monad: Capture: Log: Time: Kvs[?[_], PeerNode, Array[Byte]]](
+  override def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Kvs[?[_], PeerNode, Array[Byte]]](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
