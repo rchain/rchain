@@ -1,4 +1,4 @@
-package coop.rchain.storage.regex
+package coop.rchain.regex
 
 import org.scalatest._
 

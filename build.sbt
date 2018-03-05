@@ -87,6 +87,20 @@ lazy val models = project
     exportJars := true
   )
 
+lazy val regex = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies ++ Seq(
+      scalaCheck
+    ),
+    connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
+  )
+
 lazy val storage = project
   .settings(
     commonSettings,
