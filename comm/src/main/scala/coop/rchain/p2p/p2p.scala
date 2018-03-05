@@ -69,7 +69,6 @@ class Network(
       phsresp    <- net.roundTrip[F](phs, remote).map(err.fromEither).flatten
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- addNode[F](remote)
-      _          <- Metrics[F].incrementCounter("peers")
       tsf        <- Time[F].currentMillis
       _          <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
@@ -85,9 +84,13 @@ class Network(
       net.comm.send(data, peer)
     }
 
-  private def addNode[F[_]: Capture: Metrics](node: PeerNode): F[Unit] = Capture[F].capture {
-    net.add(node)
-  }
+  private def addNode[F[_]: FlatMap: Capture: Metrics](node: PeerNode): F[Unit] =
+    for {
+      _ <- Capture[F].capture {
+            net.add(node)
+          }
+      _ <- Metrics[F].incrementCounter("peers")
+    } yield ()
 
   private def handleEncryptionHandshake[F[_]: Monad: Capture: Log](
       sender: PeerNode,
