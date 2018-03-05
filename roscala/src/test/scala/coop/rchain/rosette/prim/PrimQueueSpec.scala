@@ -48,7 +48,7 @@ class PrimQueueSpec extends FlatSpec with Matchers {
 
   "queue-dequeue" should "correctly dequeue a ob" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Queue( Tuple(3, Some(Number(0))))))
-    queueDeQueue.fn(newCtxt) should be(Right(Queue( Tuple(2, Some(Number(0))))))
+    queueDeQueue.fn(newCtxt) should be(Right(Number(0)))
   }
 
   "queue-read" should "correctly read a ob" in {
@@ -60,11 +60,11 @@ class PrimQueueSpec extends FlatSpec with Matchers {
     // Tuple(Queue(Tuple), Tuple)
     val newQueue1 = Queue(Tuple(Tuple(1, Some(Number(0)))))
     val newCtxt1 = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue1, Tuple(Tuple(Number(0)))))
-    queuePDequeue.fn(newCtxt1) should be(Right(Queue(Tuple.Placeholder)))
+    queuePDequeue.fn(newCtxt1) should be(Right(Tuple(List(Number(0)))))
 
     val newQueue2 = Queue(Tuple(1, Some(Number(0)))).enqueue(Tuple(1, Some(Number(0))))
     val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue2, Tuple(Tuple(Number(0)))))
-    queuePDequeue.fn(newCtxt2) should be(Right(Queue(Tuple(Number(0)))))
+    queuePDequeue.fn(newCtxt2) should be(Right(Tuple(Number(0))))
   }
 
   "queue-pat-read" should "correctly pat read a ob" in {
@@ -80,7 +80,7 @@ class PrimQueueSpec extends FlatSpec with Matchers {
 
   "queue-dequeue-nth" should "correctly dequeue nth ob" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.cons(queue, Tuple(1, Number(0))))
-    queueDequeueNth.fn(newCtxt) should be(Right(Queue(Tuple(1, Number(0)))))
+    queueDequeueNth.fn(newCtxt) should be(Right(Number(0)))
   }
 
   "queue-reset" should "correctly reset" in {

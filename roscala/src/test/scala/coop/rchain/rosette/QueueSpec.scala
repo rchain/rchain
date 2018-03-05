@@ -14,7 +14,7 @@ class QueueSpec extends FlatSpec with Matchers {
     val q = Queue.create()
     val q1 = q.enqueue(Fixnum(0))
     q1.nth(0).contains(Fixnum(0)) should be(true)
-    val q2 = q1.dequeue().get
+    val q2 = q1.dequeue()._2
     q2.depth() should be(0)
     q2.isEmpty() should be(true)
   }
@@ -35,7 +35,7 @@ class QueueSpec extends FlatSpec with Matchers {
     val q2 = q1.enqueue(Tuple(1, Fixnum(1)))
     val q3 = q2.enqueue(Tuple(1, Fixnum(2)))
     val q4 = q3.enqueue(Tuple(1, Fixnum(3)))
-    val q5 = q4.patternDequeue(Tuple(1, Fixnum(2))).get
+    val q5 = q4.patternDequeue(Tuple(1, Fixnum(2)))._2
     q5.nth(2).contains(Tuple(1, Fixnum(3))) should be(true)
   }
 
@@ -45,8 +45,7 @@ class QueueSpec extends FlatSpec with Matchers {
     val q2 = q1.enqueue(Tuple(1, Fixnum(1)))
     val q3 = q2.enqueue(Tuple(1, Fixnum(2)))
     val q4 = q3.enqueue(Tuple(1, Fixnum(3)))
-    q4.patternRead(Tuple(1, Fixnum(3)))
-      .contains(Tuple(1, Fixnum(3))) should be(true)
+    q4.patternRead(Tuple(1, Fixnum(3))) == Tuple(1, Fixnum(3)) should be(true)
   }
 
   "queue dequeueNth" should "correctly dequeue nth ob" in {
@@ -56,9 +55,9 @@ class QueueSpec extends FlatSpec with Matchers {
     val q3 = q2.enqueue(Fixnum(2))
     val q4 = q3.enqueue(Fixnum(3))
     // 0 1 2 3
-    val q5 = q4.dequeueNth(2)
-    q5.get.elems.elem.contains(Fixnum(2)) should be(false)
-    q5.get.elems.elem.contains(Fixnum(0)) should be(true)
+    val q5 = q4.dequeueNth(2)._2
+    q5.elems.elem.contains(Fixnum(2)) should be(false)
+    q5.elems.elem.contains(Fixnum(0)) should be(true)
   }
 
   "queue reset" should "correctly reset" in {

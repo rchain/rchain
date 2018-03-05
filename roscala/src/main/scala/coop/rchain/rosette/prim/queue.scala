@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.Ob.ABSENT
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PrimErrorWrapper, Queue, RblBool, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, Queue, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -69,9 +69,9 @@ object queue {
       ctxt.argvec.elem.head match {
         case q: Queue =>
           if (q.isEmpty()) {
-            Right(ABSENT)
+            Left(QueueEmptyError)
           } else {
-            Right(q.dequeue().get)
+            Right(q.dequeue()._1)
           }
         case _ =>
           Left(ArgumentMismatch("The first element should be a queue"))
@@ -106,11 +106,12 @@ object queue {
           if (q.isEmpty) {
             Right(ABSENT)
           } else if (pat == Tuple.NIL) {
-            Right(q.dequeue().get)
+            Right(q.dequeue()._1)
           } else {
-            q.patternDequeue(pat)
-              .map(Right(_))
-              .getOrElse(Left(PatternMatchError))
+            q.patternDequeue(pat)._1 match {
+              case ABSENT => Left(PatternMatchError)
+              case v: Ob  => Right(v)
+            }
           }
         case _ =>
           Left(
@@ -134,7 +135,7 @@ object queue {
             val e = q.elems.elem.head
             Right(e)
           } else {
-            Right(q.patternRead(pat).getOrElse(ABSENT))
+            Right(q.patternRead(pat))
           }
         case _ =>
           Left(
@@ -179,7 +180,7 @@ object queue {
           if (q.isEmpty()) {
             Right(ABSENT)
           }
-          Right(q.dequeueNth(n.value).getOrElse(ABSENT))
+          Right(q.dequeueNth(n.value)._1)
         case _ =>
           Left(
             ArgumentMismatch(
