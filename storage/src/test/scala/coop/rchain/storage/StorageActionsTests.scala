@@ -330,23 +330,56 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
-    "return the last continuation consumed along with a piece of data" in withTestStore { store =>
-    val results: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    "return three continuations, each paired with distinct pieces of data" in withTestStore {
+    store =>
+      val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+      val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+      val results3: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    consume(store, List("ch1"), List(Wildcard), capture(results))
-    consume(store, List("ch1"), List(Wildcard), capture(results))
-    consume(store, List("ch1"), List(Wildcard), capture(results))
+      consume(store, List("ch1"), List(Wildcard), capture(results1))
+      consume(store, List("ch1"), List(Wildcard), capture(results2))
+      consume(store, List("ch1"), List(Wildcard), capture(results3))
+      val r1 = produce(store, "ch1", "datum1")
+      val r2 = produce(store, "ch1", "datum2")
+      val r3 = produce(store, "ch1", "datum3")
+
+      r1 shouldBe defined
+      r2 shouldBe defined
+      r3 shouldBe defined
+
+      List(r1, r2, r3).foreach(runK)
+
+      results1 should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+      results2 should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+      results3 should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
+
+      results1 shouldNot contain theSameElementsAs results2
+      results1 shouldNot contain theSameElementsAs results3
+      results2 shouldNot contain theSameElementsAs results3
+  }
+
+  "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
+    "return three continuations, each paired with matching data" in withTestStore { store =>
+    val results1: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    val results2: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+    val results3: mutable.ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
+
+    consume(store, List("ch1"), List(StringMatch("datum1")), capture(results1))
+    consume(store, List("ch1"), List(StringMatch("datum2")), capture(results2))
+    consume(store, List("ch1"), List(StringMatch("datum3")), capture(results3))
     val r1 = produce(store, "ch1", "datum1")
     val r2 = produce(store, "ch1", "datum2")
     val r3 = produce(store, "ch1", "datum3")
 
     r1 shouldBe defined
-    r2 shouldBe None
-    r3 shouldBe None
+    r2 shouldBe defined
+    r3 shouldBe defined
 
-    runK(r1)
+    List(r1, r2, r3).foreach(runK)
 
-    results should contain theSameElementsAs List(List("datum1"))
+    results1 shouldBe List(List("datum1"))
+    results2 shouldBe List(List("datum2"))
+    results3 shouldBe List(List("datum3"))
   }
 
   "consuming on two channels, producing on one, then producing on the other" should

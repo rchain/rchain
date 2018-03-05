@@ -13,7 +13,7 @@ class InMemoryStore[C, P, A, K] private (
     _keys: mutable.HashMap[String, List[C]],
     _ps: mutable.HashMap[String, List[P]],
     _as: mutable.HashMap[String, List[A]],
-    _k: mutable.HashMap[String, K],
+    _ks: mutable.HashMap[String, List[K]],
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K] {
@@ -49,8 +49,9 @@ class InMemoryStore[C, P, A, K] private (
     val key = hashC(channels)
     putCs(txn, channels)
     val ps = _ps.getOrElseUpdate(key, List.empty[P])
-    _ps.update(key, patterns ++ ps)
-    _k.update(key, k)
+    val ks = _ks.getOrElseUpdate(key, List.empty[K])
+    _ps.update(key, ps ++ patterns)
+    _ks.update(key, ks :+ k)
   }
 
   def getPs(txn: T, channels: List[C]): List[P] =
@@ -63,7 +64,8 @@ class InMemoryStore[C, P, A, K] private (
     val key = hashC(curr)
     for {
       ps <- _ps.get(key)
-      k  <- _k.get(key)
+      ks <- _ks.get(key)
+      k  <- ks.headOption
     } yield (ps, k)
   }
 
@@ -79,7 +81,9 @@ class InMemoryStore[C, P, A, K] private (
     for (ps <- _ps.get(key)) {
       _ps.update(key, dropIndex(ps, index))
     }
-    _k.remove(key)
+    for (ks <- _ks.get(key)) {
+      _ks.update(key, dropIndex(ks, index))
+    }
   }
 
   def addJoin(txn: T, c: C, cs: List[C]): Unit =
@@ -88,8 +92,12 @@ class InMemoryStore[C, P, A, K] private (
   def getJoin(txn: T, c: C): List[List[C]] =
     _joinMap.get(c).toList.flatten.map(getKey(txn, _))
 
-  def removeJoin(txn: T, c: C, cs: List[C]): Unit =
-    _joinMap.removeBinding(c, hashC(cs))
+  def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
+    val key = hashC(cs)
+    for (ks <- _ks.get(key) if ks.isEmpty) {
+      _joinMap.removeBinding(c, key)
+    }
+  }
 
   def removeAllJoins(txn: T, c: C): Unit =
     _joinMap.remove(c)
@@ -110,7 +118,7 @@ object InMemoryStore {
       _keys = mutable.HashMap.empty[String, List[C]],
       _ps = mutable.HashMap.empty[String, List[P]],
       _as = mutable.HashMap.empty[String, List[A]],
-      _k = mutable.HashMap.empty[String, K],
+      _ks = mutable.HashMap.empty[String, List[K]],
       _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
     )
 }
