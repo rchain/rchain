@@ -513,7 +513,6 @@ class TransitionSpec extends FlatSpec with Matchers {
     val start =
       testState
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
-        .set(_ >> 'ctxt >> 'argvec)(Tuple(Seq(Ob.NIV, Ob.NIV, Ob.NIV)))
         .set(_ >> 'code >> 'litvec)(Tuple(RequestExpr))
 
     val codevec = Seq(
@@ -528,6 +527,30 @@ class TransitionSpec extends FlatSpec with Matchers {
 
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Fixnum(6)
+  }
+
+  "OpApplyCmd" should "not change ctxt after running primitive" in {
+
+    /**
+      * This opcode sequence was created manually and has no RBL code
+      * counterpart.
+      *
+      * OpApplyCmd runs a primitive without saving its result.
+      * Therefore the successful execution of a primitive through
+      * OpApplyCmd should not change the ctxt object.
+      */
+
+    val start =
+      testState
+        .set(_ >> 'ctxt >> 'nargs)(2)
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+
+    val codevec = Seq(
+      OpApplyCmd(unwind = false, next = false, nargs = 2, primNum = 226) // fx+
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt shouldBe start.ctxt
   }
 
   "OpRtnReg" should "copy ctxt.rslt to given register" in {
