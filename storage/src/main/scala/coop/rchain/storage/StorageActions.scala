@@ -11,7 +11,7 @@ trait StorageActions {
   /* Consume */
 
   @tailrec
-  private[storage] final def findMatchingDataCandidates[C, P, A](
+  private[storage] final def findMatchingDataCandidate[C, P, A](
       data: List[(A, Int)],
       pattern: P,
       channel: C)(implicit m: Match[P, A]): Option[(A, C, Int)] =
@@ -19,7 +19,7 @@ trait StorageActions {
       case Nil => None
       case (a, i) :: as =>
         m.get(pattern, a) match {
-          case None      => findMatchingDataCandidates(as, pattern, channel)
+          case None      => findMatchingDataCandidate(as, pattern, channel)
           case Some(mat) => Some((mat, channel, i))
         }
     }
@@ -31,7 +31,7 @@ trait StorageActions {
     val options = channels.zip(patterns).map {
       case (c, p) =>
         val as: List[(A, Int)] = store.getAs(txn, c.pure[List]).zipWithIndex
-        findMatchingDataCandidates(as, p, c)
+        findMatchingDataCandidate(as, p, c)
     }
     options.sequence[Option, (A, C, Int)]
   }
