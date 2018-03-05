@@ -240,15 +240,15 @@ object Main {
     }
 
     val recipe: Effect[Unit] = for {
-      addy <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
-      keys <- calculateKeys
-      net  <- (new p2p.Network(addy, keys)).pure[Effect]
-      _    <- Task.fork(MonadOps.forever(net.net.receiver[Effect].value.void)).start.toEffect
-      _    <- addShutdownHook(net).toEffect
-      _    <- Log[Effect].info(s"Listening for traffic on $net.")
+      addy    <- p2p.NetworkAddress.parse(s"rnode://$name@$host:${conf.port()}").toEffect
+      keys    <- calculateKeys
+      network <- (new p2p.Network(addy, keys)).pure[Effect]
+      _       <- Task.fork(MonadOps.forever(network.net.receiver[Effect].value.void)).start.toEffect
+      _       <- addShutdownHook(network).toEffect
+      _       <- Log[Effect].info(s"Listening for traffic on $network.")
       _ <- if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
-          else connectToBootstrap(net)
-      _ <- MonadOps.forever(findAndConnect(net), 0L)
+          else connectToBootstrap(network)
+      _ <- MonadOps.forever(findAndConnect(network), 0L)
     } yield ()
 
     import monix.execution.Scheduler.Implicits.global
