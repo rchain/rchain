@@ -51,22 +51,6 @@ case class Par(
   def prepend(g: GPrivate): Par =
     this.copy(id = g :: this.id)
 
-  // Convenience append methods
-  def :+(s: Send): Par =
-    this.copy(sends = this.sends :+ s, freeCount = this.freeCount + s.freeCount)
-  def :+(r: Receive): Par =
-    this.copy(receives = this.receives :+ r, freeCount = this.freeCount + r.freeCount)
-  def :+(e: Eval): Par =
-    this.copy(evals = this.evals :+ e, freeCount = this.freeCount + e.freeCount)
-  def :+(n: New): Par =
-    this.copy(news = this.news :+ n, freeCount = this.freeCount + n.freeCount)
-  def :+(e: Expr): Par =
-    this.copy(exprs = this.exprs :+ e, freeCount = this.freeCount + e.freeCount)
-  def :+(m: Match): Par =
-    this.copy(matches = this.matches :+ m, freeCount = this.freeCount + m.freeCount)
-  def :+(g: GPrivate): Par =
-    this.copy(id = this.id :+ g)
-
   def singleEval(): Option[Eval] =
     if (sends.isEmpty && receives.isEmpty && news.isEmpty && exprs.isEmpty) {
       evals match {
@@ -99,15 +83,6 @@ case class Par(
       that.freeCount + freeCount
     )
 
-  def procCount: Int =
-    sends.length +
-      receives.length +
-      evals.length +
-      news.length +
-      matches.length +
-      exprs.length +
-      id.length
-
   def isEmpty: Boolean =
     sends.isEmpty &&
       receives.isEmpty &&
@@ -119,27 +94,17 @@ case class Par(
 
   def nonEmpty: Boolean = !isEmpty
 
-  def isIdentifier: Boolean =
-    sends.isEmpty &&
-      receives.isEmpty &&
-      evals.isEmpty &&
-      news.isEmpty &&
-      matches.isEmpty &&
-      exprs.isEmpty &&
-      id.nonEmpty
 }
 
 object Par {
-  def apply(): Par           = new Par()
-  def apply(s: Send): Par    = new Par(s)
-  def apply(r: Receive): Par = new Par(r)
-  def apply(e: Eval): Par    = new Par(e)
-  def apply(n: New): Par     = new Par(n)
-  def apply(e: Expr): Par    = new Par(e)
-  def apply(m: Match): Par   = new Par(m)
-
-  def forge: Par   = apply(GPrivate(uuid))
-  def uuid: String = java.util.UUID.randomUUID.toString
+  def apply(): Par            = new Par()
+  def apply(s: Send): Par     = new Par(s)
+  def apply(r: Receive): Par  = new Par(r)
+  def apply(e: Eval): Par     = new Par(e)
+  def apply(n: New): Par      = new Par(n)
+  def apply(e: Expr): Par     = new Par(e)
+  def apply(m: Match): Par    = new Par(m)
+  def apply(g: GPrivate): Par = new Par(g)
 
   implicit def fromSend(s: Send): Par                = apply(s)
   implicit def fromReceive(r: Receive): Par          = apply(r)
@@ -286,4 +251,8 @@ case class GUri(u: String) extends Ground {
 // the grammar to construct them.
 case class GPrivate(p: String) extends Ground {
   def freeCount: Int = 0
+}
+
+object GPrivate {
+  def apply(): GPrivate = GPrivate(java.util.UUID.randomUUID.toString)
 }
