@@ -532,7 +532,7 @@ object VirtualMachine {
                 .transform { (vmState, storeResult) =>
                   storeResult match {
                     case Success =>
-                      (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
+                      (vmState.update(_ >> 'doNextThreadFlag)(op.next || _), ())
                     case Failure =>
                       (vmState.copy(exitFlag = true, exitCode = 1), ())
                   }
@@ -560,7 +560,7 @@ object VirtualMachine {
                 else
                   (vmState
                      .update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, ob))
-                     .update(_ >> 'doNextThreadFlag)(if (op.next) true else _),
+                     .update(_ >> 'doNextThreadFlag)(op.next || _),
                    ())
             }
           )
@@ -581,7 +581,7 @@ object VirtualMachine {
                 .transform { (vmState, storeResult) =>
                   storeResult match {
                     case Success =>
-                      (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
+                      (vmState.update(_ >> 'doNextThreadFlag)(op.next || _), ())
                     case Failure =>
                       (vmState.copy(exitFlag = true, exitCode = 1), ())
                   }
@@ -642,7 +642,7 @@ object VirtualMachine {
           case StoreCtxt(ctxt) =>
             state
               .set(_ >> 'ctxt)(ctxt)
-              .update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
+              .update(_ >> 'doNextThreadFlag)(op.next || _)
 
           case StoreGlobal(env) => state.set(_ >> 'globalEnv)(env)
         }
