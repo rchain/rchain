@@ -41,11 +41,11 @@ trait IStore[C, P, A, K] {
 
   def getAs(txn: T, channels: List[C]): List[A]
 
-  def getK(txn: T, curr: List[C]): Option[(List[P], K)]
+  def getPsK(txn: T, curr: List[C]): Option[(List[P], K)]
 
-  def removeA(txn: T, channel: C, index: AIndex): Unit
+  def removeA(txn: T, channel: C, index: Int): Unit
 
-  def removeK(txn: T, channels: List[C], index: PIndex): Unit
+  def removePsK(txn: T, channels: List[C]): Unit
 
   // compare to store.joinMap.addBinding
   def addJoin(txn: T, c: C, cs: List[C]): Unit

@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 import coop.rchain.models.Serialize
-import coop.rchain.storage.{AIndex, IStore, PIndex}
+import coop.rchain.storage.IStore
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
@@ -57,7 +57,7 @@ class InMemoryStore[C, P, A, K] private (
   def getAs(txn: T, channels: List[C]): List[A] =
     _as.getOrElse(hashC(channels), Nil)
 
-  def getK(txn: T, curr: List[C]): Option[(List[P], K)] = {
+  def getPsK(txn: T, curr: List[C]): Option[(List[P], K)] = {
     val key = hashC(curr)
     for {
       pss     <- _psks.get(key)
@@ -65,17 +65,17 @@ class InMemoryStore[C, P, A, K] private (
     } yield (ps, k)
   }
 
-  def removeA(txn: T, channel: C, index: AIndex): Unit = {
+  def removeA(txn: T, channel: C, index: Int): Unit = {
     val key = hashC(List(channel))
     for (as <- _as.get(key)) {
-      _as.update(key, dropIndex(as, index.value))
+      _as.update(key, dropIndex(as, index))
     }
   }
 
-  def removeK(txn: T, channels: List[C], index: PIndex): Unit = {
+  def removePsK(txn: T, channels: List[C]): Unit = {
     val key = hashC(channels)
     for (ps <- _psks.get(key)) {
-      _psks.update(key, dropIndex(ps, index.value))
+      _psks.update(key, ps.tail)
     }
   }
 

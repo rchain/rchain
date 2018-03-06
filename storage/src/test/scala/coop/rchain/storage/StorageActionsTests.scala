@@ -57,7 +57,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("datum")
-      store.getK(txn, key) shouldBe None
+      store.getPsK(txn, key) shouldBe None
     }
 
     r shouldBe None
@@ -74,7 +74,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("datum1")
-      store.getK(txn, key) shouldBe None
+      store.getPsK(txn, key) shouldBe None
     }
 
     r1 shouldBe None
@@ -85,7 +85,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) should contain theSameElementsAs List("datum1", "datum2")
-      store.getK(txn, key) shouldBe None
+      store.getPsK(txn, key) shouldBe None
     }
 
     r2 shouldBe None
@@ -104,7 +104,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe List("ch1")
       store.getPs(txn, key) shouldBe List(patterns)
       store.getAs(txn, key) shouldBe Nil
-      store.getK(txn, key) shouldBe defined
+      store.getPsK(txn, key) shouldBe defined
     }
 
     r shouldBe None
@@ -131,7 +131,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe List(patterns)
       store.getAs(txn, key) shouldBe Nil
-      store.getK(txn, key) shouldBe defined
+      store.getPsK(txn, key) shouldBe defined
     }
 
     r shouldBe None
@@ -149,7 +149,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List("datum")
-      store.getK(txn, key) shouldBe None
+      store.getPsK(txn, key) shouldBe None
     }
 
     r1 shouldBe None
@@ -160,7 +160,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
-      store.getK(txn, key) shouldBe None
+      store.getPsK(txn, key) shouldBe None
     }
 
     r2 shouldBe defined
@@ -181,7 +181,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List("datum1")
-      store.getK(txn, produceKey1) shouldBe None
+      store.getPsK(txn, produceKey1) shouldBe None
     }
 
     r1 shouldBe None
@@ -197,11 +197,11 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List("datum1")
-      store.getK(txn, produceKey1) shouldBe None
+      store.getPsK(txn, produceKey1) shouldBe None
       store.getKey(txn, consumeKeyHash) shouldBe consumeKey
       store.getPs(txn, consumeKey) shouldBe List(consumePattern)
       store.getAs(txn, consumeKey) shouldBe Nil
-      store.getK(txn, consumeKey) shouldBe defined
+      store.getPsK(txn, consumeKey) shouldBe defined
     }
 
     r2 shouldBe None
@@ -215,15 +215,15 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe Nil
-      store.getK(txn, produceKey1) shouldBe None
+      store.getPsK(txn, produceKey1) shouldBe None
       store.getKey(txn, consumeKeyHash) shouldBe consumeKey
       store.getPs(txn, consumeKey) shouldBe Nil
       store.getAs(txn, consumeKey) shouldBe Nil
-      store.getK(txn, consumeKey) shouldBe None
+      store.getPsK(txn, consumeKey) shouldBe None
       store.getKey(txn, produceKey2Hash) shouldBe produceKey2
       store.getPs(txn, produceKey2) shouldBe Nil
       store.getAs(txn, produceKey2) shouldBe Nil
-      store.getK(txn, produceKey2) shouldBe None
+      store.getPsK(txn, produceKey2) shouldBe None
     }
 
     r3 shouldBe defined
@@ -252,7 +252,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List("datum1")
-      store.getK(txn, produceKey1) shouldBe None
+      store.getPsK(txn, produceKey1) shouldBe None
     }
 
     r1 shouldBe None
@@ -263,7 +263,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, produceKey2Hash) shouldBe produceKey2
       store.getPs(txn, produceKey2) shouldBe Nil
       store.getAs(txn, produceKey2) shouldBe List("datum2")
-      store.getK(txn, produceKey2) shouldBe None
+      store.getPsK(txn, produceKey2) shouldBe None
     }
 
     r2 shouldBe None
@@ -274,7 +274,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, produceKey3Hash) shouldBe produceKey3
       store.getPs(txn, produceKey3) shouldBe Nil
       store.getAs(txn, produceKey3) shouldBe List("datum3")
-      store.getK(txn, produceKey3) shouldBe None
+      store.getPsK(txn, produceKey3) shouldBe None
     }
 
     r3 shouldBe None
@@ -285,7 +285,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, consumeKeyHash) shouldBe Nil
       store.getPs(txn, consumeKey) shouldBe Nil
       store.getAs(txn, consumeKey) shouldBe Nil
-      store.getK(txn, consumeKey) shouldBe None
+      store.getPsK(txn, consumeKey) shouldBe None
     }
 
     r4 shouldBe defined
@@ -317,7 +317,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       store.getKey(txn, store.hashC(key)) shouldBe key
       store.getAs(txn, key) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
-      store.getK(txn, key) shouldBe None
+      store.getPsK(txn, key) shouldBe None
     }
 
     val continuations = List(r4, r5, r6)
@@ -457,9 +457,9 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
       val r4 = produce(store, "ch2", "datum2")
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getK(txn, List("ch1", "ch2")) shouldBe defined
-        store.getK(txn, List("ch1")) shouldBe None
-        store.getK(txn, List("ch2")) shouldBe None
+        store.getPsK(txn, List("ch1", "ch2")) shouldBe defined
+        store.getPsK(txn, List("ch1")) shouldBe None
+        store.getPsK(txn, List("ch2")) shouldBe None
         store.getAs(txn, List("ch1")) shouldBe Nil
         store.getAs(txn, List("ch2")) shouldBe List("datum2")
       }
