@@ -5,9 +5,15 @@ import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.kademlia.PeerTable
+import coop.rchain.comm.protocol.routing.Header
 import com.typesafe.scalalogging.Logger
 import scala.collection.mutable
 import scala.util.{Failure, Success}
+import CommError._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
+import cats._, cats.data._, cats.implicits._
+import scala.util.Try
 
 /**
   * Implements the lower levels of the network protocol.
@@ -32,28 +38,30 @@ final case class UnicastNetwork(peer: PeerNode,
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  private val receiver = new Thread {
-    override def run =
-      while (true) {
-        comm.recv match {
-          case Right((sock, res)) =>
-            for {
-              msg <- ProtocolMessage.parse(res)
-            } dispatch(sock, msg)
-          case Left(err: CommError) =>
-            err match {
-              case DatagramException(ex: SocketTimeoutException) => ()
-              // These next ones may ding a node's reputation; just
-              // printing for now.
-              case err @ DatagramSizeError(sz)    => logger.warn(s"bad datagram size $sz")
-              case err @ DatagramFramingError(ex) => ex.printStackTrace
-              case err @ DatagramException(ex)    => ex.printStackTrace
+  def receiver[F[_]: Monad: Capture: Log: Metrics]: F[Unit] =
+    for {
+      result <- Capture[F].capture(comm.recv)
+      _ <- result match {
+            case Right((sock, res)) =>
+              ProtocolMessage.parse(res).traverse { msg =>
+                dispatch[F](sock, msg)
+              }
+            // TODO flatten that pattern match
+            case Left(err: CommError) =>
+              err match {
+                case DatagramException(ex: SocketTimeoutException) => ().pure[F]
+                // TODO These next ones may ding a node's reputation; just
+                // printing for now.
+                case DatagramSizeError(sz) => Log[F].warn(s"bad datagram size $sz")
+                case DatagramFramingError(ex) =>
+                  Log[F].error(s"datgram framing error, ex: $ex")
+                case DatagramException(ex) => Log[F].error(s"datgram error, ex: $ex")
+                case _                     => ().pure[F]
+              }
 
-              case _ => ()
-            }
-        }
-      }
-  }
+          }
+
+    } yield ()
 
   /**
     * Return up to `limit` candidate peers.
@@ -95,73 +103,88 @@ final case class UnicastNetwork(peer: PeerNode,
     potentials.toSeq
   }
 
-  def dispatch(sock: SocketAddress, msg: ProtocolMessage): Unit =
-    for {
-      sndr <- msg.sender
-    } {
+  def dispatch[F[_]: Monad: Capture: Log: Metrics](sock: SocketAddress,
+                                                   msg: ProtocolMessage): F[Unit] = {
+
+    val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
         sock match {
           case (s: java.net.InetSocketAddress) =>
             sndr.withUdpSocket(s)
           case _ => sndr
         }
-      // Update sender's last-seen time, adding it if there are no
-      // higher-level protocols.
-      table.observe(new ProtocolNode(sender, this), next == None)
-      msg match {
-        case ping @ PingMessage(_, _)             => handlePing(sender, ping)
-        case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
-        case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
-        case resp: ProtocolResponse               => handleResponse(sock, sender, resp)
-        case _                                    => next.foreach(_.dispatch(sock, msg))
-      }
+
+      // Update sender's last-seen time, adding it if there are no higher-level protocols.
+      for {
+        _ <- Capture[F].capture(table.observe(new ProtocolNode(sender, this), next == None))
+        _ <- msg match {
+              case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
+              case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
+              case disconnect @ DisconnectMessage(_, _) => handleDisconnect[F](sender, disconnect)
+              case resp: ProtocolResponse               => handleResponse[F](sock, sender, resp)
+              case _                                    => next.traverse(d => d.dispatch[F](sock, msg)).void
+            }
+      } yield ()
+
     }
 
+    dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender"))
+  }
+
+  // TODO duplicated in p2p.scala, unify
   def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
 
   /*
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
-  private def handleResponse(sock: SocketAddress, sender: PeerNode, msg: ProtocolResponse): Unit =
-    for {
-      ret <- msg.returnHeader
-    } {
-      pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)) match {
-        case Some(promise) => promise.success(Right(msg))
-        case None          => next.foreach(_.dispatch(sock, msg))
-      }
-    }
+  private def handleResponse[F[_]: Monad: Capture: Log: Metrics](sock: SocketAddress,
+                                                                 sender: PeerNode,
+                                                                 msg: ProtocolResponse): F[Unit] = {
+    val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
+      for {
+        result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
+        _ <- result match {
+              case Some(promise) => Capture[F].capture(promise.success(Right(msg)))
+              case None          => next.traverse(_.dispatch[F](sock, msg)).void
+            }
 
-  /**
-    * Validate incoming PING and send responding PONG.
-    */
-  private def handlePing(sender: PeerNode, ping: PingMessage): Unit =
-    for {
-      pong <- ping.response(local)
-    } {
-      comm.send(pong.toByteSeq, sender)
+      } yield ()
+
     }
+    handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
+  }
+
+  private def handlePing[F[_]: Functor: Capture: Log](sender: PeerNode,
+                                                      ping: PingMessage): F[Unit] =
+    ping
+      .response(local)
+      .map { pong =>
+        Capture[F].capture(comm.send(pong.toByteSeq, sender)).void
+      }
+      .getOrElse(Log[F].error(s"Response was not available for ping: $ping"))
 
   /**
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup(sender: PeerNode, lookup: LookupMessage): Unit =
-    for {
+  private def handleLookup[F[_]: Monad: Capture: Log](sender: PeerNode,
+                                                      lookup: LookupMessage): F[Unit] =
+    (for {
       id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
-    } {
-      comm.send(resp.toByteSeq, sender)
-    }
+    } yield Capture[F].capture(comm.send(resp.toByteSeq, sender)).void)
+      .getOrElse(Log[F].error(s"lookupId or resp not available for lookup: $lookup"))
 
   /**
     * Remove sending peer from table.
     */
-  private def handleDisconnect(sender: PeerNode, disconnect: DisconnectMessage): Unit = {
-    logger.info(s"Forgetting about $sender.")
-    table.remove(sender.key)
-  }
+  private def handleDisconnect[F[_]: Monad: Capture: Log](sender: PeerNode,
+                                                          disconnect: DisconnectMessage): F[Unit] =
+    for {
+      _ <- Log[F].info(s"Forgetting about $sender.")
+      _ <- Capture[F].capture(table.remove(sender.key))
+    } yield ()
 
   /**
     * Broadcast a message to all peers in the Kademlia table.
@@ -181,30 +204,39 @@ final case class UnicastNetwork(peer: PeerNode,
     *
     * This method should be called in its own thread.
     */
-  override def roundTrip(
+  override def roundTrip[F[_]: Capture: Monad](
       msg: ProtocolMessage,
       remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): Either[CommError, ProtocolMessage] =
-    msg.header match {
-      case Some(header) => {
-        val bytes   = msg.toByteSeq
-        val pend    = PendingKey(remote.key, header.timestamp, header.seq)
-        val promise = Promise[Either[CommError, ProtocolMessage]]
-        pending.put(pend, promise)
-        try {
-          comm.send(bytes, remote)
-          Await.result(promise.future, timeout)
-        } catch {
-          case ex: Exception => Left(ProtocolException(ex))
-        } finally {
-          pending.remove(pend)
-          ()
-        }
-      }
-      case None => Left(UnknownProtocolError("malformed message"))
+      timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] = {
+
+    def send(header: Header): CommErrT[F, ProtocolMessage] = {
+      val sendIt: F[CommErr[ProtocolMessage]] = for {
+        promise <- Capture[F].capture(Promise[Either[CommError, ProtocolMessage]])
+        bytes   = msg.toByteSeq
+        pend    = PendingKey(remote.key, header.timestamp, header.seq)
+        result <- Capture[F].capture {
+                   pending.put(pend, promise)
+                   comm.send(bytes, remote)
+                   Try(Await.result(promise.future, timeout)).toEither
+                     .leftMap(protocolException)
+                     .flatten
+                 }
+        _ <- Capture[F].capture(pending.remove(pend))
+      } yield result
+      EitherT(sendIt)
     }
 
-  receiver.start
+    def fetchHeader(maybeHeader: Option[Header]): CommErrT[F, Header] =
+      maybeHeader.fold[CommErrT[F, Header]](
+        EitherT(unknownProtocol("malformed message").asLeft[Header].pure[F]))(
+        _.pure[CommErrT[F, ?]])
+
+    (for {
+      header     <- fetchHeader(msg.header)
+      messageErr <- send(header)
+    } yield messageErr).value
+
+  }
 
   override def toString = s"#{Network $local ${local.endpoint.udpSocketAddress}}"
 }

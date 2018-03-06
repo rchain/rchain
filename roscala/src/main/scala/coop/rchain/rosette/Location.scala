@@ -30,25 +30,25 @@ object Location {
     for {
       ctxt <- State.get[Ctxt]
       res <- loc match {
-        case CtxtRegister(reg) => pure(ctxt.getReg(reg))
+              case CtxtRegister(reg) => pure(ctxt.getReg(reg))
 
-        case ArgRegister(argReg) => pure(ctxt.argvec.elem.lift(argReg))
+              case ArgRegister(argReg) => pure(ctxt.argvec.elem.lift(argReg))
 
-        case LexVariable(indirect, level, offset) =>
-          pure(getLex(indirect, level, offset).runA(ctxt.env).value)
+              case LexVariable(indirect, level, offset) =>
+                pure(getLex(indirect, level, offset).runA(ctxt.env).value)
 
-        case AddrVariable(indirect, level, offset) =>
-          pure(getAddr(indirect, level, offset).runA(ctxt.env).value)
+              case AddrVariable(indirect, level, offset) =>
+                pure(getAddr(indirect, level, offset).runA(ctxt.env).value)
 
-        case GlobalVariable(offset) => pure(globalEnv.slot.lift(offset))
+              case GlobalVariable(offset) => pure(globalEnv.slot.lift(offset))
 
-        case BitField(indirect, level, offset, spanSize, sign) => pure(None)
+              case BitField(indirect, level, offset, spanSize, sign) => pure(None)
 
-        case BitField00(offset, spanSize, sign) => pure(None)
+              case BitField00(offset, spanSize, sign) => pure(None)
 
-        // TODO:
-        case _ => pure(None)
-      }
+              // TODO:
+              case _ => pure(None)
+            }
     } yield res
   }
 

@@ -1,0 +1,46 @@
+import BalanceMap, TestSet in {
+  new TestMap in {
+    BalanceMap(TestMap) | for(testMap <- TestMap) {
+      new balanceOfCh, addCh, subCh, transferCh in {
+        testMap("BalanceOf", balanceOfCh) |
+        testMap("Add", addCh) |
+        testMap("Sub", subCh) |
+        testMap("Transfer", transferCh) |
+        for(
+            balanceOf <- balanceOfCh; add <- addCh;
+            sub <- subCh; transfer <- transferCh
+        ) {
+          new result in {
+            //add can create a new account with the indicated balance
+            add("account0", 100, result) | for(r <- result) {
+              match r with true => {
+                TestSet("Add-New", [ [balanceOf, ["account0"], 100] ], result) |
+                for(_ <- result) {
+                  //adding and subtracting negative amounts is not allowed
+                  TestSet("Amount-Positive", [ [add, ["account0", -10], false], [sub, ["account0", -10], false] ], result) |
+                  for(_ <- result) {
+                    //subtracting more than is present is not allowed
+                    TestSet("Sub", [ [sub, ["account0", 200], false] ], result) |
+                    for(_ <- result) {
+                      //transfer behaves as expected
+                      TestSet(
+                        "Transfer", 
+                        [
+                          [transfer, ["account0", "account1", 10], true],
+                          [balanceOf, ["account0"], 90],
+                          [balanceOf, ["account1"], 10]
+                        ],
+                        result
+                      )
+                    }
+                  }
+                }
+              }
+              _ => { "Account creation failed.".display("\n") }
+            }
+          }
+        }
+      }
+    }
+  }
+}

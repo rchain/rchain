@@ -22,7 +22,7 @@ class PrimQueueSpec extends FlatSpec with Matchers {
     monitor = null,
   )
 
-  val queue = Queue(Tuple(2, Some(Number(0))))
+  val queue      = Queue(Tuple(2, Some(Number(0))))
   val emptyQueue = Queue(Tuple.Placeholder)
 
   "queue-depth" should "correctly get queue's depth" in {
@@ -38,38 +38,38 @@ class PrimQueueSpec extends FlatSpec with Matchers {
   }
 
   "queue-enqueue" should "correctly enqueue a ob" in {
-    val ar = Tuple.cons(queue, Tuple(1, Number(1)))
-    val newCtxt = ctxt.copy(nargs = 2, argvec = ar)
+    val ar       = Tuple.cons(queue, Tuple(1, Number(1)))
+    val newCtxt  = ctxt.copy(nargs = 2, argvec = ar)
     val newQueue = Queue(Tuple(2, Some(Number(0))))
-    val ret = queueEnqueue.fn(newCtxt)
+    val ret      = queueEnqueue.fn(newCtxt)
 
-     ret should be(Right( newQueue.enqueue(Number(1))))
+    ret should be(Right(newQueue.enqueue(Number(1))))
   }
 
   "queue-dequeue" should "correctly dequeue a ob" in {
-    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Queue( Tuple(3, Some(Number(0))))))
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Queue(Tuple(3, Some(Number(0))))))
     queueDeQueue.fn(newCtxt) should be(Right(Number(0)))
   }
 
   "queue-read" should "correctly read a ob" in {
-    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Queue( Tuple(3, Some(Number(0))))))
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Queue(Tuple(3, Some(Number(0))))))
     queueRead.fn(newCtxt) should be(Right(Number(0)))
   }
 
   "queue-pat-dequeue" should "correctly pat dequeue a ob" in {
     // Tuple(Queue(Tuple), Tuple)
     val newQueue1 = Queue(Tuple(Tuple(1, Some(Number(0)))))
-    val newCtxt1 = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue1, Tuple(Tuple(Number(0)))))
+    val newCtxt1  = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue1, Tuple(Tuple(Number(0)))))
     queuePDequeue.fn(newCtxt1) should be(Right(Tuple(List(Number(0)))))
 
     val newQueue2 = Queue(Tuple(1, Some(Number(0)))).enqueue(Tuple(1, Some(Number(0))))
-    val newCtxt2 = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue2, Tuple(Tuple(Number(0)))))
+    val newCtxt2  = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue2, Tuple(Tuple(Number(0)))))
     queuePDequeue.fn(newCtxt2) should be(Right(Tuple(Number(0))))
   }
 
   "queue-pat-read" should "correctly pat read a ob" in {
     val newQueue = Queue(Tuple(Tuple(1, Some(Number(0)))))
-    val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue, Tuple(Tuple(Number(0)))))
+    val newCtxt  = ctxt.copy(nargs = 2, argvec = Tuple.cons(newQueue, Tuple(Tuple(Number(0)))))
     queuePatRead.fn(newCtxt) should be(Right(Tuple(Number(0))))
   }
 
