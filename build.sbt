@@ -77,7 +77,8 @@ lazy val models = project
     commonSettings,
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       cats,
-      scalaCheck
+      scalaCheck,
+      scalaCheckShapeless
     ),
     connectInput in run := true,
     PB.targets in Compile := Seq(

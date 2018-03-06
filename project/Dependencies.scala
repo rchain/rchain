@@ -27,6 +27,7 @@ object Dependencies {
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
   val guav                 = "com.google.guava"       % "guava"            % "16.0"
   val jaxb                 = "javax.xml.bind"         % "jaxb-api"         % "2.1"
+  val scalaCheckShapeless  = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
 
   val http4sVersion = "0.18.0"
   val http4sDependencies = Seq(
@@ -42,8 +43,7 @@ object Dependencies {
     "io.circe" %% "circe-generic"        % circeVersion,
     "io.circe" %% "circe-generic-extras" % circeVersion,
     "io.circe" %% "circe-parser"         % circeVersion,
-    "io.circe" %% "circe-literal"        % circeVersion,
-  )
+    "io.circe" %% "circe-literal"        % circeVersion)
 
   val apiServerDependencies = http4sDependencies ++ circeDependencies
 
