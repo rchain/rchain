@@ -745,4 +745,63 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringMemQ.fn(newCtxt) should be('left)
   }
 
+  /** string-get-token */
+  "string-get-tokan" should "return a token with specified delimiters" in {
+    val sep = ".,-=/%"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), Fixnum(5), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringGetToken.fn(newCtxt) should be(Right(RblString("cX")))
+  }
+
+  it should "return a token with specified delimiters from the middle" in {
+    val sep = ".,-=/%"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), Fixnum(8), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringGetToken.fn(newCtxt) should be(Right(RblString("dW")))
+  }
+
+  it should "return the first token if no starting delimiter and index is 0" in {
+    val sep = ","
+    val str = "aZ,bY,cX,dW,eV,fU,gT"
+
+    val parms   = Tuple(Seq(RblString(str), Fixnum(0), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringGetToken.fn(newCtxt) should be(Right(RblString("aZ")))
+  }
+
+  it should "return an empty string for index out of bounds" in {
+    val sep = "."
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), Fixnum(800), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringGetToken.fn(newCtxt) should be(Right(RblString("")))
+  }
+
+  it should "return an empty string if nothing found" in {
+    val sep = "&"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), Fixnum(8), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringGetToken.fn(newCtxt) should be(Right(RblString("")))
+  }
+
+  it should "return an empty string if trailing delimiter not found" in {
+    val sep = "*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), Fixnum(16), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringGetToken.fn(newCtxt) should be(Right(RblString("")))
+  }
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    stringMemQ.fn(newCtxt) should be('left)
+  }
+
 }
