@@ -57,12 +57,9 @@ class InMemoryStore[C, P, A, K] private (
   def getAs(txn: T, channels: List[C]): List[A] =
     _as.getOrElse(hashC(channels), Nil)
 
-  def getPsK(txn: T, curr: List[C]): Option[(List[P], K)] = {
+  def getPsK(txn: T, curr: List[C]): List[(List[P], K)] = {
     val key = hashC(curr)
-    for {
-      pss     <- _psks.get(key)
-      (ps, k) <- pss.headOption
-    } yield (ps, k)
+    _psks.get(key).toList.flatten
   }
 
   def removeA(txn: T, channel: C, index: Int): Unit = {
@@ -72,10 +69,10 @@ class InMemoryStore[C, P, A, K] private (
     }
   }
 
-  def removePsK(txn: T, channels: List[C]): Unit = {
+  def removePsK(txn: T, channels: List[C], patterns: List[P]): Unit = {
     val key = hashC(channels)
-    for (ps <- _psks.get(key)) {
-      _psks.update(key, ps.tail)
+    for (psks <- _psks.get(key)) {
+      _psks.update(key, dropFirst(psks, patterns))
     }
   }
 

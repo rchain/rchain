@@ -76,19 +76,19 @@ trait StorageActions {
   @tailrec
   private[storage] final def extractProduceCandidates[C, P, A, K](store: IStore[C, P, A, K],
                                                                   groupedChannels: List[List[C]])(
-      txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)], List[C])] =
+      txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)], List[C], List[P])] =
     groupedChannels match {
       case Nil =>
         None
       case channels :: remaining =>
-        val candidates: Option[(K, List[(A, C, Int)], List[C])] =
-          store.getPsK(txn, channels).flatMap {
-            case (patterns, continuation) =>
-              extractDataCandidates(store, channels, patterns)(txn).map { candidates =>
-                (continuation, candidates, channels)
-              }
-          }
-        candidates match {
+        val matchCandidates: List[(List[P], K)] = store.getPsK(txn, channels)
+        val matches: List[(K, List[(A, C, Int)], List[C], List[P])] = matchCandidates.flatMap {
+          case (patterns, continuation) =>
+            extractDataCandidates(store, channels, patterns)(txn)
+              .map(candidates => (continuation, candidates, channels, patterns))
+              .toList
+        }
+        matches.headOption match {
           case None => extractProduceCandidates(store, remaining)(txn)
           case res  => res
         }
@@ -110,13 +110,13 @@ trait StorageActions {
       val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
       store.putA(txn, List(channel), data)
       extractProduceCandidates(store, groupedChannels)(txn).map {
-        case (continuation, candidates, channels) =>
+        case (continuation, candidates, channels, patterns) =>
           candidates.foreach {
             case (_, candidateChannel, dataIndex) =>
               store.removeA(txn, candidateChannel, dataIndex)
               ignore { store.removeJoin(txn, candidateChannel, channels) }
           }
-          store.removePsK(txn, channels)
+          store.removePsK(txn, channels, patterns)
           (continuation, candidates.map(_._1))
       }
     }

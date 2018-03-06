@@ -31,4 +31,15 @@ package object test {
     val (l1, l2) = xs splitAt n
     l1 ++ (l2 drop 1)
   }
+
+  // TODO(ht): Give this a better name
+  def dropFirst[K, V](xs: List[(K, V)], k: K): List[(K, V)] = {
+    val maybeIndex: Option[Int] = xs.zipWithIndex.collectFirst {
+      case ((ck, _), index) if ck == k => index
+    }
+    maybeIndex match {
+      case Some(index) => dropIndex(xs, index)
+      case None        => xs
+    }
+  }
 }
