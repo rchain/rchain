@@ -37,15 +37,15 @@ trait IStore[C, P, A, K] {
 
   def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit
 
-  def getPs(txn: T, channels: List[C]): List[P]
+  def getPs(txn: T, channels: List[C]): List[List[P]]
 
   def getAs(txn: T, channels: List[C]): List[A]
 
   def getK(txn: T, curr: List[C]): Option[(List[P], K)]
 
-  def removeA(txn: T, channels: List[C], index: Int): Unit
+  def removeA(txn: T, channel: C, index: AIndex): Unit
 
-  def removeK(txn: T, channels: List[C], index: Int): Unit
+  def removeK(txn: T, channels: List[C], index: PIndex): Unit
 
   // compare to store.joinMap.addBinding
   def addJoin(txn: T, c: C, cs: List[C]): Unit

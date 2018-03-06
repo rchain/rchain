@@ -4,16 +4,15 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 import coop.rchain.models.Serialize
-import coop.rchain.storage.IStore
+import coop.rchain.storage.{AIndex, IStore, PIndex}
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
 
 class InMemoryStore[C, P, A, K] private (
     _keys: mutable.HashMap[String, List[C]],
-    _ps: mutable.HashMap[String, List[P]],
+    _psks: mutable.HashMap[String, List[(List[P], K)]],
     _as: mutable.HashMap[String, List[A]],
-    _ks: mutable.HashMap[String, List[K]],
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K] {
@@ -48,14 +47,12 @@ class InMemoryStore[C, P, A, K] private (
   def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit = {
     val key = hashC(channels)
     putCs(txn, channels)
-    val ps = _ps.getOrElseUpdate(key, List.empty[P])
-    val ks = _ks.getOrElseUpdate(key, List.empty[K])
-    _ps.update(key, ps ++ patterns)
-    _ks.update(key, ks :+ k)
+    val ps = _psks.getOrElseUpdate(key, List.empty[(List[P], K)])
+    _psks.update(key, ps :+ (patterns, k))
   }
 
-  def getPs(txn: T, channels: List[C]): List[P] =
-    _ps.getOrElse(hashC(channels), Nil)
+  def getPs(txn: T, channels: List[C]): List[List[P]] =
+    _psks.getOrElse(hashC(channels), Nil).map(_._1)
 
   def getAs(txn: T, channels: List[C]): List[A] =
     _as.getOrElse(hashC(channels), Nil)
@@ -63,26 +60,22 @@ class InMemoryStore[C, P, A, K] private (
   def getK(txn: T, curr: List[C]): Option[(List[P], K)] = {
     val key = hashC(curr)
     for {
-      ps <- _ps.get(key)
-      ks <- _ks.get(key)
-      k  <- ks.headOption
+      pss     <- _psks.get(key)
+      (ps, k) <- pss.headOption
     } yield (ps, k)
   }
 
-  def removeA(txn: T, channels: List[C], index: Int): Unit = {
-    val key = hashC(channels)
+  def removeA(txn: T, channel: C, index: AIndex): Unit = {
+    val key = hashC(List(channel))
     for (as <- _as.get(key)) {
-      _as.update(key, dropIndex(as, index))
+      _as.update(key, dropIndex(as, index.value))
     }
   }
 
-  def removeK(txn: T, channels: List[C], index: Int): Unit = {
+  def removeK(txn: T, channels: List[C], index: PIndex): Unit = {
     val key = hashC(channels)
-    for (ps <- _ps.get(key)) {
-      _ps.update(key, dropIndex(ps, index))
-    }
-    for (ks <- _ks.get(key)) {
-      _ks.update(key, dropIndex(ks, index))
+    for (ps <- _psks.get(key)) {
+      _psks.update(key, dropIndex(ps, index.value))
     }
   }
 
@@ -94,7 +87,7 @@ class InMemoryStore[C, P, A, K] private (
 
   def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
     val key = hashC(cs)
-    for (ks <- _ks.get(key) if ks.isEmpty) {
+    for (psks <- _psks.get(key) if psks.isEmpty) {
       _joinMap.removeBinding(c, key)
     }
   }
@@ -116,9 +109,8 @@ object InMemoryStore {
   def create[C, P, A, K](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _keys = mutable.HashMap.empty[String, List[C]],
-      _ps = mutable.HashMap.empty[String, List[P]],
+      _psks = mutable.HashMap.empty[String, List[(List[P], K)]],
       _as = mutable.HashMap.empty[String, List[A]],
-      _ks = mutable.HashMap.empty[String, List[K]],
       _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
     )
 }

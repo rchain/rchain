@@ -12,28 +12,37 @@ trait StorageActions {
 
   @tailrec
   private[storage] final def findMatchingDataCandidate[C, P, A](
-      data: List[(A, Int)],
-      pattern: P,
-      channel: C)(implicit m: Match[P, A]): Option[(A, C, Int)] =
+      data: List[(A, AIndex)],
+      pattern: P
+  )(implicit m: Match[P, A]): Option[(A, AIndex)] =
     data match {
       case Nil => None
-      case (a, i) :: as =>
-        m.get(pattern, a) match {
-          case None      => findMatchingDataCandidate(as, pattern, channel)
-          case Some(mat) => Some((mat, channel, i))
+      case (matchCandidate, dataIndex) :: remaining =>
+        m.get(pattern, matchCandidate) match {
+          case None      => findMatchingDataCandidate(remaining, pattern)
+          case Some(mat) => Some((mat, dataIndex))
         }
     }
 
-  private[storage] def extractDataCandidates[C, P, A, K](
-      store: IStore[C, P, A, K],
-      channels: List[C],
-      patterns: List[P])(txn: store.T)(implicit m: Match[P, A]): Option[List[(A, C, Int)]] = {
-    val options = channels.zip(patterns).map {
-      case (c, p) =>
-        val as: List[(A, Int)] = store.getAs(txn, c.pure[List]).zipWithIndex
-        findMatchingDataCandidate(as, p, c)
-    }
-    options.sequence[Option, (A, C, Int)]
+  private[storage] def extractDataCandidates[C, P, A, K](store: IStore[C, P, A, K],
+                                                         channels: List[C],
+                                                         patterns: List[P])(txn: store.T)(
+      implicit m: Match[P, A]): Option[List[(A, C, AIndex, PIndex)]] = {
+    val options: List[Option[(A, C, AIndex, PIndex)]] =
+      channels
+        .zip(patterns.zipWithIndex.map(t => (t._1, PIndex(t._2))))
+        .map {
+          case (channel, (pattern, patternIndex)) =>
+            val indexedData: List[(A, AIndex)] =
+              store
+                .getAs(txn, List(channel))
+                .zipWithIndex
+                .map(t => (t._1, AIndex(t._2)))
+            findMatchingDataCandidate(indexedData, pattern).map {
+              case (data, dataIndex) => (data, channel, dataIndex, patternIndex)
+            }
+        }
+    options.sequence[Option, (A, C, AIndex, PIndex)]
   }
 
   /** `consume` does the "consume" thing
@@ -57,16 +66,14 @@ trait StorageActions {
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
           store.putK(txn, channels, patterns, continuation)
-          for (c <- channels) store.addJoin(txn, c, channels)
+          for (channel <- channels) store.addJoin(txn, channel, channels)
           None
-        case Some(acis) =>
-          acis.foreach {
-            case (_, c, i) =>
-              store.removeA(txn, c.pure[List], i)
-              store.removeK(txn, channels, i)
-              ignore { store.removeJoin(txn, c, channels) }
+        case Some(candidates) =>
+          candidates.foreach {
+            case (_, candidateChannel, dataIndex, _) =>
+              store.removeA(txn, candidateChannel, dataIndex)
           }
-          Some((continuation, acis.map(_._1)))
+          Some((continuation, candidates.map(_._1)))
       }
     }
   }
@@ -76,15 +83,17 @@ trait StorageActions {
   @tailrec
   private[storage] final def extractProduceCandidates[C, P, A, K](store: IStore[C, P, A, K],
                                                                   groupedChannels: List[List[C]])(
-      txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, Int)], List[C])] =
+      txn: store.T)(implicit m: Match[P, A]): Option[(K, List[(A, C, AIndex, PIndex)], List[C])] =
     groupedChannels match {
       case Nil =>
         None
       case channels :: remaining =>
-        val candidates: Option[(K, List[(A, C, Int)], List[C])] =
+        val candidates: Option[(K, List[(A, C, AIndex, PIndex)], List[C])] =
           store.getK(txn, channels).flatMap {
-            case (ps, k) =>
-              extractDataCandidates(store, channels, ps)(txn).map(acis => (k, acis, channels))
+            case (patterns, continuation) =>
+              extractDataCandidates(store, channels, patterns)(txn).map { candidates =>
+                (continuation, candidates, channels)
+              }
           }
         candidates match {
           case None => extractProduceCandidates(store, remaining)(txn)
@@ -106,16 +115,16 @@ trait StorageActions {
       implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
-      store.putA(txn, channel.pure[List], data)
+      store.putA(txn, List(channel), data)
       extractProduceCandidates(store, groupedChannels)(txn).map {
-        case (k, acis, cs) =>
-          acis.foreach {
-            case (_, c, i) =>
-              store.removeA(txn, c.pure[List], i)
-              store.removeK(txn, cs, i)
-              ignore { store.removeJoin(txn, c, cs) }
+        case (continuation, candidates, channels) =>
+          candidates.foreach {
+            case (_, candidateChannel, dataIndex, patternIndex) =>
+              store.removeA(txn, candidateChannel, dataIndex)
+              store.removeK(txn, channels, patternIndex)
+              ignore { store.removeJoin(txn, candidateChannel, channels) }
           }
-          (k, acis.map(_._1))
+          (continuation, candidates.map(_._1))
       }
     }
 }
