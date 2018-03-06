@@ -15,26 +15,28 @@ object BitSetBytesMapper {
       byteStringToBitSet
     )(bitSetToByteString)
 
+  // Bitsets in Scala are represented as an array of longs.
+  // We serialize this in big endian as an ByteString.
   def bitSetToByteString(bitset: BitSet): ByteString = {
     val longs: Array[Long] = bitset.toBitMask
-    val bytes: Array[Byte] = longs.foldLeft(ByteBuffer.allocate(BYTES_PER_LONG * longs.length)) {
-      (acc, long) =>
+    val bytes: Array[Byte] = longs
+      .foldLeft(ByteBuffer.allocate(BYTES_PER_LONG * longs.length)) { (acc, long) =>
         acc putLong long
-    }.array
+      }
+      .array
     ByteString.copyFrom(bytes)
   }
 
-  def byteStringToBitSet(byteString: ByteString): BitSet = {
+  def byteStringToBitSet(byteString: ByteString): BitSet =
     if (byteString.isEmpty) {
       BitSet()
     } else {
-      val byteArray = byteString.toByteArray
-      val buffer = ByteBuffer.wrap(byteArray)
+      val byteArray  = byteString.toByteArray
+      val buffer     = ByteBuffer.wrap(byteArray)
       val longBuffer = buffer.asLongBuffer
       // Hack to force long buffer to dump array. See https://stackoverflow.com/a/19003601/2750819
       var longs = Array.fill[Long](longBuffer.capacity)(0)
       longBuffer.get(longs)
       BitSet.fromBitMask(longs)
     }
-  }
 }
