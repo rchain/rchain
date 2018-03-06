@@ -746,7 +746,7 @@ class RblStringSpec extends FlatSpec with Matchers {
   }
 
   /** string-get-token */
-  "string-get-tokan" should "correctly return the first token" in {
+  "string-get-token" should "correctly return the first token" in {
     val sep = ".,-=/*"
     val str = "aZ,bY.cX-dW=eV/fU*gT"
 
