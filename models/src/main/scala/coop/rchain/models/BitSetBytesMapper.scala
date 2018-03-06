@@ -17,7 +17,7 @@ object BitSetBytesMapper {
 
   def bitSetToByteString(bitset: BitSet): ByteString = {
     val longs: Array[Long] = bitset.toBitMask
-    val bytes: Array[Byte] = (ByteBuffer.allocate(BYTES_PER_LONG * longs.length) /: longs) {
+    val bytes: Array[Byte] = longs.foldLeft(ByteBuffer.allocate(BYTES_PER_LONG * longs.length)) {
       (acc, long) =>
         acc putLong long
     }.array
