@@ -213,7 +213,11 @@ object rblstring {
     * in the second string.
     *
     * examples:
-    * (string-get-token "aX,bY.cZ-eW=fQ/gC" 2 "/-=,.") ====> "cZ"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 0 "/-=,.")   ====> "aZ"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 6 "/-=,.")   ====> "gT"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 8 "/-=,.")   ====> ""
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 5 "&")       ====> ""
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 3 "*")       ====> ""
     */
   object stringGetToken extends Prim {
     override val name: String = "string-get-token"
@@ -229,25 +233,9 @@ object rblstring {
         w   <- checkType[Fixnum](1, elem)    // Ensure arg1 is a Fixnum
         sep <- checkType[RblString](2, elem) // Ensure arg2 is a RblString
       } yield {
-        // The C++ Rosette exhibits some weird edge conditions.
-        // This mess helps to mimic them.
-        val s = str.value.indexWhere(sep.value.contains(_), w.value)
-        val start =
-          (if (s < 0 || w.value < 0 || w.value > str.value.length - 1)
-             -1
-           else if (w.value == 0)
-             0
-           else
-             s + 1)
-
-        val end =
-          (if (w.value == 0 || s < 0)
-             str.value.indexWhere(sep.value.contains(_), 0)
-           else
-             str.value.indexWhere(sep.value.contains(_), s + 1))
-
-        if (start >= 0 && end >= 0)
-          RblString(str.value.substring(start, end))
+        val tokens = str.value.split(sep.value.toArray)
+        if ((w.value >= 0) && (w.value < tokens.size))
+          RblString(tokens(w.value))
         else
           RblString("")
       }
