@@ -539,7 +539,6 @@ class TransitionSpec extends FlatSpec with Matchers {
       * Therefore the successful execution of a primitive through
       * OpApplyCmd should not change the ctxt object.
       */
-
     val start =
       testState
         .set(_ >> 'ctxt >> 'nargs)(2)

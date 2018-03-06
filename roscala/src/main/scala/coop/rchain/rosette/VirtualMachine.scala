@@ -520,24 +520,24 @@ object VirtualMachine {
       _   <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
       _   <- modify(_.set(_ >> 'loc)(loc))
 
-      prim = Prim.nthPrim(op.primNum)
+      prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
 
       _ <- handlePrimResult(
-        result,
-        ob =>
-          Location
-            .store(loc, ob)
-            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
-            .transform { (vmState, storeResult) =>
-              storeResult match {
-                case Success =>
-                  (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
-                case Failure =>
-                  (vmState.copy(exitFlag = true, exitCode = 1), ())
+            result,
+            ob =>
+              Location
+                .store(loc, ob)
+                .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+                .transform { (vmState, storeResult) =>
+                  storeResult match {
+                    case Success =>
+                      (vmState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _), ())
+                    case Failure =>
+                      (vmState.copy(exitFlag = true, exitCode = 1), ())
+                  }
               }
-          }
-      )
+          )
 
     } yield ()
 
@@ -593,13 +593,13 @@ object VirtualMachine {
     for {
       _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim = Prim.nthPrim(op.primNum)
+      prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
 
       _ <- handlePrimResult(
-        result,
-        ob => modify(_.copy(doNextThreadFlag = true))
-      )
+            result,
+            ob => modify(_.copy(doNextThreadFlag = true))
+          )
     } yield ()
 
   def execute(op: OpRtn): VMTransition[Unit] =
