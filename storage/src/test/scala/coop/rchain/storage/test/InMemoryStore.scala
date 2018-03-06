@@ -26,7 +26,7 @@ class InMemoryStore[C, P, A, K] private (
     _keys.update(hashC(channels), channels)
 
   private[storage] def getKey(txn: T, s: H) =
-    _keys.get(s).toList.flatten
+    _keys.getOrElse(s, List.empty[C])
 
   type T = Unit
 
@@ -57,10 +57,8 @@ class InMemoryStore[C, P, A, K] private (
   def getAs(txn: T, channels: List[C]): List[A] =
     _as.getOrElse(hashC(channels), Nil)
 
-  def getPsK(txn: T, curr: List[C]): List[(List[P], K)] = {
-    val key = hashC(curr)
-    _psks.get(key).toList.flatten
-  }
+  def getPsK(txn: T, curr: List[C]): List[(List[P], K)] =
+    _psks.getOrElse(hashC(curr), List.empty[(List[P], K)])
 
   def removeA(txn: T, channel: C, index: Int): Unit = {
     val key = hashC(List(channel))
@@ -80,7 +78,7 @@ class InMemoryStore[C, P, A, K] private (
     _joinMap.addBinding(c, hashC(cs))
 
   def getJoin(txn: T, c: C): List[List[C]] =
-    _joinMap.get(c).toList.flatten.map(getKey(txn, _))
+    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getKey(txn, _))
 
   def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
     val key = hashC(cs)
