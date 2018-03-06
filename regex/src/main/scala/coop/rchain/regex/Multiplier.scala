@@ -1,4 +1,4 @@
-package coop.rchain.storage.regex
+package coop.rchain.regex
 
 /**
   * Companion object for the Multiplier class
