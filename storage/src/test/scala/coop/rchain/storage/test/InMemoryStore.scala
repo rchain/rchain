@@ -67,10 +67,10 @@ class InMemoryStore[C, P, A, K] private (
     }
   }
 
-  def removePsK(txn: T, channels: List[C], patterns: List[P]): Unit = {
+  def removePsK(txn: T, channels: List[C], index: Int): Unit = {
     val key = hashC(channels)
     for (psks <- _psks.get(key)) {
-      _psks.update(key, dropFirst(psks, patterns))
+      _psks.update(key, dropIndex(psks, index))
     }
   }
 
