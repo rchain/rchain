@@ -163,7 +163,7 @@ message ETuple {
 }
 
 message ESet {
-    repeated Par ps = 1;
+    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Set"];
 }
 
 message EMap {
