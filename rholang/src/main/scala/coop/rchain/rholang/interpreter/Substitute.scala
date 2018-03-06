@@ -36,76 +36,49 @@ object Substitute {
   def substitute(term: Par)(implicit env: Env[Par]): Par = {
 
     def subExp(expxs: List[Expr]): Par =
-      (Par() /: expxs) { (par, expr) =>
+      (expxs :\ Par()) { (expr, par) =>
         expr match {
           case e @ EVar(_) =>
             subOrDec(e) match {
-              case Left(_e)    => par :+ _e
-              case Right(_par) => par ++ _par
+              case Left(_e)    => par.prepend(_e)
+              case Right(_par) => _par ++ par
             }
-          case e @ _ => par :+ substitute(e)
+          case e @ _ => par.prepend(substitute(e))
         }
       }
 
-    val sends   = for { s <- term.sends } yield substitute(s)
-    val recvs   = for { r <- term.receives } yield substitute(r)
-    val evals   = for { e <- term.evals } yield substitute(e)
-    val news    = for { n <- term.news } yield substitute(n)
-    val matches = for { m <- term.matches } yield substitute(m)
-
-    val freeCount: Int =
-      (0 /: sends)((i, s) => i + s.freeCount) +
-        (0 /: recvs)((i, r) => i + r.freeCount) +
-        (0 /: evals)((i, e) => i + e.freeCount) +
-        (0 /: news)((i, n) => i + n.freeCount) +
-        (0 /: matches)((i, m) => i + m.freeCount)
-
     Par(
-      sends,
-      recvs,
-      evals,
-      news,
+      for { s <- term.sends } yield substitute(s),
+      for { r <- term.receives } yield substitute(r),
+      for { e <- term.evals } yield substitute(e),
+      for { n <- term.news } yield substitute(n),
       Nil,
-      matches,
+      for { m <- term.matches } yield substitute(m),
       term.id,
-      freeCount
+      term.freeCount
     ) ++ subExp(term.exprs)
   }
 
-  def substitute(term: Send)(implicit env: Env[Par]): Send = {
-    val _data = term.data map { par =>
-      substitute(par)
-    }
-    val freeCount = term.chan.freeCount + (0 /: _data) { (i, par) =>
-      i + par.freeCount
-    }
+  def substitute(term: Send)(implicit env: Env[Par]): Send =
     Send(
       substitute(term.chan),
-      _data,
+      term.data map { par =>
+        substitute(par)
+      },
       term.persistent,
-      freeCount
+      term.freeCount
     )
-  }
 
-  def substitute(term: Receive)(implicit env: Env[Par]): Receive = {
-    val _binds = for { (xs, chan) <- term.binds } yield {
-      (xs, substitute(chan))
-    }
-    val _body = substitute(term.body)
-    val freeCount = _body.freeCount + (0 /: _binds) {
-      case (i, (chanxs, chan)) =>
-        i + chan.freeCount + (0 /: chanxs) { (j, _chan) =>
-          j + _chan.freeCount
-        }
-    }
+  def substitute(term: Receive)(implicit env: Env[Par]): Receive =
     Receive(
-      _binds,
-      _body,
+      for { (xs, chan) <- term.binds } yield {
+        (xs, substitute(chan))
+      },
+      substitute(term.body),
       term.persistent,
-      _binds.size,
-      freeCount
+      term.bindCount,
+      term.freeCount
     )
-  }
 
   def substitute(term: Eval)(implicit env: Env[Par]): Eval =
     Eval(substitute(term.channel))
@@ -113,21 +86,14 @@ object Substitute {
   def substitute(term: New)(implicit env: Env[Par]): New =
     New(term.bindCount, substitute(term.p))
 
-  def substitute(term: Match)(implicit env: Env[Par]): Match = {
-    val _value = substitute(term.value)
-    val _cases = for { (_case, par) <- term.cases } yield {
-      (_case, substitute(par))
-    }
+  def substitute(term: Match)(implicit env: Env[Par]): Match =
     Match(
-      _value,
-      _cases,
-      _value.freeCount +
-        (0 /: _cases) {
-          case (i, (p1, p2)) =>
-            i + p1.freeCount + p2.freeCount
-        }
+      substitute(term.value),
+      for { (_case, par) <- term.cases } yield {
+        (_case, substitute(par))
+      },
+      term.freeCount
     )
-  }
 
   def substitute(exp: Expr)(implicit env: Env[Par]): Expr =
     exp match {
