@@ -26,7 +26,7 @@ class EnvSpec extends FlatSpec with Matchers {
   "that.Env indices" should "be incremented by level of this.Env indices" in {
     val target1: Env[Par] = Env(source0, source1, source2)
     val target2: Env[Par] = Env(source3, source4)
-    val result: Env[Par]  = target1 merge target2
+    val result: Env[Par]  = target1 ++= target2
     result should be(
       mutable.LinkedHashMap(0 -> source0, 1 -> source1, 2 -> source2, 3 -> source3, 4 -> source4))
   }
