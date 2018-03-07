@@ -1,0 +1,56 @@
+import ConditionedToken, SecretName, TestSet in {
+  new testTokenCh, result1, result2, result in {
+    SecretName(result1) | SecretName(result2) |
+    for(r1 <- result1; r2 <- result2) {
+      match [r1, r2] with [[account0Name, initCondition], [account1Name, account1Condition]] => {
+        ConditionedToken("account0", initCondition, 1000, testTokenCh) |
+        for(tokenApi <- testTokenCh) {
+          new balanceOfCh, transferCh, newAccountCh in {
+            tokenApi("BalanceOf", balanceOfCh) | 
+            tokenApi("ConditionedTransfer", transferCh) | 
+            tokenApi("NewAccount", newAccountCh) |
+            for(
+                balanceOf <- balanceOfCh; transfer <- transferCh;
+                newAccount <- newAccountCh
+            ) {
+              TestSet(
+                "NewAccount",
+                [
+                  //new account creation fails when bad evidence given
+                  [newAccount, ["account1", account1Condition, "account0", 100, account1Name], false],
+                  //new account creation succeeds when proper evidence given
+                  [newAccount, ["account1", account1Condition, "account0", 100, account0Name], true],
+                   //balances check out post account creation
+                  [balanceOf, ["account0"], 900],
+                  [balanceOf, ["account1"], 100],
+                  //new account creation fails when the account id already exists
+                  [newAccount, ["account1", initCondition, "account0", 100, account0Name], false],
+                ],
+                result
+              ) |
+              for(_ <- result) {
+                TestSet(
+                  "ConditionedTransfer",
+                  [
+                    //transfer fails when insufficient funds
+                    [transfer, ["account0", "account1", 1000000, account0Name], false],
+                    //transfer fails when bad evidence given
+                    [transfer, ["account0", "account1", 100, account1Name], false],
+                    //transfer fails when target account does not exist
+                    [transfer, ["account0", "account2", 100, account0Name], false],
+                    //transfer succeeds!
+                    [transfer, ["account0", "account1", 100, account0Name], true],
+                    //balances check out post transfer
+                    [balanceOf, ["account0"], 800],
+                    [balanceOf, ["account1"], 200]
+                  ],
+                  result
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

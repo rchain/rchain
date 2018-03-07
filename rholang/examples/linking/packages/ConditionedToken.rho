@@ -1,0 +1,109 @@
+export ConditionedToken in {
+  import BalanceMap, IMapApi in {
+    new
+      IMapEmptyMap, IMapUpdated, IMapGetOrElse, //IMap Methods
+      mapApiCh, addCh, transferCh, balanceOfCh //BalanceMap methods
+    in {
+      IMapApi("EmptyMap", IMapEmptyMap) | IMapApi("GetOrElse", IMapGetOrElse) |
+      IMapApi("Updated", IMapUpdated) | BalanceMap(mapApiCh) | 
+      for(
+          mapApi <- mapApiCh; emptyMap <- IMapEmptyMap; getOrElse <- IMapGetOrElse;
+          updated <- IMapUpdated
+      ) {
+        mapApi("Transfer", transferCh) | mapApi("BalanceOf", balanceOfCh) |
+        mapApi("Add", addCh) |
+        for(add <- addCh; transfer <- transferCh; balanceOf <- balanceOfCh) {
+          contract ConditionedToken(initId, initCondition, totalSupply, return) = {
+            new
+              withdrawConditionStore, api, NewAccount, ConditionedTransfer,
+              InternalConditionedTransfer
+            in {
+              emptyMap(withdrawConditionStore) |
+              
+              contract NewAccount(newId, newCondition, from, endowment, evidence, return) = {
+                new result in {
+                  for(conditions <- withdrawConditionStore) {
+                    getOrElse(conditions, newId, false, result) |
+                    withdrawConditionStore(conditions) | 
+                    for(alreadyExists <- result) {
+                      match alreadyExists with false => {
+                        InternalConditionedTransfer(from, newId, endowment, evidence, result) |
+                        for(transferSuccess <- result) {
+                          match transferSuccess with true => {
+                            for(conditions <- withdrawConditionStore) { 
+                              updated(conditions, newId, newCondition, withdrawConditionStore) | 
+                              return(true)
+                            }
+                          }
+                          _ => { return(false) }
+                        }
+                      }
+                      _ => { return(false) }
+                    }
+                  }
+                }
+              } |
+              
+              //transfer which allows "to" to not yet exist (used in account creation)
+              contract InternalConditionedTransfer(from, to, amount, evidence, return) = {
+                new result in {
+                  for(conditions <- withdrawConditionStore) {
+                    getOrElse(conditions, from, false, result) |
+                    withdrawConditionStore(conditions) | //unlock condition map after lookup
+                    for(condition <- result) {
+                      match condition with false => { return(false) } //condition not present
+                      _ => {
+                        condition(evidence, result) |
+                        for(pass <- result) {
+                          match pass with true => {
+                            //condition passed; do transfer
+                            //note balance map is only locked during this process
+                            transfer(from, to, amount, return)
+                          }
+                          _ => { return(false) }
+                        }
+                      }
+                    }
+                  }
+                }
+              } |
+              
+              //fails if "to" account does not exist
+              contract ConditionedTransfer(from, to, amount, evidence, return) = {
+                new result in {
+                  for(conditions <- withdrawConditionStore) {
+                    getOrElse(conditions, to, false, result) |
+                    withdrawConditionStore(conditions) | 
+                    for(alreadyExists <- result) {
+                      match alreadyExists with false => { return(false) }
+                      _ => { InternalConditionedTransfer(from, to, amount, evidence, return) }
+                    }
+                  }
+                }
+              } |
+              
+              contract api(method, return) = {
+                match method with 
+                  "BalanceOf" => { return(balanceOf) }
+                  "ConditionedTransfer" => { return(ConditionedTransfer) }
+                  "NewAccount" => { return(NewAccount) }
+                  _ => { "Method: ".display(method, " not found!") | return(Nil) }
+              } |
+              
+              for(conditions <- withdrawConditionStore) { //initialize
+                new result in {
+                  updated(conditions, initId, initCondition, withdrawConditionStore) |
+                  add(initId, totalSupply, result) |
+                  for(success <- result) {
+                    match success with true => { return(api) }
+                    _ => { return(false) }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

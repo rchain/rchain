@@ -13,6 +13,7 @@ export TestSet in {
                 [a, b] => { function(a, b, result) } //function of two variables
                 [a, b, c] => { function(a, b, c, result) } //function of three variables
                 [a, b, c, d] => { function(a, b, c, d, result) } //function of four variables
+                [a, b, c, d, e] => { function(a, b, c, d, e, result) } //function of five variables
                 _ => { function(input, result) } //function of many variables
               |
               for(r <- result) {
