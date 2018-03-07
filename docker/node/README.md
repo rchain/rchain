@@ -20,6 +20,7 @@ docker-compose down -v
 ```
 
 ### Quick Start Notes:
+```
 Grafana preferences are set to refresh every 30 seconds. You can change this to your preference. The same with color scheme. 
 We "exposed" docker container tcp port 3000 so Grafana should be accessible from your browser
 We've exposed other ports for access convenience from your host. Make sure you always run this behind a firewall or you would want to change these settings and default password 
