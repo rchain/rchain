@@ -151,7 +151,11 @@ void RblTable::hashResize() {
  */
 
 
-int RblTable::hash(pOb key) { return ((int)PTR(key) >> TagSize); }
+int RblTable::hash(pOb key) {
+    // NB(leaf): previously, this did key>>TagSize, but that is pointless
+    // and silly, so now we just return the "pointer."
+    return (int)key;
+}
 
 
 void RblTable::hashify() {
