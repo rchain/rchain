@@ -27,6 +27,15 @@ We've exposed other ports for access convenience from your host. Make sure you a
 The password can be changed by editing grafana/grafana.conf
 ```
 
+### Sending Metrics to Promethus Pushgateway Using Curl 
+```
+# You can use any http client library to send data. Push gateway is collected via Prometheus
+# Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
+echo "some_metric 10" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job1
+echo "some_metric_2 30" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job2
+curl http://127.0.0.1:9091/metrics
+```
+
 ### Docker-Compose Usage
 ```
 # Run these commands from this directory 
@@ -59,16 +68,6 @@ We exposed tcp 3000 so it should be accessible from your hosts browser
 https://docs.docker.com/compose/reference/ 
 ```
 
-### Sending Metrics to Promethus Pushgateway Using Curl 
-```
-# You can use any http client library to send data. Push gateway is collected via Prometheus
-# Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
-echo "some_metric 10" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job1
-echo "some_metric_2 30" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job2
-curl http://127.0.0.1:9091/metrics
-```
-
-
 ### Troubleshooting Docker Container from Shell
 ```
 docker exec --user root -it <your-docker-container-id> /bin/sh
@@ -88,7 +87,7 @@ docker image list
 docker image rm <my image>
 ```
 
-### Push Docker Example 
+### Simple Push Docker Example Using BASH
 ```
 #!/usr/bin/env bash
 # Make changes to your docker image and push to your own repo
@@ -96,7 +95,7 @@ docker image rm <my image>
 DOCKER_USERNAME="yourusername"
 DOCKER_PASSWORD="yourpassword"
 image_id="imageid"
-image_tag="rchain-node:dev"
+image_tag="some-name:test"
 repo="${DOCKER_USERNAME}/${image_tag}"
 docker tag ${image_id} $repo
 docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
