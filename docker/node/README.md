@@ -7,32 +7,49 @@ and docker - checkout [Docker Community Edition](https://www.docker.com/communit
 
 ### Usage
 ```
-from this directory run
+# Run these commands from this directory 
+
+# Run multi-container docker-compose app in detached mode
 docker-compose up -d
 
-remove all containers and volumes
-docker-compose down -v 
+# See running containers
+docker container list
 
+# Restart containers 
+docker-compose restart
 
-docker-compose up -d
-docker-compose down
+# Stop containers 
 docker-compose stop 
-docker-compose start 
-docker-compose down -v  # removes docker volumes deleting all previous data
+
+# Remove all containers and associated volumes - volumes store persistent data
+docker-compose down -v 
 ```
 
-Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
+### Other Docker Compose Commands
+# https://docs.docker.com/compose/reference/ 
+```
+
+### Sending Metrics to Promethus Pushgateway Using Curl 
+```
+# You can use any http client library to send data. Push gateway is collected via Prometheus
+# Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
 echo "some_metric 10" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job1
 echo "some_metric_2 30" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job2
 curl http://127.0.0.1:9091/metrics
-
-
-### Troubleshooting docker images from shell
-```
-docker exec --user root -it <yourdockerimage> /bin/sh
 ```
 
-### Other Common Commands
+
+### Troubleshooting Docker Container from Shell
+```
+docker exec --user root -it <your-docker-container-id> /bin/sh
+```
+
+### View Docker Container Logs
+```
+docker logs <your-docker-container-id>
+```
+
+### Other Common Docker Commands
 ```
 docker container list
 docker container list --all
@@ -41,8 +58,11 @@ docker image list
 docker image rm <my image>
 ```
 
-Example of pushing modified docker to your own repo
+### Push Docker Example 
+```
 #!/usr/bin/env bash
+# Make changes to your docker image and push to your own repo
+# Example of pushing modified docker to your own repo
 DOCKER_USERNAME="yourusername"
 DOCKER_PASSWORD="yourpassword"
 image_id="imageid"
@@ -51,7 +71,9 @@ repo="${DOCKER_USERNAME}/${image_tag}"
 docker tag ${image_id} $repo
 docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
 docker push $repo
+```
 
 ### References
 https://docs.docker.com/compose/compose-file/
+https://docs.docker.com/compose/reference/ 
 https://docs.docker.com/
