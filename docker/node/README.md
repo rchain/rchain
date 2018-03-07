@@ -2,12 +2,14 @@
 RChain docker compose for peer-to-peer node using Prometheus for data collection and Grafana for visualization 
 
 ### Prerequisites
-You need `docker-compose` that supports 3.1 docker-compose version - checkout [install guide](https://docs.docker.com/compose/install/)
-and docker - checkout [Docker Community Edition](https://www.docker.com/community-edition)
+You need `docker-compose` that supports version 3.1 or greater docker-compose files - checkout [install docker-compose guide](https://docs.docker.com/compose/install/)
+
+You also need `docker` version that supports the needed functionality - checkout [Docker Community Edition](https://www.docker.com/community-edition)
 
 ### Usage
 ```
 # Run these commands from this directory 
+# Docker containers will have "node_" in front of them from this directory name
 
 # Run multi-container docker-compose app in detached mode
 docker-compose up -d
@@ -23,6 +25,12 @@ docker-compose stop
 
 # Remove all containers and associated volumes - volumes store persistent data
 docker-compose down -v 
+```
+
+### Login to Grafana
+```
+Go to http://localhost:3000 on your machine
+We exposed 3000 so it should be accessible from your desktop browser
 ```
 
 ### Other Docker Compose Commands
