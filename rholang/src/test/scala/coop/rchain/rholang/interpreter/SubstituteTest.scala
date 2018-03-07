@@ -27,7 +27,6 @@ class VarSubSpec extends FlatSpec with Matchers {
 
   "BoundVar" should "throw an error" in {
     val env = Env[Par](1 -> Par(GPrivate()))
-    println(env)
     an[Error] should be thrownBy subOrDec(BoundVar(0))(env)
   }
 
