@@ -16,6 +16,7 @@ object Env {
   def apply[A](a: A, b: A, k: A*): Env[A] =
     DeBruijn(mutable.LinkedHashMap.empty[Int, A]) + (a, b, k: _*)
 
+
   def apply[A](elems: (Int, A)*): Env[A] =
     mutable.LinkedHashMap[Int, A](elems: _*)
 
@@ -37,5 +38,4 @@ object Env {
       env ++= _env.rename(env.level)
 
   }
-
 }

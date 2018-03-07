@@ -3,7 +3,7 @@ package coop.rchain.models
 import cats.syntax.either._
 import com.trueaccord.scalapb.{GeneratedMessage, GeneratedMessageCompanion}
 
-trait SerializeInstances {
+object implicits {
   case class rhoInstanceWrapper[T <: GeneratedMessage with com.trueaccord.scalapb.Message[T]](
       companion: GeneratedMessageCompanion[T])
       extends Serialize[T] {
@@ -25,4 +25,5 @@ trait SerializeInstances {
   implicit object evalInstance     extends rhoInstanceWrapper(Eval)
   implicit object newInstance      extends rhoInstanceWrapper(New)
   implicit object exprInstance     extends rhoInstanceWrapper(Expr)
+  implicit object matchInstance    extends rhoInstanceWrapper(Match)
 }

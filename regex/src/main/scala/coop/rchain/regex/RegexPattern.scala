@@ -1,4 +1,4 @@
-package coop.rchain.storage.regex
+package coop.rchain.regex
 
 import scala.annotation.tailrec
 import scala.util.Try

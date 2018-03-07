@@ -1,3 +1,3 @@
 package coop.rchain
 
-package object storage
+package object storage extends StorageActions

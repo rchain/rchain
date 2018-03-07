@@ -1,6 +1,12 @@
 syntax = "proto3";
 
+import "scalapb/scalapb.proto";
+
 option java_package = "coop.rchain.models";
+
+option (scalapb.options) = {
+  import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
+};
 
 message Par {
     repeated Send sends = 1;
@@ -8,6 +14,8 @@ message Par {
     repeated Eval evals = 3;
     repeated New news = 4;
     repeated Expr exprs = 5;
+    int32 freeCount = 6;
+    bytes locallyFree = 7 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message Channel {
@@ -15,6 +23,8 @@ message Channel {
         Quote quote = 1;
         ChanVar chanVar = 2;
     }
+    int32 freeCount = 3;
+    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message Quote {
@@ -22,7 +32,7 @@ message Quote {
 }
 
 message ChanVar {
-    Var cvar = 2;
+    Var cvar = 1;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -34,6 +44,8 @@ message Var {
         BoundVar bound_var = 1;
         FreeVar free_var = 2;
     }
+    int32 freeCount = 3;
+    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message BoundVar {
@@ -57,6 +69,9 @@ message FreeVar {
 message Send {
     Channel chan = 1;
     repeated Par data = 2;
+    bool persistent = 3;
+    int32 freeCount = 4;
+    bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message ReceiveBind {
@@ -69,10 +84,17 @@ message ReceiveBind {
 // Don't currently support conditional receive
 message Receive {
     repeated ReceiveBind binds = 1;
+    Par body = 2;
+    bool persistent = 3;
+    int32 bindCount = 4;
+    int32 freeCount = 5;
+    bytes locallyFree = 6 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message Eval {
     Channel channel = 1;
+    int32 freeCount = 2;
+    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 // Number of variables bound in the new statement.
@@ -80,8 +102,22 @@ message Eval {
 // Also for normalized form, the first use should be level+0, next use level+1
 // up to level+count for the last used variable.
 message New {
-    sint32 count = 1;
+    sint32 bindCount = 1;
     Par p = 2;
+    int32 freeCount = 3;
+    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+}
+
+message Case {
+    Par pattern = 1;
+    Par source = 2;
+}
+
+message Match {
+    Par target = 1;
+    repeated Case cases = 2;
+    int32 freeCount = 3;
+    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 // Any process may be an operand to an expression.
@@ -114,6 +150,8 @@ message Expr {
         GUri g_uri = 23;
         GPrivate g_private = 24;
     }
+    int32 freeCount = 25;
+    bytes locallyFree = 26 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message EList {
@@ -125,16 +163,16 @@ message ETuple {
 }
 
 message ESet {
-    repeated Par ps = 1;
+    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Set"];
 }
 
 message EMap {
-    repeated ParTuple kvs = 1;
+    repeated KeyValuePair kvs = 1;
 }
 
-message ParTuple {
-    Par p1 = 1;
-    Par p2 = 2;
+message KeyValuePair {
+    Par key = 1;
+    Par value = 2;
 }
 
 // A variable used as a var should be bound in a process context, not a name

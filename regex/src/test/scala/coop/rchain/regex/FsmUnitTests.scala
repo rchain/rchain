@@ -1,9 +1,12 @@
-package coop.rchain.storage.regex
-
-import coop.rchain.storage.util
+package coop.rchain.regex
 import org.scalatest.{FlatSpec, Matchers}
 
 class FsmUnitTests extends FlatSpec with Matchers {
+  def ignore[A](a: => A): Unit = {
+    val _: A = a
+    ()
+  }
+
   val _ob: Int = -5
 
   def createFsmA: Fsm = Fsm(
@@ -767,25 +770,25 @@ class FsmUnitTests extends FlatSpec with Matchers {
 
   "Invalid Fsm" should "fail if alphabet null" in {
     assertThrows[IllegalArgumentException] {
-      util.ignore { Fsm(null, null, 0, null, null) }
+      ignore { Fsm(null, null, 0, null, null) }
     }
   }
 
   "Invalid Fsm" should "fail if initial state is not a state" in {
     assertThrows[IllegalArgumentException] {
-      util.ignore { Fsm(Set('a'), Set(0), 1, Set(0), Map()) }
+      ignore { Fsm(Set('a'), Set(0), 1, Set(0), Map()) }
     }
   }
 
   "Invalid Fsm" should "fail if final state is not a state" in {
     assertThrows[IllegalArgumentException] {
-      util.ignore { Fsm(Set('a'), Set(1), 1, Set(2), Map()) }
+      ignore { Fsm(Set('a'), Set(1), 1, Set(2), Map()) }
     }
   }
 
   "Invalid Fsm" should "fail if unexpected transition state detected" in {
     assertThrows[IllegalArgumentException] {
-      util.ignore { Fsm(Set('a'), Set(1, 2), 1, Set(2), Map(1 -> Map('a' -> 3))) }
+      ignore { Fsm(Set('a'), Set(1, 2), 1, Set(2), Map(1 -> Map('a' -> 3))) }
     }
   }
 }

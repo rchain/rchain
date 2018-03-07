@@ -1,6 +1,6 @@
 package coop.rchain.rosette.prim
-
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, RblString, Tuple}
+import scala.reflect.{classTag, ClassTag}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, RblChar, RblString, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
 
@@ -19,8 +19,8 @@ object rblstring {
     override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem = ctxt.argvec.elem
 
-      checkRblStringFirst(elem(0)).flatMap { s1 =>
-        checkRblStringSecond(elem(1)) match {
+      checkType[RblString](0, elem).flatMap { s1 =>
+        checkType[RblString](1, elem) match {
           case Right(s2) => Right(RblBool(f(s1.value, s2.value)))
           case Left(_)   => Right(RblBool(false))
         }
@@ -91,9 +91,9 @@ object rblstring {
       val elem = ctxt.argvec.elem
 
       for {
-        code <- checkFixnum(0, elem)      // Ensure arg0 is a Fixnum
-        sep  <- checkRblString(1, elem)   // Ensure arg1 is a RblString
-        tup  <- checkTupleString(2, elem) // Ensure arg2 is a Tuple containing RblStrings
+        code <- checkType[Fixnum](0, elem)    // Ensure arg0 is a Fixnum
+        sep  <- checkType[RblString](1, elem) // Ensure arg1 is a RblString
+        tup  <- checkTupleString(2, elem)     // Ensure arg2 is a Tuple containing RblStrings
       } yield {
         val strings = tup.elem.foldLeft(List[String]()) { (list, ob) =>
           list :+ ob.asInstanceOf[RblString].value
@@ -107,27 +107,155 @@ object rblstring {
     }
   }
 
-  /** Helper functions begin here */
   /**
-    * Check the parameter for type RblString. Return a PrimError if it is
-    * not else return the RblString.
+    * Define the string-set-nth primitive.
+    * This replaces the n element of a String
+    *
+    * examples:
+    *  (string-set-nth "abcdef" 2 #\C) ===> "abCdef"
     */
-  private def checkRblStringFirst(parm: Ob): Either[PrimError, RblString] =
-    if (!parm.isInstanceOf[RblString]) {
-      Left(TypeMismatch(0, RblString.getClass.getName))
-    } else {
-      Right(parm.asInstanceOf[RblString])
+  object stringSetNth extends Prim {
+    override val name: String = "string-set-nth"
+    override val minArgs: Int = 3
+    override val maxArgs: Int = 3
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem = ctxt.argvec.elem
+
+      for {
+        str <- checkType[RblString](0, elem)                // Ensure arg0 is a RblString
+        n   <- checkFixnumBounds(1, elem, str.value.length) // Ensure arg1 is a Fixnum
+        ch  <- checkType[RblChar](2, elem)                  // Ensure arg2 is a Char
+      } yield {
+        RblString(str.value.updated(n, ch.value).toString)
+      }
     }
+  }
 
   /**
-    * Check the specified parameter for type RblString. Return RblBool(false) if it is
-    * not else return the RblString.
+    * Define the string-length primitive.
+    * Returns the length of the string
+    * e.g. (string-length "abcdefghi") ==> 9
     */
-  private def checkRblStringSecond(parm: Ob): Either[RblBool, RblString] =
-    if (!parm.isInstanceOf[RblString]) {
-      Left(RblBool(false))
+  object stringLength extends Prim {
+    override val name: String = "string-length"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkTypeMismatch[RblString] // All args must be strings
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+      val elem = ctxt.argvec.elem
+
+      Right(Fixnum(elem(0).asInstanceOf[RblString].value.length))
+    }
+  }
+
+  /**
+    * Define the string-new primitive.
+    * This creates a new RblString of length n. It is filled with
+    * either spaces ' ' or an optionally specified character.
+    *
+    * examples:
+    *  (string-new 5) ===> "     "
+    *  (string-new 4 #\A) ===> "AAAA"
+    */
+  object stringNew extends Prim {
+    override val name: String = "string-new"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem  = ctxt.argvec.elem
+      val nargs = ctxt.nargs
+
+      for {
+        n <- checkType[Fixnum](0, elem)
+        res <- checkType[RblChar](1, elem) match {
+                case Right(ch) => Right(RblString(ch.value.toString * n.value))
+                case Left(_)   => Right(RblString(" " * n.value))
+              }
+      } yield res
+    }
+  }
+
+  /**
+    * Define the string-mem? primitive.
+    * This returns #t if the specified character is in the string else #f
+    *
+    * examples:
+    *  (string-mem? "abcdef" #\c) ===> #t
+    *  (string-mem? "abcdef" #\z) ===> #f
+    */
+  object stringMemQ extends Prim {
+    override val name: String = "string-mem?"
+    override val minArgs: Int = 2
+    override val maxArgs: Int = 2
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem = ctxt.argvec.elem
+
+      for {
+        str <- checkType[RblString](0, elem) // Ensure arg0 is a RblString
+        ch  <- checkType[RblChar](1, elem)   // Ensure arg1 is a Char
+      } yield {
+        RblBool(str.value.contains(ch.value))
+      }
+    }
+  }
+
+  /**
+    * Define the string-get-token primitive.
+    * This returns the nth substring delimited by one of the separators
+    * in the second string.
+    *
+    * examples:
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 0 "/-=,.")   ====> "aZ"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 6 "/-=,.")   ====> "gT"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 8 "/-=,.")   ====> ""
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 5 "&")       ====> ""
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 3 "*")       ====> ""
+    */
+  object stringGetToken extends Prim {
+    override val name: String = "string-get-token"
+    override val minArgs: Int = 3
+    override val maxArgs: Int = 3
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem = ctxt.argvec.elem
+
+      for {
+        str <- checkType[RblString](0, elem) // Ensure arg0 is a RblString
+        w   <- checkType[Fixnum](1, elem)    // Ensure arg1 is a Fixnum
+        sep <- checkType[RblString](2, elem) // Ensure arg2 is a RblString
+      } yield {
+        val tokens = str.value.split(sep.value.toArray)
+        if ((w.value >= 0) && (w.value < tokens.size))
+          RblString(tokens(w.value))
+        else
+          RblString("")
+      }
+    }
+  }
+
+  /** Helper functions begin here */
+  /**
+    * Check the parameter exists return IndexOutOfBounds if not.
+    * Then check that it is the specified type. Return a PrimError if it is not
+    * else return the parameter.
+    */
+  def checkType[T <: Ob](n: Int, elem: Seq[Ob])(implicit ct: ClassTag[T]): Either[PrimError, T] =
+    if (n < 0 || n >= elem.size) {
+      Left(IndexOutOfBounds(n, elem.size))
     } else {
-      Right(parm.asInstanceOf[RblString])
+      elem(n) match {
+        case e: T => Right(elem(n).asInstanceOf[T])
+        case _    => Left(TypeMismatch(n, ct.runtimeClass.getName))
+      }
     }
 
   /**
@@ -149,24 +277,18 @@ object rblstring {
 
   /**
     * Check the specified parameter for type Fixnum. Return a PrimError if it is
-    * not else return the Fixnum.
+    * not a Fixnum or if it is out of bounds of 0 <= n <= size. Otherwise return the
+    * value of the Fixnum as an Int.
     */
-  private def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
+  private def checkFixnumBounds(n: Int, elem: Seq[Ob], size: Int): Either[PrimError, Int] =
     if (!elem(n).isInstanceOf[Fixnum]) {
       Left(TypeMismatch(n, Fixnum.getClass().getName()))
     } else {
-      Right(elem(n).asInstanceOf[Fixnum])
+      val i = elem(n).asInstanceOf[Fixnum].value
+      if ((i < 0) || (i > size)) {
+        Left(IndexOutOfBounds(i, size))
+      } else {
+        Right(i)
+      }
     }
-
-  /**
-    * Check the specified parameter for type RblString. Return a PrimError if it is
-    * not else return the RblString.
-    */
-  private def checkRblString(n: Int, elem: Seq[Ob]): Either[PrimError, RblString] =
-    if (!elem(n).isInstanceOf[RblString]) {
-      Left(TypeMismatch(n, RblString.getClass.getName))
-    } else {
-      Right(elem(n).asInstanceOf[RblString])
-    }
-
 }

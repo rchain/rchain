@@ -1,38 +1,37 @@
 package coop.rchain.models
 
-import org.scalacheck.Gen
-import org.scalatest.{Matchers, PropSpec}
 import org.scalatest.prop.PropertyChecks
+import org.scalatest.{FlatSpec, Matchers}
+import implicits._
+import testImplicits._
+import BitSetBytesMapper._
 
-class RhoTypesTest extends PropSpec with PropertyChecks with Matchers {
-  def rtt[T](msg: T, serializeInstance: Serialize[T]): Unit = {
+import scala.collection.immutable.BitSet
+
+class RhoTypesTest extends FlatSpec with PropertyChecks with Matchers {
+
+  def rtt[T](msg: T)(implicit serializeInstance: Serialize[T]): Either[Throwable, T] = {
     val bytes = serializeInstance.encode(msg)
-    val msg2  = serializeInstance.decode(bytes)
-    assert(msg2.isRight && msg == msg2.right.get)
-
-    val errBytes = Array[Byte](1, 2, 3, 4)
-    val msg3     = serializeInstance.decode(errBytes)
-    assert(msg3.isLeft)
+    serializeInstance.decode(bytes)
   }
 
-  property("complex value should pass round-trip serialization") {
-    val lenVariants = for (n <- Gen.choose(0, 50)) yield n
-    forAll(lenVariants) { (len: Int) =>
-      forAll { (p1: Int, p2: Int) =>
-        val n1 = New().withCount(p1)
-        val n2 = New().withCount(p2)
-
-        val par1 = Par().withNews(List.fill(len)(n1))
-        val par2 = Par().withNews(List.fill(len)(n2))
-        val kv   = ParTuple().withP1(par1).withP2(par2)
-
-        val emap = EMap().withKvs(List.fill(len)(kv))
-        val expr = Expr().withEMap(emap)
-
-        val outerPar = Par().withExprs(List(expr))
-
-        rtt(outerPar, parInstance)
-      }
+  "Par" should "Pass round-trip serialization" in {
+    forAll { (par: Par) =>
+      val result = rtt(par)
+      result.right.get should be(par)
     }
+  }
+}
+
+class BitSetBytesMapperTest extends FlatSpec with PropertyChecks with Matchers {
+  "BitSetBytesMapper" should "Pass round-trip serialization on empty bitset" in {
+    val emptyBitSet = BitSet()
+    byteStringToBitSet(bitSetToByteString(emptyBitSet)) should be(emptyBitSet)
+  }
+
+  "BitSetBytesMapper" should "Pass round-trip serialization on a long bitset" in {
+    val nonEmptyBitSet = BitSet(0, 3, 4, 8, 13, 14, 17, 19, 21, 22, 24, 25, 26, 27, 36, 41, 44, 46,
+      47, 50, 51, 53, 56, 57, 58, 60, 63, 65, 66, 67, 68, 70, 72, 88, 910, 911)
+    byteStringToBitSet(bitSetToByteString(nonEmptyBitSet)) should be(nonEmptyBitSet)
   }
 }

@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import org.scalatest.{FlatSpec, Matchers}
 import Substitute._
+import Env._
+import scala.collection.immutable.BitSet
 
 class VarSubSpec extends FlatSpec with Matchers {
 
@@ -18,8 +20,8 @@ class VarSubSpec extends FlatSpec with Matchers {
   }
 
   "BoundVar" should "be substituted with renamed expression" in {
-    val source  = Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0))
-    val _source = Par(Send(ChanVar(BoundVar(1)), List(Par()), false, 0))
+    val source  = Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))
+    val _source = Par(Send(ChanVar(BoundVar(1)), List(Par()), false, 0, BitSet(1)))
     val env     = Env(source)
     val result  = subOrDec(BoundVar(0))(env)
     result should be(Right(_source))
@@ -47,10 +49,10 @@ class ChannelSubSpec extends FlatSpec with Matchers {
 
   "Quote" should "substitute quoted process" in {
     val env    = Env(Par(GPrivate()))
-    val par    = Par(Send(ChanVar(BoundVar(1)), List(Par()), false, 0))
+    val par    = Par(Send(ChanVar(BoundVar(1)), List(Par()), false, 0, BitSet(1)))
     val target = Quote(par)
     val result = substitute(target)(env)
-    result should be(Quote(Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0))))
+    result should be(Quote(Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))))
   }
 
   "Channel" should "be substituted for a Quote" in {
@@ -65,34 +67,45 @@ class SendSubSpec extends FlatSpec with Matchers {
 
   "Send" should "decrement subject Channel and substitute object processes" in {
     val env    = Env(Par(GPrivate()), Par(GPrivate()))
-    val result = substitute(Send(ChanVar(BoundVar(2)), List(Par()), false, 0))(env)
-    result should be(Send(ChanVar(BoundVar(0)), List(Par()), false, 0))
+    val result = substitute(Send(ChanVar(BoundVar(2)), List(Par()), false, 0, BitSet(2)))(env)
+    result should be(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))
   }
 
   "Send" should "substitute Channel for Quote" in {
     val source0 = Par(GPrivate())
     val env     = Env(source0, Par(GPrivate()))
     val result = substitute(
-      Send(Quote(Send(ChanVar(BoundVar(0)), List(Par()), false, 0)), List(Par()), false, 0))(env)
+      Send(Quote(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0))),
+           List(Par()),
+           false,
+           0,
+           BitSet(0)))(env)
     result should be(
       Send(
-        Quote(Send(Quote(source0), List(Par()), false, 0)),
+        Quote(Send(Quote(source0), List(Par()), false, 0, BitSet())),
         List(Par()),
         false,
-        0
+        0,
+        BitSet()
       )
     )
   }
 
   "Send" should "substitute all Channels for Quotes" in {
+    val env    = Env(source)
     val source = Par(GPrivate())
     val target = Send(ChanVar(BoundVar(0)),
-                      List(Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0))),
+                      List(Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))),
                       false,
-                      0)
+                      0,
+                      BitSet(0))
     val _target =
-      Send(Quote(source), List(Par(Send(Quote(source), List(Par()), false, 0))), false, 0)
-    val env    = Env(source)
+      Send(Quote(source),
+           List(Par(Send(Quote(source), List(Par()), false, 0, BitSet()))),
+           false,
+           0,
+           BitSet())
+    
     val result = substitute(target)(env)
     result should be(_target)
   }
@@ -100,25 +113,29 @@ class SendSubSpec extends FlatSpec with Matchers {
   "Send" should "substitute all channels for renamed, quoted process in environment" in {
     val chan0  = ChanVar(BoundVar(0))
     val chan1  = ChanVar(BoundVar(1))
-    val source = Par(Send(chan0, List(Par()), false, 0))
-    val target = Send(chan0, List(Par(Send(chan0, List(Par()), false, 0))), false, 0)
     val env    = Env(source)
+    val source = Par(New(1, Send(chan0, List(Par()), false, 0, BitSet(0)), BitSet()))
+    val target =
+      Send(chan0, List(Par(Send(chan0, List(Par()), false, 0, BitSet(0)))), false, 0, BitSet(0))
+
     val result = substitute(target)(env)
     result should be(
       Send(
-        Quote(Send(chan1, List(Par()), false, 0)),
+        Quote(New(1, Send(chan1, List(Par()), false, 0, BitSet(1)), BitSet())),
         List(
           Par(
             Send(
-              Quote(Par(Send(chan1, List(Par()), false, 0))),
+              Quote(Par(New(1, Send(chan1, List(Par()), false, 0, BitSet(1)), BitSet()))),
               List(Par()),
               false,
-              0
+              0,
+              BitSet()
             )
           )
         ),
         false,
-        0
+        0,
+        BitSet()
       )
     )
   }
@@ -129,10 +146,11 @@ class NewSubSpec extends FlatSpec with Matchers {
   "New" should "only substitute body of expression" in {
     val source = Par(GPrivate())
     val env    = Env(source)
-    val target = New(1, Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0)))
+    val target =
+      New(1, Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0))), BitSet(0))
     val result = substitute(target)(env)
     result should be(
-      New(1, Par(Send(Quote(source), List(Par()), false, 0)))
+      New(1, Par(Send(Quote(source), List(Par()), false, 0, BitSet())), BitSet())
     )
   }
 
@@ -143,16 +161,23 @@ class NewSubSpec extends FlatSpec with Matchers {
     val target = New(2,
                      Par(
                        Send(ChanVar(BoundVar(0)),
-                            List(Par(Send(ChanVar(BoundVar(1)), List(Par()), false, 0))),
+                            List(Par(Send(ChanVar(BoundVar(1)), List(Par()), false, 0, BitSet(1)))),
                             false,
-                            0)))
+                            0,
+                            BitSet(0, 1))),
+                     BitSet(0, 1))
     val result = substitute(target)(env)
     result should be(
       New(
         2,
         Par(
-          Send(Quote(source0), List(Par(Send(Quote(source1), List(Par()), false, 0))), false, 0)
-        )
+          Send(Quote(source0),
+               List(Par(Send(Quote(source1), List(Par()), false, 0, BitSet()))),
+               false,
+               0,
+               BitSet())
+        ),
+        BitSet()
       )
     )
   }
