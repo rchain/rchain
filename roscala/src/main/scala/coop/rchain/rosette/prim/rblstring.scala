@@ -207,6 +207,41 @@ object rblstring {
     }
   }
 
+  /**
+    * Define the string-get-token primitive.
+    * This returns the nth substring delimited by one of the separators
+    * in the second string.
+    *
+    * examples:
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 0 "/-=,.")   ====> "aZ"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 6 "/-=,.")   ====> "gT"
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 8 "/-=,.")   ====> ""
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 5 "&")       ====> ""
+    * (string-get-token "aZ,bY.cX-dW=eV/fU*gT" 3 "*")       ====> ""
+    */
+  object stringGetToken extends Prim {
+    override val name: String = "string-get-token"
+    override val minArgs: Int = 3
+    override val maxArgs: Int = 3
+
+    @checkArgumentMismatch
+    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem = ctxt.argvec.elem
+
+      for {
+        str <- checkType[RblString](0, elem) // Ensure arg0 is a RblString
+        w   <- checkType[Fixnum](1, elem)    // Ensure arg1 is a Fixnum
+        sep <- checkType[RblString](2, elem) // Ensure arg2 is a RblString
+      } yield {
+        val tokens = str.value.split(sep.value.toArray)
+        if ((w.value >= 0) && (w.value < tokens.size))
+          RblString(tokens(w.value))
+        else
+          RblString("")
+      }
+    }
+  }
+
   /** Helper functions begin here */
   /**
     * Check the parameter exists return IndexOutOfBounds if not.

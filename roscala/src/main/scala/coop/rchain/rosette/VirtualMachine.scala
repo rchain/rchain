@@ -612,13 +612,13 @@ object VirtualMachine {
     for {
       _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim = Prim.nthPrim(op.primNum)
+      prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
 
       _ <- handlePrimResult(
-        result,
-        ob => modify(_.copy(doNextThreadFlag = true))
-      )
+            result,
+            ob => modify(_.copy(doNextThreadFlag = true))
+          )
     } yield ()
 
   def execute(op: OpRtn): VMTransition[Unit] =
