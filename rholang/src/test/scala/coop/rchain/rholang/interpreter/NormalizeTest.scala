@@ -625,6 +625,39 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch(pMatch, inputs)
     }
   }
+  "PMatch" should "Handle a match inside a for pattern" in {
+    // for (@{match {x | y} { 47 => Nil }} <- @Nil) { Nil }
+
+    val listCases = new ListCase()
+    listCases.add(new CaseImpl(new PGround(new GroundInt(47)), new PNil()))
+    val pMatch       = new PMatch(new PPar(new PVar("x"), new PVar("y")), listCases)
+    val listBindings = new ListName()
+    listBindings.add(new NameQuote(pMatch))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(new LinearBindImpl(listBindings, new NameQuote(new PNil())))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt      = new ReceiptLinear(linearSimple)
+    var input        = new PInput(receipt, new PNil())
+
+    val result    = ProcNormalizeMatcher.normalizeMatch(input, inputs)
+    val bindCount = 2
+    val freeCount = 0
+
+    val matchTarget = Par(EVar(FreeVar(1))).prepend(EVar(FreeVar(0)))
+    val expectedResult =
+      inputs.par.copy(
+        receives = List(
+          Receive(
+            List((List(Quote(Match(matchTarget, List((GInt(47), Par())), 2))), Quote(Par()))),
+            Par(),
+            false,
+            bindCount,
+            freeCount
+          ))
+      )
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {

@@ -1,4 +1,4 @@
-package coop.rchain.storage.regex
+package coop.rchain.regex
 
 import scala.util.matching.Regex
 import java.nio.charset.StandardCharsets

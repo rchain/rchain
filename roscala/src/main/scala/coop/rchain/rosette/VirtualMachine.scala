@@ -609,33 +609,17 @@ object VirtualMachine {
     } yield ()
 
   def execute(op: OpApplyCmd): VMTransition[Unit] =
-    modify(
-      state =>
-        state
-          .set(_ >> 'ctxt >> 'nargs)(op.nargs)
-          .updateSelf(state => {
-            val prim = Prim.nthPrim(op.primNum)
+    for {
+      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-            val (result, newState) =
-              if (op.unwind) {
-                unwindAndApplyPrim(prim.get, state)
-              } else {
-                // TODO: Fix
-                (prim.get.dispatchHelper(state.ctxt), state)
-              }
+      prim = Prim.nthPrim(op.primNum)
+      result <- runPrim(op.unwind, prim)
 
-            result match {
-              case Right(ob) =>
-                if (ob.is(Ob.OTsysval)) {
-                  handleException(ob, op, Limbo)
-                  newState.set(_ >> 'doNextThreadFlag)(true)
-                } else {
-                  newState.update(_ >> 'doNextThreadFlag)(if (op.next) true else _)
-                }
-              case Left(DeadThread) =>
-                newState.set(_ >> 'doNextThreadFlag)(true)
-            }
-          }))
+      _ <- handlePrimResult(
+        result,
+        ob => modify(_.copy(doNextThreadFlag = true))
+      )
+    } yield ()
 
   def execute(op: OpRtn): VMTransition[Unit] =
     modify(_.set(_ >> 'doRtnData)(op.next).set(_ >> 'doRtnFlag)(true))

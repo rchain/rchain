@@ -1,7 +1,7 @@
 package coop.rchain.rosette.prim
 
 import coop.rchain.rosette.prim.rblstring._
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, RblString, Tuple}
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, PC, RblBool, RblChar, RblString, Tuple}
 import org.scalatest._
 
 class RblStringSpec extends FlatSpec with Matchers {
@@ -648,6 +648,101 @@ class RblStringSpec extends FlatSpec with Matchers {
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringJoin.fn(newCtxt) should be('left)
+  }
+
+  /** string-length */
+  "string-length" should "return the length of the string" in {
+    val s    = "abcdefghi"
+    val strs = Seq(RblString(s))
+
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(strs))
+
+    stringLength.fn(newCtxt) should be(Right(Fixnum(9)))
+  }
+
+  it should "return 0 for an empty string" in {
+    val s    = ""
+    val strs = Seq(RblString(s))
+
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(strs))
+
+    stringLength.fn(newCtxt) should be(Right(Fixnum(0)))
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    stringJoin.fn(newCtxt) should be('left)
+  }
+
+  /** string-set-nth */
+  "string-set-nth" should "replace the nth character of the string" in {
+    val s     = "abcdefghi"
+    val parms = Tuple(Seq(RblString(s), Fixnum(2), RblChar('C')))
+
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+
+    stringSetNth.fn(newCtxt) should be(Right(RblString("abCdefghi")))
+
+  }
+
+  it should "fail for index out of bounds" in {
+    val s     = "abcdefghi"
+    val parms = Tuple(Seq(RblString(s), Fixnum(20), RblChar('C')))
+
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+
+    stringSetNth.fn(newCtxt) should be('left)
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    stringSetNth.fn(newCtxt) should be('left)
+  }
+
+  /** string-new */
+  "string-new" should "create a string of length n of the specified character" in {
+    val parms   = Tuple(Seq(Fixnum(5), RblChar('C')))
+    val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
+
+    stringNew.fn(newCtxt) should be(Right(RblString("CCCCC")))
+  }
+
+  it should "create a string of n spaces if no character specified" in {
+    val parms   = Tuple(Seq(Fixnum(5)))
+    val newCtxt = ctxt.copy(nargs = 1, argvec = parms)
+
+    stringNew.fn(newCtxt) should be(Right(RblString("     ")))
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    stringNew.fn(newCtxt) should be('left)
+  }
+
+  /** string-mem? */
+  "string-mem?" should "return #t if the specified character is in the string" in {
+    val s     = "abcdefghi"
+    val parms = Tuple(Seq(RblString(s), RblChar('c')))
+
+    val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
+
+    stringMemQ.fn(newCtxt) should be(Right(RblBool(true)))
+
+  }
+
+  it should "return #f if the specified character is not in the string" in {
+    val s     = "abcdefghi"
+    val parms = Tuple(Seq(RblString(s), RblChar('z')))
+
+    val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
+
+    stringMemQ.fn(newCtxt) should be(Right(RblBool(false)))
+
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    stringMemQ.fn(newCtxt) should be('left)
   }
 
 }
