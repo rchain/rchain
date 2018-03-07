@@ -23,10 +23,6 @@ object Log extends LogInstances {
 }
 
 sealed abstract class LogInstances {
-
   implicit def eitherTLog[E, F[_]: Monad: Log[?[_]]]: Log[EitherT[F, E, ?]] =
     Log.forTrans[F, EitherT[?[_], E, ?]]
-
-  implicit def writerTKvs[W: Monoid, F[_]: Monad: Log[?[_]]]: Log[WriterT[F, W, ?]] =
-    Log.forTrans[F, WriterT[?[_], W, ?]]
 }
