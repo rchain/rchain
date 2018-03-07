@@ -34,11 +34,15 @@ final case class UnicastNetwork(peer: PeerNode,
   val pending =
     new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
-  val local = new ProtocolNode(id, endpoint, this)
+  val unsafeRoundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
+    (pm, pn) => roundTrip[Id](pm, pn)
+
+  val local = ProtocolNode(peer, unsafeRoundTrip)
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  def receiver[F[_]: Monad: Capture: Log: Time: Metrics: Kvs[?[_], PeerNode, Array[Byte]]]
+  def receiver[
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]]
     : F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
@@ -104,7 +108,8 @@ final case class UnicastNetwork(peer: PeerNode,
     potentials.toSeq
   }
 
-  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Kvs[?[_], PeerNode, Array[Byte]]](
+  def dispatch[
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]](
       sock: SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
@@ -118,7 +123,8 @@ final case class UnicastNetwork(peer: PeerNode,
 
       // Update sender's last-seen time, adding it if there are no higher-level protocols.
       for {
-        _ <- Capture[F].capture(table.observe(new ProtocolNode(sender, this), next == None))
+        _ <- Capture[F].capture(
+              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next == None))
         _ <- msg match {
               case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
               case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
@@ -133,15 +139,15 @@ final case class UnicastNetwork(peer: PeerNode,
     dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender"))
   }
 
-  // TODO duplicated in p2p.scala, unify
-  def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
+  def add(peer: PeerNode): Unit =
+    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), true)
 
   /*
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
   private def handleResponse[
-      F[_]: Monad: Capture: Log: Time: Metrics: Kvs[?[_], PeerNode, Array[Byte]]](
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]](
       sock: SocketAddress,
       sender: PeerNode,
       msg: ProtocolResponse): F[Unit] = {
