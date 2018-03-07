@@ -308,20 +308,30 @@ inline const int MASK_RANGE(const int i, const int j) {
     return x << i;
 }
 
-inline const int GET_FIELD(const unsigned int x, const int i, const int wid) {
+template <typename T>
+const T get_field(const T x, const int i, const int wid) {
     auto tmp = x & MASK_RANGE(i, i + wid);
     return tmp >> i;
 }
 
-#define SET_FIELD(x, i, wid, val) \
-    ((x) &= (~MASK_RANGE((i), (i + wid))), ((x) |= ((val) << (i))))
+template <typename T>
+void set_field(T* x, const int i, const int wid, const int val) {
+    *x &= ~MASK_RANGE(i, i + wid);
+    *x |= val << i;
+    return;
+}
 
-#define GET_LF(x, i, wid) GET_FIELD(x.locfields, i, wid)
-#define SET_LF(x, i, wid, val) SET_FIELD(x.locfields, i, wid, val)
+/** Macros for Ob.locfields. **/
+#define GET_LF(x, i, wid) get_field<unsigned int>(x.locfields, i, wid)
+
+#define SET_LF(x, i, wid, val) \
+    set_field<unsigned int>(&(x.locfields), i, wid, val)
 
 #define GET_FLAG(x, flag) ((x & (1 << flag)) ? 1 : 0)
 #define SET_FLAG(x, flag) (x |= (1 << flag))
 #define REMOVE_FLAG(x, flag) (x &= (~(1 << flag)))
+
+/** NB(leaf): End of Bits.h **/
 
 #define GET_TAGGED_TAG(x) GET_LF(x, 0, TagSize)
 #define GET_TAGGED_DATA(x) GET_LF(x, 0 + TagSize, WordSize - TagSize)

@@ -62,6 +62,7 @@ char* getcwd(char*);
 
 pMeta META(pOb ob) { return (pMeta)ob->meta(); }
 pSBO SBO(pOb ob) { return (pSBO)ob->parent(); }
+
 pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
 
 int TAG(pOb x) {
@@ -79,7 +80,8 @@ int ESCTAG(pOb x) {
 /**
  * NB(leaf): Originally, this was a macro defined as follows:
  *
- * #define SIGN_EXTEND(a, n) ((((int)a) << (WordSize - (n))) >> (WordSize - (n)))
+ * #define SIGN_EXTEND(a, n) ((((int)a) << (WordSize - (n))) >> (WordSize -
+ * (n)))
  *
  * Looking at the function definition, it's not clear what's going on here
  * other than a funky cast to int. Is it even possible for this function to
@@ -1307,7 +1309,7 @@ DEF("random-number", randomNumber, 0, 0) {
 
 DEF("now", now, 0, 0) {
     // TODO: Return as epoch time
-    return FIXNUM((int) time(NULL));
+    return FIXNUM((int)time(NULL));
 }
 
 DEF_OPRN(Sync, "expand", oprnExpand, obId);

@@ -196,8 +196,8 @@ enum Opcode {
     MaxOpcodes = 256
 };
 
-#define GET_FW(x, y, z) GET_FIELD(x.word, y, z)
-#define SET_FW(x, y, z, val) SET_FIELD(x.word, y, z, val)
+#define GET_FW(x, y, z) get_field<uint16_t>(x.word, y, z)
+#define SET_FW(x, y, z, val) set_field<uint16_t>(&(x.word), y, z, val)
 
 
 #define OP_f0_op0(x) GET_FW(x, 0, 8)
@@ -239,8 +239,8 @@ enum Opcode {
 #define OP_e0_op1(x) GET_FW(x, 0, 8)
 #define OP_e0_op0(x) GET_FW(x, 8, 8)
 
-#define WORD_OP_e0_op1(x) GET_FIELD(x, 0, 8)
-#define WORD_OP_e0_op0(x) GET_FIELD(x, 8, 8)
+#define WORD_OP_e0_op1(x) get_field<uint16_t>(x, 0, 8)
+#define WORD_OP_e0_op0(x) get_field<uint16_t>(x, 8, 8)
 
 
 #define OP_e1_op0(x) GET_FW(x, 0, 16)
