@@ -309,9 +309,11 @@ void RblTable::linearCheckSize() {
 }
 
 // We need to keep track of the number of deleted entries separately
-// because until the table is rehashed, they still occupy space in the hash table.
+// because until the table is rehashed, they still occupy space in the hash
+// table.
 void RblTable::hashCheckSize() {
-    if (4 * (numberOfEntries+numberOfDeletedHashEntries) > 3 * maxEntries) {  // i.e., the table is
+    if (4 * (numberOfEntries + numberOfDeletedHashEntries) >
+        3 * maxEntries) {  // i.e., the table is
         // 75% full
         hashResize();
     }
