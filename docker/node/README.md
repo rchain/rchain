@@ -34,7 +34,8 @@ We exposed 3000 so it should be accessible from your desktop browser
 ```
 
 ### Other Docker Compose Commands
-# https://docs.docker.com/compose/reference/ 
+```
+https://docs.docker.com/compose/reference/ 
 ```
 
 ### Sending Metrics to Promethus Pushgateway Using Curl 
@@ -82,6 +83,8 @@ docker push $repo
 ```
 
 ### References
+```
 https://docs.docker.com/compose/compose-file/
 https://docs.docker.com/compose/reference/ 
 https://docs.docker.com/
+```
