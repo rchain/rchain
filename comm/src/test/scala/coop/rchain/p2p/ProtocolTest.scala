@@ -1,9 +1,10 @@
 package coop.rchain.p2p
 
 import org.scalatest._
-import coop.rchain.comm._
+import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
+import coop.rchain.catscontrib.ski._
 
 /**
   * TODO rethink how the protocol is being tested
@@ -18,7 +19,7 @@ class ProtocolTest extends FlatSpec with Matchers {
 
     node should not be null
 
-    val src  = new ProtocolNode(node.id, node.endpoint, null)
+    val src  = ProtocolNode(node, kp2(Left(unknownProtocol("unknown"))))
     val keys = PublicPrivateKeys(Array.empty[Byte], Array.empty[Byte])
     val hs =
       EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, keys),
@@ -49,7 +50,7 @@ class ProtocolTest extends FlatSpec with Matchers {
 
     node should not be null
 
-    val src = new ProtocolNode(node.id, node.endpoint, null)
+    val src = ProtocolNode(node, kp2(Left(unknownProtocol("unknown"))))
     val hs =
       ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(src), System.currentTimeMillis)
     val result = hs.response(src)
