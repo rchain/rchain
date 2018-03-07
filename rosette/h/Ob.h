@@ -333,8 +333,6 @@ void set_field(T* x, const int i, const int wid, const int val) {
 
 /** NB(leaf): End of Bits.h **/
 
-#define PTR(ob) ((pOb)(ob))
-#define NPTR(ob) ((pOb)(ob))
 #define SYMPTR(ob) ((char*)((unsigned)(ob) - OTsym))
 
 #define BOOLVAL(ob) ESCVAL(ob)
