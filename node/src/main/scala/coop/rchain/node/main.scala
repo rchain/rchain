@@ -13,16 +13,9 @@ import monix.execution.Scheduler
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 
 import kamon._
-
-object TaskContrib {
-  implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
-    def unsafeRunSync(handle: A => Unit): Unit =
-      Await.result(task.runAsync, Duration.Inf)
-  }
-}
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version("RChain Node version 0.1")
