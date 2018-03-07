@@ -68,13 +68,13 @@ pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
 int TAG(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return GET_TAGGED_TAG(te);
+    return GET_LF(te, 0, TagSize);
 }
 
 int ESCTAG(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return GET_ESCTAGGED_TAG(te);
+    return GET_LF(te, 0, EscTagSize);
 }
 
 /**
@@ -95,13 +95,15 @@ static const int SIGN_EXTEND(const int a, const int sz) {
 const int TAGVAL(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return SIGN_EXTEND(GET_TAGGED_DATA(te), TagSize);
+    auto tmp = GET_LF(te, TagSize, WordSize - TagSize);
+    return SIGN_EXTEND(tmp, TagSize);
 }
 
 const int ESCVAL(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te), EscTagSize);
+    auto tmp = GET_LF(te, EscTagSize, WordSize - EscTagSize);
+    return SIGN_EXTEND(tmp, EscTagSize);
 }
 
 

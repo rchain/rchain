@@ -333,12 +333,6 @@ void set_field(T* x, const int i, const int wid, const int val) {
 
 /** NB(leaf): End of Bits.h **/
 
-#define GET_TAGGED_TAG(x) GET_LF(x, 0, TagSize)
-#define GET_TAGGED_DATA(x) GET_LF(x, 0 + TagSize, WordSize - TagSize)
-
-#define GET_ESCTAGGED_TAG(x) GET_LF(x, 0, EscTagSize)
-#define GET_ESCTAGGED_DATA(x) GET_LF(x, 0 + EscTagSize, (WordSize - EscTagSize))
-
 #define PTR(ob) ((pOb)(ob))
 #define NPTR(ob) ((pOb)(ob))
 #define SYMPTR(ob) ((char*)((unsigned)PTR(ob) - OTsym))
