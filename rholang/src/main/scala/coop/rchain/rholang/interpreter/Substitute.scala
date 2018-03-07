@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.interpreter.Env.DeBruijn
+import Env._
 
 object Substitute {
 
@@ -34,7 +34,6 @@ object Substitute {
     }
 
   def substitute(term: Par)(implicit env: Env[Par]): Par = {
-
     def subExp(expxs: List[Expr]): Par =
       (expxs :\ Par()) { (expr, par) =>
         expr match {
@@ -57,6 +56,7 @@ object Substitute {
       term.id,
       term.freeCount
     ) ++ subExp(term.exprs)
+
   }
 
   def substitute(term: Send)(implicit env: Env[Par]): Send =
