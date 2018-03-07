@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.syntax.rholang_mercury
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 import scala.collection.immutable.BitSet
 
@@ -195,7 +194,7 @@ object ProcNormalizeMatcher {
 
         val nameMatchResult =
           NameNormalizeMatcher.normalizeMatch(p.name_, NameVisitInputs(input.env, input.knownFree))
-        ProcVisitOutputs(input.par.merge(collapseEvalQuote(nameMatchResult.chan)),
+        ProcVisitOutputs(input.par ++ collapseEvalQuote(nameMatchResult.chan),
                          nameMatchResult.knownFree)
       }
 
@@ -469,7 +468,6 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)]) {
   // Returns the new map, and the starting level of the newly "bound" wildcards
   def setWildcardUsed(count: Int): (DebruijnLevelMap[T], Int) =
     (DebruijnLevelMap(next + count, env), next)
-
   def getBinding(varName: String): Option[T] =
     for (pair <- env.get(varName)) yield pair._2
   def getLevel(varName: String): Option[Int] =

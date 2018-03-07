@@ -77,6 +77,21 @@ lazy val models = project
     commonSettings,
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       cats,
+      scalaCheck,
+      scalaCheckShapeless
+    ),
+    connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
+  )
+
+lazy val regex = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies ++ Seq(
       scalaCheck
     ),
     connectInput in run := true,
@@ -112,7 +127,7 @@ lazy val node = project
       argParsing,
       uriParsing
     ),
-    libraryDependencies ++= apiServerDependencies ++ Seq(cats),
+    libraryDependencies ++= apiServerDependencies ++ kamonDependencies ++ Seq(cats),
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 
@@ -144,7 +159,7 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies,
+    libraryDependencies ++= commonDependencies ++ Seq(monix),
     bnfcSettings,
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
@@ -179,4 +194,3 @@ lazy val roscala = project
       shapeless,
       scalaCheck)
   ).dependsOn(roscala_macros)
-

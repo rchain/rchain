@@ -69,11 +69,14 @@ final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, tim
 
 final case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
-    header.map { h =>
-      ProtocolHandshakeResponseMessage(NetworkProtocol.protocolHandshakeResponse(src, h),
-                                       System.currentTimeMillis)
-    }
+  def response(src: ProtocolNode): Either[CommError, ProtocolMessage] =
+    header
+      .map { h =>
+        ProtocolHandshakeResponseMessage(NetworkProtocol.protocolHandshakeResponse(src, h),
+                                         System.currentTimeMillis)
+      }
+      .toRightIor(HeaderNotAvailable)
+      .toEither
 }
 final case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse

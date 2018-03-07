@@ -21,7 +21,7 @@ case class Leaf[T](item: T) extends Tree[T] {
   def size = 1
 }
 case class Node[T](children: Seq[Tree[T]]) extends Tree[T] {
-  def size = children.map(_.size).sum
+  def size: Int = children.map(_.size).sum
 }
 
 case class ScoreAtom(value: Either[Int, String]) {
@@ -387,15 +387,17 @@ object ParSortMatcher {
     val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
     val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
     val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+    val ids      = p.id.map(g => GroundSortMatcher.sortMatch(g)).sorted
     val sortedPar = Par(
-      sends = sends.map(_.term),
-      receives = receives.map(_.term),
-      exprs = exprs.map(_.term),
-      evals = evals.map(_.term),
-      news = news.map(_.term),
-      matches = matches.map(_.term),
-      freeCount = p.freeCount,
-      locallyFree = p.locallyFree
+      sends.map(_.term),
+      receives.map(_.term),
+      evals.map(_.term),
+      news.map(_.term),
+      exprs.map(_.term),
+      matches.map(_.term),
+      ids.map(_.term).asInstanceOf[List[GPrivate]],
+      p.freeCount,
+      p.locallyFree
     )
     val parScore = Node(Score.PAR,
                         sends.map(_.score) ++

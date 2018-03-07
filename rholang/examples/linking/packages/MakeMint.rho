@@ -1,0 +1,65 @@
+export MakeMint in {
+  import NonNegativeNumber, MakeBrandPair in {
+    contract MakeMint(return) = {
+      new pairCh, makePurse, internalMakePurse, int2NN in {
+        MakeBrandPair(pairCh) | for(p <- pairCh) {
+          match p with [seal, unseal] => {
+            contract int2NN(x, return) = {
+              new nnCh in {
+                NonNegativeNumber(x, nnCh) | for(nn <- nnCh) {
+                  return(nn)
+                }
+              }
+            } |
+            contract makePurse(init, return) = {
+              new balanceCh in {
+                int2NN(init, balanceCh) | for(balance <- balanceCh) {
+                  internalMakePurse(balance, return)
+                }
+              }
+            } |
+            contract internalMakePurse(balance, return) = {
+              //balance must be a NonNegativeNumber contract
+              new decr, getBalance, sprout, getDecr, deposit, api in {
+                contract decr(amount, success) = { balance("sub", amount, success) } |
+                contract getBalance(return) = { balance("value", Nil, return) } |
+                contract sprout(return) = { makePurse(0, return) } |
+                contract getDecr(return) = { seal(decr, return) } |
+                contract deposit(amount, src, success) = {
+                  new result in {
+                    src("getDecr", Nil, result) | for(sealedSrcDecr <- result) { //call getDecr function in src
+                      unseal(sealedSrcDecr, result) | for(r <- result) { //unseal resulting decr function
+                        match r with [srcDecr] => { //unseal success
+                          srcDecr(amount, result) | for(r <- result) { //call decr function
+                            match r with true => { //decr success
+                              balance("add", amount, success) //add transferred amount to this purse
+                            }
+                            _ => { success(false) }
+                          }
+                        }
+                        _ => { success(false) }
+                      }
+                    }
+                  }
+                } |
+                contract api(method, arg, return) = {
+                  match method with 
+                    "getBalance" => { getBalance(return) }
+                    "sprout" => { sprout(return) }
+                    "getDecr" => { getDecr(return) }
+                    "deposit" => {
+                      match arg with [amount, src] => { deposit(amount, src, return) }
+                      _ => { "Bad argument ".display(arg, " for method deposit!\n") | return(false) }
+                    }
+                    _ => {"Method: ".display(method, " not found!\n") | return(Nil) }
+                } |
+                return(api)
+              }
+            }
+          }
+        } |
+        return(makePurse)
+      }
+    }
+  }
+}
