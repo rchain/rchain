@@ -11,11 +11,10 @@ object Env {
   type Env[A] = mutable.LinkedHashMap[Int, A]
 
   def apply[A](a: A): Env[A] =
-    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) + a
+    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) += a
 
   def apply[A](a: A, b: A, k: A*): Env[A] =
-    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) + (a, b, k: _*)
-
+    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) += (a, b, k: _*)
 
   def apply[A](elems: (Int, A)*): Env[A] =
     mutable.LinkedHashMap[Int, A](elems: _*)
@@ -28,13 +27,13 @@ object Env {
       case (k, data) => (k + j, data)
     }
 
-    def +(a: A): mutable.LinkedHashMap[Int, A] = env += (env.level -> a)
+    def +=(a: A): mutable.LinkedHashMap[Int, A] = env += (env.level -> a)
 
-    def +(a: A, b: A, k: A*): mutable.LinkedHashMap[Int, A] = ((env + a + b) /: k) { (_env, data) =>
-      _env + data
+    def +=(a: A, b: A, k: A*): mutable.LinkedHashMap[Int, A] = ((env += a += b) /: k) { (_env, data) =>
+      _env += data
     }
 
-    def merge(_env: mutable.LinkedHashMap[Int, A]): mutable.LinkedHashMap[Int, A] =
+    def ++=(_env: mutable.LinkedHashMap[Int, A]): mutable.LinkedHashMap[Int, A] =
       env ++= _env.rename(env.level)
 
   }
