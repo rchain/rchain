@@ -196,10 +196,6 @@ enum Opcode {
     MaxOpcodes = 256
 };
 
-#ifndef GET_FLAG
-#include "Bits.h"
-#endif
-
 #define GET_FW(x, y, z) GET_FIELD(x.word, y, z)
 #define SET_FW(x, y, z, val) SET_FIELD(x.word, y, z, val)
 
