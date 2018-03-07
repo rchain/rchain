@@ -60,7 +60,7 @@ static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize - EscTagSize);
 
 #define ESCAPED(n) (((n) << TagSize) + OTesc)
 
-enum ObTag {
+enum ObTag : int {
     OTptr = 0,
     OTsym = 1,
     OTfixnum = 2,
@@ -342,10 +342,13 @@ void set_field(T* x, const int i, const int wid, const int val) {
 #define FIXVAL(ob) TAGVAL(ob)
 #define SYSVAL(ob) ((SysCode)ESCVAL(ob))
 
-#define IS_PTR(ob) (TAG(ob) == OTptr)
-#define IS_SYM(ob) (TAG(ob) == OTsym)
-#define IS_FIXNUM(ob) (TAG(ob) == OTfixnum)
-#define IS(t, ob) (t < OTesc ? (TAG(ob) == t) : (ESCTAG(ob) == t))
+bool IS_PTR(pOb x);
+bool IS_SYM(pOb x);
+bool IS_FIXNUM(pOb x);
+bool IS_LOCATION(pOb x);
+bool IS_SYSVAL(pOb x);
+bool IS_CHAR(pOb x);
+
 
 extern pOb decodeAtom(pOb);
 int TAG(pOb x);
