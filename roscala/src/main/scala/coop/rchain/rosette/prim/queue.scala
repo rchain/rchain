@@ -71,7 +71,7 @@ object queue {
           if (q.isEmpty()) {
             Left(QueueEmptyError)
           } else {
-            Right(q.dequeue()._1)
+            Right(q.dequeue()._2)
           }
         case _ =>
           Left(ArgumentMismatch("The first element should be a queue"))
@@ -88,7 +88,7 @@ object queue {
     override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
       if (q.isEmpty()) {
-        Right(ABSENT)
+        Left(Absent)
       }
       Right(q.head)
     }
@@ -104,11 +104,11 @@ object queue {
       (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
         case (q: Queue, pat: Tuple) =>
           if (q.isEmpty) {
-            Right(ABSENT)
+            Left(Absent)
           } else if (pat == Tuple.NIL) {
-            Right(q.dequeue()._1)
+            Right(q.dequeue()._2)
           } else {
-            q.patternDequeue(pat)._1 match {
+            q.patternDequeue(pat)._2 match {
               case ABSENT => Left(PatternMatchError)
               case v: Ob  => Right(v)
             }
@@ -130,7 +130,7 @@ object queue {
       (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
         case (q: Queue, pat: Tuple) =>
           if (q.isEmpty()) {
-            Right(ABSENT)
+            Left(Absent)
           } else if (pat == Tuple.NIL) {
             val e = q.elems.elem.head
             Right(e)
@@ -155,7 +155,7 @@ object queue {
         case (q: Queue, num: Fixnum) =>
           val n = num.value
           if (q.isEmpty()) {
-            Right(ABSENT)
+            Left(Absent)
           }
           if (n > q.depth() || n < 0) {
             Left(ArgumentMismatch)
@@ -178,9 +178,9 @@ object queue {
       (ctxt.argvec.elem.head, ctxt.argvec.elem(1)) match {
         case (q: Queue, n: Fixnum) =>
           if (q.isEmpty()) {
-            Right(ABSENT)
+            Left(Absent)
           }
-          Right(q.dequeueNth(n.value)._1)
+          Right(q.dequeueNth(n.value)._2)
         case _ =>
           Left(
             ArgumentMismatch(

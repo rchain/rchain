@@ -1,6 +1,6 @@
 package coop.rchain.rosette
 
-import coop.rchain.rosette.Ob.ABSENT
+import coop.rchain.rosette.Ob.{ABSENT, NIV}
 
 case class Queue(elems: Tuple) extends Ob {
 
@@ -19,12 +19,12 @@ case class Queue(elems: Tuple) extends Ob {
   def enqueue(ele: Ob): Queue =
     Queue(Tuple(elems.elem :+ ele))
 
-  def dequeue(): (Ob, Queue) =
+  def dequeue(): (Queue, Ob) =
     if (isEmpty()) {
-      (ABSENT, this)
+      (this, ABSENT)
     } else {
       val v = elems.elem.head
-      (v, Queue(Tuple(elems.elem.drop(1))))
+      (Queue(Tuple(elems.elem.drop(1))), v)
     }
 
   def reset(): Queue =
@@ -37,7 +37,7 @@ case class Queue(elems: Tuple) extends Ob {
     elems.elem.lift(index)
   }
 
-  override def setNth(i: Int, v: Ob): Option[Ob] =
+  override def setNth(i: Int, v: Ob): Option[Queue] =
     if (isEmpty()) {
       None
     } else {
@@ -45,55 +45,54 @@ case class Queue(elems: Tuple) extends Ob {
       Some(Queue(Tuple(elems.elem.updated(index, v))))
     }
 
-  override def subObject(i1: Int, i2: Int): Ob = {
+  override def subObject(i1: Int, i2: Int): Queue = {
     val newElems = elems.makeSlice(i1, i2)
     Queue(Tuple(newElems))
   }
 
-  def patternDequeue(pat: Tuple): (Ob, Queue) = {
+  def patternDequeue(pat: Tuple): (Queue, Ob) = {
     val len = nElems.asInstanceOf[Fixnum].value
-    for ((e, i) <- elems.elem.zipWithIndex) {
-      e match {
-        case msg: Tuple =>
-          if (pat.matches(msg)) {
-            val newElems = elems.elem.slice(0, i) ++: elems.elem.slice(i + 1, len)
-            return (e, Queue(Tuple(newElems)))
-          }
-        case _ =>
-      }
+    val maybeMatchedPair = elems.elem.zipWithIndex.find {
+      case (msg: Tuple, index: Int) => pat.matches(msg)
+      case _                        => false
     }
-    (ABSENT, this)
+    maybeMatchedPair
+      .map { p =>
+        val ele      = p._1
+        val index    = p._2
+        val newElems = elems.elem.slice(0, index) ++: elems.elem.slice(index + 1, len)
+        (Queue(Tuple(newElems)), ele)
+      }
+      .getOrElse(this, ABSENT)
   }
 
   def patternRead(pat: Tuple): Ob = {
-    for ((e, i) <- elems.elem.zipWithIndex) {
-      e match {
-        case msg: Tuple =>
-          if (pat.matches(msg)) {
-            return e
-          }
-        case _ =>
-      }
+    val maybeMatchedEle = elems.elem.find {
+      case msg: Tuple => pat.matches(msg)
+      case _          => false
     }
-    ABSENT
+    maybeMatchedEle.getOrElse(ABSENT)
   }
 
-  def dequeueNth(i: Int): (Ob, Queue) = {
+  def dequeueNth(i: Int): (Queue, Ob) = {
     val len = nElems.asInstanceOf[Fixnum].value
     if (i < 0 || i > len) {
-      return (ABSENT, this)
+      (this, ABSENT)
+    } else {
+      val msg      = elems.elem(i)
+      val newElems = elems.elem.slice(0, i) ++: elems.elem.slice(i + 1, len)
+      (Queue(Tuple(newElems)), msg)
     }
-    val msg      = elems.elem(i)
-    val newElems = elems.elem.slice(0, i) ++: elems.elem.slice(i + 1, len)
-    (msg, Queue(Tuple(newElems)))
   }
 
 }
 
 object Queue {
 
+  val DefaultQueueSize = 4
+
   def create(): Queue = {
-    val elems = Tuple.Placeholder
+    val elems = Tuple(DefaultQueueSize, NIV)
     Queue(elems)
   }
 

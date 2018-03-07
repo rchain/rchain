@@ -23,7 +23,7 @@ class PrimQueueSpec extends FlatSpec with Matchers {
   )
 
   val queue      = Queue(Tuple(2, Some(Number(0))))
-  val emptyQueue = Queue(Tuple.Placeholder)
+  val emptyQueue = Queue.create()
 
   "queue-depth" should "correctly get queue's depth" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(queue))
