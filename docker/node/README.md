@@ -6,7 +6,22 @@ You need `docker-compose` that supports version 3.1 or greater docker-compose fi
 
 You also need `docker` version that supports the needed functionality - checkout [Docker Community Edition](https://www.docker.com/community-edition)
 
-### Usage
+
+### Quick Start 
+```
+# Run these commands from this directory 
+docker-compose up -d
+Login to http://localhost:3000/dashboards on you machine using user:pass admin:admin
+Click on RChain dashboard (4 squares by name)
+
+Notes:
+It's set to refresh every 30 seconds. You can change this to your preference. The same with color scheme. 
+We "exposed" tcp port 3000 so it should be accessible from your browser
+We've exposed other ports for convenience. Make sure you always run this behind a firewall or you would want to change exposure and default password 
+The password can be changed by editing grafana/grafana.conf
+```
+
+### Docker-Compose Usage
 ```
 # Run these commands from this directory 
 # Docker containers will have "node_" in front of them from this directory name
@@ -30,7 +45,7 @@ docker-compose down -v
 ### Login to Grafana
 ```
 Go to http://localhost:3000 on your machine
-We exposed 3000 so it should be accessible from your desktop browser
+We exposed tcp 3000 so it should be accessible from your hosts browser
 ```
 
 ### Other Docker Compose Commands
