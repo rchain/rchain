@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.models._
+
 import scala.collection.immutable.HashMap
 
 /* Env reifies the Env[A] = HashMap[Int,A] type alias.
