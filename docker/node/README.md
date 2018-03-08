@@ -38,7 +38,7 @@ curl http://127.0.0.1:9091/metrics
 ```
 
 ## More Docker Commands
-The rest is helpful docker and docker-compose commands for managing docker resources for this application
+The rest of documentation is helpful docker and docker-compose commands for managing docker resources for this application.
 
 ### Docker-Compose Usage
 More docker-compose command usage
