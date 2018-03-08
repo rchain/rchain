@@ -161,7 +161,7 @@ lazy val rholang = project
     ),
     libraryDependencies ++= commonDependencies ++ Seq(monix, argParsing),
     bnfcSettings,
-    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
+    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
       (bnfcGrammarDir in BNFCConfig).value,
