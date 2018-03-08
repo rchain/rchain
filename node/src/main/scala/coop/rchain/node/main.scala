@@ -101,8 +101,10 @@ object Main {
       import Encryption._
       val encoder = BaseEncoding.base16().lowerCase()
       def fetchKeys: Task[PublicPrivateKeys] = Task.delay {
-        val pub: Key = encoder.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
-        val sec: Key = encoder.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        val pub: Key =
+          encoder.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
+        val sec: Key =
+          encoder.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         PublicPrivateKeys(pub, sec)
       }
 
@@ -188,7 +190,8 @@ object Main {
     }
 
     /** will use database or file system */
-    implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] = new Kvs.InMemoryKvs[Task, PeerNode, Array[Byte]]
+    implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
+      new Kvs.InMemoryKvs[Task, PeerNode, Array[Byte]]
 
     /** This is essentially a final effect that will accumulate all effects from the system */
     type CommErrT[F[_], A] = EitherT[F, CommError, A]
