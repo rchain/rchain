@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.{FileNotFoundException, FileReader}
+import java.io.{BufferedOutputStream, FileNotFoundException, FileOutputStream, FileReader}
 
 import coop.rchain.models.Par
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
@@ -9,7 +9,17 @@ import org.rogach.scallop.ScallopConf
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-    val file = trailArg[String]()
+    version("Rholang Mercury 0.1")
+    banner("""
+             |Takes in a rholang source file and
+             |outputs a normalized case class serialization for now.
+             |
+             |Options:
+             |""".stripMargin)
+    footer("\nWill add more options soon.")
+
+    val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
+    val file   = trailArg[String](descr = "Rholang source file")
     verify()
   }
 
@@ -41,14 +51,31 @@ object RholangCLI {
           ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]())
         val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
         val sortedTerm                       = ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term.get
-        val compiledFileName                 = fileName.replaceAll(".rho$", "") + ".rhoc"
-        new java.io.PrintWriter(compiledFileName) {
-          write(sortedTerm.toString); close()
+        if (conf.binary()) {
+          writeBinary(fileName, sortedTerm)
+        } else {
+          writeHumanReadable(fileName, sortedTerm)
         }
-        println(s"Compiled $fileName to $compiledFileName")
       }
       case None => System.exit(1)
     }
+  }
+
+  private def writeHumanReadable(fileName: String, sortedTerm: Par): Unit = {
+    val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
+    new java.io.PrintWriter(compiledFileName) {
+      write(sortedTerm.toString)
+      close()
+    }
+    println(s"Compiled $fileName to $compiledFileName")
+  }
+
+  private def writeBinary(fileName: String, sortedTerm: Par): Unit = {
+    val binaryFileName = fileName.replaceAll(".rho$", "") + ".bin"
+    val output         = new BufferedOutputStream(new FileOutputStream(binaryFileName))
+    output.write(sortedTerm.toByteString.toByteArray)
+    output.close()
+    println(s"Compiled $fileName to $binaryFileName")
   }
 
   private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
