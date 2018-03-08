@@ -14,25 +14,18 @@ message Par {
     repeated Eval evals = 3;
     repeated New news = 4;
     repeated Expr exprs = 5;
-    int32 freeCount = 6;
-    bytes locallyFree = 7 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    repeated Match matches = 6;
+    int32 freeCount = 7;
+    bytes locallyFree = 8 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message Channel {
     oneof channel_instance {
-        Quote quote = 1;
-        ChanVar chanVar = 2;
+        Par quote = 1;
+        Var chanVar = 2;
     }
     int32 freeCount = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-}
-
-message Quote {
-    Par p = 1;
-}
-
-message ChanVar {
-    Var cvar = 1;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -41,27 +34,19 @@ message ChanVar {
 // These are DeBruijn levels
 message Var {
     oneof var_instance {
-        BoundVar bound_var = 1;
-        FreeVar free_var = 2;
+        sint32 bound_var = 1;
+        // Wildcards are represented as bound variables. The initial normalization will
+        // not produce uses of the variable, but for (_ <- x) P is the same as
+        // for (y <- x) P if y is not free in P. We model that equivalence by turning all
+        // wildcards into bound variables.
+        // Variables that occur free in Par used as a pattern or ChanVar are binders.
+        // For the purpose of comparing patterns, we count just like BoundVars.
+
+        // In the DeBruijn level paper, they use negatives, but this is more clear.
+        sint32 free_var = 2;
     }
     int32 freeCount = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-}
-
-message BoundVar {
-    sint32 level = 1;
-}
-
-// Wildcards are represented as bound variables. The initial normalization will
-// not produce uses of the variable, but for (_ <- x) P is the same as
-// for (y <- x) P if y is not free in P. We model that equivalence by turning all
-// wildcards into bound variables.
-// Variables that occur free in Par used as a pattern or ChanVar are binders.
-// For the purpose of comparing patterns, we count just like BoundVars.
-
-// In the DeBruijn level paper, they use negatives, but this is more clear.
-message FreeVar {
-    sint32 level = 1;
 }
 
 // Upon send, all free variables in data are substituted with their values.
@@ -75,8 +60,8 @@ message Send {
 }
 
 message ReceiveBind {
-    repeated Channel channels = 1;
-    Channel channel = 2;
+    repeated Channel patterns = 1;
+    Channel source = 2;
 }
 
 // [Par] is an n-arity Pattern.
@@ -108,14 +93,14 @@ message New {
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
-message Case {
+message MatchCase {
     Par pattern = 1;
     Par source = 2;
 }
 
 message Match {
     Par target = 1;
-    repeated Case cases = 2;
+    repeated MatchCase cases = 2;
     int32 freeCount = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
@@ -124,31 +109,34 @@ message Match {
 // Only processes equivalent to a ground process of compatible type will reduce.
 message Expr {
     oneof expr_instance {
-        EList e_list = 1;
-        ETuple e_tuple = 2;
-        ESet e_set = 3;
-        EMap e_map = 4;
-        EVar e_var = 5;
-        ENot e_not = 6;
-        ENeg e_neg = 7;
-        EMult e_mult = 8;
-        EDiv e_div = 9;
-        EPlus e_plus = 10;
-        EMinus e_minus = 11;
-        ELt e_lt = 12;
-        ELte e_lte = 13;
-        EGt e_gt = 14;
-        EGte e_gte = 15;
-        EEq e_eq = 16;
-        ENeq e_neq = 17;
-        EAnd e_and = 18;
-        EOr e_or = 19;
+        bool g_bool = 1;
+        sint32 g_int = 2;
+        string g_string = 3;
+        string g_uri = 4;
+        // These should only occur as the program is being evaluated. There is no way in
+        // the grammar to construct them.
+        string g_private = 5;
 
-        GBool g_bool = 20;
-        GInt g_int = 21;
-        GString g_string = 22;
-        GUri g_uri = 23;
-        GPrivate g_private = 24;
+        ENot e_not_body = 6;
+        ENeg e_neg_body = 7;
+        EMult e_mult_body = 8;
+        EDiv e_div_body = 9;
+        EPlus e_plus_body = 10;
+        EMinus e_minus_body = 11;
+        ELt e_lt_body = 12;
+        ELte e_lte_body = 13;
+        EGt e_gt_body = 14;
+        EGte e_gte_body = 15;
+        EEq e_eq_body = 16;
+        ENeq e_neq_body = 17;
+        EAnd e_and_body = 18;
+        EOr e_or_body = 19;
+        EVar e_var_body = 20;
+
+        EList e_list_body = 21;
+        ETuple e_tuple_body = 22;
+        ESet e_set_body = 23;
+        EMap e_map_body = 24;
     }
     int32 freeCount = 25;
     bytes locallyFree = 26 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
@@ -163,7 +151,7 @@ message ETuple {
 }
 
 message ESet {
-    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Set"];
+    repeated Par ps = 1;
 }
 
 message EMap {
@@ -251,24 +239,3 @@ message EOr {
     Par p2 = 2;
 }
 
-message GBool {
-    bool b = 1;
-}
-
-message GInt {
-    sint32 i = 1;
-}
-
-message GString {
-    string s = 1;
-}
-
-message GUri {
-    string u = 1;
-}
-
-// These should only occur as the program is being evaluated. There is no way in
-// the grammar to construct them.
-message GPrivate {
-    string p = 1;
-}
