@@ -31,9 +31,9 @@ The password can be changed by editing grafana/grafana.conf
 ```
 
 ### Sending Metrics to Promethus Pushgateway Using Curl 
+You can use any http client library to send data. Push gateway is collected via Prometheus Server
+Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
 ```
-# You can use any http client library to send data. Push gateway is collected via Prometheus
-# Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
 echo "some_metric 10" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job1
 echo "some_metric_2 30" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job2
 curl http://127.0.0.1:9091/metrics
@@ -60,13 +60,6 @@ docker-compose stop
 docker-compose down -v 
 ```
 
-### Login to Grafana
-```
-Go to http://localhost:3000 on your machine
-We exposed tcp 3000 so it should be accessible from your hosts browser
-admin:admin is default user:pass
-```
-
 ### Other Docker Compose Commands
 ```
 https://docs.docker.com/compose/reference/ 
@@ -82,7 +75,7 @@ docker exec --user root -it <your-docker-container-id> /bin/sh
 docker logs <your-docker-container-id>
 ```
 
-### Other Common Docker Commands
+### Other Common Docker Commands Used for Resource Management
 ```
 docker container list
 docker container list --all
