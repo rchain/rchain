@@ -2,15 +2,15 @@ global:
   scrape_interval:     15s
   evaluation_interval: 15s
 
-  # Attach these labels to any time series or alerts when communicating with
-  # external systems (federation, remote storage, Alertmanager).
+  # Attach labels to time series or alerts when communicating with
+  # external systems like alert manager or remote storage.
   external_labels:
-      monitor: 'prometheus-stack-monitor'
+      monitor: 'prometheus-monitor'
 
-# Load and evaluate rules in this file every 'evaluation_interval' seconds.
+# Load and evaluate rules in file every evaluation_interval.
 rule_files:
-  # - "first.rules"
-  # - "second.rules"
+  # - "one.rules"
+  # - "two.rules"
 
 scrape_configs:
 
@@ -20,16 +20,8 @@ scrape_configs:
     scrape_timeout: 5s
 
     static_configs:
-        #- targets: ['localhost:9090']
+      - targets: ['localhost:9090']
       - targets: ['127.0.0.1:9090']
-
-        #   - job_name: 'machine-vm'
-        # 
-        #     scrape_interval: 10s
-        #     scrape_timeout: 5s
-        # 
-        #     static_configs:
-        #       - targets: ['cadvisor:8080']
 
   - job_name: 'prometheus-pushgateway'
 
@@ -37,8 +29,6 @@ scrape_configs:
     scrape_timeout: 5s
 
     static_configs:
-        #- targets: ['localhost:9091']
-        #- targets: ['127.0.0.1:9091']
       - targets: ['prometheus-pushgateway:9091']
   
   - job_name: 'rchain-node'
@@ -47,6 +37,4 @@ scrape_configs:
     scrape_timeout: 5s
 
     static_configs:
-        #- targets: ['localhost:9091']
-        #- targets: ['127.0.0.1:9095']
       - targets: ['rchain-node:9095']
