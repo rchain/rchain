@@ -22,16 +22,14 @@ docker-compose up -d
 docker-compose down -v 
 ```
 
-### Quick Start Notes:
-```
+### Quick Start Notes
 Grafana preferences are set to refresh every 30 seconds. You can change this to your preference. The same with color scheme. 
 We "exposed" docker container tcp port 3000 so Grafana should be accessible from your browser
 We've exposed other ports for access convenience from your host. Make sure you always run this behind a firewall or you would want to change these settings and default password 
-The password can be changed by editing grafana/grafana.conf
-```
+The password for Grafana UI can be changed by editing grafana/grafana.conf
 
 ### Sending Metrics to Promethus Pushgateway Using Curl 
-You can use any http client library to send data. Push gateway is collected via Prometheus Server
+You can use any http client library to send data. Pushgateway stats are collected via Prometheus Server. More info on [when to use the pushgateway](https://prometheus.io/docs/practices/pushing/)
 Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
 ```
 echo "some_metric 10" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job1
