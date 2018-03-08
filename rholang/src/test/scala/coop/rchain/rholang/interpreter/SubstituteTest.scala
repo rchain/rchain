@@ -92,8 +92,8 @@ class SendSubSpec extends FlatSpec with Matchers {
   }
 
   "Send" should "substitute all Channels for Quotes" in {
-    val env    = Env(source)
     val source = Par(GPrivate())
+    val env    = Env(source)
     val target = Send(ChanVar(BoundVar(0)),
                       List(Par(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))),
                       false,
@@ -113,8 +113,8 @@ class SendSubSpec extends FlatSpec with Matchers {
   "Send" should "substitute all channels for renamed, quoted process in environment" in {
     val chan0  = ChanVar(BoundVar(0))
     val chan1  = ChanVar(BoundVar(1))
-    val env    = Env(source)
     val source = Par(New(1, Send(chan0, List(Par()), false, 0, BitSet(0)), BitSet()))
+    val env    = Env(source)
     val target =
       Send(chan0, List(Par(Send(chan0, List(Par()), false, 0, BitSet(0)))), false, 0, BitSet(0))
 
