@@ -29,7 +29,7 @@ We've exposed other ports for access convenience from your host. Make sure you a
 The password for Grafana UI can be changed by editing grafana/grafana.conf
 
 ### Sending Metrics to Promethus Pushgateway Using Curl 
-You can use any http client library to send data. Pushgateway stats are collected via Prometheus Server. More info on [when to use the pushgateway](https://prometheus.io/docs/practices/pushing/)
+You can use any http client library to send data. Pushgateway stats are collected via Prometheus Server. More info on [when to use the pushgateway](https://prometheus.io/docs/practices/pushing/)<br>
 Where 127.0.0.1:9091 is socket of your Prometheus Pushgateway
 ```
 echo "some_metric 10" | curl --data-binary @- http://127.0.0.1:9091/metrics/job/job1
@@ -37,7 +37,11 @@ echo "some_metric_2 30" | curl --data-binary @- http://127.0.0.1:9091/metrics/jo
 curl http://127.0.0.1:9091/metrics
 ```
 
+## More Docker Commands
+The rest is helpful docker and docker-compose commands for managing docker resources for this application
+
 ### Docker-Compose Usage
+More docker-compose command usage
 ```
 # Run these commands from this directory 
 # Docker containers will have "node_" in front of them from this directory name
