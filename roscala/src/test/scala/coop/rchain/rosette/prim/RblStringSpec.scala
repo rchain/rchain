@@ -805,4 +805,112 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringMemQ.fn(newCtxt) should be('left)
   }
 
+  /** string-split */
+  "string-split" should "correctly tokenize a full string" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+    val res = Tuple(
+      Seq(RblString("aZ"),
+          RblString("bY"),
+          RblString("cX"),
+          RblString("dW"),
+          RblString("eV"),
+          RblString("fU"),
+          RblString("gT"),
+          Ob.NIV))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(33)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(res))
+  }
+
+  it should "correctly tokenize a full string with unspecified count" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+    val res = Tuple(
+      Seq(RblString("aZ"),
+          RblString("bY"),
+          RblString("cX"),
+          RblString("dW"),
+          RblString("eV"),
+          RblString("fU"),
+          RblString("gT"),
+          Ob.NIV))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(res))
+  }
+
+  it should "correctly ignore leading and trailing separators" in {
+    val sep = ".,-=/*"
+    val str = ",,aZ,bY.cX-dW=eV/fU*gT**"
+    val res = Tuple(
+      Seq(RblString("aZ"),
+          RblString("bY"),
+          RblString("cX"),
+          RblString("dW"),
+          RblString("eV"),
+          RblString("fU"),
+          RblString("gT"),
+          Ob.NIV))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(res))
+  }
+
+  it should "return an empty Tuple with a count of zero" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(0)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  it should "return an empty Tuple with a count less than zero" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(-1)))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(Tuple.NIL))
+  }
+
+  it should "return a Tuple of chars if no separators" in {
+    val sep = ""
+    val str = "ABC"
+    val res = Tuple(Seq(RblChar('A'), RblChar('B'), RblChar('C')))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep)))
+    val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(res))
+  }
+
+  it should "correctly return a Tuple of selected tokens and the remaining string" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+    val res = Tuple(Seq(RblString("aZ"), RblString("bY"), RblString("cX-dW=eV/fU*gT")))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(2)))
+    val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
+    stringSplit.fn(newCtxt) should be(Right(res))
+  }
+
+  it should "fail for invalid Count type" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+    val res = Tuple(Seq(RblString("aZ"), RblString("bY"), RblString("cX-dW=eV/fU*gT")))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep), RblString("foo")))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be('left)
+  }
+
+  it should "fail for invalid arguments" in {
+    val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
+    stringSplit.fn(newCtxt) should be('left)
+  }
+
 }

@@ -494,11 +494,7 @@ object VirtualMachine {
           .set(_ >> 'doXmitFlag)(true))
 
   def execute(op: OpXmitArgXtnd): VMTransition[Unit] =
-    modify(
-      _.set(_ >> 'ctxt >> 'nargs)(op.nargs)
-        .set(_ >> 'ctxt >> 'tag)(ArgRegister(op.arg))
-        .set(_ >> 'xmitData)((op.unwind, op.next))
-        .set(_ >> 'doXmitFlag)(true))
+    execute(OpXmitArg(op.unwind, op.next, op.nargs, op.arg))
 
   def execute(op: OpXmitRegXtnd): VMTransition[Unit] =
     modify(
