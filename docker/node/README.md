@@ -1,20 +1,23 @@
-## Docker Compose RChain Node using Prometheus & Grafana UI 
-RChain docker compose for peer-to-peer node using Prometheus for data collection and Grafana for visualization 
+## RChain Node with Metric Collection and Display 
+RChain Docker Compose multi-container application for peer-to-peer Rchain node using Prometheus server and pushgateway for data collection and Grafana for visualization 
 
 ### Prerequisites
-You need `docker-compose` that supports version 3.1 or greater docker-compose files - checkout [install docker-compose guide](https://docs.docker.com/compose/install/)
+You need `docker-compose` version that supports Docker Compose file format version 3.1 or greater - Easily install single file with latest version from [install docker-compose](https://docs.docker.com/compose/install/)
 
-You also need `docker` version that supports the needed functionality - checkout [Docker Community Edition](https://www.docker.com/community-edition)
+You also need `docker` version that supports the needed functionality - checkout [Docker Community Edition](https://www.docker.com/community-edition) - The lastest version will always work
 
 
 ### Quick Start 
 ```
-# Run these commands from this directory 
+# Run commands from this directory - contains node docker-compose.yml
 docker-compose up -d
+```
 
 Login to http://localhost:3000/dashboards on you machine using user:pass admin:admin
 Click on RChain dashboard (4 squares by name)
-
+View data. [Add another panel in dashboard and query](http://docs.grafana.org/guides/getting_started/#adding-editing-graphs-and-panels) as wanted.
+ 
+```
 # Remove all containers and associated volumes - volumes store persistent data
 docker-compose down -v 
 ```
@@ -61,6 +64,7 @@ docker-compose down -v
 ```
 Go to http://localhost:3000 on your machine
 We exposed tcp 3000 so it should be accessible from your hosts browser
+admin:admin is default user:pass
 ```
 
 ### Other Docker Compose Commands
