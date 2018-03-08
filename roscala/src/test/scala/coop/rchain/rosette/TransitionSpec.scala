@@ -764,4 +764,64 @@ class TransitionSpec extends FlatSpec with Matchers {
     val end = VirtualMachine.executeSeq(codevec, start)
     end.ctxt.ctxt.rslt shouldBe Fixnum(7)
   }
+
+  "OpXmitArgXtnd" should "save the result of xmit function into the specified argument for future use, the argument is specified by the following byte" in {
+
+    /**
+      * One of the expressions that use the OpXmitArgXtnd shows below (there
+      * should be more than 16 times '(+1 1)'), which compiled into about 124 opcodes.
+      *
+      * (+ (+ 1 1) (+ 1 1) (+ 1 1) (+ 1 1)
+      *    (+ 1 1) (+ 1 1) (+ 1 1) (+ 1 1)
+      *    (+ 1 1) (+ 1 1) (+ 1 1) (+ 1 1)
+      *    (+ 1 1) (+ 1 1) (+ 1 1) (+ 1 1)
+      *    (+ 1 1))
+      *
+      *
+      * litvec:
+      *   0:	{RequestExpr}
+      * codevec:
+      *   0:	alloc 17
+      *   1:	xfer global[+],trgt
+      *   3:	outstanding 124,17
+      *   5:	push/alloc 2
+      *   6:	lit 1,arg[0]
+      *   7:	lit 1,arg[1]
+      *   8:	xfer global[+],trgt
+      *  10:	xmit 2,arg[16]
+      *  12:	pop
+      *  13:	push/alloc 2
+      *  14:	lit 1,arg[0]
+      *  15:	lit 1,arg[1]
+      *  16:	xfer global[+],trgt
+      *  18:	xmit 2,arg[15]
+      *  19:	pop
+      *  ...
+      * 117:	pop
+      * 118:	push/alloc 2
+      * 119:	lit 1,arg[0]
+      * 120:	lit 1,arg[1]
+      * 121:	xfer global[+],trgt
+      * 123:	xmit/nxt 2,arg[0]
+      * 124:	xmit/nxt 17
+      *
+      */
+    val start =
+      testState
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+
+    // this test does not reflect the described test case.
+    val codevec = Seq(
+      OpAlloc(n = 17),
+      OpPushAlloc(2),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpImmediateLitToArg(value = 1, arg = 1),
+      OpXferGlobalToReg(reg = CtxtRegName.trgt, global = 668),
+      OpXmitArgXtnd(unwind = false, next = false, nargs = 2, arg = 16),
+    )
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.ctxt.argvec.elem(16) shouldBe Fixnum(2)
+  }
 }
