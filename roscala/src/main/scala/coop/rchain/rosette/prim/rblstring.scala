@@ -291,14 +291,14 @@ object rblstring {
         //  w = count of tokens to return
 
         val tl = // Get the list of tokens
-          if (sep.value.length > 0)
-            str.value.split(sep.value.toArray) // split ignores trailing separators
+          if (sep.value.isEmpty) // Don't upset split with an empty list of separators
+            Array.empty[String]
           else
-            "".split(" ") // Don't upset split with an empty list of separators
+            str.value.split(sep.value.toArray) // split ignores trailing separators
 
-        val tr = tl.dropWhile(_.length == 0) // Trim off leading separators
+        val tr = tl.dropWhile(_.isEmpty) // Trim off leading separators
 
-        if (sep.value.length == 0) { // no separators? return a Tuple of RblChars
+        if (sep.value.isEmpty) { // no separators? return a Tuple of RblChars
           Tuple(str.value.toCharArray.toSeq.map(RblChar(_)))
         } else if (w.value <= 0) { // Invalid count yields an empty Tuple
           Tuple.NIL
@@ -308,9 +308,9 @@ object rblstring {
           // Handle counts less than available tokens.
           // This yields the tokens plus the remaining string
 
-          val tokens = tr.slice(0, w.value) // get the selected tokens
+          val tokens = tr.slice(0, w.value)                        // get the selected tokens
           val idx    = nthIndex(w.value, str.value, sep.value) + 1 // Index to the rest of the string
-          val rest   = str.value.splitAt(idx)._2 // The rest of the string
+          val rest   = str.value.drop(idx)                         // The rest of the string
 
           Tuple(tokens.map(RblString(_)) :+ RblString(rest))
         }
