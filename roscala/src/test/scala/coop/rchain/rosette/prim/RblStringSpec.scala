@@ -898,6 +898,16 @@ class RblStringSpec extends FlatSpec with Matchers {
     stringSplit.fn(newCtxt) should be(Right(res))
   }
 
+  it should "fail for invalid Count type" in {
+    val sep = ".,-=/*"
+    val str = "aZ,bY.cX-dW=eV/fU*gT"
+    val res = Tuple(Seq(RblString("aZ"), RblString("bY"), RblString("cX-dW=eV/fU*gT")))
+
+    val parms   = Tuple(Seq(RblString(str), RblString(sep), RblString("foo")))
+    val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
+    stringSplit.fn(newCtxt) should be('left)
+  }
+
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
     stringSplit.fn(newCtxt) should be('left)
