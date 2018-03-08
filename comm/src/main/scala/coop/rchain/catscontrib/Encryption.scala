@@ -5,8 +5,11 @@ import Catscontrib._
 
 trait Encryption[F[_]] {
   import Encryption._
+  def fetchKeys: F[PublicPrivateKeys]
   def generateNonce: F[Nonce]
 }
+
+final case class PublicPrivateKeys(pub: Encryption.Key, priv: Encryption.Key)
 
 object Encryption extends EncryptionInstances {
 
@@ -19,8 +22,8 @@ object Encryption extends EncryptionInstances {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit E: Encryption[F]): Encryption[T[F, ?]] =
     new Encryption[T[F, ?]] {
-
-      def generateNonce: T[F, Nonce] = E.generateNonce.liftM[T]
+      def fetchKeys: T[F, PublicPrivateKeys] = E.fetchKeys.liftM[T]
+      def generateNonce: T[F, Nonce]         = E.generateNonce.liftM[T]
     }
 }
 

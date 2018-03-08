@@ -8,6 +8,7 @@ import coop.rchain.p2p
 import coop.rchain.comm._, CommError._
 import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
+import com.google.common.io.BaseEncoding
 import monix.eval.Task
 import monix.execution.Scheduler
 import scala.concurrent.Await
@@ -78,8 +79,6 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
-    import encryption._
-
     val conf = Conf(args)
 
     val name = conf.name.toOption match {
@@ -96,6 +95,21 @@ object Main {
     val src     = p2p.NetworkAddress.parse(address).right.get
 
     import ApplicativeError_._
+
+    // FIX-ME temp implemmentation, production shoul use crypto module
+    implicit val encyption: Encryption[Task] = new Encryption[Task] {
+      import Encryption._
+      val encoder = BaseEncoding.base16().lowerCase()
+      def fetchKeys: Task[PublicPrivateKeys] = Task.delay {
+        val pub: Key = encoder.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
+        val sec: Key = encoder.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        PublicPrivateKeys(pub, sec)
+      }
+
+      def generateNonce: Task[Nonce] = Task.delay {
+        encoder.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
+      }
+    }
 
     implicit def ioLog: Log[Task] = new Log[Task] {
       def debug(msg: String): Task[Unit] = Task.delay(logger.debug(msg))
