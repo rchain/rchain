@@ -1,10 +1,10 @@
 ## RChain Node with Metric Collection and Display 
-RChain Docker Compose multi-container application for RChain peer-to-peer node using Prometheus server and pushgateway for data collection and Grafana for visualization 
+RChain Docker Compose multi-container application for RChain peer-to-peer node using [Prometheus Server](https://github.com/prometheus/prometheus) and [Pushgateway](https://github.com/prometheus/pushgateway) for data collection and [Grafana](https://github.com/grafana/grafana) for visualization 
 
 ### Prerequisites
 You need `docker-compose` version that supports Docker Compose file format version 3.1 or greater - Easily install single file with latest version from [install docker-compose](https://docs.docker.com/compose/install/)
 
-You also need `docker` version that supports the needed functionality - checkout [Docker Community Edition](https://www.docker.com/community-edition) - The lastest version will always work
+You will also need a `docker` version that supports the needed functionality of this application - checkout [Docker Community Edition](https://www.docker.com/community-edition) - The lastest stable version of CE will always work.
 
 
 ### Quick Start 
