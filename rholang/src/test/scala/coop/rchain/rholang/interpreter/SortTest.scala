@@ -91,21 +91,13 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParGround)
   }
 
-  "Par" should "Sort in order of boolean, int, string, uri, private" in {
+  "Par" should "Sort in order of boolean, int, string, uri" in {
     val parGround =
       p.copy(
-        exprs = List(GUri("https://www.rchain.coop/"),
-                     GInt(47),
-                     GString("Hello"),
-                     GBool(true),
-                     GPrivate("foo")))
+        exprs = List(GUri("https://www.rchain.coop/"), GInt(47), GString("Hello"), GBool(true)))
     val sortedParGround: Option[Par] =
       p.copy(
-        exprs = List(GBool(true),
-                     GInt(47),
-                     GString("Hello"),
-                     GUri("https://www.rchain.coop/"),
-                     GPrivate("foo")))
+        exprs = List(GBool(true), GInt(47), GString("Hello"), GUri("https://www.rchain.coop/")))
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be(sortedParGround)
   }

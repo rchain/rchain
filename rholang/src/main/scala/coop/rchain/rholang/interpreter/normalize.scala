@@ -118,8 +118,8 @@ object NameNormalizeMatcher {
       case n: NameQuote => {
         def collapseQuoteEval(p: Par): Channel =
           p.singleEval() match {
-            case Some(Eval(chanNew, freeCount, locallyFree)) => chanNew.get
-            case _                                           => Quote(p)
+            case Some(Eval(chanNew, _, _)) => chanNew.get
+            case _                         => Quote(p)
           }
 
         val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
@@ -217,7 +217,7 @@ object ProcNormalizeMatcher {
 
         val nameMatchResult =
           NameNormalizeMatcher.normalizeMatch(p.name_, NameVisitInputs(input.env, input.knownFree))
-        ProcVisitOutputs(input.par.merge(collapseEvalQuote(nameMatchResult.chan)),
+        ProcVisitOutputs(input.par ++ collapseEvalQuote(nameMatchResult.chan),
                          nameMatchResult.knownFree)
 
       case p: PNot => unaryExp(p.proc_, input, ENot.apply)
@@ -493,7 +493,6 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)]) {
   // Returns the new map, and the starting level of the newly "bound" wildcards
   def setWildcardUsed(count: Int): (DebruijnLevelMap[T], Int) =
     (DebruijnLevelMap(next + count, env), next)
-
   def getBinding(varName: String): Option[T] =
     for (pair <- env.get(varName)) yield pair._2
   def getLevel(varName: String): Option[Int] =

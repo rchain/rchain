@@ -15,8 +15,9 @@ message Par {
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
-    int32 freeCount = 7;
-    bytes locallyFree = 8 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    repeated GPrivate ids = 7;
+    int32 freeCount = 8;
+    bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message Channel {
@@ -113,33 +114,30 @@ message Expr {
         sint32 g_int = 2;
         string g_string = 3;
         string g_uri = 4;
-        // These should only occur as the program is being evaluated. There is no way in
-        // the grammar to construct them.
-        string g_private = 5;
 
-        ENot e_not_body = 6;
-        ENeg e_neg_body = 7;
-        EMult e_mult_body = 8;
-        EDiv e_div_body = 9;
-        EPlus e_plus_body = 10;
-        EMinus e_minus_body = 11;
-        ELt e_lt_body = 12;
-        ELte e_lte_body = 13;
-        EGt e_gt_body = 14;
-        EGte e_gte_body = 15;
-        EEq e_eq_body = 16;
-        ENeq e_neq_body = 17;
-        EAnd e_and_body = 18;
-        EOr e_or_body = 19;
-        EVar e_var_body = 20;
+        ENot e_not_body = 5;
+        ENeg e_neg_body = 6;
+        EMult e_mult_body = 7;
+        EDiv e_div_body = 8;
+        EPlus e_plus_body = 9;
+        EMinus e_minus_body = 10;
+        ELt e_lt_body = 11;
+        ELte e_lte_body = 12;
+        EGt e_gt_body = 13;
+        EGte e_gte_body = 14;
+        EEq e_eq_body = 15;
+        ENeq e_neq_body = 16;
+        EAnd e_and_body = 17;
+        EOr e_or_body = 18;
+        EVar e_var_body = 19;
 
-        EList e_list_body = 21;
-        ETuple e_tuple_body = 22;
-        ESet e_set_body = 23;
-        EMap e_map_body = 24;
+        EList e_list_body = 20;
+        ETuple e_tuple_body = 21;
+        ESet e_set_body = 22;
+        EMap e_map_body = 23;
     }
-    int32 freeCount = 25;
-    bytes locallyFree = 26 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    int32 freeCount = 24;
+    bytes locallyFree = 25 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message EList {
@@ -239,3 +237,8 @@ message EOr {
     Par p2 = 2;
 }
 
+// These should only occur as the program is being evaluated. There is no way in
+// the grammar to construct them.
+message GPrivate {
+    string id = 1;
+}

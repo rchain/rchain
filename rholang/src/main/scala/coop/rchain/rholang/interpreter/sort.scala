@@ -28,7 +28,7 @@ case class Leaf[T](item: T) extends Tree[T] {
   def size = 1
 }
 case class Node[T](children: Seq[Tree[T]]) extends Tree[T] {
-  def size = children.map(_.size).sum
+  def size: Int = children.map(_.size).sum
 }
 
 case class ScoreAtom(value: Either[Int, String]) {
@@ -149,11 +149,10 @@ object BoolSortMatcher {
 object GroundSortMatcher {
   def sortMatch(g: ExprInstance): ScoredTerm[ExprInstance] =
     g match {
-      case gb: GBool    => ScoredTerm(g, BoolSortMatcher.sortMatch(gb).score)
-      case gi: GInt     => ScoredTerm(g, Leaves(Score.INT, gi.value))
-      case gs: GString  => ScoredTerm(g, Node(Score.STRING, Leaf(gs.value)))
-      case gu: GUri     => ScoredTerm(g, Node(Score.URI, Leaf(gu.value)))
-      case gp: GPrivate => ScoredTerm(g, Node(Score.PRIVATE, Leaf(gp.value)))
+      case gb: GBool   => ScoredTerm(g, BoolSortMatcher.sortMatch(gb).score)
+      case gi: GInt    => ScoredTerm(g, Leaves(Score.INT, gi.value))
+      case gs: GString => ScoredTerm(g, Node(Score.STRING, Leaf(gs.value)))
+      case gu: GUri    => ScoredTerm(g, Node(Score.URI, Leaf(gu.value)))
       case EListBody(gl) =>
         val pars = gl.ps.map(par => ParSortMatcher.sortMatch(par))
         ScoredTerm(EList(pars.map(_.term.get)), Node(Score.ELIST, pars.map(_.score): _*))
@@ -197,6 +196,7 @@ object GroundSortMatcher {
         val deduplicatedPars = deduplicateLastWriteWins(sortedPars)
         ScoredTerm(EMap(deduplicatedPars.map(_.term)),
                    Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
+      case _ => throw new Error("GroundSortMatcher passed unknown Expr instance")
     }
 }
 
@@ -404,13 +404,14 @@ object MatchSortMatcher {
 object ParSortMatcher {
   def sortMatch(parOption: Option[Par]): ScoredTerm[Option[Par]] =
     parOption match {
-      case Some(p) => {
+      case Some(p) =>
         val sends    = p.sends.map(s => SendSortMatcher.sortMatch(s)).sorted
         val receives = p.receives.map(r => ReceiveSortMatcher.sortMatch(r)).sorted
         val exprs    = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
         val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
         val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
         val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+        val ids      = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
         val sortedPar = Par(
           sends = sends.map(_.term),
           receives = receives.map(_.term),
@@ -418,16 +419,15 @@ object ParSortMatcher {
           evals = evals.map(_.term),
           news = news.map(_.term),
           matches = matches.map(_.term),
+          ids = ids.map(_.term),
           freeCount = p.freeCount,
           locallyFree = p.locallyFree
         )
         val parScore = Node(Score.PAR,
                             sends.map(_.score) ++
                               receives.map(_.score) ++ exprs.map(_.score) ++
-                              evals.map(_.score) ++ news.map(_.score): _*)
+                              evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*)
         ScoredTerm(sortedPar, parScore)
-      }
       case None => throw new Error("ParSortMatcher was passed None")
     }
-
 }

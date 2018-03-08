@@ -34,37 +34,36 @@ object implicits {
 
   // Expr Related
 
-  def apply(e: ExprInstance)                   = new Expr(exprInstance = e, freeCount = 0, locallyFree = BitSet())
-  implicit def fromGBool(g: GBool): Expr       = apply(g)
-  implicit def fromGInt(g: GInt): Expr         = apply(g)
-  implicit def fromGString(g: GString): Expr   = apply(g)
-  implicit def fromGUri(g: GUri): Expr         = apply(g)
-  implicit def fromGPrivate(g: GPrivate): Expr = apply(g)
+  def apply(e: ExprInstance)                 = new Expr(exprInstance = e, freeCount = 0, locallyFree = BitSet())
+  implicit def fromGBool(g: GBool): Expr     = apply(g)
+  implicit def fromGInt(g: GInt): Expr       = apply(g)
+  implicit def fromGString(g: GString): Expr = apply(g)
+  implicit def fromGUri(g: GUri): Expr       = apply(g)
 
   implicit def fromEList(e: EList): EListBody    = EListBody(e)
   implicit def fromETuple(e: ETuple): ETupleBody = ETupleBody(e)
   implicit def fromESet(e: ESet): ESetBody       = ESetBody(e)
   implicit def fromEMap(e: EMap): EMapBody       = EMapBody(e)
 
-  def apply(e: ENot) = {
+  def apply(e: ENot): Expr = {
     val p: Par = e.p.get
     new Expr(exprInstance = ENotBody(e), freeCount = p.freeCount, locallyFree = p.locallyFree)
   }
   implicit def fromENot(e: ENot): Expr = apply(e)
 
-  def apply(e: ENeg) = {
+  def apply(e: ENeg): Expr = {
     val p: Par = e.p.get
     new Expr(exprInstance = ENegBody(e), freeCount = p.freeCount, locallyFree = p.locallyFree)
   }
   implicit def fromENeg(e: ENeg): Expr = apply(e)
 
-  def apply(e: EVar) = {
+  def apply(e: EVar): Expr = {
     val v: Var = e.v.get
     new Expr(exprInstance = EVarBody(e), freeCount = v.freeCount, locallyFree = v.locallyFree)
   }
   implicit def fromEVar(e: EVar): Expr = apply(e)
 
-  def apply(e: EMult) = {
+  def apply(e: EMult): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EMultBody(e),
@@ -73,7 +72,7 @@ object implicits {
   }
   implicit def fromEMult(e: EMult): Expr = apply(e)
 
-  def apply(e: EDiv) = {
+  def apply(e: EDiv): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EDivBody(e),
@@ -82,7 +81,7 @@ object implicits {
   }
   implicit def fromEDiv(e: EDiv): Expr = apply(e)
 
-  def apply(e: EPlus) = {
+  def apply(e: EPlus): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EPlusBody(e),
@@ -91,7 +90,7 @@ object implicits {
   }
   implicit def fromEPlus(e: EPlus): Expr = apply(e)
 
-  def apply(e: EMinus) = {
+  def apply(e: EMinus): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EMinusBody(e),
@@ -100,7 +99,7 @@ object implicits {
   }
   implicit def fromEMinus(e: EMinus): Expr = apply(e)
 
-  def apply(e: ELt) = {
+  def apply(e: ELt): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = ELtBody(e),
@@ -109,7 +108,7 @@ object implicits {
   }
   implicit def fromELt(e: ELt): Expr = apply(e)
 
-  def apply(e: ELte) = {
+  def apply(e: ELte): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = ELteBody(e),
@@ -118,7 +117,7 @@ object implicits {
   }
   implicit def fromELte(e: ELte): Expr = apply(e)
 
-  def apply(e: EGt) = {
+  def apply(e: EGt): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EGtBody(e),
@@ -127,7 +126,7 @@ object implicits {
   }
   implicit def fromEGt(e: EGt): Expr = apply(e)
 
-  def apply(e: EGte) = {
+  def apply(e: EGte): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EGteBody(e),
@@ -136,7 +135,7 @@ object implicits {
   }
   implicit def fromEGte(e: EGte): Expr = apply(e)
 
-  def apply(e: EEq) = {
+  def apply(e: EEq): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EEqBody(e),
@@ -145,7 +144,7 @@ object implicits {
   }
   implicit def fromEEq(e: EEq): Expr = apply(e)
 
-  def apply(e: ENeq) = {
+  def apply(e: ENeq): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = ENeqBody(e),
@@ -154,7 +153,7 @@ object implicits {
   }
   implicit def fromENeq(e: ENeq): Expr = apply(e)
 
-  def apply(e: EAnd) = {
+  def apply(e: EAnd): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EAndBody(e),
@@ -163,7 +162,7 @@ object implicits {
   }
   implicit def fromEAnd(e: EAnd): Expr = apply(e)
 
-  def apply(e: EOr) = {
+  def apply(e: EOr): Expr = {
     val p1: Par = e.p1.get
     val p2: Par = e.p2.get
     new Expr(exprInstance = EOrBody(e),
@@ -187,6 +186,8 @@ object implicits {
     new Par(exprs = List(e), freeCount = e.freeCount, locallyFree = e.locallyFree)
   def apply(m: Match): Par =
     new Par(matches = List(m), freeCount = m.freeCount, locallyFree = m.locallyFree)
+  def apply(g: GPrivate): Par =
+    new Par(ids = List(g), freeCount = 0, locallyFree = BitSet())
 
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
@@ -194,6 +195,11 @@ object implicits {
   implicit def fromNew(n: New): Par                               = apply(n)
   implicit def fromExpr[T](e: T)(implicit toExpr: T => Expr): Par = apply(e)
   implicit def fromMatch(m: Match): Par                           = apply(m)
+  implicit def fromGPrivate(g: GPrivate): Par                     = apply(g)
+
+  object GPrivate {
+    def apply(): GPrivate = new GPrivate(java.util.UUID.randomUUID.toString)
+  }
 
   implicit class ParExtension[T](p: T)(implicit toPar: T => Par) {
     // Convenience prepend methods
@@ -242,7 +248,7 @@ object implicits {
         None
       }
 
-    def merge(that: Par) =
+    def ++(that: Par) =
       Par(
         that.sends ++ p.sends,
         that.receives ++ p.receives,
@@ -250,6 +256,7 @@ object implicits {
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
+        that.ids ++ p.ids,
         that.freeCount + p.freeCount,
         that.locallyFree | p.locallyFree
       )
