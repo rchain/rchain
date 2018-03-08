@@ -297,19 +297,19 @@ object rblstring {
           else
             str.value.split(sep.value.toArray) // split ignores trailing separators
 
-        val tr = tl.dropWhile(_.isEmpty) // Trim off leading separators
+        val tr = tl.dropWhile(_.isEmpty).toSeq // Trim off leading separators
 
         if (sep.value.isEmpty) { // no separators? return a Tuple of RblChars
-          Tuple(str.value.toCharArray.toSeq.map(RblChar(_)))
+          Tuple(str.value.toSeq.map(RblChar(_)))
         } else if (w.value <= 0) { // Invalid count yields an empty Tuple
           Tuple.NIL
         } else if (w.value > tr.size) { // Consuming the whole string yields the tokens plus NIV
-          Tuple(tr.toSeq.map(RblString(_)) :+ Ob.NIV)
+          Tuple(tr.map(RblString(_)) :+ Ob.NIV)
         } else {
           // Handle counts less than available tokens.
           // This yields the tokens plus the remaining string
 
-          val tokens = tr.slice(0, w.value)                        // get the selected tokens
+          val tokens = tr.take(w.value)                            // get the selected tokens
           val idx    = nthIndex(w.value, str.value, sep.value) + 1 // Index to the rest of the string
           val rest   = str.value.drop(idx)                         // The rest of the string
 
