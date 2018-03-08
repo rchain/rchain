@@ -280,8 +280,9 @@ object rblstring {
         sep <- checkType[RblString](1, elem) // Ensure arg1 is a RblString
         w <- checkType[Fixnum](2, elem) // Ensure optional arg2 is a Fixnum
             match {
-              case Right(v) => Right(v)
-              case Left(_)  => Right(Fixnum(Int.MaxValue))
+              case Right(v)                 => Right(v)
+              case Left(TypeMismatch(_, _)) => Left(TypeMismatch(2, Fixnum.getClass.getName))
+              case Left(_)                  => Right(Fixnum(Int.MaxValue))
             }
       } yield {
 
