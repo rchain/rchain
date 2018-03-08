@@ -159,9 +159,9 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(monix),
+    libraryDependencies ++= commonDependencies ++ Seq(monix, argParsing),
     bnfcSettings,
-    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
+    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
       (bnfcGrammarDir in BNFCConfig).value,
