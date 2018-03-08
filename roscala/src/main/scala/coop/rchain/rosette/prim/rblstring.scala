@@ -308,28 +308,6 @@ object rblstring {
           // Handle counts less than available tokens.
           // This yields the tokens plus the remaining string
 
-          // Helper to find the index after the nth token.
-          def nthIndex(n: Int, str: String, sep: String): Int = {
-            val sepSet: HashSet[Char] = HashSet.empty[Char] ++ sep
-
-            @tailrec
-            def work(chars: Iterator[(Char, Int)], count: Int): Int =
-              if (chars.nonEmpty) {
-                val (c, i)   = chars.next()
-                val newCount = if (sepSet.contains(c)) count + 1 else count
-
-                if (newCount == n) {
-                  i
-                } else {
-                  work(chars, newCount)
-                }
-              } else {
-                -1
-              }
-
-            work(str.iterator.zipWithIndex, 0)
-          }
-
           val tokens = tr.slice(0, w.value) // get the selected tokens
           val idx    = nthIndex(w.value, str.value, sep.value) + 1 // Index to the rest of the string
           val rest   = str.value.splitAt(idx)._2 // The rest of the string
@@ -389,4 +367,27 @@ object rblstring {
         Right(i)
       }
     }
+
+  // Helper to find the index after the nth token.
+  private def nthIndex(n: Int, str: String, sep: String): Int = {
+    val sepSet: HashSet[Char] = HashSet.empty[Char] ++ sep
+
+    @tailrec
+    def work(chars: Iterator[(Char, Int)], count: Int): Int =
+      if (chars.nonEmpty) {
+        val (c, i)   = chars.next()
+        val newCount = if (sepSet.contains(c)) count + 1 else count
+
+        if (newCount == n) {
+          i
+        } else {
+          work(chars, newCount)
+        }
+      } else {
+        -1
+      }
+
+    work(str.iterator.zipWithIndex, 0)
+  }
+
 }
