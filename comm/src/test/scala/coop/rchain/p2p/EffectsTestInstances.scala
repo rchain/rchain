@@ -20,25 +20,36 @@ object EffectsTestInstances {
   class CommunicationStub[F[_]: Capture: Applicative](src: ProtocolNode) extends Communication[F] {
 
     type Responses = ProtocolNode => (ProtocolMessage => CommErr[ProtocolMessage])
-    var reqresp: Option[Responses] = None
+    var reqresp: Option[Responses]      = None
+    var nodes: List[PeerNode]           = List.empty[PeerNode]
+    var requests: List[ProtocolMessage] = List.empty[ProtocolMessage]
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
+
+    def reset: Unit = {
+      reqresp = None
+      nodes = List.empty[PeerNode]
+      requests = List.empty[ProtocolMessage]
+    }
 
     def roundTrip(msg: ProtocolMessage,
                   remote: ProtocolNode,
                   timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
       Capture[F].capture {
+        requests = requests :+ msg
         reqresp.get.apply(remote).apply(msg)
       }
 
     def local: F[ProtocolNode]                                      = src.pure[F]
     def commSend(data: Seq[Byte], peer: PeerNode): F[CommErr[Unit]] = ???
-    def addNode(node: PeerNode): F[Unit]                            = ???
-    def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]      = ???
-    def findMorePeers(limit: Int): F[Seq[PeerNode]]                 = ???
-    def countPeers: F[Int]                                          = ???
-    def receiver: F[Unit]                                           = ???
+    def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
+      nodes = node :: nodes
+    }
+    def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+    def findMorePeers(limit: Int): F[Seq[PeerNode]]            = ???
+    def countPeers: F[Int]                                     = ???
+    def receiver: F[Unit]                                      = ???
   }
 
   import Encryption._
