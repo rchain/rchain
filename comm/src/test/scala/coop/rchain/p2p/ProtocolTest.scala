@@ -4,7 +4,7 @@ import org.scalatest._
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.comm.protocol.routing
-import coop.rchain.catscontrib.ski._
+import coop.rchain.catscontrib._, ski._
 
 /**
   * TODO rethink how the protocol is being tested
