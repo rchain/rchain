@@ -149,10 +149,11 @@ object GroundSortMatcher {
       case gp: GPrivate => ScoredTerm(gp, Node(Score.PRIVATE, Leaf(gp.p)))
       case gl: EList =>
         val pars = gl.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(EList(pars.map(_.term), gl.freeCount), Node(Score.ELIST, pars.map(_.score): _*))
+        ScoredTerm(EList(pars.map(_.term), gl.freeCount, gl.locallyFree),
+                   Node(Score.ELIST, pars.map(_.score): _*))
       case gt: ETuple =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETuple(pars.map(_.term), gt.freeCount),
+        ScoredTerm(ETuple(pars.map(_.term), gt.freeCount, gt.locallyFree),
                    Node(Score.ETUPLE, pars.map(_.score): _*))
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
@@ -169,7 +170,7 @@ object GroundSortMatcher {
           }
         val sortedPars       = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
         val deduplicatedPars = deduplicate(sortedPars)
-        ScoredTerm(ESet(deduplicatedPars.map(_.term), gs.freeCount),
+        ScoredTerm(ESet(deduplicatedPars.map(_.term), gs.freeCount, gs.locallyFree),
                    Node(Score.ESET, deduplicatedPars.map(_.score): _*))
       case gm: EMap =>
         def sortKeyValuePair(kv: (Par, Par)): ScoredTerm[Tuple2[Par, Par]] = {
@@ -190,7 +191,7 @@ object GroundSortMatcher {
           }.reverse
         val sortedPars       = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
         val deduplicatedPars = deduplicateLastWriteWins(sortedPars)
-        ScoredTerm(EMap(deduplicatedPars.map(_.term), gm.freeCount),
+        ScoredTerm(EMap(deduplicatedPars.map(_.term), gm.freeCount, gm.locallyFree),
                    Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
     }
 }
@@ -295,7 +296,8 @@ object SendSortMatcher {
       Send(chan = sortedChan.term,
            data = sortedData.map(_.term),
            persistent = s.persistent,
-           freeCount = s.freeCount)
+           freeCount = s.freeCount,
+           locallyFree = s.locallyFree)
     val persistentScore = if (s.persistent) 1 else 0
     val sendScore = Node(
       Score.SEND,
@@ -332,7 +334,12 @@ object ReceiveSortMatcher {
     val persistentScore = if (r.persistent) 1 else 0
     val sortedBody      = ParSortMatcher.sortMatch(r.body)
     ScoredTerm(
-      Receive(sortedBinds.map(_.term), sortedBody.term, r.persistent, r.bindCount, r.freeCount),
+      Receive(sortedBinds.map(_.term),
+              sortedBody.term,
+              r.persistent,
+              r.bindCount,
+              r.freeCount,
+              r.locallyFree),
       Node(Score.RECEIVE,
            Seq(Leaf(persistentScore)) ++
              sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
@@ -350,7 +357,7 @@ object EvalSortMatcher {
 object NewSortMatcher {
   def sortMatch(n: New): ScoredTerm[New] = {
     val sortedPar = ParSortMatcher.sortMatch(n.p)
-    ScoredTerm(New(bindCount = n.bindCount, p = sortedPar.term),
+    ScoredTerm(New(bindCount = n.bindCount, p = sortedPar.term, locallyFree = n.locallyFree),
                Node(Score.NEW, Leaf(n.bindCount), sortedPar.score))
   }
 }
@@ -367,7 +374,7 @@ object MatchSortMatcher {
 
     val sortedValue = ParSortMatcher.sortMatch(m.value)
     val scoredCases = m.cases.map(_case => sortCase(_case))
-    ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.freeCount),
+    ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.freeCount, m.locallyFree),
                Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
   }
 }
@@ -389,7 +396,8 @@ object ParSortMatcher {
       exprs.map(_.term),
       matches.map(_.term),
       ids.map(_.term).asInstanceOf[List[GPrivate]],
-      p.freeCount
+      p.freeCount,
+      p.locallyFree
     )
     val parScore = Node(Score.PAR,
                         sends.map(_.score) ++

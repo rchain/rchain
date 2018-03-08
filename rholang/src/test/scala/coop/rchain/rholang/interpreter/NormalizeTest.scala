@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Ground => AbsynGround, _}
 import org.scalatest._
+import scala.collection.immutable.BitSet
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
   "BoolTrue" should "Compile as GBool(true)" in {
@@ -50,7 +51,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch(list, inputs)
     result.par should be(
       inputs.par.prepend(
-        EList(List[Par](EVar(BoundVar(0)), Eval(ChanVar(BoundVar(1))), GInt(7)), 0)))
+        EList(List[Par](EVar(BoundVar(0)), Eval(ChanVar(BoundVar(1))), GInt(7)), 0, BitSet(0, 1))))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -67,7 +68,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
                  EVar(FreeVar(0)),
                  Eval(ChanVar(FreeVar(1)))
                ),
-               2)))
+               2,
+               BitSet())))
     result.knownFree should be(
       inputs.knownFree.newBindings(List((Some("Q"), ProcSort), (Some("y"), NameSort)))._1)
   }
@@ -96,7 +98,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
         ESet(List[Par](EPlus(EVar(BoundVar(0)), EVar(FreeVar(0))),
                        GInt(7),
                        Par(GInt(8)).prepend((EVar(FreeVar(1))))),
-             2)))
+             2,
+             BitSet(0))))
     result.knownFree should be(
       inputs.knownFree.newBindings(List((Some("R"), ProcSort), (Some("Q"), ProcSort)))._1)
   }
@@ -113,7 +116,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       inputs.par.prepend(
         EMap(List[(Par, Par)]((GInt(7), GString("Seven")),
                               (EVar(BoundVar(0)), Eval(ChanVar(BoundVar(1))))),
-             0)))
+             0,
+             BitSet(0, 1))))
     result.knownFree should be(inputs.knownFree)
   }
 }
@@ -136,6 +140,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     result.par should be(inputs.par.prepend(EVar(BoundVar(0))))
     result.knownFree should be(inputs.knownFree)
+    result.par.locallyFree should be(BitSet(0))
   }
   "PVar" should "Compile as FreeVar if it's not in env" in {
     val result = ProcNormalizeMatcher.normalizeMatch(pvar, inputs)
@@ -241,7 +246,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch(pSend, inputs)
     result.par should be(
-      inputs.par.prepend(Send(Quote(Par()), List[Par](GInt(7), GInt(8)), false, 0)))
+      inputs.par.prepend(Send(Quote(Par()), List[Par](GInt(7), GInt(8)), false, 0, BitSet())))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -254,7 +259,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch(pSend, boundInputs)
     result.par should be(
-      inputs.par.prepend(Send(ChanVar(BoundVar(0)), List[Par](GInt(7), GInt(8)), false, 0)))
+      inputs.par.prepend(
+        Send(ChanVar(BoundVar(0)), List[Par](GInt(7), GInt(8)), false, 0, BitSet(0))))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -281,7 +287,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val boundInputs    = inputs.copy(env = inputs.env.newBindings(List((Some("x"), ProcSort)))._1)
 
     val result = ProcNormalizeMatcher.normalizeMatch(parDoubleBound, boundInputs)
-    result.par should be(inputs.par.copy(exprs = List(EVar(BoundVar(0)), EVar(BoundVar(0)))))
+    result.par should be(
+      inputs.par.copy(exprs = List(EVar(BoundVar(0)), EVar(BoundVar(0))), locallyFree = BitSet(0)))
     result.knownFree should be(inputs.knownFree)
   }
   "PPar" should "Not compile if both branches use the same free variable" in {
@@ -329,10 +336,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         Send(ChanVar(BoundVar(1)),
              List[Par](EPlus(EVar(BoundVar(2)), EVar(BoundVar(3)))),
              false,
-             0),
+             0,
+             BitSet(1, 2, 3)),
         true, // persistent
         bindCount,
-        freeCount
+        freeCount,
+        BitSet(0)
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -359,15 +368,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch(pBasicContr, boundInputs)
     result.par should be(
-      inputs.par.copy(receives = List(Receive(
+      inputs.par.prepend(Receive(
         List((List(ChanVar(FreeVar(0)), Quote(Par().copy(exprs = List(GInt(5))))),
               ChanVar(BoundVar(0)))),
-        Par().copy(sends =
-          List(Send(ChanVar(BoundVar(1)), List(Par().copy(exprs = List(GInt(5)))), false, 0))),
+        Par(
+          Send(ChanVar(BoundVar(1)), List(Par().copy(exprs = List(GInt(5)))), false, 0, BitSet(1))),
         true, // persistent
         bindCount,
-        freeCount
-      ))))
+        freeCount,
+        BitSet(0)
+      )))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -392,10 +402,11 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(Receive(
         List((List(ChanVar(FreeVar(0)), ChanVar(FreeVar(1))), Quote(Par()))),
-        Send(ChanVar(BoundVar(0)), List[Par](Eval(ChanVar(BoundVar(1)))), false, 0),
+        Send(ChanVar(BoundVar(0)), List[Par](Eval(ChanVar(BoundVar(1)))), false, 0, BitSet(0, 1)),
         false, // persistent
         bindCount,
-        freeCount
+        freeCount,
+        BitSet()
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -430,11 +441,16 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
         List((List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1)))), Quote(Par())),
              (List(ChanVar(FreeVar(0)), Quote(EVar(FreeVar(1)))), Quote(GInt(1)))),
         Par().copy(
-          sends = List(Send(ChanVar(BoundVar(2)), List[Par](EVar(BoundVar(1))), false, 0),
-                       Send(ChanVar(BoundVar(0)), List[Par](EVar(BoundVar(3))), false, 0))),
+          sends = List(
+            Send(ChanVar(BoundVar(2)), List[Par](EVar(BoundVar(1))), false, 0, BitSet(1, 2)),
+            Send(ChanVar(BoundVar(0)), List[Par](EVar(BoundVar(3))), false, 0, BitSet(0, 3))
+          ),
+          locallyFree = BitSet(0, 1, 2, 3)
+        ),
         false, // persistent
         bindCount,
-        freeCount
+        freeCount,
+        BitSet()
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -485,9 +501,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(New(
         3,
-        Par(Send(ChanVar(BoundVar(0)), List[Par](GInt(7)), false, 0))
-          .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(8)), false, 0))
-          .prepend(Send(ChanVar(BoundVar(2)), List[Par](GInt(9)), false, 0))
+        Par(Send(ChanVar(BoundVar(0)), List[Par](GInt(7)), false, 0, BitSet(0)))
+          .prepend(Send(ChanVar(BoundVar(1)), List[Par](GInt(8)), false, 0, BitSet(1)))
+          .prepend(Send(ChanVar(BoundVar(2)), List[Par](GInt(9)), false, 0, BitSet(2))),
+        BitSet()
       )))
     result.knownFree should be(inputs.knownFree)
   }
@@ -520,14 +537,18 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val expectedResult =
       inputs.par.copy(
-        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false, 0)),
+        sends = List(Send(Quote(Par()), List[Par](GInt(47)), false, 0, BitSet())),
         receives = List(
           Receive(
             List((List(Quote(EVar(FreeVar(0)))), Quote(Par()))),
-            Match(EVar(BoundVar(0)), List((GInt(42), Par()), (EVar(FreeVar(0)), Par())), 0),
+            Match(EVar(BoundVar(0)),
+                  List((GInt(42), Par()), (EVar(FreeVar(0)), Par())),
+                  0,
+                  BitSet(0)),
             false,
             bindCount,
-            freeCount
+            freeCount,
+            BitSet()
           ))
       )
     result.par should be(expectedResult)
@@ -541,19 +562,19 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listSend.add(new PGround(new GroundInt(47)))
     val body       = new PSend(new NameQuote(new PNil()), new SendSingle(), listSend)
     val basicInput = new PIf(condition, body)
-    val freeCount = 0
+    val freeCount  = 0
 
     val result = ProcNormalizeMatcher.normalizeMatch(basicInput, inputs)
     result.par should be(
-      inputs.par.prepend(
-        Match(
-          GBool(true),
-          List((GBool(true), Send(Quote(Par()), List[Par](GInt(47)), false, 0)),
-               (GBool(false), Par())
-               // TODO: Fill in type error case
-          ),
-          freeCount
-        )))
+      inputs.par.prepend(Match(
+        GBool(true),
+        List((GBool(true), Send(Quote(Par()), List[Par](GInt(47)), false, 0, BitSet())),
+             (GBool(false), Par())
+             // TODO: Fill in type error case
+        ),
+        freeCount,
+        BitSet()
+      )))
     result.knownFree should be(inputs.knownFree)
   }
   "PIfElse" should "Handle a more complicated if statement with an else clause" in {
@@ -576,18 +597,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       new PSend(new NameVar("y"), new SendSingle(), ySendData)
     )
     val basicInput = new PIfElse(condition, pNewIf, pNewElse)
-    val freeCount = 0
+    val freeCount  = 0
 
     val result = ProcNormalizeMatcher.normalizeMatch(basicInput, inputs)
     result.par should be(
       inputs.par.prepend(Match(
         EEq(GInt(47), GInt(47)),
         List(
-          (GBool(true), New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, 0))),
-          (GBool(false), New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, 0)))
+          (GBool(true),
+           New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, 0, BitSet(0)), BitSet())),
+          (GBool(false),
+           New(1, Send(ChanVar(BoundVar(0)), List[Par](GInt(47)), false, 0, BitSet(0)), BitSet()))
           // TODO: Fill in type error case
         ),
-        freeCount
+        freeCount,
+        BitSet()
       )))
     result.knownFree should be(inputs.knownFree)
   }
