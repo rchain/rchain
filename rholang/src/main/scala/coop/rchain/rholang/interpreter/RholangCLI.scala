@@ -24,14 +24,12 @@ object RholangCLI {
       val prsr = parser(lxr)
       Some(prsr.pProc())
     } catch {
-      case e: FileNotFoundException => {
-        System.err.println(s"""Error: File not found: ${fileName}""")
+      case e: FileNotFoundException =>
+        System.err.println(s"""Error: File not found: ${fileName}\n${e}""")
         None
-      }
-      case t: Throwable => {
+      case t: Throwable =>
         System.err.println(s"""Error while compiling: ${fileName}\n${t}""")
         None
-      }
     }
 
   def main(args: Array[String]): Unit = {
@@ -41,15 +39,22 @@ object RholangCLI {
       case Some(term) => {
         val inputs =
           ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]())
-        val normalizedTerm   = ProcNormalizeMatcher.normalizeMatch(term, inputs)
-        val sortedTerm       = ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term.get
-        val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
+        val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
+        val sortedTerm                       = ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term.get
+        val compiledFileName                 = fileName.replaceAll(".rho$", "") + ".rhoc"
         new java.io.PrintWriter(compiledFileName) {
-          write(sortedTerm.toString); close
+          write(sortedTerm.toString); close()
         }
         println(s"Compiled $fileName to $compiledFileName")
       }
       case None => System.exit(1)
     }
+  }
+
+  private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
+    val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
+    if (normalizedTerm.par.freeCount > 0)
+      throw new Error("Top-level free variables are not allowed.")
+    normalizedTerm
   }
 }
