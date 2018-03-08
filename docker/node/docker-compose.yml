@@ -12,7 +12,7 @@ networks:
 
 services:
   rchain-node:
-    image: jeremybusk/rchain-node:dev
+    image: rchain/rchain-node:dev
     ports:
       - 9095:9095
       - 30304:30304
