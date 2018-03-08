@@ -169,7 +169,7 @@ object ProcNormalizeMatcher {
         targetResult.par,
         List(MatchCase(GBool(true), trueCaseBody.par), MatchCase(GBool(false), falseCaseBody.par)),
         freeCount,
-        trueCaseBody.par.locallyFree | falseCaseBody.par.locallyFree
+        targetResult.par.locallyFree | trueCaseBody.par.locallyFree | falseCaseBody.par.locallyFree
       )
       ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
     }

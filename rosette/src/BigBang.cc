@@ -498,14 +498,13 @@ static bool LoadRunFile() {
         return true;
     }
 
-    suicide("Unable to open RunFile \"%s\": %s", RunFile,
-            strerror(errno));
+    suicide("Unable to open RunFile \"%s\": %s", RunFile, strerror(errno));
     return false;
 }
 
 #if defined(MALLOC_DEBUGGING)
 extern "C" {
-    int malloc_debug(int);
+int malloc_debug(int);
 }
 #endif
 
@@ -561,13 +560,13 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         *stderr = *fdopen(2, "w");
     }
 
-    /**
-     * Always reset the malloc_verify stuff to current settings,
-     * regardless of whether we are restoring an image.  This permits us
-     * maximum checking while building an image, but allows the built
-     * image to run with no checking unless specifically overridden with
-     * a command-line option.
-     */
+/**
+ * Always reset the malloc_verify stuff to current settings,
+ * regardless of whether we are restoring an image.  This permits us
+ * maximum checking while building an image, but allows the built
+ * image to run with no checking unless specifically overridden with
+ * a command-line option.
+ */
 
 #if defined(MALLOC_DEBUGGING)
     malloc_debug(ParanoidAboutGC);
@@ -593,7 +592,6 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         did_run_file = LoadRunFile();
         LoadBootFiles();
         heap->tenureEverything();
-
     }
 
     handleInterrupts();
@@ -648,7 +646,7 @@ int asyncHelper(int fd, int desiredState) {
     DO_BLOCKING
 #endif
 
-        result = fcntl(fd, F_SETFL, flags);
+    result = fcntl(fd, F_SETFL, flags);
 #else
     flags = (desiredState ? 1 : 0);
     result = ioctl(fd, FIOSNBIO, &flags);

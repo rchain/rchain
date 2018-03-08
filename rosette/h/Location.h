@@ -82,8 +82,6 @@ enum CtxtRegName {
     NumberOfCtxtRegs = 0xa
 };
 
-#include "Bits.h"
-
 #define GENERIC_SIZE (GenericTagSize + GenericTypeSize)
 
 #define GET_GENERIC_TAG(x) GET_LF(x, 0, GenericTagSize)

@@ -62,30 +62,48 @@ char* getcwd(char*);
 
 pMeta META(pOb ob) { return (pMeta)ob->meta(); }
 pSBO SBO(pOb ob) { return (pSBO)ob->parent(); }
+
 pOb BASE(pOb v) { return TAG(v) == OTptr ? v : decodeAtom(v); }
 
 int TAG(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return GET_TAGGED_TAG(te);
+    return GET_LF(te, 0, TagSize);
 }
 
 int ESCTAG(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return GET_ESCTAGGED_TAG(te);
+    return GET_LF(te, 0, EscTagSize);
 }
 
-int TAGVAL(pOb x) {
-    TagExtract te;
-    te.ptr = x;
-    return SIGN_EXTEND(GET_TAGGED_DATA(te), WordSize - TagSize);
+/**
+ * NB(leaf): Originally, this was a macro defined as follows:
+ *
+ * #define SIGN_EXTEND(a, n) ((((int)a) << (WordSize - (n))) >> (WordSize -
+ * (n)))
+ *
+ * Looking at the function definition, it's not clear what's going on here
+ * other than a funky cast to int. Is it even possible for this function to
+ * return a value other than (int)a?
+ */
+static const int SIGN_EXTEND(const int a, const int sz) {
+    const auto x = a << sz;
+    return x >> sz;
 }
 
-int ESCVAL(pOb x) {
+const int TAGVAL(pOb x) {
     TagExtract te;
     te.ptr = x;
-    return SIGN_EXTEND(GET_ESCTAGGED_DATA(te), WordSize - EscTagSize);
+    auto tmp = GET_LF(te, TagSize, WordSize - TagSize);
+    return SIGN_EXTEND(tmp, TagSize);
+}
+
+const int ESCVAL(pOb x) {
+    TagExtract te;
+    te.ptr = x;
+    auto tmp = GET_LF(te, EscTagSize, WordSize - EscTagSize);
+    return SIGN_EXTEND(tmp, EscTagSize);
 }
 
 
@@ -1293,7 +1311,7 @@ DEF("random-number", randomNumber, 0, 0) {
 
 DEF("now", now, 0, 0) {
     // TODO: Return as epoch time
-    return FIXNUM((int) time(NULL));
+    return FIXNUM((int)time(NULL));
 }
 
 DEF_OPRN(Sync, "expand", oprnExpand, obId);

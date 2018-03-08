@@ -145,7 +145,14 @@ DEF("runtime-error", obRuntimeError, 1, MaxArgs) {
         BASE(ARG(i))->printQuotedOn(stderr);
         putc('\n', stderr);
     }
-    return INVALID;
+
+    // NB(leaf): I think it sucks to have a runtime error that can
+    // cause the binary to return 0 to the shell. Aborting here makes
+    // a runtime error into a hard failure, instead of a soft one.
+    // The perror() serves as a reminder to people what the problem
+    // might be.
+    perror("Nota Bene: did you forget to set ulimit -s unlimited?");
+    abort();
 }
 
 DEF_OPRN(Sync, "vm-error", oprnVmError, obRuntimeError);

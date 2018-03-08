@@ -504,7 +504,7 @@ void VirtualMachine::handleSignal() {
     sigaddset(&blockmask, SIGIO);
     if (sigprocmask(SIG_BLOCK, &blockmask, &oldmask) < 0) {
         warning("Unable to block SIGIO...\n");
-        reset();                   /* clears sigvec */
+        reset(); /* clears sigvec */
         return;
     }
 
@@ -514,7 +514,7 @@ void VirtualMachine::handleSignal() {
 
     if (sigvec & sigmask(SIGINT)) {
         warning("Can't override the SIGINT and SIGIO signals\n");
-        reset();                   /* clears sigvec */
+        reset();                                        /* clears sigvec */
         (void)sigprocmask(SIG_SETMASK, &oldmask, NULL); /* enable interrupts */
         return;
     }
@@ -524,7 +524,7 @@ void VirtualMachine::handleSignal() {
      * For each channel ready for io, call its handler.
      */
 
-    retry_select:   // TODO: Get rid of the evil goto!!
+    retry_select:  // TODO: Get rid of the evil goto!!
         fd_set rfds = fds;
         FD_CLR(1, &rfds);
         FD_CLR(2, &rfds);  // remove stdout & stderr

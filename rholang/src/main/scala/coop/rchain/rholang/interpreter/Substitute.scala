@@ -60,7 +60,8 @@ object Substitute {
       Nil,
       for { m <- term.matches } yield substitute(m),
       term.ids,
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.from(env.level).map(x => x - env.level)
     ) ++ subExp(term.exprs.toList)
   }
 
@@ -71,7 +72,8 @@ object Substitute {
         substitute(par)
       },
       term.persistent,
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.from(env.level).map(x => x - env.level)
     )
 
   def substitute(term: Receive)(implicit env: Env[Par]): Receive =
@@ -82,14 +84,18 @@ object Substitute {
       substitute(term.body.get),
       term.persistent,
       term.bindCount,
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.from(env.level).map(x => x - env.level)
     )
 
   def substitute(term: Eval)(implicit env: Env[Par]): Eval =
     Eval(substitute(term.channel.get))
 
   def substitute(term: New)(implicit env: Env[Par]): New =
-    New(term.bindCount, substitute(term.p.get))
+    New(term.bindCount,
+        substitute(term.p.get),
+        term.freeCount,
+        term.locallyFree.from(env.level).map(x => x - env.level))
 
   def substitute(term: Match)(implicit env: Env[Par]): Match =
     Match(
@@ -97,7 +103,8 @@ object Substitute {
       for { MatchCase(_case, Some(par)) <- term.cases } yield {
         MatchCase(_case, substitute(par))
       },
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.from(env.level).map(x => x - env.level)
     )
 
   def substitute(exp: Expr)(implicit env: Env[Par]): Expr =
@@ -123,7 +130,9 @@ object Substitute {
         val fc = (0 /: _ps) { (i, par) =>
           i + par.freeCount
         }
-        Expr(exprInstance = EListBody(EList(_ps)), freeCount = fc, locallyFree = exp.locallyFree)
+        Expr(exprInstance = EListBody(EList(_ps)),
+             freeCount = fc,
+             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
       case ETupleBody(ETuple(ps)) =>
         val _ps = for { par <- ps } yield {
           substitute(par.get)
@@ -131,7 +140,9 @@ object Substitute {
         val fc = (0 /: _ps) { (i, par) =>
           i + par.freeCount
         }
-        Expr(exprInstance = ETupleBody(ETuple(_ps)), freeCount = fc, locallyFree = exp.locallyFree)
+        Expr(exprInstance = ETupleBody(ETuple(_ps)),
+             freeCount = fc,
+             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
       case ESetBody(ESet(ps)) =>
         val _ps = for { par <- ps } yield {
           substitute(par.get)
@@ -139,7 +150,9 @@ object Substitute {
         val fc = (0 /: _ps) { (i, par) =>
           i + par.freeCount
         }
-        Expr(exprInstance = ESetBody(ESet(_ps)), freeCount = fc, locallyFree = exp.locallyFree)
+        Expr(exprInstance = ESetBody(ESet(_ps)),
+             freeCount = fc,
+             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
       case EMapBody(EMap(kvs)) =>
         val _ps = for { KeyValuePair(p1, p2) <- kvs } yield {
           KeyValuePair(substitute(p1.get), substitute(p2.get))
@@ -148,7 +161,9 @@ object Substitute {
           case ((i, KeyValuePair(p1, p2))) =>
             i + p1.get.freeCount + p2.get.freeCount
         }
-        Expr(exprInstance = EMapBody(EMap(_ps)), freeCount = fc, locallyFree = exp.locallyFree)
+        Expr(exprInstance = EMapBody(EMap(_ps)),
+             freeCount = fc,
+             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
       case g @ _ => exp
     }
 
@@ -188,7 +203,8 @@ object Substitute {
         rename(m, j)
       },
       term.ids,
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.map(x => x + j)
     )
 
   def rename(term: Send, j: Int): Send =
@@ -198,7 +214,8 @@ object Substitute {
         rename(par, j)
       },
       term.persistent,
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.map(x => x + j)
     )
 
   def rename(term: Receive, j: Int): Receive =
@@ -209,14 +226,18 @@ object Substitute {
       rename(term.body.get, j),
       term.persistent,
       term.bindCount,
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.map(x => x + j)
     )
 
   def rename(term: Eval, j: Int): Eval =
     Eval(rename(term.channel.get, j))
 
   def rename(term: New, j: Int): New =
-    New(term.bindCount, rename(term.p.get, j))
+    New(term.bindCount,
+        rename(term.p.get, j),
+        term.p.get.freeCount,
+        term.locallyFree.map(x => x + j))
 
   def rename(term: Match, j: Int): Match =
     Match(
@@ -224,7 +245,8 @@ object Substitute {
       for (MatchCase(pattern, source) <- term.cases) yield {
         MatchCase(pattern, rename(source.get, j))
       },
-      term.freeCount
+      term.freeCount,
+      term.locallyFree.map(x => x + j)
     )
 
   def rename(term: Expr, j: Int): Expr =
@@ -247,22 +269,22 @@ object Substitute {
       case EListBody(EList(xs)) =>
         Expr(exprInstance = EList(for { par <- xs } yield {
           rename(par, j)
-        }), freeCount = term.freeCount, locallyFree = term.locallyFree)
+        }), freeCount = term.freeCount, locallyFree = term.locallyFree.map(x => x + j))
       case ETupleBody(ETuple(xs)) =>
         Expr(exprInstance = ETuple(for { par <- xs } yield {
           rename(par, j)
-        }), freeCount = term.freeCount, locallyFree = term.locallyFree)
+        }), freeCount = term.freeCount, locallyFree = term.locallyFree.map(x => x + j))
       case ESetBody(ESet(xs)) =>
         Expr(exprInstance = ESet(for { par <- xs } yield {
           rename(par, j)
-        }), freeCount = term.freeCount, locallyFree = term.locallyFree)
+        }), freeCount = term.freeCount, locallyFree = term.locallyFree.map(x => x + j))
       case EMapBody(EMap(xs)) =>
         Expr(
           exprInstance = EMap(for { KeyValuePair(par0, par1) <- xs } yield {
             KeyValuePair(rename(par0.get, j), rename(par1.get, j))
           }),
           freeCount = term.freeCount,
-          locallyFree = term.locallyFree
+          locallyFree = term.locallyFree.map(x => x + j)
         )
       case g @ _ => term
     }
