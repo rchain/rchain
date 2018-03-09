@@ -9,7 +9,7 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
 
 import EffectsTestInstances._
 
-class ProtocolSpec extends FunSpec with Matchers {
+class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
   val encoder = BaseEncoding.base16().lowerCase()
 
@@ -27,20 +27,42 @@ class ProtocolSpec extends FunSpec with Matchers {
   implicit val encryptionEff    = new EncryptionStub[Effect](keys, nonce)
   implicit val keysStoreEff     = new Kvs.InMemoryKvs[Effect, PeerNode, Key]
 
-  describe("Node when connecting to some remote node") {
-    describe(" to which he was not connect in the past") {
+  override def beforeEach(): Unit =
+    communicationEff.reset()
 
-      it("should first send EncryptionHanshakeMessage with its public key") {
+  describe("Node") {
+    describe("when connecting to other remote node") {
+      describe(" to which he was not connect in the past") {
+
+        it("should first send EncryptionHanshakeMessage with its public key") {
+          // given
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          // when
+          Network.connect[Effect](remote)
+          // then
+          val EncryptionHandshakeMessage(proto, _) = communicationEff.requests(0)
+          val Right(EncryptionHandshake(pk))       = NetworkProtocol.toEncryptionHandshake(proto)
+          pk.toByteArray should equal(keys.pub)
+        }
+
+      }
+    }
+
+    describe("when receiving encryption handshake") {
+      it("should send back its public key in response") {
         // given
-        communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+        val receivedMessage =
+          EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, keys), 1)
         // when
-        Network.connect[Effect](remote)
+        Network.handleEncryptionHandshake[Effect](remote, receivedMessage)
         // then
-        val EncryptionHandshakeMessage(proto, ts) = communicationEff.requests(0)
-        val Right(EncryptionHandshake(pk))        = NetworkProtocol.toEncryptionHandshake(proto)
+        val EncryptionHandshakeResponseMessage(proto, _) = communicationEff.requests(0)
+        val Right(EncryptionHandshakeResponse(pk)) =
+          NetworkProtocol.toEncryptionHandshakeResponse(proto)
         pk.toByteArray should equal(keys.pub)
       }
     }
+
   }
 
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {

@@ -27,7 +27,7 @@ object EffectsTestInstances {
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
 
-    def reset: Unit = {
+    def reset(): Unit = {
       reqresp = None
       nodes = List.empty[PeerNode]
       requests = List.empty[ProtocolMessage]
@@ -41,8 +41,12 @@ object EffectsTestInstances {
         reqresp.get.apply(remote).apply(msg)
       }
 
-    def local: F[ProtocolNode]                                           = src.pure[F]
-    def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = ???
+    def local: F[ProtocolNode] = src.pure[F]
+    def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+      Capture[F].capture {
+        requests = requests :+ msg
+        Right(())
+      }
     def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
       nodes = node :: nodes
     }
