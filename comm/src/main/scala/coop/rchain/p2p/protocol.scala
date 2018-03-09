@@ -54,14 +54,12 @@ final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: 
   def response[F[_]: Monad: Time](src: ProtocolNode,
                                   keys: PublicPrivateKeys): F[Either[CommError, ProtocolMessage]] =
     for {
-      ts           <- Time[F].currentMillis
-      hErr         <- header.toRight(headerNotAvailable).pure[F]
-      handshakeErr <- NetworkProtocol.toEncryptionHandshake(proto).pure[F]
+      ts   <- Time[F].currentMillis
+      hErr <- header.toRight(headerNotAvailable).pure[F]
     } yield {
-      (hErr, handshakeErr).mapN {
-        case (h, handshake) =>
-          val p = NetworkProtocol.encryptionHandshakeResponse(src, h, keys)
-          EncryptionHandshakeResponseMessage(p, ts)
+      hErr.map { h =>
+        val p = NetworkProtocol.encryptionHandshakeResponse(src, h, keys)
+        EncryptionHandshakeResponseMessage(p, ts)
       }
     }
 }
