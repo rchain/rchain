@@ -1243,8 +1243,7 @@ Parser::~Parser() { inbuf = (RBLstring*)NIV; }
 
 
 Parser* Parser::create() {
-    void* loc = PALLOC(align(sizeof(Parser)));
-    return new (loc) Parser(&StdParseTable);
+    return gc_new<Parser>(&StdParseTable);
 }
 
 

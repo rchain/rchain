@@ -60,8 +60,7 @@ Monitor* Monitor::create(Ob* id) {
     PROTECT(opcodeCounts);
     Word32Vec* obCounts = Word32Vec::create(Base::nClasses);
     PROTECT(obCounts);
-    void* loc = PALLOC(sizeof(Monitor));
-    return new (loc) Monitor(id, timer, opcodeCounts, obCounts);
+    return gc_new<Monitor>(id, timer, opcodeCounts, obCounts);
 }
 
 
