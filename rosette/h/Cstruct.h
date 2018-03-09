@@ -28,14 +28,14 @@ class GenericDescriptor : public Actor {
     STD_DECLS(GenericDescriptor);
 
    protected:
-    GenericDescriptor(pExt);
-    GenericDescriptor(int, pOb, pOb, pOb, pExt);
-
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
    public:
+    GenericDescriptor(pExt);
+    GenericDescriptor(int, pOb, pOb, pOb, pExt);
+
     /* This seems to be the base-level protocol provided by descriptors.
      *
      * (method (S-get base path) ...)
@@ -99,10 +99,9 @@ class GenericDescriptor : public Actor {
 class NullDescriptor : public GenericDescriptor {
     STD_DECLS(NullDescriptor);
 
-   protected:
+   public:
     NullDescriptor(pExt);
 
-   public:
     static NullDescriptor* create();
 
     virtual Ob* sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex = 0);
@@ -124,7 +123,7 @@ class NullDescriptor : public GenericDescriptor {
 class AtomicDescriptor : public GenericDescriptor {
     STD_DECLS(AtomicDescriptor);
 
-   protected:
+   public:
     AtomicDescriptor(RblBool*, pExt);
     AtomicDescriptor(RblBool*, int, pOb, pOb, pOb, pExt);
 
@@ -132,7 +131,6 @@ class AtomicDescriptor : public GenericDescriptor {
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
-   public:
     RblBool* _signed;
 
     static AtomicDescriptor* create(RblBool*);
@@ -152,14 +150,13 @@ class AtomicDescriptor : public GenericDescriptor {
 class CStructure : public GenericDescriptor {
     STD_DECLS(CStructure);
 
-   protected:
+   public:
     CStructure(RblTable*, Tuple*, pExt);
 
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
-   public:
     RblTable* _descs;
     Tuple* _fieldNames;
 
@@ -176,7 +173,7 @@ class CStructure : public GenericDescriptor {
 class CArray : public GenericDescriptor {
     STD_DECLS(CArray);
 
-   protected:
+   public:
     CArray(uint16_t, GenericDescriptor*, pExt);
     CArray(int s, pOb m, pOb p, pOb mbx, pExt, uint16_t, GenericDescriptor*);
 
@@ -184,7 +181,6 @@ class CArray : public GenericDescriptor {
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
-   public:
     uint16_t _numElems;
     uint16_t filler_up_please;
     GenericDescriptor* _elemDesc;
@@ -203,11 +199,10 @@ class CArray : public GenericDescriptor {
 class CharArray : public CArray {
     STD_DECLS(CharArray);
 
-   protected:
+   public:
     CharArray(uint16_t, GenericDescriptor*, pExt);
     CharArray(int s, pOb m, pOb p, pOb mbx, pExt, uint16_t, GenericDescriptor*);
 
-   public:
     static CharArray* create(uint16_t, GenericDescriptor*);
     static CharArray* create();
 
@@ -220,10 +215,9 @@ class CharArray : public CArray {
 class CharArray0 : public CharArray {
     STD_DECLS(CharArray0);
 
-   protected:
+   public:
     CharArray0(uint16_t, GenericDescriptor*, pExt);
 
-   public:
     static CharArray0* create(uint16_t, GenericDescriptor*);
     static CharArray0* create();
 
@@ -234,7 +228,7 @@ class CharArray0 : public CharArray {
 class CRef : public GenericDescriptor {
     STD_DECLS(CRef);
 
-   protected:
+   public:
     CRef(GenericDescriptor*, pExt);
     CRef(GenericDescriptor*, int, pOb, pOb, pOb, pExt);
 
@@ -242,7 +236,6 @@ class CRef : public GenericDescriptor {
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
-   public:
     GenericDescriptor* _desc;
 
     static CRef* create(GenericDescriptor*);
@@ -263,11 +256,10 @@ class CRef : public GenericDescriptor {
 class CharRef : public CRef {
     STD_DECLS(CharRef);
 
-   protected:
+   public:
     CharRef(GenericDescriptor*, pExt);
     CharRef(GenericDescriptor*, int, pOb, pOb, pOb, pExt);
 
-   public:
     static CharRef* create(GenericDescriptor*);
     static CharRef* create();
 
@@ -280,11 +272,10 @@ class CharRef : public CRef {
 class CRef0 : public CRef {
     STD_DECLS(CRef0);
 
-   protected:
+   public:
     CRef0(GenericDescriptor*, pExt);
     CRef0(GenericDescriptor*, int, pOb, pOb, pOb, pExt);
 
-   public:
     static CRef0* create();
     static CRef0* create(GenericDescriptor*);
 
@@ -296,10 +287,9 @@ class CRef0 : public CRef {
 class CharRef0 : public CRef0 {
     STD_DECLS(CharRef0);
 
-   protected:
+   public:
     CharRef0(pExt);
 
-   public:
     static CharRef0* create();
 
     virtual Ob* flatten(Ctxt*, uint32_t, RblTable*);
@@ -312,14 +302,13 @@ class CharRef0 : public CRef0 {
 class CUnion : public GenericDescriptor {
     STD_DECLS(CUnion);
 
-   protected:
+   public:
     CUnion(RblTable*, Tuple*, pExt);
 
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
 
-   public:
     RblTable* _descs;
     Tuple* _fieldNames;
 
