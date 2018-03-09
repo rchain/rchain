@@ -3,8 +3,6 @@ import scala.reflect.{classTag, ClassTag}
 import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, RblChar, RblString, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
-import scala.collection.immutable.HashSet
-import scala.annotation.tailrec
 
 object rblstring {
 
@@ -244,81 +242,6 @@ object rblstring {
     }
   }
 
-  /**
-    * Define the string-split primitive.
-    * This returns a Tuple containing tokens from a string.
-    * Split is done at the specified separators.
-    * An optional maximum number of splits may be specified
-    * Leading and trailing separators are ignored.
-    * if no speparators, return a Tuple of the string's characters ignoring the count
-    *
-    * examples:
-    * (string-split "a,b,c,d,e,f" ",") ====> ["a" "b" "c" "d" "e" "f" #niv]
-    * (string-split "a,b.c,d.e,f" "," 4) ====> ["a" "b.c" "d.e" "f" #niv]
-    * (string-split "a,b.c,d.e,f" "," 0) ====> []
-    * (string-split "a,b.c,d.e,f" "," -1) ==== []
-    * (string-split ",a,b,c," "," 2) ====> ["a" "b" "c,"]
-    * (string-split ",a,b,c," "," 1) ====> ["a" "b,c,"]
-    * (string-split ",a,b,c," ",") ====> ["a" "b" "c" #niv]
-    * (string-split "a,b,c" "") ====> [#\a #\, #\b #\, #\c]
-    * (string-split "a,b,c,d,e,f" "," 3) ====> ["a" "b" "c" "d,e,f"]
-    * (string-split "a,b.c,d.e,f" "," 2) ====> ["a" "b.c" "d.e,f"]
-    * (string-split "a,b.c,d.e,f" ",." 2) ====> ["a" "b" "c,d.e,f"]
-    * (string-split "a,b.c,d.e,f" "," 1) ====> ["a" "b.c,d.e,f"]
-    */
-  object stringSplit extends Prim {
-    override val name: String = "string-split"
-    override val minArgs: Int = 2
-    override val maxArgs: Int = 3
-
-    @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
-      val elem = ctxt.argvec.elem
-
-      for {
-        str <- checkType[RblString](0, elem) // Ensure arg0 is a RblString
-        sep <- checkType[RblString](1, elem) // Ensure arg1 is a RblString
-        w <- checkType[Fixnum](2, elem) // Ensure optional arg2 is a Fixnum
-            match {
-              case Right(v)                 => Right(v)
-              case Left(TypeMismatch(_, _)) => Left(TypeMismatch(2, Fixnum.getClass.getName))
-              case Left(_)                  => Right(Fixnum(Int.MaxValue))
-            }
-      } yield {
-
-        // At this point:
-        //  str = string to tokenize
-        //  sep = string of separators
-        //  w = count of tokens to return
-
-        val tl = // Get the list of tokens
-          if (sep.value.isEmpty) // Don't upset split with an empty list of separators
-            Array.empty[String]
-          else
-            str.value.split(sep.value.toArray) // split ignores trailing separators
-
-        val tr = tl.dropWhile(_.isEmpty).toSeq // Trim off leading separators
-
-        if (sep.value.isEmpty) { // no separators? return a Tuple of RblChars
-          Tuple(str.value.toSeq.map(RblChar(_)))
-        } else if (w.value <= 0) { // Invalid count yields an empty Tuple
-          Tuple.NIL
-        } else if (w.value > tr.size) { // Consuming the whole string yields the tokens plus NIV
-          Tuple(tr.map(RblString(_)) :+ Ob.NIV)
-        } else {
-          // Handle counts less than available tokens.
-          // This yields the tokens plus the remaining string
-
-          val tokens = tr.take(w.value)                            // get the selected tokens
-          val idx    = nthIndex(w.value, str.value, sep.value) + 1 // Index to the rest of the string
-          val rest   = str.value.drop(idx)                         // The rest of the string
-
-          Tuple(tokens.map(RblString(_)) :+ RblString(rest))
-        }
-      }
-    }
-  }
-
   /** Helper functions begin here */
   /**
     * Check the parameter exists return IndexOutOfBounds if not.
@@ -368,27 +291,4 @@ object rblstring {
         Right(i)
       }
     }
-
-  // Helper to find the index after the nth token.
-  private def nthIndex(n: Int, str: String, sep: String): Int = {
-    val sepSet: HashSet[Char] = HashSet.empty[Char] ++ sep
-
-    @tailrec
-    def work(chars: Iterator[(Char, Int)], count: Int): Int =
-      if (chars.nonEmpty) {
-        val (c, i)   = chars.next()
-        val newCount = if (sepSet.contains(c)) count + 1 else count
-
-        if (newCount == n) {
-          i
-        } else {
-          work(chars, newCount)
-        }
-      } else {
-        -1
-      }
-
-    work(str.iterator.zipWithIndex, 0)
-  }
-
 }
