@@ -62,8 +62,7 @@ IdPattern::IdPattern(Ob* sym)
 
 
 IdPattern* IdPattern::create(Ob* sym) {
-    void* loc = PALLOC1(sizeof(IdPattern), sym);
-    return new (loc) IdPattern(sym);
+    return gc_new<IdPattern>(sym);
 }
 
 
@@ -93,8 +92,7 @@ ConstPattern::ConstPattern(Ob* val)
 
 
 ConstPattern* ConstPattern::create(Ob* val) {
-    void* loc = PALLOC1(sizeof(ConstPattern), val);
-    return new (loc) ConstPattern(val);
+    return gc_new<ConstPattern>(val);
 }
 
 
@@ -141,8 +139,7 @@ IdVecPattern::IdVecPattern(TupleExpr* te)
 
 
 IdVecPattern* IdVecPattern::create(TupleExpr* te) {
-    void* loc = PALLOC1(sizeof(IdVecPattern), te);
-    return new (loc) IdVecPattern(te);
+    return gc_new<IdVecPattern>(te);
 }
 
 
@@ -205,8 +202,7 @@ IdAmperRestPattern::IdAmperRestPattern(TupleExpr* te)
 
 
 IdAmperRestPattern* IdAmperRestPattern::create(TupleExpr* te) {
-    void* loc = PALLOC1(sizeof(IdAmperRestPattern), te);
-    return new (loc) IdAmperRestPattern(te);
+    return gc_new<IdAmperRestPattern>(te);
 }
 
 
@@ -306,8 +302,7 @@ ComplexPattern* ComplexPattern::create(TupleExpr* te) {
         ov->elem(i + 1) = FIXNUM(offset);
     }
 
-    void* loc = PALLOC(sizeof(ComplexPattern));
-    return new (loc) ComplexPattern(te, pv, ov);
+    return gc_new<ComplexPattern>(te, pv, ov);
 }
 
 
@@ -432,19 +427,16 @@ Template* Template::create(TupleExpr* te) {
     PROTECT(keys);
     StdMeta* keymeta = StdMeta::create(keys, FIXNUM(1), RBLFALSE);
 
-    void* loc = PALLOC1(sizeof(Template), keymeta);
-    return new (loc) Template(keys, keymeta, pat);
+    return gc_new<Template>(keys, keymeta, pat);
 }
 
 
+/**
+ * This version of create should only be used when making the
+ * NILtemplate.
+ */
 Template* Template::create(Tuple* keys, Ob* keymeta, CompoundPattern* pat) {
-    /*
-     * This version of create should only be used when making the
-     * NILtemplate.
-     */
-
-    void* loc = PALLOC3(sizeof(Template), keys, keymeta, pat);
-    return new (loc) Template(keys, keymeta, pat);
+    return gc_new<Template>(keys, keymeta, pat);
 }
 
 
