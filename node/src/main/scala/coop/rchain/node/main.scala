@@ -8,6 +8,7 @@ import coop.rchain.p2p
 import coop.rchain.comm._, CommError._
 import coop.rchain.catscontrib.Capture
 import com.typesafe.scalalogging.Logger
+import com.google.common.io.BaseEncoding
 import monix.eval.Task
 import monix.execution.Scheduler
 import scala.concurrent.Await
@@ -78,8 +79,6 @@ object Main {
 
   def main(args: Array[String]): Unit = {
 
-    import encryption._
-
     val conf = Conf(args)
 
     val name = conf.name.toOption match {
@@ -96,6 +95,23 @@ object Main {
     val src     = p2p.NetworkAddress.parse(address).right.get
 
     import ApplicativeError_._
+
+    // FIX-ME temp implemmentation, production shoul use crypto module
+    implicit val encyption: Encryption[Task] = new Encryption[Task] {
+      import Encryption._
+      val encoder = BaseEncoding.base16().lowerCase()
+      def fetchKeys: Task[PublicPrivateKeys] = Task.delay {
+        val pub: Key =
+          encoder.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
+        val sec: Key =
+          encoder.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        PublicPrivateKeys(pub, sec)
+      }
+
+      def generateNonce: Task[Nonce] = Task.delay {
+        encoder.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
+      }
+    }
 
     implicit def ioLog: Log[Task] = new Log[Task] {
       def debug(msg: String): Task[Unit] = Task.delay(logger.debug(msg))
@@ -175,23 +191,7 @@ object Main {
 
     /** will use database or file system */
     implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
-      new Kvs[Task, PeerNode, Array[Byte]] {
-        var mem: Map[PeerNode, Array[Byte]] = Map.empty[PeerNode, Array[Byte]]
-
-        def keys: Task[Vector[PeerNode]] = Task.delay {
-          mem.keys.toVector
-        }
-        def get(k: PeerNode): Task[Option[Array[Byte]]] = Task.delay {
-          mem.get(k)
-        }
-        def put(k: PeerNode, v: Array[Byte]): Task[Unit] = Task.delay {
-          mem = mem + (k -> v)
-        }
-
-        def delete(k: PeerNode): Task[Unit] = Task.delay {
-          mem = mem - k
-        }
-      }
+      new Kvs.InMemoryKvs[Task, PeerNode, Array[Byte]]
 
     /** This is essentially a final effect that will accumulate all effects from the system */
     type CommErrT[F[_], A] = EitherT[F, CommError, A]

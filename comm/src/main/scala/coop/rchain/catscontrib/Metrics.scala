@@ -29,6 +29,15 @@ object Metrics extends MetricsInstances {
       def setGauge(name: String, value: Long)            = M.setGauge(name, value).liftM[T]
       def record(name: String, value: Long, count: Long) = M.record(name, value, count).liftM[T]
     }
+
+  class MetricsNOP[F[_]: Applicative] extends Metrics[F] {
+    def incrementCounter(name: String, delta: Long = 1): F[Unit]    = ().pure[F]
+    def incrementSampler(name: String, delta: Long = 1): F[Unit]    = ().pure[F]
+    def sample(name: String): F[Unit]                               = ().pure[F]
+    def setGauge(name: String, value: Long): F[Unit]                = ().pure[F]
+    def record(name: String, value: Long, count: Long = 1): F[Unit] = ().pure[F]
+  }
+
 }
 
 sealed abstract class MetricsInstances {
