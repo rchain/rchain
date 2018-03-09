@@ -43,8 +43,7 @@ RblStack::RblStack(Tuple* elems)
 
 RblStack* RblStack::create() {
     Tuple* elems = Tuple::create(DefaultStackSize, NIV);
-    void* loc = PALLOC1(sizeof(RblStack), elems);
-    return new (loc) RblStack(elems);
+    return gc_new<RblStack>(elems);
 }
 
 

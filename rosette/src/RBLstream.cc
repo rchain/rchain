@@ -61,8 +61,7 @@ Istream::Istream(Ob* mbox, pExt ext, Reader* reader)
 Istream* Istream::create(Reader* r) {
     PROTECT(r);
     pExt ext = StdExtension::create(0);
-    void* loc = PALLOC1(sizeof(Istream), ext);
-    return new (loc) Istream(emptyMbox, ext, r);
+    return gc_new<Istream>(emptyMbox, ext, r);
 }
 
 
@@ -91,10 +90,7 @@ Ostream::~Ostream() {
 }
 
 
-Ostream* Ostream::create(FILE* ostrm) {
-    void* loc = PALLOC(sizeof(Ostream));
-    return new (loc) Ostream(ostrm);
-}
+Ostream* Ostream::create(FILE* ostrm) { return gc_new<Ostream>(ostrm); }
 
 
 Ob* Ostream::cloneTo(Ob*, Ob*) {

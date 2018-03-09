@@ -119,21 +119,21 @@ int align(int size) { return ((size + alignmentmask) & ~alignmentmask); }
  *
  * 3. Otherwise, perform a traditional mark/scan garbage collection to
  * recover lost storage, and try steps 1 and 2 again.
- *
- * 4. If there is still not enough storage available, obtain a new tail
- * from the system and allocate the chunk from it.
- *
- * When objects are freed, their storage is returned to the appropriate
- * free list: the size-specific free list if the storage is one of the
- * special sizes, or the miscellaneous free list otherwise.  No attempt
- * is currently made to coalesce contiguous regions of memory when they
- * are freed.
- *
- * The mark/scan garbage collection has a couple of additional twists to
- * incorporate foreign objects and the scavenger's remembered set.  The
- * marking phase is traditional, marking all nodes reachable from the RBL
- * runtime stack.
- */
+*
+* 4. If there is still not enough storage available, obtain a new tail
+* from the system and allocate the chunk from it.
+*
+* When objects are freed, their storage is returned to the appropriate
+* free list: the size-specific free list if the storage is one of the
+* special sizes, or the miscellaneous free list otherwise.  No attempt
+* is currently made to coalesce contiguous regions of memory when they
+* are freed.
+*
+* The mark/scan garbage collection has a couple of additional twists to
+* incorporate foreign objects and the scavenger's remembered set.  The
+* marking phase is traditional, marking all nodes reachable from the RBL
+* runtime stack.
+*/
 
 
 static int nextMultipleOf(int sz, int multiple) {
@@ -1162,12 +1162,10 @@ relocate:
     }
 }
 
-
 void* palloc(unsigned sz) {
     void* loc = heap->alloc(sz);
     return loc ? loc : heap->scavengeAndAlloc(sz);
 }
-
 
 void* palloc1(unsigned sz, void* ob0) {
     void* loc = heap->alloc(sz);

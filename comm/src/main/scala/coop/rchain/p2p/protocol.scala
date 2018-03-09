@@ -1,6 +1,6 @@
 package coop.rchain.p2p
 
-import coop.rchain.comm._
+import coop.rchain.comm._, CommError._
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.rchain._
@@ -51,19 +51,21 @@ object NetworkProtocol {
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
 
-  def response(src: ProtocolNode, keys: PublicPrivateKeys): Either[CommError, ProtocolMessage] =
+  def response[F[_]: Monad: Time](src: ProtocolNode,
+                                  keys: PublicPrivateKeys): F[Either[CommError, ProtocolMessage]] =
     for {
-      h         <- header.toRight(HeaderNotAvailable)
-      handshake <- NetworkProtocol.toEncryptionHandshake(proto)
-      pub       = handshake.publicKey.toByteArray
+      ts           <- Time[F].currentMillis
+      hErr         <- header.toRight(headerNotAvailable).pure[F]
+      handshakeErr <- NetworkProtocol.toEncryptionHandshake(proto).pure[F]
     } yield {
-      val message = EncryptionHandshakeResponseMessage(
-        NetworkProtocol.encryptionHandshakeResponse(src, h, keys),
-        System.currentTimeMillis)
-      message
+      (hErr, handshakeErr).mapN {
+        case (h, handshake) =>
+          val p = NetworkProtocol.encryptionHandshakeResponse(src, h, keys)
+          EncryptionHandshakeResponseMessage(p, ts)
+      }
     }
-
 }
+
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse
 

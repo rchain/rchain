@@ -46,10 +46,7 @@ Timer::Timer() : BinaryOb(sizeof(Timer), CLASS_META(Timer), CLASS_SBO(Timer)) {
 }
 
 
-Timer* Timer::create() {
-    void* loc = PALLOC(sizeof(Timer));
-    return new (loc) Timer();
-}
+Timer* Timer::create() { return gc_new<Timer>(); }
 
 
 void Timer::updateTimer() {

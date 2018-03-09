@@ -42,7 +42,9 @@ final case class UnicastNetwork(peer: PeerNode,
   val table = PeerTable(local)
 
   def receiver[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]]
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
+                                                                               PeerNode,
+                                                                               Array[Byte]]]
     : F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
@@ -109,7 +111,9 @@ final case class UnicastNetwork(peer: PeerNode,
   }
 
   def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]](
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
+                                                                               PeerNode,
+                                                                               Array[Byte]]](
       sock: SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
@@ -147,7 +151,9 @@ final case class UnicastNetwork(peer: PeerNode,
    * expecting, propagate it to the next dispatcher.
    */
   private def handleResponse[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]](
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
+                                                                               PeerNode,
+                                                                               Array[Byte]]](
       sock: SocketAddress,
       sender: PeerNode,
       msg: ProtocolResponse): F[Unit] = {

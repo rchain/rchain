@@ -93,10 +93,7 @@ ForeignFunction::ForeignFunction(Ob* Cname, Tuple* argConverters,
 
 ForeignFunction* ForeignFunction::create(Ob* Cname, Tuple* argConverters,
                                          Ob* rsltConverter, void* Caddr) {
-    void* loc =
-        PALLOC3(sizeof(ForeignFunction), Cname, argConverters, rsltConverter);
-    return new (loc)
-        ForeignFunction(Cname, argConverters, rsltConverter, Caddr);
+    return gc_new<ForeignFunction>(Cname, argConverters, rsltConverter, Caddr);
 }
 
 Ob* ForeignFunction::typecheckActuals(Ctxt* ctxt) {
@@ -362,10 +359,7 @@ ForeignFunction::ForeignFunction(Ob* Cname, Tuple* argConverters,
 
 ForeignFunction* ForeignFunction::create(Ob* Cname, Tuple* argConverters,
                                          Ob* rsltConverter, void* Caddr) {
-    void* loc =
-        PALLOC3(sizeof(ForeignFunction), Cname, argConverters, rsltConverter);
-    return new (loc)
-        ForeignFunction(Cname, argConverters, rsltConverter, Caddr);
+    return gc_new<ForeignFunction>(Cname, argConverters, rsltConverter, Caddr);
 }
 
 #if defined(sun) && (defined(mc68020) || defined(sparc))

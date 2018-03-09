@@ -26,11 +26,10 @@
 class RBLstring : public ByteVec {
     STD_DECLS(RBLstring);
 
-   protected:
+   public:
     RBLstring(int, char = ' ');
     RBLstring(int, char*);
 
-   public:
     static RBLstring* create(int, char = ' ');
     static RBLstring* create(char*);
     static RBLstring* create(int, char*);
