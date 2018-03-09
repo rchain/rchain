@@ -5,7 +5,7 @@ import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import scala.util.control.NonFatal
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 /*
  * Inspiration from ethereum:
@@ -79,12 +79,14 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
   def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](
       sender: PeerNode,
-      handshake: EncryptionHandshakeMessage)(
-      implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
+      msg: EncryptionHandshakeMessage)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
     for {
-      local       <- Communication[F].local
-      keys        <- Encryption[F].fetchKeys
-      responseErr <- handshake.response[F](local, keys)
+      local        <- Communication[F].local
+      keys         <- Encryption[F].fetchKeys
+      handshakeErr <- NetworkProtocol.toEncryptionHandshake(msg.proto).pure[F]
+      _ <- handshakeErr.fold(kp(Log[F].error("could not fetch proto message")),
+                             hs => keysStore.put(sender, hs.publicKey.toByteArray))
+      responseErr <- msg.response[F](local, keys)
       result      <- responseErr.traverse(resp => Communication[F].commSend(resp, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")

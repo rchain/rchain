@@ -15,7 +15,8 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
   val src: ProtocolNode    = protocolNode("src", 30300)
   val remote: ProtocolNode = protocolNode("remote", 30301)
-  val keys                 = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
+  val srcKeys              = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
+  val remoteKeys           = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
   val nonce                = Array.empty[Byte]
 
   type Effect[A] = CommErrT[Id, A]
@@ -24,11 +25,13 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach {
   implicit val timeEff          = new LogicalTime[Effect]
   implicit val metricEff        = new Metrics.MetricsNOP[Effect]
   implicit val communicationEff = new CommunicationStub[Effect](src)
-  implicit val encryptionEff    = new EncryptionStub[Effect](keys, nonce)
+  implicit val encryptionEff    = new EncryptionStub[Effect](srcKeys, nonce)
   implicit val keysStoreEff     = new Kvs.InMemoryKvs[Effect, PeerNode, Key]
 
-  override def beforeEach(): Unit =
+  override def beforeEach(): Unit = {
     communicationEff.reset()
+    keysStoreEff.keys.map(_.map(k => keysStoreEff.delete(k)))
+  }
 
   describe("Node") {
     describe("when connecting to other remote node") {
@@ -42,31 +45,46 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           // then
           val EncryptionHandshakeMessage(proto, _) = communicationEff.requests(0)
           val Right(EncryptionHandshake(pk))       = NetworkProtocol.toEncryptionHandshake(proto)
-          pk.toByteArray should equal(keys.pub)
+          pk.toByteArray should equal(srcKeys.pub)
         }
 
       }
     }
 
-    describe("when receiving encryption handshake") {
+    describe("when receiving encryption handshake from remote node") {
       it("should send back its public key in response") {
         // given
         val receivedMessage =
-          EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, keys), 1)
+          EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, remoteKeys), 1)
         // when
         Network.handleEncryptionHandshake[Effect](remote, receivedMessage)
         // then
         val EncryptionHandshakeResponseMessage(proto, _) = communicationEff.requests(0)
         val Right(EncryptionHandshakeResponse(pk)) =
           NetworkProtocol.toEncryptionHandshakeResponse(proto)
-        pk.toByteArray should equal(keys.pub)
+        pk.toByteArray should equal(srcKeys.pub)
       }
+
+      it("should store remote's public key") {
+        // given
+        val receivedMessage =
+          EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, remoteKeys), 1)
+        // when
+        Network.handleEncryptionHandshake[Effect](remote, receivedMessage)
+        // then
+        value(keysStoreEff.get(remote)).map(_.toList) should equal(Some(remoteKeys.pub.toList))
+      }
+
+      // TODO should not store remote key if sending msg failed (commSend)
     }
 
   }
 
+  private def value[A](ea: Effect[A]): A = ea.value.right.get
+
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
-    case hs @ EncryptionHandshakeMessage(_, _) => hs.response[Effect](remote, keys).value.right.get
+    case hs @ EncryptionHandshakeMessage(_, _) =>
+      hs.response[Effect](remote, srcKeys).value.right.get
   }
 
   private val sndPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
