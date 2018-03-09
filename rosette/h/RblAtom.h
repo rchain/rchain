@@ -23,6 +23,8 @@
 #include "rosette.h"
 #include "Ob.h"
 
+#define protected public
+
 class RblAtom : public Ob {
    protected:
     Ob* atom;

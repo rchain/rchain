@@ -49,7 +49,6 @@ CodeBuf* CodeBuf::create() {
     return new (loc) CodeBuf();
 }
 
-
 void CodeBuf::deposit(Instr i) {
     int int_pc = FIXVAL(pc);
     Instr* p;

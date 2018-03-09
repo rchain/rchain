@@ -77,10 +77,7 @@ Symbol::Symbol()
     Symbol::updateCnt();
 }
 
-Symbol* Symbol::create() {
-    void* loc = PALLOC(sizeof(Symbol));
-    return new (loc) Symbol();
-}
+Symbol* Symbol::create() { return gc_new<Symbol>(); }
 
 bool Symbol::ConstantP() { return false; }
 
@@ -152,10 +149,7 @@ RblBool::RblBool()
     RblBool::updateCnt();
 }
 
-RblBool* RblBool::create() {
-    void* loc = PALLOC(sizeof(RblBool));
-    return new (loc) RblBool();
-}
+RblBool* RblBool::create() { return gc_new<RblBool>(); }
 
 const char* RblBool::asCstring() { return BOOLVAL(atom) ? "#t" : "#f"; }
 
@@ -178,10 +172,7 @@ Char::Char() : RblAtom(sizeof(Char), CLASS_META(Char), CLASS_SBO(Char)) {
     Char::updateCnt();
 }
 
-Char* Char::create() {
-    void* loc = PALLOC(sizeof(Char));
-    return new (loc) Char();
-}
+Char* Char::create() { return gc_new<Char>(); }
 
 void Char::printOn(FILE* f) {
     fputc('#', f);
@@ -207,10 +198,7 @@ Fixnum::Fixnum()
     Fixnum::updateCnt();
 }
 
-Fixnum* Fixnum::create() {
-    void* loc = PALLOC(sizeof(Fixnum));
-    return new (loc) Fixnum();
-}
+Fixnum* Fixnum::create() { return gc_new<Fixnum>(); }
 
 char Fixnum::format[FixnumFormatSize] = "%d";
 
@@ -251,10 +239,7 @@ Niv::Niv() : RblAtom(sizeof(Niv), CLASS_META(Niv), CLASS_SBO(Niv)) {
     Niv::updateCnt();
 }
 
-Niv* Niv::create() {
-    void* loc = PALLOC(sizeof(Niv));
-    return new (loc) Niv();
-}
+Niv* Niv::create() { return gc_new<Niv>(); }
 
 const char* Niv::asCstring() { return "#niv"; }
 
@@ -271,10 +256,7 @@ Sysval::Sysval()
     Sysval::updateCnt();
 }
 
-Sysval* Sysval::create() {
-    void* loc = PALLOC(sizeof(Sysval));
-    return new (loc) Sysval();
-}
+Sysval* Sysval::create() { return gc_new<Sysval>(); }
 
 const char* Sysval::asCstring() {
     switch (ESCVAL(atom)) {

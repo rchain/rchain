@@ -343,7 +343,8 @@ int inlineUseIfPtr(void* v, PSOb__PSOb f) {
 int useIfPtr(void* v, PSOb__PSOb f) { return inlineUseIfPtr(v, f); }
 
 int inlineUseIfPtr(pOb v, SI__PSOb f) {
-    if (!IS_PTR(v)) return 0;
+    if (!IS_PTR(v))
+        return 0;
     return (v->*f)();
 }
 
