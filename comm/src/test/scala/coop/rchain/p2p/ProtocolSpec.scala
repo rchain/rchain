@@ -48,6 +48,17 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach {
           pk.toByteArray should equal(srcKeys.pub)
         }
 
+        it("should then store remote's public key") {
+          // given
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          // when
+          Network.connect[Effect](remote)
+          // then
+          value(keysStoreEff.get(remote)).map(_.toList) should equal(Some(remoteKeys.pub.toList))
+        }
+
+        it("should then send encrypted ProtocolMessage")(pending)
+
       }
     }
 
@@ -75,16 +86,15 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach {
         value(keysStoreEff.get(remote)).map(_.toList) should equal(Some(remoteKeys.pub.toList))
       }
 
-      // TODO should not store remote key if sending msg failed (commSend)
+      it("should not store remote's public key if sending response failed with error")(pending)
     }
-
   }
 
   private def value[A](ea: Effect[A]): A = ea.value.right.get
 
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ EncryptionHandshakeMessage(_, _) =>
-      hs.response[Effect](remote, srcKeys).value.right.get
+      hs.response[Effect](remote, remoteKeys).value.right.get
   }
 
   private val sndPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
