@@ -21,6 +21,25 @@ object Kvs extends KvsInstances {
       def put(k: K, v: V) = K.put(k, v).liftM[T]
       def delete(k: K)    = K.delete(k).liftM[T]
     }
+
+  class InMemoryKvs[F[_]: Capture, K, V] extends Kvs[F, K, V] {
+    val m = scala.collection.concurrent.TrieMap[K, V]()
+
+    def keys: F[Vector[K]] = Capture[F].capture {
+      m.keys.toVector
+    }
+    def get(k: K): F[Option[V]] = Capture[F].capture {
+      m.get(k)
+    }
+    def put(k: K, v: V): F[Unit] = Capture[F].capture {
+      m += (k -> v)
+    }
+
+    def delete(k: K): F[Unit] = Capture[F].capture {
+      m -= k
+    }
+  }
+
 }
 
 sealed abstract class KvsInstances {

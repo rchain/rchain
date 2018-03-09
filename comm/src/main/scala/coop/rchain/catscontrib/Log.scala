@@ -20,13 +20,17 @@ object Log extends LogInstances {
       def warn(msg: String): T[F, Unit]  = L.warn(msg).liftM[T]
       def error(msg: String): T[F, Unit] = L.error(msg).liftM[T]
     }
+
+  class NOPLog[F[_]: Applicative] extends Log[F] {
+    def debug(msg: String): F[Unit] = ().pure[F]
+    def info(msg: String): F[Unit]  = ().pure[F]
+    def warn(msg: String): F[Unit]  = ().pure[F]
+    def error(msg: String): F[Unit] = ().pure[F]
+  }
+
 }
 
 sealed abstract class LogInstances {
-
   implicit def eitherTLog[E, F[_]: Monad: Log[?[_]]]: Log[EitherT[F, E, ?]] =
     Log.forTrans[F, EitherT[?[_], E, ?]]
-
-  implicit def writerTKvs[W: Monoid, F[_]: Monad: Log[?[_]]]: Log[WriterT[F, W, ?]] =
-    Log.forTrans[F, WriterT[?[_], W, ?]]
 }

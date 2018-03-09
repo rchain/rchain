@@ -1,35 +1,40 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.models._
+import scala.collection.mutable
 
-import scala.collection.immutable.HashMap
-
-/* Env reifies the Env[A] = HashMap[Int,A] type alias.
+/* Env reifies the Env[A] = mutable.LinkedHashMap[Int,A] type alias.
    It extends HashMap with functions that manipulate
    the map based on level indices. */
 
 object Env {
 
-  def empty = HashMap.empty[Int, Par]
+  type Env[A] = mutable.LinkedHashMap[Int, A]
 
-  implicit class DeBruijn(env: HashMap[Int, Par]) {
+  def apply[A](a: A): Env[A] =
+    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) put a
 
-    def get(level: Int): Option[Par] = env.get(level)
+  def apply[A](a: A, b: A, k: A*): Env[A] =
+    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) put (a, b, k: _*)
 
-    def put(level: Int)(data: Par): HashMap[Int, Par] = env + (level -> data)
+  def apply[A](elems: (Int, A)*): Env[A] =
+    mutable.LinkedHashMap[Int, A](elems: _*)
 
-    /* Since indexing starts from 0, # of bound variables = level of
-       environment associated with the term.*/
-    def level: Int = env.keys.max + 1
+  implicit class DeBruijn[A](env: Env[A]) {
 
-    def rename(j: Int): HashMap[Int, Par] = env map { case (k, data) => (k + j, data) }
+    def level: Int = if (env.isEmpty) 0 else env.last._1 + 1
 
-    /* In [env] allocate [k.size] new slots */
-    def alloc(k: List[Par]): HashMap[Int, Par] = (env /: k) { (_env, data) =>
-      _env.put(_env.level)(data)
+    def rename(j: Int): Env[A] = env map {
+      case (k, data) => (k + j, data)
     }
 
-    def merge(_env: HashMap[Int, Par]): HashMap[Int, Par] = env ++: _env.rename(env.level)
+    def put(a: A): Env[A] = env += (env.level -> a)
+
+    def put(a: A, b: A, k: A*): Env[A] = (env.put(a).put(b) /: k) { (_env, data) =>
+      _env put data
+    }
+
+    def merge(_env: Env[A]): Env[A] =
+      env ++= _env.rename(env.level)
 
   }
 }

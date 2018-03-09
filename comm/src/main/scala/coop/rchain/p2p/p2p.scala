@@ -52,15 +52,15 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       Capture[F].unsafeUncapture(result)
     }
 
-  def connect[F[_]: Capture: Monad: Log: Time: Metrics: Communication](peer: PeerNode)(
+  def connect[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](peer: PeerNode)(
       implicit
       keysStore: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
+      keys       <- Encryption[F].fetchKeys
       _          <- Log[F].debug(s"Connecting to $peer")
       _          <- Metrics[F].incrementCounter("connects")
       ts1        <- Time[F].currentMillis
-      keys       = encryption.generate // Keys will be fetched or generated
       local      <- Communication[F].local
       ehs        = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
       remote     = ProtocolNode(peer, local, unsafeRoundTrip[F])
@@ -77,15 +77,15 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       _          <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
-  private def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Communication](
+  private def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](
       sender: PeerNode,
       handshake: EncryptionHandshakeMessage)(
       implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
     for {
-      local <- Communication[F].local
-      result <- handshake
-                 .response(local, encryption.generate) // FIX-ME
-                 .traverse(resp => Communication[F].commSend(resp.toByteSeq, sender))
+      local       <- Communication[F].local
+      keys        <- Encryption[F].fetchKeys
+      responseErr <- handshake.response[F](local, keys)
+      result      <- responseErr.traverse(resp => Communication[F].commSend(resp.toByteSeq, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
             case Left(ex) => Log[F].error(s"handleEncryptionHandshake(): $ex")
@@ -108,7 +108,9 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
     } yield ()
 
   override def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Kvs[?[_], PeerNode, Array[Byte]]](
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
+                                                                               PeerNode,
+                                                                               Array[Byte]]](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 

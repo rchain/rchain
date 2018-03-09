@@ -24,5 +24,5 @@ object CommError {
 
   def unknownProtocol(msg: String): CommError     = UnknownProtocolError(msg)
   def protocolException(th: Throwable): CommError = ProtocolException(th)
-
+  def headerNotAvailable: CommError               = HeaderNotAvailable
 }
