@@ -26,6 +26,7 @@
 #include "Ob.h"
 
 #include <tuple>
+#include <vector>
 
 class RootSet {
    public:
@@ -180,7 +181,9 @@ class ProtectedItem {
     friend void Init_Heap();
 
    public:
-    ProtectedItem(void* v) : next(root), item(v) { root = this; }
+    ProtectedItem(void* v) : next(root), item(v) {
+        root = this;
+    }
 
     ~ProtectedItem() { root = next; }
 };
@@ -192,11 +195,17 @@ class ProtectedItem {
     PROTECT(__this__)
 #define SELF __this__
 
-template <typename... Types>
-class ProtectedItems {
-   public:
-    const std::tuple<Types...> tup_;
-    ProtectedItems(Types... args) : tup_(args...) {}
+template <typename Type, typename... Types>
+struct ProtectedItems {
+    ProtectedItem p_;
+    ProtectedItems<Types...> rest_;
+    ProtectedItems(Type arg, Types... args) : p_((void*)&arg), rest_(args...) {}
+};
+
+template <typename Type>
+struct ProtectedItems<Type> {
+    ProtectedItem p_;
+    ProtectedItems(Type arg) : p_((void*)&arg) {}
 };
 
 /*
@@ -209,6 +218,17 @@ static const int alignmentmask = 3;
 
 int align(int size);
 
+template <typename T>
+T* gc_alloc(size_t sz) {
+    auto p = (T*)heap->alloc(align(sz));
+    if (!p) {
+        p = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return p;
+}
+
+
 template <typename T, typename... ArgTypes>
 T* gc_alloc(size_t sz, ArgTypes... args) {
     auto p = (T*)heap->alloc(align(sz));
@@ -218,6 +238,18 @@ T* gc_alloc(size_t sz, ArgTypes... args) {
     }
 
     return p;
+}
+
+template <typename T>
+T* gc_new() {
+    auto sz = align(sizeof(T));
+    T* loc = (T*)heap->alloc(sz);
+
+    if (!loc) {
+        loc = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return new (loc) T();
 }
 
 template <typename T, typename... ArgTypes>
@@ -232,6 +264,18 @@ T* gc_new(ArgTypes... args) {
     }
 
     return new (loc) T(args...);
+}
+
+template <typename T>
+T* gc_new_space(const size_t extra_space) {
+    auto sz = align(sizeof(T) + extra_space);
+    T* loc = (T*)heap->alloc(sz);
+
+    if (!loc) {
+        loc = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return new (loc) T();
 }
 
 template <typename T, typename... ArgTypes>
