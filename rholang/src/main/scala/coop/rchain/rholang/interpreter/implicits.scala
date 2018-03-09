@@ -33,7 +33,6 @@ object implicits {
   implicit def fromVar[T](v: T)(implicit toVar: T => Var): Option[Var] = Some(v)
 
   // Expr Related
-
   def apply(e: ExprInstance)                 = new Expr(exprInstance = e, freeCount = 0, locallyFree = BitSet())
   implicit def fromGBool(g: GBool): Expr     = apply(g)
   implicit def fromGInt(g: GInt): Expr       = apply(g)

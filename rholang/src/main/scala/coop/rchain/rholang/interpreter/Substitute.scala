@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.interpreter.Env.DeBruijn
+import coop.rchain.rholang.interpreter.Env._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
