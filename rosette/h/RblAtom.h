@@ -23,17 +23,15 @@
 #include "rosette.h"
 #include "Ob.h"
 
-#define protected public
-
 class RblAtom : public Ob {
    protected:
     Ob* atom;
 
-    RblAtom(int, Ob*, Ob*);
-
     friend Ob* decodeAtom(Ob*);
 
    public:
+    RblAtom(int, Ob*, Ob*);
+
     virtual Ob* self();
     virtual Ob* cloneTo(Ob*, Ob*);
     virtual Ob* update(bool, Ctxt*);
@@ -45,10 +43,9 @@ class RblAtom : public Ob {
 class Symbol : public RblAtom {
     STD_DECLS(Symbol);
 
-   protected:
+   public:
     Symbol();
 
-   public:
     static Symbol* create();
 
     bool ConstantP();
@@ -66,10 +63,9 @@ class Symbol : public RblAtom {
 class RblBool : public RblAtom {
     STD_DECLS(RblBool);
 
-   protected:
+   public:
     RblBool();
 
-   public:
     static RblBool* create();
     const char* asCstring();
 
@@ -80,10 +76,9 @@ class RblBool : public RblAtom {
 class Char : public RblAtom {
     STD_DECLS(Char);
 
-   protected:
+   public:
     Char();
 
-   public:
     static Char* create();
     void printOn(FILE*);
     void displayOn(FILE*);
@@ -96,13 +91,12 @@ static const int FixnumFormatSize = 16;
 class Fixnum : public RblAtom {
     STD_DECLS(Fixnum);
 
-   protected:
+   public:
     Fixnum();
 
     static char format[FixnumFormatSize];
     friend BUILTIN_PRIM(fxFormat);
 
-   public:
     static Fixnum* create();
     const char* asCstring();
 
@@ -114,10 +108,9 @@ class Fixnum : public RblAtom {
 class Niv : public RblAtom {
     STD_DECLS(Niv);
 
-   protected:
+   public:
     Niv();
 
-   public:
     static Niv* create();
     const char* asCstring();
     Ob* invoke(Ctxt*);
@@ -127,10 +120,9 @@ class Niv : public RblAtom {
 class Sysval : public RblAtom {
     STD_DECLS(Sysval);
 
-   protected:
+   public:
     Sysval();
 
-   public:
     static Sysval* create();
     const char* asCstring();
 };
@@ -139,10 +131,9 @@ class Sysval : public RblAtom {
 class ExpandedLocation : public RblAtom {
     STD_DECLS(ExpandedLocation);
 
-   protected:
+   public:
     ExpandedLocation();
 
-   public:
     static ExpandedLocation* create();
     const char* asCstring();
 };
