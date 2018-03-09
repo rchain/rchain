@@ -321,9 +321,7 @@ Float::Float(Rfloat v)
 }
 
 
-Float* Float::create(Rfloat v) {
-    return gc_new<Float>(v);
-}
+Float* Float::create(Rfloat v) { return gc_new<Float>(v); }
 
 
 const char* Float::asCstring() {

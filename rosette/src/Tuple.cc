@@ -155,7 +155,8 @@ Tuple* Tuple::create(int size, Tuple* master, int offset, int n, Ob* init) {
         return NIL;
     }
 
-    return gc_new_space<Tuple>(size * sizeof(Ob*), size, master, offset, n, init);
+    return gc_new_space<Tuple>(size * sizeof(Ob*), size, master, offset, n,
+                               init);
 }
 
 

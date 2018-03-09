@@ -39,9 +39,7 @@ EmptyMbox::EmptyMbox()
 }
 
 
-EmptyMbox* EmptyMbox::create() {
-    return gc_new<EmptyMbox>();
-}
+EmptyMbox* EmptyMbox::create() { return gc_new<EmptyMbox>(); }
 
 
 Ob* EmptyMbox::cloneTo(Ob*, Ob*) { return this; }
@@ -75,9 +73,7 @@ LockedMbox::LockedMbox()
 }
 
 
-LockedMbox* LockedMbox::create() {
-    return gc_new<LockedMbox>();
-}
+LockedMbox* LockedMbox::create() { return gc_new<LockedMbox>(); }
 
 
 Ob* LockedMbox::cloneTo(Ob*, Ob*) { return this; }

@@ -57,7 +57,8 @@ FixupVec* FixupVec::create(int n) {
 
 
 FixupVec* FixupVec::create(FixupVec* oldvec, int newsize) {
-    return gc_new_space<FixupVec>(newsize * sizeof(FixupEntry), oldvec, newsize);
+    return gc_new_space<FixupVec>(newsize * sizeof(FixupEntry), oldvec,
+                                  newsize);
 }
 
 

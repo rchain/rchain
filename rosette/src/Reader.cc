@@ -1237,9 +1237,7 @@ Reader::~Reader() {
 }
 
 
-Reader* Reader::create(FILE* f) {
-    return gc_new<Reader>(&StdReadTable, f);
-}
+Reader* Reader::create(FILE* f) { return gc_new<Reader>(&StdReadTable, f); }
 
 
 Ob* Reader::readCh() {

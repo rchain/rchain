@@ -89,8 +89,7 @@ ByteVec* ByteVec::create(int n) {
 
 
 ByteVec* ByteVec::create(ByteVec* old, int newsize) {
-    return gc_new_space<ByteVec>(newsize * sizeof(uint8_t),
-            old, newsize);
+    return gc_new_space<ByteVec>(newsize * sizeof(uint8_t), old, newsize);
 }
 
 

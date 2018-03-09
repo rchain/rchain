@@ -90,9 +90,7 @@ Ostream::~Ostream() {
 }
 
 
-Ostream* Ostream::create(FILE* ostrm) {
-    return gc_new<Ostream>(ostrm);
-}
+Ostream* Ostream::create(FILE* ostrm) { return gc_new<Ostream>(ostrm); }
 
 
 Ob* Ostream::cloneTo(Ob*, Ob*) {

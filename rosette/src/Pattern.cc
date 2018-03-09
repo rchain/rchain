@@ -61,9 +61,7 @@ IdPattern::IdPattern(Ob* sym)
 }
 
 
-IdPattern* IdPattern::create(Ob* sym) {
-    return gc_new<IdPattern>(sym);
-}
+IdPattern* IdPattern::create(Ob* sym) { return gc_new<IdPattern>(sym); }
 
 
 void IdPattern::stuffKeys(Tuple* keys, int offset) {

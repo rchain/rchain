@@ -44,9 +44,7 @@ CodeBuf::CodeBuf()
 }
 
 
-CodeBuf* CodeBuf::create() {
-    return gc_new<CodeBuf>();
-}
+CodeBuf* CodeBuf::create() { return gc_new<CodeBuf>(); }
 
 void CodeBuf::deposit(Instr i) {
     int int_pc = FIXVAL(pc);
@@ -224,9 +222,8 @@ CodeVec::CodeVec(int numberOfInstrs)
 
 
 CodeVec* CodeVec::create(int numberOfInstrs) {
-    return gc_new_space<CodeVec>(
-            align(numberOfInstrs * sizeof(Instr)),
-            numberOfInstrs);
+    return gc_new_space<CodeVec>(align(numberOfInstrs * sizeof(Instr)),
+                                 numberOfInstrs);
 }
 
 
