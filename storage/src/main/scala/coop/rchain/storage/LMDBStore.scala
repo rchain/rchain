@@ -13,8 +13,8 @@ import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Dbi, Env, EnvFlags, Txn}
 import coop.rchain.models.Serialize
 import coop.rchain.models.implicits.rhoInstanceWrapper
-import coop.rchain.storage.LMDBStore.{fromBB, hashBytes, toBB, toBL, toBS}
-import coop.rchain.storage.datamodels.{BytesList, PsKsBytes}
+import coop.rchain.storage.LMDBStore.{fromBB, fromBL, fromBS, hashBytes, toBB, toBL, toBS}
+import coop.rchain.storage.datamodels.{BytesList, PsKsBytes, PsKsBytesList}
 
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
@@ -34,7 +34,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     hashBytes(packedCs)
 
   private[storage] def hashC(c: C)(implicit serialize: Serialize[C]): H =
-    hashBytes(serialize.encode(c))
+    hashBytes(toBB(List(c))(serialize))
 
   private[storage] def hashC(cs: List[C])(implicit serialize: Serialize[C]): H =
     hashBytes(toBB(cs)(serialize))
@@ -82,57 +82,57 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     fromBB[A](Option(_dbAs.get(txn, hashCs))).getOrElse(List.empty)
   }
 
-  def removeA(txn: T, channels: List[C], index: Int): Unit = {
-    val hashCs = hashC(channels)
+  def removeA(txn: T, channel: C, index: Int): Unit = {
+    val hashCs = hashC(List(channel))
     for (as <- fromBB[A](Option(_dbAs.get(txn, hashCs)))) {
       val newAs = util.dropIndex(as, index)
       _dbAs.put(txn, hashCs, toBB(newAs))
     }
   }
 
-  private[this] def parsePsKsBytes(txn: T, hashCs : H) : List[PsKsBytes] = {
-    val psKsBin = Option(_dbPsKs.get(txn, hashCs))
+  private[this] def readPsKsBytesList(txn: T, hashCs: H): Option[List[PsKsBytes]] =
+    Option(_dbPsKs.get(txn, hashCs)).map(bytes => {
+      val fetched = new Array[Byte](bytes.remaining())
+      ignore { bytes.get(fetched) }
+      PsKsBytesList.parseFrom(fetched).values.toList
+    })
 
-    psKsBin
+  private[this] def writePsKsBytesList(txn: T, hashCs: H, values: List[PsKsBytes]): Unit = {
+    val toWrite        = PsKsBytesList().withValues(values).toByteArray
+    val bb: ByteBuffer = ByteBuffer.allocateDirect(toWrite.length)
+    bb.put(toWrite).flip()
+    _dbPsKs.put(txn, hashCs, bb)
   }
 
   def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit = {
-    val hashCs = putCsH(txn, channels)
-
-
-
-    exPsKs.map(bb => PsKsBytes.parseFrom(bb.array()))
-
-
+    val hashCs  = putCsH(txn, channels)
+    val psksLst = readPsKsBytesList(txn, hashCs).getOrElse(List.empty[PsKsBytes])
     val binPsKs = PsKsBytes().withKvalue(toBS(k)).withPatterns(toBL(patterns))
-
-
-      fromBB[P]().getOrElse(List.empty[(List[P], K)])
-//    val ps     = fromBB[P](Option(_dbPsKs.get(txn, hashCs))).getOrElse(List.empty[(List[P], K)])
-//    _dbPsKs.put(txn, hashCs, toBB(patterns ++ ps))
+    writePsKsBytesList(txn, hashCs, binPsKs +: psksLst)
   }
+
+  def getPs(txn: T, channels: List[C]): List[List[P]] =
+    getPsK(txn, channels).map(_._1)
 
   def getPsK(txn: T, curr: List[C]): List[(List[P], K)] = {
-    //    val hashCs = hashC(curr)
-    //    for {
-    //      ps <- fromBB[P](Option(_dbPs.get(txn, hashCs)))
-    //      k  <- fromBB[K](Option(_dbK.get(txn, hashCs))).flatMap(_.headOption)
-    //    } yield (ps, k)
-    throw new NotImplementedError("TODO")
-  }
-
-  def getPs(txn: T, channels: List[C]): List[List[P]] = {
-    val hashCs = hashC(channels)
-
-
-    //    fromBB[P](Option(_dbPsKs.get(txn, hashCs))).getOrElse(List.empty)
+    val hashCs  = hashC(curr)
+    val psksLst = readPsKsBytesList(txn, hashCs)
+    psksLst
+      .map(_.map(psks => {
+        val k = fromBS[K](psks.kvalue)
+        val patterns =
+          psks.patterns.map(patternBytes => fromBL[P](patternBytes)).getOrElse(List.empty[P])
+        (patterns, k)
+      }))
+      .getOrElse(List.empty[(List[P], K)])
   }
 
   def removePsK(txn: T, channels: List[C], index: Int): Unit = {
-    val hashCs = hashC(channels)
-    for (psks <- fromBB[P](Option(_dbPsKs.get(txn, hashCs)))) {
-      val newPs = util.dropIndex(psks, index)
-      _dbPsKs.put(txn, hashCs, toBB(newPs))
+    val hashCs  = hashC(channels)
+    val psksLst = readPsKsBytesList(txn, hashCs)
+    for (psks <- psksLst) {
+      val resValues = util.dropIndex(psks, index)
+      writePsKsBytesList(txn, hashCs, resValues)
     }
   }
 
@@ -176,16 +176,21 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     _dbPsKs.close()
     _dbJoins.close()
   }
+
+  def dropAll(): Unit =
+    withTxn(createTxnWrite()) { txn =>
+      _dbKeys.drop(txn)
+      _dbAs.drop(txn)
+      _dbPsKs.drop(txn)
+      _dbJoins.drop(txn)
+    }
 }
 
 object LMDBStore {
   def hashBytes(bs: ByteBuffer): ByteBuffer = {
     val fetched = new Array[Byte](bs.remaining())
     ignore { bs.get(fetched) }
-    val dataArr    = MessageDigest.getInstance("SHA-256").digest(fetched)
-    val byteBuffer = ByteBuffer.allocateDirect(dataArr.length)
-    byteBuffer.put(dataArr).flip()
-    byteBuffer
+    hashBytes(fetched)
   }
 
   def hashBytes(bs: Array[Byte]): ByteBuffer = {
@@ -195,18 +200,16 @@ object LMDBStore {
     byteBuffer
   }
 
-  def hashString(s: String): ByteBuffer =
-    hashBytes(s.getBytes(StandardCharsets.UTF_8))
-
   /**
 		* Creates an instance of [[IStore]]
 		* @param path Path to the database files
 		* @param mapSize Maximum size of the database, in bytes
 		*/
-  def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
-                                                    pc: Serialize[P],
-                                                    ac: Serialize[A],
-                                                    kc: Serialize[K]): IStore[C, P, A, K] = {
+  def create[C, P, A, K](path: Path, mapSize: Long, clear: Boolean = false)(
+      implicit sc: Serialize[C],
+      pc: Serialize[P],
+      ac: Serialize[A],
+      kc: Serialize[K]): IStore[C, P, A, K] = {
     val env: Env[ByteBuffer] =
       Env.create().setMapSize(mapSize).setMaxDbs(8).open(path.toFile)
 
@@ -214,14 +217,26 @@ object LMDBStore {
     val dbPsKs: Dbi[ByteBuffer]  = env.openDbi("PsKs", MDB_CREATE)
     val dbAs: Dbi[ByteBuffer]    = env.openDbi("As", MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi("Joins", MDB_CREATE)
-    new LMDBStore[C, P, A, K](env, dbKeys, dbPsKs, dbAs, dbJoins)
+
+    val store = new LMDBStore[C, P, A, K](env, dbKeys, dbPsKs, dbAs, dbJoins)
+    if (clear) {
+      store.dropAll()
+    }
+    store
   }
 
   private[storage] def toBS[TItem](value: TItem)(
-    implicit serialize: Serialize[TItem]): ByteString = {
+      implicit serialize: Serialize[TItem]): ByteString = {
     val encoded = serialize.encode(value)
     ByteString.copyFrom(encoded)
   }
+
+  private[storage] def fromBS[TItem](bytes: ByteString)(
+      implicit serialize: Serialize[TItem]): TItem =
+    serialize.decode(bytes.toByteArray) match {
+      case Left(err)    => throw new Exception(err)
+      case Right(value) => value
+    }
 
   private[storage] def toBL[TItem](values: List[TItem])(
       implicit serialize: Serialize[TItem]): BytesList = {
@@ -237,20 +252,25 @@ object LMDBStore {
     bb
   }
 
+  private[storage] def fromBL[TItem](bl: BytesList)(
+      implicit serialize: Serialize[TItem]): List[TItem] = {
+    val x: Either[Throwable, List[TItem]] = bl.values
+      .map(x => serialize.decode(x.toByteArray))
+      .toList
+      .sequence[Either[Throwable, ?], TItem]
+    x match {
+      case Left(err)     => throw new Exception(err)
+      case Right(values) => values
+    }
+  }
+
   private[storage] def fromBB[TItem](bytesOpt: Option[ByteBuffer])(
       implicit serialize: Serialize[TItem]): Option[List[TItem]] =
     bytesOpt.map(bytes => {
       val fetched = new Array[Byte](bytes.remaining())
       ignore { bytes.get(fetched) }
       val bl = BytesList.parseFrom(fetched)
-      val x: Either[Throwable, List[TItem]] = bl.values
-        .map(x => serialize.decode(x.toByteArray))
-        .toList
-        .sequence[Either[Throwable, ?], TItem]
-      x match {
-        case Left(err)     => throw new Exception(err)
-        case Right(values) => values
-      }
+      fromBL[TItem](bl)
     })
 }
 

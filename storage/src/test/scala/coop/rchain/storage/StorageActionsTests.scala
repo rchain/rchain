@@ -1,5 +1,7 @@
 package coop.rchain.storage
 
+import java.nio.file.Paths
+
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.storage.test._
@@ -531,5 +533,5 @@ class LMDBStoreStorageActionsTests
     extends StorageActionsTests(
       () =>
         LMDBStore.create[String, Pattern, String, List[String] => Unit](Paths.get("D:\\!checklmdb"),
-                                                                        1024 * 1024 * 1024))
-    with SerializeInstances {}
+                                                                        1024 * 1024 * 1024,
+                                                                        clear = true)) {}
