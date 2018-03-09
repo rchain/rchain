@@ -1,15 +1,17 @@
 package coop.rchain.rholang.interpreter
 
 import org.scalatest.{FlatSpec, Matchers}
+import implicits._
 import Env._
+import coop.rchain.models.Par
 
 class EnvSpec extends FlatSpec with Matchers {
 
-  val source0: Par = Par(GPrivate())
-  val source1: Par = Par(GPrivate())
-  val source2: Par = Par(GPrivate())
-  val source3: Par = Par(GPrivate())
-  val source4: Par = Par(GPrivate())
+  val source0: Par = GPrivate()
+  val source1: Par = GPrivate()
+  val source2: Par = GPrivate()
+  val source3: Par = GPrivate()
+  val source4: Par = GPrivate()
 
   "Data" should "always be inserted at the next available level index" in {
     val result: Env[Par] = Env(source0, source1, source2)
