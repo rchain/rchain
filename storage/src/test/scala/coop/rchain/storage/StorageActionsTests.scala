@@ -526,3 +526,10 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 class InMemoryStoreStorageActionsTests
     extends StorageActionsTests(
       () => InMemoryStore.create[String, Pattern, String, List[String] => Unit])
+
+class LMDBStoreStorageActionsTests
+    extends StorageActionsTests(
+      () =>
+        LMDBStore.create[String, Pattern, String, List[String] => Unit](Paths.get("D:\\!checklmdb"),
+                                                                        1024 * 1024 * 1024))
+    with SerializeInstances {}

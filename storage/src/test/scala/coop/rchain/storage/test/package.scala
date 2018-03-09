@@ -24,11 +24,4 @@ package object test {
 
   def recursivelyDeletePath(p: Path): Path =
     Files.walkFileTree(p, makeDeleteFileVisitor)
-
-  /** Drops the 'i'th element of a list.
-    */
-  def dropIndex[T](xs: List[T], n: Int): List[T] = {
-    val (l1, l2) = xs splitAt n
-    l1 ++ (l2 drop 1)
-  }
 }

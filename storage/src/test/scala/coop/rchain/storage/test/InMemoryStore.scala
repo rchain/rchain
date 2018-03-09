@@ -5,6 +5,7 @@ import java.security.MessageDigest
 
 import coop.rchain.models.Serialize
 import coop.rchain.storage.IStore
+import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
