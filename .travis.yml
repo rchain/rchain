@@ -31,5 +31,6 @@ addons:
             - jflex
             - haskell-platform
             - rpm
+            - fakeroot
 
 
