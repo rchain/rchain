@@ -40,8 +40,7 @@ EmptyMbox::EmptyMbox()
 
 
 EmptyMbox* EmptyMbox::create() {
-    void* loc = PALLOC(sizeof(EmptyMbox));
-    return new (loc) EmptyMbox();
+    return gc_new<EmptyMbox>();
 }
 
 
@@ -77,8 +76,7 @@ LockedMbox::LockedMbox()
 
 
 LockedMbox* LockedMbox::create() {
-    void* loc = PALLOC(sizeof(LockedMbox));
-    return new (loc) LockedMbox();
+    return gc_new<LockedMbox>();
 }
 
 
@@ -131,8 +129,7 @@ QueueMbox::QueueMbox(Ob* enabledSet, MboxQueue* queue)
 QueueMbox* QueueMbox::create(Ob* enabledSet) {
     PROTECT(enabledSet);
     MboxQueue* queue = MboxQueue::create();
-    void* loc = PALLOC1(sizeof(QueueMbox), queue);
-    return new (loc) QueueMbox(enabledSet, queue);
+    return gc_new<QueueMbox>(enabledSet, queue);
 }
 
 
