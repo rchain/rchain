@@ -9,7 +9,7 @@ import org.rogach.scallop.ScallopConf
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-    version("Rholang Mercury 0.1")
+    version("Rholang Mercury 0.2")
     banner("""
              |Takes in a rholang source file and
              |outputs a normalized case class serialization for now.
