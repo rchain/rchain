@@ -33,9 +33,6 @@ enum TimerMode { tmUser, tmGC, tmSys, nModes };
 class Timer : public BinaryOb {
     STD_DECLS(Timer);
 
-   protected:
-    Timer();
-
    private:
     int running;
     TimerMode mode;
@@ -47,6 +44,8 @@ class Timer : public BinaryOb {
     float fastTime(TimerMode);
 
    public:
+    Timer();
+
     static Timer* create();
 
     void reset();
