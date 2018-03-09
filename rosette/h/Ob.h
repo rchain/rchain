@@ -863,7 +863,7 @@ static const int BUILTIN_STDMETA_SLOTS = 3;
 class StdMeta : public Actor {
     STD_DECLS(StdMeta);
 
-   protected:
+   public:
     StdMeta();
     StdMeta(pExt);
     StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
@@ -871,7 +871,6 @@ class StdMeta : public Actor {
 
     StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
 
-   public:
     static StdMeta* create();
     static StdMeta* create(pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
 
