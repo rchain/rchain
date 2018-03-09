@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+
+here=$(dirname $0)
+
+java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar "$here/../lib/node-assembly-0.1.1.jar" "$@"

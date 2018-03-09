@@ -118,10 +118,10 @@ lazy val storage = project
   ).dependsOn(models)
 
 lazy val node = project
-  .enablePlugins(DockerPlugin)
+  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin)
   .settings(
     commonSettings,
-    version := "0.1",
+    version := "0.1.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
@@ -148,6 +148,39 @@ lazy val node = project
         entryPoint("/bin/main.sh")
       }
     },
+
+    version in Universal := version.value,
+    name in Universal := "rchain-node",
+
+    maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
+    packageSummary in Linux := "RChain Node",
+    packageDescription in Linux := "RChain Node Description",
+
+    mappings in Universal := {
+      val universalMappings = (mappings in Universal).value
+      val jar = (assembly in Compile).value
+
+      val filtered = universalMappings filter {
+        case (file, name) => ! name.endsWith(".jar")
+      }
+
+      filtered :+ jar -> s"/lib/${jar.getName}" :+ (baseDirectory.value / "rchain-node") -> "/bin/rchain-node"
+    },
+
+    /*
+     * Debian.
+     */
+    name in Debian := (name in Universal).value,
+    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)"),
+
+    /*
+     * Redhat
+     */
+    packageName in Rpm := (name in Universal).value,
+    // version in Rpm := version.value,
+    rpmVendor := "rchain.coop",
+    rpmUrl := Some("https://rchain.coop"),
+    rpmLicense := Some("Apache 2.0"),
   )
   .dependsOn(comm)
 
