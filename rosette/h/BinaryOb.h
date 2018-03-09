@@ -22,6 +22,8 @@
 
 #include "Ob.h"
 
+#define protected public
+
 /*
  * BinaryOb's are assumed to contain *NO* Ob*'s in their bodies, and no
  * extra scavenging is done on them.  Marking is similar: no attempt is
