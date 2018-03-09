@@ -44,7 +44,7 @@ message Protocol {
         Hello                       hello                         = 3;
         EncryptionHandshake         encryption_handshake          = 4;
         EncryptionHandshakeResponse encryption_handshake_response = 5;
-        ProtocolHandshake           protocol_handshake            = 6;
+        Frame                       frame                         = 6;
         ProtocolHandshakeResponse   protocol_handshake_response   = 7;
     }
 }

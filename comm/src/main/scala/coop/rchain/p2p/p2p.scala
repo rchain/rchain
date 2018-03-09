@@ -57,24 +57,28 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       keysStore: Kvs[F, PeerNode, Array[Byte]],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
-      keys       <- Encryption[F].fetchKeys
-      _          <- Log[F].debug(s"Connecting to $peer")
-      _          <- Metrics[F].incrementCounter("connects")
-      ts1        <- Time[F].currentMillis
-      local      <- Communication[F].local
-      ehs        = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
-      remote     = ProtocolNode(peer, local, unsafeRoundTrip[F])
-      ehsrespmsg <- Communication[F].roundTrip(ehs, remote).map(err.fromEither).flatten
-      ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
-      _          <- keysStore.put(peer, ehsresp.publicKey.toByteArray)
-      _          <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
-      ts2        <- Time[F].currentMillis
-      phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(local), ts2).pure[F]
-      phsresp    <- Communication[F].roundTrip(phs, remote).map(err.fromEither).flatten
-      _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-      _          <- Communication[F].addNode(remote)
-      tsf        <- Time[F].currentMillis
-      _          <- Metrics[F].record("connect-time", tsf - ts1)
+      keys         <- Encryption[F].fetchKeys
+      _            <- Log[F].debug(s"Connecting to $peer")
+      _            <- Metrics[F].incrementCounter("connects")
+      ts1          <- Time[F].currentMillis
+      local        <- Communication[F].local
+      ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
+      remote       = ProtocolNode(peer, local, unsafeRoundTrip[F])
+      ehsrespmsg   <- Communication[F].roundTrip(ehs, remote).map(err.fromEither).flatten
+      ehsresp      <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
+      remotePubKey = ehsresp.publicKey.toByteArray
+      _            <- keysStore.put(peer, remotePubKey)
+      _            <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
+      ts2          <- Time[F].currentMillis
+      nonce        <- Encryption[F].generateNonce
+      ph           = protocolHandshake(local).toByteArray
+      eph          <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, ph)
+      fm           = FrameMessage(frame(local, nonce, eph), ts2)
+      phsresp      <- Communication[F].roundTrip(fm, remote).map(err.fromEither).flatten
+      _            <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
+      _            <- Communication[F].addNode(remote)
+      tsf          <- Time[F].currentMillis
+      _            <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
   def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](

@@ -111,6 +111,15 @@ object Main {
       def generateNonce: Task[Nonce] = Task.delay {
         encoder.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
       }
+
+      def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): Task[Array[Byte]] =
+        Task.delay {
+          message
+        }
+      def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): Task[Array[Byte]] =
+        Task.delay {
+          cipher
+        }
     }
 
     implicit def ioLog: Log[Task] = new Log[Task] {
