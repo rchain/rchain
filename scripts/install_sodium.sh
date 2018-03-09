@@ -3,7 +3,8 @@
 set -e
 
 cd crypto
-git clone https://github.com/jedisct1/libsodium.git
+git clone https://github.com/jedisct1/libsodium --branch stable
 cd libsodium
 ./configure --prefix=$HOME/libsodium
-make
+make && make check
+sudo make install
