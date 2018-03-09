@@ -25,8 +25,6 @@
 
 #include "Ob.h"
 
-#include <tuple>
-#include <vector>
 
 class RootSet {
    public:
