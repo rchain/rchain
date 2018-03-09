@@ -72,8 +72,7 @@ pMeta StdMeta::create(pTuple map, pOb ref_count, pOb extensible) {
     ext->slot(STDMETA_REFCOUNT_SLOT) = ref_count;
     ext->slot(STDMETA_EXTENSIBLE_SLOT) = extensible;
 
-    void* loc = PALLOC1(sizeof(StdMeta), ext);
-    return new (loc) StdMeta(ext);
+    return gc_new<StdMeta>(ext);
 }
 
 

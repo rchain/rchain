@@ -48,8 +48,7 @@ StdMthd::StdMthd(Code* code, Ob* id, Ob* source)
 
 
 StdMthd* StdMthd::create(Code* code, Ob* id, Ob* source) {
-    void* loc = PALLOC3(sizeof(StdMthd), code, id, source);
-    return new (loc) StdMthd(code, id, source);
+    return gc_new<StdMthd>(code, id, source);
 }
 
 
@@ -110,8 +109,7 @@ ReflectiveMthd::ReflectiveMthd(Code* code, Ob* id, Ob* source)
 
 
 ReflectiveMthd* ReflectiveMthd::create(Code* code, Ob* id, Ob* source) {
-    void* loc = PALLOC3(sizeof(ReflectiveMthd), code, id, source);
-    return new (loc) ReflectiveMthd(code, id, source);
+    return gc_new<ReflectiveMthd>(code, id, source);
 }
 
 

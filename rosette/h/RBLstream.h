@@ -28,10 +28,9 @@ class Reader;
 class Istream : public Actor {
     STD_DECLS(Istream);
 
-   protected:
+   public:
     Istream(Ob*, pExt, Reader*);
 
-   public:
     Ob* client;
     Reader* reader;
 
@@ -43,10 +42,9 @@ class Istream : public Actor {
 class Ostream : public BinaryOb {
     STD_DECLS(Ostream);
 
-   protected:
+   public:
     Ostream(FILE*);
 
-   public:
     FILE* stream;
 
     virtual ~Ostream();

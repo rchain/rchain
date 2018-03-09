@@ -26,10 +26,9 @@
 class StdOprn : public Actor {
     STD_DECLS(StdOprn);
 
-   protected:
+   public:
     StdOprn(StdExtension*);
 
-   public:
     static StdOprn* create(Ob*, Ob* = RBLFALSE);
     virtual bool isSynchronousTrgt();
     virtual Ob* dispatch(Ctxt*);

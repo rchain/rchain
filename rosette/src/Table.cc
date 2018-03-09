@@ -62,8 +62,7 @@ RblTable::RblTable(int max, Tuple* tbl)
 
 RblTable* RblTable::create(int max) {
     Tuple* tmp = Tuple::create(max * (sizeof(Entry) / sizeof(pOb)), ABSENT);
-    void* loc = PALLOC1(sizeof(RblTable), tmp);
-    return new (loc) RblTable(max, tmp);
+    return gc_new<RblTable>(max, tmp);
 }
 
 RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
@@ -92,8 +91,7 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
 
 RblTable* RblTable::create(RblTableHitFn rtabhfn, int max) {
     Tuple* tmp = Tuple::create(max * (sizeof(Entry) / sizeof(pOb)), ABSENT);
-    void* loc = PALLOC1(sizeof(RblTable), tmp);
-    return new (loc) RblTable(max, tmp, rtabhfn);
+    return gc_new<RblTable>(max, tmp, rtabhfn);
 }
 
 RblTable::Entry& RblTable::entry(int n) {
@@ -151,7 +149,11 @@ void RblTable::hashResize() {
  */
 
 
-int RblTable::hash(pOb key) { return ((int)PTR(key) >> TagSize); }
+int RblTable::hash(pOb key) {
+    // NB(leaf): previously, this did key>>TagSize, but that is pointless
+    // and silly, so now we just return the "pointer."
+    return (int)key;
+}
 
 
 void RblTable::hashify() {
