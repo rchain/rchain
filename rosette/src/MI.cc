@@ -155,8 +155,7 @@ MIActor* MIActor::create(Tuple* class_precedence_list) {
     PROTECT(class_precedence_list);
     StdExtension* ext = StdExtension::create(BUILTIN_MI_SLOTS);
     ext->slot(MI_CPL_SLOT) = class_precedence_list;
-    void* loc = PALLOC1(sizeof(MIActor), ext);
-    return new (loc) MIActor(ext);
+    return gc_new<MIActor>(ext);
 }
 
 
@@ -275,8 +274,7 @@ ProductType* ProductType::create(Tuple* type_template, pOb rest_type) {
     StdExtension* ext = StdExtension::create(BUILTIN_ProductType_SLOTS);
     ext->slot(PROD_TYPE_TEMPLATE_SLOT) = type_template;
     ext->slot(PROD_REST_TYPE_SLOT) = rest_type;
-    void* loc = PALLOC1(sizeof(ProductType), ext);
-    return new (loc) ProductType(ext);
+    return gc_new<ProductType>(ext);
 }
 
 bool ProductType::typeMatchesp(pOb actuals) {
@@ -370,8 +368,7 @@ SumType* SumType::create(Tuple* sum_types) {
     PROTECT(sum_types);
     StdExtension* ext = StdExtension::create(BUILTIN_SumType_SLOTS);
     ext->slot(SUM_TYPE_TYPES_SLOT) = sum_types;
-    void* loc = PALLOC1(sizeof(SumType), ext);
-    return new (loc) SumType(ext);
+    return gc_new<SumType>(ext);
 }
 
 bool SumType::isCoveredByp(pOb X) {
@@ -428,8 +425,7 @@ MultiMethod::MultiMethod(pExt ext)
 MultiMethod* MultiMethod::create() {
     StdExtension* ext = StdExtension::create(BUILTIN_MultiMethod_SLOTS);
     ext->slot(MM_PROC_LIST_SLOT) = NIL;
-    void* loc = PALLOC1(sizeof(MultiMethod), ext);
-    return new (loc) MultiMethod(ext);
+    return gc_new<MultiMethod>(ext);
 }
 
 /* the procList contains procs, each of which contains a tuple of at least

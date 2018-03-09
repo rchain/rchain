@@ -52,15 +52,12 @@ FixupVec::FixupVec(FixupVec* oldvec, int newsize)
 
 
 FixupVec* FixupVec::create(int n) {
-    void* loc = PALLOC(sizeof(FixupVec) + n * sizeof(FixupEntry));
-    return new (loc) FixupVec(n);
+    return gc_new_space<FixupVec>(n * sizeof(FixupEntry), n);
 }
 
 
 FixupVec* FixupVec::create(FixupVec* oldvec, int newsize) {
-    void* loc =
-        PALLOC1(sizeof(FixupVec) + newsize * sizeof(FixupEntry), oldvec);
-    return new (loc) FixupVec(oldvec, newsize);
+    return gc_new_space<FixupVec>(newsize * sizeof(FixupEntry), oldvec, newsize);
 }
 
 
@@ -95,8 +92,7 @@ LabelTable* LabelTable::create(int size) {
     FixupVec* fv = FixupVec::create(size);
     PROTECT(fv);
     RblTable* tbl = RblTable::create();
-    void* loc = PALLOC1(sizeof(LabelTable), tbl);
-    return new (loc) LabelTable(lv, fv, tbl);
+    return gc_new<LabelTable>(lv, fv, tbl);
 }
 
 
