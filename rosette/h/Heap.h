@@ -222,12 +222,13 @@ T* gc_alloc(size_t sz, ArgTypes... args) {
 
 template <typename T, typename... ArgTypes>
 T* gc_new(ArgTypes... args) {
-    T* loc = (T*)heap->alloc(align(sizeof(T)));
+    auto sz = align(sizeof(T));
+    T* loc = (T*)heap->alloc(sz);
 
     // TODO(leaf): Figure a way to protect args and scavange.
     if (!loc) {
         ProtectedItems<ArgTypes...>(args...);
-        loc = (T*)heap->scavengeAndAlloc(align(sizeof(T)));
+        loc = (T*)heap->scavengeAndAlloc(sz);
     }
 
     return new (loc) T(args...);
@@ -235,12 +236,13 @@ T* gc_new(ArgTypes... args) {
 
 template <typename T, typename... ArgTypes>
 T* gc_new_space(const size_t extra_space, ArgTypes... args) {
-    T* loc = (T*)heap->alloc(align(sizeof(T) + extra_space));
+    auto sz = align(sizeof(T) + extra_space);
+    T* loc = (T*)heap->alloc(sz);
 
     // TODO(leaf): Figure a way to protect args and scavange.
     if (!loc) {
         ProtectedItems<ArgTypes...>(args...);
-        loc = (T*)heap->scavengeAndAlloc(align(sizeof(T)));
+        loc = (T*)heap->scavengeAndAlloc(sz);
     }
 
     return new (loc) T(args...);
