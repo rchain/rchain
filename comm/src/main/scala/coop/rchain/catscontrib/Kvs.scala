@@ -23,20 +23,20 @@ object Kvs extends KvsInstances {
     }
 
   class InMemoryKvs[F[_]: Capture, K, V] extends Kvs[F, K, V] {
-    var mem: Map[K, V] = Map.empty[K, V]
+    val m = scala.collection.concurrent.TrieMap[K, V]()
 
     def keys: F[Vector[K]] = Capture[F].capture {
-      mem.keys.toVector
+      m.keys.toVector
     }
     def get(k: K): F[Option[V]] = Capture[F].capture {
-      mem.get(k)
+      m.get(k)
     }
     def put(k: K, v: V): F[Unit] = Capture[F].capture {
-      mem = mem + (k -> v)
+      m += (k -> v)
     }
 
     def delete(k: K): F[Unit] = Capture[F].capture {
-      mem = mem - k
+      m -= k
     }
   }
 
