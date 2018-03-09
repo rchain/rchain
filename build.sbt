@@ -40,8 +40,8 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      guava,
       bouncyCastle,
-      guav,
       kalium,
       jaxb),
     fork := true,
@@ -149,7 +149,7 @@ lazy val node = project
       }
     },
   )
-  .dependsOn(comm)
+  .dependsOn(comm, crypto)
 
 lazy val rholang = project
   .settings(
