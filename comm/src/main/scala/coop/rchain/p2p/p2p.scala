@@ -85,7 +85,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       local       <- Communication[F].local
       keys        <- Encryption[F].fetchKeys
       responseErr <- handshake.response[F](local, keys)
-      result      <- responseErr.traverse(resp => Communication[F].commSend(resp.toByteSeq, sender))
+      result      <- responseErr.traverse(resp => Communication[F].commSend(resp, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
             case Left(ex) => Log[F].error(s"handleEncryptionHandshake(): $ex")
@@ -99,7 +99,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       local <- Communication[F].local
       result <- handshake
                  .response(local)
-                 .traverse(resp => Communication[F].commSend(resp.toByteSeq, sender))
+                 .traverse(resp => Communication[F].commSend(resp, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to protocol handshake request from $sender.")
             case Left(ex) => Log[F].error(s"handleProtocolHandshake(): $ex")

@@ -135,9 +135,8 @@ object Main {
           timeout: Duration = Duration(500, MILLISECONDS)): Task[CommErr[ProtocolMessage]] =
         net.roundTrip[Task](msg, remote, timeout)
       def local: Task[ProtocolNode] = net.local.pure[Task]
-      def commSend(data: Seq[Byte], peer: PeerNode): Task[CommErr[Unit]] = Task.delay {
-        net.comm.send(data, peer)
-      }
+      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
+        Task.delay(net.comm.send(msg.toByteSeq, peer))
       def addNode(node: PeerNode): Task[Unit] =
         for {
           _ <- Task.delay(net.add(node))
