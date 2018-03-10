@@ -1,6 +1,5 @@
 #!/bin/sh
-
-set -e
+set -euxo pipefail
 
 cd crypto
 git clone https://github.com/jedisct1/libsodium --branch stable
