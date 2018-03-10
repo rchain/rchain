@@ -542,20 +542,8 @@ class LMDBStoreStorageActionsTests
     store.close()
   }
 
-  override def afterAll(): Unit = {
-    //we ignore all possible IOExceptions here, since removable of temp folder is
-    //not very important
-    Files
-      .walk(LMDBStoreStorageActionsTests.dbPath)
-      .filter(x => Files.isRegularFile(x))
-      .forEach(x =>
-        Try {
-          Files.delete(x)
-      })
-    Try {
-      Files.deleteIfExists(LMDBStoreStorageActionsTests.dbPath)
-    }
-  }
+  override def afterAll(): Unit =
+    recursivelyDeletePath(LMDBStoreStorageActionsTests.dbPath)
 }
 
 object LMDBStoreStorageActionsTests {

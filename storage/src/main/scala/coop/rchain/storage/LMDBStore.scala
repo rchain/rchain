@@ -15,6 +15,7 @@ import coop.rchain.storage.LMDBStore.{fromBB, fromBL, fromBS, hashBytes, toBB, t
 import coop.rchain.storage.datamodels.{BytesList, PsKsBytes, PsKsBytesList}
 
 trait IClearableStore {
+
   /**
     *  clears database, used mostly to speedup unit-tests, and implemented by LMDBStore only
     */
