@@ -1,5 +1,7 @@
 package coop.rchain.storage
 
+import java.nio.ByteBuffer
+
 package object util {
 
   /**
@@ -33,5 +35,17 @@ package object util {
   def dropIndex[T](xs: List[T], n: Int): List[T] = {
     val (l1, l2) = xs splitAt n
     l1 ++ (l2 drop 1)
+  }
+
+  /**
+    * Converts specified byteBuffer to '-' separated string,
+    * convenient during debugging
+    */
+  private[storage] def toStr(byteBuffer: ByteBuffer): String = {
+    byteBuffer.mark()
+    val fetched = new Array[Byte](byteBuffer.remaining())
+    ignore { byteBuffer.get(fetched) }
+    byteBuffer.reset()
+    fetched.toSeq.map(x => x.toString).mkString("-")
   }
 }

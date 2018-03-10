@@ -1,15 +1,17 @@
 package coop.rchain.storage
 
-import java.nio.file.Paths
+import java.nio.file.{Files, Path}
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.storage.LMDBStoreStorageActionsTests.dbPath
 import coop.rchain.storage.test._
 import coop.rchain.storage.test.implicits._
 import coop.rchain.storage.util.{ignore => ign}
 import org.scalatest._
 
 import scala.collection.mutable
+import scala.util.Try
 
 class StorageActionsTests(createStore: () => IStore[String, Pattern, String, List[String] => Unit])
     extends FlatSpec
@@ -530,8 +532,36 @@ class InMemoryStoreStorageActionsTests
       () => InMemoryStore.create[String, Pattern, String, List[String] => Unit])
 
 class LMDBStoreStorageActionsTests
-    extends StorageActionsTests(
-      () =>
-        LMDBStore.create[String, Pattern, String, List[String] => Unit](Paths.get("D:\\!checklmdb"),
-                                                                        1024 * 1024 * 1024,
-                                                                        clear = true)) {}
+    extends StorageActionsTests(LMDBStoreStorageActionsTests.create)
+    with BeforeAndAfter
+    with BeforeAndAfterAll {
+
+  before {
+    val store = LMDBStoreStorageActionsTests.create()
+    store.asInstanceOf[IClearableStore].clear()
+    store.close()
+  }
+
+  override def afterAll(): Unit = {
+    //we ignore all possible IOExceptions here, since removable of temp folder is
+    //not very important
+    Files
+      .walk(LMDBStoreStorageActionsTests.dbPath)
+      .filter(x => Files.isRegularFile(x))
+      .forEach(x =>
+        Try {
+          Files.delete(x)
+      })
+    Try {
+      Files.deleteIfExists(LMDBStoreStorageActionsTests.dbPath)
+    }
+  }
+}
+
+object LMDBStoreStorageActionsTests {
+  private[storage] def create =
+    () =>
+      LMDBStore.create[String, Pattern, String, List[String] => Unit](dbPath, 1024 * 1024 * 1024)
+
+  private[storage] val dbPath: Path = Files.createTempDirectory("rchain-storage-test-")
+}
