@@ -40,8 +40,8 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      guava,
       bouncyCastle,
-      guav,
       kalium,
       jaxb),
     fork := true,
@@ -182,7 +182,7 @@ lazy val node = project
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
   )
-  .dependsOn(comm)
+  .dependsOn(comm, crypto)
 
 lazy val rholang = project
   .settings(

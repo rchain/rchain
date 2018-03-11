@@ -11,6 +11,7 @@ object Dependencies {
     "org.scalatest" %% "scalatest" % "3.0.1" % "test"
   )
 
+  val bitcoinj             = "org.bitcoinj"           % "bitcoinj-core"    % "0.14.6"
   val bouncyCastle         = "org.bouncycastle"       % "bcprov-jdk15on"   % "1.58"
   val kalium               = "org.abstractj.kalium"   % "kalium"           % "0.7.0"
   val argParsing           = "org.rogach"             %% "scallop"         % "3.0.3"
@@ -25,7 +26,6 @@ object Dependencies {
   val guava                = "com.google.guava"       % "guava"            % "24.0-jre"
   val hasher               = "com.roundeights"        %% "hasher"          % "1.2.0"
   val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
-  val guav                 = "com.google.guava"       % "guava"            % "16.0"
   val jaxb                 = "javax.xml.bind"         % "jaxb-api"         % "2.1"
   val scalaCheckShapeless  = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
 
