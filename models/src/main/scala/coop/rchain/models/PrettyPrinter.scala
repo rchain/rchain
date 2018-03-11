@@ -213,7 +213,7 @@ object PrettyPrinter {
   private def printNewVariables(bindCount: Int) = {
     // We arbitrarily limit the new variable printing count to MAX_NEW_VAR_COUNT
     // to prevent exploding the state of the shapeless generator
-    val MAX_NEW_VAR_COUNT = 128
+    val MAX_NEW_VAR_COUNT = 1280;
     printSeq(Range(0, List(MAX_NEW_VAR_COUNT,bindCount).min).map(x => Expr(exprInstance=GString(s"_${x}"))))
   }
 
