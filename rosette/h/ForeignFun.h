@@ -90,9 +90,10 @@ typedef long (*Incantation)(...);
 class ForeignFunction : public AbstractForeignFunction {
     STD_DECLS(ForeignFunction);
 
-   public:
+   protected:
     ForeignFunction(Ob* ob1, Tuple* tup, Ob* ob2, void* vd);
 
+   public:
     static ForeignFunction* create(Ob*, Tuple*, Ob*, void*);
     virtual Ob* typecheckActuals(Ctxt*);
     virtual convertArgReturnPair convertActual(Ctxt*, int);
@@ -107,9 +108,10 @@ class ForeignFunction : public AbstractForeignFunction {
 class ForeignFunction : public AbstractForeignFunction {
     STD_DECLS(ForeignFunction);
 
-   public:
+   protected:
     ForeignFunction(Ob* ob1, Tuple* tup, Ob* ob2, void* vd);
 
+   public:
     static ForeignFunction* create(Ob*, Tuple*, Ob*, void*);
     virtual Ob* dispatch(Ctxt*);
 };

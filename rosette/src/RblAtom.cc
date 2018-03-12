@@ -77,7 +77,10 @@ Symbol::Symbol()
     Symbol::updateCnt();
 }
 
-Symbol* Symbol::create() { return gc_new<Symbol>(); }
+Symbol* Symbol::create() {
+    void* loc = PALLOC(sizeof(Symbol));
+    return new (loc) Symbol();
+}
 
 bool Symbol::ConstantP() { return false; }
 
@@ -149,7 +152,10 @@ RblBool::RblBool()
     RblBool::updateCnt();
 }
 
-RblBool* RblBool::create() { return gc_new<RblBool>(); }
+RblBool* RblBool::create() {
+    void* loc = PALLOC(sizeof(RblBool));
+    return new (loc) RblBool();
+}
 
 const char* RblBool::asCstring() { return BOOLVAL(atom) ? "#t" : "#f"; }
 
@@ -172,7 +178,10 @@ Char::Char() : RblAtom(sizeof(Char), CLASS_META(Char), CLASS_SBO(Char)) {
     Char::updateCnt();
 }
 
-Char* Char::create() { return gc_new<Char>(); }
+Char* Char::create() {
+    void* loc = PALLOC(sizeof(Char));
+    return new (loc) Char();
+}
 
 void Char::printOn(FILE* f) {
     fputc('#', f);
@@ -198,7 +207,10 @@ Fixnum::Fixnum()
     Fixnum::updateCnt();
 }
 
-Fixnum* Fixnum::create() { return gc_new<Fixnum>(); }
+Fixnum* Fixnum::create() {
+    void* loc = PALLOC(sizeof(Fixnum));
+    return new (loc) Fixnum();
+}
 
 char Fixnum::format[FixnumFormatSize] = "%d";
 
@@ -239,7 +251,10 @@ Niv::Niv() : RblAtom(sizeof(Niv), CLASS_META(Niv), CLASS_SBO(Niv)) {
     Niv::updateCnt();
 }
 
-Niv* Niv::create() { return gc_new<Niv>(); }
+Niv* Niv::create() {
+    void* loc = PALLOC(sizeof(Niv));
+    return new (loc) Niv();
+}
 
 const char* Niv::asCstring() { return "#niv"; }
 
@@ -256,7 +271,10 @@ Sysval::Sysval()
     Sysval::updateCnt();
 }
 
-Sysval* Sysval::create() { return gc_new<Sysval>(); }
+Sysval* Sysval::create() {
+    void* loc = PALLOC(sizeof(Sysval));
+    return new (loc) Sysval();
+}
 
 const char* Sysval::asCstring() {
     switch (ESCVAL(atom)) {
@@ -398,11 +416,11 @@ MODULE_INIT(RblAtom) {
 
 
 DEF("ch<", charLt, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -411,11 +429,11 @@ DEF("ch<", charLt, 2, 2) {
 
 
 DEF("ch<=", charLe, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -423,11 +441,11 @@ DEF("ch<=", charLe, 2, 2) {
 }
 
 DEF("ch=", charEq, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -435,11 +453,11 @@ DEF("ch=", charEq, 2, 2) {
 }
 
 DEF("ch!=", charNe, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -448,11 +466,11 @@ DEF("ch!=", charNe, 2, 2) {
 
 
 DEF("ch>=", charGe, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -461,11 +479,11 @@ DEF("ch>=", charGe, 2, 2) {
 
 
 DEF("ch>", charGt, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -474,7 +492,7 @@ DEF("ch>", charGt, 2, 2) {
 
 
 DEF("ch->fx", charToFixnum, 1, 1) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 

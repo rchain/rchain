@@ -60,7 +60,7 @@ static const unsigned EscTagMask = ((unsigned)~0) >> (WordSize - EscTagSize);
 
 #define ESCAPED(n) (((n) << TagSize) + OTesc)
 
-enum ObTag : int {
+enum ObTag {
     OTptr = 0,
     OTsym = 1,
     OTfixnum = 2,
@@ -333,20 +333,18 @@ void set_field(T* x, const int i, const int wid, const int val) {
 
 /** NB(leaf): End of Bits.h **/
 
-#define SYMPTR(ob) ((char*)((unsigned)(ob)-OTsym))
-
+#define PTR(ob) ((pOb)(ob))
+#define NPTR(ob) ((pOb)(ob))
+#define SYMPTR(ob) ((char*)((unsigned)PTR(ob) - OTsym))
 #define BOOLVAL(ob) ESCVAL(ob)
 #define CHARVAL(ob) ESCVAL(ob)
 #define FIXVAL(ob) TAGVAL(ob)
 #define SYSVAL(ob) ((SysCode)ESCVAL(ob))
 
-bool IS_PTR(pOb x);
-bool IS_SYM(pOb x);
-bool IS_FIXNUM(pOb x);
-bool IS_LOCATION(pOb x);
-bool IS_SYSVAL(pOb x);
-bool IS_CHAR(pOb x);
-
+#define IS_PTR(ob) (TAG(ob) == OTptr)
+#define IS_SYM(ob) (TAG(ob) == OTsym)
+#define IS_FIXNUM(ob) (TAG(ob) == OTfixnum)
+#define IS(t, ob) (t < OTesc ? (TAG(ob) == t) : (ESCTAG(ob) == t))
 
 extern pOb decodeAtom(pOb);
 int TAG(pOb x);
@@ -863,7 +861,7 @@ static const int BUILTIN_STDMETA_SLOTS = 3;
 class StdMeta : public Actor {
     STD_DECLS(StdMeta);
 
-   public:
+   protected:
     StdMeta();
     StdMeta(pExt);
     StdMeta(int sz, pOb meta, pOb parent, pOb mbox, pExt ext)
@@ -871,6 +869,7 @@ class StdMeta : public Actor {
 
     StdMeta(InPlace_Constructor* ipc) : Actor(ipc) {}
 
+   public:
     static StdMeta* create();
     static StdMeta* create(pTuple, pOb = FIXNUM(0), pOb = RBLTRUE);
 

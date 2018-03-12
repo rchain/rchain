@@ -11,6 +11,7 @@ script:
 sudo: required
 install:
   - ./scripts/install_secp.sh
+  - ./scripts/install_sodium.sh
   - ./scripts/install.sh
 cache:
   directories:

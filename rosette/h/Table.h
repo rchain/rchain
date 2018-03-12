@@ -53,6 +53,9 @@ class RblTable : public BinaryOb {
     bool gcSensitiveKeys;
     bool registered;
 
+    RblTable(int, Tuple*);
+    RblTable(int, Tuple*, RblTableHitFn);
+
     Entry& entry(int);
 
     int hash(pOb);
@@ -77,9 +80,6 @@ class RblTable : public BinaryOb {
     friend class TblExtension;
 
    public:
-    RblTable(int, Tuple*);
-    RblTable(int, Tuple*, RblTableHitFn);
-
     Tuple* tbl;
     RblTableHitFn hitFn;
 

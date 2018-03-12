@@ -26,11 +26,11 @@ class IndexedMeta : public StdMeta {
     STD_DECLS(IndexedMeta);
 
    protected:
+    IndexedMeta(StdMeta*, int);
+
     friend class StdMeta;
 
    public:
-    IndexedMeta(StdMeta*, int);
-
     virtual Tuple* keys(Ob*);
     virtual Location keyLoc(Ob*, pOb = ABSENT);
     virtual Tuple* locContour(Ob*);

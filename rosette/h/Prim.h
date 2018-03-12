@@ -41,6 +41,8 @@ class Prim : public BinaryOb {
     static int primcount;
     static Prim* inlineTbl[MaxPrims];
 
+    Prim(char*, PRIMFN*, int, int);
+
     virtual int traversePtrs(PSOb__PSOb);
     virtual int traversePtrs(SI__PSOb);
     virtual void traversePtrs(V__PSOb);
@@ -48,8 +50,6 @@ class Prim : public BinaryOb {
     friend class BuiltinPrim;
 
    public:
-    Prim(char*, PRIMFN*, int, int);
-
     Ob* id;
     PRIMFN* fn;
     ArgNum minargs;

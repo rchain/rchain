@@ -89,7 +89,9 @@ ByteVec* ByteVec::create(int n) {
 
 
 ByteVec* ByteVec::create(ByteVec* old, int newsize) {
-    return gc_new_space<ByteVec>(newsize * sizeof(uint8_t), old, newsize);
+    void* loc =
+        PALLOC1(sizeof(ByteVec) + align(newsize * sizeof(uint8_t)), old);
+    return new (loc) ByteVec(old, newsize);
 }
 
 
@@ -172,12 +174,16 @@ Word16Vec* Word16Vec::create(int n) {
 
 
 Word16Vec* Word16Vec::create(Ob* meta, Ob* parent, int n) {
-    return gc_new_space<Word16Vec>(n * sizeof(uint16_t), meta, parent, n);
+    void* loc =
+        PALLOC2(sizeof(Word16Vec) + align(n * sizeof(uint16_t)), meta, parent);
+    return new (loc) Word16Vec(meta, parent, n);
 }
 
 
 Word16Vec* Word16Vec::create(Word16Vec* old, int newsize) {
-    return gc_new_space<Word16Vec>(newsize * sizeof(uint16_t), old, newsize);
+    void* loc =
+        PALLOC1(sizeof(Word16Vec) + align(newsize * sizeof(uint16_t)), old);
+    return new (loc) Word16Vec(old, newsize);
 }
 
 

@@ -30,9 +30,10 @@ static const int BUILTIN_MI_SLOTS = 1;
 class MIActor : public Actor {
     STD_DECLS(MIActor);
 
-   public:
+   protected:
     MIActor(pExt);
 
+   public:
     static MIActor* create(Tuple*);
     Tuple* classPrecedenceList() {
         return (Tuple*)extension->slot(MI_CPL_SLOT);
@@ -51,9 +52,10 @@ static const int BUILTIN_ProductType_SLOTS = 2;
 class ProductType : public Actor {
     STD_DECLS(ProductType);
 
-   public:
+   protected:
     ProductType(pExt);
 
+   public:
     static ProductType* create(Tuple*, pOb);
     virtual bool isCoveredByp(pOb);
     virtual pOb typeLub(pOb);
@@ -86,9 +88,10 @@ static const int BUILTIN_SumType_SLOTS = 1;
 class SumType : public Actor {
     STD_DECLS(SumType);
 
-   public:
+   protected:
     SumType(pExt);
 
+   public:
     static SumType* create(Tuple*);
     virtual bool compositeCoversp(pOb);
     virtual bool isCoveredByp(pOb);
@@ -109,9 +112,10 @@ static const int BUILTIN_MultiMethod_SLOTS = 1;
 class MultiMethod : public Actor {
     STD_DECLS(MultiMethod);
 
-   public:
+   protected:
     MultiMethod(pExt);
 
+   public:
     static MultiMethod* create();
     pOb matchAndDispatch(pCtxt);
 

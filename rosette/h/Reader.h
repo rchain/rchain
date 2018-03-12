@@ -78,6 +78,8 @@ class Reader : public BinaryOb {
     FrameStk fstk;
     ObStk ostk;
 
+    Reader(ReadTable*, FILE*);
+
     Ob* resumeExpr();
     Ob* resumeCh();
     Ob* suspendReader();
@@ -86,8 +88,6 @@ class Reader : public BinaryOb {
     ReaderMode acceptEscChar(int, int);
 
    public:
-    Reader(ReadTable*, FILE*);
-
     virtual ~Reader();
 
     static Reader* create(FILE*);
