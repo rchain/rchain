@@ -53,8 +53,7 @@ Queue::Queue(int sz, Ob* meta, Ob* parent, Tuple* elems)
 
 Queue* Queue::create() {
     Tuple* elems = Tuple::create(DefaultQueueSize, NIV);
-    void* loc = PALLOC1(sizeof(Queue), elems);
-    return new (loc) Queue(elems);
+    return gc_new<Queue>(elems);
 }
 
 
@@ -232,8 +231,7 @@ MboxQueue::MboxQueue(Tuple* elems)
 
 MboxQueue* MboxQueue::create() {
     Tuple* elems = Tuple::create(DefaultQueueSize, NIV);
-    void* loc = PALLOC1(sizeof(MboxQueue), elems);
-    return new (loc) MboxQueue(elems);
+    return gc_new<MboxQueue>(elems);
 }
 
 

@@ -36,9 +36,9 @@ class CodeBuf : public Ob {
     void growCodevec(int = DefaultCodeVecSize);
     void deposit(Instr);
 
+   public:
     CodeBuf();
 
-   public:
     CodeVec* codevec;
     Ob* pc;
 
@@ -67,10 +67,9 @@ class CodeBuf : public Ob {
 class CodeVec : public Word16Vec {
     STD_DECLS(CodeVec);
 
-   protected:
+   public:
     CodeVec(int);
 
-   public:
     static CodeVec* create(int);
 
     Instr* dumpInstr(Instr*, char*, Code*);
@@ -89,10 +88,9 @@ class CodeVec : public Word16Vec {
 class Code : public Ob {
     STD_DECLS(Code);
 
-   protected:
+   public:
     Code(CodeVec*, Tuple*);
 
-   public:
     CodeVec* codevec;
     Tuple* litvec;
 

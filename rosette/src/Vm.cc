@@ -809,7 +809,7 @@ nextop:
             goto doNextThread;
         }
 
-        if (result != SUSPENDED && IS(OTsysval, result)) {
+        if (result != SUSPENDED && IS_SYSVAL(result)) {
             /*
              * SUSPENDED is the usual case, and it requires no action.
              */
@@ -899,7 +899,7 @@ nextop:
             goto doNextThread;
         }
 
-        if (IS(OTsysval, result)) {
+        if (IS_SYSVAL(result)) {
             handleException(result, instr, loc);
             goto doNextThread;
         }
@@ -929,7 +929,7 @@ nextop:
                                       : prim->dispatchHelper(ctxt));
         if (result == DEADTHREAD)
             goto doNextThread;
-        if (IS(OTsysval, result)) {
+        if (IS_SYSVAL(result)) {
             handleException(result, instr, ArgReg(argno));
             goto doNextThread;
         }
@@ -960,7 +960,7 @@ nextop:
                                       : prim->dispatchHelper(ctxt));
         if (result == DEADTHREAD)
             goto doNextThread;
-        if (IS(OTsysval, result)) {
+        if (IS_SYSVAL(result)) {
             handleException(result, instr, CtxtReg((CtxtRegName)regno));
             goto doNextThread;
         }
@@ -988,7 +988,7 @@ nextop:
                                       : prim->dispatchHelper(ctxt));
         if (result == DEADTHREAD)
             goto doNextThread;
-        if (IS(OTsysval, result)) {
+        if (IS_SYSVAL(result)) {
             handleException(result, instr, LocLimbo);
             goto doNextThread;
         }

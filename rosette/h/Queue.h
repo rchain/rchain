@@ -26,11 +26,10 @@
 class Queue : public Ob {
     STD_DECLS(Queue);
 
-   protected:
+   public:
     Queue(Tuple*);
     Queue(int, Ob*, Ob*, Tuple*);
 
-   public:
     Ob* qHead;
     Ob* qTail;
     Ob* nElems;
@@ -60,10 +59,9 @@ class Queue : public Ob {
 class MboxQueue : public Queue {
     STD_DECLS(MboxQueue);
 
-   protected:
+   public:
     MboxQueue(Tuple*);
 
-   public:
     static MboxQueue* create();
     virtual Ob* maybeDequeue(Ob*);
 };

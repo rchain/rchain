@@ -25,6 +25,7 @@
 
 #include "Ob.h"
 
+
 class RootSet {
    public:
     virtual void preScavenge();
@@ -178,7 +179,9 @@ class ProtectedItem {
     friend void Init_Heap();
 
    public:
-    ProtectedItem(void* v) : next(root), item(v) { root = this; }
+    ProtectedItem(void* v) : next(root), item(v) {
+        root = this;
+    }
 
     ~ProtectedItem() { root = next; }
 };
@@ -190,14 +193,102 @@ class ProtectedItem {
     PROTECT(__this__)
 #define SELF __this__
 
+template <typename Type, typename... Types>
+struct ProtectedItems {
+    ProtectedItem p_;
+    ProtectedItems<Types...> rest_;
+    ProtectedItems(Type arg, Types... args) : p_((void*)&arg), rest_(args...) {}
+};
+
+template <typename Type>
+struct ProtectedItems<Type> {
+    ProtectedItem p_;
+    ProtectedItems(Type arg) : p_((void*)&arg) {}
+};
 
 /*
- * The PALLOC macros are used to conditionally protect local variables
- * while allocating a chunk of heap.  They take the addresses of the
- * variables to be protected, but don't actually protect them unless a
- * scavenge is actually going to occur.  These are only used within the
- * various create() routines.
+ * Align pads a size request to the next longword boundary, which is
+ * necessary for compatibility with the tagging scheme that uses the low
+ * two bits of a word for tag info (00 for a pointer).
  */
+
+static const int alignmentmask = 3;
+
+int align(int size);
+
+template <typename T>
+T* gc_alloc(size_t sz) {
+    auto p = (T*)heap->alloc(align(sz));
+    if (!p) {
+        p = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return p;
+}
+
+
+template <typename T, typename... ArgTypes>
+T* gc_alloc(size_t sz, ArgTypes... args) {
+    auto p = (T*)heap->alloc(align(sz));
+    if (!p) {
+        ProtectedItems<ArgTypes...>(args...);
+        return (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return p;
+}
+
+template <typename T>
+T* gc_new() {
+    auto sz = align(sizeof(T));
+    T* loc = (T*)heap->alloc(sz);
+
+    if (!loc) {
+        loc = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return new (loc) T();
+}
+
+template <typename T, typename... ArgTypes>
+T* gc_new(ArgTypes... args) {
+    auto sz = align(sizeof(T));
+    T* loc = (T*)heap->alloc(sz);
+
+    // TODO(leaf): Figure a way to protect args and scavange.
+    if (!loc) {
+        ProtectedItems<ArgTypes...>(args...);
+        loc = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return new (loc) T(args...);
+}
+
+template <typename T>
+T* gc_new_space(const size_t extra_space) {
+    auto sz = align(sizeof(T) + extra_space);
+    T* loc = (T*)heap->alloc(sz);
+
+    if (!loc) {
+        loc = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return new (loc) T();
+}
+
+template <typename T, typename... ArgTypes>
+T* gc_new_space(const size_t extra_space, ArgTypes... args) {
+    auto sz = align(sizeof(T) + extra_space);
+    T* loc = (T*)heap->alloc(sz);
+
+    // TODO(leaf): Figure a way to protect args and scavange.
+    if (!loc) {
+        ProtectedItems<ArgTypes...>(args...);
+        loc = (T*)heap->scavengeAndAlloc(sz);
+    }
+
+    return new (loc) T(args...);
+}
 
 #define PALLOC(n) palloc(n)
 #define PALLOC1(n, o0) palloc1((n), &(o0))
@@ -217,18 +308,6 @@ extern void* palloc3(unsigned, void*, void*, void*);
 extern void* palloc4(unsigned, void*, void*, void*, void*);
 extern void* palloc5(unsigned, void*, void*, void*, void*, void*);
 extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
-
-
-/*
- * Align pads a size request to the next longword boundary, which is
- * necessary for compatibility with the tagging scheme that uses the low
- * two bits of a word for tag info (00 for a pointer).
- */
-
-static const int alignmentmask = 3;
-
-int align(int size);
-
 
 #define IS_OLD(p) (!heap->is_new(p))
 #define IS_NEW(p) (heap->is_new(p))

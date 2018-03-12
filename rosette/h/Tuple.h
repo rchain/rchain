@@ -26,7 +26,7 @@
 class Tuple : public Ob {
     STD_DECLS(Tuple);
 
-   protected:
+   public:
     Tuple(int, Ob*);
     Tuple(Ob**, int);
     Tuple(int, Tuple*, int, int, Ob* = INVALID);
@@ -35,7 +35,6 @@ class Tuple : public Ob {
     Tuple(Tuple*, int, Tuple*);
     Tuple(Tuple*);
 
-   public:
     static Tuple* create();
     static Tuple* create(int, Ob*);
     static Tuple* create(Ob**, int);

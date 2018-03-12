@@ -1,16 +1,12 @@
 package coop.rchain.crypto.signatures
 
-import org.bitcoin._
+// import org.bitcoin._
 
 object Secp256k1 {
 
   /**
   * Verifies the given secp256k1 signature in native code.
-  * Calling when enabled == false is undefined (probably library not loaded)
   *
-  * @param data The data which was signed, must be exactly 32 bytes
-  * @param signature The signature
-  * @param pub The public key which did the signing
   * {{{
   * >>> import coop.rchain.crypto.hash._
   * >>> import coop.rchain.crypto.codec._
@@ -20,43 +16,82 @@ object Secp256k1 {
   * >>> Secp256k1.verify(data, sig, pub)
   * true
   * }}}
+  *
+  * Input values
+  * @param data The data which was signed, must be exactly 32 bytes
+  * @param signature The signature
+  * @param pub The public key which did the signing
+  *
+  * Return value
+  * boolean value of verification
+  *
   */
-  def verify(
-    data: Array[Byte], signature: Array[Byte], pub: Array[Byte]
-    ): Boolean =
-    NativeSecp256k1.verify(data,signature,pub)
+  // def verify(
+    // data: Array[Byte], signature: Array[Byte], pub: Array[Byte]
+    // ): Boolean =
+    // NativeSecp256k1.verify(data,signature,pub)
 
   /**
   * libsecp256k1 Create an ECDSA signature.
   *
+  * {{{
+  * >>> import coop.rchain.crypto.hash._
+  * >>> import coop.rchain.crypto.codec._
+  * >>> val data = Sha256.hash("testing".getBytes)
+  * >>> val sig = Base16.decode("3044022079BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F817980220294F14E883B3F525B5367756C2A11EF6CF84B730B36C17CB0C56F0AAB2C98589")
+  * >>> val sec = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+  * >>> Base16.encode(Secp256k1.sign(data, sec)).toUpperCase()
+  * 30440220182A108E1448DC8F1FB467D06A0F3BB8EA0533584CB954EF8DA112F1D60E39A202201C66F36DA211C087F3AF88B50EDF4F9BDAA6CF5FD6817E74DCA34DB12390C6E9
+  * }}}
+  *
+  * Input values
   * @param data Message hash, 32 bytes
   * @param sec Secret key, 32 bytes
   *
-  * Return values
-  * @param sig byte array of signature
+  * Return value
+  * byte array of signature
+  *
   **/
-  def sign(
-    data: Array[Byte], sec: Array[Byte]
-    ): Array[Byte] =
-    NativeSecp256k1.sign(data,sec)
+  // def sign(
+    // data: Array[Byte], sec: Array[Byte]
+    // ): Array[Byte] =
+    // NativeSecp256k1.sign(data,sec)
 
   /**
   * libsecp256k1 Seckey Verify - returns true if valid, false if invalid
   *
+  * {{{
+  * >>> import coop.rchain.crypto.codec._
+  * >>> val sec = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+  * >>> Secp256k1.secKeyVerify(sec)
+  * true
+  * }}}
+  *
+  * Input value
   * @param seckey ECDSA Secret key, 32 bytes
+  * 
+  * Return value
+  * Boolean of secret key verification
   */
-  def secKeyVerify(seckey: Array[Byte]): Boolean =
-    NativeSecp256k1.secKeyVerify(seckey)
+  // def secKeyVerify(seckey: Array[Byte]): Boolean =
+    // NativeSecp256k1.secKeyVerify(seckey)
 
   /**
   * libsecp256k1 Compute Pubkey - computes public key from secret key
+  *
+  * {{{
+  * >>> import coop.rchain.crypto.codec._
+  * >>> val sec = Base16.decode("67E56582298859DDAE725F972992A07C6C4FB9F62A8FFF58CE3CA926A1063530")
+  * >>> Base16.encode(Secp256k1.toPublic(sec)).toUpperCase()
+  * 04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6
+  * }}}
   *
   * @param seckey ECDSA Secret key, 32 bytes
   *
   * Return values
   * @param pubkey ECDSA Public key, 33 or 65 bytes
   */
-  def toPublic(seckey: Array[Byte]): Array[Byte] =
-    NativeSecp256k1.computePubkey(seckey)
+  // def toPublic(seckey: Array[Byte]): Array[Byte] =
+    // NativeSecp256k1.computePubkey(seckey)
 
 }
