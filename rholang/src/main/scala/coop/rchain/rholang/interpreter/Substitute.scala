@@ -94,7 +94,6 @@ object Substitute {
   def substitute(term: New)(implicit env: Env[Par]): New =
     New(term.bindCount,
         substitute(term.p.get),
-        term.freeCount,
         term.locallyFree.from(env.level).map(x => x - env.level))
 
   def substitute(term: Match)(implicit env: Env[Par]): Match =
@@ -123,47 +122,30 @@ object Substitute {
       case ENeqBody(ENeq(par1, par2))     => ENeq(substitute(par1.get), substitute(par2.get))
       case EAndBody(EAnd(par1, par2))     => EAnd(substitute(par1.get), substitute(par2.get))
       case EOrBody(EOr(par1, par2))       => EOr(substitute(par1.get), substitute(par2.get))
-      case EListBody(EList(ps)) =>
+      case EListBody(EList(ps, freeCount, locallyFree)) =>
         val _ps = for { par <- ps } yield {
           substitute(par.get)
         }
-        val fc = (0 /: _ps) { (i, par) =>
-          i + par.freeCount
-        }
-        Expr(exprInstance = EListBody(EList(_ps)),
-             freeCount = fc,
-             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
-      case ETupleBody(ETuple(ps)) =>
+        val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+        Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree)))
+      case ETupleBody(ETuple(ps, freeCount, locallyFree)) =>
         val _ps = for { par <- ps } yield {
           substitute(par.get)
         }
-        val fc = (0 /: _ps) { (i, par) =>
-          i + par.freeCount
-        }
-        Expr(exprInstance = ETupleBody(ETuple(_ps)),
-             freeCount = fc,
-             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
-      case ESetBody(ESet(ps)) =>
+        val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+        Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree)))
+      case ESetBody(ESet(ps, freeCount, locallyFree)) =>
         val _ps = for { par <- ps } yield {
           substitute(par.get)
         }
-        val fc = (0 /: _ps) { (i, par) =>
-          i + par.freeCount
-        }
-        Expr(exprInstance = ESetBody(ESet(_ps)),
-             freeCount = fc,
-             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
-      case EMapBody(EMap(kvs)) =>
+        val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+        Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree)))
+      case EMapBody(EMap(kvs, freeCount, locallyFree)) =>
         val _ps = for { KeyValuePair(p1, p2) <- kvs } yield {
           KeyValuePair(substitute(p1.get), substitute(p2.get))
         }
-        val fc = (0 /: _ps) {
-          case ((i, KeyValuePair(p1, p2))) =>
-            i + p1.get.freeCount + p2.get.freeCount
-        }
-        Expr(exprInstance = EMapBody(EMap(_ps)),
-             freeCount = fc,
-             locallyFree = exp.locallyFree.from(env.level).map(x => x - env.level))
+        val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+        Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree)))
       case g @ _ => exp
     }
 
@@ -234,10 +216,7 @@ object Substitute {
     Eval(rename(term.channel.get, j))
 
   def rename(term: New, j: Int): New =
-    New(term.bindCount,
-        rename(term.p.get, j),
-        term.p.get.freeCount,
-        term.locallyFree.map(x => x + j))
+    New(term.bindCount, rename(term.p.get, j), term.locallyFree.map(x => x + j))
 
   def rename(term: Match, j: Int): Match =
     Match(
@@ -266,26 +245,22 @@ object Substitute {
       case ENeqBody(ENeq(p1, p2))     => ENeq(rename(p1.get, j), rename(p2.get, j))
       case EAndBody(EAnd(p1, p2))     => EAnd(rename(p1.get, j), rename(p2.get, j))
       case EOrBody(EOr(p1, p2))       => EOr(rename(p1.get, j), rename(p2.get, j))
-      case EListBody(EList(xs)) =>
-        Expr(exprInstance = EList(for { par <- xs } yield {
+      case EListBody(EList(xs, freeCount, locallyFree)) =>
+        EList(for { par <- xs } yield {
           rename(par, j)
-        }), freeCount = term.freeCount, locallyFree = term.locallyFree.map(x => x + j))
-      case ETupleBody(ETuple(xs)) =>
-        Expr(exprInstance = ETuple(for { par <- xs } yield {
+        }, freeCount, locallyFree.map(x => x + j))
+      case ETupleBody(ETuple(xs, freeCount, locallyFree)) =>
+        ETuple(for { par <- xs } yield {
           rename(par, j)
-        }), freeCount = term.freeCount, locallyFree = term.locallyFree.map(x => x + j))
-      case ESetBody(ESet(xs)) =>
-        Expr(exprInstance = ESet(for { par <- xs } yield {
+        }, freeCount, locallyFree.map(x => x + j))
+      case ESetBody(ESet(xs, freeCount, locallyFree)) =>
+        ESet(for { par <- xs } yield {
           rename(par, j)
-        }), freeCount = term.freeCount, locallyFree = term.locallyFree.map(x => x + j))
-      case EMapBody(EMap(xs)) =>
-        Expr(
-          exprInstance = EMap(for { KeyValuePair(par0, par1) <- xs } yield {
-            KeyValuePair(rename(par0.get, j), rename(par1.get, j))
-          }),
-          freeCount = term.freeCount,
-          locallyFree = term.locallyFree.map(x => x + j)
-        )
+        }, freeCount, locallyFree.map(x => x + j))
+      case EMapBody(EMap(xs, freeCount, locallyFree)) =>
+        EMap(for { KeyValuePair(par0, par1) <- xs } yield {
+          KeyValuePair(rename(par0.get, j), rename(par1.get, j))
+        }, freeCount, locallyFree.map(x => x + j))
       case g @ _ => term
     }
 }

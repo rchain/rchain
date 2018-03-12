@@ -35,7 +35,7 @@ object BitSetBytesMapper {
       val byteBuffer = ByteBuffer.wrap(byteArray).order(ByteOrder.LITTLE_ENDIAN)
       val longBuffer = byteBuffer.asLongBuffer
       // Hack to force long buffer to dump array. See https://stackoverflow.com/a/19003601/2750819
-      var longs = Array.fill[Long](longBuffer.capacity)(0)
+      val longs = Array.fill[Long](longBuffer.capacity)(0)
       longBuffer.get(longs)
       BitSet.fromBitMask(longs)
     }
