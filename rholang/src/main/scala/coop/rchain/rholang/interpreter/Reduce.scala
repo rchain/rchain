@@ -102,7 +102,20 @@ object Reduce {
         * @param env An environment to add pattern variable bindings
         * @return An updated environment
         */
-      def _match(channels: Seq[Channel])(pars: Seq[Par])(env: Env[Par]): Task[Env[Par]] = ???
+      def _match(channels: Seq[Channel])(pars: Seq[Par])(env: Env[Par]): Task[Env[Par]] =
+          Task now {
+            env.put(
+              (for {(chan, par) <- channels.zip(pars)} yield {
+                chan.channelInstance match {
+                  case Quote(_) => par
+                  case ChanVar(_var) =>
+                    _var.varInstance match {
+                      case FreeVar(level) => par
+                      case _ => throw new IllegalStateException("Reassignment to variable")
+                    }
+                }
+              }):_*)
+          }
 
       /**
         * Variable "evaluation" is an environment lookup, but
@@ -148,6 +161,130 @@ object Reduce {
           case ChanVar(varue) =>
             for { par <- eval(varue)(env) } yield Quote(par)
         }
+
+      /** Algorithm as follows:
+        *
+        * 1. Fully substitute the send statement in
+        *    the given environment
+        * 2. Retrieve "value" (binding) of the subject channel
+        * 3. Produce on the channel value:
+        *     - If a continuation exists at the channel,
+        *       match sender pars against abstraction patterns.
+        *       Pattern bindings are added to the sender environment.
+        *     - If a continuation does not exist at the channel,
+        *       return unit.
+        * 4. Merge the abstraction environment with the updated
+        *    sender environment.
+        * 5. Interpreter the body of the abstraction in the
+        *    new environment.
+        * @param send An output process
+        * @param env0 An execution context
+        * @return
+        */
+      def eval(send: Send)(env0: Env[Par]): Task[Unit] = {
+
+        /**
+          * Because we don't allow unsubstituted processes
+          * in the environment, the substitution occurs in
+          * evaluation of the send. If we did, we could delegate
+          * it to the produce function.
+          */
+        val _send = substitute(send)(env0)
+
+        for {
+
+          quote <- eval(_send.chan.get)(env0)
+
+           optAbs <- produce(quote)(
+             Concretion(_send.data,
+               _send.persistent,
+               env0)
+           )(env0)
+
+           _ <- optAbs match {
+
+            case Some(Abstraction(channels,par,persistent,env1)) =>
+
+              for {
+
+                /**
+                  * Notice that the environment of the receiving process is
+                  * updated by the match function.
+                  */
+                env2 <- _match(channels)(_send.data)(env1)
+
+                /**
+                  * Renaming is such that the bindings of the receiving
+                  * process env is at a lower level than bindings of
+                  * the sending process env.
+                  */
+                _ <- eval(par)(env2 merge env0)
+
+              } yield ()
+
+            case None => Task now {()}
+          }
+        } yield ()
+      }
+
+      /** Implementation of "join". Will have to
+        * use a combination of "wander", "restartUntil",
+        * and callbacks to ensure that the continuation is only
+        * executed once. That is, if an abstraction is placed in
+        * a channel for each bind, the same continuation will execute
+        * once for each bind.
+        *
+        * @param recieve
+        * @param env
+        * @return
+        */
+
+      def evalPar(recieve: Receive)(env: Env[Par]): Task[Unit] = ???
+
+
+      /** Work in progress:
+        *
+        * Sequentially evaluates a list of
+        * bindings and executes the continuation.
+        *
+        * @param recieve An input statement
+        * @param env An environment marking execution context
+        * @return Unit
+        */
+
+      def evalSeq(recieve: Receive)(env: Env[Par]): Task[Unit] =
+
+        // TODO: Add base case - where there is only one binding left
+
+        for {
+
+          /* For any given binding */
+          bind @ ReceiveBind(patterns, Some(chan)) <- recieve.binds
+
+          envxs <- for {
+
+                    /* Fully substitute and evaluate the channel */
+                    quote <- eval(substitute(chan)(env))(env)
+
+                    abs = Abstraction(
+                      patterns,
+                      Receive(
+                        recieve.binds diff List(bind),
+                        recieve.body,
+                        recieve.persistent,
+                        recieve.bindCount - 1,
+                        recieve.freeCount - patterns.map(_.freeCount).sum,
+                        ???
+                      ),
+                      recieve.persistent,
+                      env
+                    )
+
+                    Some(Concretion(pars, persistent, env)) <- consume(quote)(abs)(env)
+
+                  } yield { (patterns, pars, env) }
+
+        } yield envxs
 
       /**
         * Eval is well-defined on channel variables provided
@@ -206,7 +343,33 @@ object Reduce {
         * @param env
         * @return
         */
-      def eval(par: Par)(env: Env[Par]): Task[Unit] = ???
+      def eval(par: Par)(env: Env[Par]): Task[Unit] =
+        Task.wanderUnordered(
+          List(
+            Task.wanderUnordered(par.sends) { send =>
+              eval(send)(env)
+            },
+            Task.wanderUnordered(par.receives) { recv =>
+              eval(recv)(env)
+            },
+            Task.wanderUnordered(par.news) { neu =>
+              eval(neu)(env)
+            },
+            Task.wanderUnordered(par.evals) { deref =>
+              eval(deref)(env)
+            },
+            Task.wanderUnordered(par.matches) { mat =>
+              eval(mat)(env)
+            },
+            Task.wanderUnordered(par.exprs) { expr =>
+              eval(expr)(env)
+            }
+          )
+        ) { xs =>
+          xs
+        } map { xxs =>
+          ()
+        }
 
       def debug(msg: String): Unit = {
         val now = java.time.format.DateTimeFormatter.ISO_INSTANT
