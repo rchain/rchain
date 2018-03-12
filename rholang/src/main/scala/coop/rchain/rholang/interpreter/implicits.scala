@@ -5,7 +5,7 @@ import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 
 import scala.collection.immutable.BitSet
@@ -291,12 +291,14 @@ object implicits {
       v.varInstance match {
         case BoundVar(_) => 0
         case FreeVar(_)  => 1
+        case Wildcard(_) => 1
       }
 
     def locallyFree(v: Var) =
       v.varInstance match {
         case BoundVar(level) => BitSet(level)
         case FreeVar(_)      => BitSet()
+        case Wildcard(_)     => BitSet()
       }
   }
 }

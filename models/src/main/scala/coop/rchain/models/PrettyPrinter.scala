@@ -6,7 +6,7 @@ import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 
 object PrettyPrinter {
   def prettyPrint(e: Expr): Unit =
@@ -108,9 +108,11 @@ object PrettyPrinter {
   def prettyPrint(v: Var): Unit =
     v.varInstance match {
       case FreeVar(level) =>
-        print(s"_${level}")
+        print(s"z${level}")
       case BoundVar(level) =>
-        print(s"_${level}")
+        print(s"x${level}")
+      case Wildcard(_) =>
+        print("_")
       // TODO: Figure out if we can prevent ScalaPB from generating
       case VarInstance.Empty =>
         print("@Nil")
