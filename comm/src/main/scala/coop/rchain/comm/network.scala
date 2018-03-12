@@ -127,8 +127,12 @@ final case class UnicastNetwork(peer: PeerNode,
 
       // Update sender's last-seen time, adding it if there are no higher-level protocols.
       for {
+        ti <- Time[F].nanoTime
         _ <- Capture[F].capture(
               table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next == None))
+        tf <- Time[F].nanoTime
+        // Capture µs timing for roundtrips
+        _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
         _ <- msg match {
               case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
               case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
@@ -171,11 +175,12 @@ final case class UnicastNetwork(peer: PeerNode,
     handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
   }
 
-  private def handlePing[F[_]: Functor: Capture: Log](sender: PeerNode,
-                                                      ping: PingMessage): F[Unit] =
+  private def handlePing[F[_]: Functor: Capture: Log: Metrics](sender: PeerNode,
+                                                               ping: PingMessage): F[Unit] =
     ping
       .response(local)
       .map { pong =>
+        Metrics[F].incrementCounter("ping-recv-count")
         Capture[F].capture(comm.send(pong.toByteSeq, sender)).void
       }
       .getOrElse(Log[F].error(s"Response was not available for ping: $ping"))
@@ -184,22 +189,27 @@ final case class UnicastNetwork(peer: PeerNode,
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup[F[_]: Monad: Capture: Log](sender: PeerNode,
-                                                      lookup: LookupMessage): F[Unit] =
+  private def handleLookup[F[_]: Monad: Capture: Log: Metrics](sender: PeerNode,
+                                                               lookup: LookupMessage): F[Unit] =
     (for {
       id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
-    } yield Capture[F].capture(comm.send(resp.toByteSeq, sender)).void)
-      .getOrElse(Log[F].error(s"lookupId or resp not available for lookup: $lookup"))
+    } yield {
+      Metrics[F].incrementCounter("lookup-recv-count")
+      Capture[F].capture(comm.send(resp.toByteSeq, sender)).void
+    }).getOrElse(Log[F].error(s"lookupId or resp not available for lookup: $lookup"))
 
   /**
     * Remove sending peer from table.
     */
-  private def handleDisconnect[F[_]: Monad: Capture: Log](sender: PeerNode,
-                                                          disconnect: DisconnectMessage): F[Unit] =
+  private def handleDisconnect[F[_]: Monad: Capture: Log: Metrics](
+      sender: PeerNode,
+      disconnect: DisconnectMessage): F[Unit] =
     for {
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
+      _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+      _ <- Metrics[F].incrementCounter("peers", -1L)
     } yield ()
 
   /**
