@@ -398,11 +398,11 @@ MODULE_INIT(RblAtom) {
 
 
 DEF("ch<", charLt, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -411,11 +411,11 @@ DEF("ch<", charLt, 2, 2) {
 
 
 DEF("ch<=", charLe, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -423,11 +423,11 @@ DEF("ch<=", charLe, 2, 2) {
 }
 
 DEF("ch=", charEq, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -435,11 +435,11 @@ DEF("ch=", charEq, 2, 2) {
 }
 
 DEF("ch!=", charNe, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -448,11 +448,11 @@ DEF("ch!=", charNe, 2, 2) {
 
 
 DEF("ch>=", charGe, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -461,11 +461,11 @@ DEF("ch>=", charGe, 2, 2) {
 
 
 DEF("ch>", charGt, 2, 2) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return RBLFALSE;
     }
 
@@ -474,7 +474,7 @@ DEF("ch>", charGt, 2, 2) {
 
 
 DEF("ch->fx", charToFixnum, 1, 1) {
-    if (!IS_CHAR(ARG(0))) {
+    if (!IS(OTchar, ARG(0))) {
         return PRIM_MISMATCH(0, "Char");
     }
 
