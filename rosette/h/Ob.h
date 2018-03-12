@@ -333,14 +333,9 @@ void set_field(T* x, const int i, const int wid, const int val) {
 
 /** NB(leaf): End of Bits.h **/
 
-<<<<<<< HEAD
 #define PTR(ob) ((pOb)(ob))
 #define NPTR(ob) ((pOb)(ob))
 #define SYMPTR(ob) ((char*)((unsigned)PTR(ob) - OTsym))
-=======
-#define SYMPTR(ob) ((char*)((unsigned)(ob) - OTsym))
-
->>>>>>> parent of 7abcd0e... Add template heap allocation functions.
 #define BOOLVAL(ob) ESCVAL(ob)
 #define CHARVAL(ob) ESCVAL(ob)
 #define FIXVAL(ob) TAGVAL(ob)

@@ -315,8 +315,6 @@ extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
  * two bits of a word for tag info (00 for a pointer).
  */
 
-static const int alignmentmask = 3;
-
 int align(int size);
 
 
