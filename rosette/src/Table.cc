@@ -62,7 +62,8 @@ RblTable::RblTable(int max, Tuple* tbl)
 
 RblTable* RblTable::create(int max) {
     Tuple* tmp = Tuple::create(max * (sizeof(Entry) / sizeof(pOb)), ABSENT);
-    return gc_new<RblTable>(max, tmp);
+    void* loc = PALLOC1(sizeof(RblTable), tmp);
+    return new (loc) RblTable(max, tmp);
 }
 
 RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
@@ -91,7 +92,8 @@ RblTable::RblTable(int max, Tuple* tbl, RblTableHitFn rtabhfn)
 
 RblTable* RblTable::create(RblTableHitFn rtabhfn, int max) {
     Tuple* tmp = Tuple::create(max * (sizeof(Entry) / sizeof(pOb)), ABSENT);
-    return gc_new<RblTable>(max, tmp, rtabhfn);
+    void* loc = PALLOC1(sizeof(RblTable), tmp);
+    return new (loc) RblTable(max, tmp, rtabhfn);
 }
 
 RblTable::Entry& RblTable::entry(int n) {
