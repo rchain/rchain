@@ -64,13 +64,9 @@ object VirtualMachine {
   def runPrim(unwind: Boolean, optPrim: Option[Prim]): VMTransition[Result] =
     for {
       result <- optPrim match {
-                 case Some(prim) =>
-                   if (unwind)
-                     unwindAndApplyPrim(prim).embedCtxt
-                   else
-                     prim.dispatchHelper.embedCtxt
-
-                 case None => pure[VMState, Result](Left(PrimNotFound))
+                 case Some(prim) if unwind  => unwindAndApplyPrim(prim).embedCtxt
+                 case Some(prim) if !unwind => prim.dispatchHelper.embedCtxt
+                 case None                  => pure[VMState, Result](Left(PrimNotFound))
                }
     } yield result
 
@@ -311,8 +307,10 @@ object VirtualMachine {
     }
   }
 
-  def schedule(ctxt: Ctxt): VMTransition[Unit] =
+  def schedule(ctxt: Ctxt): VMTransition[Unit] = {
+    loggerStrand.info("Schedule ctxt " + ctxt.id)
     modify[VMState](_.update(_ >> 'strandPool)(_ :+ ctxt))
+  }
 
   /** Return current result
     *
@@ -327,12 +325,7 @@ object VirtualMachine {
 
       (isError, optContinuation) = ctxtRet
 
-      _ <- optContinuation match {
-            case Some(ctxt) =>
-              loggerStrand.info("Schedule ctxt " + ctxt.id)
-              schedule(ctxt)
-            case None => doNothing
-          }
+      _ <- optContinuation.map(schedule).getOrElse(pure(()))
 
       _ <- if (isError)
             modify[VMState](_.copy(vmErrorFlag = true))
@@ -357,13 +350,7 @@ object VirtualMachine {
 
       (result, optContinuation) = dispatchResult
 
-      _ <- optContinuation match {
-            case Some(ctxt) =>
-              loggerStrand.info("Schedule ctxt " + ctxt.id)
-              schedule(ctxt)
-            case None =>
-              pure[VMState, Unit](())
-          }
+      _ <- optContinuation.map(schedule).getOrElse(pure(()))
 
       _ <- result match {
             // TODO: Add missing case where result is OTsysval

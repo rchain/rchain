@@ -16,20 +16,20 @@ class CtxtSpec extends FlatSpec with Matchers {
   }
 
   it should "return parent ctxt as a continuation if outstanding field of parent is one" in {
-    val ctxt0  = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
-    val result = Ctxt.applyK(Fixnum(1), LocTrgt).runA(ctxt0).value
+    val ctxt0                = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
+    val (_, optContinuation) = Ctxt.applyK(Fixnum(1), LocTrgt).runA(ctxt0).value
 
-    result._2.isDefined should be(true)
-    result._2.get.id should be(1)
-    result._2.get.outstanding should be(0)
+    optContinuation.isDefined should be(true)
+    optContinuation.get.id should be(1)
+    optContinuation.get.outstanding should be(0)
   }
 
   "rcv" should "return itself as a continuation if outstanding field is one" in {
-    val ctxt0  = ctxt.copy(outstanding = 1)
-    val result = Ctxt.rcv(Fixnum(1), LocTrgt).runA(ctxt0).value
+    val ctxt0                = ctxt.copy(outstanding = 1)
+    val (_, optContinuation) = Ctxt.rcv(Fixnum(1), LocTrgt).runA(ctxt0).value
 
-    result._2.isDefined should be(true)
-    result._2.get.id should be(0)
+    optContinuation.isDefined should be(true)
+    optContinuation.get.id should be(0)
   }
 
   it should "decrease the outstanding field by one if storing was successful" in {
@@ -49,11 +49,11 @@ class CtxtSpec extends FlatSpec with Matchers {
   }
 
   it should "return parent ctxt as a continuation if outstanding field of parent is one" in {
-    val ctxt0  = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
-    val result = Ctxt.applyK(Fixnum(1), LocTrgt).runA(ctxt0).value
+    val ctxt0                = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
+    val (_, optContinuation) = Ctxt.applyK(Fixnum(1), LocTrgt).runA(ctxt0).value
 
-    result._2.isDefined should be(true)
-    result._2.get.id should be(1)
-    result._2.get.outstanding should be(0)
+    optContinuation.isDefined should be(true)
+    optContinuation.get.id should be(1)
+    optContinuation.get.outstanding should be(0)
   }
 }

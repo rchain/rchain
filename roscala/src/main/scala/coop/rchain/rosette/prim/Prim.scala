@@ -43,26 +43,29 @@ abstract class Prim extends Ob {
     * return the parent ctxt which then has to be scheduled by
     * the caller.
     */
-  override def dispatch: CtxtTransition[(Result, Option[Continuation])] =
+  override def dispatch: CtxtTransition[(Result, Option[Continuation])] = {
+
+    /**
+      * Try to return the primitive result to the parent ctxt.
+      * This can potentially return the parent ctxt as a ctxt
+      * that needs to be scheduled by the caller.
+      */
+    def returnResultToParent(result: Ob): CtxtTransition[(Result, Option[Continuation])] =
+      Ctxt
+        .ret(result)
+        .transform(
+          (ctxt, res) =>
+            if (res._1)
+              (ctxt, (Right(result), res._2))
+            else
+              (ctxt, (Right(result), res._2))
+        )
+
     for {
       primResult <- dispatchHelper
 
       result <- primResult match {
-                 case Right(ob) =>
-                   /**
-                     * Try to return the primitive result to the parent ctxt.
-                     * This can potentially return the parent ctxt as a ctxt
-                     * that needs to be scheduled by the caller.
-                     */
-                   Ctxt
-                     .ret(ob)
-                     .transform(
-                       (ctxt, res) =>
-                         if (res._1)
-                           (ctxt, (primResult, res._2))
-                         else
-                           (ctxt, (primResult, res._2))
-                     )
+                 case Right(ob) => returnResultToParent(ob)
 
                  case _ =>
                    /**
@@ -73,6 +76,7 @@ abstract class Prim extends Ob {
                    pure[Ctxt, (Result, Option[Continuation])]((primResult, None))
                }
     } yield result
+  }
 
   def invoke: CtxtTransition[(Result, Option[Continuation])] = dispatch
 }
