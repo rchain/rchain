@@ -1,5 +1,7 @@
 package coop.rchain.p2p
 
+import scala.concurrent.duration.{Duration, MILLISECONDS}
+import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
@@ -71,14 +73,17 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       _            <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
       ts2          <- Time[F].currentMillis
       nonce        <- Encryption[F].generateNonce
-      ph           = protocolHandshake(local).toByteArray
-      eph          <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, ph)
+      ph           = protocolHandshake(local, nonce)
+      eph          <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, ph.toByteArray)
       fm           = FrameMessage(frame(local, nonce, eph), ts2)
-      phsresp      <- Communication[F].roundTrip(fm, remote).map(err.fromEither).flatten
-      _            <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-      _            <- Communication[F].addNode(remote)
-      tsf          <- Time[F].currentMillis
-      _            <- Metrics[F].record("connect-time", tsf - ts1)
+      phsresp <- Communication[F]
+                  .roundTrip(fm, remote, Duration(6000, MILLISECONDS))
+                  .map(err.fromEither)
+                  .flatten
+      _   <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
+      _   <- Communication[F].addNode(remote)
+      tsf <- Time[F].currentMillis
+      _   <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
   def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](
@@ -98,34 +103,51 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
           }
     } yield ()
 
-  private def handleProtocolHandshake[F[_]: Monad: Capture: Log: Metrics: Communication](
-      sender: PeerNode,
-      handshake: ProtocolHandshakeMessage): F[Unit] =
+  def handleFrame[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
+      remote: PeerNode,
+      msg: FrameMessage)(implicit
+                         err: ApplicativeError_[F, CommError],
+                         keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
     for {
-      local <- Communication[F].local
-      result <- handshake
-                 .response(local)
-                 .traverse(resp => Communication[F].commSend(resp, sender))
-      _ <- result.traverse {
-            case Right(_) => Log[F].info(s"Responded to protocol handshake request from $sender.")
-            case Left(ex) => Log[F].error(s"handleProtocolHandshake(): $ex")
-          }
-      _ <- Communication[F].addNode(sender)
+      local             <- Communication[F].local
+      maybeRemotePubKey <- keysStore.get(remote)
+      keys              <- Encryption[F].fetchKeys
+      remotePubKey <- maybeRemotePubKey
+                       .map(_.pure[F])
+                       .getOrElse(err.raiseError(peerNodeNotFound(remote)))
+      frame          <- err.fromEither(NetworkProtocol.toFrame(msg.proto))
+      nonce          = frame.nonce.toByteArray
+      encryptedBytes = frame.framed.toByteArray
+      decryptedBytes <- Encryption[F].decrypt(remotePubKey, keys.priv, nonce, encryptedBytes)
+      ph <- Frameable
+             .parseFrom(decryptedBytes)
+             .message
+             .protocolHandshake
+             .map(_.pure[F])
+             .getOrElse(err.raiseError(parseError("could not parse ProtocolHandshake")))
+      ts <- Time[F].currentMillis
+      result <- msg.header
+                 .map { h =>
+                   ProtocolHandshakeResponseMessage(protocolHandshakeResponse(local, h), ts)
+                 }
+                 .toRightIor(HeaderNotAvailable)
+                 .toEither
+                 .traverse(resp => Communication[F].commSend(resp, remote))
+      _ <- Communication[F].addNode(remote)
+      _ <- Log[F].info("handleFrame: end")
     } yield ()
 
-  override def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]](
-      sock: java.net.SocketAddress,
-      msg: ProtocolMessage): F[Unit] = {
+  override def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+    ?[_],
+    PeerNode,
+    Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: java.net.SocketAddress,
+                                                      msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
         sock match {
-          case (s: java.net.InetSocketAddress) =>
-            sndr.withUdpSocket(s)
-          case _ => sndr
+          case (s: java.net.InetSocketAddress) => sndr.withUdpSocket(s)
+          case _                               => sndr
         }
 
       msg match {
@@ -134,16 +156,19 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
             msg.typeUrl match {
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
-                val eh = msg.unpack(EncryptionHandshake)
-
                 handleEncryptionHandshake[F](sender,
                                              EncryptionHandshakeMessage(proto,
                                                                         System.currentTimeMillis))
               // TODO interpolate this string to check if class exists
-              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
-                handleProtocolHandshake[F](sender,
-                                           ProtocolHandshakeMessage(proto,
-                                                                    System.currentTimeMillis))
+              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Frame" =>
+                val err     = ApplicativeError_[F, CommError]
+                val handled = handleFrame[F](sender, FrameMessage(proto, System.currentTimeMillis))
+                err.attempt(handled) >>= {
+                  case Right(_) =>
+                    Log[F].info(s"Responded to protocol handshake request from $sender.")
+                  case Left(ex) => Log[F].error(s"handleProtocolHandshake(): $ex")
+                }
+
               case _ => Log[F].warn(s"Unexpected message type ${msg.typeUrl}")
             }
           }.void

@@ -3,7 +3,7 @@ package coop.rchain.p2p
 import org.scalatest._
 import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._, CommError._, NetworkProtocol._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
 
@@ -72,7 +72,12 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           p should equal(remoteKeys.pub) withClue ("remotes public should be used for encryption")
           s should equal(srcKeys.priv) withClue ("source private should be used for encryption")
           un should equal(nonce) withClue ("generated nounce should be used for encryption")
-          val ph: ProtocolHandshake = ProtocolHandshake.parseFrom(f.toByteArray)
+          Frameable
+            .parseFrom(f.toByteArray)
+            .message
+            .protocolHandshake
+            .map(_.nonce.toByteArray)
+            .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
         }
       }
     }
@@ -81,7 +86,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
       it("should send back its public key in response") {
         // given
         val receivedMessage =
-          EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, remoteKeys), 1)
+          EncryptionHandshakeMessage(encryptionHandshake(src, remoteKeys), 1)
         // when
         Network.handleEncryptionHandshake[Effect](remote, receivedMessage)
         // then
@@ -94,7 +99,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
       it("should store remote's public key") {
         // given
         val receivedMessage =
-          EncryptionHandshakeMessage(NetworkProtocol.encryptionHandshake(src, remoteKeys), 1)
+          EncryptionHandshakeMessage(encryptionHandshake(src, remoteKeys), 1)
         // when
         Network.handleEncryptionHandshake[Effect](remote, receivedMessage)
         // then
@@ -102,6 +107,42 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
       }
 
       it("should not store remote's public key if sending response failed with error")(pending)
+    }
+
+    describe("when reciving encrypted ProtocolHandshake") {
+
+      it("should decrypt the frame") {
+        // given
+        keysStoreEff.put(remote, remoteKeys.pub)
+        val receivedMessage =
+          FrameMessage(frame(src, nonce, protocolHandshake(src, nonce).toByteArray), 1)
+        // when
+        Network.handleFrame[Effect](remote, receivedMessage)
+        // then
+        encryptionEff.decryptions should not be empty withClue ("decryption should be used")
+        val (p, s, un, c) = encryptionEff.decryptions(0)
+        p should equal(remoteKeys.pub) withClue ("remotes public should be used for decryption")
+        s should equal(srcKeys.priv) withClue ("source private should be used for decryption")
+        un should equal(nonce) withClue ("generated nounce should be used for decryption")
+        Frameable
+          .parseFrom(c)
+          .message
+          .protocolHandshake
+          .map(_.nonce.toByteArray)
+          .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
+      }
+      it("should send encrypted response back to the remote") {
+        // given
+        keysStoreEff.put(remote, remoteKeys.pub)
+        val receivedMessage =
+          FrameMessage(frame(src, nonce, protocolHandshake(src, nonce).toByteArray), 1)
+        // when
+        Network.handleFrame[Effect](remote, receivedMessage)
+        // then
+        val ProtocolHandshakeResponseMessage(proto, _) = communicationEff.requests(0)
+      }
+      it("should not respond if message can not be decrypted")(pending)
+      it("should not respond if it does not contain remotes public key")(pending)
     }
   }
 

@@ -53,7 +53,8 @@ object NetworkProtocol {
       case a => Left(UnknownProtocolError(s"Was expecting Frame, got $a"))
     }
 
-  def protocolHandshake(src: ProtocolNode): ProtocolHandshake = ProtocolHandshake(number = 1)
+  def protocolHandshake(src: ProtocolNode, nonce: Nonce): Frameable =
+    Frameable(Frameable.Message.ProtocolHandshake(ProtocolHandshake(ByteString.copyFrom(nonce))))
 
   def protocolHandshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
     ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(ProtocolHandshakeResponse()))
@@ -80,16 +81,5 @@ final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, tim
 
 final case class FrameMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage
 
-final case class ProtocolHandshakeMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolMessage {
-  def response(src: ProtocolNode): Either[CommError, ProtocolMessage] =
-    header
-      .map { h =>
-        ProtocolHandshakeResponseMessage(NetworkProtocol.protocolHandshakeResponse(src, h),
-                                         System.currentTimeMillis)
-      }
-      .toRightIor(HeaderNotAvailable)
-      .toEither
-}
 final case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolResponse

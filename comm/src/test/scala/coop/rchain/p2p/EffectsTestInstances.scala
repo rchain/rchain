@@ -62,9 +62,12 @@ object EffectsTestInstances {
       extends Encryption[F] {
 
     var encryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
+    var decryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
 
-    def reset(): Unit =
+    def reset(): Unit = {
       encryptions = Nil
+      decryptions = Nil
+    }
 
     def fetchKeys: F[PublicPrivateKeys] = keys.pure[F]
     def generateNonce: F[Nonce]         = nonce.pure[F]
@@ -73,8 +76,10 @@ object EffectsTestInstances {
       message.pure[F]
     }
 
-    def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]] =
+    def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]] = {
+      decryptions = decryptions :+ (pub, sec, nonce, cipher)
       cipher.pure[F]
+    }
   }
 
 }
