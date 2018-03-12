@@ -315,7 +315,7 @@ int inlineUseIfPtr(void* v, PSOb__PSOb f) {
     pOb* pp = (pOb*)v;
     pOb p = *pp;
     if (IS_PTR(p)) {
-        pOb q = (p->*f)();
+        pOb q = (PTR(p)->*f)();
         if (p != q) {
             *pp = q;
             return 1;
@@ -336,13 +336,12 @@ int inlineUseIfPtr(pOb v, SI__PSOb f) {
     return (v->*f)();
 }
 
-
 int useIfPtr(pOb v, SI__PSOb f) { return inlineUseIfPtr(v, f); }
 
 
 void inlineUseIfPtr(pOb v, V__PSOb f) {
     if (IS_PTR(v)) {
-        (v->*f)();
+        (PTR(v)->*f)();
     }
 }
 
