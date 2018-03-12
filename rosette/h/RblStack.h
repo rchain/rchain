@@ -26,9 +26,10 @@
 class RblStack : public Ob {
     STD_DECLS(RblStack);
 
-   public:
+   protected:
     RblStack(Tuple*);
 
+   public:
     Ob* nElems;
     Tuple* elems;
 

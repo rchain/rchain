@@ -44,7 +44,10 @@ CodeBuf::CodeBuf()
 }
 
 
-CodeBuf* CodeBuf::create() { return gc_new<CodeBuf>(); }
+CodeBuf* CodeBuf::create() {
+    void* loc = PALLOC(sizeof(CodeBuf));
+    return new (loc) CodeBuf();
+}
 
 void CodeBuf::deposit(Instr i) {
     int int_pc = FIXVAL(pc);
@@ -222,8 +225,8 @@ CodeVec::CodeVec(int numberOfInstrs)
 
 
 CodeVec* CodeVec::create(int numberOfInstrs) {
-    return gc_new_space<CodeVec>(align(numberOfInstrs * sizeof(Instr)),
-                                 numberOfInstrs);
+    void* loc = PALLOC(sizeof(CodeVec) + align(numberOfInstrs * sizeof(Instr)));
+    return new (loc) CodeVec(numberOfInstrs);
 }
 
 
@@ -708,14 +711,16 @@ Code::Code(CodeVec* codevec, Tuple* litvec)
 
 
 Code* Code::create(CodeVec* codevec, Tuple* litvec) {
-    return gc_new<Code>(codevec, litvec);
+    void* loc = PALLOC2(sizeof(Code), codevec, litvec);
+    return new (loc) Code(codevec, litvec);
 }
 
 
 Code* Code::create(CodeBuf* codebuf, Tuple* litvec) {
     PROTECT(litvec);
     CodeVec* codevec = codebuf->finish();
-    return gc_new<Code>(codevec, litvec);
+    void* loc = PALLOC1(sizeof(Code), codevec);
+    return new (loc) Code(codevec, litvec);
 }
 
 

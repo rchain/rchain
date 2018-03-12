@@ -26,9 +26,10 @@
 class Monitor : public Ob {
     STD_DECLS(Monitor);
 
-   public:
+   protected:
     Monitor(Ob*, Timer*, Word32Vec*, Word32Vec*);
 
+   public:
     Ob* id;
     Timer* timer;
     Word32Vec* opcodeCounts;

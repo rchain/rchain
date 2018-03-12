@@ -39,11 +39,11 @@ class Float : public BinaryOb {
     static char format[FloatFormatSize];
     friend BUILTIN_PRIM(flFormat);
 
+    Float(Rfloat);
+
     Ob* checkResult(Prim*, Ctxt*, Rfloat);
 
    public:
-    Float(Rfloat);
-
     Rfloat val;
 
     static Float* create(Rfloat);
