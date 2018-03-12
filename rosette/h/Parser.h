@@ -72,6 +72,8 @@ class Parser : public BinaryOb {
     STD_DECLS(Parser);
 
    protected:
+    Parser(ParseTable*);
+
     Ob* resumeExpr();
     Ob* suspendParser();
     Ob* finish(Ob*);
@@ -79,8 +81,6 @@ class Parser : public BinaryOb {
     ParserMode acceptEscChar(int, int);
 
    public:
-    Parser(ParseTable*);
-
     virtual ~Parser();
 
     static Parser* create();

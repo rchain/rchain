@@ -43,7 +43,8 @@ StdOprn* StdOprn::create(pOb id, pOb sync) {
     StdExtension* ext = StdExtension::create(BUILTIN_STDOPRN_SLOTS);
     ext->slot(STDOPRN_ID_SLOT) = id;
     ext->slot(STDOPRN_SYNC_SLOT) = sync;
-    return gc_new<StdOprn>(ext);
+    void* loc = PALLOC1(sizeof(StdOprn), ext);
+    return new (loc) StdOprn(ext);
 }
 
 
