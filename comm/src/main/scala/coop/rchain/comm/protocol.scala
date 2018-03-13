@@ -6,12 +6,14 @@ import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
+import coop.rchain.comm._, CommError._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
 
+// TODO REMOVE inheritance hierarchy for composition
 trait ProtocolDispatcher[A] {
 
   /**
@@ -19,7 +21,10 @@ trait ProtocolDispatcher[A] {
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch(extra: A, msg: ProtocolMessage): Unit
+  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+                 ?[_],
+                 PeerNode,
+                 Array[Byte]]](extra: A, msg: ProtocolMessage): F[Unit]
 }
 
 /**
@@ -38,10 +43,10 @@ trait ProtocolHandler {
     * Send a message to a single, remote node, and wait up to the
     * specified duration for a response.
     */
-  def roundTrip[F[_]: Capture: Monad](msg: ProtocolMessage,
-                                      remote: ProtocolNode,
-                                      timeout: Duration = Duration(500, MILLISECONDS))(
-      implicit err: ApplicativeError_[F, CommError]): F[ProtocolMessage]
+  def roundTrip[F[_]: Capture: Monad](
+      msg: ProtocolMessage,
+      remote: ProtocolNode,
+      timeout: Duration = Duration(500, MILLISECONDS)): F[Either[CommError, ProtocolMessage]]
 
   /**
     * Asynchronously broadcast a message to all known peers.
@@ -49,16 +54,30 @@ trait ProtocolHandler {
   def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]]
 }
 
+object ProtocolNode {
+
+  def apply(peer: PeerNode,
+            local: ProtocolNode,
+            roundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage]): ProtocolNode =
+    new ProtocolNode(peer.id, peer.endpoint, Some(local), roundTrip)
+
+  def apply(peer: PeerNode,
+            roundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage]): ProtocolNode =
+    new ProtocolNode(peer.id, peer.endpoint, None, roundTrip)
+}
+
 /**
   * A `PeerNode` that knows how to send and receive messages. The
   * `ping` method for Kademlia is here.
   */
-class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHandler)
+class ProtocolNode private (id: NodeIdentifier,
+                            endpoint: Endpoint,
+                            maybeLocal: Option[ProtocolNode],
+                            roundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage])
     extends PeerNode(id, endpoint)
     with kademlia.Peer {
 
-  def this(peer: PeerNode, handler: ProtocolHandler) =
-    this(peer.id, peer.endpoint, handler)
+  def local: ProtocolNode = maybeLocal.getOrElse(this)
 
   private var _seq = 0L
   def seq: Long = _seq synchronized {
@@ -67,8 +86,8 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
   }
 
   override def ping: Try[Duration] = {
-    val req = PingMessage(ProtocolMessage.ping(handler.local), System.currentTimeMillis)
-    handler.roundTrip[Either[CommError, ?]](req, this) match {
+    val req = PingMessage(ProtocolMessage.ping(local), System.currentTimeMillis)
+    roundTrip(req, this) match {
       case Right(resp) =>
         req.header match {
           case Some(incoming) =>
@@ -84,8 +103,8 @@ class ProtocolNode(id: NodeIdentifier, endpoint: Endpoint, handler: ProtocolHand
   }
 
   def lookup(key: Seq[Byte]): Try[Seq[PeerNode]] = {
-    val req = LookupMessage(ProtocolMessage.lookup(handler.local, key), System.currentTimeMillis)
-    handler.roundTrip[Either[CommError, ?]](req, this) match {
+    val req = LookupMessage(ProtocolMessage.lookup(local, key), System.currentTimeMillis)
+    roundTrip(req, this) match {
       case Right(LookupResponseMessage(proto, _)) =>
         proto.message.lookupResponse match {
           case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))

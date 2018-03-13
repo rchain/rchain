@@ -40,8 +40,8 @@ lazy val crypto = project
   .settings(
     name := "Crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      guava,
       bouncyCastle,
-      guav,
       kalium,
       jaxb),
     fork := true,
@@ -77,6 +77,21 @@ lazy val models = project
     commonSettings,
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       cats,
+      scalaCheck,
+      scalaCheckShapeless
+    ),
+    connectInput in run := true,
+    PB.targets in Compile := Seq(
+      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+    ),
+    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
+    exportJars := true
+  )
+
+lazy val regex = project
+  .settings(
+    commonSettings,
+    libraryDependencies ++= commonDependencies ++ Seq(
       scalaCheck
     ),
     connectInput in run := true,
@@ -103,16 +118,16 @@ lazy val storage = project
   ).dependsOn(models)
 
 lazy val node = project
-  .enablePlugins(DockerPlugin)
+  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin)
   .settings(
     commonSettings,
-    version := "0.1",
+    version := "0.1.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
       uriParsing
     ),
-    libraryDependencies ++= apiServerDependencies ++ Seq(cats),
+    libraryDependencies ++= apiServerDependencies ++ kamonDependencies ++ Seq(cats),
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 
@@ -133,8 +148,41 @@ lazy val node = project
         entryPoint("/bin/main.sh")
       }
     },
+
+    version in Universal := version.value,
+    name in Universal := "rchain-node",
+
+    maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
+    packageSummary in Linux := "RChain Node",
+    packageDescription in Linux := "RChain Node Description",
+
+    mappings in Universal := {
+      val universalMappings = (mappings in Universal).value
+      val jar = (assembly in Compile).value
+
+      val filtered = universalMappings filter {
+        case (file, name) => ! name.endsWith(".jar")
+      }
+
+      filtered :+ jar -> s"/lib/${jar.getName}" :+ (baseDirectory.value / "rchain-node") -> "/bin/rchain-node"
+    },
+
+    /*
+     * Debian.
+     */
+    name in Debian := (name in Universal).value,
+    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)"),
+
+    /*
+     * Redhat
+     */
+    packageName in Rpm := (name in Universal).value,
+    // version in Rpm := version.value,
+    rpmVendor := "rchain.coop",
+    rpmUrl := Some("https://rchain.coop"),
+    rpmLicense := Some("Apache 2.0"),
   )
-  .dependsOn(comm)
+  .dependsOn(comm, crypto)
 
 lazy val rholang = project
   .settings(
@@ -144,7 +192,7 @@ lazy val rholang = project
       "-language:higherKinds",
       "-Yno-adapted-args",
     ),
-    libraryDependencies ++= commonDependencies,
+    libraryDependencies ++= commonDependencies ++ Seq(monix, argParsing),
     bnfcSettings,
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
@@ -179,4 +227,3 @@ lazy val roscala = project
       shapeless,
       scalaCheck)
   ).dependsOn(roscala_macros)
-

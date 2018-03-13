@@ -26,10 +26,9 @@
 class EmptyMbox : public Ob {
     STD_DECLS(EmptyMbox);
 
-   protected:
+   public:
     EmptyMbox();
 
-   public:
     static EmptyMbox* create();
     virtual Ob* cloneTo(Ob*, Ob*);
     virtual Ob* receiveMsg(MboxOb*, Ctxt*);
@@ -40,10 +39,9 @@ class EmptyMbox : public Ob {
 class LockedMbox : public Ob {
     STD_DECLS(LockedMbox);
 
-   protected:
+   public:
     LockedMbox();
 
-   public:
     static LockedMbox* create();
     virtual Ob* cloneTo(Ob*, Ob*);
     virtual Ob* receiveMsg(MboxOb*, Ctxt*);
@@ -54,10 +52,9 @@ class LockedMbox : public Ob {
 class QueueMbox : public Ob {
     STD_DECLS(QueueMbox);
 
-   protected:
+   public:
     QueueMbox(Ob*, MboxQueue*);
 
-   public:
     Ob* lockVal;
     Ob* enabledSet;
     MboxQueue* queue;

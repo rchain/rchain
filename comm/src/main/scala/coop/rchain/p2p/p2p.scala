@@ -1,10 +1,9 @@
 package coop.rchain.p2p
 
-import coop.rchain.comm._
+import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import scala.util.control.NonFatal
-import com.typesafe.scalalogging.Logger
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
@@ -42,81 +41,80 @@ case object NetworkAddress {
     }
 }
 
-class Network(
-    local: PeerNode,
-    keys: PublicPrivateKeys
-) extends ProtocolDispatcher[java.net.SocketAddress] {
+object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
   import NetworkProtocol._
 
-  val logger   = Logger("p2p")
-  val iologger = IOLogger("p2p")
+  def unsafeRoundTrip[F[_]: Capture: Communication]
+    : (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
+    (pm: ProtocolMessage, pn: ProtocolNode) => {
+      val result = Communication[F].roundTrip(pm, pn)
+      Capture[F].unsafeUncapture(result)
+    }
 
-  val net = new UnicastNetwork(local, Some(this))
-
-  /**
-    * This method (eventually) will initiate the two-part RChain handshake protocol. First, encryption keys are exchanged,
-    * allowing encryption for all future messages. Next protocols are agreed on to ensure that these two nodes can speak
-    * the same language.
-    */
-  def connect[F[_]: Capture: Monad](peer: PeerNode)(
-      implicit pubKeysKvs: Kvs[F, PeerNode, Array[Byte]],
-      err: ApplicativeError_[F, CommError]): F[Unit] = {
-
-    import iologger._
-
+  def connect[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](peer: PeerNode)(
+      implicit
+      keysStore: Kvs[F, PeerNode, Array[Byte]],
+      err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
-      _          <- debug[F](s"Connecting to $peer")
-      ts1        <- IOUtil.currentMilis[F]
-      ehs        = EncryptionHandshakeMessage(encryptionHandshake(net.local, keys), ts1)
-      remote     = new ProtocolNode(peer, this.net)
-      ehsrespmsg <- net.roundTrip[F](ehs, remote)
+      keys       <- Encryption[F].fetchKeys
+      _          <- Log[F].debug(s"Connecting to $peer")
+      _          <- Metrics[F].incrementCounter("connects")
+      ts1        <- Time[F].currentMillis
+      local      <- Communication[F].local
+      ehs        = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
+      remote     = ProtocolNode(peer, local, unsafeRoundTrip[F])
+      ehsrespmsg <- Communication[F].roundTrip(ehs, remote).map(err.fromEither).flatten
       ehsresp    <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
-      _          <- pubKeysKvs.put(peer, ehsresp.publicKey.toByteArray)
-      _          <- debug[F](s"Received encryption response from ${ehsrespmsg.sender.get}.")
-      ts2        <- IOUtil.currentMilis[F]
-      phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(net.local), ts2).pure[F]
-      phsresp    <- net.roundTrip[F](phs, remote)
-      _          <- debug[F](s"Received protocol handshake response from ${phsresp.sender.get}.")
-    } yield {
-      net.add(remote)
-    }
+      _          <- keysStore.put(peer, ehsresp.publicKey.toByteArray)
+      _          <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
+      ts2        <- Time[F].currentMillis
+      phs        <- ProtocolHandshakeMessage(NetworkProtocol.protocolHandshake(local), ts2).pure[F]
+      phsresp    <- Communication[F].roundTrip(phs, remote).map(err.fromEither).flatten
+      _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
+      _          <- Communication[F].addNode(remote)
+      tsf        <- Time[F].currentMillis
+      _          <- Metrics[F].record("connect-time", tsf - ts1)
+    } yield ()
 
-  }
+  private def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](
+      sender: PeerNode,
+      handshake: EncryptionHandshakeMessage)(
+      implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
+    for {
+      local       <- Communication[F].local
+      keys        <- Encryption[F].fetchKeys
+      responseErr <- handshake.response[F](local, keys)
+      result      <- responseErr.traverse(resp => Communication[F].commSend(resp.toByteSeq, sender))
+      _ <- result.traverse {
+            case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
+            case Left(ex) => Log[F].error(s"handleEncryptionHandshake(): $ex")
+          }
+    } yield ()
 
-  def disconnect(): Unit = {
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
-    ()
-  }
+  private def handleProtocolHandshake[F[_]: Monad: Capture: Log: Metrics: Communication](
+      sender: PeerNode,
+      handshake: ProtocolHandshakeMessage): F[Unit] =
+    for {
+      local <- Communication[F].local
+      result <- handshake
+                 .response(local)
+                 .traverse(resp => Communication[F].commSend(resp.toByteSeq, sender))
+      _ <- result.traverse {
+            case Right(_) => Log[F].info(s"Responded to protocol handshake request from $sender.")
+            case Left(ex) => Log[F].error(s"handleProtocolHandshake(): $ex")
+          }
+      _ <- Communication[F].addNode(sender)
+    } yield ()
 
-  private def handleEncryptionHandshake(sender: PeerNode,
-                                        handshake: EncryptionHandshakeMessage): Unit =
-    handshake.response(net.local, keys).map { resp =>
-      net.comm.send(resp.toByteSeq, sender) match {
-        case Right(_) =>
-          logger.info(s"Responded to encryption handshake request from $sender.")
-        case Left(ex) =>
-          logger.error(s"handleEncryptionHandshake(): $ex")
-      }
-    }
+  override def dispatch[
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
+                                                                               PeerNode,
+                                                                               Array[Byte]]](
+      sock: java.net.SocketAddress,
+      msg: ProtocolMessage): F[Unit] = {
 
-  private def handleProtocolHandshake(sender: PeerNode, handshake: ProtocolHandshakeMessage): Unit =
-    handshake.response(net.local).map { resp =>
-      net.comm.send(resp.toByteSeq, sender) match {
-        case Right(_) =>
-          logger.info(s"Responded to protocol handshake request from $sender.")
-        case Left(ex) =>
-          logger.error(s"handleProtocolHandshake(): $ex")
-      }
-      // TODO: This add() call should be conditional on actually going
-      // through the handshake process, but for now it helps
-      // demonstrate network-building.
-      net.add(sender)
-    }
-
-  override def dispatch(sock: java.net.SocketAddress, msg: ProtocolMessage): Unit =
-    msg.sender.map { sndr =>
+    val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
         sock match {
           case (s: java.net.InetSocketAddress) =>
@@ -126,32 +124,34 @@ class Network(
 
       msg match {
         case upstream @ UpstreamMessage(proto, _) =>
-          proto.message.upstream.map { msg =>
+          proto.message.upstream.traverse { msg =>
             msg.typeUrl match {
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
                 val eh = msg.unpack(EncryptionHandshake)
 
-                handleEncryptionHandshake(
-                  sender,
-                  EncryptionHandshakeMessage(proto, System.currentTimeMillis)) //FIX-ME
+                handleEncryptionHandshake[F](sender,
+                                             EncryptionHandshakeMessage(proto,
+                                                                        System.currentTimeMillis))
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.ProtocolHandshake" =>
-                handleProtocolHandshake(sender,
-                                        ProtocolHandshakeMessage(proto, System.currentTimeMillis))
-              case _ => logger.warn(s"Unexpected message type ${msg.typeUrl}")
+                handleProtocolHandshake[F](sender,
+                                           ProtocolHandshakeMessage(proto,
+                                                                    System.currentTimeMillis))
+              case _ => Log[F].warn(s"Unexpected message type ${msg.typeUrl}")
             }
-          }
+          }.void
         /*
          * We do not expect to get any responses to the protocol out
          * of the blue; rather, they'll all be done through
          * synchronous, request-response messaging.
          */
         case upstream @ UpstreamResponse(proto, _) =>
-          logger.error(s"Out-of-sequence message: $upstream")
-        case _ => logger.warn(s"Unrecognized msg ${msg}")
+          Log[F].error(s"Out-of-sequence message: $upstream")
+        case _ => Log[F].warn(s"Unrecognized msg ${msg}")
       }
     }
 
-  override def toString = s"#{Network ${local.toAddress}}"
+    dispatchForSender.getOrElse(Log[F].error(s"received message with empty sender, msg = $msg"))
+  }
 }

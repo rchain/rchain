@@ -58,20 +58,17 @@ RBLstring::RBLstring(int n, char* s)
 
 
 RBLstring* RBLstring::create(int n, char c) {
-    void* loc = PALLOC(sizeof(RBLstring) + align(n));
-    return new (loc) RBLstring(n, c);
+    return gc_new_space<RBLstring>(n, n, c);
 }
 
 
 RBLstring* RBLstring::create(char* s) {
     int n = strlen(s) + 1;
-    void* loc = PALLOC(sizeof(RBLstring) + align(n));
-    return new (loc) RBLstring(n, s);
+    return gc_new_space<RBLstring>(n, n, s);
 }
 
 RBLstring* RBLstring::create(int n, char* s) {
-    void* loc = PALLOC(sizeof(RBLstring) + align(n + 1));
-    RBLstring* str = new (loc) RBLstring(n + 1, (char)0);
+    auto str = gc_new_space<RBLstring>(align(n + 1), n + 1, (char)0);
     memcpy((char*)&str->byte(0), s, n);
     return str;
 }
