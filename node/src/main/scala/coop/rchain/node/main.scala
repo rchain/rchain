@@ -111,6 +111,15 @@ object Main {
       def generateNonce: Task[Nonce] = Task.delay {
         encoder.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
       }
+
+      def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): Task[Array[Byte]] =
+        Task.delay {
+          message
+        }
+      def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): Task[Array[Byte]] =
+        Task.delay {
+          cipher
+        }
     }
 
     implicit def ioLog: Log[Task] = new Log[Task] {
@@ -124,35 +133,6 @@ object Main {
       def currentMillis: Task[Long] = Task.delay {
         System.currentTimeMillis
       }
-    }
-
-    val net = new UnicastNetwork(src, Some(p2p.Network))
-
-    implicit lazy val communication: Communication[Task] = new Communication[Task] {
-      def roundTrip(
-          msg: ProtocolMessage,
-          remote: ProtocolNode,
-          timeout: Duration = Duration(500, MILLISECONDS)): Task[CommErr[ProtocolMessage]] =
-        net.roundTrip[Task](msg, remote, timeout)
-      def local: Task[ProtocolNode] = net.local.pure[Task]
-      def commSend(data: Seq[Byte], peer: PeerNode): Task[CommErr[Unit]] = Task.delay {
-        net.comm.send(data, peer)
-      }
-      def addNode(node: PeerNode): Task[Unit] =
-        for {
-          _ <- Task.delay(net.add(node))
-          _ <- Metrics[Task].incrementCounter("peers")
-        } yield ()
-      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] = Task.delay {
-        net.broadcast(msg)
-      }
-      def findMorePeers(limit: Int): Task[Seq[PeerNode]] = Task.delay {
-        net.findMorePeers(limit)
-      }
-      def countPeers: Task[Int] = Task.delay {
-        net.table.peers.size
-      }
-      def receiver: Task[Unit] = net.receiver[Task]
     }
 
     implicit def metrics: Metrics[Task] = new Metrics[Task] {
@@ -205,6 +185,37 @@ object Main {
       def toEffect: Effect[A] = t.liftM[CommErrT]
     }
 
+    val net = new UnicastNetwork(src, Some(p2p.Network))
+
+    implicit lazy val communication: Communication[Effect] = new Communication[Effect] {
+      def roundTrip(
+          msg: ProtocolMessage,
+          remote: ProtocolNode,
+          timeout: Duration = Duration(500, MILLISECONDS)): Effect[CommErr[ProtocolMessage]] =
+        net.roundTrip[Effect](msg, remote, timeout)
+      def local: Effect[ProtocolNode] = net.local.pure[Effect]
+      def commSend(msg: ProtocolMessage, peer: PeerNode): Effect[CommErr[Unit]] =
+        Task.delay(net.comm.send(msg.toByteSeq, peer)).toEffect
+      def addNode(node: PeerNode): Effect[Unit] =
+        for {
+          _ <- Task.delay(net.add(node)).toEffect
+          _ <- Metrics[Effect].incrementCounter("peers")
+        } yield ()
+      def broadcast(msg: ProtocolMessage): Effect[Seq[CommErr[Unit]]] =
+        Task.delay {
+          net.broadcast(msg)
+        }.toEffect
+      def findMorePeers(limit: Int): Effect[Seq[PeerNode]] =
+        Task.delay {
+          net.findMorePeers(limit)
+        }.toEffect
+      def countPeers: Effect[Int] =
+        Task.delay {
+          net.table.peers.size
+        }.toEffect
+      def receiver: Effect[Unit] = net.receiver[Effect]
+    }
+
     val metricsServer = MetricsServer()
 
     val http = HttpServer(conf.httpPort())
@@ -250,7 +261,6 @@ object Main {
           _ <- if (thisCount != lastCount) Log[Effect].info(s"Peers: $thisCount.")
               else ().pure[Effect]
         } yield thisCount)
-
     }
 
     val recipe: Effect[Unit] = for {

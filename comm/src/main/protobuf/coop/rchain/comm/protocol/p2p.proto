@@ -24,16 +24,21 @@ message EncryptionHandshakeResponse {
 }
 
 message Frame {
-  bytes nonce    = 1;
-  bytes msg      = 2;
+  bytes nonce       = 1;
+  bytes framed      = 2;
 }
 
 message ProtocolHandshake {
-    // Temporary field included to test serialization.
-    uint64 number = 1;
+  bytes nonce       = 1;
 }
 
 message ProtocolHandshakeResponse {
+}
+
+message Frameable {
+  oneof message {
+    ProtocolHandshake   protocol_handshake   = 1;
+  }
 }
 
 message Protocol {
@@ -44,7 +49,7 @@ message Protocol {
         Hello                       hello                         = 3;
         EncryptionHandshake         encryption_handshake          = 4;
         EncryptionHandshakeResponse encryption_handshake_response = 5;
-        ProtocolHandshake           protocol_handshake            = 6;
+        Frame                       frame                         = 6;
         ProtocolHandshakeResponse   protocol_handshake_response   = 7;
     }
 }

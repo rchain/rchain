@@ -10,7 +10,7 @@ trait Communication[F[_]] {
                 remote: ProtocolNode,
                 timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]]
   def local: F[ProtocolNode]
-  def commSend(data: Seq[Byte], peer: PeerNode): F[CommErr[Unit]]
+  def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def addNode(node: PeerNode): F[Unit]
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
   def findMorePeers(limit: Int): F[Seq[PeerNode]]
@@ -30,8 +30,9 @@ object Communication extends CommunicationInstances {
           remote: ProtocolNode,
           timeout: Duration = Duration(500, MILLISECONDS)): T[F, CommErr[ProtocolMessage]] =
         C.roundTrip(msg, remote, timeout).liftM[T]
-      def local: T[F, ProtocolNode]                                 = C.local.liftM[T]
-      def commSend(d: Seq[Byte], p: PeerNode): T[F, CommErr[Unit]]  = C.commSend(d, p).liftM[T]
+      def local: T[F, ProtocolNode] = C.local.liftM[T]
+      def commSend(msg: ProtocolMessage, p: PeerNode): T[F, CommErr[Unit]] =
+        C.commSend(msg, p).liftM[T]
       def addNode(node: PeerNode): T[F, Unit]                       = C.addNode(node).liftM[T]
       def broadcast(msg: ProtocolMessage): T[F, Seq[CommErr[Unit]]] = C.broadcast(msg).liftM[T]
       def findMorePeers(limit: Int): T[F, Seq[PeerNode]]            = C.findMorePeers(limit).liftM[T]
