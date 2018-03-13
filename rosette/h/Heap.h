@@ -25,7 +25,6 @@
 
 #include "Ob.h"
 
-
 class RootSet {
    public:
     virtual void preScavenge();
@@ -207,9 +206,11 @@ struct ProtectedItems<Type> {
 };
 
 /*
- * Align pads a size request to the next longword boundary, which is
- * necessary for compatibility with the tagging scheme that uses the low
- * two bits of a word for tag info (00 for a pointer).
+ * The PALLOC macros are used to conditionally protect local variables
+ * while allocating a chunk of heap.  They take the addresses of the
+ * variables to be protected, but don't actually protect them unless a
+ * scavenge is actually going to occur.  These are only used within the
+ * various create() routines.
  */
 
 static const int alignmentmask = 3;
@@ -252,13 +253,12 @@ T* gc_new() {
 
 template <typename T, typename... ArgTypes>
 T* gc_new(ArgTypes... args) {
-    auto sz = align(sizeof(T));
-    T* loc = (T*)heap->alloc(sz);
+    T* loc = (T*)heap->alloc(align(sizeof(T)));
 
     // TODO(leaf): Figure a way to protect args and scavange.
     if (!loc) {
         ProtectedItems<ArgTypes...>(args...);
-        loc = (T*)heap->scavengeAndAlloc(sz);
+        loc = (T*)heap->scavengeAndAlloc(align(sizeof(T)));
     }
 
     return new (loc) T(args...);
@@ -278,13 +278,12 @@ T* gc_new_space(const size_t extra_space) {
 
 template <typename T, typename... ArgTypes>
 T* gc_new_space(const size_t extra_space, ArgTypes... args) {
-    auto sz = align(sizeof(T) + extra_space);
-    T* loc = (T*)heap->alloc(sz);
+    T* loc = (T*)heap->alloc(align(sizeof(T) + extra_space));
 
     // TODO(leaf): Figure a way to protect args and scavange.
     if (!loc) {
         ProtectedItems<ArgTypes...>(args...);
-        loc = (T*)heap->scavengeAndAlloc(sz);
+        loc = (T*)heap->scavengeAndAlloc(align(sizeof(T)));
     }
 
     return new (loc) T(args...);
@@ -308,6 +307,16 @@ extern void* palloc3(unsigned, void*, void*, void*);
 extern void* palloc4(unsigned, void*, void*, void*, void*);
 extern void* palloc5(unsigned, void*, void*, void*, void*, void*);
 extern void* palloc6(unsigned, void*, void*, void*, void*, void*, void*);
+
+
+/*
+ * Align pads a size request to the next longword boundary, which is
+ * necessary for compatibility with the tagging scheme that uses the low
+ * two bits of a word for tag info (00 for a pointer).
+ */
+
+int align(int size);
+
 
 #define IS_OLD(p) (!heap->is_new(p))
 #define IS_NEW(p) (heap->is_new(p))

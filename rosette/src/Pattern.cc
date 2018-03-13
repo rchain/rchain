@@ -61,7 +61,10 @@ IdPattern::IdPattern(Ob* sym)
 }
 
 
-IdPattern* IdPattern::create(Ob* sym) { return gc_new<IdPattern>(sym); }
+IdPattern* IdPattern::create(Ob* sym) {
+    void* loc = PALLOC1(sizeof(IdPattern), sym);
+    return new (loc) IdPattern(sym);
+}
 
 
 void IdPattern::stuffKeys(Tuple* keys, int offset) {
@@ -90,7 +93,8 @@ ConstPattern::ConstPattern(Ob* val)
 
 
 ConstPattern* ConstPattern::create(Ob* val) {
-    return gc_new<ConstPattern>(val);
+    void* loc = PALLOC1(sizeof(ConstPattern), val);
+    return new (loc) ConstPattern(val);
 }
 
 
@@ -137,7 +141,8 @@ IdVecPattern::IdVecPattern(TupleExpr* te)
 
 
 IdVecPattern* IdVecPattern::create(TupleExpr* te) {
-    return gc_new<IdVecPattern>(te);
+    void* loc = PALLOC1(sizeof(IdVecPattern), te);
+    return new (loc) IdVecPattern(te);
 }
 
 
@@ -200,7 +205,8 @@ IdAmperRestPattern::IdAmperRestPattern(TupleExpr* te)
 
 
 IdAmperRestPattern* IdAmperRestPattern::create(TupleExpr* te) {
-    return gc_new<IdAmperRestPattern>(te);
+    void* loc = PALLOC1(sizeof(IdAmperRestPattern), te);
+    return new (loc) IdAmperRestPattern(te);
 }
 
 
@@ -300,7 +306,8 @@ ComplexPattern* ComplexPattern::create(TupleExpr* te) {
         ov->elem(i + 1) = FIXNUM(offset);
     }
 
-    return gc_new<ComplexPattern>(te, pv, ov);
+    void* loc = PALLOC(sizeof(ComplexPattern));
+    return new (loc) ComplexPattern(te, pv, ov);
 }
 
 
@@ -425,16 +432,19 @@ Template* Template::create(TupleExpr* te) {
     PROTECT(keys);
     StdMeta* keymeta = StdMeta::create(keys, FIXNUM(1), RBLFALSE);
 
-    return gc_new<Template>(keys, keymeta, pat);
+    void* loc = PALLOC1(sizeof(Template), keymeta);
+    return new (loc) Template(keys, keymeta, pat);
 }
 
 
-/**
- * This version of create should only be used when making the
- * NILtemplate.
- */
 Template* Template::create(Tuple* keys, Ob* keymeta, CompoundPattern* pat) {
-    return gc_new<Template>(keys, keymeta, pat);
+    /*
+     * This version of create should only be used when making the
+     * NILtemplate.
+     */
+
+    void* loc = PALLOC3(sizeof(Template), keys, keymeta, pat);
+    return new (loc) Template(keys, keymeta, pat);
 }
 
 

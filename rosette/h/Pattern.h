@@ -24,9 +24,10 @@
 #include "Ob.h"
 
 class Pattern : public Ob {
-   public:
+   protected:
     Pattern(int, Ob*, Ob*);
 
+   public:
     virtual int numberOfKeys(void);
     virtual void stuffKeys(Tuple*, int);
     virtual bool matchIntoArgvec(Tuple*, int, Ob*, int = -1);
@@ -39,9 +40,10 @@ class Pattern : public Ob {
 class IdPattern : public Pattern {
     STD_DECLS(IdPattern);
 
-   public:
+   protected:
     IdPattern(Ob*);
 
+   public:
     Ob* symbol;
 
     static IdPattern* create(Ob*);
@@ -55,9 +57,10 @@ class IdPattern : public Pattern {
 class ConstPattern : public Pattern {
     STD_DECLS(ConstPattern);
 
-   public:
+   protected:
     ConstPattern(Ob*);
 
+   public:
     Ob* val;
 
     static ConstPattern* create(Ob*);
@@ -69,9 +72,10 @@ class ConstPattern : public Pattern {
 
 
 class CompoundPattern : public Pattern {
-   public:
+   protected:
     CompoundPattern(int, Ob*, Ob*, TupleExpr*);
 
+   public:
     TupleExpr* expr;
 
     virtual Tuple* match(Tuple*, int);
@@ -82,9 +86,10 @@ class CompoundPattern : public Pattern {
 class IdVecPattern : public CompoundPattern {
     STD_DECLS(IdVecPattern);
 
-   public:
+   protected:
     IdVecPattern(TupleExpr*);
 
+   public:
     static IdVecPattern* create(TupleExpr*);
 
     int numberOfKeys(void);
@@ -98,9 +103,10 @@ class IdVecPattern : public CompoundPattern {
 class IdAmperRestPattern : public CompoundPattern {
     STD_DECLS(IdAmperRestPattern);
 
-   public:
+   protected:
     IdAmperRestPattern(TupleExpr*);
 
+   public:
     static IdAmperRestPattern* create(TupleExpr*);
 
     int numberOfKeys(void);
@@ -114,9 +120,10 @@ class IdAmperRestPattern : public CompoundPattern {
 class ComplexPattern : public CompoundPattern {
     STD_DECLS(ComplexPattern);
 
-   public:
+   protected:
     ComplexPattern(TupleExpr*, Tuple*, Tuple*);
 
+   public:
     Tuple* patvec;
     Tuple* offsetvec;
 
@@ -133,9 +140,10 @@ class ComplexPattern : public CompoundPattern {
 class Template : public Ob {
     STD_DECLS(Template);
 
-   public:
+   protected:
     Template(Tuple*, Ob*, CompoundPattern*);
 
+   public:
     Tuple* keytuple;
     CompoundPattern* pat;
     Ob* keymeta;

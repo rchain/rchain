@@ -369,7 +369,7 @@ DEF("string-size", stringSize, 1, 1) {
 DEF("string-set-nth", stringSetNth, 3, 3) {
     CHECK(0, RBLstring, string);
     CHECK_FIXNUM(1, n);
-    if (!IS_CHAR(ARG(2))) {
+    if (!IS(OTchar, ARG(2))) {
         return PRIM_MISMATCH(2, "Char");
     }
 
@@ -392,7 +392,7 @@ DEF("string-new", stringNew, 1, 2) {
     CHECK_FIXNUM(0, n);
     char c = ' ';
     if (NARGS > 1) {
-        if (!IS_CHAR(ARG(1))) {
+        if (!IS(OTchar, ARG(1))) {
             return PRIM_MISMATCH(1, "Char");
         }
 
@@ -414,7 +414,7 @@ int stringMemQAux(RBLstring* string, char c) {
 
 DEF("string-mem?", stringMemQ, 2, 2) {
     CHECK(0, RBLstring, string);
-    if (!IS_CHAR(ARG(1))) {
+    if (!IS(OTchar, ARG(1))) {
         return PRIM_MISMATCH(1, "Char");
     }
 

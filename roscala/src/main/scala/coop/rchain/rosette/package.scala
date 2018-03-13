@@ -1,6 +1,7 @@
 package coop.rchain
 
 import cats.data.State
+import coop.rchain.rosette.Ctxt.CtxtTransition
 import coop.rchain.rosette.parser.bytecode.ParseError
 import coop.rchain.rosette.prim.PrimError
 
@@ -13,7 +14,7 @@ package object rosette {
   sealed trait RblError
   case object DeadThread                        extends RblError
   case object Invalid                           extends RblError
-  case object Suspend                           extends RblError
+  case object Suspended                         extends RblError
   case object Absent                            extends RblError
   case object Upcall                            extends RblError
   case object PrimNotFound                      extends RblError
@@ -30,6 +31,11 @@ package object rosette {
         case t: T => Some(t)
         case _    => None
       }
+  }
+
+  implicit class RichCtxtTrans[A](trans: CtxtTransition[A]) {
+    def embedCtxt: VMTransition[A] =
+      trans.transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
   }
 
   implicit class OptionOps[R](opt: Option[R]) {

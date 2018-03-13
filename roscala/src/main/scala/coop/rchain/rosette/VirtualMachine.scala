@@ -1,9 +1,10 @@
 package coop.rchain.rosette
 
 import cats.data.State
+import cats.data.State._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rosette.Ob._
-import coop.rchain.rosette.Ctxt.setReg
+import coop.rchain.rosette.Ctxt.{setReg, Continuation, CtxtTransition}
 import coop.rchain.rosette.prim.Prim
 
 sealed trait Work
@@ -32,6 +33,10 @@ object VirtualMachine {
     Ob.NIV
   )
 
+  val doNextThread = modify[VMState](_.copy(doNextThreadFlag = true))
+  val doNothing    = pure[VMState, Unit](())
+  val vmError      = modify[VMState](_.copy(exitFlag = true, exitCode = 1))
+
   def handleApplyPrimSuspend(op: Op): Unit                = ()
   def handleApplyPrimUpcall(op: Op, tag: Location): Unit  = ()
   def handleFormalsMismatch(formals: Template): Ob        = null
@@ -39,71 +44,44 @@ object VirtualMachine {
   def handleSleep(): Unit                                 = ()
   def handleXmitUpcall(op: Op, tag: Location): Unit       = ()
 
+  /*
   def handleVirtualMachineError(state: VMState): VMState =
     state.ctxt.vmError(state)._2
+   */
 
   def handlePrimResult(primResult: Result, save: Ob => VMTransition[Unit]): VMTransition[Unit] =
     primResult match {
       case Right(ob) => save(ob)
 
-      case Left(DeadThread) => modify(_.copy(doNextThreadFlag = true))
+      case Left(DeadThread) => doNextThread
 
-      case Left(PrimNotFound) => modify(_.copy(exitFlag = true, exitCode = 1))
+      case Left(PrimNotFound) => vmError
 
       // TODO: Port handleException for OTsysval
-      case Left(_) => modify(_.copy(doNextThreadFlag = true))
+      case Left(_) => doNextThread
     }
 
   def runPrim(unwind: Boolean, optPrim: Option[Prim]): VMTransition[Result] =
-    State { state =>
-      optPrim match {
-        case Some(prim) =>
-          if (unwind)
-            unwindAndApplyPrim(prim, state).swap
-          else
-            (state, prim.dispatchHelper(state.ctxt))
+    for {
+      result <- optPrim match {
+                 case Some(prim) if unwind  => unwindAndApplyPrim(prim).embedCtxt
+                 case Some(prim) if !unwind => prim.dispatchHelper.embedCtxt
+                 case None                  => pure[VMState, Result](Left(PrimNotFound))
+               }
+    } yield result
 
-        case None =>
-          (state, Left(PrimNotFound))
-      }
-    }
+  // TODO: Finish
+  def unwindAndApplyPrim(prim: Prim): CtxtTransition[Result] = {
+    val unwind: CtxtTransition[Unit]         = ???
+    val recoil: Ctxt => CtxtTransition[Unit] = ???
 
-  /**
-    *  This code protects the current argvec, temporarily replacing it
-    *  with the unwound argvec for use by the primitive, and then
-    *  restoring it after the primitive has finished.  This is necessary
-    *  because of the way that the compiler permits inlined primitives
-    *  (the subjects of opApplyPrim opcodes) to share a common argvec.
-    *  Unwinding cannot be permitted to clobber the argvec that the
-    *  compiler has set up, or bad things can happen (and they are *hard*
-    *  to track down).
-    */
-  def unwindAndApplyPrim(prim: Prim, state: VMState): (Result, VMState) =
-    state.ctxt.argvec.flattenRest() match {
-      case Right(newArgvec) =>
-        val tmpState = state
-          .set(_ >> 'ctxt >> 'argvec)(newArgvec)
-          .set(_ >> 'ctxt >> 'nargs)(newArgvec.elem.size)
-
-        val result = prim.dispatchHelper(tmpState.ctxt)
-
-        (result, state)
-
-      case Left(AbsentRest) =>
-        val tmpState = state
-          .set(_ >> 'ctxt >> 'argvec)(Tuple.NIL)
-          .set(_ >> 'ctxt >> 'nargs)(0)
-
-        val result = prim.dispatchHelper(tmpState.ctxt)
-
-        (result, state)
-
-      case Left(InvalidRest) =>
-        val (error, errorState) =
-          prim.runtimeError("&rest value is not a tuple", state)
-
-        (Left(error), errorState)
-    }
+    for {
+      oldCtxt    <- get[Ctxt]
+      _          <- unwind
+      primResult <- prim.dispatchHelper
+      _          <- recoil(oldCtxt)
+    } yield primResult
+  }
 
   def handleException(v: Ob, op: Op, tag: Location): Unit =
     v.sysval match {
@@ -133,7 +111,12 @@ object VirtualMachine {
     }
 
   def getNextStrand: VMTransition[Boolean] = State { state =>
-    loggerStrand.info("Try to get next strand")
+    loggerStrand.info("Try to get next ctxt")
+    if (state.strandPool.isEmpty)
+      loggerStrand.info("strandPool is empty")
+    else
+      loggerStrand.info(
+        s"strandPool contains ${state.strandPool.size} ctxt: ${state.strandPool.map(_.id).mkString(", ")}")
 
     if (state.strandPool.isEmpty) {
       tryAwakeSleepingStrand(state) match {
@@ -144,11 +127,11 @@ object VirtualMachine {
         case NoWorkLeft => (state, true)
 
         case StrandsScheduled(stateScheduled) =>
-          val stateDebug = if (stateScheduled.debug) {
-            state.update(_ >> 'debugInfo)(_ :+ "*** waking sleepers\n")
-          } else {
-            stateScheduled
-          }
+          val stateDebug =
+            if (stateScheduled.debug)
+              state.update(_ >> 'debugInfo)(_ :+ "*** waking sleepers\n")
+            else
+              stateScheduled
 
           val strand   = stateDebug.strandPool.head
           val newState = stateDebug.update(_ >> 'strandPool)(_.tail)
@@ -165,11 +148,10 @@ object VirtualMachine {
 
   def tryAwakeSleepingStrand(state: VMState): Work =
     if (state.sleeperPool.isEmpty) {
-      if (state.nsigs == 0) {
+      if (state.nsigs == 0)
         NoWorkLeft
-      } else {
+      else
         WaitForAsync
-      }
     } else {
 
       /** Schedule all sleeping strands
@@ -193,16 +175,15 @@ object VirtualMachine {
         installMonitor(strand.monitor, state)
       else state
 
-    loggerStrand.info(s"Install strand ${strand.hashCode()}")
     installCtxt(strand, stateInstallMonitor)
   }
 
   def installMonitor(monitor: Monitor, state: VMState): VMState = {
-    val stateDebug = if (state.debug) {
-      state.update(_ >> 'debugInfo)(_ :+ s"*** new monitor: ${monitor.id}\n")
-    } else {
-      state
-    }
+    val stateDebug =
+      if (state.debug)
+        state.update(_ >> 'debugInfo)(_ :+ s"*** new monitor: ${monitor.id}\n")
+      else
+        state
 
     stateDebug.currentMonitor.stop()
 
@@ -219,11 +200,15 @@ object VirtualMachine {
   }
 
   def installCtxt(ctxt: Ctxt, state: VMState): VMState = {
-    val stateDebug = if (state.debug) {
-      state.update(_ >> 'debugInfo)(_ :+ "*** new strand\n")
-    } else {
-      state
-    }
+    val stateDebug =
+      if (state.debug)
+        state.update(_ >> 'debugInfo)(_ :+ "*** new strand\n")
+      else
+        state
+
+    loggerStrand.info(s"Install ctxt ${ctxt.id}")
+    //loggerStrand.info(s"Install code with size ${ctxt.code.codevec.size}")
+    //loggerStrand.info(s"Install pc value ${ctxt.pc.relative}")
 
     stateDebug
       .set(_ >> 'ctxt)(ctxt)
@@ -231,17 +216,20 @@ object VirtualMachine {
       .set(_ >> 'pc >> 'relative)(ctxt.pc.relative)
   }
 
-  def executeSeq(opCodes: Seq[Op], state: VMState): VMState = {
+  def executeSeq(opcodes: Seq[Op], state: VMState): VMState = {
     var pc           = state.pc.relative
     var exit         = false
     var currentState = state
+    var codevec      = opcodes
 
-    while (pc < opCodes.size && !exit) {
-      val op = opCodes(pc)
+    loggerStrand.info(s"Current ctxt: ${state.ctxt.id} | Parent ctxt: ${state.ctxt.ctxt.id}")
+
+    while (pc < codevec.size && !exit) {
+      val op = codevec(pc)
       loggerOpcode.info("PC: " + pc + " Opcode: " + op)
 
       val tmpState = for {
-        _ <- modify(
+        _ <- modify[VMState](
               _.update(_ >> 'pc >> 'relative)(_ + 1)
                 .update(_ >> 'bytecodes)(
                   _.updated(op, currentState.bytecodes.getOrElse(op, 0.toLong) + 1)))
@@ -253,6 +241,7 @@ object VirtualMachine {
       currentState = tmpState.runS(currentState).value
 
       pc = currentState.pc.relative
+      codevec = currentState.code.codevec
 
       if (currentState.exitFlag) exit = true
     }
@@ -267,12 +256,12 @@ object VirtualMachine {
 
     if (mState.doXmitFlag) {
       // may set doNextThreadFlag
-      mState = doXmit(mState).set(_ >> 'doXmitFlag)(false)
+      mState = doXmit.runS(mState).value.set(_ >> 'doXmitFlag)(false)
     }
 
     if (mState.doRtnFlag) {
       // may set doNextThreadFlag
-      mState = doRtn(mState).set(_ >> 'doRtnFlag)(false)
+      mState = doRtn.runS(mState).value.set(_ >> 'doRtnFlag)(false)
     }
 
     if (mState.vmErrorFlag) {
@@ -283,6 +272,8 @@ object VirtualMachine {
 
     if (mState.doNextThreadFlag) {
       val (tmpState, isEmpty) = getNextStrand.run(mState).value
+      loggerStrand.info("Current codesize: " + mState.code.codevec.size)
+      loggerStrand.info("Current pc: " + mState.pc.relative)
       mState = tmpState.set(_ >> 'doNextThreadFlag)(false)
 
       if (isEmpty) {
@@ -316,33 +307,63 @@ object VirtualMachine {
     }
   }
 
-  def doRtn(state: VMState): VMState = {
-    val (isError, newState) = state.ctxt.ret(state.ctxt.rslt)(state)
-
-    if (isError)
-      newState.set(_ >> 'vmErrorFlag)(true)
-    else if (newState.doRtnFlag)
-      newState.set(_ >> 'doNextThreadFlag)(true)
-    else
-      newState
+  def schedule(ctxt: Ctxt): VMTransition[Unit] = {
+    loggerStrand.info("Schedule ctxt " + ctxt.id)
+    modify[VMState](_.update(_ >> 'strandPool)(_ :+ ctxt))
   }
 
-  def doXmit(state: VMState): VMState = {
-    val (result, newState) = state.ctxt.trgt match {
-      case ob: StdOprn => ob.dispatch(state)
-      // TODO: Add other cases
-      case _ => (Right(Ob.NIV), state)
-    }
+  /** Return current result
+    *
+    * This returns the current result to the parent ctxt.
+    * The parent ctxt possibly gets scheduled.
+    */
+  def doRtn: VMTransition[Unit] =
+    for {
+      rslt        <- inspect[VMState, Ob](_.ctxt.rslt)
+      ctxtRet     <- Ctxt.ret(rslt).embedCtxt
+      isDoRtnFlag <- inspect[VMState, Boolean](_.doRtnFlag)
 
-    result match {
-      case Right(ob) if ob.is(OTsysval) =>
-        // handleException(ob, instr, state.ctxt.tag)
-        newState.set(_ >> 'doNextThreadFlag)(true)
-      case Left(DeadThread)       => newState.set(_ >> 'doNextThreadFlag)(true)
-      case _ if state.xmitData._2 => newState.set(_ >> 'doNextThreadFlag)(true)
-      case _                      => newState
-    }
-  }
+      (isError, optContinuation) = ctxtRet
+
+      _ <- optContinuation.map(schedule).getOrElse(pure(()))
+
+      _ <- if (isError)
+            modify[VMState](_.copy(vmErrorFlag = true))
+          else
+            doNothing
+
+      _ <- if (isDoRtnFlag) doNextThread else doNothing
+    } yield ()
+
+  /** Dispatch current target
+    *
+    * This puts the result of the dispatch into the parent ctxt.
+    * The parent ctxt (which includes the result) possibly gets scheduled.
+    *
+    * TODO: Add unwind
+    */
+  def doXmit: VMTransition[Unit] =
+    for {
+      target         <- inspect[VMState, Ob](_.ctxt.trgt)
+      dispatchResult <- target.dispatch.embedCtxt
+      next           <- inspect[VMState, Boolean](_.xmitData._2)
+
+      (result, optContinuation) = dispatchResult
+
+      _ <- optContinuation.map(schedule).getOrElse(pure(()))
+
+      _ <- result match {
+            // TODO: Add missing case where result is OTsysval
+            case Left(DeadThread) => doNextThread
+
+            // This is the usual case
+            case Left(Suspended) => doNothing
+
+            case _ if next => doNextThread
+
+            case _ => doNothing
+          }
+    } yield ()
 
   def executeDispatch(op: Op): VMTransition[Unit] =
     op match {
@@ -402,7 +423,7 @@ object VirtualMachine {
     modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0))
 
   def execute(op: OpPush): VMTransition[Unit] =
-    modify(state => state.set(_ >> 'ctxt)(Ctxt(None, state.ctxt)))
+    modify(state => state.set(_ >> 'ctxt)(Ctxt(Tuple.NIL, state.ctxt)))
 
   def execute(op: OpPop): VMTransition[Unit] =
     modify(state => state.set(_ >> 'ctxt)(state.ctxt.ctxt))
@@ -413,7 +434,7 @@ object VirtualMachine {
     modify(_.set(_ >> 'ctxt >> 'argvec)(Tuple(op.n, NIV)))
 
   def execute(op: OpPushAlloc): VMTransition[Unit] =
-    modify(_.update(_ >> 'ctxt)(Ctxt(Some(Tuple(op.n, None)), _)))
+    modify(_.update(_ >> 'ctxt)(Ctxt(Tuple(op.n, NIV), _)))
 
   def execute(op: OpExtend): VMTransition[Unit] = modify { state =>
     def getTemplate = state.code.lit(op.lit).as[Template]
@@ -445,8 +466,8 @@ object VirtualMachine {
 
   def execute(op: OpFork): VMTransition[Unit] =
     for {
-      ctxt <- inspect[Ctxt](_.ctxt.copy(pc = PC(op.pc)))
-      _    <- modify(_.update(_ >> 'strandPool)(ctxt +: _))
+      ctxt <- inspect[VMState, Ctxt](_.ctxt.copy(pc = PC(op.pc)))
+      _    <- modify[VMState](_.update(_ >> 'strandPool)(ctxt +: _))
     } yield ()
 
   def execute(op: OpXmitTag): VMTransition[Unit] =
@@ -508,9 +529,9 @@ object VirtualMachine {
 
   def execute(op: OpApplyPrimTag): VMTransition[Unit] =
     for {
-      loc <- inspect(_.code.lit(op.lit).asInstanceOf[Location])
-      _   <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
-      _   <- modify(_.set(_ >> 'loc)(loc))
+      loc <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
+      _   <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
+      _   <- modify[VMState](_.set(_ >> 'loc)(loc))
 
       prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
@@ -535,7 +556,7 @@ object VirtualMachine {
 
   def execute(op: OpApplyPrimArg): VMTransition[Unit] =
     for {
-      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
+      _ <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
       prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
@@ -560,7 +581,7 @@ object VirtualMachine {
 
   def execute(op: OpApplyPrimReg): VMTransition[Unit] =
     for {
-      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
+      _ <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
       prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
@@ -568,8 +589,7 @@ object VirtualMachine {
       _ <- handlePrimResult(
             result,
             ob =>
-              setReg(op.reg, ob)
-                .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+              setReg(op.reg, ob).embedCtxt
                 .transform { (vmState, storeResult) =>
                   storeResult match {
                     case Success =>
@@ -583,7 +603,7 @@ object VirtualMachine {
 
   def execute(op: OpApplyCmd): VMTransition[Unit] =
     for {
-      _ <- modify(_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
+      _ <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
       prim   = Prim.nthPrim(op.primNum)
       result <- runPrim(op.unwind, prim)
@@ -618,41 +638,39 @@ object VirtualMachine {
         .set(_ >> 'doRtnFlag)(true))
 
   def execute(op: OpUpcallRtn): VMTransition[Unit] =
-    modify(
-      state =>
-        state
-          .set(_ >> 'ctxt >> 'tag)(state.code.lit(op.lit).asInstanceOf[Location])
-          .updateSelf(state => {
-            val ctxt = state.ctxt
+    for {
+      result   <- inspect[VMState, Ob](_.ctxt.rslt)
+      location <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
 
-            /*
-        import Location._
+      _ <- modify[VMState](_.set(_ >> 'ctxt >> 'tag)(location))
 
-        Location.store(ctxt.tag, ctxt.ctxt, state.globalEnv, ctxt.rslt) match {
-          case StoreFail => state.set(_ >> 'vmErrorFlag)(true)
+      storeResult <- Location
+                      .store(location, result)
+                      .transformS[VMState](
+                        _.ctxt.ctxt,
+                        (vmState, ctxt) => vmState.set(_ >> 'ctxt >> 'ctxt)(ctxt))
 
-          case StoreCtxt(ctxt) =>
-            state
-              .set(_ >> 'ctxt)(ctxt)
-              .update(_ >> 'doNextThreadFlag)(op.next || _)
-
-          case StoreGlobal(env) => state.set(_ >> 'globalEnv)(env)
-        }
-             */
-            state
-          }))
+      _ <- storeResult match {
+            case Success if op.next => doNextThread
+            case Success            => execute(OpUpcallResume())
+            case Failure            => vmError
+          }
+    } yield ()
 
   def execute(op: OpUpcallResume): VMTransition[Unit] =
-    modify(
-      state =>
-        state.ctxt.ctxt
-          .scheduleStrand(state)
-          .set(_ >> 'doNextThreadFlag)(true))
+    for {
+      parentCtxt <- inspect[VMState, Ctxt](_.ctxt.ctxt)
+      _          <- schedule(parentCtxt)
+      _          <- doNextThread
+    } yield ()
 
   def execute(op: OpNxt): VMTransition[Unit] =
     for {
       exit <- getNextStrand
-      _    <- if (exit) modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0)) else pure
+      _ <- if (exit)
+            modify[VMState](_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0))
+          else
+            pure[VMState, Unit](())
     } yield ()
 
   def execute(op: OpJmp): VMTransition[Unit] = modify(_.set(_ >> 'pc >> 'relative)(op.pc))
@@ -776,20 +794,20 @@ object VirtualMachine {
     for {
       optOb <- getCtxtReg(op.reg)
       _ <- optOb match {
-            case Some(ob) => modify(_.set(_ >> 'ctxt >> 'rslt)(ob))
-            case None     => pure
+            case Some(ob) => modify[VMState](_.set(_ >> 'ctxt >> 'rslt)(ob))
+            case None     => pure[VMState, Unit](())
           }
     } yield ()
 
   def execute(op: OpXferRsltToDest): VMTransition[Unit] =
     for {
-      location <- inspect[Location](_.code.lit(op.lit).asInstanceOf[Location])
-      _        <- modify(_.copy(loc = location))
-      rslt     <- inspect[Ob](_.ctxt.rslt)
+      location <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
+      _        <- modify[VMState](_.copy(loc = location))
+      rslt     <- inspect[VMState, Ob](_.ctxt.rslt)
 
       _ <- Location
             .store(location, rslt)
-            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+            .embedCtxt
             .transform { (vmState, storeRes) =>
               storeRes match {
                 case Success => (vmState, ())
@@ -800,9 +818,9 @@ object VirtualMachine {
 
   def execute(op: OpXferSrcToRslt): VMTransition[Unit] =
     for {
-      location  <- inspect[Location](_.code.lit(op.lit).asInstanceOf[Location])
-      globalEnv <- inspect[TblObject](_.globalEnv)
-      _         <- modify(_.copy(loc = location))
+      location  <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
+      globalEnv <- inspect[VMState, TblObject](_.globalEnv)
+      _         <- modify[VMState](_.copy(loc = location))
       _ <- Location
             .fetch(location, globalEnv)
             .transform((ctxt, optRes) => (ctxt.copy(rslt = optRes.getOrElse(Ob.INVALID)), ()))
@@ -828,10 +846,4 @@ object VirtualMachine {
 
   def execute(op: OpUnknown): VMTransition[Unit] =
     modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(1))
-
-  def inspect[A] = State.inspect[VMState, A] _
-
-  val modify = State.modify[VMState] _
-
-  lazy val pure = State.pure[VMState, Unit](())
 }

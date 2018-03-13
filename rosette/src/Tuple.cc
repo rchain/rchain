@@ -143,7 +143,8 @@ Tuple* Tuple::create() {
      * initialize NIL.
      */
     if (NIL == INVALID) {
-        return gc_new<Tuple>(0, INVALID);
+        void* loc = PALLOC(sizeof(Tuple));
+        return new (loc) Tuple(0, INVALID);
     } else {
         return NIL;
     }
@@ -155,8 +156,8 @@ Tuple* Tuple::create(int size, Tuple* master, int offset, int n, Ob* init) {
         return NIL;
     }
 
-    return gc_new_space<Tuple>(size * sizeof(Ob*), size, master, offset, n,
-                               init);
+    void* loc = PALLOC2(sizeof(Tuple) + size * sizeof(Ob*), master, init);
+    return new (loc) Tuple(size, master, offset, n, init);
 }
 
 
@@ -165,12 +166,14 @@ Tuple* Tuple::create(int n, Ob* init) {
         return NIL;
     }
 
-    return gc_new_space<Tuple>(n * sizeof(Ob*), n, init);
+    void* loc = PALLOC1(sizeof(Tuple) + n * sizeof(Ob*), init);
+    return new (loc) Tuple(n, init);
 }
 
 
 Tuple* Tuple::create(Ob** p, int n) {
-    return gc_new_space<Tuple>(n * sizeof(Ob*), p, n);
+    void* loc = PALLOC(sizeof(Tuple) + n * sizeof(Ob*));
+    return new (loc) Tuple(p, n);
 }
 
 
@@ -179,7 +182,8 @@ Tuple* Tuple::create(int size, int offset, Tuple* rest) {
         return NIL;
     }
 
-    return gc_new_space<Tuple>(size * sizeof(Ob*), size, offset, rest);
+    void* loc = PALLOC1(sizeof(Tuple) + size * sizeof(Ob*), rest);
+    return new (loc) Tuple(size, offset, rest);
 }
 
 
@@ -192,7 +196,7 @@ Tuple* Tuple::create(Tuple* t1, Tuple* t2) {
         return t1;
     }
 
-    auto loc = gc_alloc<Tuple>(SIZE(t1) + SIZE(t2) - sizeof(Tuple), t1, t2);
+    void* loc = PALLOC2(SIZE(t1) + SIZE(t2) - sizeof(Tuple), t1, t2);
     return new (loc) Tuple(t1, t2);
 }
 
@@ -200,7 +204,8 @@ Tuple* Tuple::create(Tuple* t1, Tuple* t2) {
 Tuple* Tuple::create(Tuple* t, int n) {
     PROTECT(t);
     Tuple* rest = t->makeTail(n);
-    return gc_new_space<Tuple>((n + 1) * sizeof(Ob*), t, n, rest);
+    void* loc = PALLOC1(sizeof(Tuple) + (n + 1) * sizeof(Ob*), rest);
+    return new (loc) Tuple(t, n, rest);
 }
 
 
@@ -209,7 +214,7 @@ Tuple* Tuple::create(Tuple* t) {
         return NIL;
     }
 
-    auto loc = gc_alloc<Tuple>(SIZE(t), t);
+    void* loc = PALLOC1(SIZE(t), t);
     return new (loc) Tuple(t);
 }
 
