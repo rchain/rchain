@@ -80,6 +80,12 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
             .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
         }
       }
+      describe(" to which he was connected in the past") {
+        it("should skip encryption handshake")(pending)
+        it("should init protocol handshake")(pending)
+        it("should rollback to encryption handshake if initialized protocol handshake did not respond")(
+          pending)
+      }
     }
 
     describe("when receiving encryption handshake from remote node") {
