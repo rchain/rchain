@@ -1,38 +1,42 @@
 new testResult, updateTestResult in {
   testResult!(true) |
   contract updateTestResult(@bool, return) = {
-    for(r <- testResult) {
+    for(@r <- testResult) {
       match [r, bool] {
-        case [true, true] => { testResult!(true) | return!(true) }
-        case _ => { testResult!(false) | return!(false) }
+        [true, true] => { testResult!(true) | return!(true) }
+        _ => { testResult!(false) | return!(false) }
       }
     }
   } |
-  contract @"CellDemo"(_) = new MakeCell in {
-    // Makes a single cell in which you can store values
-    contract MakeCell(@init, get, set) = new valueStore in {
-      valueStore!(init) |
-      for (@value <= valueStore) {
-        select {
-          ack <- get => { valueStore!(value) | ack!(value) }
-          @newValue, ack <- set => { valueStore!(newValue) | ack!(true) }
+  contract @"CellDemo"(_) = {
+    new MakeCell in {
+      // Makes a single cell in which you can store values
+      contract MakeCell(@init, get, set) = {
+        new valueStore in {
+          valueStore!(init) |
+          for(ack <- get; @value <- valueStore) {
+            valueStore!(value) | ack!(value)
+          } |
+          for(@newValue, ack <- set; _ <- valueStore) {
+            valueStore!(newValue) | ack!(true)
+          }
         }
-      }
-    } |
+      } |
 
-    // Cell usage.
-    new myGet, mySet in {
-      MakeCell!(123, *myGet, *mySet) |
-      new ack in {
-        myGet!(*ack) |
-        for (@result <- ack) {
-          updateTestResult!(result == 123, *ack) |
-          for (_ <- ack) {
-            mySet!(456, *ack) |
+      // Cell usage.
+      new myGet, mySet in {
+        MakeCell!(123, *myGet, *mySet) |
+        new ack in {
+          myGet!(*ack) |
+          for (@result <- ack) {
+            updateTestResult!(result == 123, *ack) |
             for (_ <- ack) {
-              myGet!(*ack) |
-              for (@result <- ack) {
-                updateTestResult!(result == 456, *ack)
+              mySet!(456, *ack) |
+              for (_ <- ack) {
+                myGet!(*ack) |
+                for (@result <- ack) {
+                  updateTestResult!(result == 456, *ack)
+                }
               }
             }
           }
