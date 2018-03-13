@@ -2,6 +2,7 @@ package coop.rchain.p2p
 
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
@@ -103,13 +104,32 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
           }
     } yield ()
 
+  private def getOrError[F[_]: Applicative, A](oa: Option[A], error: CommError)(
+      implicit
+      err: ApplicativeError_[F, CommError]): F[A] =
+    oa.fold[F[A]](err.raiseError[A](error))(_.pure[F])
+
+  private def handleProtocolHandshake[F[_]: Monad: Time: Communication](
+      remote: PeerNode,
+      maybeHeader: Option[Header],
+      maybePh: Option[ProtocolHandshake])(implicit
+                                          err: ApplicativeError_[F, CommError]): F[String] =
+    for {
+      local  <- Communication[F].local
+      ph     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      h      <- getOrError[F, Header](maybeHeader, headerNotAvailable)
+      ts     <- Time[F].currentMillis
+      resp   = ProtocolHandshakeResponseMessage(protocolHandshakeResponse(local, h), ts)
+      result <- Communication[F].commSend(resp, remote)
+      _      <- Communication[F].addNode(remote)
+    } yield s"Resonded to protocol handshake request from $remote"
+
   def handleFrame[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
       remote: PeerNode,
       msg: FrameMessage)(implicit
                          err: ApplicativeError_[F, CommError],
-                         keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
+                         keysStore: Kvs[F, PeerNode, Array[Byte]]): F[String] =
     for {
-      local             <- Communication[F].local
       maybeRemotePubKey <- keysStore.get(remote)
       keys              <- Encryption[F].fetchKeys
       remotePubKey <- maybeRemotePubKey
@@ -119,23 +139,13 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       nonce          = frame.nonce.toByteArray
       encryptedBytes = frame.framed.toByteArray
       decryptedBytes <- Encryption[F].decrypt(remotePubKey, keys.priv, nonce, encryptedBytes)
-      ph <- Frameable
-             .parseFrom(decryptedBytes)
-             .message
-             .protocolHandshake
-             .map(_.pure[F])
-             .getOrElse(err.raiseError(parseError("could not parse ProtocolHandshake")))
-      ts <- Time[F].currentMillis
-      result <- msg.header
-                 .map { h =>
-                   ProtocolHandshakeResponseMessage(protocolHandshakeResponse(local, h), ts)
-                 }
-                 .toRightIor(HeaderNotAvailable)
-                 .toEither
-                 .traverse(resp => Communication[F].commSend(resp, remote))
-      _ <- Communication[F].addNode(remote)
-      _ <- Log[F].info("handleFrame: end")
-    } yield ()
+      unframed       = Frameable.parseFrom(decryptedBytes).message
+      res <- if (unframed.isProtocolHandshake) {
+              handleProtocolHandshake[F](remote, msg.header, unframed.protocolHandshake)
+            } else
+              err.fromEither(
+                Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
+    } yield res
 
   override def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
     ?[_],
@@ -164,11 +174,9 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                 val err     = ApplicativeError_[F, CommError]
                 val handled = handleFrame[F](sender, FrameMessage(proto, System.currentTimeMillis))
                 err.attempt(handled) >>= {
-                  case Right(_) =>
-                    Log[F].info(s"Responded to protocol handshake request from $sender.")
-                  case Left(ex) => Log[F].error(s"handleProtocolHandshake(): $ex")
+                  case Right(res) => Log[F].info(res)
+                  case Left(err)  => Log[F].error(s"error while handling frame message: $err")
                 }
-
               case _ => Log[F].warn(s"Unexpected message type ${msg.typeUrl}")
             }
           }.void
