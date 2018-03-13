@@ -28,7 +28,7 @@ object SpatialMatcher {
   }
 
   @tailrec
-  def possiblyFind[T, R](prop: (T => Option[R]), haystack: Seq[T]): Option[R] =
+  def possiblyFind[T, R](prop: T => Option[R], haystack: Seq[T]): Option[R] =
     haystack match {
       case Nil => None
       case head +: rest =>
@@ -49,7 +49,7 @@ object SpatialMatcher {
           exists(prop, rest)
     }
 
-  def emptyMap: Map[Int, Par] = Map()
+  def emptyMap: FreeMap = Map.empty[Int, Par]
 
   def unLift[F[_], S, A](raw: StateT[F, S, A])(implicit F: Monad[F]): StateT[F, S, F[(S, A)]] =
     StateT(s => F.pure((s, raw.run(s))))
@@ -143,7 +143,7 @@ object SpatialMatcher {
         }
       // Try to find a match for a single pattern.
       case (targets, pattern +: prem) => {
-        if (lf.freeCount(pattern) == 0) {
+        if (lf.freeCount(pattern) === 0) {
           possiblyRemove(pattern, targets) match {
             case None           => StateT.liftF(Stream.Empty)
             case Some(filtered) => listMatch(filtered, prem, matcher, merger, varLevel, wildcard)
@@ -174,7 +174,7 @@ object SpatialMatcher {
     } yield forcedYield
 
   def spatialMatch(target: Par, pattern: Par): OptionalFreeMap[Unit] =
-    if (pattern.freeCount == 0) {
+    if (pattern.freeCount === 0) {
       if (pattern == target)
         StateT.pure(Unit)
       else {
@@ -254,7 +254,7 @@ object SpatialMatcher {
       case (ChanVar(tv), ChanVar(pv)) =>
         (tv.varInstance, pv.varInstance) match {
           case (BoundVar(tlevel), BoundVar(plevel)) => {
-            if (tlevel == plevel)
+            if (tlevel === plevel)
               StateT.pure(Unit)
             else
               StateT.liftF(None)
