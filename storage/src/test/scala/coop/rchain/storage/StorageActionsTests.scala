@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.storage.LMDBStoreStorageActionsTests.dbPath
 import coop.rchain.storage.test._
 import coop.rchain.storage.test.implicits._
 import coop.rchain.storage.util.{ignore => ign}
@@ -13,10 +12,7 @@ import org.scalatest._
 import scala.collection.mutable
 import scala.util.Try
 
-class StorageActionsTests(createStore: () => IStore[String, Pattern, String, List[String] => Unit])
-    extends FlatSpec
-    with Matchers
-    with OptionValues {
+abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionValues {
 
   val logger: Logger = Logger[StorageActionsTests]
 
@@ -27,14 +23,7 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestStore(f: IStore[String, Pattern, String, List[String] => Unit] => Unit): Unit = {
-    val store: IStore[String, Pattern, String, List[String] => Unit] = createStore()
-    try {
-      f(store)
-    } finally {
-      store.close()
-    }
-  }
+  def withTestStore(f: IStore[String, Pattern, String, List[String] => Unit] => Unit): Unit
 
   /** A utility function to be used as a continuation in tests.
     *
@@ -527,29 +516,33 @@ class StorageActionsTests(createStore: () => IStore[String, Pattern, String, Lis
   }
 }
 
-class InMemoryStoreStorageActionsTests
-    extends StorageActionsTests(
-      () => InMemoryStore.create[String, Pattern, String, List[String] => Unit])
+class InMemoryStoreStorageActionsTests extends StorageActionsTests() {
+  override def withTestStore(
+      f: IStore[String, Pattern, String, List[String] => Unit] => Unit): Unit = {
+    val testStore = InMemoryStore.create[String, Pattern, String, List[String] => Unit]
+    try {
+      f(testStore)
+    } finally {
+      testStore.close()
+    }
+  }
+}
 
-class LMDBStoreStorageActionsTests
-    extends StorageActionsTests(LMDBStoreStorageActionsTests.create)
-    with BeforeAndAfter
-    with BeforeAndAfterAll {
+class LMDBStoreStorageActionsTests extends StorageActionsTests() with BeforeAndAfterAll {
+  private[this] val dbDir = Files.createTempDirectory("rchain-storage-test-")
 
-  before {
-    val store = LMDBStoreStorageActionsTests.create()
-    store.asInstanceOf[IClearableStore].clear()
-    store.close()
+  override def withTestStore(
+      f: IStore[String, Pattern, String, List[String] => Unit] => Unit): Unit = {
+    val testStore =
+      LMDBStore.create[String, Pattern, String, List[String] => Unit](dbDir, 1024 * 1024 * 1024)
+    testStore.clear()
+    try {
+      f(testStore)
+    } finally {
+      testStore.close()
+    }
   }
 
   override def afterAll(): Unit =
-    recursivelyDeletePath(LMDBStoreStorageActionsTests.dbPath)
-}
-
-object LMDBStoreStorageActionsTests {
-  private[storage] def create =
-    () =>
-      LMDBStore.create[String, Pattern, String, List[String] => Unit](dbPath, 1024 * 1024 * 1024)
-
-  private[storage] val dbPath: Path = Files.createTempDirectory("rchain-storage-test-")
+    recursivelyDeletePath(dbDir)
 }

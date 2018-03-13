@@ -1,7 +1,10 @@
 package coop.rchain.storage
 
+import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
+
+import coop.rchain.storage.util.ignore
 
 package object test {
 
@@ -24,4 +27,16 @@ package object test {
 
   def recursivelyDeletePath(p: Path): Path =
     Files.walkFileTree(p, makeDeleteFileVisitor)
+
+  /**
+    * Converts specified byteBuffer to '-' separated string,
+    * convenient during debugging
+    */
+  private[storage] def toStr(byteBuffer: ByteBuffer): String = {
+    byteBuffer.mark()
+    val fetched = new Array[Byte](byteBuffer.remaining())
+    ignore { byteBuffer.get(fetched) }
+    byteBuffer.reset()
+    fetched.toSeq.map(x => x.toString).mkString("-")
+  }
 }

@@ -1,26 +1,10 @@
 package coop.rchain.storage
-
 import java.nio.ByteBuffer
-import java.nio.file.Path
-import java.security.MessageDigest
 
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.storage.util._
-import org.lmdbjava.DbiFlags.MDB_CREATE
-import org.lmdbjava.{Dbi, Env, Txn}
 import coop.rchain.models.Serialize
-import coop.rchain.models.implicits.rhoInstanceWrapper
-import coop.rchain.storage.LMDBStore.{fromBB, fromBL, fromBS, hashBytes, toBB, toBL, toBS}
 import coop.rchain.storage.datamodels.{BytesList, PsKsBytes, PsKsBytesList}
-
-trait IClearableStore {
-
-  /**
-    *  clears database, used mostly to speedup unit-tests, and implemented by LMDBStore only
-    */
-  def clear(): Unit
-}
+import org.lmdbjava.{Dbi, Env, Txn}
 
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
@@ -31,31 +15,35 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 ac: Serialize[A],
                                                                 kc: Serialize[K],
                                                                 bl: Serialize[BytesList])
-    extends IStore[C, P, A, K]
-    with IClearableStore {
+    extends IStore[C, P, A, K] {
+
+  import coop.rchain.storage.util._
+  import coop.rchain.storage.LMDBStore.{
+    fromByteBuffer,
+    fromByteString,
+    fromBytesList,
+    hashBytes,
+    toByteBuffer,
+    toByteString,
+    toBytesList
+  }
 
   type H = ByteBuffer
 
-  private[storage] def hashC(packedCs: H): H =
-    hashBytes(packedCs)
-
-  private[storage] def hashC(c: C)(implicit serialize: Serialize[C]): H =
-    hashC(List(c))(serialize)
-
-  private[storage] def hashC(cs: List[C])(implicit serialize: Serialize[C]): H =
-    hashC(toBB(cs)(serialize))
+  private[storage] def hashC(cs: List[C])(implicit st: Serialize[C]): H =
+    hashBytes(toByteBuffer(cs)(st))
 
   private[storage] def getKey(txn: T, s: H): List[C] =
-    fromBB[C](Option(_dbKeys.get(txn, s))).getOrElse(List.empty)
+    Option(_dbKeys.get(txn, s)).map(fromByteBuffer[C]).getOrElse(List.empty[C])
 
   private[storage] def putCs(txn: T, channels: List[C]): Unit =
     putCsH(txn, channels)
 
   private[storage] def putCsH(txn: T, channels: List[C]): H = {
-    val packedCs = toBB(channels)
-    val hashCs   = hashC(packedCs)
-    _dbKeys.put(txn, hashCs, packedCs)
-    hashCs
+    val packedCs = toByteBuffer(channels)
+    val keyCs    = hashBytes(packedCs)
+    _dbKeys.put(txn, keyCs, packedCs)
+    keyCs
   }
 
   type T = Txn[ByteBuffer]
@@ -78,101 +66,109 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
 
   def putA(txn: T, channels: List[C], a: A): Unit = {
-    val hashCs = putCsH(txn, channels)
-    val as     = fromBB[A](Option(_dbAs.get(txn, hashCs))).getOrElse(List.empty[A])
-    _dbAs.put(txn, hashCs, toBB(a :: as))
+    val keyCs = putCsH(txn, channels)
+    val as    = Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]).getOrElse(List.empty[A])
+    _dbAs.put(txn, keyCs, toByteBuffer(a :: as))
   }
 
   def getAs(txn: T, channels: List[C]): List[A] = {
-    val hashCs = hashC(channels)
-    fromBB[A](Option(_dbAs.get(txn, hashCs))).getOrElse(List.empty[A])
+    val keyCs = hashC(channels)
+    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]).getOrElse(List.empty[A])
   }
 
   def removeA(txn: T, channel: C, index: Int): Unit = {
-    val hashCs = hashC(List(channel))
-    //shouldn't we need to throw exception if as doesn't exists?
-    for (as <- fromBB[A](Option(_dbAs.get(txn, hashCs)))) {
-      val newAs = util.dropIndex(as, index)
-      _dbAs.put(txn, hashCs, toBB(newAs))
+    val keyCs = hashC(List(channel))
+    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]) match {
+      case Some(as) => _dbAs.put(txn, keyCs, toByteBuffer(util.dropIndex(as, index)))
+      case None     => throw new IllegalArgumentException(s"removeA: no values at $channel")
     }
   }
 
-  private[this] def readPsKsBytesList(txn: T, hashCs: H): Option[List[PsKsBytes]] =
-    Option(_dbPsKs.get(txn, hashCs)).map(bytes => {
+  private[this] def readPsKsBytesList(txn: T, keyCs: H): Option[List[PsKsBytes]] =
+    Option(_dbPsKs.get(txn, keyCs)).map(bytes => {
       val fetched = new Array[Byte](bytes.remaining())
       ignore { bytes.get(fetched) }
       PsKsBytesList.parseFrom(fetched).values.toList
     })
 
-  private[this] def writePsKsBytesList(txn: T, hashCs: H, values: List[PsKsBytes]): Unit = {
+  private[this] def writePsKsBytesList(txn: T, keyCs: H, values: List[PsKsBytes]): Unit = {
     val toWrite        = PsKsBytesList().withValues(values).toByteArray
     val bb: ByteBuffer = ByteBuffer.allocateDirect(toWrite.length)
     bb.put(toWrite).flip()
-    _dbPsKs.put(txn, hashCs, bb)
+    _dbPsKs.put(txn, keyCs, bb)
   }
 
   def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit = {
-    val hashCs  = putCsH(txn, channels)
-    val binPsKs = PsKsBytes().withKvalue(toBS(k)).withPatterns(toBL(patterns))
-    val psksLst = readPsKsBytesList(txn, hashCs).getOrElse(List.empty[PsKsBytes])
-    writePsKsBytesList(txn, hashCs, binPsKs +: psksLst)
+    val keyCs   = putCsH(txn, channels)
+    val binPsKs = PsKsBytes().withKvalue(toByteString(k)).withPatterns(toBytesList(patterns))
+    val psksLst = readPsKsBytesList(txn, keyCs).getOrElse(List.empty[PsKsBytes])
+    writePsKsBytesList(txn, keyCs, binPsKs +: psksLst)
   }
 
   def getPs(txn: T, channels: List[C]): List[List[P]] =
     getPsK(txn, channels).map(_._1)
 
   def getPsK(txn: T, curr: List[C]): List[(List[P], K)] = {
-    val hashCs = hashC(curr)
-    readPsKsBytesList(txn, hashCs)
-      .map(_.map(psks => {
-        val patterns =
-          psks.patterns.map(patternBytes => fromBL[P](patternBytes)).getOrElse(List.empty[P])
-        (patterns, fromBS[K](psks.kvalue))
-      }))
+    val keyCs = hashC(curr)
+    readPsKsBytesList(txn, keyCs)
+      .flatMap { (psKsByteses: List[PsKsBytes]) =>
+        psKsByteses
+          .map { (psks: PsKsBytes) =>
+            psks.patterns
+              .map((bl: BytesList) => fromBytesList[P](bl))
+              .map((ps: List[P]) => (ps, fromByteString[K](psks.kvalue)))
+          }
+          .sequence[Option, (List[P], K)]
+      }
       .getOrElse(List.empty[(List[P], K)])
   }
 
   def removePsK(txn: T, channels: List[C], index: Int): Unit = {
-    val hashCs = hashC(channels)
-    //shouldn't we need to throw exception if psks doesn't exists?
-    for (psks <- readPsKsBytesList(txn, hashCs)) {
-      val resValues = util.dropIndex(psks, index)
-      writePsKsBytesList(txn, hashCs, resValues)
+    val keyCs = hashC(channels)
+    readPsKsBytesList(txn, keyCs) match {
+      case Some(psks) => writePsKsBytesList(txn, keyCs, util.dropIndex(psks, index))
+      case None       => throw new IllegalArgumentException(s"removePsK: no values at $channels")
     }
   }
 
   def addJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val joinKey = hashC(c)
+    val joinKey = hashC(List(c))
     val oldCsList =
-      fromBB[BytesList](Option(_dbJoins.get(txn, joinKey))).getOrElse(List.empty)
-    _dbJoins.put(txn, joinKey, toBB(toBL(cs) :: oldCsList))
+      Option(_dbJoins.get(txn, joinKey))
+        .map(fromByteBuffer[BytesList])
+        .getOrElse(List.empty[BytesList])
+    _dbJoins.put(txn, joinKey, toByteBuffer(toBytesList(cs) :: oldCsList))
   }
 
   def getJoin(txn: T, c: C): List[List[C]] = {
-    val joinKey   = hashC(c)
-    val oldCsList = fromBB[BytesList](Option(_dbJoins.get(txn, joinKey)))
-    oldCsList.getOrElse(Nil).flatMap(x => fromBB[C](Some(ByteBuffer.wrap(x.toByteArray))))
+    val joinKey = hashC(List(c))
+    Option(_dbJoins.get(txn, joinKey))
+      .map(fromByteBuffer[BytesList])
+      .map(_.map(fromBytesList[C]))
+      .getOrElse(List.empty[List[C]])
   }
 
   def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val joinKey = hashC(c)
+    val joinKey = hashC(List(c))
     val exList =
-      fromBB[BytesList](Option(_dbJoins.get(txn, joinKey)))
-        .getOrElse(List.empty[BytesList])
-        .flatMap(x => fromBB[C](Some(ByteBuffer.wrap(x.toByteArray))))
+      Option(_dbJoins.get(txn, joinKey))
+        .map(fromByteBuffer[BytesList])
+        .map(_.map(fromBytesList[C]))
+        .getOrElse(List.empty[List[C]])
     val idx = exList.indexOf(cs)
-    //shouldn't we need to throw exception if cs not found?
     if (idx >= 0) {
       val resList = dropIndex(exList, idx)
       if (resList.nonEmpty)
-        _dbJoins.put(txn, joinKey, toBB(resList.map(toBL(_))))
+        _dbJoins.put(txn, joinKey, toByteBuffer(resList.map(toBytesList(_))))
       else
         _dbJoins.delete(txn, joinKey)
+    } else {
+      throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exList")
     }
   }
 
   def removeAllJoins(txn: T, c: C): Unit =
-    _dbJoins.delete(txn, hashC(c))
+    _dbJoins.delete(txn, hashC(List(c)))
 
   def close(): Unit = {
     _dbKeys.close()
@@ -192,6 +188,13 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 }
 
 object LMDBStore {
+  import java.security.MessageDigest
+  import java.nio.file.Path
+  import com.google.protobuf.ByteString
+  import coop.rchain.storage.util._
+  import org.lmdbjava.DbiFlags.MDB_CREATE
+  import coop.rchain.models.implicits.rhoInstanceWrapper
+
   private[this] val keysTableName: String  = "Keys"
   private[this] val psksTableName: String  = "PsKs"
   private[this] val asTableName: String    = "As"
@@ -201,13 +204,14 @@ object LMDBStore {
 
   /**
     * Creates an instance of [[IStore]]
-    * @param path Path to the database files
+    *
+    * @param path    Path to the database files
     * @param mapSize Maximum size of the database, in bytes
     */
   def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
                                                     pc: Serialize[P],
                                                     ac: Serialize[A],
-                                                    kc: Serialize[K]): IStore[C, P, A, K] = {
+                                                    kc: Serialize[K]): LMDBStore[C, P, A, K] = {
     val env: Env[ByteBuffer] =
       Env.create().setMapSize(mapSize).setMaxDbs(8).open(path.toFile)
 
@@ -219,64 +223,58 @@ object LMDBStore {
     new LMDBStore[C, P, A, K](env, dbKeys, dbPsKs, dbAs, dbJoins)
   }
 
-  private[storage] def toBS[TItem](value: TItem)(
-      implicit serialize: Serialize[TItem]): ByteString = {
-    val encoded = serialize.encode(value)
-    ByteString.copyFrom(encoded)
-  }
+  private[storage] def toByteString[T](value: T)(implicit st: Serialize[T]): ByteString =
+    ByteString.copyFrom(st.encode(value))
 
-  private[storage] def fromBS[TItem](bytes: ByteString)(
-      implicit serialize: Serialize[TItem]): TItem =
-    serialize.decode(bytes.toByteArray) match {
+  private[storage] def fromByteString[T](bytes: ByteString)(implicit st: Serialize[T]): T =
+    st.decode(bytes.toByteArray) match {
       case Left(err)    => throw new Exception(err)
       case Right(value) => value
     }
 
-  private[storage] def toBL[TItem](values: List[TItem])(
-      implicit serialize: Serialize[TItem]): BytesList = {
-    val encoded = values.map(serialize.encode)
-    BytesList().withValues(encoded.map(ByteString.copyFrom))
-  }
+  private[storage] def toBytesList[T](values: List[T])(implicit st: Serialize[T]): BytesList =
+    BytesList().withValues(values.map(st.encode).map(ByteString.copyFrom))
 
-  private[storage] def fromBL[TItem](bl: BytesList)(
-      implicit serialize: Serialize[TItem]): List[TItem] = {
-    val x: Either[Throwable, List[TItem]] = bl.values
-      .map(x => serialize.decode(x.toByteArray))
+  private[storage] def fromBytesList[T](bl: BytesList)(implicit st: Serialize[T]): List[T] = {
+    val x: Either[Throwable, List[T]] = bl.values
+      .map(x => st.decode(x.toByteArray))
       .toList
-      .sequence[Either[Throwable, ?], TItem]
+      .sequence[Either[Throwable, ?], T]
     x match {
       case Left(err)     => throw new Exception(err)
       case Right(values) => values
     }
   }
 
-  private[storage] def toBB[TItem](values: List[TItem])(
-      implicit serialize: Serialize[TItem]): ByteBuffer = {
-    val bl             = toBL(values).toByteArray
+  private[storage] def toByteBuffer[T](values: List[T])(implicit st: Serialize[T]): ByteBuffer = {
+    val bl             = toBytesList(values).toByteArray
     val bb: ByteBuffer = ByteBuffer.allocateDirect(bl.length)
     bb.put(bl).flip()
     bb
   }
 
-  private[storage] def fromBB[TItem](bytesOpt: Option[ByteBuffer])(
-      implicit serialize: Serialize[TItem]): Option[List[TItem]] =
-    bytesOpt.map(bytes => {
-      val fetched = new Array[Byte](bytes.remaining())
-      ignore { bytes.get(fetched) }
-      val bl = BytesList.parseFrom(fetched)
-      fromBL[TItem](bl)
-    })
+  private[storage] def fromByteBuffer[T](byteBuffer: ByteBuffer)(
+      implicit st: Serialize[T]): List[T] = {
+    val fetched = new Array[Byte](byteBuffer.remaining())
+    ignore {
+      byteBuffer.get(fetched)
+    }
+    val bl = BytesList.parseFrom(fetched)
+    fromBytesList[T](bl)
+  }
 
   def hashBytes(byteBuffer: ByteBuffer): ByteBuffer = {
     byteBuffer.mark()
     val fetched = new Array[Byte](byteBuffer.remaining())
-    ignore { byteBuffer.get(fetched) }
+    ignore {
+      byteBuffer.get(fetched)
+    }
     byteBuffer.reset()
     hashBytes(fetched)
   }
 
-  def hashBytes(bs: Array[Byte]): ByteBuffer = {
-    val dataArr    = MessageDigest.getInstance("SHA-256").digest(bs)
+  def hashBytes(bytes: Array[Byte]): ByteBuffer = {
+    val dataArr    = MessageDigest.getInstance("SHA-256").digest(bytes)
     val byteBuffer = ByteBuffer.allocateDirect(dataArr.length)
     byteBuffer.put(dataArr).flip()
     byteBuffer
