@@ -124,6 +124,9 @@ object Main {
       def currentMillis: Task[Long] = Task.delay {
         System.currentTimeMillis
       }
+      def nanoTime: Task[Long] = Task.delay {
+        System.nanoTime
+      }
     }
 
     val net = new UnicastNetwork(src, Some(p2p.Network))
