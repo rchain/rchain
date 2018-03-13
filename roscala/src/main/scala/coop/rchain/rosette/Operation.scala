@@ -1,18 +1,20 @@
 package coop.rchain.rosette
 
+import cats.data.State._
+import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
+
 case class StdOprn(override val extension: StdExtension) extends Actor {
-  override def dispatch(state: VMState): (Result, VMState) =
-    // TODO:
-    //if (debugging_level)
-    //    printf("\toprn %s\n", BASE(extension->slot(STDOPRN_ID_SLOT))->asCstring());
-    if (state.ctxt.nargs > 0) {
-      state.ctxt
-        .arg(0)
-        .map(_.lookupAndInvoke(state))
-        .getOrElse((Left(RuntimeError("no argument for dispatch")), state))
-    } else {
-      (Left(RuntimeError("no argument for dispatch")), state)
-    }
+  override def dispatch: CtxtTransition[(Result, Option[Continuation])] =
+    for {
+      optArg0 <- inspect[Ctxt, Option[Ob]](_.arg(0))
+
+      result <- optArg0 match {
+                 case Some(ob) => ob.lookupAndInvoke
+                 case None =>
+                   pure[Ctxt, (Result, Option[Continuation])](
+                     (Left(RuntimeError("no argument for dispatch")), None))
+               }
+    } yield result
 }
 
 object OprnVmError extends StdOprn(null)
