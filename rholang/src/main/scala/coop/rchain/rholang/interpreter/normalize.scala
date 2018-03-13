@@ -283,16 +283,18 @@ object ProcNormalizeMatcher {
         val formalsResults = (initAcc /: p.listname_.asScala.toList)(
           (acc, n: Name) => {
             val result =
-              NameNormalizeMatcher.normalizeMatch(n, NameVisitInputs(DebruijnLevelMap(), acc._2))
+              NameNormalizeMatcher.normalizeMatch(n, NameVisitInputs(DebruijnIndexMap(), acc._2))
             (result.chan :: acc._1, result.knownFree)
           }
         )
-        val newEnv     = input.env.merge(formalsResults._2)._1
+        val newEnv     = input.env.absorbFree(formalsResults._2)._1
         val boundCount = formalsResults._2.countNoWildcards
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
         val freeCount = bodyResult.knownFree.count - input.knownFree.count
+        println("Channel locallyFree is: " + ChannelLocallyFree.locallyFree(nameMatchResult.chan))
+        println("Body locallyFree is: " + bodyResult.par.locallyFree)
         ProcVisitOutputs(
           input.par.prepend(
             Receive(
@@ -301,8 +303,9 @@ object ProcNormalizeMatcher {
               true,
               boundCount,
               freeCount,
-              (ChannelLocallyFree.locallyFree(nameMatchResult.chan) | bodyResult.par.locallyFree)
-                .until(input.env.next)
+              ChannelLocallyFree.locallyFree(nameMatchResult.chan) | (bodyResult.par.locallyFree
+                .from(boundCount)
+                .map(x => x - boundCount))
             )),
           bodyResult.knownFree
         )
@@ -336,7 +339,7 @@ object ProcNormalizeMatcher {
                 (acc, n: Name) => {
                   val result =
                     NameNormalizeMatcher.normalizeMatch(n,
-                                                        NameVisitInputs(DebruijnLevelMap(), acc._2))
+                                                        NameVisitInputs(DebruijnIndexMap(), acc._2))
                   (result.chan :: acc._1, result.knownFree)
                 }
               )
@@ -373,7 +376,7 @@ object ProcNormalizeMatcher {
         })
         val bindCount  = mergedFrees.countNoWildcards
         val binds      = receipts.map((receipt) => ReceiveBind(receipt._1, receipt._2))
-        val updatedEnv = input.env.merge(mergedFrees)._1
+        val updatedEnv = input.env.absorbFree(mergedFrees)._1
         val bodyResult =
           normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
         val freeCount = bodyResult.knownFree.count - input.knownFree.count
@@ -384,7 +387,9 @@ object ProcNormalizeMatcher {
                     persistent,
                     bindCount,
                     freeCount,
-                    (sourcesLocallyFree | bodyResult.par.locallyFree).until(input.env.next))),
+                    sourcesLocallyFree | (bodyResult.par.locallyFree
+                      .from(bindCount)
+                      .map(x => x - bindCount)))),
           bodyResult.knownFree
         )
       }
@@ -401,14 +406,16 @@ object ProcNormalizeMatcher {
         val newBindings = p.listnamedecl_.asScala.toList.map {
           case n: NameDeclSimpl => (n.var_, NameSort)
         }
-        val newEnv     = input.env.newBindings(newBindings)._1
+        val newEnv     = input.env.newBindings(newBindings)
         val newCount   = newEnv.count - input.env.count
         val bodyResult = normalizeMatch(p.proc_, ProcVisitInputs(Par(), newEnv, input.knownFree))
         val foldedNew = bodyResult.par.singleNew() match {
           case Some(New(count, body, locallyFree)) =>
-            New(newCount + count, body, locallyFree.until(input.env.next))
+            New(newCount + count, body, locallyFree.from(newCount).map(x => x - newCount))
           case _ =>
-            New(newCount, bodyResult.par, bodyResult.par.locallyFree.until(input.env.next))
+            New(newCount,
+                bodyResult.par,
+                bodyResult.par.locallyFree.from(newCount).map(x => x - newCount))
         }
         ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
       }
@@ -429,13 +436,14 @@ object ProcNormalizeMatcher {
               val patternResult =
                 normalizeMatch(
                   pattern,
-                  ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]()))
-              val caseEnv = input.env.merge(patternResult.knownFree)._1
+                  ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]()))
+              val caseEnv    = input.env.absorbFree(patternResult.knownFree)._1
+              val boundCount = patternResult.knownFree.countNoWildcards
               val caseBodyResult =
                 normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
               (Seq(MatchCase(patternResult.par, caseBodyResult.par)) ++ acc._1,
                caseBodyResult.knownFree,
-               acc._3 | caseBodyResult.par.locallyFree)
+               acc._3 | caseBodyResult.par.locallyFree.from(boundCount).map(x => x - boundCount))
             }
           }
         }
@@ -445,7 +453,7 @@ object ProcNormalizeMatcher {
             Match(targetResult.par,
                   casesResult._1.reverse,
                   freeCount,
-                  (casesResult._3 | targetResult.par.locallyFree).until(input.env.next))),
+                  casesResult._3 | targetResult.par.locallyFree)),
           casesResult._2
         )
       }
@@ -459,13 +467,13 @@ object ProcNormalizeMatcher {
 }
 
 case class ProcVisitInputs(par: Par,
-                           env: DebruijnLevelMap[VarSort],
+                           env: DebruijnIndexMap[VarSort],
                            knownFree: DebruijnLevelMap[VarSort])
 // Returns the update Par and an updated map of free variables.
 case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
 
-case class NameVisitInputs(env: DebruijnLevelMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
+case class NameVisitInputs(env: DebruijnIndexMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class NameVisitOutputs(chan: Channel, knownFree: DebruijnLevelMap[VarSort])
 
-case class CollectVisitInputs(env: DebruijnLevelMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
+case class CollectVisitInputs(env: DebruijnIndexMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])
