@@ -12,7 +12,7 @@ networks:
 
 services:
   rchain-node:
-    image: rchain/rchain-node:lastest
+    image: rchain/rchain-node:latest
     ports:
       - 9095:9095
       - 30304:30304
