@@ -205,7 +205,7 @@ lazy val rholang = project
 
     // Fix up root directory so tests find relative files they need
     fork in Test := true
-  ).dependsOn(models)
+  ).dependsOn(models, storage)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(
