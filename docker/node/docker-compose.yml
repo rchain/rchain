@@ -1,0 +1,54 @@
+version: '3.1'
+
+volumes:
+    prometheus_data_storage: {}
+    grafana_data_storage: {}
+
+networks:
+  rchain:
+    driver: bridge
+  metrics:
+    driver: bridge
+
+services:
+  rchain-node:
+    image: rchain/rchain-node:latest
+    ports:
+      - 9095:9095
+      - 30304:30304
+    networks:
+      - rchain 
+  prometheus-pushgateway:
+    image: prom/pushgateway
+    ports:
+      - 9091:9091
+    networks:
+      - rchain 
+  prometheus-server:
+    image: prom/prometheus:v2.1.0
+    ports:
+      - 9090:9090
+    networks:
+      - rchain 
+      - metrics 
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data_storage:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+  grafana-ui:
+    image: grafana/grafana:5.0.0
+    ports:
+      - 3000:3000
+    networks:
+      - metrics 
+    #environment:
+    #  - GF_SECURITY_ADMIN_PASSWORD=secret
+    env_file:
+      - ./grafana/grafana.conf
+    volumes:
+      - grafana_data_storage:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
