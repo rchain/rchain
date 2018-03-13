@@ -287,7 +287,7 @@ object ProcNormalizeMatcher {
             (result.chan :: acc._1, result.knownFree)
           }
         )
-        val newEnv     = input.env.absorbFree(formalsResults._2)._1
+        val newEnv     = input.env.merge(formalsResults._2)._1
         val boundCount = formalsResults._2.countNoWildcards
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
@@ -366,14 +366,14 @@ object ProcNormalizeMatcher {
         val (sources, thisLevelFree, sourcesLocallyFree) = processSources(bindings)
         val receipts                                     = ReceiveSortMatcher.preSortBinds(processBindings(sources))
         val mergedFrees = (DebruijnLevelMap[VarSort]() /: receipts)((env, receipt) =>
-          env.absorbFree(receipt._3) match {
+          env.merge(receipt._3) match {
             case (newEnv, Nil) => newEnv
             case _ =>
               throw new Error("Free variable used as binder may not be used twice.")
         })
         val bindCount  = mergedFrees.countNoWildcards
         val binds      = receipts.map((receipt) => ReceiveBind(receipt._1, receipt._2))
-        val updatedEnv = input.env.absorbFree(mergedFrees)._1
+        val updatedEnv = input.env.merge(mergedFrees)._1
         val bodyResult =
           normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
         val freeCount = bodyResult.knownFree.count - input.knownFree.count
@@ -430,7 +430,7 @@ object ProcNormalizeMatcher {
                 normalizeMatch(
                   pattern,
                   ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]()))
-              val caseEnv = input.env.absorbFree(patternResult.knownFree)._1
+              val caseEnv = input.env.merge(patternResult.knownFree)._1
               val caseBodyResult =
                 normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
               (Seq(MatchCase(patternResult.par, caseBodyResult.par)) ++ acc._1,
@@ -456,75 +456,6 @@ object ProcNormalizeMatcher {
       case _ => throw new Error("Compilation of construct not yet supported.")
     }
   }
-}
-
-// Parameterized over T, the kind of typing discipline we are enforcing.
-class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wildcardCount: Int) {
-  def this() = this(0, Map[String, (Int, T)](), 0)
-
-  def newBinding(binding: (String, T)): (DebruijnLevelMap[T], Int) =
-    binding match {
-      case (varName, sort) =>
-        (DebruijnLevelMap[T](next + 1, env + (varName -> ((next, sort))), wildcardCount), next)
-    }
-
-  // Returns the new map, and the first value assigned. Given that they're assigned contiguously
-  def newBindings(bindings: List[(String, T)]): (DebruijnLevelMap[T], Int) = {
-    val newMap = (this /: bindings)((map, binding) => map.newBinding(binding)._1)
-    (newMap, next)
-  }
-
-  // Returns the new map, and a list of the shadowed variables
-  def absorbFree(binders: DebruijnLevelMap[T]): (DebruijnLevelMap[T], List[String]) = {
-    val finalNext          = next + binders.next
-    val finalWildcardCount = wildcardCount + binders.wildcardCount
-    val adjustNext         = next
-    binders.env.foldLeft((this, List[String]())) {
-      case ((db: DebruijnLevelMap[T], shadowed: List[String]),
-            (k: String, (level: Int, varType: T @unchecked))) => {
-        val shadowedNew = if (db.env.contains(k)) k :: shadowed else shadowed
-        (DebruijnLevelMap(finalNext,
-                          db.env + (k -> ((level + adjustNext, varType))),
-                          finalWildcardCount),
-         shadowedNew)
-      }
-    }
-  }
-
-  // Returns the new map
-  def setWildcardUsed(count: Int): DebruijnLevelMap[T] =
-    DebruijnLevelMap(next, env, wildcardCount + count)
-
-  def getBinding(varName: String): Option[T] =
-    for (pair <- env.get(varName)) yield pair._2
-  def getLevel(varName: String): Option[Int] =
-    for (pair <- env.get(varName)) yield pair._1
-  def get(varName: String): Option[(Int, T)] = env.get(varName)
-  def isEmpty()                              = next == 0
-
-  def count: Int            = next + wildcardCount
-  def countNoWildcards: Int = next
-
-  override def equals(that: Any): Boolean =
-    that match {
-      case that: DebruijnLevelMap[T] =>
-        next == that.next &&
-          env == that.env
-      case _ => false
-    }
-
-  override def hashCode(): Int =
-    (next.hashCode() * 37 + env.hashCode)
-}
-
-object DebruijnLevelMap {
-  def apply[T](next: Int, env: Map[String, (Int, T)], wildcardCount: Int): DebruijnLevelMap[T] =
-    new DebruijnLevelMap(next, env, wildcardCount)
-
-  def apply[T](): DebruijnLevelMap[T] = new DebruijnLevelMap[T]()
-
-  def unapply[T](db: DebruijnLevelMap[T]): Option[(Int, Map[String, (Int, T)], Int)] =
-    Some((db.next, db.env, db.wildcardCount))
 }
 
 case class ProcVisitInputs(par: Par,
