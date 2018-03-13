@@ -88,7 +88,7 @@ object queue {
     override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
       if (q.isEmpty()) {
-        Left(Absent)
+        Left(QueueEmptyError)
       }
       Right(q.head)
     }
@@ -158,7 +158,7 @@ object queue {
             Left(Absent)
           }
           if (n > q.depth() || n < 0) {
-            Left(ArgumentMismatch)
+            Left(Absent)
           }
           Right(q.elems.elem(n))
         case _ =>
