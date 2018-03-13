@@ -32,17 +32,11 @@ message Channel {
 // process.
 // These are DeBruijn levels
 message Var {
+    message WildcardMsg {}
     oneof var_instance {
         sint32 bound_var = 1;
-        // Wildcards are represented as bound variables. The initial normalization will
-        // not produce uses of the variable, but for (_ <- x) P is the same as
-        // for (y <- x) P if y is not free in P. We model that equivalence by turning all
-        // wildcards into bound variables.
-        // Variables that occur free in Par used as a pattern or ChanVar are binders.
-        // For the purpose of comparing patterns, we count just like BoundVars.
-
-        // In the DeBruijn level paper, they use negatives, but this is more clear.
         sint32 free_var = 2;
+        WildcardMsg wildcard = 3;
     }
 }
 
