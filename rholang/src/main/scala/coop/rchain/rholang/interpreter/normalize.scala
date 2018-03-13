@@ -40,8 +40,8 @@ object GroundNormalizeMatcher {
 object CollectionNormalizeMatcher {
   import scala.collection.JavaConverters._
   def normalizeMatch(c: Collection, input: CollectVisitInputs): CollectVisitOutputs = {
-    def foldMatch[T](listproc: List[Proc], constructor: Seq[Par] => T)(
-        implicit toExprInstance: T => ExprInstance): CollectVisitOutputs = {
+    def foldMatch[T](listproc: List[Proc], constructor: (Seq[Par], Int, BitSet) => T)(
+        implicit toExpr: T => Expr): CollectVisitOutputs = {
       val folded = ((List[Par](), input.knownFree, BitSet()) /: listproc)(
         (acc, e) => {
           val result =
@@ -51,10 +51,7 @@ object CollectionNormalizeMatcher {
       )
       val resultKnownFree = folded._2
       val freeCount       = resultKnownFree.next - input.knownFree.next
-      CollectVisitOutputs(Expr(exprInstance = constructor(folded._1.reverse),
-                               freeCount = freeCount,
-                               locallyFree = folded._3),
-                          resultKnownFree)
+      CollectVisitOutputs(constructor(folded._1.reverse, freeCount, folded._3), resultKnownFree)
     }
 
     def foldMatchMap(listproc: List[AbsynKeyValuePair]): CollectVisitOutputs = {
@@ -76,10 +73,7 @@ object CollectionNormalizeMatcher {
       )
       val resultKnownFree = folded._2
       val freeCount       = resultKnownFree.next - input.knownFree.next
-      CollectVisitOutputs(Expr(exprInstance = EMap(folded._1.reverse),
-                               freeCount = freeCount,
-                               locallyFree = folded._3),
-                          resultKnownFree)
+      CollectVisitOutputs(EMap(folded._1.reverse, freeCount, folded._3), resultKnownFree)
     }
     c match {
       case cl: CollectList  => foldMatch(cl.listproc_.asScala.toList, EList.apply)
@@ -118,8 +112,8 @@ object NameNormalizeMatcher {
       case n: NameQuote => {
         def collapseQuoteEval(p: Par): Channel =
           p.singleEval() match {
-            case Some(Eval(chanNew, _, _)) => chanNew.get
-            case _                         => Quote(p)
+            case Some(Eval(chanNew)) => chanNew.get
+            case _                   => Quote(p)
           }
 
         val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
@@ -212,7 +206,7 @@ object ProcNormalizeMatcher {
         def collapseEvalQuote(chan: Channel): Par =
           chan.channelInstance match {
             case Quote(q) => q
-            case _        => Eval(chan, chan.freeCount, chan.locallyFree)
+            case _        => Eval(chan)
           }
 
         val nameMatchResult =
@@ -264,7 +258,7 @@ object ProcNormalizeMatcher {
                  dataResults._1,
                  persistent,
                  freeCount,
-                 nameMatchResult.chan.locallyFree | dataResults._3)),
+                 ChannelLocallyFree.locallyFree(nameMatchResult.chan) | dataResults._3)),
           dataResults._2.knownFree
         )
       }
@@ -301,7 +295,8 @@ object ProcNormalizeMatcher {
               true,
               boundCount,
               freeCount,
-              (nameMatchResult.chan.locallyFree | bodyResult.par.locallyFree).until(input.env.next)
+              (ChannelLocallyFree.locallyFree(nameMatchResult.chan) | bodyResult.par.locallyFree)
+                .until(input.env.next)
             )),
           bodyResult.knownFree
         )
@@ -322,7 +317,7 @@ object ProcNormalizeMatcher {
               NameNormalizeMatcher.normalizeMatch(e._2, NameVisitInputs(input.env, acc._2))
             ((e._1, sourceResult.chan) :: acc._1,
              sourceResult.knownFree,
-             acc._3 | sourceResult.chan.locallyFree)
+             acc._3 | ChannelLocallyFree.locallyFree(sourceResult.chan))
           })
           (foldResult._1.reverse, foldResult._2, foldResult._3)
         }
@@ -404,13 +399,10 @@ object ProcNormalizeMatcher {
         val newCount   = newEnv.next - input.env.next
         val bodyResult = normalizeMatch(p.proc_, ProcVisitInputs(Par(), newEnv, input.knownFree))
         val foldedNew = bodyResult.par.singleNew() match {
-          case Some(New(count, body, freeCount, locallyFree)) =>
-            New(newCount + count, body, freeCount, locallyFree.until(input.env.next))
+          case Some(New(count, body, locallyFree)) =>
+            New(newCount + count, body, locallyFree.until(input.env.next))
           case _ =>
-            New(newCount,
-                bodyResult.par,
-                bodyResult.par.freeCount,
-                bodyResult.par.locallyFree.until(input.env.next))
+            New(newCount, bodyResult.par, bodyResult.par.locallyFree.until(input.env.next))
         }
         ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
       }
