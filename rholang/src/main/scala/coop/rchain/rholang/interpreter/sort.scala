@@ -106,6 +106,7 @@ object Score {
   // Vars
   final val BOUND_VAR = 50
   final val FREE_VAR  = 51
+  final val WILDCARD  = 52
 
   // Expr
   final val EVAR   = 100
@@ -286,6 +287,7 @@ object VarSortMatcher {
         v.varInstance match {
           case BoundVar(level) => ScoredTerm(v, Leaves(Score.BOUND_VAR, level))
           case FreeVar(level)  => ScoredTerm(v, Leaves(Score.FREE_VAR, level))
+          case Wildcard(_)     => ScoredTerm(v, Leaves(Score.WILDCARD))
         }
       case None => throw new Error("VarSortMatcher was passed None")
     }
