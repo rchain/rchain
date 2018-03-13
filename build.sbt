@@ -86,7 +86,7 @@ lazy val models = project
     ),
     crossScalaVersions := Seq("2.11.12", scalaVersion.value),
     exportJars := true
-  )
+  ).dependsOn(storage)
 
 lazy val regex = project
   .settings(
@@ -115,7 +115,7 @@ lazy val storage = project
     ),
     crossScalaVersions := Seq("2.11.12", scalaVersion.value),
     exportJars := true
-  ).dependsOn(models)
+  )
 
 lazy val node = project
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin)

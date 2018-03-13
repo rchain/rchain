@@ -2,8 +2,7 @@ package coop.rchain.storage.test
 
 import java.nio.charset.StandardCharsets
 
-import coop.rchain.models.Serialize
-import coop.rchain.storage.Match
+import coop.rchain.storage.{Match, Serialize}
 
 object implicits {
 
