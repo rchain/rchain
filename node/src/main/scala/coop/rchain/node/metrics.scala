@@ -4,7 +4,7 @@ import kamon.prometheus._
 import kamon._
 import scala.util.control.NonFatal
 
-final case class MetricsServer(port: Int = 9095) {
+final case class MetricsServer() {
   val reporter = new PrometheusReporter()
 
   Kamon.addReporter(reporter)
