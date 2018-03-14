@@ -82,7 +82,7 @@ object SpatialMatcher {
       merger: (Par, T) => Par,
       varLevel: Option[Int],
       wildcard: Boolean)(implicit lf: HasLocallyFree[T]): OptionalFreeMap[Unit] = {
-    val exactMatch = !wildcard && !varLevel.isEmpty
+    val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
     if (exactMatch && plen != tlen)

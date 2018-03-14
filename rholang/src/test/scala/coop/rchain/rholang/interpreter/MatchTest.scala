@@ -77,4 +77,23 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val result        = spatialMatch(target, pattern).runS(emptyMap)
     result should be(None)
   }
+
+  "Matching extras with free variable" should "work" in {
+    val target: Par  = GInt(7).prepend(GInt(8)).prepend(GInt(9))
+    val pattern: Par = GInt(8).prepend(EVar(FreeVar(0)))
+    val result       = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7)))))
+  }
+  "Matching extras with wildcard" should "work" in {
+    val target: Par  = GInt(7).prepend(GInt(8)).prepend(GInt(9))
+    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg())))
+    val result       = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map.empty[Int, Par]))
+  }
+  "Matching extras with wildcard and free variable" should "capture in the free variable" in {
+    val target: Par  = GInt(7).prepend(GInt(8)).prepend(GInt(9))
+    val pattern: Par = GInt(8).prepend(EVar(Wildcard(Var.WildcardMsg()))).prepend(EVar(FreeVar(0)))
+    val result       = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7)))))
+  }
 }
