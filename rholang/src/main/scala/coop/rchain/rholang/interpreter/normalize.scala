@@ -181,23 +181,29 @@ object ProcNormalizeMatcher {
       }
 
       case p: PVar =>
-        input.env.get(p.var_) match {
-          case Some((level, ProcSort)) => {
-            ProcVisitOutputs(input.par.prepend(EVar(Some(BoundVar(level)))), input.knownFree)
-          }
-          case Some((_, NameSort)) => {
-            throw new Error("Name variable used in process context.")
-          }
-          case None => {
-            input.knownFree.get(p.var_) match {
-              case None =>
-                val newBindingsPair =
-                  input.knownFree.newBinding((p.var_, ProcSort))
-                ProcVisitOutputs(input.par.prepend(EVar(FreeVar(newBindingsPair._2))),
-                                 newBindingsPair._1)
-              case _ => throw new Error("Free variable used as binder may not be used twice.")
+        p.procvar_ match {
+          case pvv: ProcVarVar =>
+            input.env.get(pvv.var_) match {
+              case Some((level, ProcSort)) => {
+                ProcVisitOutputs(input.par.prepend(EVar(Some(BoundVar(level)))), input.knownFree)
+              }
+              case Some((_, NameSort)) => {
+                throw new Error("Name variable used in process context.")
+              }
+              case None => {
+                input.knownFree.get(pvv.var_) match {
+                  case None =>
+                    val newBindingsPair =
+                      input.knownFree.newBinding((pvv.var_, ProcSort))
+                    ProcVisitOutputs(input.par.prepend(EVar(FreeVar(newBindingsPair._2))),
+                                     newBindingsPair._1)
+                  case _ => throw new Error("Free variable used as binder may not be used twice.")
+                }
+              }
             }
-          }
+          case _: ProcVarWildcard =>
+            ProcVisitOutputs(input.par.prepend(EVar(Wildcard(Var.WildcardMsg()))),
+                             input.knownFree.setWildcardUsed(1))
         }
 
       case _: PNil => ProcVisitOutputs(input.par, input.knownFree)

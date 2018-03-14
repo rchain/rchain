@@ -21,7 +21,7 @@ _. Proc13 ::= "{" Proc "}" ;
 -- or a collection.
 PGround.      Proc13 ::= Ground ;
 PCollect.     Proc13 ::= Collection ;
-PVar.         Proc13 ::= Var ;
+PVar.         Proc13 ::= ProcVar ;
 PNil.         Proc13 ::= "Nil" ;
 PEval.        Proc12 ::= "*" Name ;
 PMethod.      Proc11 ::= Proc11 "." Var "(" [Proc] ")" ;
@@ -52,6 +52,10 @@ PNew.         Proc1 ::= "new" [NameDecl] "in" Proc1 ;
 PPar.         Proc  ::= Proc "|" Proc1 ;
 
 separator Proc "," ;
+
+-- Process variables
+ProcVarWildcard. ProcVar ::= "_" ;
+ProcVarVar.      ProcVar ::= Var ;
 
 -- Names
 NameWildcard. Name ::= "_" ;
@@ -113,7 +117,7 @@ CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
 
-token Var ((letter | '_' | '\'') (letter | digit | '_' | '\'')*) ;
+token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 
 -- Comments:
 comment "//" ;
