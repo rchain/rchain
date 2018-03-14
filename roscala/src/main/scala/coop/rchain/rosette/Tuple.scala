@@ -117,7 +117,7 @@ case class Tuple(elem: Seq[Ob]) extends Ob {
 
 object Tuple {
 
-  object NIL extends Tuple(Seq.empty)
+  val NIL = Tuple(Seq.empty)
 
   val Placeholder = Tuple(Seq.empty)
 

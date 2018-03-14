@@ -26,10 +26,11 @@
 class StdMthd : public Ob {
     STD_DECLS(StdMthd);
 
-   public:
+   protected:
     StdMthd(Code*, Ob*, Ob*);
     StdMthd(int, Ob*, Ob*, Code*, Ob*, Ob*);
 
+   public:
     Code* code;
     Ob* id;
     Ob* source;
@@ -43,9 +44,10 @@ class StdMthd : public Ob {
 class ReflectiveMthd : public StdMthd {
     STD_DECLS(ReflectiveMthd);
 
-   public:
+   protected:
     ReflectiveMthd(Code*, Ob* = Qanon, Ob* = NIV);
 
+   public:
     static ReflectiveMthd* create(Code*, Ob* = Qanon, Ob* = NIV);
     virtual Ob* dispatch(Ctxt*);
     virtual Ob* invoke(Ctxt*);

@@ -6,10 +6,10 @@ import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 
 object PrettyPrinter {
-  def prettyPrint(e: Expr): Unit = {
+  def prettyPrint(e: Expr): Unit =
     e.exprInstance match {
       case ENegBody(ENeg(p)) =>
         print("-")
@@ -68,21 +68,21 @@ object PrettyPrinter {
         print(" <= ")
         prettyPrint(p2.get)
 
-      case EListBody(EList(s)) =>
+      case EListBody(EList(s, _, _)) =>
         print("[")
         printSeq(s)
         print("]")
-      case ETupleBody(ETuple(s)) =>
+      case ETupleBody(ETuple(s, _, _)) =>
         print("[")
         printSeq(s)
         print("]")
-      case ESetBody(ESet(s)) =>
+      case ESetBody(ESet(s, _, _)) =>
         print("(")
         printSeq(s)
         print(")")
-      case EMapBody(EMap(kvs)) =>
+      case EMapBody(EMap(kvs, _, _)) =>
         print("{")
-        for {(kv, i) <- kvs.zipWithIndex} yield {
+        for { (kv, i) <- kvs.zipWithIndex } yield {
           prettyPrint(kv.key.get)
           print(":")
           prettyPrint(kv.value.get)
@@ -94,31 +94,31 @@ object PrettyPrinter {
       case EVarBody(EVar(v)) =>
         prettyPrint(v.get)
 
-      case GBool(b) => print(b)
-      case GInt(i) => print(i)
+      case GBool(b)   => print(b)
+      case GInt(i)    => print(i)
       case GString(s) => print(s)
-      case GUri(u) => print(u)
+      case GUri(u)    => print(u)
 
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => print("Nil")
 
       case _ => throw new Error("Attempted to print unknown Expr type")
     }
-  }
 
-  def prettyPrint(v: Var): Unit = {
+  def prettyPrint(v: Var): Unit =
     v.varInstance match {
       case FreeVar(level) =>
-        print(s"_${level}")
+        print(s"z${level}")
       case BoundVar(level) =>
-        print(s"_${level}")
+        print(s"x${level}")
+      case Wildcard(_) =>
+        print("_")
       // TODO: Figure out if we can prevent ScalaPB from generating
       case VarInstance.Empty =>
         print("@Nil")
     }
-  }
 
-  def prettyPrint(c: Channel): Unit = {
+  def prettyPrint(c: Channel): Unit =
     c.channelInstance match {
       case Quote(p) =>
         print("@{ ")
@@ -130,11 +130,10 @@ object PrettyPrinter {
       case ChannelInstance.Empty =>
         print("@Nil")
     }
-  }
 
-  def prettyPrint(t: GeneratedMessage): Unit = {
+  def prettyPrint(t: GeneratedMessage): Unit =
     t match {
-      case v: Var => prettyPrint(v)
+      case v: Var     => prettyPrint(v)
       case c: Channel => prettyPrint(c)
       case s: Send =>
         prettyPrint(s.chan.get)
@@ -173,7 +172,7 @@ object PrettyPrinter {
         print("match { ")
         prettyPrint(m.target.get)
         print(" } { ")
-        for {(matchCase, i) <- m.cases.zipWithIndex} yield {
+        for { (matchCase, i) <- m.cases.zipWithIndex } yield {
           prettyPrint(matchCase.pattern.get)
           print(" => ")
           prettyPrint(matchCase.source.get)
@@ -193,7 +192,7 @@ object PrettyPrinter {
             if (items.nonEmpty) {
               if (acc)
                 print(" | ")
-              for {(item, i) <- items.zipWithIndex} yield {
+              for { (item, i) <- items.zipWithIndex } yield {
                 prettyPrint(item)
                 if (i != items.length - 1) {
                   print(" | ")
@@ -207,25 +206,23 @@ object PrettyPrinter {
         }
       case _ => throw new Error("Attempt to print unknown GeneratedMessage type")
     }
-  }
 
   // TODO: Calculate proper numbering/naming
   private def printNewVariables(bindCount: Int) = {
     // We arbitrarily limit the new variable printing count to MAX_NEW_VAR_COUNT
     // to prevent exploding the state of the shapeless generator
     val MAX_NEW_VAR_COUNT = 128
-    printSeq(Range(0, List(MAX_NEW_VAR_COUNT,bindCount).min).map(x => Expr(exprInstance=GString(s"_${x}"))))
+    printSeq(Range(0, List(MAX_NEW_VAR_COUNT, bindCount).min).map(x =>
+      Expr(exprInstance = GString(s"_${x}"))))
   }
 
-  private def printSeq[T <: GeneratedMessage](s: Seq[T]) = {
-    for {(p, i) <- s.zipWithIndex} yield {
+  private def printSeq[T <: GeneratedMessage](s: Seq[T]) =
+    for { (p, i) <- s.zipWithIndex } yield {
       prettyPrint(p)
       if (i != s.length - 1)
         print(",")
     }
-  }
 
-  private def isEmpty(p: Par) = {
+  private def isEmpty(p: Par) =
     p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty
-  }
 }

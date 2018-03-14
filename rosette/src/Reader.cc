@@ -1237,7 +1237,10 @@ Reader::~Reader() {
 }
 
 
-Reader* Reader::create(FILE* f) { return gc_new<Reader>(&StdReadTable, f); }
+Reader* Reader::create(FILE* f) {
+    void* loc = PALLOC(align(sizeof(Reader)));
+    return new (loc) Reader(&StdReadTable, f);
+}
 
 
 Ob* Reader::readCh() {

@@ -74,14 +74,16 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       _          <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
       _          <- Communication[F].addNode(remote)
       tsf        <- Time[F].currentMillis
-      _          <- Metrics[F].record("connect-time", tsf - ts1)
+      _          <- Metrics[F].record("connect-time-ms", tsf - ts1)
     } yield ()
 
-  private def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](
+  private def handleEncryptionHandshake[
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
       sender: PeerNode,
       handshake: EncryptionHandshakeMessage)(
       implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
     for {
+      _           <- Metrics[F].incrementCounter("p2p-encryption-handshake-recv-count")
       local       <- Communication[F].local
       keys        <- Encryption[F].fetchKeys
       responseErr <- handshake.response[F](local, keys)
@@ -96,6 +98,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       sender: PeerNode,
       handshake: ProtocolHandshakeMessage): F[Unit] =
     for {
+      _     <- Metrics[F].incrementCounter("p2p-protocol-handshake-recv-count")
       local <- Communication[F].local
       result <- handshake
                  .response(local)

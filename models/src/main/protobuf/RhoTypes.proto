@@ -25,8 +25,6 @@ message Channel {
         Par quote = 1;
         Var chanVar = 2;
     }
-    int32 freeCount = 3;
-    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -34,20 +32,12 @@ message Channel {
 // process.
 // These are DeBruijn levels
 message Var {
+    message WildcardMsg {}
     oneof var_instance {
         sint32 bound_var = 1;
-        // Wildcards are represented as bound variables. The initial normalization will
-        // not produce uses of the variable, but for (_ <- x) P is the same as
-        // for (y <- x) P if y is not free in P. We model that equivalence by turning all
-        // wildcards into bound variables.
-        // Variables that occur free in Par used as a pattern or ChanVar are binders.
-        // For the purpose of comparing patterns, we count just like BoundVars.
-
-        // In the DeBruijn level paper, they use negatives, but this is more clear.
         sint32 free_var = 2;
+        WildcardMsg wildcard = 3;
     }
-    int32 freeCount = 3;
-    bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 // Upon send, all free variables in data are substituted with their values.
@@ -79,8 +69,6 @@ message Receive {
 
 message Eval {
     Channel channel = 1;
-    int32 freeCount = 2;
-    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 // Number of variables bound in the new statement.
@@ -90,7 +78,6 @@ message Eval {
 message New {
     sint32 bindCount = 1;
     Par p = 2;
-    int32 freeCount = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
@@ -136,24 +123,30 @@ message Expr {
         ESet e_set_body = 22;
         EMap e_map_body = 23;
     }
-    int32 freeCount = 24;
-    bytes locallyFree = 25 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message EList {
     repeated Par ps = 1;
+    int32 freeCount = 2;
+    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message ETuple {
     repeated Par ps = 1;
+    int32 freeCount = 2;
+    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message ESet {
     repeated Par ps = 1;
+    int32 freeCount = 2;
+    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message EMap {
     repeated KeyValuePair kvs = 1;
+    int32 freeCount = 2;
+    bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
 }
 
 message KeyValuePair {
