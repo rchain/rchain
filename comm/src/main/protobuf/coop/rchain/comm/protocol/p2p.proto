@@ -33,11 +33,13 @@ message ProtocolHandshake {
 }
 
 message ProtocolHandshakeResponse {
+  bytes nonce       = 1;
 }
 
 message Frameable {
   oneof message {
-    ProtocolHandshake   protocol_handshake   = 1;
+    ProtocolHandshake           protocol_handshake            = 1;
+    ProtocolHandshakeResponse   protocol_handshake_response   = 2;
   }
 }
 
@@ -50,6 +52,5 @@ message Protocol {
         EncryptionHandshake         encryption_handshake          = 4;
         EncryptionHandshakeResponse encryption_handshake_response = 5;
         Frame                       frame                         = 6;
-        ProtocolHandshakeResponse   protocol_handshake_response   = 7;
     }
 }

@@ -140,7 +140,9 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
       }
 
-      it("should send encrypted response back to the remote") {
+      it("should encrypt protocol handshake response")(pending)
+
+      it("should send encrypted protocol handshake response back to the remote") {
         // given
         keysStoreEff.put(remote, remoteKeys.pub)
         val receivedMessage =
@@ -148,8 +150,11 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         // when
         Network.handleFrame[Effect](remote, receivedMessage)
         // then
-        val ProtocolHandshakeResponseMessage(proto, _) = communicationEff.requests(0)
+        val FrameMessage(proto, _)  = communicationEff.requests(0)
+        val Right(Frame(n, framed)) = toFrame(proto)
+        n.toByteArray should equal(nonce)
       }
+      it("should add node once protocol handshake response is sent")(pending)
       it("should not respond if message can not be decrypted")(pending)
       it("should not respond if it does not contain remotes public key")(pending)
     }

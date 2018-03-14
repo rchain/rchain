@@ -56,8 +56,13 @@ object NetworkProtocol {
   def protocolHandshake(src: ProtocolNode, nonce: Nonce): Frameable =
     Frameable(Frameable.Message.ProtocolHandshake(ProtocolHandshake(ByteString.copyFrom(nonce))))
 
-  def protocolHandshakeResponse(src: ProtocolNode, h: routing.Header): routing.Protocol =
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(ProtocolHandshakeResponse()))
+  def protocolHandshakeResponse(src: ProtocolNode,
+                                h: routing.Header,
+                                nonce: Nonce): routing.Protocol =
+    ProtocolMessage.upstreamResponse(
+      src,
+      h,
+      AnyProto.pack(ProtocolHandshakeResponse(ByteString.copyFrom(nonce))))
 }
 
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
@@ -80,6 +85,3 @@ final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, tim
     extends ProtocolResponse
 
 final case class FrameMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage
-
-final case class ProtocolHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse

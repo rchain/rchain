@@ -109,19 +109,29 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       err: ApplicativeError_[F, CommError]): F[A] =
     oa.fold[F[A]](err.raiseError[A](error))(_.pure[F])
 
-  private def handleProtocolHandshake[F[_]: Monad: Time: Communication](
+  private def handleProtocolHandshake[F[_]: Monad: Time: Communication: Encryption](
       remote: PeerNode,
       maybeHeader: Option[Header],
       maybePh: Option[ProtocolHandshake])(implicit
+                                          keysStore: Kvs[F, PeerNode, Array[Byte]],
                                           err: ApplicativeError_[F, CommError]): F[String] =
     for {
-      local  <- Communication[F].local
-      ph     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      h      <- getOrError[F, Header](maybeHeader, headerNotAvailable)
+      local <- Communication[F].local
+      ph    <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      h     <- getOrError[F, Header](maybeHeader, headerNotAvailable)
+
+      keys  <- Encryption[F].fetchKeys
+      nonce <- Encryption[F].generateNonce
+      remotePubKey <- keysStore
+                       .get(remote)
+                       .map(k => err.fromEither(k.toRight(publicKeyNotAvailable(remote))))
+                       .flatten
+      phr    = protocolHandshakeResponse(local, h, nonce)
+      eph    <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, phr.toByteArray)
       ts     <- Time[F].currentMillis
-      resp   = ProtocolHandshakeResponseMessage(protocolHandshakeResponse(local, h), ts)
-      result <- Communication[F].commSend(resp, remote)
-      _      <- Communication[F].addNode(remote)
+      fm     = FrameMessage(frame(local, nonce, eph), ts)
+      result <- Communication[F].commSend(fm, remote)
+      // _      <- Communication[F].addNode(remote)
     } yield s"Resonded to protocol handshake request from $remote"
 
   def handleFrame[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
