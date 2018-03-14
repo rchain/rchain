@@ -113,6 +113,8 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
       }
 
       it("should not store remote's public key if sending response failed with error")(pending)
+
+      it("should log when there were errors while sending resonse back to remote node")(pending)
     }
 
     describe("when reciving encrypted ProtocolHandshake") {
@@ -137,6 +139,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           .map(_.nonce.toByteArray)
           .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
       }
+
       it("should send encrypted response back to the remote") {
         // given
         keysStoreEff.put(remote, remoteKeys.pub)
@@ -150,6 +153,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
       it("should not respond if message can not be decrypted")(pending)
       it("should not respond if it does not contain remotes public key")(pending)
     }
+
   }
 
   private def value[A](ea: Effect[A]): A = ea.value.right.get
