@@ -14,6 +14,14 @@ import scala.collection.immutable.Stream
 
 import implicits.{ExprLocallyFree, SendLocallyFree}
 
+// The spatial matcher takes targets and patterns. It uses StateT[Option,
+// FreeMap, Unit] to represent the computation. The state is the mapping from
+// free variables to the values that were captured. StateT[Option, S, A] allows
+// for failure, and when a failure occurs, no new state is provided. This is
+// what we want, because when no matching occurs, there is no result map.
+// In a few places we use StateT[Stream, FreeMap, A] for backtracking. In order
+// to help cut down on backtracking, wherever one of several possible matches
+// will do, we just take one.
 object SpatialMatcher {
   type FreeMap            = Map[Int, Par]
   type OptionalFreeMap[A] = StateT[Option, FreeMap, A]
@@ -75,6 +83,19 @@ object SpatialMatcher {
       }
     }
 
+  // This function finds a single matching from a list of patterns and a list of
+  // targets.
+  // Any remaining terms are either grouped with the free variable varLevel or
+  // thrown away with the wildcard. If both are provided, we prefer to capture
+  // terms that can be captured.
+  // tlist is the target list
+  // plist is the pattern list
+  // matcher is a function that does a spatial match between T's
+  // merger is a function that adds a captured T to a par. Used for updating the
+  //   state map.
+  // varLevel: if non-empty, the free variable level where to put the remaining
+  //   T's
+  // wildcard: if true, there is a wildcard in parallel with the pattern list.
   def listMatchSingle[T](
       tlist: Seq[T],
       plist: Seq[T],
@@ -112,7 +133,7 @@ object SpatialMatcher {
         varLevel match {
           case None =>
             // If there is a wildcard, we succeed.
-            // We also succed if there isn't but the remainder is empty.
+            // We also succeed if there isn't but the remainder is empty.
             if (wildcard || rem == Nil)
               StateT.pure(Unit)
             else
