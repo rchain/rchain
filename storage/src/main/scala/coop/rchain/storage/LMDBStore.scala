@@ -1,9 +1,16 @@
 package coop.rchain.storage
+
 import java.nio.ByteBuffer
+import java.nio.file.Path
+import java.security.MessageDigest
 
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.models.Serialize
+import coop.rchain.models.implicits.rhoInstanceWrapper
 import coop.rchain.storage.datamodels.{BytesList, PsKsBytes, PsKsBytesList}
+import coop.rchain.storage.util._
+import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Dbi, Env, Txn}
 
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
@@ -17,20 +24,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 bl: Serialize[BytesList])
     extends IStore[C, P, A, K] {
 
-  import coop.rchain.storage.util._
-  import coop.rchain.storage.LMDBStore.{
-    fromByteBuffer,
-    fromByteString,
-    fromBytesList,
-    hashBytes,
-    toByteBuffer,
-    toByteString,
-    toBytesList
-  }
+  import coop.rchain.storage.LMDBStore._
 
   type H = ByteBuffer
 
-  private[storage] def hashC(cs: List[C])(implicit st: Serialize[C]): H =
+  private[storage] def hashCs(cs: List[C])(implicit st: Serialize[C]): H =
     hashBytes(toByteBuffer(cs)(st))
 
   private[storage] def getKey(txn: T, s: H): List[C] =
@@ -72,12 +70,12 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   def getAs(txn: T, channels: List[C]): List[A] = {
-    val keyCs = hashC(channels)
+    val keyCs = hashCs(channels)
     Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]).getOrElse(List.empty[A])
   }
 
   def removeA(txn: T, channel: C, index: Int): Unit = {
-    val keyCs = hashC(List(channel))
+    val keyCs = hashCs(List(channel))
     Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]) match {
       case Some(as) => _dbAs.put(txn, keyCs, toByteBuffer(util.dropIndex(as, index)))
       case None     => throw new IllegalArgumentException(s"removeA: no values at $channel")
@@ -87,7 +85,9 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private[this] def readPsKsBytesList(txn: T, keyCs: H): Option[List[PsKsBytes]] =
     Option(_dbPsKs.get(txn, keyCs)).map(bytes => {
       val fetched = new Array[Byte](bytes.remaining())
-      ignore { bytes.get(fetched) }
+      ignore {
+        bytes.get(fetched)
+      }
       PsKsBytesList.parseFrom(fetched).values.toList
     })
 
@@ -109,7 +109,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     getPsK(txn, channels).map(_._1)
 
   def getPsK(txn: T, curr: List[C]): List[(List[P], K)] = {
-    val keyCs = hashC(curr)
+    val keyCs = hashCs(curr)
     readPsKsBytesList(txn, keyCs)
       .flatMap { (psKsByteses: List[PsKsBytes]) =>
         psKsByteses
@@ -124,7 +124,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   def removePsK(txn: T, channels: List[C], index: Int): Unit = {
-    val keyCs = hashC(channels)
+    val keyCs = hashCs(channels)
     readPsKsBytesList(txn, keyCs) match {
       case Some(psks) => writePsKsBytesList(txn, keyCs, util.dropIndex(psks, index))
       case None       => throw new IllegalArgumentException(s"removePsK: no values at $channels")
@@ -132,7 +132,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   def addJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val joinKey = hashC(List(c))
+    val joinKey = hashCs(List(c))
     val oldCsList =
       Option(_dbJoins.get(txn, joinKey))
         .map(fromByteBuffer[BytesList])
@@ -141,7 +141,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   def getJoin(txn: T, c: C): List[List[C]] = {
-    val joinKey = hashC(List(c))
+    val joinKey = hashCs(List(c))
     Option(_dbJoins.get(txn, joinKey))
       .map(fromByteBuffer[BytesList])
       .map(_.map(fromBytesList[C]))
@@ -149,7 +149,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val joinKey = hashC(List(c))
+    val joinKey = hashCs(List(c))
     val exList =
       Option(_dbJoins.get(txn, joinKey))
         .map(fromByteBuffer[BytesList])
@@ -168,7 +168,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   def removeAllJoins(txn: T, c: C): Unit =
-    _dbJoins.delete(txn, hashC(List(c)))
+    _dbJoins.delete(txn, hashCs(List(c)))
 
   def close(): Unit = {
     _dbKeys.close()
@@ -188,13 +188,6 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 }
 
 object LMDBStore {
-  import java.security.MessageDigest
-  import java.nio.file.Path
-  import com.google.protobuf.ByteString
-  import coop.rchain.storage.util._
-  import org.lmdbjava.DbiFlags.MDB_CREATE
-  import coop.rchain.models.implicits.rhoInstanceWrapper
-
   private[this] val keysTableName: String  = "Keys"
   private[this] val psksTableName: String  = "PsKs"
   private[this] val asTableName: String    = "As"

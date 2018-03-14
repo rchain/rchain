@@ -16,7 +16,7 @@ trait IStore[C, P, A, K] {
     */
   type H
 
-  private[storage] def hashC(channels: List[C])(implicit sc: Serialize[C]): H
+  private[storage] def hashCs(channels: List[C])(implicit sc: Serialize[C]): H
 
   private[storage] def putCs(txn: T, channels: List[C]): Unit
 

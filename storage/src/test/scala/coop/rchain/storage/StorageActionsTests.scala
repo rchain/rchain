@@ -12,7 +12,7 @@ import org.scalatest._
 import scala.collection.mutable
 import scala.util.Try
 
-abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionValues {
+abstract class StorageActionsTests extends FlatSpec with Matchers with OptionValues {
 
   val logger: Logger = Logger[StorageActionsTests]
 
@@ -42,7 +42,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
   "produce" should
     "persist a piece of data in the store" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashC(key)
+    val keyHash = store.hashCs(key)
 
     val r = produce(store, key.head, "datum")
 
@@ -59,7 +59,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
   "producing twice on the same channel" should
     "persist two pieces of data in the store" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashC(key)
+    val keyHash = store.hashCs(key)
 
     val r1 = produce(store, key.head, "datum1")
 
@@ -88,7 +88,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
     "persist a continuation in the store" in withTestStore { store =>
     val key      = List("ch1")
     val patterns = List(Wildcard)
-    val keyHash  = store.hashC(key)
+    val keyHash  = store.hashCs(key)
     val results  = mutable.ListBuffer.empty[List[String]]
 
     val r = consume(store, key, patterns, capture(results))
@@ -115,7 +115,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
     "persist a continuation in the store" in withTestStore { store =>
     val key      = List("ch1", "ch2", "ch3")
     val patterns = List(Wildcard, Wildcard, Wildcard)
-    val keyHash  = store.hashC(key)
+    val keyHash  = store.hashCs(key)
     val results  = mutable.ListBuffer.empty[List[String]]
 
     val r = consume(store, key, patterns, capture(results))
@@ -133,7 +133,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
   "producing and then consuming on the same channel" should
     "return the continuation and data" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashC(key)
+    val keyHash = store.hashCs(key)
     val results = mutable.ListBuffer.empty[List[String]]
 
     val r1 = produce(store, key.head, "datum")
@@ -166,7 +166,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
     "return a continuation and all the data" in withTestStore { store =>
     val produceKey1     = List("ch1")
-    val produceKey1Hash = store.hashC(produceKey1)
+    val produceKey1Hash = store.hashCs(produceKey1)
 
     val r1 = produce(store, produceKey1.head, "datum1")
 
@@ -180,7 +180,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
     r1 shouldBe None
 
     val consumeKey     = List("ch1", "ch2")
-    val consumeKeyHash = store.hashC(consumeKey)
+    val consumeKeyHash = store.hashCs(consumeKey)
     val consumePattern = List(Wildcard, Wildcard)
     val results        = mutable.ListBuffer.empty[List[String]]
 
@@ -200,7 +200,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
     r2 shouldBe None
 
     val produceKey2     = List("ch2")
-    val produceKey2Hash = store.hashC(produceKey2)
+    val produceKey2Hash = store.hashCs(produceKey2)
 
     val r3 = produce(store, produceKey2.head, "datum2")
 
@@ -233,10 +233,10 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
     val produceKey3     = List("ch3")
     val consumeKey      = List("ch1", "ch2", "ch3")
     val patterns        = List(Wildcard, Wildcard, Wildcard)
-    val produceKey1Hash = store.hashC(produceKey1)
-    val produceKey2Hash = store.hashC(produceKey2)
-    val produceKey3Hash = store.hashC(produceKey3)
-    val consumeKeyHash  = store.hashC(consumeKey)
+    val produceKey1Hash = store.hashCs(produceKey1)
+    val produceKey2Hash = store.hashCs(produceKey2)
+    val produceKey3Hash = store.hashCs(produceKey3)
+    val consumeKeyHash  = store.hashCs(consumeKey)
     val results         = mutable.ListBuffer.empty[List[String]]
 
     val r1 = produce(store, produceKey1.head, "datum1")
@@ -307,7 +307,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
     val r6 = consume(store, key, List(Wildcard), capture(results))
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, store.hashC(key)) shouldBe key
+      store.getKey(txn, store.hashCs(key)) shouldBe key
       store.getAs(txn, key) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
       store.getPsK(txn, key) shouldBe Nil
@@ -516,7 +516,7 @@ abstract class StorageActionsTests() extends FlatSpec with Matchers with OptionV
   }
 }
 
-class InMemoryStoreStorageActionsTests extends StorageActionsTests() {
+class InMemoryStoreStorageActionsTests extends StorageActionsTests {
   override def withTestStore(
       f: IStore[String, Pattern, String, List[String] => Unit] => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, List[String] => Unit]
@@ -528,7 +528,7 @@ class InMemoryStoreStorageActionsTests extends StorageActionsTests() {
   }
 }
 
-class LMDBStoreStorageActionsTests extends StorageActionsTests() with BeforeAndAfterAll {
+class LMDBStoreStorageActionsTests extends StorageActionsTests with BeforeAndAfterAll {
   private[this] val dbDir = Files.createTempDirectory("rchain-storage-test-")
 
   override def withTestStore(
