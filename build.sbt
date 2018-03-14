@@ -54,7 +54,7 @@ lazy val comm = project
   .settings(
     commonSettings,
     version := "0.1",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       uriParsing,
       uPnP,
       hasher,

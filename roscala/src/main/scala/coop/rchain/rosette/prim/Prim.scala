@@ -1,5 +1,8 @@
 package coop.rchain.rosette.prim
 
+import cats.data.State
+import cats.data.State._
+import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 import coop.rchain.rosette._
 import coop.rchain.rosette.prim.Prim.mismatchArgs
 
@@ -18,45 +21,64 @@ abstract class Prim extends Ob {
 
   def fn(ctxt: Ctxt): Either[PrimError, Ob]
 
-  /** Dispatch primitive
-    *
+  /**
     * Rosette seems to potentially return INVALID, UPCALL or DEADTHREAD here
     * Therefore we return RblError for the error case
     */
-  def dispatchHelper(ctxt: Ctxt): Result = {
+  def dispatchHelper: CtxtTransition[Result] = State { ctxt =>
     val n = ctxt.nargs
 
     if (minArgs <= n && n <= maxArgs)
-      fn(ctxt).left.map(PrimErrorWrapper)
+      (ctxt, fn(ctxt).left.map(PrimErrorWrapper))
     else
-      Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs)))
+      (ctxt, Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs))))
   }
 
-  override def dispatch(state: VMState): (Result, VMState) = {
-    // TODO:
-    //if (debugging_level)
-    //    printf("\t%s\n", BASE(id)->asCstring());
+  /** Dispatch primitive
+    *
+    * This runs a primitive with dispatchHelper and tries
+    * to return the result to the parent ctxt.
+    *
+    * Returning the result to the parent ctxt, will potentially
+    * return the parent ctxt which then has to be scheduled by
+    * the caller.
+    */
+  override def dispatch: CtxtTransition[(Result, Option[Continuation])] = {
 
-    val result = dispatchHelper(state.ctxt)
+    /**
+      * Try to return the primitive result to the parent ctxt.
+      * This can potentially return the parent ctxt as a ctxt
+      * that needs to be scheduled by the caller.
+      */
+    def returnResultToParent(result: Ob): CtxtTransition[(Result, Option[Continuation])] =
+      Ctxt
+        .ret(result)
+        .transform(
+          (ctxt, res) =>
+            if (res._1)
+              (ctxt, (Right(result), res._2))
+            else
+              (ctxt, (Right(result), res._2))
+        )
 
-    if (result.isRight) {
-      val r = result.right.get
-      (Right(r), state.ctxt.ret(r)(state)._2)
-    } else {
-      (result, state)
-    }
+    for {
+      primResult <- dispatchHelper
+
+      result <- primResult match {
+                 case Right(ob) => returnResultToParent(ob)
+
+                 case _ =>
+                   /**
+                     * Something went wrong with running the primitive.
+                     * Report the error back and there is no ctxt to be
+                     * scheduled.
+                     */
+                   pure[Ctxt, (Result, Option[Continuation])]((primResult, None))
+               }
+    } yield result
   }
 
-  def invoke(state: VMState): (Result, VMState) = {
-    val result = dispatch(state)
-
-    // TODO:
-    //if (!BASE(ctxt->trgt)->isSynchronousTrgt())
-    //    BASE(ctxt->arg(0))->updateNoArgs();
-
-    result
-  }
-
+  def invoke: CtxtTransition[(Result, Option[Continuation])] = dispatch
 }
 
 object Prim {

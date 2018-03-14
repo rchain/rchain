@@ -3,6 +3,7 @@ package coop.rchain.rosette
 import java.io.File
 
 import cats.data.State
+import cats.data.State._
 import coop.rchain.rosette
 import coop.rchain.rosette.utils.{lensTrans, printToFile, unsafeCastLens}
 import coop.rchain.rosette.Meta.StdMeta
@@ -12,6 +13,7 @@ import coop.rchain.rosette.utils.Instances._
 import shapeless.OpticDefns.RootLens
 import shapeless._
 import cats.implicits._
+import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 
 trait Base
 
@@ -25,8 +27,8 @@ trait Ob extends Base with Cloneable {
   def meta: Ob   = slot.head
   def parent: Ob = slot(1)
 
-  def dispatch(state: VMState): (Result, VMState) = null
-  def extendWith(keyMeta: Ob): Ob                 = null
+  def dispatch: CtxtTransition[(Result, Option[Continuation])] = pure((Right(Ob.NIV), None))
+  def extendWith(keyMeta: Ob): Ob                              = null
 
   def getAddr(indirect: Boolean, level: Int, offset: Int): Ob =
     getLex(indirect, level, offset)
@@ -50,34 +52,15 @@ trait Ob extends Base with Cloneable {
   def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
     Right(null)
 
-  def lookupAndInvoke(state: VMState): (Result, VMState) = {
-    val fn = meta match {
-      case stdMeta: StdMeta =>
-        stdMeta.lookupOBOStdMeta(self, state.ctxt.trgt)(state)
-      case _ => Left(Absent)
-    }
-
-    if (state.interruptPending != 0) {
-      (Left(Absent), state)
-    } else {
-      // TODO:
-      //if (fn == ABSENT) {
-      //  PROTECT_THIS(Ob); PROTECT(ctxt);
-      //  ctxt->prepare();
-      //  Tuple* new_argvec = Tuple::create (2, INVALID);
-      //  new_argvec->elem(0) = ctxt->trgt;
-      //  new_argvec->elem(1) = ctxt;
-      //  Ctxt* new_ctxt = Ctxt::create (oprnMissingMethod, new_argvec);
-      //  new_ctxt->monitor = vm->systemMonitor;
-      //  return oprnMissingMethod->dispatch(new_ctxt);
-      //}
-
-      fn match {
-        case Right(prim: Prim) => prim.invoke(state)
-        case _                 => (Left(Absent), state)
-      }
-    }
-  }
+  def lookupAndInvoke: CtxtTransition[(Result, Option[Continuation])] =
+    for {
+      target <- State.inspect[Ctxt, Ob](_.trgt)
+      fn     <- meta.asInstanceOf[StdMeta].lookupOBOStdMeta(self, target)
+      result <- fn match {
+                 case Right(prim: Prim) => prim.invoke
+                 case _                 => pure[Ctxt, (Result, Option[Continuation])]((Left(Absent), None))
+               }
+    } yield result
 
   def matches(ctxt: Ctxt): Boolean = false
   def numberOfSlots(): Int         = slot.size

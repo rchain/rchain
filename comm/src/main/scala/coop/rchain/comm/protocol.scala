@@ -9,6 +9,7 @@ import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm._, CommError._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import kamon._
 
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
@@ -85,7 +86,11 @@ class ProtocolNode private (id: NodeIdentifier,
     _seq
   }
 
+  val pingSendCount   = Kamon.counter("protocol-ping-sends")
+  val lookupSendCount = Kamon.counter("protocol-lookup-send")
+
   override def ping: Try[Duration] = {
+    pingSendCount.increment()
     val req = PingMessage(ProtocolMessage.ping(local), System.currentTimeMillis)
     roundTrip(req, this) match {
       case Right(resp) =>
@@ -103,6 +108,7 @@ class ProtocolNode private (id: NodeIdentifier,
   }
 
   def lookup(key: Seq[Byte]): Try[Seq[PeerNode]] = {
+    lookupSendCount.increment()
     val req = LookupMessage(ProtocolMessage.lookup(local, key), System.currentTimeMillis)
     roundTrip(req, this) match {
       case Right(LookupResponseMessage(proto, _)) =>

@@ -1,16 +1,19 @@
 package coop.rchain.rosette
 
+import cats.data.State._
+import coop.rchain.rosette.Ctxt.CtxtTransition
+
 object Meta {
   case class StdMeta(override val extension: StdExtension = null) extends Actor {
-    def get(client: Ob, key: Ob, ctxt: Ctxt): Result =
-      Left(Absent)
+    // TODO:
+    def get(client: Ob, key: Ob): CtxtTransition[Result] =
+      pure[Ctxt, Result](Left(Absent))
 
-    def lookupOBOStdMeta(client: Ob, key: Ob)(state: VMState): Result =
-      if (state.interruptPending != 0) {
-        Left(Absent)
-      } else {
-        val result = get(client, key, state.ctxt)
-
+    // TODO:
+    def lookupOBOStdMeta(client: Ob, key: Ob): CtxtTransition[Result] =
+      for {
+        result <- get(client, key)
+      } yield {
         result.left.flatMap {
           // TODO:
           // BASE(BASE(client)->parent())->lookup(key, ctxt)

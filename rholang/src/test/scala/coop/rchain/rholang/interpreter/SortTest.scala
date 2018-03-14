@@ -104,28 +104,24 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort and deduplicate sets insides" in {
     val parGround =
-      Expr(
-        exprInstance = ESet(
-          List(
-            GInt(2),
-            GInt(1),
-            Expr(exprInstance = ESet(List(GInt(1), GInt(2))),
-                 freeCount = 0,
-                 locallyFree = BitSet()),
-            Expr(exprInstance = ESet(List(GInt(1), GInt(1))), freeCount = 0, locallyFree = BitSet())
-          )),
+      ESet(
+        List(
+          GInt(2),
+          GInt(1),
+          ESet(List(GInt(1), GInt(2)), freeCount = 0, locallyFree = BitSet()),
+          ESet(List(GInt(1), GInt(1)), freeCount = 0, locallyFree = BitSet())
+        ),
         freeCount = 0,
         locallyFree = BitSet()
       )
     val sortedParGround: Option[Par] =
-      Expr(
-        exprInstance = ESet(
-          List(
-            GInt(1),
-            GInt(2),
-            Expr(exprInstance = ESet(List(GInt(1))), freeCount = 0, locallyFree = BitSet()),
-            Expr(exprInstance = ESet(List(GInt(1), GInt(2))), freeCount = 0, locallyFree = BitSet())
-          )),
+      ESet(
+        List(
+          GInt(1),
+          GInt(2),
+          ESet(List(GInt(1)), freeCount = 0, locallyFree = BitSet()),
+          ESet(List(GInt(1), GInt(2)), freeCount = 0, locallyFree = BitSet())
+        ),
         freeCount = 0,
         locallyFree = BitSet()
       )
@@ -135,24 +131,20 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort map insides by key and last write should win" in {
     val parGround =
-      Expr(
-        exprInstance = EMap(
-          List(
-            KeyValuePair(GInt(2),
-                         Expr(exprInstance = ESet(List(GInt(2), GInt(1))),
-                              freeCount = 0,
-                              locallyFree = BitSet())),
-            KeyValuePair(GInt(2), GInt(1)),
-            KeyValuePair(GInt(1), GInt(1))
-          )),
+      EMap(
+        List(
+          KeyValuePair(GInt(2),
+                       ESet(List(GInt(2), GInt(1)), freeCount = 0, locallyFree = BitSet())),
+          KeyValuePair(GInt(2), GInt(1)),
+          KeyValuePair(GInt(1), GInt(1))
+        ),
         freeCount = 0,
         locallyFree = BitSet()
       )
     val sortedParGround: Option[Par] =
-      Expr(
-        exprInstance = EMap(List(KeyValuePair(GInt(1), GInt(1)), KeyValuePair(GInt(2), GInt(1)))),
-        freeCount = 0,
-        locallyFree = BitSet())
+      EMap(List(KeyValuePair(GInt(1), GInt(1)), KeyValuePair(GInt(2), GInt(1))),
+           freeCount = 0,
+           locallyFree = BitSet())
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be(sortedParGround)
   }
