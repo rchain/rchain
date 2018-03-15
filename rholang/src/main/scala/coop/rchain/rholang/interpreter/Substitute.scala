@@ -85,55 +85,44 @@ object Substitute {
       )
       .term
 
-  def substitute(term: Receive)(implicit env: Env[Par]): Receive = {
-    val subBinds =
-      for { ReceiveBind(xs, Some(chan)) <- term.binds } yield {
-        ReceiveBind(xs, substitute(chan))
-      }
-    val origShift = env.shift
-    env.shift(term.bindCount)
-    val result = ReceiveSortMatcher
+  def substitute(term: Receive)(implicit env: Env[Par]): Receive =
+    ReceiveSortMatcher
       .sortMatch(
         Receive(
-          binds = subBinds,
-          body = substitute(term.body.get),
+          binds = term.binds
+            .map({
+              case ReceiveBind(xs, Some(chan)) => ReceiveBind(xs, substitute(chan))
+            }),
+          body = substitute(term.body.get)(env.shift(term.bindCount)),
           persistent = term.persistent,
           bindCount = term.bindCount,
           freeCount = term.freeCount,
-          locallyFree = term.locallyFree.until(origShift)
+          locallyFree = term.locallyFree.until(env.shift)
         )
       )
       .term
-    env.shift(-term.bindCount)
-    result
-  }
 
   def substitute(term: Eval)(implicit env: Env[Par]): Eval =
     EvalSortMatcher.sortMatch(Eval(substitute(term.channel.get))).term
 
-  def substitute(term: New)(implicit env: Env[Par]): New = {
-    val origShift = env.shift
-    env.shift(term.bindCount)
-    val result = NewSortMatcher
+  def substitute(term: New)(implicit env: Env[Par]): New =
+    NewSortMatcher
       .sortMatch(
-        New(term.bindCount, substitute(term.p.get), term.locallyFree.until(origShift))
+        New(term.bindCount,
+            substitute(term.p.get)(env.shift(term.bindCount)),
+            term.locallyFree.until(env.shift))
       )
       .term
-    env.shift(-term.bindCount)
-    result
-  }
 
   def substitute(term: Match)(implicit env: Env[Par]): Match =
     MatchSortMatcher
       .sortMatch(
         Match(
-          substitute(term.target.get),
-          for { MatchCase(_case, Some(par)) <- term.cases } yield {
-            env.shift(_case.get.freeCount)
-            val result = MatchCase(_case, substitute(par))
-            env.shift(-_case.get.freeCount)
-            result
-          },
+          target = substitute(term.target.get),
+          term.cases.map({
+            case MatchCase(_case, Some(par)) =>
+              MatchCase(_case, substitute(par)(env.shift(_case.get.freeCount)))
+          }),
           term.freeCount,
           term.locallyFree.until(env.shift)
         )

@@ -32,8 +32,7 @@ class VarSubSpec extends FlatSpec with Matchers {
   }
 
   "BoundVar" should "be left unchanged" in {
-    val env = Env.makeEnv(GPrivate(): Par, GPrivate(): Par)
-    env.shift(1)
+    val env                 = Env.makeEnv(GPrivate(): Par, GPrivate(): Par).shift(1)
     val result              = maybeSubstitute(BoundVar(0))(env)
     val expectedResult: Var = BoundVar(0)
     result should be(Left(expectedResult))
@@ -42,16 +41,14 @@ class VarSubSpec extends FlatSpec with Matchers {
 
 class ChannelSubSpec extends FlatSpec with Matchers {
   "ChanVar" should "be left unchanged" in {
-    val env = Env.makeEnv(GPrivate(): Par, GPrivate(): Par)
-    env.shift(1)
+    val env                     = Env.makeEnv(GPrivate(): Par, GPrivate(): Par).shift(1)
     val result                  = substitute(ChanVar(BoundVar(0)))(env)
     val expectedResult: Channel = ChanVar(BoundVar(0))
     result should be(expectedResult)
   }
 
   "Quote" should "leave variables not in environment alone." in {
-    val env = Env.makeEnv(GPrivate(): Par)
-    env.shift(1)
+    val env    = Env.makeEnv(GPrivate(): Par).shift(1)
     val par    = Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0))
     val target = Quote(par)
     val result = substitute(target)(env)
@@ -72,8 +69,7 @@ class ChannelSubSpec extends FlatSpec with Matchers {
 class SendSubSpec extends FlatSpec with Matchers {
   "Send" should "leave variables not in evironment alone." in {
 
-    val env = Env.makeEnv(GPrivate(): Par, GPrivate(): Par)
-    env.shift(1)
+    val env    = Env.makeEnv(GPrivate(): Par, GPrivate(): Par).shift(1)
     val result = substitute(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))(env)
     result should be(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))
   }
