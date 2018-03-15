@@ -152,7 +152,7 @@ lazy val node = project
 
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
-    packageDescription in Linux := "RChain Node Description",
+    packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
 
     /*
      * Debian.
