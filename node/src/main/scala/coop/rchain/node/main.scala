@@ -7,6 +7,7 @@ import scala.collection.JavaConverters._
 import coop.rchain.p2p
 import coop.rchain.comm._, CommError._
 import coop.rchain.catscontrib.Capture
+import coop.rchain.crypto.encryption.Curve25519
 import com.typesafe.scalalogging.Logger
 import com.google.common.io.BaseEncoding
 import monix.eval.Task
@@ -96,30 +97,33 @@ object Main {
 
     import ApplicativeError_._
 
-    // FIX-ME temp implemmentation, production shoul use crypto module
     implicit val encyption: Encryption[Task] = new Encryption[Task] {
       import Encryption._
       val encoder = BaseEncoding.base16().lowerCase()
-      def fetchKeys: Task[PublicPrivateKeys] = Task.delay {
-        val pub: Key =
-          encoder.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
-        val sec: Key =
-          encoder.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+
+      private def generateFresh: Task[PublicPrivateKeys] = Task.delay {
+        val (pub, sec) = Curve25519.newKeyPair
         PublicPrivateKeys(pub, sec)
       }
 
-      def generateNonce: Task[Nonce] = Task.delay {
-        encoder.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
-      }
+      private def storeToFS: PublicPrivateKeys => Task[PublicPrivateKeys] =
+        _.pure[Task] // FIX-ME implement
+
+      private def fetchFromFS: Task[Option[PublicPrivateKeys]] = none.pure[Task] // FIX-ME implement
+
+      def fetchKeys: Task[PublicPrivateKeys] =
+        (fetchFromFS >>= {
+          case None     => generateFresh >>= storeToFS
+          case Some(ks) => ks.pure[Task]
+        }).memoize
+
+      def generateNonce: Task[Nonce] = Task.delay(Curve25519.newNonce)
 
       def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): Task[Array[Byte]] =
-        Task.delay {
-          message
-        }
+        Task.delay(Curve25519.encrypt(pub, sec, nonce, message))
+
       def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): Task[Array[Byte]] =
-        Task.delay {
-          cipher
-        }
+        Task.delay(Curve25519.decrypt(pub, sec, nonce, cipher))
     }
 
     implicit def ioLog: Log[Task] = new Log[Task] {
