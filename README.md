@@ -160,7 +160,7 @@ Everything that can be stitched together can be done so with the `node` project.
 
 Invoking the above Docker image is simple enough:
 ```
-<computer:~/src/rchain (dev)> docker run -ti --net=host coop.rchain/coop.rchain-node:latest
+<computer:~/src/rchain (dev)> docker run -ti coop.rchain/coop.rchain-node:latest
 15:49:21.363 [main] INFO main - uPnP: Some(/10.0.0.9) -> Some(192.168.0.101)
 15:49:21.497 [main] INFO main - Listening for traffic on #{Network rnode://facff6c005814a669b2063b38f8fc6c4@10.0.0.9:30304}.
 15:49:21.500 [main] INFO main - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
