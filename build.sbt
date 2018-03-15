@@ -121,7 +121,7 @@ lazy val node = project
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging)
   .settings(
     commonSettings,
-    version := "0.1.1",
+    version := "0.1.2",
     name := "rnode",
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
