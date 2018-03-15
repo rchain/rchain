@@ -5,6 +5,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import NormalizerExceptions._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
@@ -18,6 +19,49 @@ import scala.collection.immutable.BitSet
 sealed trait VarSort
 case object ProcSort extends VarSort
 case object NameSort extends VarSort
+
+object NormalizerExceptions {
+  trait NormalizerException
+  case class UnexpectedNameContext(
+      varName: String,
+      procVarLine: Int,
+      procVarCol: Int,
+      nameContextLine: Int,
+      nameContextCol: Int
+  ) extends Exception(
+        s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol")
+      with NormalizerException
+
+  case class UnexpectedReuseOfNameContextFree(
+      varName: String,
+      firstUseLine: Int,
+      firstUseCol: Int,
+      secondUseLine: Int,
+      secondUseCol: Int
+  ) extends Exception(
+        s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in name context.")
+      with NormalizerException
+
+  case class UnexpectedProcContext(
+      varName: String,
+      nameVarLine: Int,
+      nameVarCol: Int,
+      processContextLine: Int,
+      processContextCol: Int
+  ) extends Exception(
+        s"Name variable: $varName at $nameVarLine:$nameVarCol used in process context at $processContextLine:$processContextCol")
+      with NormalizerException
+
+  case class UnexpectedReuseOfProcContextFree(
+      varName: String,
+      firstUseLine: Int,
+      firstUseCol: Int,
+      secondUseLine: Int,
+      secondUseCol: Int
+  ) extends Exception(
+        s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context.")
+      with NormalizerException
+}
 
 object BoolNormalizeMatcher {
   def normalizeMatch(b: Bool): GBool =
@@ -104,7 +148,8 @@ object NameNormalizeMatcher {
                 val newBindingsPair =
                   input.knownFree.newBinding((n.var_, NameSort, n.line_num, n.col_num))
                 NameVisitOutputs(ChanVar(FreeVar(newBindingsPair._2)), newBindingsPair._1)
-              case _ => throw new Error("Free variable used as binder may not be used twice.")
+              case Some((_, _, line, col)) =>
+                throw UnexpectedReuseOfNameContextFree(n.var_, line, col, n.line_num, n.col_num)
             }
           }
         }
@@ -124,14 +169,6 @@ object NameNormalizeMatcher {
       }
     }
 
-  case class UnexpectedNameContext(
-      varName: String,
-      procVarLine: Int,
-      procVarCol: Int,
-      nameContextLine: Int,
-      nameContextCol: Int
-  ) extends Exception(
-        s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol")
 }
 
 object ProcNormalizeMatcher {
@@ -204,7 +241,12 @@ object ProcNormalizeMatcher {
                       input.knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
                     ProcVisitOutputs(input.par.prepend(EVar(FreeVar(newBindingsPair._2))),
                                      newBindingsPair._1)
-                  case _ => throw new Error("Free variable used as binder may not be used twice.")
+                  case Some((_, _, line, col)) =>
+                    throw UnexpectedReuseOfProcContextFree(pvv.var_,
+                                                           line,
+                                                           col,
+                                                           pvv.line_num,
+                                                           pvv.col_num)
                 }
             }
           case _: ProcVarWildcard =>
@@ -374,8 +416,13 @@ object ProcNormalizeMatcher {
         val mergedFrees = (DebruijnLevelMap[VarSort]() /: receipts)((env, receipt) =>
           env.absorbFree(receipt._3) match {
             case (newEnv, Nil) => newEnv
-            case _ =>
-              throw new Error("Free variable used as binder may not be used twice.")
+            case (_, (shadowingVar, line, col) :: _) =>
+              val Some((_, _, firstUsageLine, firstUsageCol)) = env.get(shadowingVar)
+              throw UnexpectedReuseOfNameContextFree(shadowingVar,
+                                                     firstUsageLine,
+                                                     firstUsageCol,
+                                                     line,
+                                                     col)
         })
         val bindCount  = mergedFrees.countNoWildcards
         val binds      = receipts.map((receipt) => ReceiveBind(receipt._1, receipt._2))
@@ -463,14 +510,6 @@ object ProcNormalizeMatcher {
     }
   }
 
-  case class UnexpectedProcContext(
-      varName: String,
-      nameVarLine: Int,
-      nameVarCol: Int,
-      processContextLine: Int,
-      processContextCol: Int
-  ) extends Exception(
-        s"Name variable: $varName at $nameVarLine:$nameVarCol used in process context at $processContextLine:$processContextCol")
 }
 
 // Parameterized over T, the kind of typing discipline we are enforcing.
@@ -493,19 +532,18 @@ class DebruijnLevelMap[T](val next: Int,
   }
 
   // Returns the new map, and a list of the shadowed variables
-  def absorbFree(binders: DebruijnLevelMap[T]): (DebruijnLevelMap[T], List[String]) = {
+  def absorbFree(binders: DebruijnLevelMap[T]): (DebruijnLevelMap[T], List[(String, Int, Int)]) = {
     val finalNext          = next + binders.next
     val finalWildcardCount = wildcardCount + binders.wildcardCount
     val adjustNext         = next
-    binders.env.foldLeft((this, List[String]())) {
-      case ((db: DebruijnLevelMap[T], shadowed: List[String]),
-            (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))) => {
-        val shadowedNew = if (db.env.contains(k)) k :: shadowed else shadowed
+    binders.env.foldLeft((this, List[(String, Int, Int)]())) {
+      case ((db: DebruijnLevelMap[T], shadowed: List[(String, Int, Int)]),
+            (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))) =>
+        val shadowedNew = if (db.env.contains(k)) (k, line, col) :: shadowed else shadowed
         (DebruijnLevelMap(finalNext,
                           db.env + (k -> ((level + adjustNext, varType, line, col))),
                           finalWildcardCount),
          shadowedNew)
-      }
     }
   }
 

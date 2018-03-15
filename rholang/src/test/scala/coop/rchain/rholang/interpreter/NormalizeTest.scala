@@ -13,8 +13,7 @@ import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.NameNormalizeMatcher.UnexpectedNameContext
-import coop.rchain.rholang.interpreter.ProcNormalizeMatcher.UnexpectedProcContext
+import coop.rchain.rholang.interpreter.NormalizerExceptions._
 import implicits._
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
@@ -95,7 +94,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     tupleData.add(new PPar(new PGround(new GroundInt(7)), new PVar(new ProcVarVar("Q"))))
     val tuple = new PCollect(new CollectTuple(tupleData))
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(tuple, inputs)
     }
   }
@@ -175,7 +174,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val boundInputs =
       inputs.copy(knownFree = inputs.knownFree.newBinding(("x", ProcSort, 0, 0))._1)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     }
   }
@@ -289,7 +288,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PVar(new ProcVarVar("x")))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pSend, inputs)
     }
   }
@@ -312,7 +311,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
   "PPar" should "Not compile if both branches use the same free variable" in {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(parDoubleFree, inputs)
     }
   }
@@ -493,7 +492,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val body   = new PNil()
     val pInput = new PInput(receipt, body)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pInput, inputs)
     }
   }
@@ -646,7 +645,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                    new PNil()))
     val pMatch = new PMatch(new PGround(new GroundInt(47)), listCases)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pMatch, inputs)
     }
   }
@@ -726,7 +725,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     val boundInputs =
       inputs.copy(knownFree = inputs.knownFree.newBinding(("x", NameSort, 0, 0))._1)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
