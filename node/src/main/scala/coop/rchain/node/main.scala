@@ -170,7 +170,7 @@ object Main {
     }
 
     /** will use database or file system */
-    implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
+    implicit val inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
       new Kvs.InMemoryKvs[Task, PeerNode, Array[Byte]]
 
     /** This is essentially a final effect that will accumulate all effects from the system */
