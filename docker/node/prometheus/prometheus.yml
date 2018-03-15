@@ -1,0 +1,38 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+  # Attach labels to time series or alerts when communicating with
+  # external systems like alert manager or remote storage.
+  external_labels:
+      monitor: 'prometheus-monitor'
+
+# Load and evaluate rules in file every evaluation_interval.
+rule_files:
+  # - "some.rules"
+
+scrape_configs:
+
+  - job_name: 'prometheus-server'
+
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'prometheus-pushgateway'
+
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+    static_configs:
+      - targets: ['prometheus-pushgateway:9091']
+  
+  - job_name: 'rchain-node'
+
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+    static_configs:
+      - targets: ['rchain-node:9095']

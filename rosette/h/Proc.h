@@ -26,9 +26,10 @@
 class Proc : public Ob {
     STD_DECLS(Proc);
 
-   public:
+   protected:
     Proc(Ob*, Code*, Ob*, Ob*);
 
+   public:
     Ob* env;
     Code* code;
     Ob* id;

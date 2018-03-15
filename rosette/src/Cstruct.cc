@@ -299,7 +299,8 @@ GenericDescriptor::~GenericDescriptor() {
 
 GenericDescriptor* GenericDescriptor::create() {
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<GenericDescriptor>(ext);
+    void* loc = PALLOC1(sizeof(GenericDescriptor), ext);
+    return new (loc) GenericDescriptor(ext);
 }
 
 int GenericDescriptor::traversePtrs(PSOb__PSOb f) {
@@ -561,7 +562,8 @@ NullDescriptor::NullDescriptor(pExt ext)
 
 NullDescriptor* NullDescriptor::create() {
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<NullDescriptor>(ext);
+    void* loc = PALLOC1(sizeof(NullDescriptor), ext);
+    return new (loc) NullDescriptor(ext);
 }
 
 Ob* NullDescriptor::sGet(Ctxt*, uint32_t, Tuple*, int) {
@@ -632,12 +634,14 @@ AtomicDescriptor::AtomicDescriptor(RblBool* sgn, int s, pOb mta, pOb prnt,
 AtomicDescriptor* AtomicDescriptor::create(RblBool* b) {
     PROTECT(b);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<AtomicDescriptor>(b, ext);
+    void* loc = PALLOC1(sizeof(AtomicDescriptor), ext);
+    return new (loc) AtomicDescriptor(b, ext);
 }
 
 AtomicDescriptor* AtomicDescriptor::create() {
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<AtomicDescriptor>((RblBool*)RBLFALSE, ext);
+    void* loc = PALLOC1(sizeof(AtomicDescriptor), ext);
+    return new (loc) AtomicDescriptor((RblBool*)RBLFALSE, ext);
 }
 
 int AtomicDescriptor::traversePtrs(PSOb__PSOb f) {
@@ -747,14 +751,16 @@ CStructure* CStructure::create(RblTable* tbl, Tuple* tup) {
     PROTECT(tbl);
     PROTECT(tup);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CStructure>(tbl, tup, ext);
+    void* loc = PALLOC1(sizeof(CStructure), ext);
+    return new (loc) CStructure(tbl, tup, ext);
 }
 
 CStructure* CStructure::create() {
     RblTable* tmp = RblTable::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CStructure>(tmp, NIL, ext);
+    void* loc = PALLOC1(sizeof(CStructure), ext);
+    return new (loc) CStructure(tmp, NIL, ext);
 }
 
 int CStructure::traversePtrs(PSOb__PSOb f) {
@@ -911,14 +917,16 @@ CArray::CArray(int s, pOb m, pOb p, pOb mbx, pExt ext, uint16_t cnt,
 CArray* CArray::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CArray>(cnt, elmd, ext);
+    void* loc = PALLOC1(sizeof(CArray), ext);
+    return new (loc) CArray(cnt, elmd, ext);
 }
 
 CArray* CArray::create() {
     GenericDescriptor* tmp = GenericDescriptor::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CArray>(0, tmp, ext);
+    void* loc = PALLOC1(sizeof(CArray), ext);
+    return new (loc) CArray(0, tmp, ext);
 }
 
 int CArray::traversePtrs(PSOb__PSOb f) {
@@ -1016,14 +1024,16 @@ CharArray::CharArray(int s, pOb m, pOb p, pOb mbx, pExt ext, uint16_t cnt,
 CharArray* CharArray::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharArray>(cnt, elmd, ext);
+    void* loc = PALLOC1(sizeof(CharArray), ext);
+    return new (loc) CharArray(cnt, elmd, ext);
 }
 
 CharArray* CharArray::create() {
     GenericDescriptor* tmp = GenericDescriptor::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharArray>(0, tmp, ext);
+    void* loc = PALLOC1(sizeof(CharArray), ext);
+    return new (loc) CharArray(0, tmp, ext);
 }
 
 Ob* CharArray::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path,
@@ -1092,14 +1102,16 @@ CharArray0::CharArray0(uint16_t cnt, GenericDescriptor* elemd, pExt ext)
 CharArray0* CharArray0::create(uint16_t cnt, GenericDescriptor* elmd) {
     PROTECT(elmd);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharArray0>(cnt, elmd, ext);
+    void* loc = PALLOC1(sizeof(CharArray0), ext);
+    return new (loc) CharArray0(cnt, elmd, ext);
 }
 
 CharArray0* CharArray0::create() {
     GenericDescriptor* tmp = GenericDescriptor::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharArray0>(0, tmp, ext);
+    void* loc = PALLOC1(sizeof(CharArray0), ext);
+    return new (loc) CharArray0(0, tmp, ext);
 }
 
 Ob* CharArray0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1157,14 +1169,16 @@ CRef::CRef(GenericDescriptor* elemd, int s, pOb m, pOb p, pOb mbx, pExt ext)
 CRef* CRef::create(GenericDescriptor* elemd) {
     PROTECT(elemd);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CRef>(elemd, ext);
+    void* loc = PALLOC1(sizeof(CRef), ext);
+    return new (loc) CRef(elemd, ext);
 }
 
 CRef* CRef::create() {
     GenericDescriptor* tmp = GenericDescriptor::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CRef>(tmp, ext);
+    void* loc = PALLOC1(sizeof(CRef), ext);
+    return new (loc) CRef(tmp, ext);
 }
 
 int CRef::traversePtrs(PSOb__PSOb f) {
@@ -1347,14 +1361,16 @@ CharRef::CharRef(GenericDescriptor* elemd, int s, pOb m, pOb p, pOb mbx,
 CharRef* CharRef::create(GenericDescriptor* elemd) {
     PROTECT(elemd);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharRef>(elemd, ext);
+    void* loc = PALLOC1(sizeof(CharRef), ext);
+    return new (loc) CharRef(elemd, ext);
 }
 
 CharRef* CharRef::create() {
     GenericDescriptor* tmp = GenericDescriptor::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharRef>(tmp, ext);
+    void* loc = PALLOC1(sizeof(CharRef), ext);
+    return new (loc) CharRef(tmp, ext);
 }
 
 Ob* CharRef::sSet(Ctxt* ctxt, uint32_t base, Ob* val, Tuple* path, int pindex) {
@@ -1442,14 +1458,16 @@ CRef0::CRef0(GenericDescriptor* elemd, int s, pOb mta, pOb prnt, pOb mbx,
 CRef0* CRef0::create(GenericDescriptor* elemd) {
     PROTECT(elemd);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CRef0>(elemd, ext);
+    void* loc = PALLOC1(sizeof(CRef0), ext);
+    return new (loc) CRef0(elemd, ext);
 }
 
 CRef0* CRef0::create() {
     GenericDescriptor* tmp = GenericDescriptor::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CRef0>(tmp, ext);
+    void* loc = PALLOC1(sizeof(CRef0), ext);
+    return new (loc) CRef0(tmp, ext);
 }
 
 Ob* CRef0::sGet(Ctxt* ctxt, uint32_t base, Tuple* path, int pindex) {
@@ -1522,7 +1540,8 @@ CharRef0::CharRef0(pExt ext)
 
 CharRef0* CharRef0::create() {
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CharRef0>(ext);
+    void* loc = PALLOC1(sizeof(CharRef0), ext);
+    return new (loc) CharRef0(ext);
 }
 
 Ob* CharRef0::flatten(Ctxt* ctxt, uint32_t base, RblTable* occtxt) {
@@ -1604,14 +1623,16 @@ CUnion* CUnion::create(RblTable* tbl, Tuple* tup) {
     PROTECT(tbl);
     PROTECT(tup);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CUnion>(tbl, tup, ext);
+    void* loc = PALLOC1(sizeof(CUnion), ext);
+    return new (loc) CUnion(tbl, tup, ext);
 }
 
 CUnion* CUnion::create() {
     RblTable* tmp = RblTable::create();
     PROTECT(tmp);
     StdExtension* ext = StdExtension::create(0);
-    return gc_new<CUnion>(tmp, NIL, ext);
+    void* loc = PALLOC1(sizeof(CUnion), ext);
+    return new (loc) CUnion(tmp, NIL, ext);
 }
 
 int CUnion::traversePtrs(PSOb__PSOb f) {

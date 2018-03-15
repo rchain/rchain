@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import org.scalatest._
 import implicits._
@@ -80,6 +80,36 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
   }
 }
 
+class VarSortMatcherSpec extends FlatSpec with Matchers {
+  val p = Par()
+  "Different kinds of variables" should "bin separately" in {
+    val parVars = p.copy(
+      exprs = List(EVar(BoundVar(2)),
+                   EVar(Wildcard(Var.WildcardMsg())),
+                   EVar(BoundVar(1)),
+                   EVar(FreeVar(0)),
+                   EVar(FreeVar(2)),
+                   EVar(BoundVar(0)),
+                   EVar(FreeVar(1))),
+      freeCount = 4,
+      locallyFree = BitSet(0, 1, 2)
+    )
+    val sortedParVars: Option[Par] = p.copy(
+      exprs = List(EVar(BoundVar(0)),
+                   EVar(BoundVar(1)),
+                   EVar(BoundVar(2)),
+                   EVar(FreeVar(0)),
+                   EVar(FreeVar(1)),
+                   EVar(FreeVar(2)),
+                   EVar(Wildcard(Var.WildcardMsg()))),
+      freeCount = 4,
+      locallyFree = BitSet(0, 1, 2)
+    )
+    val result = ParSortMatcher.sortMatch(parVars)
+    result.term should be(sortedParVars)
+  }
+}
+
 class ParSortMatcherSpec extends FlatSpec with Matchers {
   val p = Par()
   "Par" should "Sort so that smaller integers come first" in {
@@ -104,28 +134,24 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort and deduplicate sets insides" in {
     val parGround =
-      Expr(
-        exprInstance = ESet(
-          List(
-            GInt(2),
-            GInt(1),
-            Expr(exprInstance = ESet(List(GInt(1), GInt(2))),
-                 freeCount = 0,
-                 locallyFree = BitSet()),
-            Expr(exprInstance = ESet(List(GInt(1), GInt(1))), freeCount = 0, locallyFree = BitSet())
-          )),
+      ESet(
+        List(
+          GInt(2),
+          GInt(1),
+          ESet(List(GInt(1), GInt(2)), freeCount = 0, locallyFree = BitSet()),
+          ESet(List(GInt(1), GInt(1)), freeCount = 0, locallyFree = BitSet())
+        ),
         freeCount = 0,
         locallyFree = BitSet()
       )
     val sortedParGround: Option[Par] =
-      Expr(
-        exprInstance = ESet(
-          List(
-            GInt(1),
-            GInt(2),
-            Expr(exprInstance = ESet(List(GInt(1))), freeCount = 0, locallyFree = BitSet()),
-            Expr(exprInstance = ESet(List(GInt(1), GInt(2))), freeCount = 0, locallyFree = BitSet())
-          )),
+      ESet(
+        List(
+          GInt(1),
+          GInt(2),
+          ESet(List(GInt(1)), freeCount = 0, locallyFree = BitSet()),
+          ESet(List(GInt(1), GInt(2)), freeCount = 0, locallyFree = BitSet())
+        ),
         freeCount = 0,
         locallyFree = BitSet()
       )
@@ -135,24 +161,20 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort map insides by key and last write should win" in {
     val parGround =
-      Expr(
-        exprInstance = EMap(
-          List(
-            KeyValuePair(GInt(2),
-                         Expr(exprInstance = ESet(List(GInt(2), GInt(1))),
-                              freeCount = 0,
-                              locallyFree = BitSet())),
-            KeyValuePair(GInt(2), GInt(1)),
-            KeyValuePair(GInt(1), GInt(1))
-          )),
+      EMap(
+        List(
+          KeyValuePair(GInt(2),
+                       ESet(List(GInt(2), GInt(1)), freeCount = 0, locallyFree = BitSet())),
+          KeyValuePair(GInt(2), GInt(1)),
+          KeyValuePair(GInt(1), GInt(1))
+        ),
         freeCount = 0,
         locallyFree = BitSet()
       )
     val sortedParGround: Option[Par] =
-      Expr(
-        exprInstance = EMap(List(KeyValuePair(GInt(1), GInt(1)), KeyValuePair(GInt(2), GInt(1)))),
-        freeCount = 0,
-        locallyFree = BitSet())
+      EMap(List(KeyValuePair(GInt(1), GInt(1)), KeyValuePair(GInt(2), GInt(1))),
+           freeCount = 0,
+           locallyFree = BitSet())
     val result = ParSortMatcher.sortMatch(parGround)
     result.term should be(sortedParGround)
   }

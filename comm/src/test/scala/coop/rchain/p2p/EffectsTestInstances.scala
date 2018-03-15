@@ -15,6 +15,11 @@ object EffectsTestInstances {
       this.clock = clock + 1
       clock
     }
+
+    def nanoTime: F[Long] = Capture[F].capture {
+      this.clock = clock + 1
+      clock
+    }
   }
 
   class CommunicationStub[F[_]: Capture: Applicative](src: ProtocolNode) extends Communication[F] {

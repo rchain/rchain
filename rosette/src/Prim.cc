@@ -43,7 +43,8 @@ Prim::Prim(char* s, PRIMFN* f, int min, int max)
 
 
 Prim* Prim::create(char* s, PRIMFN* f, int min, int max) {
-    return gc_new<Prim>(s, f, min, max);
+    void* loc = PALLOC(sizeof(Prim));
+    return new (loc) Prim(s, f, min, max);
 }
 
 

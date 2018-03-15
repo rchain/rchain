@@ -49,6 +49,9 @@ class FixupVec : public BinaryOb {
      * of the object ends.
      */
 
+    FixupVec(int);
+    FixupVec(FixupVec*, int);
+
     static FixupVec* create(int);
     static FixupVec* create(FixupVec*, int);
 
@@ -60,9 +63,6 @@ class FixupVec : public BinaryOb {
     friend class LabelTable;
 
    public:
-    FixupVec(int);
-    FixupVec(FixupVec*, int);
-
     int numberOfEntries() { return (count); }
     void addEntry(int, Label);
     int capacity() {
@@ -80,9 +80,10 @@ class LabelNode;
 class LabelTable : public Ob {
     STD_DECLS(LabelTable);
 
-   public:
+   protected:
     LabelTable(Word16Vec*, FixupVec*, RblTable*);
 
+   public:
     Ob* nextLabel;
     Word16Vec* labelValues;
     FixupVec* fixupValues;

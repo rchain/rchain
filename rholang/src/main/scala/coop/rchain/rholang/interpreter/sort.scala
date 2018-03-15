@@ -106,6 +106,7 @@ object Score {
   // Vars
   final val BOUND_VAR = 50
   final val FREE_VAR  = 51
+  final val WILDCARD  = 52
 
   // Expr
   final val EVAR   = 100
@@ -155,10 +156,12 @@ object GroundSortMatcher {
       case gu: GUri    => ScoredTerm(g, Node(Score.URI, Leaf(gu.value)))
       case EListBody(gl) =>
         val pars = gl.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(EList(pars.map(_.term.get)), Node(Score.ELIST, pars.map(_.score): _*))
+        ScoredTerm(EListBody(gl.withPs(pars.map(_.term.get))),
+                   Node(Score.ELIST, pars.map(_.score): _*))
       case ETupleBody(gt) =>
         val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETuple(pars.map(_.term.get)), Node(Score.ETUPLE, pars.map(_.score): _*))
+        ScoredTerm(ETupleBody(gt.withPs(pars.map(_.term.get))),
+                   Node(Score.ETUPLE, pars.map(_.score): _*))
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case ESetBody(gs) =>
@@ -174,7 +177,7 @@ object GroundSortMatcher {
           }
         val sortedPars       = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
         val deduplicatedPars = deduplicate(sortedPars)
-        ScoredTerm(ESet(deduplicatedPars.map(_.term.get)),
+        ScoredTerm(ESetBody(gs.withPs(deduplicatedPars.map(_.term.get))),
                    Node(Score.ESET, deduplicatedPars.map(_.score): _*))
       case EMapBody(gm) =>
         def sortKeyValuePair(kv: KeyValuePair): ScoredTerm[KeyValuePair] = {
@@ -194,7 +197,7 @@ object GroundSortMatcher {
           }.reverse
         val sortedPars       = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
         val deduplicatedPars = deduplicateLastWriteWins(sortedPars)
-        ScoredTerm(EMap(deduplicatedPars.map(_.term)),
+        ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
                    Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
       case _ => throw new Error("GroundSortMatcher passed unknown Expr instance")
     }
@@ -211,9 +214,7 @@ object ExprSortMatcher {
 
   def sortMatch(e: Expr): ScoredTerm[Expr] = {
     def constructExpr(exprInstance: ExprInstance, score: Tree[ScoreAtom]) =
-      ScoredTerm(
-        Expr(exprInstance = exprInstance, freeCount = e.freeCount, locallyFree = e.locallyFree),
-        score)
+      ScoredTerm(Expr(exprInstance = exprInstance), score)
     e.exprInstance match {
       case ENegBody(en) =>
         val sortedPar = ParSortMatcher.sortMatch(en.p)
@@ -286,6 +287,7 @@ object VarSortMatcher {
         v.varInstance match {
           case BoundVar(level) => ScoredTerm(v, Leaves(Score.BOUND_VAR, level))
           case FreeVar(level)  => ScoredTerm(v, Leaves(Score.FREE_VAR, level))
+          case Wildcard(_)     => ScoredTerm(v, Leaves(Score.WILDCARD))
         }
       case None => throw new Error("VarSortMatcher was passed None")
     }

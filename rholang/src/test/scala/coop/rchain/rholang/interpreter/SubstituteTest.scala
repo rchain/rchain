@@ -126,17 +126,17 @@ class SendSubSpec extends FlatSpec with Matchers {
   "Send" should "substitute all channels for renamed, quoted process in environment" in {
     val chan0       = ChanVar(BoundVar(0))
     val chan1       = ChanVar(BoundVar(1))
-    val source: Par = New(1, Send(chan0, List(Par()), false, 0, BitSet(0)), 0, BitSet())
+    val source: Par = New(1, Send(chan0, List(Par()), false, 0, BitSet(0)), BitSet())
     val env         = Env(source)
     val target =
       Send(chan0, List(Send(chan0, List(Par()), false, 0, BitSet(0))), false, 0, BitSet(0))
     val result = substitute(target)(env)
     result should be(
       Send(
-        Quote(New(1, Send(chan1, List(Par()), false, 0, BitSet(1)), 0, BitSet())),
+        Quote(New(1, Send(chan1, List(Par()), false, 0, BitSet(1)), BitSet())),
         List(
           Send(
-            Quote(New(1, Send(chan1, List(Par()), false, 0, BitSet(1)), 0, BitSet())),
+            Quote(New(1, Send(chan1, List(Par()), false, 0, BitSet(1)), BitSet())),
             List(Par()),
             false,
             0,
@@ -156,10 +156,10 @@ class NewSubSpec extends FlatSpec with Matchers {
   "New" should "only substitute body of expression" in {
     val source: Par = GPrivate()
     val env         = Env(source)
-    val target      = New(1, Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)), 0, BitSet(0))
+    val target      = New(1, Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)), BitSet(0))
     val result      = substitute(target)(env)
     result should be(
-      New(1, Send(Quote(source), List(Par()), false, 0, BitSet()), 0, BitSet())
+      New(1, Send(Quote(source), List(Par()), false, 0, BitSet()), BitSet())
     )
   }
 
@@ -172,7 +172,6 @@ class NewSubSpec extends FlatSpec with Matchers {
                           List(Send(ChanVar(BoundVar(1)), List(Par()), false, 0, BitSet(1))),
                           false,
                           0),
-                     0,
                      BitSet(0, 1))
 
     val result = substitute(target)(env)
