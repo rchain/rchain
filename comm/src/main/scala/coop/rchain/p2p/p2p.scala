@@ -47,6 +47,7 @@ case object NetworkAddress {
 object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
   import NetworkProtocol._
+  import Encryption._
 
   def unsafeRoundTrip[F[_]: Capture: Communication]
     : (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
@@ -72,19 +73,12 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       remotePubKey = ehsresp.publicKey.toByteArray
       _            <- keysStore.put(peer, remotePubKey)
       _            <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
-      ts2          <- Time[F].currentMillis
-      nonce        <- Encryption[F].generateNonce
-      ph           = protocolHandshake(local, nonce)
-      eph          <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, ph.toByteArray)
-      fm           = FrameMessage(frame(local, nonce, eph), ts2)
-      phsresp <- Communication[F]
-                  .roundTrip(fm, remote, Duration(6000, MILLISECONDS))
-                  .map(err.fromEither)
-                  .flatten
-      _   <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-      _   <- Communication[F].addNode(remote)
-      tsf <- Time[F].currentMillis
-      _   <- Metrics[F].record("connect-time", tsf - ts1)
+      fm           <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
+      phsresp      <- Communication[F].roundTrip(fm, remote) >>= err.fromEither
+      _            <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
+      _            <- Communication[F].addNode(remote)
+      tsf          <- Time[F].currentMillis
+      _            <- Metrics[F].record("connect-time", tsf - ts1)
     } yield ()
 
   def handleEncryptionHandshake[F[_]: Monad: Capture: Log: Time: Communication: Encryption](
@@ -103,36 +97,6 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
             case Left(ex) => Log[F].error(s"handleEncryptionHandshake(): $ex")
           }
     } yield ()
-
-  private def getOrError[F[_]: Applicative, A](oa: Option[A], error: CommError)(
-      implicit
-      err: ApplicativeError_[F, CommError]): F[A] =
-    oa.fold[F[A]](err.raiseError[A](error))(_.pure[F])
-
-  private def handleProtocolHandshake[F[_]: Monad: Time: Communication: Encryption](
-      remote: PeerNode,
-      maybeHeader: Option[Header],
-      maybePh: Option[ProtocolHandshake])(implicit
-                                          keysStore: Kvs[F, PeerNode, Array[Byte]],
-                                          err: ApplicativeError_[F, CommError]): F[String] =
-    for {
-      local <- Communication[F].local
-      ph    <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      h     <- getOrError[F, Header](maybeHeader, headerNotAvailable)
-
-      keys  <- Encryption[F].fetchKeys
-      nonce <- Encryption[F].generateNonce
-      remotePubKey <- keysStore
-                       .get(remote)
-                       .map(k => err.fromEither(k.toRight(publicKeyNotAvailable(remote))))
-                       .flatten
-      phr    = protocolHandshakeResponse(local, h, nonce)
-      eph    <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, phr.toByteArray)
-      ts     <- Time[F].currentMillis
-      fm     = FrameMessage(frame(local, nonce, eph), ts)
-      result <- Communication[F].commSend(fm, remote)
-      // _      <- Communication[F].addNode(remote)
-    } yield s"Resonded to protocol handshake request from $remote"
 
   def handleFrame[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
       remote: PeerNode,
@@ -156,6 +120,21 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
               err.fromEither(
                 Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
     } yield res
+
+  private def handleProtocolHandshake[F[_]: Monad: Time: Communication: Encryption](
+      remote: PeerNode,
+      maybeHeader: Option[Header],
+      maybePh: Option[ProtocolHandshake])(implicit
+                                          keysStore: Kvs[F, PeerNode, Array[Byte]],
+                                          err: ApplicativeError_[F, CommError]): F[String] =
+    for {
+      local  <- Communication[F].local
+      ph     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      h      <- getOrError[F, Header](maybeHeader, headerNotAvailable)
+      fm     <- frameResponseMessage[F](remote, h, nonce => protocolHandshakeResponse(local, nonce))
+      result <- Communication[F].commSend(fm, remote)
+      _      <- Communication[F].addNode(remote)
+    } yield s"Responded to protocol handshake request from $remote"
 
   override def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
     ?[_],
@@ -203,4 +182,48 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
     dispatchForSender.getOrElse(Log[F].error(s"received message with empty sender, msg = $msg"))
   }
+
+  private def getOrError[F[_]: Applicative, A](oa: Option[A], error: CommError)(
+      implicit
+      err: ApplicativeError_[F, CommError]): F[A] =
+    oa.fold[F[A]](err.raiseError[A](error))(_.pure[F])
+
+  private def frameMessage[F[_]: Monad: Time: Communication: Encryption](
+      remote: PeerNode,
+      frameable: Nonce => Frameable)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+                                     err: ApplicativeError_[F, CommError]): F[FrameMessage] =
+    for {
+      local <- Communication[F].local
+      keys  <- Encryption[F].fetchKeys
+      nonce <- Encryption[F].generateNonce
+      remotePubKey <- keysStore
+                       .get(remote)
+                       .map(k => err.fromEither(k.toRight(publicKeyNotAvailable(remote))))
+                       .flatten
+      f <- Encryption[F].encrypt(pub = remotePubKey,
+                                 sec = keys.priv,
+                                 nonce,
+                                 frameable(nonce).toByteArray)
+      ts <- Time[F].currentMillis
+    } yield FrameMessage(frame(local, nonce, f), ts)
+
+  private def frameResponseMessage[F[_]: Monad: Time: Communication: Encryption](
+      remote: PeerNode,
+      header: Header,
+      frameable: Nonce => Frameable)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+                                     err: ApplicativeError_[F, CommError]): F[FrameMessage] =
+    for {
+      local <- Communication[F].local
+      keys  <- Encryption[F].fetchKeys
+      nonce <- Encryption[F].generateNonce
+      remotePubKey <- keysStore
+                       .get(remote)
+                       .map(k => err.fromEither(k.toRight(publicKeyNotAvailable(remote))))
+                       .flatten
+      f <- Encryption[F].encrypt(pub = remotePubKey,
+                                 sec = keys.priv,
+                                 nonce,
+                                 frameable(nonce).toByteArray)
+      ts <- Time[F].currentMillis
+    } yield FrameMessage(frameResponse(local, header, nonce, f), ts)
 }

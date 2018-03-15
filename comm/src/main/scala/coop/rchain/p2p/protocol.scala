@@ -23,6 +23,14 @@ object NetworkProtocol {
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(msg))
   }
 
+  def frameResponse(src: ProtocolNode,
+                    h: routing.Header,
+                    nonce: Nonce,
+                    framed: Array[Byte]): routing.Protocol = {
+    val msg = Frame(ByteString.copyFrom(nonce), ByteString.copyFrom(framed))
+    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
+  }
+
   def encryptionHandshakeResponse(src: ProtocolNode,
                                   h: routing.Header,
                                   keys: PublicPrivateKeys): routing.Protocol = {
@@ -56,13 +64,10 @@ object NetworkProtocol {
   def protocolHandshake(src: ProtocolNode, nonce: Nonce): Frameable =
     Frameable(Frameable.Message.ProtocolHandshake(ProtocolHandshake(ByteString.copyFrom(nonce))))
 
-  def protocolHandshakeResponse(src: ProtocolNode,
-                                h: routing.Header,
-                                nonce: Nonce): routing.Protocol =
-    ProtocolMessage.upstreamResponse(
-      src,
-      h,
-      AnyProto.pack(ProtocolHandshakeResponse(ByteString.copyFrom(nonce))))
+  def protocolHandshakeResponse(src: ProtocolNode, nonce: Nonce): Frameable =
+    Frameable(
+      Frameable.Message.ProtocolHandshakeResponse(
+        ProtocolHandshakeResponse(ByteString.copyFrom(nonce))))
 }
 
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
@@ -85,3 +90,6 @@ final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, tim
     extends ProtocolResponse
 
 final case class FrameMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage
+
+final case class FrameResponseMessage(proto: routing.Protocol, timestamp: Long)
+    extends ProtocolResponse
