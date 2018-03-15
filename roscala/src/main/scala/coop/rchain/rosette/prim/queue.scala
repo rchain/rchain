@@ -89,8 +89,9 @@ object queue {
       val q = ctxt.argvec.elem.head.asInstanceOf[Queue]
       if (q.isEmpty()) {
         Left(QueueEmptyError)
+      } else {
+        Right(q.head)
       }
-      Right(q.head)
     }
   }
 
@@ -156,11 +157,11 @@ object queue {
           val n = num.value
           if (q.isEmpty()) {
             Left(Absent)
-          }
-          if (n > q.depth() || n < 0) {
+          } else if (n > q.depth() || n < 0) {
             Left(Absent)
+          } else {
+            Right(q.elems.elem(n))
           }
-          Right(q.elems.elem(n))
         case _ =>
           Left(
             ArgumentMismatch(
@@ -179,8 +180,9 @@ object queue {
         case (q: Queue, n: Fixnum) =>
           if (q.isEmpty()) {
             Left(Absent)
+          } else {
+            Right(q.dequeueNth(n.value)._2)
           }
-          Right(q.dequeueNth(n.value)._2)
         case _ =>
           Left(
             ArgumentMismatch(
