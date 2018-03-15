@@ -92,17 +92,17 @@ object NameNormalizeMatcher {
         NameVisitOutputs(ChanVar(Wildcard(Var.WildcardMsg())), wildcardBindResult)
       case n: NameVar =>
         input.env.get(n.var_) match {
-          case Some((level, NameSort)) => {
+          case Some((level, NameSort, _, _)) => {
             NameVisitOutputs(ChanVar(BoundVar(level)), input.knownFree)
           }
-          case Some((_, ProcSort)) => {
-            throw new Error("Proc variable used in name context.")
+          case Some((_, ProcSort, line, col)) => {
+            throw UnexpectedNameContext(n.var_, line, col, n.line_num, n.col_num)
           }
           case None => {
             input.knownFree.get(n.var_) match {
               case None =>
                 val newBindingsPair =
-                  input.knownFree.newBinding((n.var_, NameSort))
+                  input.knownFree.newBinding((n.var_, NameSort, n.line_num, n.col_num))
                 NameVisitOutputs(ChanVar(FreeVar(newBindingsPair._2)), newBindingsPair._1)
               case _ => throw new Error("Free variable used as binder may not be used twice.")
             }
@@ -123,6 +123,15 @@ object NameNormalizeMatcher {
         NameVisitOutputs(collapseQuoteEval(procVisitResult.par), procVisitResult.knownFree)
       }
     }
+
+  case class UnexpectedNameContext(
+      varName: String,
+      procVarLine: Int,
+      procVarCol: Int,
+      nameContextLine: Int,
+      nameContextCol: Int
+  ) extends Exception(
+        s"Proc variable: $varName at $procVarLine:$procVarCol used in Name context at $nameContextLine:$nameContextCol")
 }
 
 object ProcNormalizeMatcher {
@@ -184,22 +193,19 @@ object ProcNormalizeMatcher {
         p.procvar_ match {
           case pvv: ProcVarVar =>
             input.env.get(pvv.var_) match {
-              case Some((level, ProcSort)) => {
+              case Some((level, ProcSort, _, _)) =>
                 ProcVisitOutputs(input.par.prepend(EVar(Some(BoundVar(level)))), input.knownFree)
-              }
-              case Some((_, NameSort)) => {
-                throw new Error("Name variable used in process context.")
-              }
-              case None => {
+              case Some((_, NameSort, line, col)) =>
+                throw UnexpectedProcContext(pvv.var_, line, col, pvv.line_num, pvv.col_num)
+              case None =>
                 input.knownFree.get(pvv.var_) match {
                   case None =>
                     val newBindingsPair =
-                      input.knownFree.newBinding((pvv.var_, ProcSort))
+                      input.knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
                     ProcVisitOutputs(input.par.prepend(EVar(FreeVar(newBindingsPair._2))),
                                      newBindingsPair._1)
                   case _ => throw new Error("Free variable used as binder may not be used twice.")
                 }
-              }
             }
           case _: ProcVarWildcard =>
             ProcVisitOutputs(input.par.prepend(EVar(Wildcard(Var.WildcardMsg()))),
@@ -399,7 +405,7 @@ object ProcNormalizeMatcher {
         import scala.collection.JavaConverters._
         // TODO: bindings within a single new shouldn't have overlapping names.
         val newBindings = p.listnamedecl_.asScala.toList.map {
-          case n: NameDeclSimpl => (n.var_, NameSort)
+          case n: NameDeclSimpl => (n.var_, NameSort, n.line_num, n.col_num)
         }
         val newEnv     = input.env.newBindings(newBindings)._1
         val newCount   = newEnv.count - input.env.count
@@ -456,20 +462,32 @@ object ProcNormalizeMatcher {
       case _ => throw new Error("Compilation of construct not yet supported.")
     }
   }
+
+  case class UnexpectedProcContext(
+      varName: String,
+      nameVarLine: Int,
+      nameVarCol: Int,
+      processContextLine: Int,
+      processContextCol: Int
+  ) extends Exception(
+        s"Name variable: $varName at $nameVarLine:$nameVarCol used in process context at $processContextLine:$processContextCol")
 }
 
 // Parameterized over T, the kind of typing discipline we are enforcing.
-class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wildcardCount: Int) {
-  def this() = this(0, Map[String, (Int, T)](), 0)
+class DebruijnLevelMap[T](val next: Int,
+                          val env: Map[String, (Int, T, Int, Int)],
+                          val wildcardCount: Int) {
+  def this() = this(0, Map[String, (Int, T, Int, Int)](), 0)
 
-  def newBinding(binding: (String, T)): (DebruijnLevelMap[T], Int) =
+  def newBinding(binding: (String, T, Int, Int)): (DebruijnLevelMap[T], Int) =
     binding match {
-      case (varName, sort) =>
-        (DebruijnLevelMap[T](next + 1, env + (varName -> ((next, sort))), wildcardCount), next)
+      case (varName, sort, line, col) =>
+        (DebruijnLevelMap[T](next + 1, env + (varName -> ((next, sort, line, col))), wildcardCount),
+         next)
     }
 
   // Returns the new map, and the first value assigned. Given that they're assigned contiguously
-  def newBindings(bindings: List[(String, T)]): (DebruijnLevelMap[T], Int) = {
+  def newBindings(bindings: List[(String, T, Int, Int)]): (DebruijnLevelMap[T], Int) = {
     val newMap = (this /: bindings)((map, binding) => map.newBinding(binding)._1)
     (newMap, next)
   }
@@ -481,10 +499,10 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wil
     val adjustNext         = next
     binders.env.foldLeft((this, List[String]())) {
       case ((db: DebruijnLevelMap[T], shadowed: List[String]),
-            (k: String, (level: Int, varType: T @unchecked))) => {
+            (k: String, (level: Int, varType: T @unchecked, line: Int, col: Int))) => {
         val shadowedNew = if (db.env.contains(k)) k :: shadowed else shadowed
         (DebruijnLevelMap(finalNext,
-                          db.env + (k -> ((level + adjustNext, varType))),
+                          db.env + (k -> ((level + adjustNext, varType, line, col))),
                           finalWildcardCount),
          shadowedNew)
       }
@@ -499,8 +517,8 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wil
     for (pair <- env.get(varName)) yield pair._2
   def getLevel(varName: String): Option[Int] =
     for (pair <- env.get(varName)) yield pair._1
-  def get(varName: String): Option[(Int, T)] = env.get(varName)
-  def isEmpty()                              = next == 0
+  def get(varName: String): Option[(Int, T, Int, Int)] = env.get(varName)
+  def isEmpty()                                        = next == 0
 
   def count: Int            = next + wildcardCount
   def countNoWildcards: Int = next
@@ -518,12 +536,14 @@ class DebruijnLevelMap[T](val next: Int, val env: Map[String, (Int, T)], val wil
 }
 
 object DebruijnLevelMap {
-  def apply[T](next: Int, env: Map[String, (Int, T)], wildcardCount: Int): DebruijnLevelMap[T] =
+  def apply[T](next: Int,
+               env: Map[String, (Int, T, Int, Int)],
+               wildcardCount: Int): DebruijnLevelMap[T] =
     new DebruijnLevelMap(next, env, wildcardCount)
 
   def apply[T](): DebruijnLevelMap[T] = new DebruijnLevelMap[T]()
 
-  def unapply[T](db: DebruijnLevelMap[T]): Option[(Int, Map[String, (Int, T)], Int)] =
+  def unapply[T](db: DebruijnLevelMap[T]): Option[(Int, Map[String, (Int, T, Int, Int)], Int)] =
     Some((db.next, db.env, db.wildcardCount))
 }
 
