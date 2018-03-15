@@ -81,7 +81,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       _            <- Metrics[F].record("connect-time-ms", tsf - ts1)
     } yield ()
 
-  private def handleEncryptionHandshake[
+  def handleEncryptionHandshake[
       F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
       sender: PeerNode,
       msg: EncryptionHandshakeMessage)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
