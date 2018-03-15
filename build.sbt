@@ -118,7 +118,7 @@ lazy val storage = project
   ).dependsOn(models)
 
 lazy val node = project
-  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging)
+  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
     commonSettings,
     version := "0.1.2",
@@ -129,6 +129,9 @@ lazy val node = project
       uriParsing
     ),
     libraryDependencies ++= apiServerDependencies ++ kamonDependencies ++ Seq(cats),
+
+    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoPackage := "coop.rchain.node",
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 
