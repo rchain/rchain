@@ -19,7 +19,7 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import kamon._
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
-  version("RChain Node version 0.1.1")
+  version(s"RChain Node ${BuildInfo.version}")
 
   val name =
     opt[String](default = None, short = 'n', descr = "Node name or key.")
