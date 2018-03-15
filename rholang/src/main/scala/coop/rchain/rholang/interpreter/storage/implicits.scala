@@ -11,14 +11,7 @@ import scala.annotation.tailrec
 //noinspection ConvertExpressionToSAM
 object implicits {
 
-  implicit def orderingIntTuple[T]: Ordering[(Int, T)] =
-    new Ordering[(Int, T)] {
-
-      def compare(x: (Int, T), y: (Int, T)): Int =
-        (x, y) match {
-          case ((i1, _), (i2, _)) => i1.compare(i2)
-        }
-    }
+  implicit def orderingIntTuple[T]: Ordering[(Int, T)] = Ordering.by[(Int, T), Int](_._1)
 
   private def toQuotes[T](fm: FreeMap)(implicit ord: Ordering[(Int, Par)]): Option[List[Quote]] = {
     @tailrec
