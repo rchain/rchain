@@ -32,7 +32,7 @@ object EffectsTestInstances {
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
 
-    def reset: Unit = {
+    def reset(): Unit = {
       reqresp = None
       nodes = List.empty[PeerNode]
       requests = List.empty[ProtocolMessage]
@@ -46,8 +46,12 @@ object EffectsTestInstances {
         reqresp.get.apply(remote).apply(msg)
       }
 
-    def local: F[ProtocolNode]                                      = src.pure[F]
-    def commSend(data: Seq[Byte], peer: PeerNode): F[CommErr[Unit]] = ???
+    def local: F[ProtocolNode] = src.pure[F]
+    def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+      Capture[F].capture {
+        requests = requests :+ msg
+        Right(())
+      }
     def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
       nodes = node :: nodes
     }
@@ -61,8 +65,26 @@ object EffectsTestInstances {
 
   class EncryptionStub[F[_]: Applicative](keys: PublicPrivateKeys, nonce: Nonce)
       extends Encryption[F] {
+
+    var encryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
+    var decryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
+
+    def reset(): Unit = {
+      encryptions = Nil
+      decryptions = Nil
+    }
+
     def fetchKeys: F[PublicPrivateKeys] = keys.pure[F]
     def generateNonce: F[Nonce]         = nonce.pure[F]
+    def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): F[Array[Byte]] = {
+      encryptions = encryptions :+ (pub, sec, nonce, message)
+      message.pure[F]
+    }
+
+    def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]] = {
+      decryptions = decryptions :+ (pub, sec, nonce, cipher)
+      cipher.pure[F]
+    }
   }
 
 }

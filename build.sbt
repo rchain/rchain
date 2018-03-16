@@ -118,16 +118,20 @@ lazy val storage = project
   )
 
 lazy val node = project
-  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin)
+  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
     commonSettings,
-    version := "0.1.1",
+    version := "0.1.3",
+    name := "rnode",
     libraryDependencies ++= commonDependencies ++ protobufDependencies,
     libraryDependencies ++= Seq(
       argParsing,
       uriParsing
     ),
     libraryDependencies ++= apiServerDependencies ++ kamonDependencies ++ Seq(cats),
+
+    buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
+    buildInfoPackage := "coop.rchain.node",
 
     mainClass in assembly := Some("coop.rchain.node.Main"),
 
@@ -149,38 +153,21 @@ lazy val node = project
       }
     },
 
-    version in Universal := version.value,
-    name in Universal := "rchain-node",
-
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
-    packageDescription in Linux := "RChain Node Description",
-
-    mappings in Universal := {
-      val universalMappings = (mappings in Universal).value
-      val jar = (assembly in Compile).value
-
-      val filtered = universalMappings filter {
-        case (file, name) => ! name.endsWith(".jar")
-      }
-
-      filtered :+ jar -> s"/lib/${jar.getName}" :+ (baseDirectory.value / "rchain-node") -> "/bin/rchain-node"
-    },
+    packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
 
     /*
      * Debian.
      */
-    name in Debian := (name in Universal).value,
     debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)"),
 
     /*
      * Redhat
      */
-    packageName in Rpm := (name in Universal).value,
-    // version in Rpm := version.value,
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
-    rpmLicense := Some("Apache 2.0"),
+    rpmLicense := Some("Apache 2.0")
   )
   .dependsOn(comm, crypto)
 

@@ -18,8 +18,7 @@ import scala.util.Try
 /**
   * Implements the lower levels of the network protocol.
   */
-final case class UnicastNetwork(peer: PeerNode,
-                                next: Option[ProtocolDispatcher[SocketAddress]] = None)
+class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
     with ProtocolDispatcher[SocketAddress] {
 
@@ -41,11 +40,10 @@ final case class UnicastNetwork(peer: PeerNode,
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  def receiver[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]]
-    : F[Unit] =
+  def receiver[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+    ?[_],
+    PeerNode,
+    Array[Byte]]: ApplicativeError_[?[_], CommError]]: F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
       _ <- result match {
@@ -110,12 +108,11 @@ final case class UnicastNetwork(peer: PeerNode,
     potentials.toSeq
   }
 
-  def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]](
-      sock: SocketAddress,
-      msg: ProtocolMessage): F[Unit] = {
+  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+    ?[_],
+    PeerNode,
+    Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
+                                                      msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
@@ -155,12 +152,12 @@ final case class UnicastNetwork(peer: PeerNode,
    * expecting, propagate it to the next dispatcher.
    */
   private def handleResponse[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]](
-      sock: SocketAddress,
-      sender: PeerNode,
-      msg: ProtocolResponse): F[Unit] = {
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
+                                                          sender: PeerNode,
+                                                          msg: ProtocolResponse): F[Unit] = {
     val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
       for {
         result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
