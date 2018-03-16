@@ -13,6 +13,9 @@ case class ArgumentMismatch(msg: String)               extends PrimError
 case class TypeMismatch(argNum: Int, typeName: String) extends PrimError
 case class IndexOutOfBounds(argNum: Int, size: Int)    extends PrimError
 case object ArithmeticError                            extends PrimError
+case object PatternMatchError                          extends PrimError
+case object QueueEmptyError                            extends PrimError
+case object Absent                                     extends PrimError
 
 abstract class Prim extends Ob {
   val name: String
