@@ -12,7 +12,7 @@ import scala.collection.immutable.SortedMap
 //noinspection ConvertExpressionToSAM
 object implicits {
 
-  private def toQuotes[T](fm: FreeMap, max: Int): List[Quote] = {
+  private def toQuotes(fm: FreeMap, max: Int): List[Quote] = {
     val sortedParList: SortedMap[Int, Par] = SortedMap.empty[Int, Par] ++ fm
     (0 to max).map { (i: Int) =>
       sortedParList.get(i) match {
