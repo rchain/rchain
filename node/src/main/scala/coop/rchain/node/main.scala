@@ -16,6 +16,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import java.io.{File, PrintWriter}
 
 import kamon._
 
@@ -106,14 +107,34 @@ object Main {
         PublicPrivateKeys(pub, sec)
       }
 
-      private def storeToFS: PublicPrivateKeys => Task[PublicPrivateKeys] =
-        _.pure[Task] // FIX-ME implement
+      val storePath = System.getProperty("user.home") + File.separator + s".${name}-rnode.keys"
 
-      private def fetchFromFS: Task[Option[PublicPrivateKeys]] = none.pure[Task] // FIX-ME implement
+      private def storeToFS: PublicPrivateKeys => Task[Unit] =
+        keys =>
+          Task
+            .delay {
+              val pw = new PrintWriter(new File(storePath))
+              pw.println(encoder.encode(keys.pub))
+              pw.println(encoder.encode(keys.priv))
+              pw.close
+            }
+            .attempt
+            .void
+
+      private def fetchFromFS: Task[Option[PublicPrivateKeys]] =
+        Task
+          .delay {
+            val lines  = scala.io.Source.fromFile(storePath).getLines.toList
+            val pubKey = encoder.decode(lines(0))
+            val secKey = encoder.decode(lines(1))
+            PublicPrivateKeys(pubKey, secKey)
+          }
+          .attempt
+          .map(_.toOption)
 
       def fetchKeys: Task[PublicPrivateKeys] =
         (fetchFromFS >>= {
-          case None     => generateFresh >>= storeToFS
+          case None     => generateFresh >>= (keys => (storeToFS(keys) *> keys.pure[Task]))
           case Some(ks) => ks.pure[Task]
         }).memoize
 
