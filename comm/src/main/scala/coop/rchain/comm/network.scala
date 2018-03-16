@@ -18,8 +18,7 @@ import scala.util.Try
 /**
   * Implements the lower levels of the network protocol.
   */
-final case class UnicastNetwork(peer: PeerNode,
-                                next: Option[ProtocolDispatcher[SocketAddress]] = None)
+class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
     with ProtocolDispatcher[SocketAddress] {
 
