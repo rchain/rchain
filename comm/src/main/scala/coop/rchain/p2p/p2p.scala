@@ -68,7 +68,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       local        <- Communication[F].local
       ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
       remote       = ProtocolNode(peer, local, unsafeRoundTrip[F])
-      ehsrespmsg   <- Communication[F].roundTrip(ehs, remote).map(err.fromEither).flatten
+      ehsrespmsg   <- Communication[F].roundTrip(ehs, remote) >>= (err.fromEither _)
       ehsresp      <- err.fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
       remotePubKey = ehsresp.publicKey.toByteArray
       _            <- keysStore.put(peer, remotePubKey)
