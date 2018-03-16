@@ -2,4 +2,7 @@
 
 set -euo pipefail
 
-sbt -Dsbt.log.noformat=true clean node/debian:packageBin node/rpm:packageBin
+if [ $SUBPROJECT = "core" ]
+then
+    sbt -Dsbt.log.noformat=true clean node/debian:packageBin node/rpm:packageBin
+fi
