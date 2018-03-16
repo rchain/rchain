@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.storage.implicits._
 import coop.rchain.storage.test._
 import coop.rchain.storage.test.implicits._
 import coop.rchain.storage.util.{ignore => ign}

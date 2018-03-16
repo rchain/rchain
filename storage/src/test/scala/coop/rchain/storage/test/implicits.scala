@@ -3,8 +3,7 @@ package coop.rchain.storage.test
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-import coop.rchain.models.Serialize
-import coop.rchain.storage.Match
+import coop.rchain.storage.{Match, Serialize}
 
 import scala.collection.mutable
 
