@@ -3,9 +3,9 @@
 
 ## Usage
 ```
-$ scala link.scala <rholangSource> <libraryDirectory>
+$ scala link.scala <libraryDirectory> <rholangSource> [<rholangSource> ...]
 ```
-Where `<rholangSource>` is the file to be linked with packages (i.e. imports resolved) and `<libraryDirectory>` is a directory with all the Rholang sources with `export` declarations.
+Where `<rholangSource>` is a file to be linked with packages (i.e. imports resolved) and `<libraryDirectory>` is a directory with all the Rholang sources with `export` declarations.
 
 `link.scala` provides facility for "linking" Rholang source code. Linking is done  by trans-piling extended Rholang source into standard Rholang source. The extended Rholang includes two new keywords: `export` and `import`. These two keywords work very similarly to the `new` keyword in standard Rholang, but `export` has the restriction that only a single  name can be declared (i.e. `export x, y in { ... }` would be INVALID). Also note that `export` and `import` declarations can only appear at the "top level" of a file -- i.e. NOT inside `contract` definitions, bodies of `for` statements or `match` cases, etc. `export`s can use `import`s from other packages.
 

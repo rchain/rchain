@@ -34,4 +34,17 @@ addons:
             - rpm
             - fakeroot
 
+after_success:
+  - "./scripts/create-artifacts.sh"
 
+deploy:
+  provider: releases
+  api_key: "$GITHUB_RELEASES_API_TOKEN_PUBLIC_REPO"
+  file_glob: true
+  file:
+    - "node/target/*.deb"
+    - "node/target/rpm/RPMS/noarch/*.rpm"
+  skip_cleanup: true
+  on:
+    tags: true
+    branch: master
