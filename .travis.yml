@@ -45,6 +45,7 @@ deploy:
   file:
     - "node/target/*.deb"
     - "node/target/rpm/RPMS/noarch/*.rpm"
+  skip_cleanup: true
   on:
     tags: true
     branch: master
