@@ -39,8 +39,7 @@ after_success:
 
 deploy:
   provider: releases
-  api_key:
-    secure: paewS1kvI+zK3ajfcVQmDthGcQe4j8nT+q7zdcz0Q835JXxrkoFdFksgkGVZVkNYg8wCZOc1QZz3jBM9GAHmedHqbbMQdc+dmijA0pbjU88CzcTo8PAKS52dpgStvLcLicAJ7v1Vwx6DAzkeB+WChSQhKxc00h7gFj8kh1VEBPnpsWIBPPTXGRujVX/zQoiq6oPDZwJFDOIB4hSpkNCxqsTBjT3CdeCVekUaKPVJQ88MiUDrwi30GMjv0gB1xCTSh3Fl64Rk4a7z7adK3QjRWrEmLh6hqANTt5gWrXDgwevcL0LDdFsSTsxalpuZPXhfWqwA2d+5YXNBMNkqvUFN0v8ZEoNHZl+vXvccA+au5hSBHyL4DI085llTsSWBoI8sZ/uB9WfSkdZPKV9RH4DoGuaGAlphtA4aiDO3h8PTv/uL0ei/rcBiUI7V6ZH2c+gKrggIMKHFeGeLhIOTZGylAScvNO4zB7ITbN6lF/VBlxsaOsaRnbq3WH2JFJuNAnmfv8M6ZaVhdcegT6UWWVKaWod2UksirotUuchjT1GLRtZmXSgphW2EEMsnkN4GHVqnCwnqyCKqR+SOzo3NNPESsUveCyhxY827l/ghC06Tk2K/ckZaSyP6y0Eb/m0m9W6iZt09msjoMPE296tRivdg7seAHNfj4iD18v+LLWVA3y8=
+  api_key: "$GITHUB_RELEASES_API_TOKEN_PUBLIC_REPO"
   file_glob: true
   file:
     - "node/target/*.deb"
