@@ -2,7 +2,7 @@ package coop.rchain.p2p
 
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing._
+import coop.rchain.comm.protocol.routing, routing.Header
 import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
@@ -195,38 +195,36 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       remote: PeerNode,
       frameable: Nonce => Frameable)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
                                      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
-    for {
-      local <- Communication[F].local
-      keys  <- Encryption[F].fetchKeys
-      nonce <- Encryption[F].generateNonce
-      remotePubKey <- keysStore
-                       .get(remote)
-                       .map(k => err.fromEither(k.toRight(publicKeyNotAvailable(remote))))
-                       .flatten
-      f <- Encryption[F].encrypt(pub = remotePubKey,
-                                 sec = keys.priv,
-                                 nonce,
-                                 frameable(nonce).toByteArray)
-      ts <- Time[F].currentMillis
-    } yield FrameMessage(frame(local, nonce, f), ts)
+    frameIt[F](remote, frameable, (local, nonce, f) => frame(local, nonce, f))
 
   private def frameResponseMessage[F[_]: Monad: Time: Communication: Encryption](
       remote: PeerNode,
       header: Header,
       frameable: Nonce => Frameable)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
                                      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
+    frameIt[F](remote, frameable, (local, nonce, f) => frameResponse(local, header, nonce, f))
+
+  private def frameIt[F[_]: Monad: Time: Communication: Encryption](
+      remote: PeerNode,
+      frameable: Nonce => Frameable,
+      proto: (ProtocolNode, Nonce, Array[Byte]) => routing.Protocol)(
+      implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     for {
-      local <- Communication[F].local
-      keys  <- Encryption[F].fetchKeys
-      nonce <- Encryption[F].generateNonce
-      remotePubKey <- keysStore
-                       .get(remote)
-                       .map(k => err.fromEither(k.toRight(publicKeyNotAvailable(remote))))
-                       .flatten
-      f <- Encryption[F].encrypt(pub = remotePubKey,
-                                 sec = keys.priv,
-                                 nonce,
-                                 frameable(nonce).toByteArray)
-      ts <- Time[F].currentMillis
-    } yield FrameMessage(frameResponse(local, header, nonce, f), ts)
+      local        <- Communication[F].local
+      nonce        <- Encryption[F].generateNonce
+      keys         <- Encryption[F].fetchKeys
+      remotePubKey <- fetchRemotePublicKey[F](remote)
+      framed       = frameable(nonce).toByteArray
+      f            <- Encryption[F].encrypt(pub = remotePubKey, sec = keys.priv, nonce, framed)
+      ts           <- Time[F].currentMillis
+    } yield FrameMessage(proto(local, nonce, f), ts)
+
+  private def fetchRemotePublicKey[F[_]: Monad](remote: PeerNode)(
+      implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+      err: ApplicativeError_[F, CommError]): F[Key] =
+    for {
+      maybeKey <- keysStore.get(remote)
+      key      <- err.fromEither(maybeKey.toRight(publicKeyNotAvailable(remote)))
+    } yield key
 }
