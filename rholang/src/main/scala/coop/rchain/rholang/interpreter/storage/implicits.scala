@@ -1,28 +1,28 @@
 package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
-import coop.rchain.models.{Channel, Par}
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.storage.{Match => StorageMatch}
+import coop.rchain.models.{Channel, HasLocallyFree, Par}
 import coop.rchain.rholang.interpreter.SpatialMatcher._
+import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.storage.{Match => StorageMatch}
 
-import scala.annotation.tailrec
+import scala.collection.immutable.SortedMap
 
 //noinspection ConvertExpressionToSAM
 object implicits {
 
-  implicit def orderingIntTuple[T]: Ordering[(Int, T)] = Ordering.by[(Int, T), Int](_._1)
-
-  private def toQuotes[T](fm: FreeMap)(implicit ord: Ordering[(Int, Par)]): Option[List[Quote]] = {
-    @tailrec
-    def loop(sortedParList: List[(Int, Par)], curr: Int, acc: List[Quote]): Option[List[Quote]] =
-      sortedParList match {
-        case Nil                         => Some(acc)
-        case (i, t) :: tail if i == curr => loop(tail, i + 1, Quote(t) :: acc)
-        case _                           => None
+  private def toQuotes[T](fm: FreeMap, max: Int): List[Quote] = {
+    val sortedParList: SortedMap[Int, Par] = SortedMap.empty[Int, Par] ++ fm
+    (0 to max).map { (i: Int) =>
+      sortedParList.get(i) match {
+        case Some(par) => Quote(par)
+        case None      => Quote(Par.defaultInstance)
       }
-    loop(fm.toList.sorted, 0, Nil)
+    }.toList
   }
+
+  private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
 
   implicit val matchListChannelListQuote: StorageMatch[List[Channel], List[Quote]] =
     new StorageMatch[List[Channel], List[Quote]] {
@@ -30,6 +30,8 @@ object implicits {
       def get(patterns: List[Channel], data: List[Quote]): Option[List[Quote]] =
         foldMatch(patterns, data.map(Channel.apply), (t: Channel, p: Channel) => spatialMatch(t, p))
           .runS(emptyMap)
-          .flatMap(toQuotes)
+          .map { (freeMap: FreeMap) =>
+            toQuotes(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)
+          }
     }
 }
