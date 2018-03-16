@@ -51,6 +51,11 @@ case class Env[A](val envMap: Map[Int, A], val level: Int, val shift: Int) {
       (acc, newVal) => acc.put(newVal)
     )
 
+  def put(as: Seq[A]): Env[A] =
+    as.foldLeft(this)(
+      (acc, newVal) => acc.put(newVal)
+    )
+
   // Still slightly uncertain about this.
   def merge(_env: Env[A]): Env[A] = {
     val renamed = _env.rename(level)

@@ -48,10 +48,10 @@ class ChannelSubSpec extends FlatSpec with Matchers {
   }
 
   "Quote" should "leave variables not in environment alone." in {
-    val env    = Env.makeEnv(GPrivate(): Par).shift(1)
-    val par    = Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0))
-    val target = Quote(par)
-    val result = substitute(target)(env)
+    val env             = Env.makeEnv(GPrivate(): Par).shift(1)
+    val par             = Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0))
+    val target          = Quote(par)
+    val result: Channel = substitute(target)(env)
     val expectedResult: Channel =
       Quote(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))
     result should be(expectedResult)

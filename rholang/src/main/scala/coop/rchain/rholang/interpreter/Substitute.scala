@@ -25,6 +25,9 @@ object Substitute {
       case Right(par)  => Right(par)
     }
 
+  def substitute(term: Quote)(implicit env: Env[Par]): Quote =
+    Quote(substitute(term.value))
+
   def substitute(term: Channel)(implicit env: Env[Par]): Channel =
     ChannelSortMatcher
       .sortMatch(
