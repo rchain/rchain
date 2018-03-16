@@ -19,4 +19,8 @@ in pkgs.stdenv.mkDerivation {
   buildInputs =
     [ # deps go here
     ];
+
+  doCheck = true;
+
+  checkTarget = "test";
 }
