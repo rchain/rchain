@@ -8,8 +8,6 @@ import Env._
 import implicits._
 import monix.eval.Task
 
-// Notes: Caution, a type annotation is often needed for Env.
-
 /** Reduce is a type-class for evaluating Rholang expressions.
   *
   * @tparam M The kind of Monad used for evaluation.
@@ -18,7 +16,7 @@ import monix.eval.Task
   * @tparam D The type of data to be stored.
   */
 trait Reduce[M[_], A, C, D] {
-  def alloc(level: Int)(env: Env[A]): M[A]
+  def alloc(level: Int)(env: Env[A]): M[Env[A]]
   def produce(quote: C)(data: D)(env: Env[A]): M[Option[D]]
   def consume(quote: C)(data: D)(env: Env[A]): M[Option[D]]
   def eval(par: Par)(env: Env[Par]): Task[Unit]
@@ -53,9 +51,8 @@ object Reduce {
         */
       def alloc(level: Int)(env: Env[Par]): Task[Env[Par]] =
         Task now {
-          (Env[Par]() /: (0 to level).toList) { (_env, _) =>
-            val addr: Par = GPrivate()
-            _env.put(addr)
+          (env /: (0 to level).toList) { (_env, _) =>
+            _env.put(GPrivate(): Par)
           }
         }
 
