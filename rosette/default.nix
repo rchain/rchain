@@ -10,17 +10,25 @@ in pkgs.stdenv.mkDerivation {
 
   src = ./.;
 
+  NIX_CFLAGS_COMPILE = "-O0";
+
   nativeBuildInputs = with pkgs;
     [ cmake
       doxygen
       pkgconfig
     ];
 
-  buildInputs =
+  buildInputs = with pkgs;
     [ # deps go here
     ];
 
   doCheck = true;
 
+  preCheck = ''
+    ulimit -s unlimited
+  '';
+
   checkTarget = "test";
+
+  hardeningDisable = [ "all" ];
 }
