@@ -14,7 +14,7 @@ object Env {
     DeBruijn(SortedMap.empty[Int, A]) put a
 
   def apply[A](a: A, b: A, k: A*): Env[A] =
-    DeBruijn(SortedMap.empty[Int, A]) put (a, b, k: _*)
+    DeBruijn(SortedMap.empty[Int, A]) put (a +: b +: k: _*)
 
   def apply[A](elems: (Int, A)*): Env[A] =
     SortedMap[Int, A](elems: _*)
@@ -29,7 +29,7 @@ object Env {
 
     def put(a: A): Env[A] = env + (env.level -> a)
 
-    def put(a: A, b: A, k: A*): Env[A] = (env.put(a).put(b) /: k) { (_env, data) =>
+    def put(k: A*): Env[A] = (env /: k) { (_env, data) =>
       _env put data
     }
 

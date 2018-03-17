@@ -58,9 +58,10 @@ object MVarOps {
   def modify[A, B](mvar: MVar[A])(f: A => Task[(A, B)]): Task[B] =
     for {
       a <- mvar.take
-      (_a, b) <- f(a).doOnFinish(
-                  _ => mvar.put(a)
-                )
-      _ <- mvar.put(_a)
+      tmp <- f(a).doOnFinish(
+              _ => mvar.put(a)
+            )
+      (_a, b) = tmp
+      _       <- mvar.put(_a)
     } yield b
 }
