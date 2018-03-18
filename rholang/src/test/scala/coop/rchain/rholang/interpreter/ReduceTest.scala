@@ -45,7 +45,7 @@ class ReduceSpec extends FlatSpec with Matchers {
     val inspectTask = for {
       _      <- resultTask
       tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
-      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(tsHash)
+      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
     } yield tsHash
 
     val result = Await.result(inspectTask.runAsync, 3.seconds)
@@ -54,5 +54,34 @@ class ReduceSpec extends FlatSpec with Matchers {
         Quote(GString("channel")) ->
           ((Seq[(Seq[Par], Boolean)]((Seq[Par](GInt(7), GInt(8), GInt(9)), false)),
             Seq[(Seq[Channel], Cont[Par, Par], Boolean)]()))))
+  }
+
+  "eval of single channel Receive" should "place something in the tuplespace." in {
+    val receive: Receive =
+      Receive(Seq(
+                ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+                            Quote(GString("channel")))),
+              Par(),
+              false,
+              3,
+              0,
+              BitSet())
+    val resultTask = Reduce.debruijnInterpreter.eval(receive)(Env())
+    val inspectTask = for {
+      _      <- resultTask
+      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
+      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+    } yield tsHash
+
+    val result = Await.result(inspectTask.runAsync, 3.seconds)
+    result should be(
+      HashMap(
+        Quote(GString("channel")) ->
+          ((Seq[(Seq[Par], Boolean)](),
+            Seq[(Seq[Channel], Cont[Par, Par], Boolean)](
+              (Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+               (Par(), Env()),
+               false)
+            )))))
   }
 }
