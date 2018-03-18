@@ -23,8 +23,8 @@
       enableLiveAutocompletion: false
     });
     editor.resize();
+    var rhotext = document.getElementById("rhotext");
     editor.getSession().on("change", function () {
-      var rhotext = document.getElementById("rhotext");
       rhotext.value = editor.getSession().getValue();
 });
 
