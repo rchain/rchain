@@ -1,0 +1,31 @@
+{% load static %}
+{{ form.media }}
+  <style type="text/css" media="screen">
+	#editor {
+		border: 1px solid lightgray;
+		margin: auto;
+		height: 400px;
+		width: 100%;
+	}
+</style>
+<textarea type="text" name="rho" id="rhotext" style="display: none;"></textarea>
+<pre id="editor">print(5)</pre>
+<script>
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/tomorrow_night_eighties");
+    editor.session.setMode("ace/mode/rholang");
+    editor.session.setTabSize(2);
+    editor.renderer.setScrollMargin(10, 10);
+    editor.setOptions({
+      autoScrollEditorIntoView: true,
+      enableBasicAutocompletion: true,
+      enableSnippets: true,
+      enableLiveAutocompletion: false
+    });
+    editor.resize();
+    editor.getSession().on("change", function () {
+      var rhotext = document.getElementById("rhotext");
+      rhotext.value = editor.getSession().getValue();
+});
+
+</script>
