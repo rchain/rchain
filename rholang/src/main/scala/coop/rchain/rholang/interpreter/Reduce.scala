@@ -258,7 +258,7 @@ object Reduce {
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
                 continue(body)(newEnv)
-              case None => Task now { () }
+              case None => Task.unit
             }
       } yield ()
 
@@ -273,7 +273,7 @@ object Reduce {
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
                 continue(body)(newEnv)
-              case None => Task now { () }
+              case None => Task.unit
             }
       } yield ()
 
@@ -312,28 +312,31 @@ object Reduce {
       } yield ()
     }
 
-    def evalToInt(p: Par)(implicit env: Env[Par]): Task[Option[Int]] = {
+    def evalToInt(p: Par)(implicit env: Env[Par]): Task[Int] = {
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
         None
       p.exprs match {
-        case Expr(GInt(v)) +: Nil => Task.pure(Some(v))
-        case _                    => Task.pure(None)
+        case Expr(GInt(v)) +: Nil => Task.pure(v)
+        case Expr(EPlusBody(EPlus(p1, p2))) +: Nil =>
+          for {
+            i1 <- evalToInt(p1.get)
+            i2 <- evalToInt(p2.get)
+          } yield i1 + i2
+        case _ => Task raiseError new Error("Error: Integer expected, or unimplemented expression.")
       }
     }
 
     def evalExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] =
       expr.exprInstance match {
+        case x: GBool   => Task.pure[Expr](x)
+        case x: GInt    => Task.pure[Expr](x)
+        case x: GString => Task.pure[Expr](x)
+        case x: GUri    => Task.pure[Expr](x)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
-            ov1 <- evalToInt(p1.get)
-            ov2 <- evalToInt(p2.get)
-            retVal <- {
-              (ov1, ov2) match {
-                case (Some(v1), Some(v2)) => Task.pure(v1 + v2)
-                case _                    => Task raiseError new Error("Invalid arithmetic.")
-              }
-            }
-          } yield GInt(retVal)
+            v1 <- evalToInt(p1.get)
+            v2 <- evalToInt(p2.get)
+          } yield GInt(v1 + v2)
         case _ => Task raiseError new Error("Unimplemented expression.")
       }
 
