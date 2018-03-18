@@ -1,0 +1,24 @@
+new testResult in {
+  contract @"IterateDemo"(_) = {
+    new chan, loop, iCh in {
+      contract loop(@list, @acc, return) = {
+        match list { 
+          [hd, tl] => {
+            for(@i <- iCh) {
+              iCh!(i + 1) |
+              match [hd == i, acc] {
+                [true, true] => { loop!(tl, true, *return) }
+                _ => { loop!(tl, false, *return) }
+              }
+            }
+          }
+          _ => { return!(acc) }
+        }
+      } |
+      iCh!(1) |
+      loop!([1, [2, [3, [4, []]]]], true, *chan) |
+      for(@c <- chan){ testResult!(c) }
+    }
+  } |
+  @"IterateDemo"!(Nil)
+}

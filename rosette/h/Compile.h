@@ -88,7 +88,6 @@ enum RtnCode { ImplicitRtn, TaggedRtn, UntaggedRtn };
 static const bool CtxtAvailable = true;
 static const bool ArgvecAvailable = true;
 
-#include "Bits.h"
 #define GET_ATTR(x, flag) GET_FLAG((x).word, flag)
 #define SET_ATTR(x, flag, val) \
     (val ? SET_FLAG((x).word, flag) : REMOVE_FLAG((x).word, flag))

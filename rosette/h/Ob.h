@@ -293,25 +293,49 @@ enum SysCode {
 #define SLEEP MAKEESCTAGGED(OTsysval, syscodeSleep)
 #define DEADTHREAD MAKEESCTAGGED(OTsysval, syscodeDeadThread)
 
-#include "Bits.h"
-
-#define GET_TAGGED_TAG(x) GET_LF(x, 0, TagSize)
-#define GET_TAGGED_DATA(x) GET_LF(x, 0 + TagSize, WordSize - TagSize)
-
-#define GET_ESCTAGGED_TAG(x) GET_LF(x, 0, EscTagSize)
-#define GET_ESCTAGGED_DATA(x) GET_LF(x, 0 + EscTagSize, (WordSize - EscTagSize))
-
 union TagExtract {
     pOb ptr;
     unsigned int locfields;
 };
 
-#define SIGN_EXTEND(a, n) ((((int)a) << (WordSize - (n))) >> (WordSize - (n)))
+/**
+ * NB(leaf): The next set of macros come from the deprecated Bits.h.
+ */
+
+/* Make a mask for bits i < j, masking j-i bits */
+inline const int MASK_RANGE(const int i, const int j) {
+    const auto x = ~(~0 << (j - i));
+    return x << i;
+}
+
+template <typename T>
+const T get_field(const T x, const int i, const int wid) {
+    auto tmp = x & MASK_RANGE(i, i + wid);
+    return tmp >> i;
+}
+
+template <typename T>
+void set_field(T* x, const int i, const int wid, const int val) {
+    *x &= ~MASK_RANGE(i, i + wid);
+    *x |= val << i;
+    return;
+}
+
+/** Macros for Ob.locfields. **/
+#define GET_LF(x, i, wid) get_field<unsigned int>(x.locfields, i, wid)
+
+#define SET_LF(x, i, wid, val) \
+    set_field<unsigned int>(&(x.locfields), i, wid, val)
+
+#define GET_FLAG(x, flag) ((x & (1 << flag)) ? 1 : 0)
+#define SET_FLAG(x, flag) (x |= (1 << flag))
+#define REMOVE_FLAG(x, flag) (x &= (~(1 << flag)))
+
+/** NB(leaf): End of Bits.h **/
 
 #define PTR(ob) ((pOb)(ob))
 #define NPTR(ob) ((pOb)(ob))
 #define SYMPTR(ob) ((char*)((unsigned)PTR(ob) - OTsym))
-
 #define BOOLVAL(ob) ESCVAL(ob)
 #define CHARVAL(ob) ESCVAL(ob)
 #define FIXVAL(ob) TAGVAL(ob)
@@ -325,8 +349,8 @@ union TagExtract {
 extern pOb decodeAtom(pOb);
 int TAG(pOb x);
 int ESCTAG(pOb x);
-int TAGVAL(pOb x);
-int ESCVAL(pOb x);
+const int TAGVAL(pOb x);
+const int ESCVAL(pOb x);
 
 pOb BASE(pOb v);
 

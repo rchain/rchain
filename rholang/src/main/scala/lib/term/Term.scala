@@ -19,7 +19,7 @@ trait Term[Namespace, /*+*/ TagType]
   def collectTags /* [Tag1 >: Tag] */ (term: Term[Namespace, TagType]): List[TagType] =
     term match {
       case TermLeaf(t) => List(t)
-      case TermBranch(ns, lbls) => {
+      case TermBranch(_, lbls) => {
         (List[TagType]() /: lbls.flatMap(_.self))(
           { (acc, e) =>
             {

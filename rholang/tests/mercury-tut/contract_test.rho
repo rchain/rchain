@@ -1,0 +1,6 @@
+new testResult in {
+  contract @"HelloWorld"(@data) = {
+    testResult!(data)
+  } |
+  @"HelloWorld"!(true)
+}

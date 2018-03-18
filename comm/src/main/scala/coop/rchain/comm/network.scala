@@ -18,8 +18,7 @@ import scala.util.Try
 /**
   * Implements the lower levels of the network protocol.
   */
-final case class UnicastNetwork(peer: PeerNode,
-                                next: Option[ProtocolDispatcher[SocketAddress]] = None)
+class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
     with ProtocolDispatcher[SocketAddress] {
 
@@ -34,11 +33,17 @@ final case class UnicastNetwork(peer: PeerNode,
   val pending =
     new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
-  val local = new ProtocolNode(id, endpoint, this)
+  val unsafeRoundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
+    (pm, pn) => roundTrip[Id](pm, pn)
+
+  val local = ProtocolNode(peer, unsafeRoundTrip)
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  def receiver[F[_]: Monad: Capture: Log]: F[Unit] =
+  def receiver[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+    ?[_],
+    PeerNode,
+    Array[Byte]]: ApplicativeError_[?[_], CommError]]: F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
       _ <- result match {
@@ -103,7 +108,11 @@ final case class UnicastNetwork(peer: PeerNode,
     potentials.toSeq
   }
 
-  def dispatch[F[_]: Monad: Capture: Log](sock: SocketAddress, msg: ProtocolMessage): F[Unit] = {
+  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+    ?[_],
+    PeerNode,
+    Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
+                                                      msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
@@ -115,7 +124,12 @@ final case class UnicastNetwork(peer: PeerNode,
 
       // Update sender's last-seen time, adding it if there are no higher-level protocols.
       for {
-        _ <- Capture[F].capture(table.observe(new ProtocolNode(sender, this), next == None))
+        ti <- Time[F].nanoTime
+        _ <- Capture[F].capture(
+              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next == None))
+        tf <- Time[F].nanoTime
+        // Capture µs timing for roundtrips
+        _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
         _ <- msg match {
               case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
               case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
@@ -130,16 +144,20 @@ final case class UnicastNetwork(peer: PeerNode,
     dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender"))
   }
 
-  // TODO duplicated in p2p.scala, unify
-  def add(peer: PeerNode): Unit = table.observe(new ProtocolNode(peer, this), true)
+  def add(peer: PeerNode): Unit =
+    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), true)
 
   /*
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
-  private def handleResponse[F[_]: Monad: Capture: Log](sock: SocketAddress,
-                                                        sender: PeerNode,
-                                                        msg: ProtocolResponse): F[Unit] = {
+  private def handleResponse[
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
+                                                          sender: PeerNode,
+                                                          msg: ProtocolResponse): F[Unit] = {
     val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
       for {
         result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
@@ -154,11 +172,12 @@ final case class UnicastNetwork(peer: PeerNode,
     handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
   }
 
-  private def handlePing[F[_]: Functor: Capture: Log](sender: PeerNode,
-                                                      ping: PingMessage): F[Unit] =
+  private def handlePing[F[_]: Functor: Capture: Log: Metrics](sender: PeerNode,
+                                                               ping: PingMessage): F[Unit] =
     ping
       .response(local)
       .map { pong =>
+        Metrics[F].incrementCounter("ping-recv-count")
         Capture[F].capture(comm.send(pong.toByteSeq, sender)).void
       }
       .getOrElse(Log[F].error(s"Response was not available for ping: $ping"))
@@ -167,22 +186,27 @@ final case class UnicastNetwork(peer: PeerNode,
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup[F[_]: Monad: Capture: Log](sender: PeerNode,
-                                                      lookup: LookupMessage): F[Unit] =
+  private def handleLookup[F[_]: Monad: Capture: Log: Metrics](sender: PeerNode,
+                                                               lookup: LookupMessage): F[Unit] =
     (for {
       id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
-    } yield Capture[F].capture(comm.send(resp.toByteSeq, sender)).void)
-      .getOrElse(Log[F].error(s"lookupId or resp not available for lookup: $lookup"))
+    } yield {
+      Metrics[F].incrementCounter("lookup-recv-count")
+      Capture[F].capture(comm.send(resp.toByteSeq, sender)).void
+    }).getOrElse(Log[F].error(s"lookupId or resp not available for lookup: $lookup"))
 
   /**
     * Remove sending peer from table.
     */
-  private def handleDisconnect[F[_]: Monad: Capture: Log](sender: PeerNode,
-                                                          disconnect: DisconnectMessage): F[Unit] =
+  private def handleDisconnect[F[_]: Monad: Capture: Log: Metrics](
+      sender: PeerNode,
+      disconnect: DisconnectMessage): F[Unit] =
     for {
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
+      _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+      _ <- Metrics[F].incrementCounter("peers", -1L)
     } yield ()
 
   /**

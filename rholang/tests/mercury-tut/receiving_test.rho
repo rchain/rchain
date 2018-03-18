@@ -1,0 +1,9 @@
+new testResult in {
+  contract @"HelloAgain"(_) = {
+    new chan in {
+      chan!("Hello again, world!") |
+      for (@text <- chan) { testResult!(text == "Hello again, world!") }
+    }
+  } |
+  @"HelloAgain"!(Nil)
+}

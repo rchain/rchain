@@ -1,7 +1,5 @@
 package coop.rchain.storage
 
-import coop.rchain.models.Serialize
-
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
@@ -16,7 +14,7 @@ trait IStore[C, P, A, K] {
     */
   type H
 
-  private[storage] def hashC(channels: List[C])(implicit sc: Serialize[C]): H
+  private[storage] def hashCs(channels: List[C])(implicit sc: Serialize[C]): H
 
   private[storage] def putCs(txn: T, channels: List[C]): Unit
 
@@ -37,15 +35,15 @@ trait IStore[C, P, A, K] {
 
   def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit
 
-  def getPs(txn: T, channels: List[C]): List[P]
+  def getPs(txn: T, channels: List[C]): List[List[P]]
 
   def getAs(txn: T, channels: List[C]): List[A]
 
-  def getK(txn: T, curr: List[C]): Option[(List[P], K)]
+  def getPsK(txn: T, curr: List[C]): List[(List[P], K)]
 
-  def removeA(txn: T, channels: List[C], index: Int): Unit
+  def removeA(txn: T, channel: C, index: Int): Unit
 
-  def removeK(txn: T, channels: List[C], index: Int): Unit
+  def removePsK(txn: T, channels: List[C], index: Int): Unit
 
   // compare to store.joinMap.addBinding
   def addJoin(txn: T, c: C, cs: List[C]): Unit

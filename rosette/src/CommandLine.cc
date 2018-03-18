@@ -70,9 +70,10 @@ void usage(const char* name, bool fatal = false, const char* msg = NULL) {
             " -b, --boot=FILE        BOOT file\n"
             " -i, --interactive-repl Always run the REPL, even if passed a\n"
             "                        script file to run.\n"
-            "\n", name);
+            "\n",
+            name);
 
-    if (fatal) { 
+    if (fatal) {
         if (msg) {
             suicide("%s", msg);
         } else {
@@ -134,8 +135,8 @@ int ParseCommandLine(int argc, char** argv) {
 
     while (1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "+qhvdI:t:p:is:o:b:",
-                long_options, &option_index);
+        c = getopt_long(argc, argv, "+qhvdI:t:p:is:o:b:", long_options,
+                        &option_index);
 
         if (-1 == c) {
             break;
@@ -145,56 +146,56 @@ int ParseCommandLine(int argc, char** argv) {
         size_t chars = 0;
 
         switch (c) {
-            case 'v':
-                VerboseFlag = 1;
-                break;
+        case 'v':
+            VerboseFlag = 1;
+            break;
 
-            case 'q':
-                VerboseFlag = 0;
-                break;
+        case 'q':
+            VerboseFlag = 0;
+            break;
 
-            case 'h':
-                usage(argv[0]);
-                exit(0);
+        case 'h':
+            usage(argv[0]);
+            exit(0);
 
-            case 't':
-                age = std::stoi(optarg);
-                TenuringAge = age;
-                break;
+        case 't':
+            age = std::stoi(optarg);
+            TenuringAge = age;
+            break;
 
-            case 'p':
-                ParanoidAboutGC = std::stoi(optarg);
-                break;
+        case 'p':
+            ParanoidAboutGC = std::stoi(optarg);
+            break;
 
-            case 'I':
-                InfantSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
-                break;
+        case 'I':
+            InfantSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
+            break;
 
-            case 's':
-                SurvivorSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
-                break;
+        case 's':
+            SurvivorSpaceSize = std::stoul(optarg, &chars, 10) * 1024;
+            break;
 
-            case 'o':
-                OldSpaceChunkSize = std::stoul(optarg, &chars, 10) * 1024;
-                break;
+        case 'o':
+            OldSpaceChunkSize = std::stoul(optarg, &chars, 10) * 1024;
+            break;
 
-            case 'd':
-                strncpy(BootDirectory, optarg, MAXPATHLEN);
-                break;
+        case 'd':
+            strncpy(BootDirectory, optarg, MAXPATHLEN);
+            break;
 
-            case 'b':
-                strncpy(BootFile, optarg, MAXPATHLEN);
-                break;
+        case 'b':
+            strncpy(BootFile, optarg, MAXPATHLEN);
+            break;
 
-            case 'i':
-                ForceEnableRepl = true;
-                break;
+        case 'i':
+            ForceEnableRepl = true;
+            break;
 
-            default:
-                // TODO(leaf): We should handle this better, since getopt_long
-                // will return '?' or ':' to tell us something about what went
-                // wrong.
-                usage(argv[0], true, "Invalid argument.");
+        default:
+            // TODO(leaf): We should handle this better, since getopt_long
+            // will return '?' or ':' to tell us something about what went
+            // wrong.
+            usage(argv[0], true, "Invalid argument.");
         }
     }
 

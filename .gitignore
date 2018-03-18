@@ -40,7 +40,7 @@ boot/
 # BNFC
 ###################
 rholang/bnfc/
-rholang/src/main/java/coop/**
+rholang/src/main/java/
 
 # Secp256k1
 ###################
