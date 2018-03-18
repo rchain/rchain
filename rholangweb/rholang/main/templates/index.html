@@ -155,7 +155,7 @@
           var name;
           $('#examples option:selected').each(
             (_ix, opt) => { name = $(opt).attr('value') });
-          $('#id_rho').text(exByName[name]);
+          editor.setValue(exByName[name]);
         });
 
         $('#save').click(function (e) {
