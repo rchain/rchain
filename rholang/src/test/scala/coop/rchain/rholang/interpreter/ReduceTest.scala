@@ -84,4 +84,56 @@ class ReduceSpec extends FlatSpec with Matchers {
                false)
             )))))
   }
+
+  "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
+    val send: Send =
+      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+    val receive: Receive =
+      Receive(
+        Seq(
+          ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+                      Quote(GString("channel")))),
+        Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+        false,
+        3,
+        0,
+        BitSet()
+      )
+
+    val sendTask    = Reduce.debruijnInterpreter.eval(send)(Env())
+    val receiveTask = Reduce.debruijnInterpreter.eval(receive)(Env())
+
+    val inspectTaskSendFirst = for {
+      _      <- sendTask
+      _      <- receiveTask
+      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
+      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+    } yield tsHash
+
+    val inspectTaskReceiveFirst = for {
+      _      <- receiveTask
+      _      <- sendTask
+      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
+      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+    } yield tsHash
+
+    val sendFirstResult = Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
+    sendFirstResult should be(
+      HashMap(
+        Quote(GString("result")) ->
+          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
+            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
+        Quote(GString("channel")) -> ((Seq(), Seq()))
+      )
+    )
+    val receiveFirstResult = Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
+    receiveFirstResult should be(
+      HashMap(
+        Quote(GString("result")) ->
+          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
+            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
+        Quote(GString("channel")) -> ((Seq(), Seq()))
+      )
+    )
+  }
 }
