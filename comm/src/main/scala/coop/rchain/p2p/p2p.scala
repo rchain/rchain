@@ -63,9 +63,21 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       keysStore: KeysStore[F],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
+      tss    <- Time[F].currentMillis
+      _      <- Log[F].debug(s"Connecting to $peer")
+      _      <- Metrics[F].incrementCounter("connects")
+      remote <- firstPhase[F](peer)
+      _      <- secondPhase[F](remote)
+      tsf    <- Time[F].currentMillis
+      _      <- Metrics[F].record("connect-time-ms", tsf - tss)
+    } yield ()
+
+  def firstPhase[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](
+      peer: PeerNode)(implicit
+                      keysStore: KeysStore[F],
+                      err: ApplicativeError_[F, CommError]): F[ProtocolNode] =
+    for {
       keys         <- Encryption[F].fetchKeys
-      _            <- Log[F].debug(s"Connecting to $peer")
-      _            <- Metrics[F].incrementCounter("connects")
       ts1          <- Time[F].currentMillis
       local        <- Communication[F].local
       ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
@@ -75,12 +87,18 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       remotePubKey = ehsresp.publicKey.toByteArray
       _            <- keysStore.put(peer, remotePubKey)
       _            <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
-      fm           <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
-      phsresp      <- Communication[F].roundTrip(fm, remote) >>= err.fromEither
-      _            <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-      _            <- Communication[F].addNode(remote)
-      tsf          <- Time[F].currentMillis
-      _            <- Metrics[F].record("connect-time-ms", tsf - ts1)
+    } yield remote
+
+  def secondPhase[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](
+      remote: ProtocolNode)(implicit
+                            keysStore: KeysStore[F],
+                            err: ApplicativeError_[F, CommError]): F[Unit] =
+    for {
+      local   <- Communication[F].local
+      fm      <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
+      phsresp <- Communication[F].roundTrip(fm, remote) >>= err.fromEither
+      _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
+      _       <- Communication[F].addNode(remote)
     } yield ()
 
   def handleEncryptionHandshake[
