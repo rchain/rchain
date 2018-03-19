@@ -159,7 +159,7 @@
         });
 
         $('#save').click(function (e) {
-          $('#rhoSave').val($('#id_rho').val());
+          $('#rhoSave').val(editor.getValue());
           $(this.form).submit();
           $('#saveDialog').modal('hide');
         });
