@@ -12,7 +12,7 @@ import coop.rchain.models.Var.VarInstance._
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
 
-import implicits.{ExprLocallyFree, SendLocallyFree}
+import implicits.{ExprLocallyFree, ParExtension, SendLocallyFree}
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -164,7 +164,7 @@ object SpatialMatcher {
         }
       // Try to find a match for a single pattern.
       case (targets, pattern +: prem) => {
-        if (lf.freeCount(pattern) === 0) {
+        if (lf.freeCount(pattern) === 0 && !lf.wildcard(pattern)) {
           possiblyRemove(pattern, targets) match {
             case None           => StateT.liftF(Stream.Empty)
             case Some(filtered) => listMatch(filtered, prem, matcher, merger, varLevel, wildcard)
@@ -195,7 +195,7 @@ object SpatialMatcher {
     } yield forcedYield
 
   def spatialMatch(target: Par, pattern: Par): OptionalFreeMap[Unit] =
-    if (pattern.freeCount === 0) {
+    if (pattern.freeCount === 0 && !pattern.wildcard) {
       if (pattern == target)
         StateT.pure(Unit)
       else {
