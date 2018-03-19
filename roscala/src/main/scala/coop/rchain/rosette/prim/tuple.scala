@@ -17,7 +17,7 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
       checkTuple(1, elem).map(Tuple.cons(elem.head, _)) // arg1 must be a Tuple
     }
@@ -34,7 +34,7 @@ object tuple {
     override val maxArgs: Int = MaxArgs
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem  = ctxt.argvec.elem
       val nargs = ctxt.nargs
       val last  = nargs - 1
@@ -56,7 +56,7 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).map(Tuple.rcons(_, elem(1))) // arg0 must be a Tuple
@@ -75,7 +75,7 @@ object tuple {
 
     @checkTypeMismatch[Tuple] // All args must be Tuples
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
       val n    = ctxt.nargs
       val init = Tuple(Seq.empty)
@@ -99,7 +99,7 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Ob] = {
       val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).flatMap( // Ensure arg0 is a Tuple
@@ -129,7 +129,7 @@ object tuple {
     override val maxArgs: Int = 3
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
 
       def wrapper[A, B](f: Int => Option[Ob], v: Int, size: Int): Either[PrimError, Ob] =
@@ -165,7 +165,7 @@ object tuple {
 
     @checkTypeMismatch[Tuple] // Only arg must be a Tuple
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Ob] = {
       val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
@@ -190,7 +190,7 @@ object tuple {
 
     @checkTypeMismatch[Tuple] // Only arg must be a Tuple
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Ob] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Ob] = {
       val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).map { t => // Ensure arg0 is a Tuple
@@ -216,7 +216,7 @@ object tuple {
 
     @checkTypeMismatch[Tuple] // Only arg must be a Tuple
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
       val t    = elem(0).asInstanceOf[Tuple]
       if (t.elem.size > 0)
@@ -251,7 +251,7 @@ object tuple {
     override val maxArgs: Int = MaxArgs
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem  = ctxt.argvec.elem
       val nargs = ctxt.nargs
 
@@ -274,7 +274,7 @@ object tuple {
     override val maxArgs: Int = 3
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem  = ctxt.argvec.elem
       val nargs = ctxt.nargs
 
@@ -293,7 +293,7 @@ object tuple {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem  = ctxt.argvec.elem
       val nargs = ctxt.nargs
 
@@ -310,7 +310,7 @@ object tuple {
 
     @checkTypeMismatch[Tuple] // Args must be Tuples
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem = ctxt.argvec.elem
       val pat  = elem(0).asInstanceOf[Tuple]
       val tup  = elem(1).asInstanceOf[Tuple]

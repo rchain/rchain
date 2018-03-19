@@ -1,13 +1,16 @@
 package coop.rchain
 
-import cats.data.State
-import coop.rchain.rosette.Ctxt.CtxtTransition
+import cats.{Functor, Monoid}
+import cats.data.{ReaderWriterState, ReaderWriterStateT, State, StateT}
+import cats.implicits._
+import coop.rchain.rosette.Ctxt.Continuation
 import coop.rchain.rosette.parser.bytecode.ParseError
 import coop.rchain.rosette.prim.PrimError
 
 import reflect.runtime.universe._
 import reflect.runtime.currentMirror
 import scala.annotation.tailrec
+import scala.Function.uncurried
 import scala.reflect.ClassTag
 
 package object rosette {
@@ -21,9 +24,69 @@ package object rosette {
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
 
-  type VMTransition[A] = State[VMState, A]
+  type GlobalEnv = TblObject
 
   type Result = Either[RblError, Ob]
+
+  type VMTransition[A] = State[VMState, A]
+
+  type CtxtTransition[A] = ReaderWriterState[Unit, List[Continuation], (GlobalEnv, Ctxt), A]
+
+  def getCtxt = ReaderWriterState.get[Unit, List[Continuation], (GlobalEnv, Ctxt)].map {
+    case (globalEnv, ctxt) => ctxt
+  }
+
+  def getGlobalEnv = ReaderWriterState.get[Unit, List[Continuation], (GlobalEnv, Ctxt)].map {
+    case (globalEnv, ctxt) => globalEnv
+  }
+
+  def inspectCtxt[A](f: Ctxt => A) =
+    ReaderWriterState.inspect[Unit, List[Continuation], (GlobalEnv, Ctxt), A] {
+      case (globalEnv, ctxt) => f(ctxt)
+    }
+
+  def modifyCtxt(f: Ctxt => Ctxt) =
+    ReaderWriterState.modify[Unit, List[Continuation], (GlobalEnv, Ctxt)] {
+      case (globalEnv, ctxt) => (globalEnv, f(ctxt))
+    }
+
+  def modifyGlobalEnv(f: GlobalEnv => GlobalEnv) =
+    ReaderWriterState.modify[Unit, List[Continuation], (GlobalEnv, Ctxt)] {
+      case (globalEnv, ctxt) => (f(globalEnv), ctxt)
+    }
+
+  def tellCont = ReaderWriterState.tell[Unit, List[Continuation], (GlobalEnv, Ctxt)] _
+
+  def pureCtxt[A] = ReaderWriterState.pure[Unit, List[Continuation], (GlobalEnv, Ctxt), A] _
+
+  def liftRWS[F[_]: Functor, E, L: Monoid, S, A](
+      st: StateT[F, S, A]): ReaderWriterStateT[F, E, L, S, A] =
+    ReaderWriterStateT.applyF[F, E, L, S, A](
+      st.runF.map(f =>
+        uncurried(_ =>
+          s0 =>
+            f(s0).map[(L, S, A)] {
+              case (s1, a) =>
+                (Monoid[L].empty, s1, a)
+        }))
+    )
+
+  /** Transform a `CtxtTransition` into a `VMTransition`
+    *
+    * This pulls out continuations from the writer monad in `CtxtTransition`
+    * to the return value of the `VMTransition`.
+    * It also embeds `ctxt` and `globalEnv` into the `VMTransition`.
+    */
+  def transformCtxtTransToVMTrans[A](
+      trans1: CtxtTransition[A]): VMTransition[(A, List[Continuation])] =
+    State { vmState0: VMState =>
+      val initial                       = (vmState0.globalEnv, vmState0.ctxt)
+      val (conts, (globalEnv, ctxt), a) = trans1.run((), initial).value
+
+      val vmState1 = vmState0.copy(ctxt = ctxt, globalEnv = globalEnv)
+
+      (vmState1, (a, conts))
+    }
 
   implicit class RichOb(ob: Ob) {
     def as[T <: Ob: ClassTag]: Option[T] =
@@ -33,9 +96,9 @@ package object rosette {
       }
   }
 
-  implicit class RichCtxtTrans[A](trans: CtxtTransition[A]) {
-    def embedCtxt: VMTransition[A] =
-      trans.transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+  implicit class RichCtxtTrans[A](ctxtTrans: State[Ctxt, A]) {
+    def embedCtxtInVM: State[VMState, A] =
+      ctxtTrans.transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
   }
 
   implicit class OptionOps[R](opt: Option[R]) {

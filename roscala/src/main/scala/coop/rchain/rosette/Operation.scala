@@ -1,18 +1,17 @@
 package coop.rchain.rosette
 
-import cats.data.State._
-import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
+import cats.implicits._
 
 case class StdOprn(meta: Ob, parent: Ob, override val extension: StdExtension) extends Actor {
-  override def dispatch: CtxtTransition[(Result, Option[Continuation])] =
+  override def dispatch: CtxtTransition[Result] =
     for {
-      optArg0 <- inspect[Ctxt, Option[Ob]](_.arg(0))
+      ctxt      <- getCtxt
+      globalEnv <- getGlobalEnv
+      optArg0   = ctxt.arg(0)
 
       result <- optArg0 match {
                  case Some(ob) => ob.lookupAndInvoke
-                 case None =>
-                   pure[Ctxt, (Result, Option[Continuation])](
-                     (Left(RuntimeError("no argument for dispatch")), None))
+                 case None     => pureCtxt[Result](Left(RuntimeError("no argument for dispatch")))
                }
     } yield result
 }
