@@ -1,23 +1,23 @@
 package coop.rchain.rholang.interpreter
 
-import scala.collection.mutable
+import scala.collection.immutable.SortedMap
 
-/* Env reifies the Env[A] = mutable.LinkedHashMap[Int,A] type alias.
-   It extends HashMap with functions that manipulate
+/* Env reifies the Env[A] = SortedMap[Int,A] type alias.
+   It extends SortedMap with functions that manipulate
    the map based on level indices. */
 
 object Env {
 
-  type Env[A] = mutable.LinkedHashMap[Int, A]
+  type Env[A] = SortedMap[Int, A]
 
   def apply[A](a: A): Env[A] =
-    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) put a
+    DeBruijn(SortedMap.empty[Int, A]) put a
 
   def apply[A](a: A, b: A, k: A*): Env[A] =
-    DeBruijn(mutable.LinkedHashMap.empty[Int, A]) put (a, b, k: _*)
+    DeBruijn(SortedMap.empty[Int, A]) put (a +: b +: k: _*)
 
   def apply[A](elems: (Int, A)*): Env[A] =
-    mutable.LinkedHashMap[Int, A](elems: _*)
+    SortedMap[Int, A](elems: _*)
 
   implicit class DeBruijn[A](env: Env[A]) {
 
@@ -27,14 +27,14 @@ object Env {
       case (k, data) => (k + j, data)
     }
 
-    def put(a: A): Env[A] = env += (env.level -> a)
+    def put(a: A): Env[A] = env + (env.level -> a)
 
-    def put(a: A, b: A, k: A*): Env[A] = (env.put(a).put(b) /: k) { (_env, data) =>
+    def put(k: A*): Env[A] = (env /: k) { (_env, data) =>
       _env put data
     }
 
     def merge(_env: Env[A]): Env[A] =
-      env ++= _env.rename(env.level)
+      env ++ _env.rename(env.level)
 
   }
 }
