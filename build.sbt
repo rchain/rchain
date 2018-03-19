@@ -117,6 +117,11 @@ lazy val storage = project
     exportJars := true
   )
 
+lazy val storageBench = (project in file("storage-bench"))
+    .settings(commonSettings, libraryDependencies ++= commonDependencies)
+    .enablePlugins(JmhPlugin)
+    .dependsOn(storage)
+
 lazy val node = project
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
