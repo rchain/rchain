@@ -43,7 +43,7 @@ compiled examples/token.rho to examples/token.rbl
 
 ### Running rbl with Rosette
 After generating the rbl:
-1. in ../rosette, run build.sh
+1.  (cd ../rosette && ./build.sh)
 2.  (cd ../rosette && ./run.sh ../rholang/token.rbl)
 
 ## What's working, what's broken:
