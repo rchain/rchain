@@ -46,6 +46,8 @@ case object NetworkAddress {
 
 object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
+  type KeysStore[F[_]] = Kvs[F, PeerNode, Array[Byte]]
+
   import NetworkProtocol._
   import Encryption._
 
@@ -58,7 +60,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
   def connect[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](peer: PeerNode)(
       implicit
-      keysStore: Kvs[F, PeerNode, Array[Byte]],
+      keysStore: KeysStore[F],
       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
       keys         <- Encryption[F].fetchKeys
@@ -84,7 +86,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
   def handleEncryptionHandshake[
       F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
       sender: PeerNode,
-      msg: EncryptionHandshakeMessage)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]]): F[Unit] =
+      msg: EncryptionHandshakeMessage)(implicit keysStore: KeysStore[F]): F[Unit] =
     for {
       _            <- Metrics[F].incrementCounter("p2p-encryption-handshake-recv-count")
       local        <- Communication[F].local
@@ -104,7 +106,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       remote: PeerNode,
       msg: FrameMessage)(implicit
                          err: ApplicativeError_[F, CommError],
-                         keysStore: Kvs[F, PeerNode, Array[Byte]]): F[String] =
+                         keysStore: KeysStore[F]): F[String] =
     for {
       _                 <- Metrics[F].incrementCounter("p2p-protocol-handshake-recv-count")
       maybeRemotePubKey <- keysStore.get(remote)
@@ -128,7 +130,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       remote: PeerNode,
       maybeHeader: Option[Header],
       maybePh: Option[ProtocolHandshake])(implicit
-                                          keysStore: Kvs[F, PeerNode, Array[Byte]],
+                                          keysStore: KeysStore[F],
                                           err: ApplicativeError_[F, CommError]): F[String] =
     for {
       local  <- Communication[F].local
@@ -193,14 +195,14 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
   private def frameMessage[F[_]: Monad: Time: Communication: Encryption](
       remote: PeerNode,
-      frameable: Nonce => Frameable)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+      frameable: Nonce => Frameable)(implicit keysStore: KeysStore[F],
                                      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     frameIt[F](remote, frameable, (local, nonce, f) => frame(local, nonce, f))
 
   private def frameResponseMessage[F[_]: Monad: Time: Communication: Encryption](
       remote: PeerNode,
       header: Header,
-      frameable: Nonce => Frameable)(implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+      frameable: Nonce => Frameable)(implicit keysStore: KeysStore[F],
                                      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     frameIt[F](remote, frameable, (local, nonce, f) => frameResponse(local, header, nonce, f))
 
@@ -208,7 +210,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       remote: PeerNode,
       frameable: Nonce => Frameable,
       proto: (ProtocolNode, Nonce, Array[Byte]) => routing.Protocol)(
-      implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+      implicit keysStore: KeysStore[F],
       err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     for {
       local        <- Communication[F].local
@@ -221,7 +223,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
     } yield FrameMessage(proto(local, nonce, f), ts)
 
   private def fetchRemotePublicKey[F[_]: Monad](remote: PeerNode)(
-      implicit keysStore: Kvs[F, PeerNode, Array[Byte]],
+      implicit keysStore: KeysStore[F],
       err: ApplicativeError_[F, CommError]): F[Key] =
     for {
       maybeKey <- keysStore.get(remote)
