@@ -10,128 +10,31 @@ var RholangHighlightRules = function() {
         start: [{
             include: "#declarations"
         }],
-        "#for-declaration": [{
-            token: "text",
-            regex: /(?=\bfor\b)/,
-            push: [{
-                token: "text",
-                regex: "(?<=\{)",
-                next: "pop"
-            }, {
-                token: "keyword.control.for.rho",
-                regex: /\bfor\b/,
-                push: [{
-                    token: "text",
-                    regex: "(?<=\\))",
-                    next: "pop"
-                }, {
-                    include: "#comment"
-                }, {
-                    include: "#bind"
-                }]
-            }, {
-                include: "#comment"
-            }, {
-            }]
-        }],
-        "#parameter": [{
-            token: "variable.name.rho",
-            regex: /[-_'a-zA-Z0-9]+/
-        }],
-        "#appl": [{
-            token: "text",
-            regex: /(?=\b\.?[-_'a-zA-Z0-9]+\s*\()/,
-            push: [{
-                token: "text",
-                regex: "(?<=\\))",
-                next: "pop"
-            }, {
-                include: "#argument-list"
-            }, {
-                token: "entity.name.function.rho",
-                regex: /[-_'a-zA-Z0-9]+/
-            }]
-        }],
-        "#func-declaration": [{
-            token: "text",
-            regex: /(?=\bdef\b)/,
-            push: [{
-                token: "text",
-                regex: "(?<=\})",
-                next: "pop"
-            }, {
-                token: "keyword.other.function.rho",
-                regex: /\bdef\b/
-            }, {
-                token: "entity.name.function.rho",
-                regex: /[-_''a-zA-Z0-9]+/,
-                push: [{
-                    token: "text",
-                    regex: /(?=\{)/,
-                    next: "pop"
-                }, {
-                    include: "#comment"
-                }, {
-                    include: "#parameter-list"
-                }, {
-                    token: "text",
-                    regex: "(?<=\\))",
-                    push: [{
-                        token: "text",
-                        regex: /(?=\{)/,
-                        next: "pop"
-                    }, {
-                        token: "keyword.other.function.rho",
-                        regex: /\=/
-                    }]
-                }]
-            }, {
-                include: "#comment"
-            }, {
-                include: "#block-declaration"
-            }]
-        }],
-        "#parameter-list": [{
-            token: "paren.lparen.rho",
-            regex: /\(/,
-            push: [{
-                token: "paren.rparen.rho",
-                regex: /\)/,
-                next: "pop"
-            }, {
-                include: "#comment"
-            }, {
-                include: "#string"
-            }, {
-                include: "#constant"
-            }, {
-                include: "#parameter"
-            }]
-        }],
-        "#block-declaration": [{
-            token: "paren.lparen.rho",
-            regex: /\{/,
-            push: [{
-                token: "paren.rparen.rho",
-                regex: /\}/,
-                next: "pop"
-            }, {
-                include: "#declarations"
-            }]
-        }],
-        "#comment": [{
-            token: "punctuation.definition.comment.rho",
-            regex: /\/\*/,
-            push: [{
-                token: "punctuation.definition.comment.rho",
-                regex: /\*\//,
-                next: "pop"
-            }, {
-                defaultToken: "comment.block.rho"
-            }]
+        "#declarations": [{
+            include: "#comment"
         }, {
-            token: "comment",
-            regex: "\\/\\/.*$"
+            include: "#string"
+        }, {
+            include: "#new-declaration"
+        }, {
+            include: "#contract-declaration"
+        }, {
+            include: "#for-declaration"
+        }, {
+            include: "#match-declaration"
+        }, {
+            include: "#select-declaration"
+        }, {
+            include: "#block-declaration"
+        }, {
+            include: "#appl"
+        }, {
+            include: "#constant"
+        }, {
+            include: "#chan"
+        }, {
+            token: "keyword.control.rho",
+            regex: /=>/
         }],
         "#terminals": [{
             include: "#comment"
@@ -144,132 +47,49 @@ var RholangHighlightRules = function() {
         }, {
             include: "#chan"
         }],
+        "#constant": [{
+            token: "constant.language.rho",
+            regex: /\b(?:Nil|true|false)\b/
+        }, {
+            token: "constant.numeric.rho",
+            regex: /-?\b[0-9]+\b/
+        }],
         "#contract-declaration": [{
             token: "text",
             regex: /(?=\bcontract\b)/,
             push: [{
                 token: "text",
-                regex: "(?<=\})",
+                regex: /(?={)/,
                 next: "pop"
             }, {
                 token: "keyword.other.contract.rho",
                 regex: /\bcontract\b/
             }, {
                 token: "entity.name.function.rho",
-                regex: /[-_''a-zA-Z0-9]+/,
-                push: [{
-                    token: "text",
-                    regex: /(?=\{)/,
-                    next: "pop"
-                }, {
-                    include: "#comment"
-                }, {
-                    include: "#parameter-list"
-                }, {
-                    token: "text",
-                    regex: "(?<=\\))",
-                    push: [{
-                        token: "text",
-                        regex: /(?=\{)/,
-                        next: "pop"
-                    }, {
-                        token: "keyword.other.contract.rho",
-                        regex: /\=/
-                    }]
-                }]
+                regex: /[-_'a-zA-Z0-9]+/
             }, {
                 include: "#comment"
             }, {
-                include: "#block-declaration"
+                include: "#parameter-list"
+            }, {
+                token: "keyword.other.contract.rho",
+                regex: /\=/
             }]
         }],
-        "#sum-total-declaration": [{
+        "#for-declaration": [{
             token: "text",
-            regex: /(?=\b(?:sum|total)\b)/,
+            regex: /(?=\bfor\b)/,
             push: [{
                 token: "text",
-                regex: "(?<=\})",
+                regex: /(?={)/,
                 next: "pop"
             }, {
-                token: "keyword.control.sum.rho",
-                regex: /\b(?:sum|total)\b/,
-                push: [{
-                    token: "text",
-                    regex: "(?<=\\))",
-                    next: "pop"
-                }, {
-                    include: "#comment"
-                }, {
-                    include: "#bind"
-                }]
+                token: "keyword.control.for.rho",
+                regex: /\bfor\b/
             }, {
                 include: "#comment"
             }, {
-                include: "#block-declaration"
-            }]
-        }],
-        "#parameter-bind": [{
-            token: "variable.name.rho",
-            regex: /[-_'a-zA-Z0-9]+\s*(?=<-)/
-        }],
-        "#chan": [{
-            token: ["keyword.other.chan.rho", "text"],
-            regex: /([@*#]*)([-_'a-zA-Z0-9]+)/
-        }],
-        "#new-declaration": [{
-            token: "keyword.other.new.rho",
-            regex: /\bnew\b/,
-            push: [{
-                token: ["keyword.other.in.rho", "text"],
-                regex: /(in)(\s*)(?=\{)/,
-                next: "pop"
-            }, {
-                include: "#comment"
-            }, {
-                include: "#parameter"
-            }]
-        }, {
-            include: "#comment"
-        }, {
-            include: "#block-declaration"
-        }],
-        "#match-declaration": [{
-            token: "text",
-            regex: /(?=\bmatch\b)/,
-            push: [{
-                token: "text",
-                regex: /(?=\})/,
-                next: "pop"
-            }, {
-                token: "keyword.control.match.rho",
-                regex: /\bmatch\b/,
-                push: [{
-                    token: "keyword.control.match.rho",
-                    regex: /\bwith\b/,
-                    next: "pop"
-                }, {
-                    include: "#terminals"
-                }]
-            }, {
-                include: "#comment"
-            }, {
-                include: "#block-declaration"
-            }, {
-                include: "#terminals"
-            }, {
-                token: "keyword.control.match.rho",
-                regex: /=>/
-            }]
-        }],
-        "#argument-list": [{
-            token: "paren.lparen.rho",
-            regex: /\(/,
-            push: [{
-                token: "paren.rparen.rho",
-                regex: /\)/,
-                next: "pop"
-            }, {
-                include: "#terminals"
+                include: "#bind"
             }]
         }],
         "#bind": [{
@@ -288,30 +108,128 @@ var RholangHighlightRules = function() {
                 regex: /<-|\/:|:\\/
             }]
         }],
-        "#select-declaration": [{
-            token: "text",
-            regex: /(?=\bselect\b)/,
+        "#new-declaration": [{
+            token: "keyword.other.new.rho",
+            regex: /\b(new|export|import)\b/,
             push: [{
-                token: "text",
-                regex: "(?<=\})",
+                token: ["keyword.other.in.rho", "text"],
+                regex: /(in)(\s*)(?={)/,
                 next: "pop"
-            }, {
-                token: "keyword.control.select.rho",
-                regex: /\bselect\b/,
-                push: [{
-                    token: "text",
-                    regex: /(?=\})/,
-                    next: "pop"
-                }, {
-                    include: "#comment"
-                }, {
-                    include: "#case-declaration"
-                }]
             }, {
                 include: "#comment"
             }, {
-                include: "#block-declaration"
+                include: "#parameter"
             }]
+        }],
+        "#match-declaration": [{
+            token: "keyword.control.match.rho",
+            regex: /\bmatch\b/,
+            push: [{
+                token: "keyword.control.match.rho",
+                regex: /\bwith\b/,
+                next: "pop"
+            }, {
+                include: "#comment"
+            }, {
+                include: "#terminals"
+            }]
+        }],
+        "#argument-list": [{
+            token: "paren.lparen.rho",
+            regex: /\(/,
+            push: [{
+                token: "paren.rparen.rho",
+                regex: /\)/,
+                next: "pop"
+            }, {
+                include: "#terminals"
+            }]
+        }],
+        "#select-declaration": [{
+            token: "keyword.control.select.rho",
+            regex: /\bselect\b/
+        }, {
+            include: "#comment"
+        }, {
+            include: "#case-declaration"
+        }],
+        "#case-declaration": [{
+            token: "text",
+            regex: /(?=\bcase\b)/,
+            push: [{
+                token: "text",
+                regex: /(?={)/,
+                next: "pop"
+            }, {
+                token: "keyword.control.case.rho",
+                regex: /\bcase\b/
+            }, {
+                include: "#comment"
+            }, {
+                include: "#parameter-bind"
+            }, {
+                include: "#terminals"
+            }, {
+                token: "keyword.other.case.rho",
+                regex: /<-/
+            }, {
+                token: "keyword.control.case.rho",
+                regex: /=>/
+            }]
+        }],
+        "#block-declaration": [{
+            token: "paren.lparen.rho",
+            regex: /\{/,
+            push: [{
+                token: "paren.rparen.rho",
+                regex: /\}/,
+                next: "pop"
+            }, {
+                include: "#declarations"
+            }]
+        }],
+        "#chan": [{
+            token: ["keyword.other.chan.rho", "text"],
+            regex: /([@*#]*)([-_'a-zA-Z0-9]+)/
+        }],
+        "#appl": [{
+            token: "text",
+            regex: /(?=\b\.?[-_'a-zA-Z0-9]+\s*\()/,
+            push: [{
+                token: "text",
+                regex: /(?=\()/,
+                next: "pop"
+            }, {
+                token: "entity.name.function.rho",
+                regex: /[-_'a-zA-Z0-9]+/
+            }]
+        }, {
+            include: "#argument-list"
+        }],
+        "#parameter-list": [{
+            token: "paren.lparen.rho",
+            regex: /\(/,
+            push: [{
+                token: "paren.rparen.rho",
+                regex: /\)/,
+                next: "pop"
+            }, {
+                include: "#comment"
+            }, {
+                include: "#string"
+            }, {
+                include: "#constant"
+            }, {
+                include: "#parameter"
+            }]
+        }],
+        "#parameter-bind": [{
+            token: "variable.name.rho",
+            regex: /[-_'a-zA-Z0-9]+\s*(?=<-)/
+        }],
+        "#parameter": [{
+            token: "variable.name.rho",
+            regex: /[-_'a-zA-Z0-9]+/
         }],
         "#string": [{
             token: "string.quoted.double.rho",
@@ -327,70 +245,19 @@ var RholangHighlightRules = function() {
                 defaultToken: "string.quoted.double.rho"
             }]
         }],
-        "#declarations": [{
-            include: "#comment"
-        }, {
-            include: "#string"
-        }, {
-            include: "#new-declaration"
-        }, {
-            include: "#contract-declaration"
-        }, {
-            include: "#func-declaration"
-        }, {
-            include: "#for-declaration"
-        }, {
-            include: "#match-declaration"
-        }, {
-            include: "#select-declaration"
-        }, {
-            include: "#sum-total-declaration"
-        }, {
-            include: "#block-declaration"
-        }, {
-            include: "#appl"
-        }, {
-            include: "#constant"
-        }, {
-            include: "#chan"
-        }],
-        "#constant": [{
-            token: "constant.language.rho",
-            regex: /\b(?:Nil|true|false)\b/
-        }, {
-            token: "constant.numeric.rho",
-            regex: /-?\b[0-9]+\b/
-        }],
-        "#case-declaration": [{
-            token: "text",
-            regex: /(?=\bcase\b)/,
+        "#comment": [{
+            token: "punctuation.definition.comment.rho",
+            regex: /\/\*/,
             push: [{
-                token: "text",
-                regex: "(?<=\})",
+                token: "punctuation.definition.comment.rho",
+                regex: /\*\//,
                 next: "pop"
             }, {
-                token: "keyword.control.case.rho",
-                regex: /\bcase\b/,
-                push: [{
-                    token: "text",
-                    regex: /(?=\{)/,
-                    next: "pop"
-                }, {
-                    include: "#parameter-bind"
-                }, {
-                    include: "#terminals"
-                }, {
-                    token: "keyword.control.case.rho",
-                    regex: /=>/
-                }, {
-                    token: "keyword.other.case.rho",
-                    regex: /<-/
-                }]
-            }, {
-                include: "#comment"
-            }, {
-                include: "#block-declaration"
+                defaultToken: "comment.block.rho"
             }]
+        }, {
+            token: "comment",
+            regex: "\\/\\/.*$"
         }]
     };
 
@@ -409,34 +276,145 @@ oop.inherits(RholangHighlightRules, TextHighlightRules);
 exports.RholangHighlightRules = RholangHighlightRules;
 });
 
-define("ace/mode/folding/rholang",["require","exports","module","ace/lib/oop","ace/mode/folding/fold_mode"], function(require, exports, module) {
-    "use strict";
+define("ace/mode/folding/cstyle",["require","exports","module","ace/lib/oop","ace/range","ace/mode/folding/fold_mode"], function(require, exports, module) {
+"use strict";
+
+var oop = require("../../lib/oop");
+var Range = require("../../range").Range;
+var BaseFoldMode = require("./fold_mode").FoldMode;
+
+var FoldMode = exports.FoldMode = function(commentRegex) {
+    if (commentRegex) {
+        this.foldingStartMarker = new RegExp(
+            this.foldingStartMarker.source.replace(/\|[^|]*?$/, "|" + commentRegex.start)
+        );
+        this.foldingStopMarker = new RegExp(
+            this.foldingStopMarker.source.replace(/\|[^|]*?$/, "|" + commentRegex.end)
+        );
+    }
+};
+oop.inherits(FoldMode, BaseFoldMode);
+
+(function() {
     
-    var oop = require("../../lib/oop");
-    var BaseFoldMode = require("./fold_mode").FoldMode;
+    this.foldingStartMarker = /([\{\[\(])[^\}\]\)]*$|^\s*(\/\*)/;
+    this.foldingStopMarker = /^[^\[\{\(]*([\}\]\)])|^[\s\*]*(\*\/)/;
+    this.singleLineBlockCommentRe= /^\s*(\/\*).*\*\/\s*$/;
+    this.tripleStarBlockCommentRe = /^\s*(\/\*\*\*).*\*\/\s*$/;
+    this.startRegionRe = /^\s*(\/\*|\/\/)#?region\b/;
+    this._getFoldWidgetBase = this.getFoldWidget;
+    this.getFoldWidget = function(session, foldStyle, row) {
+        var line = session.getLine(row);
     
-    var FoldMode = exports.FoldMode = function(markers) {
-        this.foldingStartMarker = new RegExp("([\\[{])(?:\\s*)$|(" + markers + ")(?:\\s*)(?:#.*)?$");
+        if (this.singleLineBlockCommentRe.test(line)) {
+            if (!this.startRegionRe.test(line) && !this.tripleStarBlockCommentRe.test(line))
+                return "";
+        }
+    
+        var fw = this._getFoldWidgetBase(session, foldStyle, row);
+    
+        if (!fw && this.startRegionRe.test(line))
+            return "start"; // lineCommentRegionStart
+    
+        return fw;
     };
-    oop.inherits(FoldMode, BaseFoldMode);
-    
-    (function() {
-    
-        this.getFoldWidgetRange = function(session, foldStyle, row) {
-            var line = session.getLine(row);
-            var match = line.match(this.foldingStartMarker);
-            if (match) {
-                if (match[1])
-                    return this.openingBracketBlock(session, match[1], row, match.index);
-                if (match[2])
-                    return this.indentationBlock(session, row, match.index + match[2].length);
-                return this.indentationBlock(session, row);
+
+    this.getFoldWidgetRange = function(session, foldStyle, row, forceMultiline) {
+        var line = session.getLine(row);
+        
+        if (this.startRegionRe.test(line))
+            return this.getCommentRegionBlock(session, line, row);
+        
+        var match = line.match(this.foldingStartMarker);
+        if (match) {
+            var i = match.index;
+
+            if (match[1])
+                return this.openingBracketBlock(session, match[1], row, i);
+                
+            var range = session.getCommentFoldRange(row, i + match[0].length, 1);
+            
+            if (range && !range.isMultiLine()) {
+                if (forceMultiline) {
+                    range = this.getSectionRange(session, row);
+                } else if (foldStyle != "all")
+                    range = null;
             }
-        };
+            
+            return range;
+        }
+
+        if (foldStyle === "markbegin")
+            return;
+
+        var match = line.match(this.foldingStopMarker);
+        if (match) {
+            var i = match.index + match[0].length;
+
+            if (match[1])
+                return this.closingBracketBlock(session, match[1], row, i);
+
+            return session.getCommentFoldRange(row, i, -1);
+        }
+    };
     
-    }).call(FoldMode.prototype);
-    
-    });
+    this.getSectionRange = function(session, row) {
+        var line = session.getLine(row);
+        var startIndent = line.search(/\S/);
+        var startRow = row;
+        var startColumn = line.length;
+        row = row + 1;
+        var endRow = row;
+        var maxRow = session.getLength();
+        while (++row < maxRow) {
+            line = session.getLine(row);
+            var indent = line.search(/\S/);
+            if (indent === -1)
+                continue;
+            if  (startIndent > indent)
+                break;
+            var subRange = this.getFoldWidgetRange(session, "all", row);
+            
+            if (subRange) {
+                if (subRange.start.row <= startRow) {
+                    break;
+                } else if (subRange.isMultiLine()) {
+                    row = subRange.end.row;
+                } else if (startIndent == indent) {
+                    break;
+                }
+            }
+            endRow = row;
+        }
+        
+        return new Range(startRow, startColumn, endRow, session.getLine(endRow).length);
+    };
+    this.getCommentRegionBlock = function(session, line, row) {
+        var startColumn = line.search(/\s*$/);
+        var maxRow = session.getLength();
+        var startRow = row;
+        
+        var re = /^\s*(?:\/\*|\/\/|--)#?(end)?region\b/;
+        var depth = 1;
+        while (++row < maxRow) {
+            line = session.getLine(row);
+            var m = re.exec(line);
+            if (!m) continue;
+            if (m[1]) depth--;
+            else depth++;
+
+            if (!depth) break;
+        }
+
+        var endRow = row;
+        if (endRow > startRow) {
+            return new Range(startRow, startColumn, endRow, line.length);
+        }
+    };
+
+}).call(FoldMode.prototype);
+
+});
 
 define("ace/mode/matching_brace_outdent",["require","exports","module","ace/range"], function(require, exports, module) {
 "use strict";
@@ -478,13 +456,13 @@ var MatchingBraceOutdent = function() {};
 exports.MatchingBraceOutdent = MatchingBraceOutdent;
 });
 
-define("ace/mode/rholang",["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/rholang_highlight_rules","ace/mode/folding/rholang","ace/mode/matching_brace_outdent","ace/mode/behaviour/cstyle"], function(require, exports, module) {
+define("ace/mode/rholang",["require","exports","module","ace/lib/oop","ace/mode/text","ace/mode/rholang_highlight_rules","ace/mode/folding/cstyle","ace/mode/matching_brace_outdent","ace/mode/behaviour/cstyle"], function(require, exports, module) {
 "use strict";
 
 var oop = require("../lib/oop");
 var TextMode = require("./text").Mode;
 var RholangHighlightRules = require("./rholang_highlight_rules").RholangHighlightRules;
-var FoldMode = require("./folding/rholang").FoldMode;
+var FoldMode = require("./folding/cstyle").FoldMode;
 var MatchingBraceOutdent = require("./matching_brace_outdent").MatchingBraceOutdent;
 var CstyleBehaviour = require("./behaviour/cstyle").CstyleBehaviour;
 
@@ -499,38 +477,6 @@ oop.inherits(Mode, TextMode);
 (function() {
     this.lineCommentStart = "//";
     this.blockComment = {start: "/*", end: "*/"};
-
-    this.getNextLineIndent = function(state, line, tab) {
-        var indent = this.$getIndent(line);
-
-        var tokenizedLine = this.getTokenizer().getLineTokens(line, state);
-        var tokens = tokenizedLine.tokens;
-
-        if (tokens.length && tokens[tokens.length-1].type == "comment") {
-            return indent;
-        }
-
-        if (state == "start") {
-            var match = line.match(/^.*[\{\(\[]\s*$/);
-            if (match) {
-                indent += tab;
-            }
-        }
-
-        return indent;
-    };
-
-    this.checkOutdent = function(state, line, input) {
-        return this.$outdent.checkOutdent(line, input);
-    };
-
-    this.autoOutdent = function(state, doc, row) {
-        this.$outdent.autoOutdent(doc, row);
-    };
-
-    this.createWorker = function(session) {
-        return null;
-    };
 
     this.$id = "ace/mode/rholang";
 }).call(Mode.prototype);
