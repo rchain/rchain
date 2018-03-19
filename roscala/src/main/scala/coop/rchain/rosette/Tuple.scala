@@ -11,7 +11,7 @@ sealed trait TupleError
 case object AbsentRest  extends TupleError
 case object InvalidRest extends TupleError
 
-case class Tuple(elem: Seq[Ob]) extends Ob {
+case class Tuple(meta: Ob, parent: Ob, elem: Seq[Ob]) extends Ob {
 
   def accepts(msg: Ctxt): Boolean =
     if (this == Tuple.NIL) {
@@ -121,11 +121,13 @@ object Tuple {
 
   val Placeholder = Tuple(Seq.empty)
 
+  def apply(elem: Seq[Ob]): Tuple = new Tuple(null, null, elem)
+
   def apply(init: Ob): Tuple =
     Tuple(Seq(init))
 
   def apply(t1: Tuple, t2: Tuple): Tuple =
-    new Tuple(t1.elem ++ t2.elem)
+    Tuple(t1.elem ++ t2.elem)
 
   def apply(size: Int, master: Tuple, offset: Int, n: Int, init: Option[Ob] = None): Tuple = {
     val slice = master.elem.slice(offset, n + offset)
@@ -136,19 +138,19 @@ object Tuple {
       Seq.empty
     }
 
-    new Tuple(slice ++ filling)
+    Tuple(slice ++ filling)
   }
 
-  def apply(a: Int, b: Ob): Tuple = new Tuple(Seq.fill(a)(b))
+  def apply(a: Int, b: Ob): Tuple = Tuple(Seq.fill(a)(b))
 
   def apply(a: Int, b: Option[Ob]): Tuple =
     Tuple(Seq.fill(a)(b getOrElse Ob.INVALID))
 
   def cons(ob: Ob, t: Tuple): Tuple =
-    new Tuple(ob +: t.elem)
+    Tuple(ob +: t.elem)
 
   def rcons(t: Tuple, ob: Ob): Tuple =
-    new Tuple(t.elem :+ ob)
+    Tuple(t.elem :+ ob)
 
   def concat(t1: Tuple, t2: Tuple): Tuple = apply(t1, t2)
 }
