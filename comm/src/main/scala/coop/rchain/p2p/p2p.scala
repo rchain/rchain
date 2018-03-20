@@ -61,22 +61,33 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
   def connect[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](peer: PeerNode)(
       implicit
       keysStore: KeysStore[F],
-      err: ApplicativeError_[F, CommError]): F[Unit] =
+      err: ApplicativeError_[F, CommError]): F[Unit] = {
+
+    def fullHandshake: F[Unit] = firstPhase[F](peer) *> secondPhase[F](peer)
+
+    def secondPhaseOrFull: F[Unit] =
+      for {
+        res <- secondPhase[F](peer).attempt
+        _   <- res.fold(kp(fullHandshake), _.pure[F])
+      } yield ()
+
     for {
       tss      <- Time[F].currentMillis
       _        <- Log[F].debug(s"Connecting to $peer")
       _        <- Metrics[F].incrementCounter("connects")
       maybeKey <- keysStore.get(peer)
-      _        <- maybeKey.fold(firstPhase[F](peer) *> secondPhase[F](peer))(kp(secondPhase[F](peer)))
+      _        <- maybeKey.fold(fullHandshake)(kp(secondPhaseOrFull))
       tsf      <- Time[F].currentMillis
       _        <- Metrics[F].record("connect-time-ms", tsf - tss)
     } yield ()
+  }
 
   def firstPhase[F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption](
       peer: PeerNode)(implicit
                       keysStore: KeysStore[F],
                       err: ApplicativeError_[F, CommError]): F[ProtocolNode] =
     for {
+      _            <- Log[F].info(s"Initialize first phase handshake (encryption handshake) to $peer")
       keys         <- Encryption[F].fetchKeys
       ts1          <- Time[F].currentMillis
       local        <- Communication[F].local
@@ -94,6 +105,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                       keysStore: KeysStore[F],
                       err: ApplicativeError_[F, CommError]): F[Unit] =
     for {
+      _       <- Log[F].info(s"Initialize second phase handshake (protocol handshake) to $peer")
       local   <- Communication[F].local
       remote  = ProtocolNode(peer, local, unsafeRoundTrip[F])
       fm      <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
