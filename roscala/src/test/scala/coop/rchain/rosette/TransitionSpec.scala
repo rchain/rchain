@@ -3,7 +3,7 @@ package coop.rchain.rosette
 import cats.data.State
 import coop.rchain.rosette.CtxtRegName._
 import coop.rchain.rosette.Meta.StdMeta
-import coop.rchain.rosette.expr.{LetExpr, RequestExpr, TupleExpr}
+import coop.rchain.rosette.expr._
 import coop.rchain.rosette.Location._
 import org.scalatest._
 
@@ -280,6 +280,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       *  10:  xmit/nxt 2
       */
     val template = Template(
+      meta = null,
+      parent = null,
       Tuple(Seq(Symbol("x"), Symbol("y"))),
       StdMeta(),
       IdVecPattern(TupleExpr(Seq(Symbol("x"), Symbol("y"))))
@@ -474,6 +476,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       *   11:   rtn/nxt
       */
     val template = Template(
+      meta = null,
+      parent = null,
       Tuple(Seq(Symbol("x"))),
       StdMeta(),
       IdVecPattern(TupleExpr(Seq(Symbol("x"))))
@@ -533,6 +537,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       *   11:   rtn/nxt
       */
     val template = Template(
+      meta = null,
+      parent = null,
       Tuple(Seq(Symbol("x"))),
       StdMeta(),
       IdVecPattern(TupleExpr(Seq(Symbol("x"))))

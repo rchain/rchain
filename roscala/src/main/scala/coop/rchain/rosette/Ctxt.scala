@@ -22,6 +22,10 @@ case class Ctxt(tag: Location,
                 monitor: Monitor, // reg[9]
                 id: Int = 100) // debugging purposes only
     extends Ob {
+
+  override val meta   = null
+  override val parent = null
+
   private val regs =
     Vector(rslt, trgt, argvec, env, code, ctxt, self2, selfEnv, rcvr, monitor)
 

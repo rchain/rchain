@@ -1,6 +1,8 @@
 package coop.rchain.rosette
 
-case class Monitor(id: Ob,
+case class Monitor(meta: Ob,
+                   parent: Ob,
+                   id: Ob,
                    timer: Timer,
                    opcodeCounts: Map[Op, Long],
                    obCounts: Long,
@@ -14,5 +16,5 @@ case class Monitor(id: Ob,
 
 object Monitor {
   def apply(id: Ob): Monitor =
-    new Monitor(id, Timer(), Map(), 0, tracing = false)
+    new Monitor(meta = null, parent = null, id, Timer(), Map(), 0, tracing = false)
 }

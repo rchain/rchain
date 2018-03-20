@@ -3,16 +3,27 @@ package coop.rchain.rosette.utils
 import coop.rchain.rosette.{Actor, Ob, StdExtension}
 import shapeless._
 
+import scala.annotation.tailrec
+
 object Instances {
+  case object InvalidLensParam extends Exception
 
   private def setField[T: Clone, A](arg: T, fieldName: String)(value: A): T = {
     val r = implicitly[Clone[T]].clone(arg)
 
-    val field = r.getClass.getDeclaredField(fieldName)
-    field.setAccessible(true)
-    field.set(r, value)
+    @tailrec
+    def rec(clazz: Class[_]): T =
+      try {
+        val field = clazz.getDeclaredField(fieldName)
+        field.setAccessible(true)
+        field.set(r, value)
 
-    r
+        r
+      } catch {
+        case _: NoSuchFieldException => rec(clazz.getSuperclass)
+      }
+
+    rec(arg.getClass)
   }
 
   implicit def cloneOb[T <: Ob]: Clone[T] = _.clone().asInstanceOf[T]
@@ -32,12 +43,11 @@ object Instances {
   implicit val mkParentFieldLens = new MkFieldLens[Ob, Witness.`'parent`.T] {
     override type Elem = Ob
     override def apply(): Lens[Ob, Ob] = new Lens[Ob, Ob] {
-      override def get(s: Ob): Ob = s.parent
-      override def set(s: Ob)(a: Ob): Ob = {
-        val l          = lens[Ob] >> 'slot
-        val r: Seq[Ob] = l.get(s).updated(1, a)
-        l.set(s)(r)
-      }
+      override def get(s: Ob): Ob =
+        if (s == null) throw InvalidLensParam
+        else s.parent
+      override def set(s: Ob)(a: Ob): Ob =
+        setField(s, "parent")(a)
     }
   }
 
