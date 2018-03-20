@@ -172,6 +172,11 @@ lazy val storage = (project in file("storage"))
     )
   )
 
+lazy val storageBench = (project in file("storage-bench"))
+  .settings(commonSettings, libraryDependencies ++= commonDependencies)
+  .enablePlugins(JmhPlugin)
+  .dependsOn(storage)
+
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(crypto, comm, models, regex, storage, node, rholang, roscala)

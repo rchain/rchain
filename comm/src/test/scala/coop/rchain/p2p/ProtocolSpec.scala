@@ -13,11 +13,11 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
 
   val encoder = BaseEncoding.base16().lowerCase()
 
-  val src: ProtocolNode    = protocolNode("src", 30300)
-  val remote: ProtocolNode = protocolNode("remote", 30301)
-  val srcKeys              = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
-  val remoteKeys           = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
-  val nonce                = encoder.decode("00112233")
+  val src: ProtocolNode = protocolNode("src", 30300)
+  val remote: PeerNode  = peerNode("remote", 30301)
+  val srcKeys           = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
+  val remoteKeys        = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
+  val nonce             = encoder.decode("00112233")
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -35,12 +35,14 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
   }
 
   describe("Node") {
+
     describe("when connecting to other remote node") {
+
       describe(" to which he was not connect in the past") {
 
         it("should first send EncryptionHanshakeMessage with its public key") {
           // given
-          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
           Network.connect[Effect](remote)
           // then
@@ -51,7 +53,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
 
         it("should then store remote's public key") {
           // given
-          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
           Network.connect[Effect](remote)
           // then
@@ -60,7 +62,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
 
         it("should then send encrypted ProtocolMessage") {
           // given
-          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
           Network.connect[Effect](remote)
           // then
@@ -79,12 +81,21 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
             .map(_.nonce.toByteArray)
             .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
         }
+
+        it("should then add remote node to communication layer") {
+          // given
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
+          // when
+          Network.connect[Effect](remote)
+          // then
+          communicationEff.nodes should not be empty
+        }
       }
 
       describe(" to which he was connected in the past") {
         it("should skip encryption handshake") {
           // given
-          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           keysStoreEff.put(remote, remoteKeys.pub)
           // when
           Network.connect[Effect](remote)
@@ -93,7 +104,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         }
         it("should init protocol handshake") {
           // given
-          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhase)))
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           keysStoreEff.put(remote, remoteKeys.pub)
           // when
           Network.connect[Effect](remote)
@@ -113,8 +124,28 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
             .map(_.nonce.toByteArray)
             .get should equal(nonce) withClue ("framed massaged should be ProtocolHandshake with nonce in it")
         }
-        it("should rollback to encryption handshake if initialized protocol handshake did not respond")(
-          pending)
+
+        it("should then add remote node to communication layer") {
+          // given
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
+          keysStoreEff.put(remote, remoteKeys.pub)
+          // when
+          Network.connect[Effect](remote)
+          // then
+          communicationEff.nodes should not be empty
+        }
+
+        it("should rollback to encryption handshake if initialized protocol handshake did not respond") {
+          // given
+          communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseFailure)))
+          keysStoreEff.put(remote, remoteKeys.pub)
+          // when
+          Network.connect[Effect](remote)
+          // then
+          communicationEff.requests(0) should be(an[FrameMessage])
+          communicationEff.requests(1) should be(an[EncryptionHandshakeMessage])
+          communicationEff.requests(2) should be(an[FrameMessage])
+        }
       }
     }
 
@@ -195,11 +226,21 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
 
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ EncryptionHandshakeMessage(_, _) =>
-      hs.response[Effect](remote, remoteKeys).value.right.get
+      hs.response[Effect](ProtocolNode(remote, roundTripNOP), remoteKeys).value.right.get
   }
 
-  private val sndPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
-    case hs @ FrameMessage(_, _) => Left(unknownProtocol("unknown")) //hs.response(remote)
+  private val sndPhaseSucc: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
+    case hs @ FrameMessage(_, _) =>
+      Right(
+        FrameMessage(frameResponse(ProtocolNode(remote, roundTripNOP),
+                                   hs.header.get,
+                                   Array.empty[Byte],
+                                   Array.empty[Byte]),
+                     1))
+  }
+
+  private val sndPhaseFailure: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
+    case hs @ FrameMessage(_, _) => Left(unknownProtocol("unknown"))
   }
 
   private def generateResponses(
@@ -212,6 +253,9 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
     kp2[ProtocolMessage, ProtocolNode, CommErr[ProtocolMessage]](Left(unknownProtocol("unknown")))
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
+  private def peerNode(name: String, port: Int): PeerNode =
+    new PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+
   private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(new PeerNode(NodeIdentifier(name.getBytes), endpoint(port)), roundTripNOP)
+    ProtocolNode(peerNode(name, port), roundTripNOP)
 }
