@@ -201,11 +201,16 @@ object implicits {
         that.locallyFree | p.locallyFree
       )
 
-    // TODO: Receives and matches
     def wildcard: Boolean =
       p.sends.map(send => SendLocallyFree.wildcard(send)).exists(identity) || p.evals
         .map(eval => EvalLocallyFree.wildcard(eval))
-        .exists(identity) || p.exprs.map(expr => ExprLocallyFree.wildcard(expr)).exists(identity)
+        .exists(identity) || p.exprs
+        .map(expr => ExprLocallyFree.wildcard(expr))
+        .exists(identity) || p.receives
+        .map(receive => ReceiveLocallyFree.wildcard(receive))
+        .exists(identity) || p.matches
+        .map(_match => MatchLocallyFree.wildcard(_match))
+        .exists(identity)
   }
 
   implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
@@ -215,6 +220,36 @@ object implicits {
       ChannelLocallyFree.wildcard(s.chan.get) || s.data.map(_.wildcard).exists(identity)
     def freeCount(s: Send)   = s.freeCount
     def locallyFree(s: Send) = s.locallyFree
+  }
+
+  implicit val ReceiveLocallyFree: HasLocallyFree[Receive] = new HasLocallyFree[Receive] {
+    def wildcard(r: Receive) = {
+      val wildcardBinds = r.binds.foldLeft(false) { (acc, bind: ReceiveBind) =>
+        bind match {
+          case ReceiveBind(patterns: Seq[Channel], source: Option[Channel]) =>
+            acc || patterns
+              .map(pattern => ChannelLocallyFree.wildcard(pattern))
+              .exists(identity) || ChannelLocallyFree.wildcard(source.get)
+        }
+      }
+      r.body.get.wildcard || wildcardBinds
+    }
+    def freeCount(r: Receive)   = r.freeCount
+    def locallyFree(r: Receive) = r.locallyFree
+  }
+
+  implicit val MatchLocallyFree: HasLocallyFree[Match] = new HasLocallyFree[Match] {
+    def wildcard(m: Match) = {
+      val wildcardMatchCases = m.cases.foldLeft(false) { (acc, _case: MatchCase) =>
+        _case match {
+          case MatchCase(pattern: Option[Par], source: Option[Par]) =>
+            acc || pattern.get.wildcard || source.get.wildcard
+        }
+      }
+      m.target.get.wildcard || wildcardMatchCases
+    }
+    def freeCount(m: Match)   = m.freeCount
+    def locallyFree(m: Match) = m.locallyFree
   }
 
   implicit val ExprLocallyFree: HasLocallyFree[Expr] = new HasLocallyFree[Expr] {
