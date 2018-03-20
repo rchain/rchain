@@ -1069,6 +1069,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       *
       */
     val template = Template(
+      meta = null,
+      parent = null,
       Tuple(Symbol("x")),
       StdMeta(),
       IdVecPattern(TupleExpr(Seq(Symbol("x"))))
