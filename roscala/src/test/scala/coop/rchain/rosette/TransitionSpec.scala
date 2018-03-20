@@ -1238,7 +1238,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpIndLitToArg(lit = 14, arg = 13),
       OpNargs(14),
       OpExtend(15),
-      OpOutstanding(pc = 24, n = 1),
+      OpOutstanding(pc = 23, n = 1),
       OpPushAlloc(n = 2),
       OpImmediateLitToArg(value = 1, arg = 0),
       OpImmediateLitToArg(value = 1, arg = 1),
