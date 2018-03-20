@@ -689,12 +689,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 class NameMatcherSpec extends FlatSpec with Matchers {
   val inputs = NameVisitInputs(DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]())
 
-  "NameWildcard" should "Set wildcard flag in knownFree" in {
+  "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                      = new NameWildcard()
     val result                  = NameNormalizeMatcher.normalizeMatch(nw, inputs)
     val expectedResult: Channel = ChanVar(Wildcard(Var.WildcardMsg()))
     result.chan should be(expectedResult)
-    result.knownFree shouldEqual (inputs.knownFree.setWildcardUsed(1))
+    result.knownFree.count shouldEqual 1
   }
 
   val nvar = new NameVar("x")
