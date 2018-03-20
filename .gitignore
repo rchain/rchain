@@ -50,7 +50,11 @@ crypto/secp256k1/
 ###################
 !rosette/bin/README
 rosette/src/*.o
+rosette/.vagrant
+Vagrantfile
+
 # Actual code editors
+###################
 *~
 \#*
 .ensime*
