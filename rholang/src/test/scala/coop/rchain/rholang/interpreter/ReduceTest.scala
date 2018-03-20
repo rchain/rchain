@@ -22,7 +22,7 @@ import Reduce.Cont
 class ReduceSpec extends FlatSpec with Matchers {
   "evalExpr" should "handle simple addition" in {
     val addExpr: Expr = EPlus(GInt(7), GInt(8))
-    val resultTask    = Reduce.debruijnInterpreter.evalExpr(addExpr)(Env())
+    val resultTask    = Reduce.makeInterpreter.evalExpr(addExpr)(Env())
 
     val result         = Await.result(resultTask.runAsync, 3.seconds)
     val expected: Expr = GInt(15)
@@ -31,7 +31,7 @@ class ReduceSpec extends FlatSpec with Matchers {
 
   "evalExpr" should "leave ground values alone" in {
     val groundExpr: Expr = GInt(7)
-    val resultTask       = Reduce.debruijnInterpreter.evalExpr(groundExpr)(Env())
+    val resultTask       = Reduce.makeInterpreter.evalExpr(groundExpr)(Env())
 
     val result         = Await.result(resultTask.runAsync, 3.seconds)
     val expected: Expr = GInt(7)
@@ -41,11 +41,12 @@ class ReduceSpec extends FlatSpec with Matchers {
   "eval of Send" should "place something in the tuplespace." in {
     val send: Send =
       Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
-    val resultTask = Reduce.debruijnInterpreter.eval(send)(Env())
+    val interpreter = Reduce.makeInterpreter
+    val resultTask  = interpreter.eval(send)(Env())
     val inspectTask = for {
       _      <- resultTask
-      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
-      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(tsHash)
     } yield tsHash
 
     val result = Await.result(inspectTask.runAsync, 3.seconds)
@@ -66,11 +67,12 @@ class ReduceSpec extends FlatSpec with Matchers {
               3,
               0,
               BitSet())
-    val resultTask = Reduce.debruijnInterpreter.eval(receive)(Env())
+    val interpreter = Reduce.makeInterpreter
+    val resultTask  = interpreter.eval(receive)(Env())
     val inspectTask = for {
       _      <- resultTask
-      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
-      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(tsHash)
     } yield tsHash
 
     val result = Await.result(inspectTask.runAsync, 3.seconds)
@@ -100,21 +102,22 @@ class ReduceSpec extends FlatSpec with Matchers {
         BitSet()
       )
 
-    val sendTask    = Reduce.debruijnInterpreter.eval(send)(Env())
-    val receiveTask = Reduce.debruijnInterpreter.eval(receive)(Env())
+    val interpreter = Reduce.makeInterpreter
+    val sendTask    = interpreter.eval(send)(Env())
+    val receiveTask = interpreter.eval(receive)(Env())
 
     val inspectTaskSendFirst = for {
       _      <- sendTask
       _      <- receiveTask
-      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
-      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
     } yield tsHash
 
     val inspectTaskReceiveFirst = for {
       _      <- receiveTask
       _      <- sendTask
-      tsHash <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.take
-      _      <- Reduce.debruijnInterpreter.tupleSpace.spaceMVar.put(HashMap())
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
     } yield tsHash
 
     val sendFirstResult = Await.result(inspectTaskSendFirst.runAsync, 3.seconds)

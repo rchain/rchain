@@ -144,7 +144,7 @@ object Reduce {
   }
 
   // implicit def DebruijnInterpreter: Reduce[Task, Quote, Par, Channel, Par] =
-  object debruijnInterpreter extends Reduce[Task, Quote, Par, Channel, Par] {
+  class DebruijnInterpreter extends Reduce[Task, Quote, Par, Channel, Par] {
     val tupleSpace = new SimpleTuplespace()
 
     // This makes sense. Run a Par in the empty environment.
@@ -395,4 +395,6 @@ object Reduce {
       println(s"$now [$thread]" + "\n" + msg)
     }
   }
+
+  def makeInterpreter: DebruijnInterpreter = new DebruijnInterpreter()
 }
