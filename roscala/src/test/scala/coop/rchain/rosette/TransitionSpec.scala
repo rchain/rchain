@@ -1054,8 +1054,8 @@ class TransitionSpec extends FlatSpec with Matchers {
       *   3:	extend 1
       *   4:	outstanding 12,1
       *   6:	push/alloc 2
-      *   7:	lit 1,arg[0]
-      *   8:	lit 1,arg[1]
+      *   7:	lit 7,arg[0]
+      *   8:	lit 5,arg[1]
       *   9:	xfer global[+],trgt
       *   11:	xmit/tag/nxt 2,lex[0,0]
       *   12:	xfer lex[0,0],rslt
