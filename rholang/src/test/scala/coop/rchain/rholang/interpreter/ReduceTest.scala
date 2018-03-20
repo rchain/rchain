@@ -139,4 +139,57 @@ class ReduceSpec extends FlatSpec with Matchers {
       )
     )
   }
+
+  "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
+    val send: Send =
+      Send(Quote(EPlus(GInt(7), GInt(8))), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+    val receive: Receive =
+      Receive(
+        Seq(
+          ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+                      Quote(GInt(15)))),
+        Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+        false,
+        3,
+        0,
+        BitSet()
+      )
+
+    val interpreter = Reduce.makeInterpreter
+    val sendTask    = interpreter.eval(send)(Env())
+    val receiveTask = interpreter.eval(receive)(Env())
+
+    val inspectTaskSendFirst = for {
+      _      <- sendTask
+      _      <- receiveTask
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
+    } yield tsHash
+
+    val inspectTaskReceiveFirst = for {
+      _      <- receiveTask
+      _      <- sendTask
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
+    } yield tsHash
+
+    val sendFirstResult = Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
+    sendFirstResult should be(
+      HashMap(
+        Quote(GString("result")) ->
+          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
+            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
+        Quote(GInt(15)) -> ((Seq(), Seq()))
+      )
+    )
+    val receiveFirstResult = Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
+    receiveFirstResult should be(
+      HashMap(
+        Quote(GString("result")) ->
+          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
+            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
+        Quote(GInt(15)) -> ((Seq(), Seq()))
+      )
+    )
+  }
 }

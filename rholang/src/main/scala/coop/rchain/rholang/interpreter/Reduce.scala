@@ -223,10 +223,13 @@ object Reduce {
       */
     def eval(channel: Channel)(implicit env: Env[Par]): Task[Quote] =
       channel.channelInstance match {
-        case q @ Quote(_) =>
-          Task now q
+        case Quote(p) =>
+          for { evaled <- evalExpr(p)(env) } yield Quote(evaled)
         case ChanVar(varue) =>
-          for { par <- eval(varue)(env) } yield Quote(par)
+          for {
+            par    <- eval(varue)(env)
+            evaled <- evalExpr(par)(env)
+          } yield Quote(evaled)
       }
 
     /** Algorithm as follows:
@@ -251,7 +254,7 @@ object Reduce {
     def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
       for {
         quote           <- eval(send.chan.get)
-        data            <- send.data.toList.traverse(x => exprEval(x)(env))
+        data            <- send.data.toList.traverse(x => evalExpr(x)(env))
         subChan: Quote  = substitute(quote)
         optContinuation <- produce(subChan, data, send.persistent)
 
@@ -264,11 +267,9 @@ object Reduce {
 
     def eval(receive: Receive)(implicit env: Env[Par]): Task[Unit] =
       for {
-        binds <- receive.binds
-                  .map((rb: ReceiveBind) =>
+        binds <- receive.binds.toList
+                  .traverse((rb: ReceiveBind) =>
                     eval(rb.source.get).map(quote => (rb.patterns, substitute(quote))))
-                  .toList
-                  .sequence
         optContinuation <- consume(binds, receive.body.get, receive.persistent)
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
@@ -382,7 +383,7 @@ object Reduce {
     def continue(body: Par)(implicit env: Env[Par]): Task[Unit] =
       eval(body)
 
-    def exprEval(par: Par)(implicit env: Env[Par]): Task[Par] =
+    def evalExpr(par: Par)(implicit env: Env[Par]): Task[Par] =
       for {
         evaledExprs <- par.exprs.toList.traverse(expr => evalExpr(expr)(env))
       } yield par.copy(exprs = evaledExprs)
