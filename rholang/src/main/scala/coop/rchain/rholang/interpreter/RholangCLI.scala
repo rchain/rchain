@@ -84,7 +84,7 @@ object RholangCLI {
 
   private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
     val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
-    if (normalizedTerm.par.freeCount > 0)
+    if (normalizedTerm.knownFree.count > 0)
       throw new Error("Top-level free variables are not allowed.")
     normalizedTerm
   }
