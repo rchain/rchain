@@ -37,10 +37,6 @@ object RholangCLI {
       } else {
         writeHumanReadable(fileName, sortedTerm.get)
       }
-      // TODO: In case we want to print out result from the evaluator for the CLI
-      // uncomment and adjust the following.
-      //
-      // Evaluator.run(sortedTerm.get)
     } else {
       print("> ")
       repl
@@ -51,7 +47,6 @@ object RholangCLI {
   private def lexer(fileReader: Reader): Yylex     = new Yylex(fileReader)
   private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
-  // TODO: And delete this
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task now {
       PrettyPrinter.prettyPrint(normalizedTerm)
@@ -64,7 +59,6 @@ object RholangCLI {
         print("> ")
       } else {
         val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
-        // TODO: Replace below with Evaluator.run(sortedTerm.get)
         printTask(normalizedTerm)
       }
     }
