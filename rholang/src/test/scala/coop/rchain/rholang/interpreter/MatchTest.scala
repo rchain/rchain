@@ -73,7 +73,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   "Matching a send" should "require arity matching in" in {
     val target: Send =
       Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
-    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, 2, BitSet())
+    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, 1, BitSet())
     val result        = spatialMatch(target, pattern).runS(emptyMap)
     result should be(None)
   }
