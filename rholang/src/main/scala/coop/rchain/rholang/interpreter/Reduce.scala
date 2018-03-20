@@ -151,30 +151,30 @@ object Reduce {
     def inj(par: Par): Task[Unit] =
       for { _ <- eval(par)(Env[Par]()) } yield ()
 
-    /** Sending data requires a trip to the store. Chan's
-      * read vs. take will be the difference between persistent
-      * and ephemeral inputs.
+    /** 
+      * Materialize a send in the store, optionally returning the matched continuation.
       *
-      * @param quote The channel on which data is being sent.
-      * @param data  A "concretion" representing an executed output process.
-      * @param env   An environment marking the execution context.
-      * @return An optional abstraction representing the possibility
-      *         that the corresponding input process has already executed.
-      */
+      * @param chan  The channel on which data is being sent.
+      * @param data  The par objects holding the processes being sent.
+      * @param persistent  True if the write should remain in the tuplespace indefinitely.
+      * @param env  An environment marking the execution context.
+      * @return  An optional continuation resulting from a match in the tuplespace.
+    */
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       tupleSpace.simpleProduce(chan, data, persistent)
 
-    /** Dual to the produce function. Will also require a
-      * trip to the store. Chan's read vs. take will be the
-      * difference between persistent and ephemeral outputs.
+    /**
+      * Materialize a send in the store, optionally returning the matched continuation.
       *
-      * @param quote The channel on which data is being read.
-      * @param data An "abstraction" representing an awaiting continuation.
-      * @param env An environment marking the execution context.
-      * @return An optional concretion representing the possibility
-      *         that the corresponding output process has already executed.
-      */
+      * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Channel].
+      *               The Seq is for arity matching, and each term in the Seq is a name pattern.
+      * @param body  A Par object which will be run in the envirnoment resulting from the match.
+      * @param env  The current environment, to which the matches will be added before resuming
+      *             execution in body
+      * @return  An optional continuation resulting from a match. The body of the continuation
+      *          will be @param body if the continuation is not None.
+    */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       binds match {
@@ -186,7 +186,6 @@ object Reduce {
     /**
       * Variable "evaluation" is an environment lookup, but
       * lookup of an unbound variable should be an error.
-      * Task "now" indicates that no thread is forked.
       *
       * @param varue The variable to be evaluated
       * @param env   The environment (possibly) containing
@@ -215,6 +214,8 @@ object Reduce {
       * is lifted into the monadic context. If a channel
       * variable is given, the variable is evaluated and
       * the resulting par is quoted.
+      * In either case the top level expressions of the quoted process are evaluated
+      * when the channel is evaluated.
       *
       * @param channel The channel to be evaluated
       * @param env An environment that (possibly) has
@@ -234,19 +235,13 @@ object Reduce {
 
     /** Algorithm as follows:
       *
-      * 1. Fully substitute the send statement in
-      *    the given environment
-      * 2. Retrieve "value" (binding) of the subject channel
-      * 3. Produce on the channel value:
-      *     - If a continuation exists at the channel,
-      *       match sender pars against abstraction patterns.
-      *       Pattern bindings are added to the sender environment.
-      *     - If a continuation does not exist at the channel,
-      *       return unit.
-      * 4. Merge the abstraction environment with the updated
-      *    sender environment.
-      * 5. Interpreter the body of the abstraction in the
-      *    new environment.
+      * 1. Fully evaluate the channel in given environment.
+      *    (See eval(Channel) to see all that entails)
+      * 2. Substitute any variable references in the channel so that it can be
+      *    correctly used as a key in the tuple space.
+      * 3. Evaluate any top level expressions in the data being sent.
+      * 4. Call produce
+      * 5. If produce returned a continuation, evaluate it.
       * @param send An output process
       * @param env0 An execution context
       * @return
@@ -280,8 +275,8 @@ object Reduce {
 
     /**
       * Eval is well-defined on channel variables provided
-      * a binding exists for the variable. It should
-      * always yield either a Par or an error.
+      * a binding exists for the variable. It simply gets the
+      * quoted process and calls eval.
       */
     def eval(drop: Eval)(implicit env: Env[Par]): Task[Unit] =
       for {
@@ -290,10 +285,8 @@ object Reduce {
       } yield ()
 
     /**
-      * The constructor "now", used above in alloc,
-      * guarantees that no new thread is forked.
-      * The flatMap call sequences alloc and eval -
-      * so New executes sequentially.
+      * Adds neu.bindCount new GPrivate from UUID's to the environment and then
+      * proceeds to evaluate the body.
       *
       * @param neu
       * @param env
@@ -380,9 +373,16 @@ object Reduce {
       } map { xxs =>
         ()
       }
+
+    /**
+      * Continue is straightforward in this case, it just calls eval.
+      */
     def continue(body: Par)(implicit env: Env[Par]): Task[Unit] =
       eval(body)
 
+    /**
+      * Evaluate any top level expressions in @param Par .
+      */
     def evalExpr(par: Par)(implicit env: Env[Par]): Task[Par] =
       for {
         evaledExprs <- par.exprs.toList.traverse(expr => evalExpr(expr)(env))
