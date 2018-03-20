@@ -110,23 +110,37 @@ object implicits {
 
   def apply(): Par = new Par()
   def apply(s: Send): Par =
-    new Par(sends = List(s), freeCount = s.freeCount, locallyFree = s.locallyFree)
+    new Par(sends = List(s),
+            freeCount = s.freeCount,
+            locallyFree = s.locallyFree,
+            wildcard = s.wildcard)
   def apply(r: Receive): Par =
-    new Par(receives = List(r), freeCount = r.freeCount, locallyFree = r.locallyFree)
+    new Par(receives = List(r),
+            freeCount = r.freeCount,
+            locallyFree = r.locallyFree,
+            wildcard = r.wildcard)
   def apply(e: Eval): Par =
     new Par(evals = List(e),
             freeCount = EvalLocallyFree.freeCount(e),
-            locallyFree = EvalLocallyFree.locallyFree(e))
+            locallyFree = EvalLocallyFree.locallyFree(e),
+            wildcard = EvalLocallyFree.wildcard(e))
   def apply(n: New): Par =
-    new Par(news = List(n), freeCount = n.p.get.freeCount, locallyFree = n.locallyFree)
+    new Par(news = List(n),
+            freeCount = NewLocallyFree.freeCount(n),
+            locallyFree = NewLocallyFree.locallyFree(n),
+            wildcard = NewLocallyFree.wildcard(n))
   def apply(e: Expr): Par =
     new Par(exprs = List(e),
             freeCount = ExprLocallyFree.freeCount(e),
-            locallyFree = ExprLocallyFree.locallyFree(e))
+            locallyFree = ExprLocallyFree.locallyFree(e),
+            wildcard = ExprLocallyFree.wildcard(e))
   def apply(m: Match): Par =
-    new Par(matches = List(m), freeCount = m.freeCount, locallyFree = m.locallyFree)
+    new Par(matches = List(m),
+            freeCount = m.freeCount,
+            locallyFree = m.locallyFree,
+            wildcard = m.wildcard)
   def apply(g: GPrivate): Par =
-    new Par(ids = List(g), freeCount = 0, locallyFree = BitSet())
+    new Par(ids = List(g), freeCount = 0, locallyFree = BitSet(), wildcard = false)
 
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
@@ -146,27 +160,39 @@ object implicits {
     def prepend(s: Send): Par =
       p.copy(sends = Seq(s) ++ p.sends,
              freeCount = p.freeCount + s.freeCount,
-             locallyFree = p.locallyFree | s.locallyFree)
+             locallyFree = p.locallyFree | s.locallyFree,
+             wildcard = p.wildcard || s.wildcard)
     def prepend(r: Receive): Par =
       p.copy(receives = Seq(r) ++ p.receives,
              freeCount = p.freeCount + r.freeCount,
-             locallyFree = p.locallyFree | r.locallyFree)
+             locallyFree = p.locallyFree | r.locallyFree,
+             wildcard = p.wildcard || r.wildcard)
     def prepend(e: Eval): Par =
-      p.copy(evals = Seq(e) ++ p.evals,
-             freeCount = p.freeCount + EvalLocallyFree.freeCount(e),
-             locallyFree = p.locallyFree | EvalLocallyFree.locallyFree(e))
+      p.copy(
+        evals = Seq(e) ++ p.evals,
+        freeCount = p.freeCount + EvalLocallyFree.freeCount(e),
+        locallyFree = p.locallyFree | EvalLocallyFree.locallyFree(e),
+        wildcard = p.wildcard || EvalLocallyFree.wildcard(e)
+      )
     def prepend(n: New): Par =
-      p.copy(news = Seq(n) ++ p.news,
-             freeCount = p.freeCount + n.p.get.freeCount,
-             locallyFree = p.locallyFree | n.locallyFree)
+      p.copy(
+        news = Seq(n) ++ p.news,
+        freeCount = p.freeCount + NewLocallyFree.freeCount(n),
+        locallyFree = p.locallyFree | NewLocallyFree.locallyFree(n),
+        wildcard = p.wildcard || NewLocallyFree.wildcard(n)
+      )
     def prepend(e: Expr): Par =
-      p.copy(exprs = Seq(e) ++ p.exprs,
-             freeCount = p.freeCount + ExprLocallyFree.freeCount(e),
-             locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e))
+      p.copy(
+        exprs = Seq(e) ++ p.exprs,
+        freeCount = p.freeCount + ExprLocallyFree.freeCount(e),
+        locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e),
+        wildcard = p.wildcard || ExprLocallyFree.wildcard(e)
+      )
     def prepend(m: Match): Par =
       p.copy(matches = Seq(m) ++ p.matches,
              freeCount = p.freeCount + m.freeCount,
-             locallyFree = p.locallyFree | m.locallyFree)
+             locallyFree = p.locallyFree | m.locallyFree,
+             wildcard = p.wildcard || m.wildcard)
 
     def singleEval(): Option[Eval] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
@@ -198,60 +224,18 @@ object implicits {
         that.matches ++ p.matches,
         that.ids ++ p.ids,
         that.freeCount + p.freeCount,
-        that.locallyFree | p.locallyFree
+        that.locallyFree | p.locallyFree,
+        that.wildcard || p.wildcard
       )
-
-    def wildcard: Boolean =
-      p.sends.map(send => SendLocallyFree.wildcard(send)).exists(identity) || p.evals
-        .map(eval => EvalLocallyFree.wildcard(eval))
-        .exists(identity) || p.exprs
-        .map(expr => ExprLocallyFree.wildcard(expr))
-        .exists(identity) || p.receives
-        .map(receive => ReceiveLocallyFree.wildcard(receive))
-        .exists(identity) || p.matches
-        .map(_match => MatchLocallyFree.wildcard(_match))
-        .exists(identity)
   }
 
   implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
 
   implicit val SendLocallyFree: HasLocallyFree[Send] = new HasLocallyFree[Send] {
-    def wildcard(s: Send) =
-      ChannelLocallyFree.wildcard(s.chan.get) || s.data.map(_.wildcard).exists(identity)
+    def wildcard(s: Send)    = s.wildcard
     def freeCount(s: Send)   = s.freeCount
     def locallyFree(s: Send) = s.locallyFree
   }
-
-  implicit val ReceiveLocallyFree: HasLocallyFree[Receive] = new HasLocallyFree[Receive] {
-    def wildcard(r: Receive) = {
-      val wildcardBinds = r.binds.foldLeft(false) { (acc, bind: ReceiveBind) =>
-        bind match {
-          case ReceiveBind(patterns: Seq[Channel], source: Option[Channel]) =>
-            acc || patterns
-              .map(pattern => ChannelLocallyFree.wildcard(pattern))
-              .exists(identity) || ChannelLocallyFree.wildcard(source.get)
-        }
-      }
-      r.body.get.wildcard || wildcardBinds
-    }
-    def freeCount(r: Receive)   = r.freeCount
-    def locallyFree(r: Receive) = r.locallyFree
-  }
-
-  implicit val MatchLocallyFree: HasLocallyFree[Match] = new HasLocallyFree[Match] {
-    def wildcard(m: Match) = {
-      val wildcardMatchCases = m.cases.foldLeft(false) { (acc, _case: MatchCase) =>
-        _case match {
-          case MatchCase(pattern: Option[Par], source: Option[Par]) =>
-            acc || pattern.get.wildcard || source.get.wildcard
-        }
-      }
-      m.target.get.wildcard || wildcardMatchCases
-    }
-    def freeCount(m: Match)   = m.freeCount
-    def locallyFree(m: Match) = m.locallyFree
-  }
-
   implicit val ExprLocallyFree: HasLocallyFree[Expr] = new HasLocallyFree[Expr] {
     def wildcard(e: Expr) =
       e.exprInstance match {
@@ -355,6 +339,12 @@ object implicits {
         case Quote(p)   => p.locallyFree
         case ChanVar(v) => VarLocallyFree.locallyFree(v)
       }
+  }
+
+  implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {
+    def wildcard(n: New)    = n.p.get.wildcard
+    def freeCount(n: New)   = n.p.get.freeCount
+    def locallyFree(n: New) = n.locallyFree
   }
 
   implicit val EvalLocallyFree: HasLocallyFree[Eval] = new HasLocallyFree[Eval] {
