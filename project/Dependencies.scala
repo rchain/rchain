@@ -34,7 +34,7 @@ object Dependencies {
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.1" % "test"
   val scalapbRuntime      = "com.trueaccord.scalapb"     %% "scalapb-runtime"           % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
-  val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.1" % "test"
+  val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
