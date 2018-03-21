@@ -11,6 +11,8 @@ import org.scalatest._
 
 abstract class StorageActionsTests extends FlatSpec with Matchers with OptionValues {
 
+  type Store = IStore[String, Pattern, String, StringsCaptor] with IStoreTest
+
   val logger: Logger = Logger[StorageActionsTests]
 
   override def withFixture(test: NoArgTest): Outcome = {
@@ -20,7 +22,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestStore(f: IStore[String, Pattern, String, StringsCaptor] => Unit): Unit
+  def withTestStore(f: Store => Unit): Unit
 
   /* Tests */
 
@@ -39,6 +41,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     }
 
     r shouldBe None
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeA(txn, key.head, 0)
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "producing twice on the same channel" should
@@ -67,6 +75,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     }
 
     r2 shouldBe None
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeA(txn, key.head, 0)
+      store.removeA(txn, key.head, 0)
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming on one channel" should
@@ -85,12 +100,21 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     }
 
     r shouldBe None
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removePsK(txn, key, 0)
+      store.removeJoin(txn, "ch1", List("ch1"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming with a list of patterns that is a different length than the list of channels" should
     "throw" in withTestStore { store =>
     an[IllegalArgumentException] shouldBe thrownBy(
       consume(store, List("ch1", "ch2"), List(Wildcard), new StringsCaptor))
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming on three channels" should
@@ -109,6 +133,15 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     }
 
     r shouldBe None
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removePsK(txn, key, 0)
+      store.removeJoin(txn, "ch1", List("ch1", "ch2", "ch3"))
+      store.removeJoin(txn, "ch2", List("ch1", "ch2", "ch3"))
+      store.removeJoin(txn, "ch3", List("ch1", "ch2", "ch3"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "producing and then consuming on the same channel" should
@@ -129,8 +162,10 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
     val r2 = consume(store, key, List(Wildcard), new StringsCaptor)
 
+    store.isNoGarbage shouldBe true
+
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getKey(txn, keyHash) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
       store.getPsK(txn, key) shouldBe Nil
@@ -141,6 +176,8 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     runK(r2)
 
     getK(r2).results should contain theSameElementsAs List(List("datum"))
+
+    store.isNoGarbage shouldBe true
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
@@ -188,7 +225,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe Nil
       store.getPsK(txn, produceKey1) shouldBe Nil
-      store.getKey(txn, consumeKeyHash) shouldBe consumeKey
+      store.getKey(txn, consumeKeyHash) shouldBe Nil
       store.getPs(txn, consumeKey) shouldBe Nil
       store.getAs(txn, consumeKey) shouldBe Nil
       store.getPsK(txn, consumeKey) shouldBe Nil
@@ -203,6 +240,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     runK(r3)
 
     getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+      store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "producing on three different channels and then consuming once on all three" should
@@ -264,6 +308,8 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     runK(r4)
 
     getK(r4).results should contain theSameElementsAs List(List("datum1", "datum2", "datum3"))
+
+    store.isNoGarbage shouldBe true
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
@@ -285,7 +331,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val r6 = consume(store, key, List(Wildcard), captor)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, store.hashCs(key)) shouldBe key
+      store.getKey(txn, store.hashCs(key)) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
       store.getPsK(txn, key) shouldBe Nil
@@ -300,6 +346,8 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     captor.results should contain theSameElementsAs List(List("datum3"),
                                                          List("datum2"),
                                                          List("datum1"))
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
@@ -326,6 +374,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
       getK(r1).results shouldNot contain theSameElementsAs getK(r2).results
       getK(r1).results shouldNot contain theSameElementsAs getK(r3).results
       getK(r2).results shouldNot contain theSameElementsAs getK(r3).results
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removeJoin(txn, "ch1", List("ch1"))
+      }
+
+      store.isNoGarbage shouldBe true
   }
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
@@ -347,6 +401,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     getK(r1).results shouldBe List(List("datum1"))
     getK(r2).results shouldBe List(List("datum2"))
     getK(r3).results shouldBe List(List("datum3"))
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeJoin(txn, "ch1", List("ch1"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
@@ -362,6 +422,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     runK(r3)
 
     getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+      store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming twice on the same channels with different patterns, and then producing on those channels" should
@@ -393,6 +460,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
     getK(r4).results should contain theSameElementsAs List(List("datum3", "datum4"))
     getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+      store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming and producing with non-trivial matches" should
@@ -413,6 +487,15 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
       store.getAs(txn, List("ch1", "ch2")) shouldBe Nil
       store.getAs(txn, List("ch1")) shouldBe List("datum1")
     }
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeA(txn, "ch1", 0)
+      store.removePsK(txn, List("ch1", "ch2"), 0)
+      store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+      store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming twice and producing twice with non-trivial matches" should
@@ -431,6 +514,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
     getK(r3).results should contain theSameElementsAs List(List("datum1"))
     getK(r4).results should contain theSameElementsAs List(List("datum2"))
+
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.removeJoin(txn, "ch2", List("ch2"))
+      store.removeJoin(txn, "ch1", List("ch1"))
+    }
+
+    store.isNoGarbage shouldBe true
   }
 
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
@@ -456,12 +546,107 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
       runK(r3)
 
       getK(r3).results should contain theSameElementsAs List(List("datum1"))
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removeA(txn, "ch2", 0)
+        store.removePsK(txn, List("ch1", "ch2"), 0)
+        store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+        store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+        store.removeJoin(txn, "ch1", List("ch1"))
+      }
+
+      store.isNoGarbage shouldBe true
+    }
+
+  "joins" should "remove joins if no PsK" in
+    withTestStore { store =>
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.putA(txn, List("ch1"), "datum1")
+        store.putA(txn, List("ch2"), "datum2")
+
+        store.addJoin(txn, "ch1", List("ch1", "ch2"))
+        store.addJoin(txn, "ch2", List("ch1", "ch2"))
+        //ensure that doubled addJoin creates only one entry
+        store.addJoin(txn, "ch1", List("ch1", "ch2"))
+        store.addJoin(txn, "ch2", List("ch1", "ch2"))
+
+        store.putA(txn, List("ch1", "ch2"), "datum_ch1_ch2")
+      }
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+        store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+      }
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+        store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+      }
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List.empty[List[String]]
+        store.getJoin(txn, "ch2") shouldBe List.empty[List[String]]
+      }
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removeA(txn, "ch1", 0)
+        store.removeA(txn, "ch2", 0)
+        store.removeA(txn, List("ch1", "ch2"), 0)
+      }
+
+      store.isNoGarbage shouldBe true
+    }
+
+  "removeAllJoins" should "should not clear joins if PsK exists" in
+    withTestStore { store =>
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.putK(txn, List("ch1"), List(Wildcard), new StringsCaptor)
+        store.putK(txn, List("ch2"), List(Wildcard), new StringsCaptor)
+
+        store.putK(txn, List("ch1", "ch2"), List(Wildcard), new StringsCaptor)
+
+        store.addJoin(txn, "ch1", List("ch1", "ch2"))
+        store.addJoin(txn, "ch2", List("ch1", "ch2"))
+      }
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+        store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+      }
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removeJoin(txn, "ch1", List("ch1", "ch2"))
+        store.removeJoin(txn, "ch2", List("ch1", "ch2"))
+      }
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+        store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+      }
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removeAllJoins(txn, "ch1")
+        store.removeAllJoins(txn, "ch2")
+      }
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List.empty[List[String]]
+        store.getJoin(txn, "ch2") shouldBe List.empty[List[String]]
+      }
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.removePsK(txn, List("ch1", "ch2"), 0)
+        store.removePsK(txn, List("ch1"), 0)
+        store.removePsK(txn, List("ch2"), 0)
+      }
+
+      store.isNoGarbage shouldBe true
     }
 }
 
 class InMemoryStoreStorageActionsTests extends StorageActionsTests {
 
-  override def withTestStore(f: IStore[String, Pattern, String, StringsCaptor] => Unit): Unit = {
+  override def withTestStore(f: Store => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
     try {
       f(testStore)
@@ -475,7 +660,7 @@ class LMDBStoreStorageActionsTests extends StorageActionsTests with BeforeAndAft
 
   private[this] val dbDir = Files.createTempDirectory("rchain-storage-test-")
 
-  override def withTestStore(f: IStore[String, Pattern, String, StringsCaptor] => Unit): Unit = {
+  override def withTestStore(f: Store => Unit): Unit = {
     val testStore =
       LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
     testStore.clear()
