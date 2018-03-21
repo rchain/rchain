@@ -3,7 +3,6 @@ package coop.rchain.storage.bench
 import java.nio.file.{Files, Path}
 
 import cats.syntax.either._
-import coop.rchain.storage.implicits._
 import coop.rchain.storage.examples.StringExamples._
 import coop.rchain.storage.examples.StringExamples.implicits._
 import coop.rchain.storage.{LMDBStore, _}
