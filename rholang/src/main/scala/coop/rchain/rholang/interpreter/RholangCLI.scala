@@ -8,6 +8,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import org.rogach.scallop.ScallopConf
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -48,7 +49,7 @@ object RholangCLI {
   private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
   private def printTask(normalizedTerm: Par): Task[Unit] =
-    Task now {
+    Task {
       PrettyPrinter.prettyPrint(normalizedTerm)
       print("\n> ")
     }
@@ -59,7 +60,8 @@ object RholangCLI {
         print("> ")
       } else {
         val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
-        printTask(normalizedTerm)
+        val evaluator      = printTask(normalizedTerm)
+        evaluator.runAsync
       }
     }
 
