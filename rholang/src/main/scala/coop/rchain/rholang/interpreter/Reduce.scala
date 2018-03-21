@@ -78,7 +78,7 @@ object Reduce {
                   space.put(c, ((data, persistent) +: writes, reads))
                   Task.pure(None)
                 }
-                case (binds, cont: Cont[Par, Par], readPersistent) +: remReads => {
+                case (_, cont: Cont[Par, Par], readPersistent) +: remReads => {
                   val newWrites =
                     if (persistent)
                       (data, persistent) +: writes
@@ -151,7 +151,7 @@ object Reduce {
     def inj(par: Par): Task[Unit] =
       for { _ <- eval(par)(Env[Par]()) } yield ()
 
-    /** 
+    /**
       * Materialize a send in the store, optionally returning the matched continuation.
       *
       * @param chan  The channel on which data is being sent.
@@ -159,7 +159,7 @@ object Reduce {
       * @param persistent  True if the write should remain in the tuplespace indefinitely.
       * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
-    */
+      */
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       tupleSpace.simpleProduce(chan, data, persistent)
@@ -174,7 +174,7 @@ object Reduce {
       *             execution in body
       * @return  An optional continuation resulting from a match. The body of the continuation
       *          will be @param body if the continuation is not None.
-    */
+      */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       binds match {
@@ -306,19 +306,21 @@ object Reduce {
       } yield ()
     }
 
-    def evalToInt(p: Par)(implicit env: Env[Par]): Task[Int] = {
+    def evalToInt(p: Par)(implicit env: Env[Par]): Task[Int] =
       if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-        None
-      p.exprs match {
-        case Expr(GInt(v)) +: Nil => Task.pure(v)
-        case Expr(EPlusBody(EPlus(p1, p2))) +: Nil =>
-          for {
-            i1 <- evalToInt(p1.get)
-            i2 <- evalToInt(p2.get)
-          } yield i1 + i2
-        case _ => Task raiseError new Error("Error: Integer expected, or unimplemented expression.")
-      }
-    }
+        Task raiseError new Error(
+          "Error: parallel or non expression found where expression expected.")
+      else
+        p.exprs match {
+          case Expr(GInt(v)) +: Nil => Task.pure(v)
+          case Expr(EPlusBody(EPlus(p1, p2))) +: Nil =>
+            for {
+              i1 <- evalToInt(p1.get)
+              i2 <- evalToInt(p2.get)
+            } yield i1 + i2
+          case _ =>
+            Task raiseError new Error("Error: Integer expected, or unimplemented expression.")
+        }
 
     def evalExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] =
       expr.exprInstance match {
