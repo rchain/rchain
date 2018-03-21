@@ -1192,7 +1192,9 @@ class TransitionSpec extends FlatSpec with Matchers {
     )
 
     val template = Template(
-      new Tuple(symbols),
+      meta = null,
+      parent = null,
+      Tuple(symbols),
       StdMeta(),
       IdVecPattern(TupleExpr(symbols.map(symbol => Symbol(symbol.value))))
     )
