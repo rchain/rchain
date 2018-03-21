@@ -3,8 +3,7 @@ package coop.rchain.storage.test
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-import coop.rchain.models.Serialize
-import coop.rchain.storage.IStore
+import coop.rchain.storage.{IStore, Serialize}
 import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 

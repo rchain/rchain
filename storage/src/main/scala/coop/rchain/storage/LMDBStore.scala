@@ -6,8 +6,6 @@ import java.security.MessageDigest
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.models.Serialize
-import coop.rchain.models.implicits.rhoInstanceWrapper
 import coop.rchain.storage.datamodels.{BytesList, PsKsBytes, PsKsBytesList}
 import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -21,7 +19,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 pc: Serialize[P],
                                                                 ac: Serialize[A],
                                                                 kc: Serialize[K],
-                                                                bl: Serialize[BytesList])
+                                                                sbl: Serialize[BytesList])
     extends IStore[C, P, A, K] {
 
   import coop.rchain.storage.LMDBStore._
@@ -193,18 +191,18 @@ object LMDBStore {
   private[this] val asTableName: String    = "As"
   private[this] val joinsTableName: String = "Joins"
 
-  implicit object bytesListInstance extends rhoInstanceWrapper(BytesList)
-
   /**
     * Creates an instance of [[IStore]]
     *
     * @param path    Path to the database files
     * @param mapSize Maximum size of the database, in bytes
     */
-  def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
-                                                    pc: Serialize[P],
-                                                    ac: Serialize[A],
-                                                    kc: Serialize[K]): LMDBStore[C, P, A, K] = {
+  def create[C, P, A, K](path: Path, mapSize: Long)(
+      implicit sc: Serialize[C],
+      pc: Serialize[P],
+      ac: Serialize[A],
+      kc: Serialize[K],
+      sbl: Serialize[BytesList]): LMDBStore[C, P, A, K] = {
     val env: Env[ByteBuffer] =
       Env.create().setMapSize(mapSize).setMaxDbs(8).open(path.toFile)
 

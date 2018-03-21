@@ -13,6 +13,7 @@ import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.NormalizerExceptions._
 import implicits._
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
@@ -49,7 +50,7 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
 class CollectMatcherSpec extends FlatSpec with Matchers {
   val inputs = ProcVisitInputs(
     Par(),
-    DebruijnIndexMap[VarSort]().newBindings(List(("P", ProcSort), ("x", NameSort))),
+    DebruijnIndexMap[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]())
 
   "List" should "delegate" in {
@@ -84,7 +85,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
                freeCount = 2,
                locallyFree = BitSet())))
     result.knownFree should be(
-      inputs.knownFree.newBindings(List(("Q", ProcSort), ("y", NameSort)))._1)
+      inputs.knownFree.newBindings(List(("Q", ProcSort, 0, 0), ("y", NameSort, 0, 0)))._1)
   }
   "Tuple" should "propagate free variables" in {
     val tupleData = new ListProc()
@@ -93,7 +94,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     tupleData.add(new PPar(new PGround(new GroundInt(7)), new PVar(new ProcVarVar("Q"))))
     val tuple = new PCollect(new CollectTuple(tupleData))
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(tuple, inputs)
     }
   }
@@ -114,7 +115,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
              freeCount = 2,
              locallyFree = BitSet(1))))
     result.knownFree should be(
-      inputs.knownFree.newBindings(List(("R", ProcSort), ("Q", ProcSort)))._1)
+      inputs.knownFree.newBindings(List(("R", ProcSort, 0, 0), ("Q", ProcSort, 0, 0)))._1)
   }
 
   "Map" should "delegate" in {
@@ -149,7 +150,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   val pvar = new PVar(new ProcVarVar("x"))
   "PVar" should "Compile as BoundVar if it's in env" in {
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     result.par should be(inputs.par.prepend(EVar(BoundVar(0))))
@@ -160,27 +161,27 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch(pvar, inputs)
     result.par should be(inputs.par.prepend(EVar(FreeVar(0))))
     result.knownFree shouldEqual
-      (inputs.knownFree.newBinding(("x", ProcSort))._1)
+      (inputs.knownFree.newBinding(("x", ProcSort, 0, 0))._1)
   }
   "PVar" should "Not compile if it's in env of the wrong sort" in {
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
 
-    an[Error] should be thrownBy {
+    an[UnexpectedProcContext] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     }
   }
   "PVar" should "Not compile if it's used free somewhere else" in {
     val boundInputs =
-      inputs.copy(knownFree = inputs.knownFree.newBinding(("x", ProcSort))._1)
+      inputs.copy(knownFree = inputs.knownFree.newBinding(("x", ProcSort, 0, 0))._1)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pvar, boundInputs)
     }
   }
 
   "PEval" should "Handle a bound name varible" in {
     val pEval       = new PEval(new NameVar("x"))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
     result.par should be(inputs.par.prepend(Eval(ChanVar(BoundVar(0)))))
@@ -189,7 +190,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   "PEval" should "Collapse a quote" in {
     val pEval = new PEval(
       new NameQuote(new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pEval, boundInputs)
     result.par should be(inputs.par.prepend(EVar(BoundVar(0))).prepend(EVar(BoundVar(0))))
@@ -206,7 +207,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PNeg" should "Delegate" in {
     val pNeg        = new PNeg(new PVar(new ProcVarVar("x")))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pNeg, boundInputs)
     result.par should be(inputs.par.prepend(ENeg(EVar(BoundVar(0)))))
@@ -215,11 +216,11 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PMult" should "Delegate" in {
     val pMult       = new PMult(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pMult, boundInputs)
     result.par should be(inputs.par.prepend(EMult(EVar(BoundVar(0)), EVar(FreeVar(0)))))
-    result.knownFree should be(inputs.knownFree.newBinding(("y", ProcSort))._1)
+    result.knownFree should be(inputs.knownFree.newBinding(("y", ProcSort, 0, 0))._1)
   }
 
   "PDiv" should "Delegate" in {
@@ -233,7 +234,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   "PAdd" should "Delegate" in {
     val pAdd = new PAdd(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
     val boundInputs =
-      inputs.copy(env = inputs.env.newBindings(List(("x", ProcSort), ("y", ProcSort))))
+      inputs.copy(env = inputs.env.newBindings(List(("x", ProcSort, 0, 0), ("y", ProcSort, 0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pAdd, boundInputs)
     result.par should be(inputs.par.prepend(EPlus(EVar(BoundVar(1)), EVar(BoundVar(0)))))
@@ -245,7 +246,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                             new PMult(new PVar(new ProcVarVar("y")), new PVar(new ProcVarVar("z"))))
     val boundInputs = inputs.copy(
       env = inputs.env
-        .newBindings(List(("x", ProcSort), ("y", ProcSort), ("z", ProcSort))))
+        .newBindings(List(("x", ProcSort, 0, 0), ("y", ProcSort, 0, 0), ("z", ProcSort, 0, 0))))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pMinus, boundInputs)
     result.par should be(
@@ -270,7 +271,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PGround(new GroundInt(7)))
     sentData.add(new PGround(new GroundInt(8)))
     val pSend       = new PSend(new NameVar("x"), new SendSingle(), sentData)
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pSend, boundInputs)
     result.par should be(
@@ -285,7 +286,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     sentData.add(new PVar(new ProcVarVar("x")))
     val pSend = new PSend(new NameQuote(new PVar(new ProcVarVar("x"))), new SendSingle(), sentData)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pSend, inputs)
     }
   }
@@ -299,7 +300,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PPar" should "Compile both branches with the same environment" in {
     val parDoubleBound = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
-    val boundInputs    = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs    = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(parDoubleBound, boundInputs)
     result.par should be(
@@ -308,7 +309,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
   "PPar" should "Not compile if both branches use the same free variable" in {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(parDoubleFree, inputs)
     }
   }
@@ -319,7 +320,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.copy(exprs = List(EVar(FreeVar(1)), EVar(FreeVar(0))), freeCount = 2))
     result.knownFree should be(
-      inputs.knownFree.newBindings(List(("x", ProcSort), ("y", ProcSort)))._1)
+      inputs.knownFree.newBindings(List(("x", ProcSort, 0, 0), ("y", ProcSort, 0, 0)))._1)
   }
 
   "PContr" should "Handle a basic contract" in {
@@ -341,7 +342,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val pBasicContr = new PContr(new NameVar("add"),
                                  listBindings,
                                  new PSend(new NameVar("ret"), new SendSingle(), listSend))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("add", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("add", NameSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pBasicContr, boundInputs)
     result.par should be(
@@ -380,7 +381,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val pBasicContr = new PContr(new NameVar("ret5"),
                                  listBindings,
                                  new PSend(new NameVar("ret"), new SendSingle(), listSend))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("ret5", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("ret5", NameSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pBasicContr, boundInputs)
     result.par should be(
@@ -489,7 +490,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val body   = new PNil()
     val pInput = new PInput(receipt, body)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pInput, inputs)
     }
   }
@@ -642,7 +643,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
                    new PNil()))
     val pMatch = new PMatch(new PGround(new GroundInt(47)), listCases)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch(pMatch, inputs)
     }
   }
@@ -697,7 +698,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   val nvar = new NameVar("x")
 
   "NameVar" should "Compile as BoundVar if it's in env" in {
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
 
     val result                  = NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     val expectedResult: Channel = ChanVar(BoundVar(0))
@@ -709,20 +710,20 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     val expectedResult: Channel = ChanVar(FreeVar(0))
     result.chan should be(expectedResult)
     result.knownFree shouldEqual
-      (inputs.knownFree.newBinding(("x", NameSort))._1)
+      (inputs.knownFree.newBinding(("x", NameSort, 0, 0))._1)
   }
   "NameVar" should "Not compile if it's in env of the wrong sort" in {
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
-    an[Error] should be thrownBy {
+    an[UnexpectedNameContext] should be thrownBy {
       NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
   "NameVar" should "Not compile if it's used free somewhere else" in {
     val boundInputs =
-      inputs.copy(knownFree = inputs.knownFree.newBinding(("x", NameSort))._1)
+      inputs.copy(knownFree = inputs.knownFree.newBinding(("x", NameSort, 0, 0))._1)
 
-    an[Error] should be thrownBy {
+    an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       NameNormalizeMatcher.normalizeMatch(nvar, boundInputs)
     }
   }
@@ -730,7 +731,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   val nqvar = new NameQuote(new PVar(new ProcVarVar("x")))
 
   "NameQuote" should "compile to a quoted var if the var is bound" in {
-    val boundInputs             = inputs.copy(env = inputs.env.newBinding(("x", ProcSort)))
+    val boundInputs             = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
     val nqvar                   = new NameQuote(new PVar(new ProcVarVar("x")))
     val result                  = NameNormalizeMatcher.normalizeMatch(nqvar, boundInputs)
     val expectedResult: Channel = Quote(EVar(BoundVar(0)))
@@ -742,7 +743,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     val result                  = NameNormalizeMatcher.normalizeMatch(nqvar, inputs)
     val expectedResult: Channel = Quote(EVar(FreeVar(0)))
     result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree.newBinding(("x", ProcSort))._1)
+    result.knownFree should be(inputs.knownFree.newBinding(("x", ProcSort, 0, 0))._1)
   }
 
   "NameQuote" should "compile to a quoted ground" in {
@@ -755,7 +756,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
 
   "NameQuote" should "collapse an eval" in {
     val nqeval                  = new NameQuote(new PEval(new NameVar("x")))
-    val boundInputs             = inputs.copy(env = inputs.env.newBinding(("x", NameSort)))
+    val boundInputs             = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
     val result                  = NameNormalizeMatcher.normalizeMatch(nqeval, boundInputs)
     val expectedResult: Channel = ChanVar(BoundVar(0))
     result.chan should be(expectedResult)
@@ -764,7 +765,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
 
   "NameQuote" should "not collapse an eval | eval" in {
     val nqeval      = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort)))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
     val result      = NameNormalizeMatcher.normalizeMatch(nqeval, boundInputs)
     val expectedResult: Channel =
       Quote(Eval(ChanVar(BoundVar(0))).prepend(Eval(ChanVar(BoundVar(0)))))

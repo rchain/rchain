@@ -320,7 +320,8 @@ object SendSortMatcher {
            data = sortedData.map(_.term.get),
            persistent = s.persistent,
            freeCount = s.freeCount,
-           locallyFree = s.locallyFree)
+           locallyFree = s.locallyFree,
+           wildcard = s.wildcard)
     val persistentScore = if (s.persistent) 1 else 0
     val sendScore = Node(
       Score.SEND,
@@ -364,7 +365,8 @@ object ReceiveSortMatcher {
               r.persistent,
               r.bindCount,
               r.freeCount,
-              r.locallyFree),
+              r.locallyFree,
+              r.wildcard),
       Node(Score.RECEIVE,
            Seq(Leaf(persistentScore)) ++
              sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
@@ -398,8 +400,10 @@ object MatchSortMatcher {
 
     val sortedValue = ParSortMatcher.sortMatch(m.target)
     val scoredCases = m.cases.map(c => sortCase(c))
-    ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.freeCount, m.locallyFree),
-               Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
+    ScoredTerm(
+      Match(sortedValue.term, scoredCases.map(_.term), m.freeCount, m.locallyFree, m.wildcard),
+      Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*)
+    )
   }
 }
 
@@ -423,7 +427,8 @@ object ParSortMatcher {
           matches = matches.map(_.term),
           ids = ids.map(_.term),
           freeCount = p.freeCount,
-          locallyFree = p.locallyFree
+          locallyFree = p.locallyFree,
+          wildcard = p.wildcard
         )
         val parScore = Node(Score.PAR,
                             sends.map(_.score) ++

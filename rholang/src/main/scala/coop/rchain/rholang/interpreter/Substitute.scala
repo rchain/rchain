@@ -150,30 +150,30 @@ object Substitute {
           case ENeqBody(ENeq(par1, par2))     => ENeq(substitute(par1.get), substitute(par2.get))
           case EAndBody(EAnd(par1, par2))     => EAnd(substitute(par1.get), substitute(par2.get))
           case EOrBody(EOr(par1, par2))       => EOr(substitute(par1.get), substitute(par2.get))
-          case EListBody(EList(ps, freeCount, locallyFree)) =>
+          case EListBody(EList(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree)))
-          case ETupleBody(ETuple(ps, freeCount, locallyFree)) =>
+            Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree, wildcard)))
+          case ETupleBody(ETuple(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree)))
-          case ESetBody(ESet(ps, freeCount, locallyFree)) =>
+            Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree, wildcard)))
+          case ESetBody(ESet(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree)))
-          case EMapBody(EMap(kvs, freeCount, locallyFree)) =>
+            Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree, wildcard)))
+          case EMapBody(EMap(kvs, freeCount, locallyFree, wildcard)) =>
             val _ps = for { KeyValuePair(p1, p2) <- kvs } yield {
               KeyValuePair(substitute(p1.get), substitute(p2.get))
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree)))
+            Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree, wildcard)))
           case g @ _ => exp
         }
       )

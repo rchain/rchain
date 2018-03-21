@@ -40,7 +40,7 @@ boot/
 # BNFC
 ###################
 rholang/bnfc/
-rholang/src/main/java/coop/**
+rholang/src/main/java/
 
 # Secp256k1
 ###################
@@ -50,7 +50,11 @@ crypto/secp256k1/
 ###################
 !rosette/bin/README
 rosette/src/*.o
+rosette/.vagrant
+Vagrantfile
+
 # Actual code editors
+###################
 *~
 \#*
 .ensime*

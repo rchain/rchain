@@ -1,58 +1,66 @@
 import sbt._
 
 object Dependencies {
-  private val loggingDependencies = Seq(
-    "com.typesafe.scala-logging" %% "scala-logging" % "3.7.2",
-    "ch.qos.logback" % "logback-classic" % "1.2.3"
-  )
 
-  private val testingDependencies = Seq(
-    "org.scalactic" %% "scalactic" % "3.0.1",
-    "org.scalatest" %% "scalatest" % "3.0.1" % "test"
-  )
-
-  val bitcoinj             = "org.bitcoinj"           % "bitcoinj-core"    % "0.14.6"
-  val bouncyCastle         = "org.bouncycastle"       % "bcprov-jdk15on"   % "1.58"
-  val kalium               = "org.abstractj.kalium"   % "kalium"           % "0.7.0"
-  val argParsing           = "org.rogach"             %% "scallop"         % "3.0.3"
-  val uriParsing           = "io.lemonlabs"           %% "scala-uri"       % "0.5.0"
-  val uPnP                 = "org.bitlet"              % "weupnp"          % "0.1.+"
-  val protobufCompiler     = "com.trueaccord.scalapb" %% "compilerplugin"  % "0.6.6"
-  val protobufRuntime      = "com.trueaccord.scalapb" %% "scalapb-runtime" % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
-  val cats                 = "org.typelevel"          %% "cats-core"       % "1.0.1"
-  val lmdb                 = "org.lmdbjava"            % "lmdbjava"        % "0.6.0"
-  val shapeless            = "com.chuusai"            %% "shapeless"       % "2.3.2"
-  val monix                = "io.monix"               %% "monix"           % "3.0.0-M3"
-  val guava                = "com.google.guava"       % "guava"            % "24.0-jre"
-  val hasher               = "com.roundeights"        %% "hasher"          % "1.2.0"
-  val scalaCheck           = "org.scalacheck"         %% "scalacheck"      % "1.13.4" % "test"
-  val jaxb                 = "javax.xml.bind"         % "jaxb-api"         % "2.1"
-  val scalaCheckShapeless  = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
-
+  val circeVersion  = "0.9.1"
   val http4sVersion = "0.18.0"
-  val http4sDependencies = Seq(
-    // "org.http4s" %% "rho-swagger"         % http4sVersion,
-    "org.http4s" %% "http4s-dsl"          % http4sVersion,
-    "org.http4s" %% "http4s-blaze-server" % http4sVersion,
-    "org.http4s" %% "http4s-blaze-client" % http4sVersion,
-    "org.http4s" %% "http4s-circe"        % http4sVersion)
+  val kamonVersion  = "1.0.0"
 
-  val circeVersion = "0.9.1"
-  val circeDependencies = Seq(
-    "io.circe" %% "circe-core"           % circeVersion,
-    "io.circe" %% "circe-generic"        % circeVersion,
-    "io.circe" %% "circe-generic-extras" % circeVersion,
-    "io.circe" %% "circe-parser"         % circeVersion,
-    "io.circe" %% "circe-literal"        % circeVersion)
+  // format: off
+  val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
+  val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.58"
+  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
+  val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
+  val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
+  val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
+  val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
+  val guava               = "com.google.guava"            % "guava"                     % "24.0-jre"
+  val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
+  val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
+  val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
+  val http4sCirce         = "org.http4s"                 %% "http4s-circe"              % http4sVersion
+  val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
+  val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.1"
+  val kalium              = "org.abstractj.kalium"        % "kalium"                    % "0.7.0"
+  val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
+  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
+  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.0"
+  val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
+  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-M3"
+  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
+  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "0.5.0"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
+  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
+  val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.1" % "test"
+  val scalapbRuntime      = "com.trueaccord.scalapb"     %% "scalapb-runtime"           % com.trueaccord.scalapb.compiler.Version.scalapbVersion % "protobuf"
+  val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.1" % "test"
+  val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
+  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
+  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
+  // format: on
 
-  val apiServerDependencies = http4sDependencies ++ circeDependencies
+  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
-  val commonDependencies   = loggingDependencies ++ testingDependencies
-  val protobufDependencies = Seq(protobufCompiler, protobufRuntime)
+  private val testing = Seq(scalactic, scalatest, scalacheck)
 
-  val kamonDependencies = Seq(
-    "io.kamon" %% "kamon-core"       % "1.0.0",
-    "io.kamon" %% "kamon-prometheus" % "1.0.0"
-  )
+  private val logging = Seq(scalaLogging, logbackClassic)
 
+  private val circeDependencies: Seq[ModuleID] =
+    Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
+
+  private val http4sDependencies: Seq[ModuleID] =
+    Seq(http4sDSL, http4sBlazeServer, http4sBlazeClient, http4sCirce)
+
+  val protobufDependencies: Seq[ModuleID] =
+    Seq(scalapbRuntime)
+
+  val kamonDependencies: Seq[ModuleID] =
+    Seq(kamonCore, kamonPrometheus)
+
+  val apiServerDependencies: Seq[ModuleID] =
+    http4sDependencies ++ circeDependencies
+
+  val commonDependencies: Seq[ModuleID] =
+    logging ++ testing :+ kindProjector
 }

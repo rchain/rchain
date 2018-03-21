@@ -12,7 +12,7 @@ import coop.rchain.models.Var.VarInstance._
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
 
-import implicits.{ExprLocallyFree, SendLocallyFree}
+import implicits.{ExprLocallyFree, ParExtension, SendLocallyFree}
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -73,14 +73,14 @@ object SpatialMatcher {
       .reverse
 
   // This helper function is useful in several productions
-  def foldMatch(tlist: Seq[Par], plist: Seq[Par]): OptionalFreeMap[Unit] =
+  def foldMatch[T](tlist: Seq[T],
+                   plist: Seq[T],
+                   f: (T, T) => OptionalFreeMap[Unit]): OptionalFreeMap[Unit] =
     (tlist, plist) match {
-      case (Nil, Nil) => StateT.pure(Unit)
-      case (Nil, _)   => StateT.liftF(None)
-      case (_, Nil)   => StateT.liftF(None)
-      case (t +: trem, p +: prem) => {
-        spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem))
-      }
+      case (Nil, Nil)             => StateT.pure(Unit)
+      case (Nil, _)               => StateT.liftF[Option, FreeMap, Unit](None)
+      case (_, Nil)               => StateT.liftF[Option, FreeMap, Unit](None)
+      case (t +: trem, p +: prem) => f(t, p).flatMap(_ => foldMatch(trem, prem, f))
     }
 
   // This function finds a single matching from a list of patterns and a list of
@@ -164,7 +164,7 @@ object SpatialMatcher {
         }
       // Try to find a match for a single pattern.
       case (targets, pattern +: prem) => {
-        if (lf.freeCount(pattern) === 0) {
+        if (lf.freeCount(pattern) === 0 && !lf.wildcard(pattern)) {
           possiblyRemove(pattern, targets) match {
             case None           => StateT.liftF(Stream.Empty)
             case Some(filtered) => listMatch(filtered, prem, matcher, merger, varLevel, wildcard)
@@ -195,7 +195,7 @@ object SpatialMatcher {
     } yield forcedYield
 
   def spatialMatch(target: Par, pattern: Par): OptionalFreeMap[Unit] =
-    if (pattern.freeCount === 0) {
+    if (pattern.freeCount === 0 && !pattern.wildcard) {
       if (pattern == target)
         StateT.pure(Unit)
       else {
@@ -292,16 +292,16 @@ object SpatialMatcher {
     else
       for {
         _           <- spatialMatch(target.chan.get, pattern.chan.get)
-        forcedYield <- foldMatch(target.data, pattern.data)
+        forcedYield <- foldMatch(target.data, pattern.data, (t: Par, p: Par) => spatialMatch(t, p))
       } yield forcedYield
 
   def spatialMatch(target: Expr, pattern: Expr): OptionalFreeMap[Unit] =
     (target.exprInstance, pattern.exprInstance) match {
-      case (EListBody(EList(tlist, _, _)), EListBody(EList(plist, _, _))) => {
-        foldMatch(tlist, plist)
+      case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, _))) => {
+        foldMatch(tlist, plist, (t: Par, p: Par) => spatialMatch(t, p))
       }
-      case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
-        foldMatch(tlist, plist)
+      case (ETupleBody(ETuple(tlist, _, _, _)), ETupleBody(ETuple(plist, _, _, _))) => {
+        foldMatch(tlist, plist, (t: Par, p: Par) => spatialMatch(t, p))
       }
       case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
         if (vp == vt) StateT.pure(Unit) else StateT.liftF(None)
