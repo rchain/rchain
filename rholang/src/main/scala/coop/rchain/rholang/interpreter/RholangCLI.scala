@@ -98,7 +98,7 @@ object RholangCLI {
 
   private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
     val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
-    if (normalizedTerm.par.freeCount > 0) {
+    if (normalizedTerm.knownFree.count > 0) {
       val topLevelFreeList = normalizedTerm.knownFree.env.map {
         case (name, (_, _, line, col)) => s"$name at $line:$col"
       }

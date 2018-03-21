@@ -149,30 +149,30 @@ object Substitute {
           case ENeqBody(ENeq(par1, par2))     => ENeq(substitute(par1.get), substitute(par2.get))
           case EAndBody(EAnd(par1, par2))     => EAnd(substitute(par1.get), substitute(par2.get))
           case EOrBody(EOr(par1, par2))       => EOr(substitute(par1.get), substitute(par2.get))
-          case EListBody(EList(ps, freeCount, locallyFree)) =>
+          case EListBody(EList(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
-            Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree)))
-          case ETupleBody(ETuple(ps, freeCount, locallyFree)) =>
+            Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree, wildcard)))
+          case ETupleBody(ETuple(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
-            Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree)))
-          case ESetBody(ESet(ps, freeCount, locallyFree)) =>
+            Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree, wildcard)))
+          case ESetBody(ESet(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
-            Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree)))
-          case EMapBody(EMap(kvs, freeCount, locallyFree)) =>
+            Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree, wildcard)))
+          case EMapBody(EMap(kvs, freeCount, locallyFree, wildcard)) =>
             val _ps = for { KeyValuePair(p1, p2) <- kvs } yield {
               KeyValuePair(substitute(p1.get), substitute(p2.get))
             }
             val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
-            Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree)))
+            Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree, wildcard)))
           case g @ _ => exp
         }
       )
@@ -274,22 +274,22 @@ object Substitute {
       case ENeqBody(ENeq(p1, p2))     => ENeq(rename(p1.get, j), rename(p2.get, j))
       case EAndBody(EAnd(p1, p2))     => EAnd(rename(p1.get, j), rename(p2.get, j))
       case EOrBody(EOr(p1, p2))       => EOr(rename(p1.get, j), rename(p2.get, j))
-      case EListBody(EList(xs, freeCount, locallyFree)) =>
+      case EListBody(EList(xs, freeCount, locallyFree, wildcard)) =>
         EList(for { par <- xs } yield {
           rename(par, j)
-        }, freeCount, locallyFree.map(x => x + j))
-      case ETupleBody(ETuple(xs, freeCount, locallyFree)) =>
+        }, freeCount, locallyFree.map(x => x + j), wildcard)
+      case ETupleBody(ETuple(xs, freeCount, locallyFree, wildcard)) =>
         ETuple(for { par <- xs } yield {
           rename(par, j)
-        }, freeCount, locallyFree.map(x => x + j))
-      case ESetBody(ESet(xs, freeCount, locallyFree)) =>
+        }, freeCount, locallyFree.map(x => x + j), wildcard)
+      case ESetBody(ESet(xs, freeCount, locallyFree, wildcard)) =>
         ESet(for { par <- xs } yield {
           rename(par, j)
-        }, freeCount, locallyFree.map(x => x + j))
-      case EMapBody(EMap(xs, freeCount, locallyFree)) =>
+        }, freeCount, locallyFree.map(x => x + j), wildcard)
+      case EMapBody(EMap(xs, freeCount, locallyFree, wildcard)) =>
         EMap(for { KeyValuePair(par0, par1) <- xs } yield {
           KeyValuePair(rename(par0.get, j), rename(par1.get, j))
-        }, freeCount, locallyFree.map(x => x + j))
+        }, freeCount, locallyFree.map(x => x + j), wildcard)
       case g @ _ => term
     }
 }
