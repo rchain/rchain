@@ -6,6 +6,7 @@ import java.security.MessageDigest
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.storage.Serialize.mkProtobufInstance
 import coop.rchain.storage.datamodels.{BytesList, PsKsBytes, PsKsBytesList}
 import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -15,10 +16,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbPsKs: Dbi[ByteBuffer],
                                      _dbAs: Dbi[ByteBuffer],
-                                     _dbJoins: Dbi[ByteBuffer])(implicit sc: Serialize[C],
-                                                                pc: Serialize[P],
-                                                                ac: Serialize[A],
-                                                                kc: Serialize[K],
+                                     _dbJoins: Dbi[ByteBuffer])(implicit
+                                                                sc: Serialize[C],
+                                                                sp: Serialize[P],
+                                                                sa: Serialize[A],
+                                                                sk: Serialize[K],
                                                                 sbl: Serialize[BytesList])
     extends IStore[C, P, A, K] {
 
@@ -197,12 +199,13 @@ object LMDBStore {
     * @param path    Path to the database files
     * @param mapSize Maximum size of the database, in bytes
     */
-  def create[C, P, A, K](path: Path, mapSize: Long)(
-      implicit sc: Serialize[C],
-      pc: Serialize[P],
-      ac: Serialize[A],
-      kc: Serialize[K],
-      sbl: Serialize[BytesList]): LMDBStore[C, P, A, K] = {
+  def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
+                                                    sp: Serialize[P],
+                                                    sa: Serialize[A],
+                                                    sk: Serialize[K]): LMDBStore[C, P, A, K] = {
+
+    val bytesListInstance: Serialize[BytesList] = mkProtobufInstance(BytesList)
+
     val env: Env[ByteBuffer] =
       Env.create().setMapSize(mapSize).setMaxDbs(8).open(path.toFile)
 
@@ -211,7 +214,7 @@ object LMDBStore {
     val dbAs: Dbi[ByteBuffer]    = env.openDbi(asTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](env, dbKeys, dbPsKs, dbAs, dbJoins)
+    new LMDBStore[C, P, A, K](env, dbKeys, dbPsKs, dbAs, dbJoins)(sc, sp, sa, sk, bytesListInstance)
   }
 
   private[storage] def toByteString[T](value: T)(implicit st: Serialize[T]): ByteString =
@@ -254,7 +257,7 @@ object LMDBStore {
     fromBytesList[T](bl)
   }
 
-  def hashBytes(byteBuffer: ByteBuffer): ByteBuffer = {
+  private[storage] def hashBytes(byteBuffer: ByteBuffer): ByteBuffer = {
     byteBuffer.mark()
     val fetched = new Array[Byte](byteBuffer.remaining())
     ignore {
@@ -264,7 +267,7 @@ object LMDBStore {
     hashBytes(fetched)
   }
 
-  def hashBytes(bytes: Array[Byte]): ByteBuffer = {
+  private[storage] def hashBytes(bytes: Array[Byte]): ByteBuffer = {
     val dataArr    = MessageDigest.getInstance("SHA-256").digest(bytes)
     val byteBuffer = ByteBuffer.allocateDirect(dataArr.length)
     byteBuffer.put(dataArr).flip()
