@@ -22,7 +22,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 sa: Serialize[A],
                                                                 sk: Serialize[K],
                                                                 sbl: Serialize[BytesList])
-    extends IStore[C, P, A, K] {
+    extends IStore[C, P, A, K]
+    with IStoreTest {
 
   import coop.rchain.storage.LMDBStore._
 
@@ -74,11 +75,39 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]).getOrElse(List.empty[A])
   }
 
-  def removeA(txn: T, channel: C, index: Int): Unit = {
-    val keyCs = hashCs(List(channel))
+  def collectGarbage(txn: T,
+                     keyCs: H,
+                     asCollected: Boolean = false,
+                     psksCollected: Boolean = false,
+                     joinsCollected: Boolean = false): Unit = {
+
+    def isEmpty(dbi: Dbi[ByteBuffer]): Boolean =
+      dbi.get(txn, keyCs) == null
+
+    val readyToCollect = (asCollected || isEmpty(_dbAs)) &&
+      (psksCollected || isEmpty(_dbPsKs)) &&
+      (joinsCollected || isEmpty(_dbJoins))
+
+    if (readyToCollect) {
+      _dbKeys.delete(txn, keyCs)
+    }
+  }
+
+  def removeA(txn: T, channel: C, index: Int): Unit =
+    removeA(txn, List(channel), index)
+
+  def removeA(txn: T, channels: List[C], index: Int): Unit = {
+    val keyCs = hashCs(channels)
     Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]) match {
-      case Some(as) => _dbAs.put(txn, keyCs, toByteBuffer(util.dropIndex(as, index)))
-      case None     => throw new IllegalArgumentException(s"removeA: no values at $channel")
+      case Some(as) =>
+        val newAs = util.dropIndex(as, index)
+        if (newAs.nonEmpty) {
+          _dbAs.put(txn, keyCs, toByteBuffer(newAs))
+        } else {
+          _dbAs.delete(txn, keyCs)
+          collectGarbage(txn, keyCs, asCollected = true)
+        }
+      case None => throw new IllegalArgumentException(s"removeA: no values at $channels")
     }
   }
 
@@ -91,12 +120,16 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       PsKsBytesList.parseFrom(fetched).values.toList
     })
 
-  private[this] def writePsKsBytesList(txn: T, keyCs: H, values: List[PsKsBytes]): Unit = {
-    val toWrite        = PsKsBytesList().withValues(values).toByteArray
-    val bb: ByteBuffer = ByteBuffer.allocateDirect(toWrite.length)
-    bb.put(toWrite).flip()
-    _dbPsKs.put(txn, keyCs, bb)
-  }
+  private[this] def writePsKsBytesList(txn: T, keyCs: H, values: List[PsKsBytes]): Unit =
+    if (values.nonEmpty) {
+      val toWrite        = PsKsBytesList().withValues(values).toByteArray
+      val bb: ByteBuffer = ByteBuffer.allocateDirect(toWrite.length)
+      bb.put(toWrite).flip()
+      _dbPsKs.put(txn, keyCs, bb)
+    } else {
+      _dbPsKs.delete(txn, keyCs)
+      collectGarbage(txn, keyCs, psksCollected = true)
+    }
 
   def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit = {
     val keyCs   = putCsH(txn, channels)
@@ -137,7 +170,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       Option(_dbJoins.get(txn, joinKey))
         .map(fromByteBuffer[BytesList])
         .getOrElse(List.empty[BytesList])
-    _dbJoins.put(txn, joinKey, toByteBuffer(toBytesList(cs) :: oldCsList))
+
+    val addBl = toBytesList(cs)
+    if (!oldCsList.contains(addBl)) {
+      _dbJoins.put(txn, joinKey, toByteBuffer(addBl :: oldCsList))
+    }
   }
 
   def getJoin(txn: T, c: C): List[List[C]] = {
@@ -157,18 +194,26 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
         .getOrElse(List.empty[List[C]])
     val idx = exList.indexOf(cs)
     if (idx >= 0) {
-      val resList = dropIndex(exList, idx)
-      if (resList.nonEmpty)
-        _dbJoins.put(txn, joinKey, toByteBuffer(resList.map(toBytesList(_))))
-      else
-        _dbJoins.delete(txn, joinKey)
+      val csKey = hashCs(cs)
+      if (_dbPsKs.get(txn, csKey) == null) {
+        val resList = dropIndex(exList, idx)
+        if (resList.nonEmpty) {
+          _dbJoins.put(txn, joinKey, toByteBuffer(resList.map(toBytesList(_))))
+        } else {
+          _dbJoins.delete(txn, joinKey)
+          collectGarbage(txn, joinKey, joinsCollected = true)
+        }
+      }
     } else {
       throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exList")
     }
   }
 
-  def removeAllJoins(txn: T, c: C): Unit =
-    _dbJoins.delete(txn, hashCs(List(c)))
+  def removeAllJoins(txn: T, c: C): Unit = {
+    val joinKey = hashCs(List(c))
+    _dbJoins.delete(txn, joinKey)
+    collectGarbage(txn, joinKey)
+  }
 
   def close(): Unit = {
     _dbKeys.close()
@@ -184,6 +229,14 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       _dbAs.drop(txn)
       _dbPsKs.drop(txn)
       _dbJoins.drop(txn)
+    }
+
+  def isNoGarbage: Boolean =
+    withTxn(createTxnRead()) { txn =>
+      !_dbKeys.iterate(txn).hasNext &&
+      !_dbAs.iterate(txn).hasNext &&
+      !_dbPsKs.iterate(txn).hasNext &&
+      !_dbJoins.iterate(txn).hasNext
     }
 }
 

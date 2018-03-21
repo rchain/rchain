@@ -20,6 +20,8 @@ trait IStore[C, P, A, K] {
 
   private[storage] def getKey(txn: T, hash: H): List[C]
 
+  private[storage] def removeA(txn: T, channels: List[C], index: Int)
+
   /**
     * The type of transactions
     */
@@ -58,4 +60,11 @@ trait IStore[C, P, A, K] {
   def removeAllJoins(txn: T, c: C): Unit
 
   def close(): Unit
+}
+
+/**
+  * Used for unit-tests and other package-local calls
+  */
+private[storage] trait IStoreTest {
+  def isNoGarbage: Boolean
 }
