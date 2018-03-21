@@ -54,7 +54,7 @@ object RholangCLI {
   private def buildNormalizedTerm(source: Reader) = {
     val term = buildAST(source)
     val inputs =
-      ProcVisitInputs(Par(), DebruijnLevelMap[VarSort](), DebruijnLevelMap[VarSort]())
+      ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
     val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
     ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term
   }
