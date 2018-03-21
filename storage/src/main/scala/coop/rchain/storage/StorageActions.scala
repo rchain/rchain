@@ -125,7 +125,7 @@ trait StorageActions {
     * @tparam A a type representing a piece of data
     * @tparam K a type representing a continuation
     */
-  def produce[C, P, A, K, T](store: IStore[C, P, A, K], channel: C, data: A)(
+  def produce[C, P, A, K](store: IStore[C, P, A, K], channel: C, data: A)(
       implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
