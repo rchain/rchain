@@ -136,8 +136,8 @@ object CollectionNormalizeMatcher {
 object NameNormalizeMatcher {
   def normalizeMatch(n: Name, input: NameVisitInputs): NameVisitOutputs =
     n match {
-      case _: NameWildcard =>
-        val wildcardBindResult = input.knownFree.setWildcardUsed(1)
+      case wc: NameWildcard =>
+        val wildcardBindResult = input.knownFree.addWildcard(wc.line_num, wc.col_num)
         NameVisitOutputs(ChanVar(Wildcard(Var.WildcardMsg())), wildcardBindResult)
       case n: NameVar =>
         input.env.get(n.var_) match {
@@ -256,7 +256,7 @@ object ProcNormalizeMatcher {
             }
           case _: ProcVarWildcard =>
             ProcVisitOutputs(input.par.prepend(EVar(Wildcard(Var.WildcardMsg()))),
-                             input.knownFree.setWildcardUsed(1))
+                             input.knownFree.addWildcard(p.line_num, p.col_num))
         }
 
       case _: PNil => ProcVisitOutputs(input.par, input.knownFree)

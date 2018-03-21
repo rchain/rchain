@@ -85,11 +85,19 @@ object RholangCLI {
   private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
     val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
     if (normalizedTerm.knownFree.count > 0) {
-      val topLevelFreeList = normalizedTerm.knownFree.env.map {
-        case (name, (_, _, line, col)) => s"$name at $line:$col"
+      if (normalizedTerm.knownFree.wildcards.isEmpty) {
+        val topLevelFreeList = normalizedTerm.knownFree.env.map {
+          case (name, (_, _, line, col)) => s"$name at $line:$col"
+        }
+        throw new Error(
+          s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}.")
+      } else {
+        val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
+          case (line, col) => s"_ (wildcard) at $line:$col"
+        }
+        throw new Error(
+          s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}.")
       }
-      throw new Error(
-        s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}.")
     }
     normalizedTerm
   }
