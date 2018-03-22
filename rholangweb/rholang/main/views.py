@@ -8,6 +8,7 @@ from django.forms import Form
 from django.shortcuts import render
 
 from .runner import UserError
+from django_rholang_editor.fields import RholangTextFormField
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +92,8 @@ def exampleMenu(paths):
 
 
 class CompilerForm(Form):
-    rho = forms.CharField(widget=forms.Textarea)
+    rho = RholangTextFormField()
+    # rho = forms.CharField(widget=forms.Textarea)
     verbose = forms.BooleanField(label="Verbose", required=False)
 
 
