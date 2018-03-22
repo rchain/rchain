@@ -28,10 +28,10 @@ object implicits {
     new StorageMatch[List[Channel], List[Quote]] {
 
       def get(patterns: List[Channel], data: List[Quote]): Option[List[Quote]] =
-        foldMatch(patterns, data.map(Channel.apply), (t: Channel, p: Channel) => spatialMatch(t, p))
+        foldMatch(data.map(Channel.apply), patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
           .runS(emptyMap)
           .map { (freeMap: FreeMap) =>
-            toQuotes(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)
+            toQuotes(freeMap, patterns.map((c: Channel) => freeCount(c)).sum - 1)
           }
     }
 }
