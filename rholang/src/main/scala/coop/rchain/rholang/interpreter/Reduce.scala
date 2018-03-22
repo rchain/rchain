@@ -1,9 +1,11 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Expr.ExprInstance
+import coop.rchain.models.Match
+import coop.rchain.models.MatchCase
 import coop.rchain.models.{GPrivate => _, _}
 
 import Substitute._
@@ -15,6 +17,7 @@ import cats.data._
 import cats.implicits._
 
 import monix.eval.{MVar, Task}
+import scala.annotation.tailrec
 import scala.collection.mutable.HashMap
 
 // Notes: Caution, a type annotation is often needed for Env.
@@ -60,28 +63,30 @@ object Reduce {
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       for {
         space <- spaceMVar.take
+        // TODO: Handle the environment in the store
+        substData = data.map(p => substitute(p)(env))
         result <- {
           space.get(c) match {
             case None => {
               space.put(
                 c,
-                (Seq((data, persistent)), Seq.empty[(Seq[Channel], Cont[Par, Par], Boolean)]))
+                (Seq((substData, persistent)), Seq.empty[(Seq[Channel], Cont[Par, Par], Boolean)]))
               Task.pure(None)
             }
             case Some((writes, reads)) => {
               val (head, tail) = reads.span({
-                case (pattern, _, _) => (pattern.length != data.length)
+                case (pattern, _, _) => (pattern.length != substData.length)
               })
               tail match {
                 case Nil => {
                   // TODO: Same as below, the data write should be substituted, at least for now.
-                  space.put(c, ((data, persistent) +: writes, reads))
+                  space.put(c, ((substData, persistent) +: writes, reads))
                   Task.pure(None)
                 }
                 case (_, cont: Cont[Par, Par], readPersistent) +: remReads => {
                   val newWrites =
                     if (persistent)
-                      (data, persistent) +: writes
+                      (substData, persistent) +: writes
                     else
                       writes
                   val newReads =
@@ -90,8 +95,7 @@ object Reduce {
                     else
                       head ++ remReads
                   space.put(c, (newWrites, newReads))
-                  // TODO: data may refer to the environment. Make it fully substituted.
-                  Task.pure(Some((cont._1, cont._2.put(data))))
+                  Task.pure(Some((cont._1, cont._2.put(substData))))
                 }
               }
             }
@@ -203,6 +207,9 @@ object Reduce {
             case None =>
               Task raiseError new IllegalStateException("Unbound variable")
           }
+        case Wildcard(_) =>
+          Task raiseError new IllegalStateException(
+            "Unbound variable: attempting to evaluate a pattern")
         case FreeVar(_) =>
           Task raiseError new IllegalStateException(
             "Unbound variable: attempting to evaluate a pattern")
@@ -295,14 +302,14 @@ object Reduce {
     def eval(neu: New)(implicit env: Env[Par]): Task[Unit] = {
       def alloc(level: Int)(implicit env: Env[Par]): Task[Env[Par]] =
         Task now {
-          (Env[Par]() /: (0 to level).toList) { (_env, _) =>
+          (env /: (0 to level).toList) { (_env, _) =>
             val addr: Par = GPrivate()
             _env.put(addr)
           }
         }
       for {
         _env <- alloc(neu.bindCount)
-        _    <- eval(neu.p.get)
+        _    <- eval(neu.p.get)(_env)
       } yield ()
     }
 
@@ -324,10 +331,11 @@ object Reduce {
 
     def evalExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] =
       expr.exprInstance match {
-        case x: GBool   => Task.pure[Expr](x)
-        case x: GInt    => Task.pure[Expr](x)
-        case x: GString => Task.pure[Expr](x)
-        case x: GUri    => Task.pure[Expr](x)
+        case x: GBool     => Task.pure[Expr](x)
+        case x: GInt      => Task.pure[Expr](x)
+        case x: GString   => Task.pure[Expr](x)
+        case x: GUri      => Task.pure[Expr](x)
+        case EVarBody(ev) => Task.pure[Expr](ev)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
             v1 <- evalToInt(p1.get)
@@ -336,8 +344,40 @@ object Reduce {
         case _ => Task raiseError new Error("Unimplemented expression.")
       }
 
-    def eval(mat: Match)(implicit env: Env[Par]): Task[Unit] =
-      Task raiseError new Error("match is currently unimplemented.")
+    def eval(mat: Match)(implicit env: Env[Par]): Task[Unit] = {
+      def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
+        Range(0, freeCount).foldLeft(env)(
+          (acc, e) =>
+            acc.put(
+              freeMap.get(e) match {
+                case Some(p) => p
+                case None    => Par()
+              }
+          )
+        )
+      @tailrec
+      def firstMatch(target: Par, cases: Seq[MatchCase]): Task[Unit] =
+        cases match {
+          case Nil => Task.unit
+          case singleCase +: caseRem =>
+            val matchResult = SpatialMatcher
+              .spatialMatch(target, singleCase.pattern.get)
+              .runS(SpatialMatcher.emptyMap)
+            matchResult match {
+              case None => firstMatch(target, caseRem)
+              case Some(freeMap) => {
+                val newEnv = addToEnv(env, freeMap, singleCase.pattern.get.freeCount)
+                eval(singleCase.source.get)(newEnv)
+              }
+            }
+        }
+      for {
+        evaledTarget <- evalExpr(mat.target.get)
+        // TODO(kyle): Make the matcher accept an environment, instead of
+        // substituting it.
+        _ <- firstMatch(substitute(evaledTarget)(env), mat.cases)
+      } yield ()
+    }
 
     /** WanderUnordered is the non-deterministic analogue
       * of traverse - it parallelizes eval.
