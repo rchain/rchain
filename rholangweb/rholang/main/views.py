@@ -92,8 +92,7 @@ def exampleMenu(paths):
 
 
 class CompilerForm(Form):
-    rho = RholangTextFormField()
-    # rho = forms.CharField(widget=forms.Textarea)
+    rho = RholangTextFormField(default_text="print(5)")
     verbose = forms.BooleanField(label="Verbose", required=False)
 
 
