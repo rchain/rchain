@@ -321,6 +321,12 @@ object implicits {
       }
   }
 
+  implicit val GPrivateLocallyFree: HasLocallyFree[GPrivate] = new HasLocallyFree[GPrivate] {
+    def wildcard(g: GPrivate)    = false
+    def freeCount(g: GPrivate)   = 0
+    def locallyFree(g: GPrivate) = BitSet()
+  }
+
   implicit val ChannelLocallyFree: HasLocallyFree[Channel] = new HasLocallyFree[Channel] {
     def wildcard(c: Channel) =
       c.channelInstance match {

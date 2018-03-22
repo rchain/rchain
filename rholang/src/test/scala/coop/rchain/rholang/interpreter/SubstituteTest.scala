@@ -177,3 +177,14 @@ class NewSubSpec extends FlatSpec with Matchers {
     )
   }
 }
+
+class EvalSubSpec extends FlatSpec with Matchers {
+  "Eval" should "remove Eval/Quote pairs." in {
+    val env: Env[Par] = Env.makeEnv(GPrivate("one"), GPrivate("zero"))
+    val target: Par   = Eval(ChanVar(BoundVar(1)))
+    val result: Par   = substitute(target)(env)
+    val expected: Par = GPrivate("one")
+
+    result should be(expected)
+  }
+}

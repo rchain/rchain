@@ -96,4 +96,12 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val result       = spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7)))))
   }
+  "Matching send with free variable in channel and variable position" should "capture both values" in {
+    val pattern: Par =
+      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
+    val sendTarget: Par =
+      Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, 0, BitSet())
+    val result = spatialMatch(sendTarget, pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one"))))
+  }
 }
