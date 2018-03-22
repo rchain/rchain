@@ -1,14 +1,20 @@
 package coop.rchain.rholang.interpreter
 
 import java.io._
+import java.util.concurrent.TimeoutException
 
-import scala.io.Source
 import coop.rchain.models.{Par, PrettyPrinter}
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import org.rogach.scallop.ScallopConf
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import monix.eval.Task
+import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
+import org.rogach.scallop.ScallopConf
+import scala.annotation.tailrec
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import scala.io.Source
+import scala.util.{Failure, Success, Try}
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -50,20 +56,38 @@ object RholangCLI {
 
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task {
+      print("Evaluating:\n")
       PrettyPrinter.prettyPrint(normalizedTerm)
-      print("\n> ")
     }
 
-  private def repl =
+  private def repl = {
+    val interp = Reduce.makeInterpreter
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
       } else {
         val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
-        val evaluator      = printTask(normalizedTerm)
-        evaluator.runAsync
+        val evaluatorTask = for {
+          _ <- printTask(normalizedTerm)
+          _ <- interp.inj(normalizedTerm)
+          _ <- Task now { print("\n> ") }
+        } yield ()
+        val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+        @tailrec
+        def keepTrying(): Unit =
+          Await.ready(evaluatorFuture, 5.seconds).value match {
+            case Some(Success(_)) => ()
+            case Some(Failure(e: TimeoutException)) => {
+              println("This is taking a long time. Feel free to ^C and quit.")
+              keepTrying()
+            }
+            case Some(Failure(e)) => throw e
+            case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+          }
+        keepTrying()
       }
     }
+  }
 
   private def buildNormalizedTerm(source: Reader): Option[Par] = {
     val term = buildAST(source)
