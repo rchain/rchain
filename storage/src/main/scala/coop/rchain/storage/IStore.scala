@@ -61,10 +61,3 @@ trait IStore[C, P, A, K] {
 
   def close(): Unit
 }
-
-/**
-  * Used for unit-tests and other package-local calls
-  */
-private[storage] trait IStoreTest {
-  def isNoGarbage: Boolean
-}

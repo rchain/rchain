@@ -135,12 +135,12 @@ package object storage {
       extractProduceCandidate(store, groupedChannels)(txn)
         .map {
           case ProduceCandidate(channels, continuation, continuationIndex, dataCandidates) =>
+            store.removePsK(txn, channels, continuationIndex)
             dataCandidates.foreach {
               case DataCandidate(candidateChannel, _, dataIndex) =>
                 store.removeA(txn, candidateChannel, dataIndex)
                 ignore { store.removeJoin(txn, candidateChannel, channels) }
             }
-            store.removePsK(txn, channels, continuationIndex)
             logger.info(s"produce: matching continuation found at <channels: $channels>")
             (continuation, dataCandidates.map(_.datum))
         }

@@ -3,7 +3,7 @@ package coop.rchain.storage.test
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-import coop.rchain.storage.{IStore, IStoreTest, Serialize}
+import coop.rchain.storage.{IStore, ITestableStore, Serialize}
 import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
@@ -16,7 +16,7 @@ class InMemoryStore[C, P, A, K] private (
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
-    with IStoreTest {
+    with ITestableStore {
 
   type H = String
 
@@ -123,7 +123,7 @@ class InMemoryStore[C, P, A, K] private (
 
   def close(): Unit = ()
 
-  def isNoGarbage: Boolean =
+  def isEmpty: Boolean =
     _psks.isEmpty && _as.isEmpty && _keys.isEmpty && _joinMap.isEmpty
 }
 
