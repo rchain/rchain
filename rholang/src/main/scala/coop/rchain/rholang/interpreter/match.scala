@@ -12,7 +12,7 @@ import coop.rchain.models.Var.VarInstance._
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
 
-import implicits.{ExprLocallyFree, ParExtension, SendLocallyFree}
+import implicits.{ExprLocallyFree, GPrivateLocallyFree, ParExtension, SendLocallyFree}
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -255,6 +255,12 @@ object SpatialMatcher {
                                    (p, e) => p.withExprs(e +: p.exprs),
                                    varLevel,
                                    wildcard)
+        _ <- listMatchSingle[GPrivate](target.ids,
+                                       pattern.ids,
+                                       spatialMatch,
+                                       (p, i) => p.withIds(i +: p.ids),
+                                       varLevel,
+                                       wildcard)
       } yield Unit
     }
 
@@ -294,6 +300,17 @@ object SpatialMatcher {
         _           <- spatialMatch(target.chan.get, pattern.chan.get)
         forcedYield <- foldMatch(target.data, pattern.data, (t: Par, p: Par) => spatialMatch(t, p))
       } yield forcedYield
+
+  /**
+    * Note that currently there should be no way to put a GPrivate in a pattern
+    * because patterns start with an empty environment.
+    * We're going to write the obvious definition anyway.
+    */
+  def spatialMatch(target: GPrivate, pattern: GPrivate): OptionalFreeMap[Unit] =
+    if (target == pattern)
+      StateT.pure(Unit)
+    else
+      StateT.liftF(None)
 
   def spatialMatch(target: Expr, pattern: Expr): OptionalFreeMap[Unit] =
     (target.exprInstance, pattern.exprInstance) match {
