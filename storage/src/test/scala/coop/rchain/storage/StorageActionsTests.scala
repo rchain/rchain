@@ -744,7 +744,7 @@ class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOper
 }
 
 class LMDBStoreStorageActionsTests
-  extends StorageActionsTests
+    extends StorageActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll {
 
