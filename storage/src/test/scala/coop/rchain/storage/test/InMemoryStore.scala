@@ -10,7 +10,7 @@ import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K] private (
+class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, List[C]],
     _waitingContinuations: mutable.HashMap[String, List[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, List[Datum[A]]],
@@ -84,7 +84,9 @@ class InMemoryStore[C, P, A, K] private (
   def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] =
     _waitingContinuations
       .getOrElse(hashCs(curr), List.empty[WaitingContinuation[P, K]])
-      .map(InMemoryStore.roundTrip)
+      .map { (wk: WaitingContinuation[P, K]) =>
+        wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
+      }
 
   def removeA(txn: T, channel: C, index: Int): Unit =
     removeA(txn, List(channel), index)
@@ -134,10 +136,10 @@ class InMemoryStore[C, P, A, K] private (
 object InMemoryStore {
 
   /* UGLY HACK FOR TESTING */
-  def roundTrip[A <: Serializable](a: A): A =
-    makeSerializeFromSerializable[A]
-      .decode(makeSerializeFromSerializable[A].encode(a))
-      .fold(throw _, identity)
+  def roundTrip[A <: Serializable](a: A): A = {
+    val ser = makeSerializeFromSerializable[A]
+    ser.decode(ser.encode(a)).fold(throw _, identity)
+  }
 
   def hashBytes(bs: Array[Byte]): Array[Byte] =
     MessageDigest.getInstance("SHA-256").digest(bs)
@@ -145,7 +147,7 @@ object InMemoryStore {
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
 
-  def create[C, P, A, K](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _keys = mutable.HashMap.empty[String, List[C]],
       _waitingContinuations = mutable.HashMap.empty[String, List[WaitingContinuation[P, K]]],
