@@ -302,7 +302,7 @@ object Reduce {
     def eval(neu: New)(implicit env: Env[Par]): Task[Unit] = {
       def alloc(level: Int)(implicit env: Env[Par]): Task[Env[Par]] =
         Task now {
-          (env /: (0 to level).toList) { (_env, _) =>
+          (env /: (0 until level).toList) { (_env, _) =>
             val addr: Par = GPrivate()
             _env.put(addr)
           }
