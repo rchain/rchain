@@ -7,8 +7,8 @@ from django.http import HttpResponse
 from django.forms import Form
 from django.shortcuts import render
 
-from .fields import RholangTextFormField
 from .runner import UserError
+from django_rholang_editor.fields import RholangTextFormField
 
 log = logging.getLogger(__name__)
 
