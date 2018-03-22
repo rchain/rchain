@@ -18,13 +18,14 @@ class BasicBench {
     consume(state.testStore,
             List("ch1", "ch2"),
             List(StringMatch("bad"), StringMatch("finger")),
-            new StringsCaptor)
+            new StringsCaptor,
+            false)
 
-    val r1 = produce(state.testStore, "ch1", "bad")
+    val r1 = produce(state.testStore, "ch1", "bad", false)
 
     assert(r1.isEmpty)
 
-    val r2 = produce(state.testStore, "ch2", "finger")
+    val r2 = produce(state.testStore, "ch2", "finger", false)
 
     runK(r2)
 

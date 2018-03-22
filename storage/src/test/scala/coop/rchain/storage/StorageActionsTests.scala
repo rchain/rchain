@@ -30,12 +30,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val key     = List("ch1")
     val keyHash = store.hashCs(key)
 
-    val r = produce(store, key.head, "datum")
+    val r = produce(store, key.head, "datum", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("datum")
+      store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
       store.getPsK(txn, key) shouldBe Nil
     }
 
@@ -53,23 +53,24 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val key     = List("ch1")
     val keyHash = store.hashCs(key)
 
-    val r1 = produce(store, key.head, "datum1")
+    val r1 = produce(store, key.head, "datum1", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("datum1")
+      store.getAs(txn, key) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, key) shouldBe Nil
     }
 
     r1 shouldBe None
 
-    val r2 = produce(store, key.head, "datum2")
+    val r2 = produce(store, key.head, "datum2", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) should contain theSameElementsAs List("datum1", "datum2")
+      store.getAs(txn, key) should contain theSameElementsAs List(Datum("datum1", persist = false),
+                                                                  Datum("datum2", persist = false))
       store.getPsK(txn, key) shouldBe Nil
     }
 
@@ -89,7 +90,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val patterns = List(Wildcard)
     val keyHash  = store.hashCs(key)
 
-    val r = consume(store, key, patterns, new StringsCaptor)
+    val r = consume(store, key, patterns, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe List("ch1")
@@ -111,7 +112,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
   "consuming with a list of patterns that is a different length than the list of channels" should
     "throw" in withTestStore { store =>
     an[IllegalArgumentException] shouldBe thrownBy(
-      consume(store, List("ch1", "ch2"), List(Wildcard), new StringsCaptor))
+      consume(store, List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false))
 
     store.isNoGarbage shouldBe true
   }
@@ -122,7 +123,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val patterns = List(Wildcard, Wildcard, Wildcard)
     val keyHash  = store.hashCs(key)
 
-    val r = consume(store, key, patterns, new StringsCaptor)
+    val r = consume(store, key, patterns, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
@@ -148,18 +149,18 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val key     = List("ch1")
     val keyHash = store.hashCs(key)
 
-    val r1 = produce(store, key.head, "datum")
+    val r1 = produce(store, key.head, "datum", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List("datum")
+      store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
       store.getPsK(txn, key) shouldBe Nil
     }
 
     r1 shouldBe None
 
-    val r2 = consume(store, key, List(Wildcard), new StringsCaptor)
+    val r2 = consume(store, key, List(Wildcard), new StringsCaptor, persist = false)
 
     store.isNoGarbage shouldBe true
 
@@ -184,12 +185,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val produceKey1     = List("ch1")
     val produceKey1Hash = store.hashCs(produceKey1)
 
-    val r1 = produce(store, produceKey1.head, "datum1")
+    val r1 = produce(store, produceKey1.head, "datum1", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List("datum1")
+      store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, produceKey1) shouldBe Nil
     }
 
@@ -199,12 +200,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val consumeKeyHash = store.hashCs(consumeKey)
     val consumePattern = List(Wildcard, Wildcard)
 
-    val r2 = consume(store, consumeKey, consumePattern, new StringsCaptor)
+    val r2 = consume(store, consumeKey, consumePattern, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List("datum1")
+      store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, produceKey1) shouldBe Nil
       store.getKey(txn, consumeKeyHash) shouldBe consumeKey
       store.getPs(txn, consumeKey) shouldBe List(consumePattern)
@@ -217,7 +218,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val produceKey2     = List("ch2")
     val produceKey2Hash = store.hashCs(produceKey2)
 
-    val r3 = produce(store, produceKey2.head, "datum2")
+    val r3 = produce(store, produceKey2.head, "datum2", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
@@ -260,40 +261,40 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val produceKey3Hash = store.hashCs(produceKey3)
     val consumeKeyHash  = store.hashCs(consumeKey)
 
-    val r1 = produce(store, produceKey1.head, "datum1")
+    val r1 = produce(store, produceKey1.head, "datum1", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List("datum1")
+      store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, produceKey1) shouldBe Nil
     }
 
     r1 shouldBe None
 
-    val r2 = produce(store, produceKey2.head, "datum2")
+    val r2 = produce(store, produceKey2.head, "datum2", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey2Hash) shouldBe produceKey2
       store.getPs(txn, produceKey2) shouldBe Nil
-      store.getAs(txn, produceKey2) shouldBe List("datum2")
+      store.getAs(txn, produceKey2) shouldBe List(Datum("datum2", persist = false))
       store.getPsK(txn, produceKey2) shouldBe Nil
     }
 
     r2 shouldBe None
 
-    val r3 = produce(store, produceKey3.head, "datum3")
+    val r3 = produce(store, produceKey3.head, "datum3", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, produceKey3Hash) shouldBe produceKey3
       store.getPs(txn, produceKey3) shouldBe Nil
-      store.getAs(txn, produceKey3) shouldBe List("datum3")
+      store.getAs(txn, produceKey3) shouldBe List(Datum("datum3", persist = false))
       store.getPsK(txn, produceKey3) shouldBe Nil
     }
 
     r3 shouldBe None
 
-    val r4 = consume(store, List("ch1", "ch2", "ch3"), patterns, new StringsCaptor)
+    val r4 = consume(store, List("ch1", "ch2", "ch3"), patterns, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, consumeKeyHash) shouldBe Nil
@@ -317,17 +318,17 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
     val key = List("ch1")
 
-    val r1 = produce(store, key.head, "datum1")
-    val r2 = produce(store, key.head, "datum2")
-    val r3 = produce(store, key.head, "datum3")
+    val r1 = produce(store, key.head, "datum1", persist = false)
+    val r2 = produce(store, key.head, "datum2", persist = false)
+    val r3 = produce(store, key.head, "datum3", persist = false)
 
     r1 shouldBe None
     r2 shouldBe None
     r3 shouldBe None
 
-    val r4 = consume(store, key, List(Wildcard), captor)
-    val r5 = consume(store, key, List(Wildcard), captor)
-    val r6 = consume(store, key, List(Wildcard), captor)
+    val r4 = consume(store, key, List(Wildcard), captor, persist = false)
+    val r5 = consume(store, key, List(Wildcard), captor, persist = false)
+    val r6 = consume(store, key, List(Wildcard), captor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, store.hashCs(key)) shouldBe Nil
@@ -352,13 +353,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
   "consuming three times on the same channel, then producing three times on that channel" should
     "return three continuations, each paired with distinct pieces of data" in withTestStore {
     store =>
-      consume(store, List("ch1"), List(Wildcard), new StringsCaptor)
-      consume(store, List("ch1"), List(Wildcard), new StringsCaptor)
-      consume(store, List("ch1"), List(Wildcard), new StringsCaptor)
+      consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+      consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      val r1 = produce(store, "ch1", "datum1")
-      val r2 = produce(store, "ch1", "datum2")
-      val r3 = produce(store, "ch1", "datum3")
+      val r1 = produce(store, "ch1", "datum1", persist = false)
+      val r2 = produce(store, "ch1", "datum2", persist = false)
+      val r3 = produce(store, "ch1", "datum3", persist = false)
 
       r1 shouldBe defined
       r2 shouldBe defined
@@ -383,13 +384,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
     "return three continuations, each paired with matching data" in withTestStore { store =>
-    consume(store, List("ch1"), List(StringMatch("datum1")), new StringsCaptor)
-    consume(store, List("ch1"), List(StringMatch("datum2")), new StringsCaptor)
-    consume(store, List("ch1"), List(StringMatch("datum3")), new StringsCaptor)
+    consume(store, List("ch1"), List(StringMatch("datum1")), new StringsCaptor, persist = false)
+    consume(store, List("ch1"), List(StringMatch("datum2")), new StringsCaptor, persist = false)
+    consume(store, List("ch1"), List(StringMatch("datum3")), new StringsCaptor, persist = false)
 
-    val r1 = produce(store, "ch1", "datum1")
-    val r2 = produce(store, "ch1", "datum2")
-    val r3 = produce(store, "ch1", "datum3")
+    val r1 = produce(store, "ch1", "datum1", persist = false)
+    val r2 = produce(store, "ch1", "datum2", persist = false)
+    val r3 = produce(store, "ch1", "datum3", persist = false)
 
     r1 shouldBe defined
     r2 shouldBe defined
@@ -410,9 +411,13 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
   "consuming on two channels, producing on one, then producing on the other" should
     "return a continuation with both pieces of data" in withTestStore { store =>
-    val r1 = consume(store, List("ch1", "ch2"), List(Wildcard, Wildcard), new StringsCaptor)
-    val r2 = produce(store, "ch1", "datum1")
-    val r3 = produce(store, "ch2", "datum2")
+    val r1 = consume(store,
+                     List("ch1", "ch2"),
+                     List(Wildcard, Wildcard),
+                     new StringsCaptor,
+                     persist = false)
+    val r2 = produce(store, "ch1", "datum1", persist = false)
+    val r3 = produce(store, "ch2", "datum2", persist = false)
 
     r1 shouldBe None
     r2 shouldBe None
@@ -437,16 +442,18 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
     val r1 = consume(store,
                      channels,
                      List(StringMatch("datum1"), StringMatch("datum2")),
-                     new StringsCaptor)
+                     new StringsCaptor,
+                     persist = false)
     val r2 = consume(store,
                      channels,
                      List(StringMatch("datum3"), StringMatch("datum4")),
-                     new StringsCaptor)
+                     new StringsCaptor,
+                     persist = false)
 
-    val r3 = produce(store, "ch1", "datum3")
-    val r4 = produce(store, "ch2", "datum4")
-    val r5 = produce(store, "ch1", "datum1")
-    val r6 = produce(store, "ch2", "datum2")
+    val r3 = produce(store, "ch1", "datum3", persist = false)
+    val r4 = produce(store, "ch2", "datum4", persist = false)
+    val r5 = produce(store, "ch1", "datum1", persist = false)
+    val r6 = produce(store, "ch2", "datum2", persist = false)
 
     r1 shouldBe None
     r2 shouldBe None
@@ -474,17 +481,18 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
       store,
       List("ch1", "ch2"),
       List(Wildcard, StringMatch("datum1")),
-      new StringsCaptor
+      new StringsCaptor,
+      persist = false
     )
 
-    val r2 = produce(store, "ch1", "datum1")
+    val r2 = produce(store, "ch1", "datum1", persist = false)
 
     r1 shouldBe None
     r2 shouldBe None
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("ch1", "ch2")) shouldBe Nil
-      store.getAs(txn, List("ch1")) shouldBe List("datum1")
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = false))
     }
 
     store.withTxn(store.createTxnWrite()) { txn =>
@@ -499,10 +507,12 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
   "consuming twice and producing twice with non-trivial matches" should
     "work" in withTestStore { store =>
-    val r1 = consume(store, List("ch1"), List(StringMatch("datum1")), new StringsCaptor)
-    val r2 = consume(store, List("ch2"), List(StringMatch("datum2")), new StringsCaptor)
-    val r3 = produce(store, "ch1", "datum1")
-    val r4 = produce(store, "ch2", "datum2")
+    val r1 =
+      consume(store, List("ch1"), List(StringMatch("datum1")), new StringsCaptor, persist = false)
+    val r2 =
+      consume(store, List("ch2"), List(StringMatch("datum2")), new StringsCaptor, persist = false)
+    val r3 = produce(store, "ch1", "datum1", persist = false)
+    val r4 = produce(store, "ch2", "datum2", persist = false)
 
     List(r1, r2, r3, r4).foreach(runK)
 
@@ -525,18 +535,22 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
     "return a continuation paired with one piece of data" in
     withTestStore { store =>
-      consume(store, List("ch1", "ch2"), List(Wildcard, Wildcard), new StringsCaptor)
-      consume(store, List("ch1"), List(Wildcard), new StringsCaptor)
+      consume(store,
+              List("ch1", "ch2"),
+              List(Wildcard, Wildcard),
+              new StringsCaptor,
+              persist = false)
+      consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
-      val r3 = produce(store, "ch1", "datum1")
-      val r4 = produce(store, "ch2", "datum2")
+      val r3 = produce(store, "ch1", "datum1", persist = false)
+      val r4 = produce(store, "ch2", "datum2", persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getPsK(txn, List("ch1", "ch2")) should not be empty
         store.getPsK(txn, List("ch1")) shouldBe Nil
         store.getPsK(txn, List("ch2")) shouldBe Nil
         store.getAs(txn, List("ch1")) shouldBe Nil
-        store.getAs(txn, List("ch2")) shouldBe List("datum2")
+        store.getAs(txn, List("ch2")) shouldBe List(Datum("datum2", persist = false))
       }
 
       r3 shouldBe defined
@@ -560,8 +574,8 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
   "joins" should "remove joins if no PsK" in
     withTestStore { store =>
       store.withTxn(store.createTxnWrite()) { txn =>
-        store.putA(txn, List("ch1"), "datum1")
-        store.putA(txn, List("ch2"), "datum2")
+        store.putA(txn, List("ch1"), Datum("datum1", persist = false))
+        store.putA(txn, List("ch2"), Datum("datum2", persist = false))
 
         store.addJoin(txn, "ch1", List("ch1", "ch2"))
         store.addJoin(txn, "ch2", List("ch1", "ch2"))
@@ -569,7 +583,7 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
         store.addJoin(txn, "ch1", List("ch1", "ch2"))
         store.addJoin(txn, "ch2", List("ch1", "ch2"))
 
-        store.putA(txn, List("ch1", "ch2"), "datum_ch1_ch2")
+        store.putA(txn, List("ch1", "ch2"), Datum("datum_ch1_ch2", persist = false))
       }
 
       store.withTxn(store.createTxnRead()) { txn =>
@@ -599,10 +613,16 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
   "removeAllJoins" should "should not clear joins if PsK exists" in
     withTestStore { store =>
       store.withTxn(store.createTxnWrite()) { txn =>
-        store.putK(txn, List("ch1"), List(Wildcard), new StringsCaptor)
-        store.putK(txn, List("ch2"), List(Wildcard), new StringsCaptor)
+        store.putK(txn,
+                   List("ch1"),
+                   WaitingContinuation(List(Wildcard), new StringsCaptor, persist = true))
+        store.putK(txn,
+                   List("ch2"),
+                   WaitingContinuation(List(Wildcard), new StringsCaptor, persist = true))
 
-        store.putK(txn, List("ch1", "ch2"), List(Wildcard), new StringsCaptor)
+        store.putK(txn,
+                   List("ch1", "ch2"),
+                   WaitingContinuation(List(Wildcard), new StringsCaptor, persist = true))
 
         store.addJoin(txn, "ch1", List("ch1", "ch2"))
         store.addJoin(txn, "ch2", List("ch1", "ch2"))
@@ -641,6 +661,215 @@ abstract class StorageActionsTests extends FlatSpec with Matchers with OptionVal
 
       store.isNoGarbage shouldBe true
     }
+
+  /* Persist tests */
+
+  "producing and then doing a persistent consume on the same channel" should
+    "return the continuation and data" in withTestStore { store =>
+    val key     = List("ch1")
+    val keyHash = store.hashCs(key)
+
+    val r1 = produce(store, key.head, "datum", persist = false)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getKey(txn, keyHash) shouldBe key
+      store.getPs(txn, key) shouldBe Nil
+      store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
+      store.getPsK(txn, key) shouldBe Nil
+    }
+
+    r1 shouldBe None
+
+    store.isNoGarbage shouldBe false
+
+    val r2 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getKey(txn, keyHash) shouldBe List("ch1")
+      store.getPs(txn, key) shouldBe List(List(Wildcard))
+      store.getAs(txn, key) shouldBe Nil
+      store.getPsK(txn, key) should not be empty
+    }
+
+    r2 shouldBe defined
+
+    runK(r2)
+
+    getK(r2).results should contain theSameElementsAs List(List("datum"))
+
+    store.isNoGarbage shouldBe false
+  }
+
+  "producing, doing a persistent consume, and producing again on the same channel" should
+    "return the continuation for the first produce, and then the second produce" in withTestStore {
+    store =>
+      val key     = List("ch1")
+      val keyHash = store.hashCs(key)
+
+      val r1 = produce(store, key.head, "datum1", persist = false)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getKey(txn, keyHash) shouldBe key
+        store.getPs(txn, key) shouldBe Nil
+        store.getAs(txn, key) shouldBe List(Datum("datum1", persist = false))
+        store.getPsK(txn, key) shouldBe Nil
+      }
+
+      r1 shouldBe None
+
+      store.isNoGarbage shouldBe false
+
+      val r2 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getKey(txn, keyHash) shouldBe List("ch1")
+        store.getPs(txn, key) shouldBe List(List(Wildcard))
+        store.getAs(txn, key) shouldBe Nil
+        store.getPsK(txn, key) should not be empty
+      }
+
+      r2 shouldBe defined
+
+      runK(r2)
+
+      getK(r2).results should contain theSameElementsAs List(List("datum1"))
+
+      val r3 = produce(store, key.head, "datum2", persist = false)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getKey(txn, keyHash) shouldBe List("ch1")
+        store.getPs(txn, key) shouldBe List(List(Wildcard))
+        store.getAs(txn, key) shouldBe Nil
+        store.getPsK(txn, key) should not be empty
+      }
+
+      r3 shouldBe defined
+
+      runK(r3)
+
+      getK(r3).results should contain theSameElementsAs List(List("datum2"))
+
+      store.isNoGarbage shouldBe false
+  }
+
+  "doing a persistent consume and producing multiple times" should "work" in withTestStore {
+    store =>
+      val r1 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+
+      r1 shouldBe None
+
+      val r2 = produce(store, "ch1", "datum1", persist = false)
+
+      r2 shouldBe defined
+
+      runK(r2)
+
+      getK(r2).results should contain theSameElementsAs List(List("datum1"))
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe Nil
+        store.getPsK(txn, List("ch1")) should not be empty
+      }
+
+      val r3 = produce(store, "ch1", "datum2", persist = false)
+
+      r3 shouldBe defined
+
+      runK(r3)
+
+      getK(r3).results should contain theSameElementsAs List(List("datum2"))
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe Nil
+        store.getPsK(txn, List("ch1")) should not be empty
+      }
+
+      store.isNoGarbage shouldBe false
+  }
+
+  "consuming and doing a persistient produce" should "work" in withTestStore { store =>
+    val r1 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    r1 shouldBe None
+
+    val r2 = produce(store, "ch1", "datum1", persist = true)
+
+    r2 shouldBe defined
+
+    runK(r2)
+
+    getK(r2).results should contain theSameElementsAs List(List("datum1"))
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getPsK(txn, List("ch1")) shouldBe Nil
+    }
+  }
+
+  "consuming, doing a persistient produce, and consuming again" should "work" in withTestStore {
+    store =>
+      val r1 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+      r1 shouldBe None
+
+      val r2 = produce(store, "ch1", "datum1", persist = true)
+
+      r2 shouldBe defined
+
+      runK(r2)
+
+      getK(r2).results should contain theSameElementsAs List(List("datum1"))
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+        store.getPsK(txn, List("ch1")) shouldBe Nil
+      }
+
+      val r3 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+      r3 shouldBe defined
+
+      runK(r3)
+
+      getK(r3).results should contain theSameElementsAs List(List("datum1"))
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+        store.getPsK(txn, List("ch1")) shouldBe Nil
+      }
+  }
+
+  "doing a persistent produce and consuming twice" should "work" in withTestStore { store =>
+    val r1 = produce(store, "ch1", "datum1", persist = true)
+
+    r1 shouldBe None
+
+    val r2 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    r2 shouldBe defined
+
+    runK(r2)
+
+    getK(r2).results should contain theSameElementsAs List(List("datum1"))
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getPsK(txn, List("ch1")) shouldBe Nil
+    }
+
+    val r3 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    r3 shouldBe defined
+
+    runK(r3)
+
+    getK(r3).results should contain theSameElementsAs List(List("datum1"))
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getPsK(txn, List("ch1")) shouldBe Nil
+    }
+  }
 }
 
 class InMemoryStoreStorageActionsTests extends StorageActionsTests {

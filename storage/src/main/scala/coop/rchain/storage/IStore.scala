@@ -20,7 +20,7 @@ trait IStore[C, P, A, K] {
 
   private[storage] def getKey(txn: T, hash: H): List[C]
 
-  private[storage] def removeA(txn: T, channels: List[C], index: Int)
+  private[storage] def removeA(txn: T, channels: List[C], index: Int): Unit
 
   /**
     * The type of transactions
@@ -33,15 +33,15 @@ trait IStore[C, P, A, K] {
 
   def withTxn[R](txn: T)(f: T => R): R
 
-  def putA(txn: T, channels: List[C], a: A): Unit
+  def putA(txn: T, channels: List[C], datum: Datum[A]): Unit
 
-  def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit
+  def putK(txn: T, channels: List[C], continuation: WaitingContinuation[P, K]): Unit
 
-  def getPs(txn: T, channels: List[C]): List[List[P]]
+  private[storage] def getPs(txn: T, channels: List[C]): List[List[P]]
 
-  def getAs(txn: T, channels: List[C]): List[A]
+  def getAs(txn: T, channels: List[C]): List[Datum[A]]
 
-  def getPsK(txn: T, curr: List[C]): List[(List[P], K)]
+  def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]]
 
   def removeA(txn: T, channel: C, index: Int): Unit
 
