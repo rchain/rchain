@@ -20,6 +20,8 @@ trait IStore[C, P, A, K] {
 
   private[storage] def getKey(txn: T, hash: H): List[C]
 
+  private[storage] def removeA(txn: T, channels: List[C], index: Int)
+
   /**
     * The type of transactions
     */

@@ -3,7 +3,7 @@ package coop.rchain.storage.test
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-import coop.rchain.storage.{IStore, Serialize}
+import coop.rchain.storage.{IStore, ITestableStore, Serialize}
 import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
@@ -15,7 +15,8 @@ class InMemoryStore[C, P, A, K] private (
     _as: mutable.HashMap[String, List[A]],
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
-    extends IStore[C, P, A, K] {
+    extends IStore[C, P, A, K]
+    with ITestableStore {
 
   type H = String
 
@@ -36,6 +37,27 @@ class InMemoryStore[C, P, A, K] private (
 
   def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
+
+  def collectGarbage(key: H): Unit = {
+    val as = _as.get(key).exists(_.nonEmpty)
+    if (!as) {
+      //we still may have empty list, remove it as well
+      _as.remove(key)
+    }
+
+    val psks = _psks.get(key).exists(_.nonEmpty)
+    if (!psks) {
+      //we still may have empty list, remove it as well
+      _psks.remove(key)
+    }
+
+    val cs    = _keys.getOrElse(key, List.empty[C])
+    val joins = cs.size == 1 && _joinMap.contains(cs.head)
+
+    if (!as && !psks && !joins) {
+      _keys.remove(key)
+    }
+  }
 
   def putA(txn: T, channels: List[C], a: A): Unit = {
     val key = hashCs(channels)
@@ -60,11 +82,15 @@ class InMemoryStore[C, P, A, K] private (
   def getPsK(txn: T, curr: List[C]): List[(List[P], K)] =
     _psks.getOrElse(hashCs(curr), List.empty[(List[P], K)])
 
-  def removeA(txn: T, channel: C, index: Int): Unit = {
-    val key = hashCs(List(channel))
+  def removeA(txn: T, channel: C, index: Int): Unit =
+    removeA(txn, List(channel), index)
+
+  def removeA(txn: T, channels: List[C], index: Int): Unit = {
+    val key = hashCs(channels)
     for (as <- _as.get(key)) {
       _as.update(key, dropIndex(as, index))
     }
+    collectGarbage(key)
   }
 
   def removePsK(txn: T, channels: List[C], index: Int): Unit = {
@@ -72,6 +98,7 @@ class InMemoryStore[C, P, A, K] private (
     for (psks <- _psks.get(key)) {
       _psks.update(key, dropIndex(psks, index))
     }
+    collectGarbage(key)
   }
 
   def addJoin(txn: T, c: C, cs: List[C]): Unit =
@@ -81,16 +108,23 @@ class InMemoryStore[C, P, A, K] private (
     _joinMap.getOrElse(c, Set.empty[String]).toList.map(getKey(txn, _))
 
   def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val key = hashCs(cs)
-    for (psks <- _psks.get(key) if psks.isEmpty) {
-      _joinMap.removeBinding(c, key)
+    val joinKey = hashCs(List(c))
+    val csKey   = hashCs(cs)
+    if (_psks.get(csKey).forall(_.isEmpty)) {
+      _joinMap.removeBinding(c, csKey)
     }
+    collectGarbage(joinKey)
   }
 
-  def removeAllJoins(txn: T, c: C): Unit =
+  def removeAllJoins(txn: T, c: C): Unit = {
     _joinMap.remove(c)
+    collectGarbage(hashCs(List(c)))
+  }
 
   def close(): Unit = ()
+
+  def isEmpty: Boolean =
+    _psks.isEmpty && _as.isEmpty && _keys.isEmpty && _joinMap.isEmpty
 }
 
 object InMemoryStore {
