@@ -35,6 +35,18 @@ class InMemoryStore[C, P, A, K] private (
 
   def createTxnWrite(): Unit = ()
 
+  def keys(): List[List[C]] = _keys.values.toList
+
+  def toHashMap: mutable.HashMap[List[C], ((List[A], Boolean), (List[(List[P], K)], Boolean))] = {
+    val hashMap =
+      mutable.HashMap.empty[List[C], ((List[A], Boolean), (List[(List[P], K)], Boolean))]
+    keys.map(key =>
+      withTxn(createTxnRead()) { txn =>
+        hashMap += ((key, ((getAs(txn, key), false), (getPsK(txn, key), false))))
+    })
+    hashMap
+  }
+
   def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 

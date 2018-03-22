@@ -13,14 +13,18 @@ import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import monix.eval.{MVar, Task}
 import monix.execution.Scheduler.Implicits.global
-
 import Reduce.Cont
+import coop.rchain.storage.Serialize
+import coop.rchain.storage.test.InMemoryStore
 
 class ReduceSpec extends FlatSpec with Matchers {
+  implicit val serializer = Serialize.mkProtobufInstance(Channel)
+
   "evalExpr" should "handle simple addition" in {
+    implicit val tupleSpace = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+
     val addExpr: Expr = EPlus(GInt(7), GInt(8))
     val resultTask    = Reduce.makeInterpreter.evalExpr(addExpr)(Env())
 
@@ -30,6 +34,8 @@ class ReduceSpec extends FlatSpec with Matchers {
   }
 
   "evalExpr" should "leave ground values alone" in {
+    implicit val tupleSpace = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+
     val groundExpr: Expr = GInt(7)
     val resultTask       = Reduce.makeInterpreter.evalExpr(groundExpr)(Env())
 
@@ -39,25 +45,32 @@ class ReduceSpec extends FlatSpec with Matchers {
   }
 
   "eval of Send" should "place something in the tuplespace." in {
+    implicit val tupleSpace = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+
     val send: Send =
       Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
     val interpreter = Reduce.makeInterpreter
     val resultTask  = interpreter.eval(send)(Env())
     val inspectTask = for {
       _      <- resultTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(tsHash)
+      tsHash <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val result = Await.result(inspectTask.runAsync, 3.seconds)
     result should be(
       HashMap(
-        Quote(GString("channel")) ->
-          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GInt(7), GInt(8), GInt(9)), false)),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]()))))
+        List(Channel(Quote(GString("channel")))) ->
+          ((
+             (List(List[Quote](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9)))), false),
+             (List.empty[(List[List[Channel]], Par)], false)
+           ))
+      ))
+
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
+    implicit val tupleSpace = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+
     val receive: Receive =
       Receive(Seq(
                 ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
@@ -71,20 +84,27 @@ class ReduceSpec extends FlatSpec with Matchers {
     val resultTask  = interpreter.eval(receive)(Env())
     val inspectTask = for {
       _      <- resultTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(tsHash)
+      tsHash <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val result = Await.result(inspectTask.runAsync, 3.seconds)
     result should be(
       HashMap(
-        Quote(GString("channel")) ->
-          ((Seq[(Seq[Par], Boolean)](),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)](
-              (Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
-               (Par(), Env()),
-               false)
-            )))))
+        List(Channel(Quote(GString("channel")))) ->
+          ((
+             (List.empty[List[Quote]], false),
+             (
+               List(
+                 (List(
+                    List(Channel(ChanVar(FreeVar(0))),
+                         Channel(ChanVar(FreeVar(1))),
+                         Channel(ChanVar(FreeVar(2))))),
+                  Par())
+               ),
+               false
+             )
+           ))
+      ))
   }
 
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
@@ -102,45 +122,49 @@ class ReduceSpec extends FlatSpec with Matchers {
         BitSet()
       )
 
-    val interpreter = Reduce.makeInterpreter
-    val sendTask    = interpreter.eval(send)(Env())
-    val receiveTask = interpreter.eval(receive)(Env())
-
     val inspectTaskSendFirst = for {
-      _      <- sendTask
-      _      <- receiveTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
+      tupleSpace  <- Task.pure(InMemoryStore.create[Channel, List[Channel], List[Quote], Par])
+      interpreter <- Task.pure(Reduce.makeInterpreter(tupleSpace))
+      _           <- interpreter.eval(send)(Env())
+      _           <- interpreter.eval(receive)(Env())
+      tsHash      <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val inspectTaskReceiveFirst = for {
-      _      <- receiveTask
-      _      <- sendTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
+      tupleSpace  <- Task.pure(InMemoryStore.create[Channel, List[Channel], List[Quote], Par])
+      interpreter <- Task.pure(Reduce.makeInterpreter(tupleSpace))
+      _           <- interpreter.eval(receive)(Env())
+      _           <- interpreter.eval(send)(Env())
+      tsHash      <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val sendFirstResult = Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     sendFirstResult should be(
       HashMap(
-        Quote(GString("result")) ->
-          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
-        Quote(GString("channel")) -> ((Seq(), Seq()))
+        List(Channel(Quote(GString("result")))) ->
+          (((List(List[Quote](Quote(GString("Success")))), false),
+            (List.empty[(List[List[Channel]], Par)], false))),
+        List(Channel(Quote(GString("channel")))) -> (((List.empty[List[Quote]], false),
+                                                      (List.empty[(List[List[Channel]], Par)],
+                                                       false)))
       )
     )
     val receiveFirstResult = Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     receiveFirstResult should be(
       HashMap(
-        Quote(GString("result")) ->
-          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
-        Quote(GString("channel")) -> ((Seq(), Seq()))
+        List(Channel(Quote(GString("result")))) ->
+          (((List(List[Quote](Quote(GString("Success")))), false),
+            (List.empty[(List[List[Channel]], Par)], false))),
+        List(Channel(Quote(GString("channel")))) -> (((List.empty[List[Quote]], false),
+                                                      (List.empty[(List[List[Channel]], Par)],
+                                                       false)))
       )
     )
   }
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
+    implicit val tupleSpace = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+
     val send: Send =
       Send(Quote(EPlus(GInt(7), GInt(8))), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
     val receive: Receive =
@@ -160,40 +184,46 @@ class ReduceSpec extends FlatSpec with Matchers {
     val receiveTask = interpreter.eval(receive)(Env())
 
     val inspectTaskSendFirst = for {
-      _      <- sendTask
-      _      <- receiveTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
+      tupleSpace  <- Task.pure(InMemoryStore.create[Channel, List[Channel], List[Quote], Par])
+      interpreter <- Task.pure(Reduce.makeInterpreter(tupleSpace))
+      _           <- interpreter.eval(send)(Env())
+      _           <- interpreter.eval(receive)(Env())
+      tsHash      <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val inspectTaskReceiveFirst = for {
-      _      <- receiveTask
-      _      <- sendTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(HashMap())
+      tupleSpace  <- Task.pure(InMemoryStore.create[Channel, List[Channel], List[Quote], Par])
+      interpreter <- Task.pure(Reduce.makeInterpreter(tupleSpace))
+      _           <- interpreter.eval(receive)(Env())
+      _           <- interpreter.eval(send)(Env())
+      tsHash      <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val sendFirstResult = Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     sendFirstResult should be(
       HashMap(
-        Quote(GString("result")) ->
-          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
-        Quote(GInt(15)) -> ((Seq(), Seq()))
+        List(Channel(Quote(GString("result")))) ->
+          (((List(List[Quote](Quote(GString("Success")))), false),
+            (List.empty[(List[List[Channel]], Par)], false))),
+        List(Channel(Quote(GInt(15)))) ->
+          (((List.empty[List[Quote]], false), (List.empty[(List[List[Channel]], Par)], false)))
       )
     )
     val receiveFirstResult = Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     receiveFirstResult should be(
       HashMap(
-        Quote(GString("result")) ->
-          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GString("Success")), false)),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())),
-        Quote(GInt(15)) -> ((Seq(), Seq()))
+        List(Channel(Quote(GString("result")))) ->
+          (((List(List[Quote](Quote(GString("Success")))), false),
+            (List.empty[(List[List[Channel]], Par)], false))),
+        List(Channel(Quote(GInt(15)))) ->
+          (((List.empty[List[Quote]], false), (List.empty[(List[List[Channel]], Par)], false)))
       )
     )
   }
 
   "Simple match" should "capture and add to the environment." in {
+    implicit val tupleSpace = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+
     val pattern: Par =
       Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
     val sendTarget: Par =
@@ -217,16 +247,17 @@ class ReduceSpec extends FlatSpec with Matchers {
 
     val inspectTask = for {
       _      <- matchTask
-      tsHash <- interpreter.tupleSpace.spaceMVar.take
-      _      <- interpreter.tupleSpace.spaceMVar.put(tsHash)
+      tsHash <- Task.pure(tupleSpace.toHashMap)
     } yield tsHash
 
     val result = Await.result(inspectTask.runAsync, 3.seconds)
     result should be(
       HashMap(
-        Quote(GString("result")) ->
-          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GPrivate("one"), GPrivate("zero")), false)),
-            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())))
+        List(Channel(Quote(GString("result")))) ->
+          ((
+             (List(List[Quote](Quote(GPrivate("one")), Quote(GPrivate("zero")))), false),
+             (List.empty[(List[List[Channel]], Par)], false)
+           )))
     )
   }
 }
