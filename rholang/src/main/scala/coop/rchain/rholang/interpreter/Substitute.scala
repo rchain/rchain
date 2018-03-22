@@ -9,24 +9,34 @@ import implicits._
 
 object Substitute {
 
-  def subOrDec(term: Var)(implicit env: Env[Par]): Either[Var, Par] =
+  def maybeSubstitute(term: Var)(implicit env: Env[Par]): Either[Var, Par] =
     term.varInstance match {
-      case BoundVar(level) =>
-        env.get(level) match {
-          case Some(par) => Right(rename(par, env.level))
-          case None =>
-            if (level - env.level < 0)
-              throw new Error(s"Illegal Index [Variable: $term, Level: ${level - env.level}]")
-            else Left(BoundVar(level - env.level))
+      case BoundVar(index) =>
+        env.get(index) match {
+          case Some(par) => Right(par)
+          case None      => Left(BoundVar(index))
         }
       case _ => throw new Error(s"Illegal Substitution [$term]")
     }
 
-  def subOrDec(term: EVar)(implicit env: Env[Par]): Either[EVar, Par] =
-    subOrDec(term.v.get) match {
-      case Left(varue) => Left(EVar(varue))
-      case Right(par)  => Right(par)
+  def maybeSubstitute(term: EVar)(implicit env: Env[Par]): Either[EVar, Par] =
+    maybeSubstitute(term.v.get) match {
+      case Left(v)    => Left(EVar(v))
+      case Right(par) => Right(par)
     }
+
+  def maybeSubstitute(term: Eval)(implicit env: Env[Par]): Either[Eval, Par] =
+    term.channel.get.channelInstance match {
+      case Quote(p) => Right(substitute(p))
+      case ChanVar(v) =>
+        maybeSubstitute(v) match {
+          case Left(v)    => Left(Eval(ChanVar(v)))
+          case Right(par) => Right(par)
+        }
+    }
+
+  def substitute(term: Quote)(implicit env: Env[Par]): Quote =
+    Quote(substitute(term.value))
 
   def substitute(term: Channel)(implicit env: Env[Par]): Channel =
     ChannelSortMatcher
@@ -34,7 +44,7 @@ object Substitute {
         term.channelInstance match {
           case Quote(p) => Quote(substitute(p))
           case ChanVar(v) =>
-            subOrDec(v) match {
+            maybeSubstitute(v) match {
               case Left(_v) => ChanVar(_v)
               case Right(p) => Quote(p)
             }
@@ -44,11 +54,11 @@ object Substitute {
 
   def substitute(term: Par)(implicit env: Env[Par]): Par = {
 
-    def subExp(expxs: List[Expr]): Par =
+    def subExp(expxs: Seq[Expr]): Par =
       (expxs :\ Par()) { (expr, par) =>
         expr.exprInstance match {
           case EVarBody(e @ EVar(_)) =>
-            subOrDec(e) match {
+            maybeSubstitute(e) match {
               case Left(_e)    => par.prepend(_e)
               case Right(_par) => _par ++ par
             }
@@ -56,19 +66,28 @@ object Substitute {
         }
       }
 
+    def subEval(evals: Seq[Eval]): Par =
+      evals.foldRight(Par()) { (eval: Eval, par: Par) =>
+        maybeSubstitute(eval) match {
+          case Left(plainEval)   => par.prepend(plainEval)
+          case Right(droppedPar) => droppedPar ++ par
+        }
+      }
+
     ParSortMatcher
       .sortMatch(
-        Par(
-          for { s <- term.sends } yield substitute(s),
-          for { r <- term.receives } yield substitute(r),
-          for { e <- term.evals } yield substitute(e),
-          for { n <- term.news } yield substitute(n),
-          Nil,
-          for { m <- term.matches } yield substitute(m),
-          term.ids,
-          term.freeCount,
-          term.locallyFree.from(env.level).map(x => x - env.level)
-        ) ++ subExp(term.exprs.toList)
+        subExp(term.exprs) ++
+          subEval(term.evals) ++
+          Par(
+            sends = term.sends.map(substitute),
+            evals = Nil,
+            news = term.news.map(substitute),
+            exprs = Nil,
+            matches = term.matches.map(substitute),
+            ids = term.ids,
+            freeCount = term.freeCount,
+            locallyFree = term.locallyFree.until(env.shift)
+          )
       )
       .term
       .get
@@ -84,7 +103,7 @@ object Substitute {
           },
           term.persistent,
           term.freeCount,
-          term.locallyFree.from(env.level).map(x => x - env.level)
+          term.locallyFree.until(env.shift)
         )
       )
       .term
@@ -93,27 +112,25 @@ object Substitute {
     ReceiveSortMatcher
       .sortMatch(
         Receive(
-          for { ReceiveBind(xs, Some(chan)) <- term.binds } yield {
-            ReceiveBind(xs, substitute(chan))
-          },
-          substitute(term.body.get),
-          term.persistent,
-          term.bindCount,
-          term.freeCount,
-          term.locallyFree.from(env.level).map(x => x - env.level)
+          binds = term.binds
+            .map({
+              case ReceiveBind(xs, Some(chan)) => ReceiveBind(xs, substitute(chan))
+            }),
+          body = substitute(term.body.get)(env.shift(term.bindCount)),
+          persistent = term.persistent,
+          bindCount = term.bindCount,
+          freeCount = term.freeCount,
+          locallyFree = term.locallyFree.until(env.shift)
         )
       )
       .term
-
-  def substitute(term: Eval)(implicit env: Env[Par]): Eval =
-    EvalSortMatcher.sortMatch(Eval(substitute(term.channel.get))).term
 
   def substitute(term: New)(implicit env: Env[Par]): New =
     NewSortMatcher
       .sortMatch(
         New(term.bindCount,
-            substitute(term.p.get),
-            term.locallyFree.from(env.level).map(x => x - env.level))
+            substitute(term.p.get)(env.shift(term.bindCount)),
+            term.locallyFree.until(env.shift))
       )
       .term
 
@@ -121,12 +138,13 @@ object Substitute {
     MatchSortMatcher
       .sortMatch(
         Match(
-          substitute(term.target.get),
-          for { MatchCase(_case, Some(par)) <- term.cases } yield {
-            MatchCase(_case, substitute(par))
-          },
+          target = substitute(term.target.get),
+          term.cases.map({
+            case MatchCase(_case, Some(par)) =>
+              MatchCase(_case, substitute(par)(env.shift(_case.get.freeCount)))
+          }),
           term.freeCount,
-          term.locallyFree.from(env.level).map(x => x - env.level)
+          term.locallyFree.until(env.shift)
         )
       )
       .term
@@ -153,143 +171,28 @@ object Substitute {
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
-            val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+            val newLocallyFree = locallyFree.until(env.shift)
             Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree, wildcard)))
           case ETupleBody(ETuple(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
-            val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+            val newLocallyFree = locallyFree.until(env.shift)
             Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree, wildcard)))
           case ESetBody(ESet(ps, freeCount, locallyFree, wildcard)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
-            val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+            val newLocallyFree = locallyFree.until(env.shift)
             Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree, wildcard)))
           case EMapBody(EMap(kvs, freeCount, locallyFree, wildcard)) =>
             val _ps = for { KeyValuePair(p1, p2) <- kvs } yield {
               KeyValuePair(substitute(p1.get), substitute(p2.get))
             }
-            val newLocallyFree = locallyFree.from(env.level).map(x => x - env.level)
+            val newLocallyFree = locallyFree.until(env.shift)
             Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree, wildcard)))
           case g @ _ => exp
         }
       )
       .term
-
-  def rename(term: Var, j: Int): Var =
-    term.varInstance match {
-      case BoundVar(i) =>
-        if (i + j < 0)
-          throw new Error(s"Illegal Index [Variable: $term, Level: ${i + j}]")
-        else BoundVar(i + j)
-      case _ => term
-    }
-
-  def rename(term: Channel, j: Int): Channel =
-    term.channelInstance match {
-      case Quote(par)     => Quote(rename(par, j))
-      case ChanVar(varue) => ChanVar(rename(varue, j))
-    }
-
-  def rename(term: Par, j: Int): Par =
-    Par(
-      for (s <- term.sends) yield {
-        rename(s, j)
-      },
-      for (r <- term.receives) yield {
-        rename(r, j)
-      },
-      for (e <- term.evals) yield {
-        rename(e, j)
-      },
-      for (n <- term.news) yield {
-        rename(n, j)
-      },
-      for (e <- term.exprs) yield {
-        rename(e, j)
-      },
-      for (m <- term.matches) yield {
-        rename(m, j)
-      },
-      term.ids,
-      term.freeCount,
-      term.locallyFree.map(x => x + j)
-    )
-
-  def rename(term: Send, j: Int): Send =
-    Send(
-      rename(term.chan.get, j),
-      term.data map { par =>
-        rename(par, j)
-      },
-      term.persistent,
-      term.freeCount,
-      term.locallyFree.map(x => x + j)
-    )
-
-  def rename(term: Receive, j: Int): Receive =
-    Receive(
-      for (ReceiveBind(xs, channel) <- term.binds) yield {
-        ReceiveBind(xs, rename(channel.get, j))
-      },
-      rename(term.body.get, j),
-      term.persistent,
-      term.bindCount,
-      term.freeCount,
-      term.locallyFree.map(x => x + j)
-    )
-
-  def rename(term: Eval, j: Int): Eval =
-    Eval(rename(term.channel.get, j))
-
-  def rename(term: New, j: Int): New =
-    New(term.bindCount, rename(term.p.get, j), term.locallyFree.map(x => x + j))
-
-  def rename(term: Match, j: Int): Match =
-    Match(
-      rename(term.target.get, j),
-      for (MatchCase(pattern, source) <- term.cases) yield {
-        MatchCase(pattern, rename(source.get, j))
-      },
-      term.freeCount,
-      term.locallyFree.map(x => x + j)
-    )
-
-  def rename(term: Expr, j: Int): Expr =
-    term.exprInstance match {
-      case EVarBody(EVar(v))          => EVar(rename(v.get, j))
-      case ENotBody(ENot(p))          => ENot(rename(p.get, j))
-      case ENegBody(ENeg(p))          => ENeg(rename(p.get, j))
-      case EMultBody(EMult(p1, p2))   => EMult(rename(p1.get, j), rename(p2.get, j))
-      case EDivBody(EDiv(p1, p2))     => EDiv(rename(p1.get, j), rename(p2.get, j))
-      case EPlusBody(EPlus(p1, p2))   => EPlus(rename(p1.get, j), rename(p2.get, j))
-      case EMinusBody(EMinus(p1, p2)) => EMinus(rename(p1.get, j), rename(p2.get, j))
-      case ELtBody(ELt(p1, p2))       => ELt(rename(p1.get, j), rename(p2.get, j))
-      case ELteBody(ELte(p1, p2))     => ELte(rename(p1.get, j), rename(p2.get, j))
-      case EGtBody(EGt(p1, p2))       => EGt(rename(p1.get, j), rename(p2.get, j))
-      case EGteBody(EGte(p1, p2))     => EGte(rename(p1.get, j), rename(p2.get, j))
-      case EEqBody(EEq(p1, p2))       => EEq(rename(p1.get, j), rename(p2.get, j))
-      case ENeqBody(ENeq(p1, p2))     => ENeq(rename(p1.get, j), rename(p2.get, j))
-      case EAndBody(EAnd(p1, p2))     => EAnd(rename(p1.get, j), rename(p2.get, j))
-      case EOrBody(EOr(p1, p2))       => EOr(rename(p1.get, j), rename(p2.get, j))
-      case EListBody(EList(xs, freeCount, locallyFree, wildcard)) =>
-        EList(for { par <- xs } yield {
-          rename(par, j)
-        }, freeCount, locallyFree.map(x => x + j), wildcard)
-      case ETupleBody(ETuple(xs, freeCount, locallyFree, wildcard)) =>
-        ETuple(for { par <- xs } yield {
-          rename(par, j)
-        }, freeCount, locallyFree.map(x => x + j), wildcard)
-      case ESetBody(ESet(xs, freeCount, locallyFree, wildcard)) =>
-        ESet(for { par <- xs } yield {
-          rename(par, j)
-        }, freeCount, locallyFree.map(x => x + j), wildcard)
-      case EMapBody(EMap(xs, freeCount, locallyFree, wildcard)) =>
-        EMap(for { KeyValuePair(par0, par1) <- xs } yield {
-          KeyValuePair(rename(par0.get, j), rename(par1.get, j))
-        }, freeCount, locallyFree.map(x => x + j), wildcard)
-      case g @ _ => term
-    }
 }
