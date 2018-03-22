@@ -6,6 +6,7 @@ dist: trusty
 env:
   - SUBPROJECT=rosette
   - SUBPROJECT=core
+  - SUBPROJECT=rhoscala-tests
 script:
   - ./scripts/build-subprojects.sh
 sudo: required
