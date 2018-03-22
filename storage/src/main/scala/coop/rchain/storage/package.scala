@@ -149,6 +149,9 @@ package object storage {
                                 WaitingContinuation(_, continuation, persistK),
                                 continuationIndex,
                                 dataCandidates) =>
+            if (!persistK) {
+              store.removePsK(txn, channels, continuationIndex)
+            }
             dataCandidates.foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                   if !persistData =>
@@ -156,9 +159,6 @@ package object storage {
                 ignore { store.removeJoin(txn, candidateChannel, channels) }
               case _ =>
                 ()
-            }
-            if (!persistK) {
-              store.removePsK(txn, channels, continuationIndex)
             }
             logger.info(s"produce: matching continuation found at <channels: $channels>")
             (continuation, dataCandidates.map(_.datum.a))

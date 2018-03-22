@@ -17,7 +17,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
-    with IStoreTest {
+    with ITestableStore {
 
   type H = String
 
@@ -129,7 +129,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   def close(): Unit = ()
 
-  def isNoGarbage: Boolean =
+  def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
 }
 

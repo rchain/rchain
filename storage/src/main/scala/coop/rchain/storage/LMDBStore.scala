@@ -23,7 +23,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 sk: Serialize[K],
                                                                 sbl: Serialize[BytesList])
     extends IStore[C, P, A, K]
-    with IStoreTest {
+    with ITestableStore {
 
   import coop.rchain.storage.LMDBStore._
 
@@ -262,7 +262,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       _dbJoins.drop(txn)
     }
 
-  def isNoGarbage: Boolean =
+  def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
       !_dbKeys.iterate(txn).hasNext &&
       !_dbAs.iterate(txn).hasNext &&
