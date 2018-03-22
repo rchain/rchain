@@ -21,8 +21,8 @@ object Substitute {
 
   def maybeSubstitute(term: EVar)(implicit env: Env[Par]): Either[EVar, Par] =
     maybeSubstitute(term.v.get) match {
-      case Left(varue) => Left(EVar(varue))
-      case Right(par)  => Right(par)
+      case Left(v)    => Left(EVar(v))
+      case Right(par) => Right(par)
     }
 
   def maybeSubstitute(term: Eval)(implicit env: Env[Par]): Either[Eval, Par] =
@@ -30,8 +30,8 @@ object Substitute {
       case Quote(p) => Right(substitute(p))
       case ChanVar(v) =>
         maybeSubstitute(v) match {
-          case Left(varue) => Left(Eval(ChanVar(varue)))
-          case Right(par)  => Right(par)
+          case Left(v)    => Left(Eval(ChanVar(v)))
+          case Right(par) => Right(par)
         }
     }
 
