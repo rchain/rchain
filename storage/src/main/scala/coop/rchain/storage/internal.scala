@@ -1,12 +1,10 @@
 package coop.rchain.storage
 
-private[storage] final case class Datum[A](a: A, persist: Boolean)
+final case class Datum[A](a: A, persist: Boolean)
 
 private[storage] final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
 
-private[storage] final case class WaitingContinuation[P, K](patterns: List[P],
-                                                            continuation: K,
-                                                            persist: Boolean)
+final case class WaitingContinuation[P, K](patterns: List[P], continuation: K, persist: Boolean)
 
 private[storage] final case class ProduceCandidate[C, P, A, K](
     channels: List[C],

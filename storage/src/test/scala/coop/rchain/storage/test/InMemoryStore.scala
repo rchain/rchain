@@ -10,6 +10,8 @@ import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
 
+case class Row[P, A, K](data: Option[List[Datum[A]]], wks: Option[List[WaitingContinuation[P, K]]])
+
 class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, List[C]],
     _waitingContinuations: mutable.HashMap[String, List[WaitingContinuation[P, K]]],
@@ -35,6 +37,16 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   def createTxnRead(): Unit = ()
 
   def createTxnWrite(): Unit = ()
+
+  def keys(): List[List[C]] = _keys.values.toList
+
+  def toHashMap: mutable.HashMap[List[C], Row[P, A, K]] =
+    _keys.map {
+      case (hash, cs) =>
+        val data = _data.get(hash)
+        val wks  = _waitingContinuations.get(hash)
+        (cs, Row(data, wks))
+    }
 
   def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
@@ -128,6 +140,13 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   }
 
   def close(): Unit = ()
+
+  def clear(): Unit = {
+    _keys.clear()
+    _waitingContinuations.clear()
+    _data.clear()
+    _joinMap.clear()
+  }
 
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
