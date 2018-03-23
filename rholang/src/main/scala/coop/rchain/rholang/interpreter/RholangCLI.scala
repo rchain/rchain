@@ -5,6 +5,7 @@ import java.util.concurrent.TimeoutException
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.{Channel, Par, PrettyPrinter}
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.storage.{InMemoryStore, Serialize}
@@ -12,6 +13,7 @@ import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
+
 import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -74,17 +76,18 @@ object RholangCLI {
         val evaluatorTask = for {
           _ <- printTask(normalizedTerm)
           _ <- interp.inj(normalizedTerm)
-          _ <- Task now { print("\n> ") }
         } yield ()
         val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
         @tailrec
         def keepTrying(): Unit =
           Await.ready(evaluatorFuture, 5.seconds).value match {
-            case Some(Success(_)) => ()
-            case Some(Failure(e: TimeoutException)) => {
+            case Some(Success(_)) =>
+              print("Storage Contents:\n")
+              StoragePrinter.prettyPrint(memStore)
+              print("\n> ")
+            case Some(Failure(e: TimeoutException)) =>
               println("This is taking a long time. Feel free to ^C and quit.")
               keepTrying()
-            }
             case Some(Failure(e)) => throw e
             case None             => throw new Error("Error: Future claimed to be ready, but value was None")
           }
