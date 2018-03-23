@@ -7,7 +7,7 @@ import coop.rchain.storage.util.withResource
 
 package object examples {
 
-  private[examples] def makeSerializeFromSerializable[T <: Serializable]: Serialize[T] =
+  private[storage] def makeSerializeFromSerializable[T <: Serializable]: Serialize[T] =
     new Serialize[T] {
 
       def encode(a: T): Array[Byte] =
