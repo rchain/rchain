@@ -8,7 +8,7 @@ env:
   - SUBPROJECT=core
   - SUBPROJECT=rhoscala-additional-tests
 script:
-  - ./scripts/build-subprojects.sh
+  - ./ci/build-subprojects.sh
 sudo: required
 install:
   - ./scripts/install_secp.sh
@@ -23,7 +23,7 @@ notifications:
     recipients:
       - rchain-makers@pyrofex.net
     on_success: never
-    on_failure: always 
+    on_failure: never 
 addons:
     apt:
         sources:
