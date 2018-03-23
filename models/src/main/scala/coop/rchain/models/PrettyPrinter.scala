@@ -60,7 +60,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
       case GBool(b)   => b.toString
       case GInt(i)    => i.toString
       case GString(s) => "\"" + s + "\""
-      case GUri(u)    => "\"" + u + "\""
+      case GUri(u)    => s"`$u`"
 
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => "Nil"
@@ -70,7 +70,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(_)      => s"x$freeShift"
+      case FreeVar(level)  => s"x${level + freeShift}"
       case BoundVar(level) => s"x${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
@@ -108,7 +108,9 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
         "for( " + {
           ("" /: r.binds.zipWithIndex) {
             case (string, (bind, i)) =>
-              string + PrettyPrinter(boundShift + i, boundShift + i).buildSeq(bind.patterns) + {
+              // Stepping past a channel increments boundShift by 1.
+              // Entering a pattern sets freeShift = boundShift and boundShift = 0.
+              string + PrettyPrinter(freeShift, boundShift + i).buildPattern(bind.patterns) + {
                 if (r.persistent) " <= " + buildString(bind.source.get)
                 else " <- " + buildString(bind.source.get)
               } + {
@@ -167,6 +169,15 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
     ("" /: s.zipWithIndex) {
       case (string, (p, i)) =>
         string + buildString(p) + {
+          if (i != s.length - 1) ", "
+          else ""
+        }
+    }
+
+  def buildPattern(s: Seq[Channel]): String =
+    ("" /: s.zipWithIndex) {
+      case (string, (p, i)) =>
+        string + PrettyPrinter(boundShift + i, 0).buildString(p) + {
           if (i != s.length - 1) ", "
           else ""
         }
