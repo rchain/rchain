@@ -63,7 +63,7 @@ object Reduce {
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
       // TODO: Handle the environment in the store
       val substData: List[Quote] = data.toList.map(p => Quote(substitute(p)(env)))
-      internalProduce(tupleSpace, Channel(chan), substData) match {
+      internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
         case Some((body, dataList)) =>
           val newEnv: Env[Par] =
             Env.makeEnv(dataList.flatMap(identity).map({ case Quote(p) => p }): _*)
@@ -90,7 +90,11 @@ object Reduce {
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case bind +: Nil =>
-          internalConsume(tupleSpace, List(Channel(bind._2)), List(bind._1.toList), substBody) match {
+          internalConsume(tupleSpace,
+                          List(Channel(bind._2)),
+                          List(bind._1.toList),
+                          substBody,
+                          persist = persistent) match {
             case Some((continuation, dataList)) =>
               val newEnv: Env[Par] =
                 Env.makeEnv(dataList.flatten.map({ case Quote(p) => p }): _*)
@@ -355,6 +359,6 @@ object Reduce {
   }
 
   def makeInterpreter(
-      implicit tupleSpace: IStore[Channel, List[Channel], List[Quote], Par]): DebruijnInterpreter =
+      tupleSpace: IStore[Channel, List[Channel], List[Quote], Par]): DebruijnInterpreter =
     new DebruijnInterpreter(tupleSpace)
 }
