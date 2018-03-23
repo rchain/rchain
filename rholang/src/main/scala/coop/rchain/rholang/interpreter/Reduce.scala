@@ -16,14 +16,8 @@ import cats.implicits._
 import monix.eval.{MVar, Task}
 
 import scala.annotation.tailrec
-import scala.collection.mutable.HashMap
 import storage.implicits._
-import coop.rchain.storage.{
-  IStore,
-  Serialize,
-  consume => internalConsume,
-  produce => internalProduce
-}
+import coop.rchain.storage.{IStore, consume => internalConsume, produce => internalProduce}
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -37,7 +31,7 @@ import coop.rchain.storage.{
   */
 trait Reduce[M[_], C, A, P, B] {
   type Cont[Data, Body] = (Body, Env[Data])
-  def produce(chan: C, data: List[A], persistent: Boolean)(
+  def produce(chan: C, data: Seq[A], persistent: Boolean)(
       implicit env: Env[A]): M[Option[Cont[A, B]]]
   def consume(binds: Seq[(Seq[P], C)], body: B, persistent: Boolean)(
       implicit env: Env[A]): M[Option[Cont[A, B]]]
@@ -49,7 +43,7 @@ object Reduce {
   // TODO: How do I not define this twice?
   type Cont[Data, Body] = (Body, Env[Data])
 
-  class DebruijnInterpreter(implicit tupleSpace: IStore[Channel, List[Channel], List[Quote], Par])
+  class DebruijnInterpreter(tupleSpace: IStore[Channel, List[Channel], List[Quote], Par])
       extends Reduce[Task, Quote, Par, Channel, Par] {
 
     // This makes sense. Run a Par in the empty environment.
@@ -65,10 +59,10 @@ object Reduce {
       * @param env  An environment marking the execution context.
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
-    def produce(chan: Quote, data: List[Par], persistent: Boolean)(
+    def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
       // TODO: Handle the environment in the store
-      val substData: List[Quote] = data.map(p => Quote(substitute(p)(env)))
+      val substData: List[Quote] = data.toList.map(p => Quote(substitute(p)(env)))
       internalProduce(tupleSpace, Channel(chan), substData) match {
         case Some((body, dataList)) =>
           val newEnv: Env[Par] =
@@ -90,20 +84,23 @@ object Reduce {
       *          will be @param body if the continuation is not None.
       */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
+        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
+      // TODO: Allow for the environment to be stored with the body in the Tuplespace
+      val substBody = substitute(body)(env)
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case bind +: Nil =>
-          internalConsume(tupleSpace, List(Channel(bind._2)), List(bind._1.toList), body) match {
-            case Some((body, dataList)) =>
+          internalConsume(tupleSpace, List(Channel(bind._2)), List(bind._1.toList), substBody) match {
+            case Some((continuation, dataList)) =>
               val newEnv: Env[Par] =
-                Env.makeEnv(dataList.flatMap(identity).map({ case Quote(p) => p }): _*)
-              Task.pure(Some((body, newEnv)))
+                Env.makeEnv(dataList.flatten.map({ case Quote(p) => p }): _*)
+              Task.pure(Some((continuation, newEnv)))
             case None => Task.pure(None)
           }
         // TODO: join should be almost free with internalConsume but test cases still need to be written
         case _ => Task raiseError new Error("Error: joins are not currently implemented.")
       }
+    }
 
     /**
       * Variable "evaluation" is an environment lookup, but
@@ -359,5 +356,5 @@ object Reduce {
 
   def makeInterpreter(
       implicit tupleSpace: IStore[Channel, List[Channel], List[Quote], Par]): DebruijnInterpreter =
-    new DebruijnInterpreter
+    new DebruijnInterpreter(tupleSpace)
 }

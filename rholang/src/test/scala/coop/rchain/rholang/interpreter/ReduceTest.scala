@@ -143,10 +143,7 @@ class ReduceSpec extends FlatSpec with Matchers {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           (((List(List[Quote](Quote(GString("Success")))), false),
-            (List.empty[(List[List[Channel]], Par)], false))),
-        List(Channel(Quote(GString("channel")))) -> (((List.empty[List[Quote]], false),
-                                                      (List.empty[(List[List[Channel]], Par)],
-                                                       false)))
+            (List.empty[(List[List[Channel]], Par)], false)))
       )
     )
     val receiveFirstResult = Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
@@ -154,10 +151,7 @@ class ReduceSpec extends FlatSpec with Matchers {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           (((List(List[Quote](Quote(GString("Success")))), false),
-            (List.empty[(List[List[Channel]], Par)], false))),
-        List(Channel(Quote(GString("channel")))) -> (((List.empty[List[Quote]], false),
-                                                      (List.empty[(List[List[Channel]], Par)],
-                                                       false)))
+            (List.empty[(List[List[Channel]], Par)], false)))
       )
     )
   }
@@ -204,9 +198,7 @@ class ReduceSpec extends FlatSpec with Matchers {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           (((List(List[Quote](Quote(GString("Success")))), false),
-            (List.empty[(List[List[Channel]], Par)], false))),
-        List(Channel(Quote(GInt(15)))) ->
-          (((List.empty[List[Quote]], false), (List.empty[(List[List[Channel]], Par)], false)))
+            (List.empty[(List[List[Channel]], Par)], false)))
       )
     )
     val receiveFirstResult = Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
@@ -214,9 +206,7 @@ class ReduceSpec extends FlatSpec with Matchers {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           (((List(List[Quote](Quote(GString("Success")))), false),
-            (List.empty[(List[List[Channel]], Par)], false))),
-        List(Channel(Quote(GInt(15)))) ->
-          (((List.empty[List[Quote]], false), (List.empty[(List[List[Channel]], Par)], false)))
+            (List.empty[(List[List[Channel]], Par)], false)))
       )
     )
   }
