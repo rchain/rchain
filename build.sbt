@@ -183,6 +183,7 @@ lazy val roscala = (project in file("roscala"))
   .dependsOn(roscala_macros)
 
 lazy val storage = (project in file("storage"))
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
@@ -191,7 +192,9 @@ lazy val storage = (project in file("storage"))
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
-    )
+    ),
+    scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
+    git.remoteRepo := scmInfo.value.get.connection
   )
 
 lazy val storageBench = (project in file("storage-bench"))
