@@ -540,9 +540,19 @@ trait StorageActionsTests extends StorageActionsBase {
 
     r1 shouldBe None
 
-    store.isEmpty shouldBe false
-
+    // Data exists so the write will not "stick"
     val r2 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
+
+    store.isEmpty shouldBe true
+
+    r2 shouldBe defined
+
+    runK(r2)
+
+    getK(r2).results should contain theSameElementsAs List(List("datum"))
+
+    // the data has been consumed, so the write will "stick"
+    val r3 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getKey(txn, keyHash) shouldBe List("ch1")
@@ -551,13 +561,7 @@ trait StorageActionsTests extends StorageActionsBase {
       store.getPsK(txn, key) should not be empty
     }
 
-    r2 shouldBe defined
-
-    runK(r2)
-
-    getK(r2).results should contain theSameElementsAs List(List("datum"))
-
-    store.isEmpty shouldBe false
+    r3 shouldBe None
   }
 
   "producing, doing a persistent consume, and producing again on the same channel" should
@@ -577,16 +581,10 @@ trait StorageActionsTests extends StorageActionsBase {
 
       r1 shouldBe None
 
-      store.isEmpty shouldBe false
-
+      // Matching data exists so the write will not "stick"
       val r2 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
 
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getKey(txn, keyHash) shouldBe List("ch1")
-        store.getPs(txn, key) shouldBe List(List(Wildcard))
-        store.getAs(txn, key) shouldBe Nil
-        store.getPsK(txn, key) should not be empty
-      }
+      store.isEmpty shouldBe true
 
       r2 shouldBe defined
 
@@ -594,7 +592,8 @@ trait StorageActionsTests extends StorageActionsBase {
 
       getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
-      val r3 = produce(store, key.head, "datum2", persist = false)
+      // All matching data has been consumed, so the write will "stick"
+      val r3 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getKey(txn, keyHash) shouldBe List("ch1")
@@ -603,22 +602,41 @@ trait StorageActionsTests extends StorageActionsBase {
         store.getPsK(txn, key) should not be empty
       }
 
-      r3 shouldBe defined
+      r3 shouldBe None
 
-      runK(r3)
+      val r4 = produce(store, key.head, "datum2", persist = false)
 
-      getK(r3).results should contain theSameElementsAs List(List("datum2"))
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getKey(txn, keyHash) shouldBe List("ch1")
+        store.getPs(txn, key) shouldBe List(List(Wildcard))
+        store.getAs(txn, key) shouldBe Nil
+        store.getPsK(txn, key) should not be empty
+      }
 
-      store.isEmpty shouldBe false
+      r4 shouldBe defined
+
+      runK(r4)
+
+      getK(r4).results should contain theSameElementsAs List(List("datum2"))
   }
 
   "doing a persistent consume and producing multiple times" should "work" in withTestStore {
     store =>
       val r1 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe Nil
+        store.getPsK(txn, List("ch1")) should not be empty
+      }
+
       r1 shouldBe None
 
       val r2 = produce(store, "ch1", "datum1", persist = false)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe Nil
+        store.getPsK(txn, List("ch1")) should not be empty
+      }
 
       r2 shouldBe defined
 
@@ -626,25 +644,18 @@ trait StorageActionsTests extends StorageActionsBase {
 
       getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
+      val r3 = produce(store, "ch1", "datum2", persist = false)
+
       store.withTxn(store.createTxnRead()) { txn =>
         store.getAs(txn, List("ch1")) shouldBe Nil
         store.getPsK(txn, List("ch1")) should not be empty
       }
-
-      val r3 = produce(store, "ch1", "datum2", persist = false)
 
       r3 shouldBe defined
 
       runK(r3)
 
       getK(r3).results should contain theSameElementsAs List(List("datum2"))
-
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe Nil
-        store.getPsK(txn, List("ch1")) should not be empty
-      }
-
-      store.isEmpty shouldBe false
   }
 
   "consuming and doing a persistient produce" should "work" in withTestStore { store =>
@@ -652,13 +663,21 @@ trait StorageActionsTests extends StorageActionsBase {
 
     r1 shouldBe None
 
+    // A matching continuation exists so the write will not "stick"
     val r2 = produce(store, "ch1", "datum1", persist = true)
+
+    store.isEmpty shouldBe true
 
     r2 shouldBe defined
 
     runK(r2)
 
     getK(r2).results should contain theSameElementsAs List(List("datum1"))
+
+    // All matching continuations have been produced, so the write will "stick"
+    val r3 = produce(store, "ch1", "datum1", persist = true)
+
+    r3 shouldBe None
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
@@ -672,7 +691,10 @@ trait StorageActionsTests extends StorageActionsBase {
 
       r1 shouldBe None
 
+      // A matching continuation exists so the write will not "stick"
       val r2 = produce(store, "ch1", "datum1", persist = true)
+
+      store.isEmpty shouldBe true
 
       r2 shouldBe defined
 
@@ -680,31 +702,47 @@ trait StorageActionsTests extends StorageActionsBase {
 
       getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
-      store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-        store.getPsK(txn, List("ch1")) shouldBe Nil
-      }
-
-      val r3 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
-
-      r3 shouldBe defined
-
-      runK(r3)
-
-      getK(r3).results should contain theSameElementsAs List(List("datum1"))
+      // All matching continuations have been produced, so the write will "stick"
+      val r3 = produce(store, "ch1", "datum1", persist = true)
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
         store.getPsK(txn, List("ch1")) shouldBe Nil
       }
+
+      r3 shouldBe None
+
+      val r4 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+        store.getPsK(txn, List("ch1")) shouldBe Nil
+      }
+
+      r4 shouldBe defined
+
+      runK(r4)
+
+      getK(r4).results should contain theSameElementsAs List(List("datum1"))
+
   }
 
   "doing a persistent produce and consuming twice" should "work" in withTestStore { store =>
     val r1 = produce(store, "ch1", "datum1", persist = true)
 
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getPsK(txn, List("ch1")) shouldBe Nil
+    }
+
     r1 shouldBe None
 
     val r2 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getPsK(txn, List("ch1")) shouldBe Nil
+    }
 
     r2 shouldBe defined
 
@@ -712,23 +750,78 @@ trait StorageActionsTests extends StorageActionsBase {
 
     getK(r2).results should contain theSameElementsAs List(List("datum1"))
 
+    val r3 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
     store.withTxn(store.createTxnRead()) { txn =>
       store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
       store.getPsK(txn, List("ch1")) shouldBe Nil
     }
-
-    val r3 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
     r3 shouldBe defined
 
     runK(r3)
 
     getK(r3).results should contain theSameElementsAs List(List("datum1"))
+  }
+
+  "producing three times and doing a persistent consume" should "work" in withTestStore { store =>
+    val r1 = produce(store, "ch1", "datum1", persist = false)
+    val r2 = produce(store, "ch1", "datum2", persist = false)
+    val r3 = produce(store, "ch1", "datum3", persist = false)
+
+    r1 shouldBe None
+    r2 shouldBe None
+    r3 shouldBe None
+
+    // Matching data exists so the write will not "stick"
+    val r4 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum2", persist = false),
+                                                  Datum("datum1", persist = false))
       store.getPsK(txn, List("ch1")) shouldBe Nil
     }
+
+    r4 shouldBe defined
+
+    runK(r4)
+
+    getK(r4).results should contain theSameElementsAs List(List("datum3"))
+
+    // Matching data exists so the write will not "stick"
+    val r5 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = false))
+      store.getPsK(txn, List("ch1")) shouldBe Nil
+    }
+
+    r5 shouldBe defined
+
+    runK(r5)
+
+    getK(r5).results should contain theSameElementsAs List(List("datum2"))
+
+    // Matching data exists so the write will not "stick"
+    val r6 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+
+    store.isEmpty shouldBe true
+
+    r6 shouldBe defined
+
+    runK(r6)
+
+    getK(r6).results should contain theSameElementsAs List(List("datum1"))
+
+    // All matching data has been consumed, so the write will "stick"
+    val r7 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      store.getAs(txn, List("ch1")) shouldBe Nil
+      store.getPsK(txn, List("ch1")) should not be empty
+    }
+
+    r7 shouldBe None
   }
 }
 

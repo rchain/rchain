@@ -64,7 +64,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     val key = hashCs(channels)
     putCs(txn, channels)
     val datums = _data.getOrElseUpdate(key, List.empty[Datum[A]])
-    _data.update(key, datums :+ datum)
+    _data.update(key, datum +: datums)
   }
 
   private[storage] def putK(txn: T,
