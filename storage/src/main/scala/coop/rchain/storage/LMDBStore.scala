@@ -23,20 +23,19 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 sk: Serialize[K],
                                                                 sbl: Serialize[BytesList])
     extends IStore[C, P, A, K]
-    with ITestableStore {
+    with ITestableStore[C, P] {
 
   import coop.rchain.storage.LMDBStore._
 
-  type H = ByteBuffer
+  private[storage] type H = ByteBuffer
+
+  private[storage] type T = Txn[ByteBuffer]
 
   private[storage] def hashCs(cs: List[C])(implicit st: Serialize[C]): H =
     hashBytes(toByteBuffer(cs)(st))
 
   private[storage] def getKey(txn: T, s: H): List[C] =
     Option(_dbKeys.get(txn, s)).map(fromByteBuffer[C]).getOrElse(List.empty[C])
-
-  private[storage] def putCs(txn: T, channels: List[C]): Unit =
-    putCsH(txn, channels)
 
   private[storage] def putCsH(txn: T, channels: List[C]): H = {
     val packedCs = toByteBuffer(channels)
@@ -45,13 +44,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     keyCs
   }
 
-  type T = Txn[ByteBuffer]
+  private[storage] def createTxnRead(): T = env.txnRead
 
-  def createTxnRead(): T = env.txnWrite
+  private[storage] def createTxnWrite(): T = env.txnWrite
 
-  def createTxnWrite(): T = env.txnWrite
-
-  def withTxn[R](txn: T)(f: T => R): R =
+  private[storage] def withTxn[R](txn: T)(f: T => R): R =
     try {
       val ret: R = f(txn)
       txn.commit()
@@ -84,14 +81,14 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       collectGarbage(txn, keyCs, psksCollected = true)
     }
 
-  def putA(txn: T, channels: List[C], datum: Datum[A]): Unit = {
+  private[storage] def putA(txn: T, channels: List[C], datum: Datum[A]): Unit = {
     val keyCs   = putCsH(txn, channels)
     val binAs   = AsBytes().withAvalue(toByteString(datum.a)).withPersist(datum.persist)
     val asksLst = readAsBytesList(txn, keyCs).getOrElse(List.empty[AsBytes])
     writeAsBytesList(txn, keyCs, binAs :: asksLst)
   }
 
-  def getAs(txn: T, channels: List[C]): List[Datum[A]] = {
+  private[storage] def getAs(txn: T, channels: List[C]): List[Datum[A]] = {
     val keyCs = hashCs(channels)
     readAsBytesList(txn, keyCs)
       .map { (byteses: List[AsBytes]) =>
@@ -118,10 +115,10 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
-  def removeA(txn: T, channel: C, index: Int): Unit =
+  private[storage] def removeA(txn: T, channel: C, index: Int): Unit =
     removeA(txn, List(channel), index)
 
-  def removeA(txn: T, channels: List[C], index: Int): Unit = {
+  private[storage] def removeA(txn: T, channels: List[C], index: Int): Unit = {
     val keyCs = hashCs(channels)
     Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer[A]) match {
       case Some(as) =>
@@ -156,7 +153,9 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       collectGarbage(txn, keyCs, psksCollected = true)
     }
 
-  def putK(txn: T, channels: List[C], continuation: WaitingContinuation[P, K]): Unit = {
+  private[storage] def putK(txn: T,
+                            channels: List[C],
+                            continuation: WaitingContinuation[P, K]): Unit = {
     val keyCs = putCsH(txn, channels)
     val binPsKs =
       PsKsBytes()
@@ -167,10 +166,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     writePsKsBytesList(txn, keyCs, binPsKs +: psksLst)
   }
 
-  def getPs(txn: T, channels: List[C]): List[List[P]] =
-    getPsK(txn, channels).map(_.patterns)
-
-  def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] = {
+  private[storage] def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] = {
     val keyCs = hashCs(curr)
     readPsKsBytesList(txn, keyCs)
       .flatMap { (psKsByteses: List[PsKsBytes]) =>
@@ -187,7 +183,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       .getOrElse(List.empty[WaitingContinuation[P, K]])
   }
 
-  def removePsK(txn: T, channels: List[C], index: Int): Unit = {
+  private[storage] def removePsK(txn: T, channels: List[C], index: Int): Unit = {
     val keyCs = hashCs(channels)
     readPsKsBytesList(txn, keyCs) match {
       case Some(psks) => writePsKsBytesList(txn, keyCs, util.dropIndex(psks, index))
@@ -195,7 +191,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
-  def addJoin(txn: T, c: C, cs: List[C]): Unit = {
+  private[storage] def addJoin(txn: T, c: C, cs: List[C]): Unit = {
     val joinKey = hashCs(List(c))
     val oldCsList =
       Option(_dbJoins.get(txn, joinKey))
@@ -208,7 +204,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
-  def getJoin(txn: T, c: C): List[List[C]] = {
+  private[storage] def getJoin(txn: T, c: C): List[List[C]] = {
     val joinKey = hashCs(List(c))
     Option(_dbJoins.get(txn, joinKey))
       .map(fromByteBuffer[BytesList])
@@ -216,7 +212,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       .getOrElse(List.empty[List[C]])
   }
 
-  def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
+  private[storage] def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
     val joinKey = hashCs(List(c))
     val exList =
       Option(_dbJoins.get(txn, joinKey))
@@ -240,11 +236,19 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
-  def removeAllJoins(txn: T, c: C): Unit = {
+  private[storage] def removeAllJoins(txn: T, c: C): Unit = {
     val joinKey = hashCs(List(c))
     _dbJoins.delete(txn, joinKey)
     collectGarbage(txn, joinKey)
   }
+
+  private[storage] def clear(): Unit =
+    withTxn(createTxnWrite()) { txn =>
+      _dbKeys.drop(txn)
+      _dbAs.drop(txn)
+      _dbPsKs.drop(txn)
+      _dbJoins.drop(txn)
+    }
 
   def close(): Unit = {
     _dbKeys.close()
@@ -254,14 +258,6 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     env.close()
   }
 
-  def clear(): Unit =
-    withTxn(createTxnWrite()) { txn =>
-      _dbKeys.drop(txn)
-      _dbAs.drop(txn)
-      _dbPsKs.drop(txn)
-      _dbJoins.drop(txn)
-    }
-
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
       !_dbKeys.iterate(txn).hasNext &&
@@ -269,6 +265,9 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       !_dbPsKs.iterate(txn).hasNext &&
       !_dbJoins.iterate(txn).hasNext
     }
+
+  def getPs(txn: T, channels: List[C]): List[List[P]] =
+    getPsK(txn, channels).map(_.patterns)
 }
 
 object LMDBStore {
