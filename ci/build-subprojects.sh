@@ -5,9 +5,9 @@ set -e
 if [ -d "${SUBPROJECT}" -a -f "${SUBPROJECT}/build.sh" ]; then
     echo "${SUBPROJECT}/build.sh"
     (cd "${SUBPROJECT}"; bash ./build.sh)
-elif [ "${SUBPROJECT}" = "rhoscala-additional-tests" ]; then
+elif [ "${SUBPROJECT}" = "rholang-more-tests" ]; then
     echo "RUNNING ${SUBPROJECT}"
-    ci/rhoscala-additional-tests-main.sh
+    ci/rholang-more-tests-main.sh
     pwd
     ls -lhat
 elif [ -f "build.sbt" ]; then
