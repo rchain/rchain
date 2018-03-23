@@ -36,6 +36,14 @@ object StringExamples {
     final def results: List[List[String]] = res.toList
 
     final def apply(v1: List[String]): Unit = ignore(res += v1)
+
+    override def hashCode(): Int =
+      res.hashCode() * 37
+
+    override def equals(obj: scala.Any): Boolean = obj match {
+      case sc: StringsCaptor => sc.res == res
+      case _                 => false
+    }
   }
 
   object implicits {

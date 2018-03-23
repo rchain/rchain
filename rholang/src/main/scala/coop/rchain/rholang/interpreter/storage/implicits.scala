@@ -12,15 +12,13 @@ import scala.collection.immutable.SortedMap
 //noinspection ConvertExpressionToSAM
 object implicits {
 
-  private def toQuotes(fm: FreeMap, max: Int): List[Quote] = {
-    val sortedParList: SortedMap[Int, Par] = SortedMap.empty[Int, Par] ++ fm
-    (0 to max).map { (i: Int) =>
-      sortedParList.get(i) match {
+  private def toQuotes(fm: FreeMap, max: Int): List[Quote] =
+    (0 until max).map { (i: Int) =>
+      fm.get(i) match {
         case Some(par) => Quote(par)
         case None      => Quote(Par.defaultInstance)
       }
     }.toList
-  }
 
   private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
 
@@ -28,7 +26,7 @@ object implicits {
     new StorageMatch[List[Channel], List[Quote]] {
 
       def get(patterns: List[Channel], data: List[Quote]): Option[List[Quote]] =
-        foldMatch(patterns, data.map(Channel.apply), (t: Channel, p: Channel) => spatialMatch(t, p))
+        foldMatch(data.map(Channel.apply), patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
           .runS(emptyMap)
           .map { (freeMap: FreeMap) =>
             toQuotes(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)

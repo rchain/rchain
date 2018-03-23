@@ -192,4 +192,41 @@ class ReduceSpec extends FlatSpec with Matchers {
       )
     )
   }
+
+  "Simple match" should "capture and add to the environment." in {
+    val pattern: Par =
+      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
+    val sendTarget: Par =
+      Send(ChanVar(BoundVar(1)), List(GInt(7), EVar(BoundVar(0))), false, 0, BitSet(0, 1))
+    val matchTerm: Match =
+      Match(sendTarget,
+            List(
+              MatchCase(
+                pattern,
+                Send(Quote(GString("result")),
+                     List(Eval(ChanVar(BoundVar(1))), EVar(BoundVar(0))),
+                     false,
+                     0,
+                     BitSet())
+              )),
+            0,
+            BitSet(0, 1))
+    val env         = Env.makeEnv[Par](GPrivate("one"), GPrivate("zero"))
+    val interpreter = Reduce.makeInterpreter
+    val matchTask   = interpreter.eval(matchTerm)(env)
+
+    val inspectTask = for {
+      _      <- matchTask
+      tsHash <- interpreter.tupleSpace.spaceMVar.take
+      _      <- interpreter.tupleSpace.spaceMVar.put(tsHash)
+    } yield tsHash
+
+    val result = Await.result(inspectTask.runAsync, 3.seconds)
+    result should be(
+      HashMap(
+        Quote(GString("result")) ->
+          ((Seq[(Seq[Par], Boolean)]((Seq[Par](GPrivate("one"), GPrivate("zero")), false)),
+            Seq[(Seq[Channel], Cont[Par, Par], Boolean)]())))
+    )
+  }
 }
