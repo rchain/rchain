@@ -5,12 +5,14 @@ import java.nio.file.Files
 import com.typesafe.scalalogging.Logger
 import coop.rchain.storage.examples.StringExamples._
 import coop.rchain.storage.examples.StringExamples.implicits._
+import coop.rchain.storage.internal._
 import coop.rchain.storage.test._
 import org.scalatest._
 
 abstract class StorageActionsBase extends FlatSpec with Matchers with OptionValues {
 
-  type TestStore = IStore[String, Pattern, String, StringsCaptor] with ITestableStore
+  type TestStore =
+    IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
 
   val logger: Logger = Logger[StorageActionsTests]
 
