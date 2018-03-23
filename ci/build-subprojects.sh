@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ev
 
 if [ -d "${SUBPROJECT}" -a -f "${SUBPROJECT}/build.sh" ]; then
     echo "${SUBPROJECT}/build.sh"
