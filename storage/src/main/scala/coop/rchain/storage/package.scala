@@ -82,13 +82,13 @@ package object storage {
       throw new IllegalArgumentException(msg)
     }
     store.withTxn(store.createTxnWrite()) { txn =>
-      logger.info(
+      logger.debug(
         s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>")
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
           store.putK(txn, channels, WaitingContinuation(patterns, continuation, persist))
           for (channel <- channels) store.addJoin(txn, channel, channels)
-          logger.info(
+          logger.debug(
             s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
           None
         case Some(dataCandidates) =>
@@ -99,7 +99,7 @@ package object storage {
             case _ =>
               ()
           }
-          logger.info(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
+          logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
           Some((continuation, dataCandidates.map(_.datum.a)))
       }
     }
@@ -156,7 +156,7 @@ package object storage {
       implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
-      logger.info(
+      logger.debug(
         s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>")
       extractProduceCandidateAlt(store, groupedChannels, channel, Datum(data, persist))(txn) match {
         case Some(
@@ -176,12 +176,12 @@ package object storage {
             case _ =>
               ()
           }
-          logger.info(s"produce: matching continuation found at <channels: $channels>")
+          logger.debug(s"produce: matching continuation found at <channels: $channels>")
           Some(continuation, dataCandidates.map(_.datum.a))
         case None =>
-          logger.info(s"produce: no matching continuation found")
+          logger.debug(s"produce: no matching continuation found")
           store.putA(txn, List(channel), Datum(data, persist))
-          logger.info(s"produce: persisted <data: $data> at <channel: $channel>")
+          logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
           None
 
       }
