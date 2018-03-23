@@ -243,6 +243,11 @@ object Reduce {
               i1 <- evalToInt(p1.get)
               i2 <- evalToInt(p2.get)
             } yield i1 + i2
+          case Expr(EVarBody(EVar(v))) +: Nil =>
+            for {
+              lookup <- eval(v.get)
+              result <- evalToInt(lookup)
+            } yield result
           case _ =>
             Task raiseError new Error("Error: Integer expected, or unimplemented expression.")
         }
