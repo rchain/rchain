@@ -1,23 +1,20 @@
 package coop.rchain.models
 
 import coop.rchain.models.Channel.ChannelInstance._
-import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
-import implicits._
-import coop.rchain.models._
 
 import scala.collection.immutable.BitSet
 
-class StringBuilderTest extends FlatSpec with PropertyChecks with Matchers {
+class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
 
   val p: Par = Par()
 
   "New" should "use 0-based indexing" in {
     val neu    = p.copy(news = Seq(New(3, Some(Par()))))
-    val result = StringBuilder().buildString(neu)
+    val result = PrettyPrinter().buildString(neu)
     val target = "new x0, x1, x2 in { Nil }"
     result shouldBe target
   }
@@ -30,8 +27,7 @@ class StringBuilderTest extends FlatSpec with PropertyChecks with Matchers {
                   Expr(exprInstance = GUri("www.3cheese.com"))),
       ids = Seq(GPrivate("4"), GPrivate("5"))
     )
-    val result = StringBuilder().buildString(source)
-    println(result)
+    val result = PrettyPrinter().buildString(source)
     val target = "0 | true | 2 | www.3cheese.com | 4 | 5"
     result shouldBe target
   }
@@ -39,7 +35,7 @@ class StringBuilderTest extends FlatSpec with PropertyChecks with Matchers {
   "Send" should "pretty print" in {
     val source: Par = p.copy(
       sends = Seq(Send(Some(Channel(Quote(Par()))), List[Par](Par(), Par()), true, 0, BitSet())))
-    val result = StringBuilder().buildString(source)
+    val result = PrettyPrinter().buildString(source)
     val target = "@{ Nil }!!(Nil, Nil)"
     result shouldBe target
   }
@@ -65,7 +61,7 @@ class StringBuilderTest extends FlatSpec with PropertyChecks with Matchers {
         ))
       )))
 
-    val result = StringBuilder().buildString(source)
+    val result = PrettyPrinter().buildString(source)
     val target = "new x0 in { for( x1 <- x0 ) { *x1 } }"
     result shouldBe target
   }
@@ -97,7 +93,7 @@ class StringBuilderTest extends FlatSpec with PropertyChecks with Matchers {
         ))
       )))
 
-    val result = StringBuilder().buildString(source)
+    val result = PrettyPrinter().buildString(source)
     val target = "new x0 in { for( x1 <- x0 ; x2 <- x0 ) { *x1 | *x2 } }"
     result shouldBe target
   }
@@ -129,7 +125,7 @@ class StringBuilderTest extends FlatSpec with PropertyChecks with Matchers {
         )
       )
 
-    val result = StringBuilder().buildString(source)
+    val result = PrettyPrinter().buildString(source)
     val target = "new x0 in { x0!(Nil) | for( x1 <- x0 ) { *x1 } }"
     result shouldBe target
   }

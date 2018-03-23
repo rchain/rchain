@@ -8,11 +8,11 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 
-object StringBuilder {
-  def apply(): StringBuilder = new StringBuilder(0, 0)
+object PrettyPrinter {
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0)
 }
 
-case class StringBuilder(freeShift: Int, boundShift: Int) {
+case class PrettyPrinter(freeShift: Int, boundShift: Int) {
   def buildString(e: Expr): String =
     e.exprInstance match {
       case ENegBody(ENeg(p)) => "-" + buildString(p.get)
@@ -108,7 +108,7 @@ case class StringBuilder(freeShift: Int, boundShift: Int) {
         "for( " + {
           ("" /: r.binds.zipWithIndex) {
             case (string, (bind, i)) =>
-              string + StringBuilder(freeShift, boundShift + i).buildSeq(bind.patterns) + {
+              string + PrettyPrinter(freeShift, boundShift + i).buildSeq(bind.patterns) + {
                 if (r.persistent) " <= " + buildString(bind.source.get)
                 else " <- " + buildString(bind.source.get)
               } + {
@@ -116,12 +116,12 @@ case class StringBuilder(freeShift: Int, boundShift: Int) {
                 else ""
               }
           }
-        } + " ) { " + StringBuilder(freeShift, boundShift + r.binds.length)
+        } + " ) { " + PrettyPrinter(freeShift, boundShift + r.binds.length)
           .buildString(r.body.get) + " }"
 
       case e: Eval => "*" + buildString(e.channel.get)
       case n: New =>
-        "new" + buildNewVariables(n.bindCount) + " in { " + StringBuilder(
+        "new" + buildNewVariables(n.bindCount) + " in { " + PrettyPrinter(
           freeShift,
           boundShift + n.bindCount).buildString(n.p.get) + " }"
       case e: Expr =>
