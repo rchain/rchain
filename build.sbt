@@ -138,7 +138,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, storage % "test->test;compile->compile;compile->test")
+  .dependsOn(models, storage)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)

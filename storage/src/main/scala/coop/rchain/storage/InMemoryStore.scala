@@ -1,10 +1,10 @@
-package coop.rchain.storage.test
+package coop.rchain.storage
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-import coop.rchain.storage._
 import coop.rchain.storage.examples._
+import coop.rchain.storage.internal._
 import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
