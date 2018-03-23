@@ -125,13 +125,13 @@ In the code below, we show an example of iterating through a linked list impleme
 
 3) The `match` construction allows destructuring a variable through pattern matching.
 
-4) If `list` matches the pattern of a head/tail pair then we execute the main body of the loop
+4) If `list` matches the pattern of a head/tail pair then we execute the main body of the loop.
 
-5) We read the current index from the channel
+5) We read the current index from the channel.
 
-6) We increment the index and store it back
+6) We increment the index and store it back.
 
-7) `match` also allows matching more complex expressions against patterns.
+7) The `match` keyword also allows matching more complex expressions against patterns.
 
 8) Here we confirm that the head of the list is equal to the current index and that the accumulator it still equal to `true` and recursively invoke the loop again.
 
@@ -202,7 +202,7 @@ In the code below, we show an example of iterating through a linked list impleme
 
 5, 11, 17) We define different methods which can be called by sending a message on `port`. This is done by specifying mutually exclusive patterns the message on `port` can match, with the first element of the message being the method name and subsequent elements being the argument(s) and return channel. Using the `<=` arrow instead of the `<-` arrow means that the `for`s are "replicated". This gives them the same behavior as `contract`s, i.e. the process listening for messages on `port` persists after spawning an instance of its body.
 
-8) We take advantage of being able to quote any process to make a name in order to create a unique name for each value to be stored at. `*ticket | *table` is the process produced by the concurrent composition of the processes produced by unquoting the names `ticket` and `table`. That process can then be quoted to form a unique name that is then used to store the value by sending it on the name.
+8) We take advantage of being able to quote any process to make a name in order to create a unique name for each value to be stored at. The process `*ticket | *table` is produced by the concurrent composition of the processes produced by unquoting the names `ticket` and `table`. That process can then be quoted to form a unique name that is then used to store the value by sending it on the name.
 
 ## Dining philosophers and deadlock
 
@@ -358,7 +358,7 @@ Suppose Alice has a channel and would like to log Bob's access to it.  Bob would
     }
 
 
-A sealer/unsealer pair gives the same functionality as public keys, but without cryptography. It's merely an attenuation of the coat check described above.  This design pattern can be used to sign something on a user's behalf.  In the Rholang blockchain tutorial, we'll see that it even works on the blockchain because there are no secrets to store, only unforgeable names to be kept inaccessible.
+A sealer/unsealer pair gives the same functionality as public keys, but without cryptography. It's merely an attenuation of the coat check described above.  This design pattern can be used to sign something on a user's behalf.  In the Rholang blockchain tutorial, we'll see that a sealer/unsealer pair even works as a signing/verification pair of keys on the blockchain because there are no secrets to store, only unforgeable names to be kept inaccessible.
 
 ### Beware of sending attenuators
 
