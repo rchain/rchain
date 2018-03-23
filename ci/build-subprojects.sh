@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -ev
 
 if [ -d "${SUBPROJECT}" -a -f "${SUBPROJECT}/build.sh" ]; then
