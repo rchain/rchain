@@ -14,11 +14,15 @@ new testResult, updateTestResult in {
       contract MakeCell(@init, get, set) = {
         new valueStore in {
           valueStore!(init) |
-          for(ack <- get; @value <- valueStore) {
-            valueStore!(value) | ack!(value)
+          contract get(ack) = {
+            for(@value <- valueStore) {
+              valueStore!(value) | ack!(value)
+            }
           } |
-          for(@newValue, ack <- set; _ <- valueStore) {
-            valueStore!(newValue) | ack!(true)
+          contract set(@newValue, ack) = {
+            for(_ <- valueStore) {
+              valueStore!(newValue) | ack!(true)
+            }
           }
         }
       } |
