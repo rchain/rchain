@@ -101,6 +101,7 @@ lazy val node = (project in file("node"))
         entryPoint("/bin/main.sh")
       }
     },
+
     /* Packaging */
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
