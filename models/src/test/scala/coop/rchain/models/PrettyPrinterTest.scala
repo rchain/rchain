@@ -27,8 +27,9 @@ class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
                   Expr(exprInstance = GUri("www.3cheese.com"))),
       ids = Seq(GPrivate("4"), GPrivate("5"))
     )
+
     val result = PrettyPrinter().buildString(source)
-    val target = "0 | true | 2 | www.3cheese.com | 4 | 5"
+    val target = "0 | true | \"2\" | \"www.3cheese.com\" | 4 | 5"
     result shouldBe target
   }
 

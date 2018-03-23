@@ -59,8 +59,8 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
       case GBool(b)   => b.toString
       case GInt(i)    => i.toString
-      case GString(s) => s
-      case GUri(u)    => u
+      case GString(s) => "\"" + s + "\""
+      case GUri(u)    => "\"" + u + "\""
 
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => "Nil"
@@ -70,7 +70,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(_)      => s"x$boundShift"
+      case FreeVar(_)      => s"x$freeShift"
       case BoundVar(level) => s"x${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
@@ -108,7 +108,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
         "for( " + {
           ("" /: r.binds.zipWithIndex) {
             case (string, (bind, i)) =>
-              string + PrettyPrinter(freeShift, boundShift + i).buildSeq(bind.patterns) + {
+              string + PrettyPrinter(boundShift + i, boundShift + i).buildSeq(bind.patterns) + {
                 if (r.persistent) " <= " + buildString(bind.source.get)
                 else " <- " + buildString(bind.source.get)
               } + {
@@ -121,7 +121,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
       case e: Eval => "*" + buildString(e.channel.get)
       case n: New =>
-        "new" + buildNewVariables(n.bindCount) + " in { " + PrettyPrinter(
+        "new " + buildNewVariables(n.bindCount) + " in { " + PrettyPrinter(
           freeShift,
           boundShift + n.bindCount).buildString(n.p.get) + " }"
       case e: Expr =>
@@ -155,20 +155,19 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
       case _ => throw new Error("Attempt to print unknown GeneratedMessage type")
     }
 
-  // TODO: Calculate proper numbering/naming
-  def buildNewVariables(bindCount: Int): String = {
+  private def buildNewVariables(bindCount: Int): String = {
     // We arbitrarily limit the new variable string count to MAX_NEW_VAR_COUNT
     // to prevent exploding the state of the shapeless generator
     val MAX_NEW_VAR_COUNT = 128
-    buildSeq((0 until Math.min(MAX_NEW_VAR_COUNT, bindCount)).map(i =>
-      Expr(exprInstance = GString(s" x$i"))))
+    buildSeq(
+      (0 until Math.min(MAX_NEW_VAR_COUNT, bindCount)).map(i => GPrivate(s"x${boundShift + i}")))
   }
 
-  def buildSeq[T <: GeneratedMessage](s: Seq[T]): String =
+  private def buildSeq[T <: GeneratedMessage](s: Seq[T]): String =
     ("" /: s.zipWithIndex) {
       case (string, (p, i)) =>
         string + buildString(p) + {
-          if (i != s.length - 1) ","
+          if (i != s.length - 1) ", "
           else ""
         }
     }
