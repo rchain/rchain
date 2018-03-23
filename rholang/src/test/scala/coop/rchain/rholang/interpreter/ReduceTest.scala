@@ -15,8 +15,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import coop.rchain.storage.{Datum, Serialize, WaitingContinuation}
-import coop.rchain.storage.test.{InMemoryStore, Row}
+import coop.rchain.storage.{InMemoryStore, Serialize}
+import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
 
 trait InMemoryStoreTester {
   def withTestStore[C, P, A, K <: Serializable, R](store: InMemoryStore[C, P, A, K])(

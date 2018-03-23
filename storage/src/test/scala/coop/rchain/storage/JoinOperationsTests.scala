@@ -1,6 +1,7 @@
 package coop.rchain.storage
 
 import coop.rchain.storage.examples.StringExamples.{StringsCaptor, Wildcard}
+import coop.rchain.storage.internal._
 
 trait JoinOperationsTests extends StorageActionsBase {
 
