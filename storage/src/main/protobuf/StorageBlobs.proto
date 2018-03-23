@@ -9,8 +9,18 @@ message BytesList {
 message PsKsBytes {
     BytesList patterns = 1;
     bytes kvalue = 2;
+    bool persist = 3;
 }
 
 message PsKsBytesList {
     repeated PsKsBytes values = 1;
+}
+
+message AsBytes {
+    bytes avalue = 1;
+    bool persist = 2;
+}
+
+message AsBytesList {
+    repeated AsBytes values = 1;
 }

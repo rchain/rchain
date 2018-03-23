@@ -7,18 +7,17 @@ import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Match
 import coop.rchain.models.MatchCase
 import coop.rchain.models.{GPrivate => _, _}
-
 import Substitute._
 import Env._
 import implicits._
-
 import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
-
 import monix.eval.{MVar, Task}
+
 import scala.annotation.tailrec
-import scala.collection.mutable.HashMap
+import storage.implicits._
+import coop.rchain.storage.{IStore, consume => internalConsume, produce => internalProduce}
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -43,113 +42,9 @@ trait Reduce[M[_], C, A, P, B] {
 object Reduce {
   // TODO: How do I not define this twice?
   type Cont[Data, Body] = (Body, Env[Data])
-  // Doesn't do joins. Only handles var patterns and @Var patterns.
-  // Does handle arity matching.
-  // The map is a map from a channel (Quote), to a pair.
-  // The pair is a list of writes and a list of reads.
-  // a write is just a list of Pars.
-  // a read is a list of Channels, which for early simplicity must be either:
-  // a Chanvar(FreeVar) or a Quote(EVar())
-  class SimpleTuplespace(
-      space: HashMap[Quote,
-                     (Seq[(Seq[Par], Boolean)], Seq[(Seq[Channel], Cont[Par, Par], Boolean)])]) {
-    def this() =
-      this(
-        HashMap
-          .empty[Quote, (Seq[(Seq[Par], Boolean)], Seq[(Seq[Channel], Cont[Par, Par], Boolean)])])
-    val spaceMVar = MVar(space)
 
-    def simpleProduce(c: Quote, data: Seq[Par], persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
-      for {
-        space <- spaceMVar.take
-        // TODO: Handle the environment in the store
-        substData = data.map(p => substitute(p)(env))
-        result <- {
-          space.get(c) match {
-            case None => {
-              space.put(
-                c,
-                (Seq((substData, persistent)), Seq.empty[(Seq[Channel], Cont[Par, Par], Boolean)]))
-              Task.pure(None)
-            }
-            case Some((writes, reads)) => {
-              val (head, tail) = reads.span({
-                case (pattern, _, _) => (pattern.length != substData.length)
-              })
-              tail match {
-                case Nil => {
-                  // TODO: Same as below, the data write should be substituted, at least for now.
-                  space.put(c, ((substData, persistent) +: writes, reads))
-                  Task.pure(None)
-                }
-                case (_, cont: Cont[Par, Par], readPersistent) +: remReads => {
-                  val newWrites =
-                    if (persistent)
-                      (substData, persistent) +: writes
-                    else
-                      writes
-                  val newReads =
-                    if (readPersistent) // persistent
-                      head ++ tail
-                    else
-                      head ++ remReads
-                  space.put(c, (newWrites, newReads))
-                  Task.pure(Some((cont._1, cont._2.put(substData))))
-                }
-              }
-            }
-          }
-        }
-        _ <- spaceMVar.put(space)
-      } yield result
-
-    def simpleConsume(c: Quote, pattern: Seq[Channel], body: Par, persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
-      for {
-        space <- spaceMVar.take
-        result <- {
-          space.get(c) match {
-            case None => {
-              space.put(c,
-                        (Seq.empty[(Seq[Par], Boolean)], Seq((pattern, (body, env), persistent))))
-              Task.pure(None)
-            }
-            case Some((writes, reads)) => {
-              val (head, tail) = writes.span({
-                case (data, _) => (pattern.length != data.length)
-              })
-              tail match {
-                case Nil => {
-                  space.put(c, (writes, (pattern, (body, env), persistent) +: reads))
-                  Task.pure(None)
-                }
-                case (data, writePersistent) +: remWrites => {
-                  val newReads =
-                    if (persistent)
-                      (pattern, (body, env), persistent) +: reads
-                    else
-                      reads
-                  val newWrites =
-                    if (writePersistent)
-                      head ++ tail
-                    else
-                      head ++ remWrites
-                  space.put(c, (newWrites, newReads))
-                  // TODO: should writes have their own environment?
-                  Task.pure(Some((body, env.put(data))))
-                }
-              }
-            }
-          }
-        }
-        _ <- spaceMVar.put(space)
-      } yield result
-  }
-
-  // implicit def DebruijnInterpreter: Reduce[Task, Quote, Par, Channel, Par] =
-  class DebruijnInterpreter extends Reduce[Task, Quote, Par, Channel, Par] {
-    val tupleSpace = new SimpleTuplespace()
+  class DebruijnInterpreter(tupleSpace: IStore[Channel, List[Channel], List[Quote], Par])
+      extends Reduce[Task, Quote, Par, Channel, Par] {
 
     // This makes sense. Run a Par in the empty environment.
     def inj(par: Par): Task[Unit] =
@@ -165,8 +60,17 @@ object Reduce {
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
-      tupleSpace.simpleProduce(chan, data, persistent)
+        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
+      // TODO: Handle the environment in the store
+      val substData: List[Quote] = data.toList.map(p => Quote(substitute(p)(env)))
+      internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
+        case Some((body, dataList)) =>
+          val newEnv: Env[Par] =
+            Env.makeEnv(dataList.flatMap(identity).map({ case Quote(p) => p }): _*)
+          Task.pure(Some((body, newEnv)))
+        case None => Task.pure(None)
+      }
+    }
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -180,12 +84,26 @@ object Reduce {
       *          will be @param body if the continuation is not None.
       */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
+        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
+      // TODO: Allow for the environment to be stored with the body in the Tuplespace
+      val substBody = substitute(body)(env)
       binds match {
-        case Nil         => Task raiseError new Error("Error: empty binds")
-        case bind +: Nil => tupleSpace.simpleConsume(bind._2, bind._1, body, persistent)
-        case _           => Task raiseError new Error("Error: joins are not currently implemented.")
+        case Nil => Task raiseError new Error("Error: empty binds")
+        case _ =>
+          val (patterns: List[List[Channel]], channels: List[Quote]) = binds.unzip
+          internalConsume(tupleSpace,
+                          channels.map(q => Channel(q)),
+                          patterns,
+                          substBody,
+                          persist = persistent) match {
+            case Some((continuation, dataList)) =>
+              val newEnv: Env[Par] =
+                Env.makeEnv(dataList.flatten.map({ case Quote(p) => p }): _*)
+              Task.pure(Some((continuation, newEnv)))
+            case None => Task.pure(None)
+          }
       }
+    }
 
     /**
       * Variable "evaluation" is an environment lookup, but
@@ -444,5 +362,7 @@ object Reduce {
     }
   }
 
-  def makeInterpreter: DebruijnInterpreter = new DebruijnInterpreter()
+  def makeInterpreter(
+      tupleSpace: IStore[Channel, List[Channel], List[Quote], Par]): DebruijnInterpreter =
+    new DebruijnInterpreter(tupleSpace)
 }

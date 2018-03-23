@@ -43,6 +43,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
+  val repl = opt[Boolean](default = Some(false),
+                          short = 'r',
+                          descr = "Start node with REPL (but without P2P network)")
+
   verify()
 }
 
@@ -80,9 +84,15 @@ object Main {
   }
 
   def main(args: Array[String]): Unit = {
-
     val conf = Conf(args)
+    conf.repl().fold(executeP2p(conf), executeREPL(conf))
+  }
 
+  private def executeREPL(conf: Conf): Unit =
+    // TODO run REPL here
+    println("here REPL will be running....")
+
+  private def executeP2p(conf: Conf): Unit = {
     val name = conf.name.toOption match {
       case Some(key) => key
       case None      => UUID.randomUUID.toString.replaceAll("-", "")
@@ -306,6 +316,5 @@ object Main {
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
     }
-
   }
 }
