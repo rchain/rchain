@@ -140,7 +140,7 @@ lazy val rholang = (project in file("rholang"))
   )
   .dependsOn(models, storage)
 
-lazy val rholangCLI = (project in file("rholang-cli"))
+lazy val rholangCLI = (project in file("rholang"))
   .settings(commonSettings: _*)
   .settings(bnfcSettings: _*)
   .settings(
