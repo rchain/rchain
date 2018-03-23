@@ -7,6 +7,7 @@ env:
   - SUBPROJECT=rosette
   - SUBPROJECT=core
   - SUBPROJECT=rholang-more-tests
+  - SUBPROJECT=test_artifact_creation
 script:
   - ./ci/build-subprojects.sh
 sudo: required
