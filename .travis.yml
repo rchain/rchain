@@ -6,8 +6,9 @@ dist: trusty
 env:
   - SUBPROJECT=rosette
   - SUBPROJECT=core
+  - SUBPROJECT=rholang-more-tests
 script:
-  - ./scripts/build-subprojects.sh
+  - ./ci/build-subprojects.sh
 sudo: required
 install:
   - ./scripts/install_secp.sh
