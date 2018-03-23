@@ -8,6 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.storage.Serialize.mkProtobufInstance
 import coop.rchain.storage.datamodels._
+import coop.rchain.storage.internal._
 import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Dbi, Env, Txn}
