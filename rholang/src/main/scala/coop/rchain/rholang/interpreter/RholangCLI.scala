@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import java.io._
 
 import scala.io.Source
-import coop.rchain.models.{Par, StringBuilder}
+import coop.rchain.models.{Par, PrettyPrinter}
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import org.rogach.scallop.ScallopConf
@@ -50,7 +50,7 @@ object RholangCLI {
 
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task {
-      println(StringBuilder().buildString(normalizedTerm))
+      println(PrettyPrinter().buildString(normalizedTerm))
       print("\n> ")
     }
 
