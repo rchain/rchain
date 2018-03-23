@@ -163,6 +163,36 @@ trait StorageActionsTests extends StorageActionsBase {
     store.isEmpty shouldBe true
   }
 
+  "producing three times then doing consuming three times" should "work" in withTestStore { store =>
+    val r1 = produce(store, "ch1", "datum1", persist = false)
+    val r2 = produce(store, "ch1", "datum2", persist = false)
+    val r3 = produce(store, "ch1", "datum3", persist = false)
+
+    r1 shouldBe None
+    r2 shouldBe None
+    r3 shouldBe None
+
+    val r4 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    runK(r4)
+
+    getK(r4).results should contain theSameElementsAs List(List("datum3"))
+
+    val r5 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    runK(r5)
+
+    getK(r5).results should contain theSameElementsAs List(List("datum2"))
+
+    val r6 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
+
+    runK(r6)
+
+    getK(r6).results should contain theSameElementsAs List(List("datum1"))
+
+    store.isEmpty shouldBe true
+  }
+
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
     "return a continuation and all the data" in withTestStore { store =>
     val produceKey1     = List("ch1")
