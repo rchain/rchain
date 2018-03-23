@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option java_package = "coop.rchain.storage.datamodels";
+
+message BytesList {
+    repeated bytes values = 1;
+}
+
+message PsKsBytes {
+    BytesList patterns = 1;
+    bytes kvalue = 2;
+}
+
+message PsKsBytesList {
+    repeated PsKsBytes values = 1;
+}

@@ -5,7 +5,10 @@ import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
 import coop.rchain.rosette.Ctxt.setReg
 
-sealed trait Location                                               extends Ob
+sealed trait Location extends Ob {
+  override val meta   = null
+  override val parent = null
+}
 case class ArgRegister(argReg: Int)                                 extends Location
 case class CtxtRegister(reg: Int)                                   extends Location
 case class AddrVariable(indirect: Boolean, level: Int, offset: Int) extends Location

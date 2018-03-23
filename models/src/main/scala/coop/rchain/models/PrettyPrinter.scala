@@ -68,19 +68,19 @@ object PrettyPrinter {
         print(" <= ")
         prettyPrint(p2.get)
 
-      case EListBody(EList(s, _, _)) =>
+      case EListBody(EList(s, _, _, _)) =>
         print("[")
         printSeq(s)
         print("]")
-      case ETupleBody(ETuple(s, _, _)) =>
+      case ETupleBody(ETuple(s, _, _, _)) =>
         print("[")
         printSeq(s)
         print("]")
-      case ESetBody(ESet(s, _, _)) =>
+      case ESetBody(ESet(s, _, _, _)) =>
         print("(")
         printSeq(s)
         print(")")
-      case EMapBody(EMap(kvs, _, _)) =>
+      case EMapBody(EMap(kvs, _, _, _)) =>
         print("{")
         for { (kv, i) <- kvs.zipWithIndex } yield {
           prettyPrint(kv.key.get)

@@ -7,6 +7,8 @@ trait Encryption[F[_]] {
   import Encryption._
   def fetchKeys: F[PublicPrivateKeys]
   def generateNonce: F[Nonce]
+  def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): F[Array[Byte]]
+  def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]]
 }
 
 final case class PublicPrivateKeys(pub: Encryption.Key, priv: Encryption.Key)
@@ -24,6 +26,10 @@ object Encryption extends EncryptionInstances {
     new Encryption[T[F, ?]] {
       def fetchKeys: T[F, PublicPrivateKeys] = E.fetchKeys.liftM[T]
       def generateNonce: T[F, Nonce]         = E.generateNonce.liftM[T]
+      def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): T[F, Array[Byte]] =
+        E.encrypt(pub, sec, nonce, message).liftM[T]
+      def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): T[F, Array[Byte]] =
+        E.decrypt(pub, sec, nonce, cipher).liftM[T]
     }
 }
 

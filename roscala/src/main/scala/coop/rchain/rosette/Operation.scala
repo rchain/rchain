@@ -3,7 +3,7 @@ package coop.rchain.rosette
 import cats.data.State._
 import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 
-case class StdOprn(override val extension: StdExtension) extends Actor {
+case class StdOprn(meta: Ob, parent: Ob, override val extension: StdExtension) extends Actor {
   override def dispatch: CtxtTransition[(Result, Option[Continuation])] =
     for {
       optArg0 <- inspect[Ctxt, Option[Ob]](_.arg(0))
@@ -17,4 +17,8 @@ case class StdOprn(override val extension: StdExtension) extends Actor {
     } yield result
 }
 
-object OprnVmError extends StdOprn(null)
+object StdOprn {
+  def apply(extension: StdExtension): StdOprn = StdOprn(meta = null, parent = null, extension)
+
+  val OprnVmError = StdOprn(null)
+}

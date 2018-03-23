@@ -4,7 +4,7 @@ import cats.data.State._
 import coop.rchain.rosette.Ctxt.CtxtTransition
 
 object Meta {
-  case class StdMeta(override val extension: StdExtension = null) extends Actor {
+  case class StdMeta(meta: Ob, parent: Ob, override val extension: StdExtension) extends Actor {
     // TODO:
     def get(client: Ob, key: Ob): CtxtTransition[Result] =
       pure[Ctxt, Result](Left(Absent))
@@ -22,5 +22,10 @@ object Meta {
           case Absent => Right(prim.Prims(226))
         }
       }
+  }
+
+  object StdMeta {
+    def apply(extension: StdExtension = null): StdMeta =
+      StdMeta(meta = null, parent = null, extension)
   }
 }

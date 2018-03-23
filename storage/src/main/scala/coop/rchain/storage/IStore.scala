@@ -1,7 +1,5 @@
 package coop.rchain.storage
 
-import coop.rchain.models.Serialize
-
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
@@ -16,11 +14,13 @@ trait IStore[C, P, A, K] {
     */
   type H
 
-  private[storage] def hashC(channels: List[C])(implicit sc: Serialize[C]): H
+  private[storage] def hashCs(channels: List[C])(implicit sc: Serialize[C]): H
 
   private[storage] def putCs(txn: T, channels: List[C]): Unit
 
   private[storage] def getKey(txn: T, hash: H): List[C]
+
+  private[storage] def removeA(txn: T, channels: List[C], index: Int)
 
   /**
     * The type of transactions

@@ -1,6 +1,13 @@
-addSbtPlugin("com.geirsson" % "sbt-scalafmt" % "1.4.0")
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
-addSbtPlugin("se.marcuslonnberg" % "sbt-docker" % "1.5.0")
-addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
-addSbtPlugin("com.github.tkawachi" % "sbt-doctest" % "0.7.1")
-addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.7.0")
+addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.12")
+
+// Yes it's weird to do the following, but it's what is mandated by the scalapb documentation
+libraryDependencies += "com.trueaccord.scalapb" %% "compilerplugin" % "0.6.6"
+
+addSbtPlugin("com.geirsson"        % "sbt-scalafmt"        % "1.4.0")
+addSbtPlugin("com.eed3si9n"        % "sbt-assembly"        % "0.14.5")
+addSbtPlugin("se.marcuslonnberg"   % "sbt-docker"          % "1.5.0")
+addSbtPlugin("org.scoverage"       % "sbt-scoverage"       % "1.5.1")
+addSbtPlugin("com.github.tkawachi" % "sbt-doctest"         % "0.7.1")
+addSbtPlugin("com.eed3si9n"        % "sbt-buildinfo"       % "0.7.0")
+addSbtPlugin("com.typesafe.sbt"    % "sbt-native-packager" % "1.3.3")
+addSbtPlugin("pl.project13.scala"  % "sbt-jmh"             % "0.3.3")
