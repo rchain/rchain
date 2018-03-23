@@ -95,11 +95,12 @@ case class StringBuilder(freeShift: Int, boundShift: Int) {
           if (s.persistent) "!!("
           else "!("
         } + {
-          for { (datum, i) <- s.data.zipWithIndex } yield {
-            buildString(datum) + {
-              if (i != s.data.length - 1) ","
-              else ""
-            }
+          ("" /: s.data.zipWithIndex) {
+            case (string, (datum, i)) =>
+              string + buildString(datum) + {
+                if (i != s.data.length - 1) ", "
+                else ""
+              }
           }
         } + ")"
 
@@ -140,17 +141,15 @@ case class StringBuilder(freeShift: Int, boundShift: Int) {
         else {
           val list = List(p.sends, p.receives, p.evals, p.news, p.exprs, p.matches, p.ids)
           ((false, "") /: list) {
-            case ((acc, string), items) =>
+            case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
-                if (acc) (acc,string + "|")
-                (true, ("" /: items.zipWithIndex) {
+                (true, string + { if (prevNonEmpty) " | " else "" } + ("" /: items.zipWithIndex) {
                   case (_string, (_p, i)) =>
                     _string + buildString(_p) + {
-                      if (i != items.length - 1) " | "
-                      else ""
+                      if (i != items.length - 1) " | " else ""
                     }
                 })
-              } else (acc, string)
+              } else (prevNonEmpty, string)
           }
         }._2
       case _ => throw new Error("Attempt to print unknown GeneratedMessage type")
@@ -175,5 +174,5 @@ case class StringBuilder(freeShift: Int, boundShift: Int) {
     }
 
   private def isEmpty(p: Par) =
-    p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty
+    p.sends.isEmpty & p.receives.isEmpty & p.evals.isEmpty & p.news.isEmpty & p.exprs.isEmpty & p.matches.isEmpty & p.ids.isEmpty
 }
