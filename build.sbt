@@ -128,6 +128,28 @@ lazy val rholang = (project in file("rholang"))
       "-Yno-adapted-args"
     ),
     libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
+    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
+    coverageExcludedFiles := Seq(
+      (javaSource in Compile).value,
+      (bnfcGrammarDir in BNFCConfig).value,
+      (bnfcOutputDir in BNFCConfig).value,
+      baseDirectory.value / "src" / "main" / "k",
+      baseDirectory.value / "src" / "main" / "rbl"
+    ).map(_.getPath ++ "/.*").mkString(";"),
+    fork in Test := true
+  )
+  .dependsOn(models, storage)
+
+lazy val rholangCLI = (project in file("rholang-cli"))
+  .settings(commonSettings: _*)
+  .settings(bnfcSettings: _*)
+  .settings(
+    scalacOptions ++= Seq(
+      "-language:existentials",
+      "-language:higherKinds",
+      "-Yno-adapted-args"
+    ),
+    libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
     mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -179,4 +201,4 @@ lazy val storageBench = (project in file("storage-bench"))
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(crypto, comm, models, regex, storage, node, rholang, roscala)
+  .aggregate(crypto, comm, models, regex, storage, node, rholang, rholangCLI, roscala)
