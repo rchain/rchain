@@ -41,6 +41,24 @@ package object storage {
     options.sequence[Option, DataCandidate[C, A]]
   }
 
+  private[storage] def extractDataCandidates[C, P, A, K](
+      store: IStore[C, P, A, K],
+      channels: List[C],
+      patterns: List[P],
+      batChannel: C,
+      data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
+    val options: List[Option[DataCandidate[C, A]]] =
+      channels.zip(patterns).map {
+        case (channel, pattern) if channel == batChannel =>
+          val indexedData: List[(Datum[A], Int)] = List((data, -1))
+          findMatchingDataCandidate(channel, indexedData, pattern)
+        case (channel, pattern) =>
+          val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
+          findMatchingDataCandidate(channel, indexedData, pattern)
+      }
+    options.sequence[Option, DataCandidate[C, A]]
+  }
+
   /** `consume` does the "consume" thing
     *
     * @param store
@@ -81,10 +99,6 @@ package object storage {
             case _ =>
               ()
           }
-          if (persist) {
-            store.putK(txn, channels, WaitingContinuation(patterns, continuation, persist))
-            for (channel <- channels) store.addJoin(txn, channel, channels)
-          }
           logger.info(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
           Some((continuation, dataCandidates.map(_.datum.a)))
       }
@@ -92,35 +106,37 @@ package object storage {
   }
 
   /* Produce */
-
   @tailrec
   private[storage] final def extractFirstMatch[C, P, A, K](
       store: IStore[C, P, A, K],
       channels: List[C],
-      matchCandidates: List[(WaitingContinuation[P, K], Int)])(txn: store.T)(
-      implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
+      matchCandidates: List[(WaitingContinuation[P, K], Int)],
+      channel: C,
+      data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
     matchCandidates match {
       case Nil => None
       case (p @ WaitingContinuation(patterns, _, _), index) :: remaining =>
-        extractDataCandidates(store, channels, patterns)(txn) match {
+        extractDataCandidates(store, channels, patterns, channel, data)(txn) match {
           case None =>
-            extractFirstMatch(store, channels, remaining)(txn)
+            extractFirstMatch(store, channels, remaining, channel, data)(txn)
           case Some(dataCandidates) =>
             Some(ProduceCandidate(channels, p, index, dataCandidates))
         }
     }
 
   @tailrec
-  private[storage] final def extractProduceCandidate[C, P, A, K](store: IStore[C, P, A, K],
-                                                                 groupedChannels: List[List[C]])(
-      txn: store.T)(implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
+  private[storage] final def extractProduceCandidateAlt[C, P, A, K](
+      store: IStore[C, P, A, K],
+      groupedChannels: List[List[C]],
+      channel: C,
+      data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
     groupedChannels match {
       case Nil => None
       case channels :: remaining =>
         val matchCandidates: List[(WaitingContinuation[P, K], Int)] =
           store.getPsK(txn, channels).zipWithIndex
-        extractFirstMatch(store, channels, matchCandidates)(txn) match {
-          case None             => extractProduceCandidate(store, remaining)(txn)
+        extractFirstMatch(store, channels, matchCandidates, channel, data)(txn) match {
+          case None             => extractProduceCandidateAlt(store, remaining, channel, data)(txn)
           case produceCandidate => produceCandidate
         }
     }
@@ -140,34 +156,34 @@ package object storage {
       implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
-      store.putA(txn, List(channel), Datum(data, persist))
-      logger.info(s"produce: persisted <data: $data> at <channel: $channel>")
       logger.info(
         s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>")
-      extractProduceCandidate(store, groupedChannels)(txn)
-        .map {
-          case ProduceCandidate(channels,
-                                WaitingContinuation(_, continuation, persistK),
-                                continuationIndex,
-                                dataCandidates) =>
-            if (!persistK) {
-              store.removePsK(txn, channels, continuationIndex)
-            }
-            dataCandidates.foreach {
-              case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
-                  if !persistData =>
+      extractProduceCandidateAlt(store, groupedChannels, channel, Datum(data, persist))(txn) match {
+        case Some(
+            ProduceCandidate(channels,
+                             WaitingContinuation(_, continuation, persistK),
+                             continuationIndex,
+                             dataCandidates)) =>
+          if (!persistK) {
+            store.removePsK(txn, channels, continuationIndex)
+          }
+          dataCandidates.foreach {
+            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
+              if (!persistData && dataIndex >= 0) {
                 store.removeA(txn, candidateChannel, dataIndex)
-                ignore { store.removeJoin(txn, candidateChannel, channels) }
-              case _ =>
-                ()
-            }
-            logger.info(s"produce: matching continuation found at <channels: $channels>")
-            (continuation, dataCandidates.map(_.datum.a))
-        }
-        .recoverWith {
-          case _: Unit =>
-            logger.info(s"produce: no matching continuation found")
-            None
-        }
+              }
+              store.removeJoin(txn, candidateChannel, channels)
+            case _ =>
+              ()
+          }
+          logger.info(s"produce: matching continuation found at <channels: $channels>")
+          Some(continuation, dataCandidates.map(_.datum.a))
+        case None =>
+          logger.info(s"produce: no matching continuation found")
+          store.putA(txn, List(channel), Datum(data, persist))
+          logger.info(s"produce: persisted <data: $data> at <channel: $channel>")
+          None
+
+      }
     }
 }
