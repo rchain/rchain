@@ -6,6 +6,7 @@ dist: trusty
 env:
   - SUBPROJECT=rosette
   - SUBPROJECT=core
+  - SUBPROJECT=test_artifact_creation
 script:
   - ./scripts/build-subprojects.sh
 sudo: required
