@@ -122,13 +122,15 @@ lazy val rholang = (project in file("rholang"))
   .settings(commonSettings: _*)
   .settings(bnfcSettings: _*)
   .settings(
+    //version := "0.1",
     scalacOptions ++= Seq(
       "-language:existentials",
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
     libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
-    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
+    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
+    // mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
       (bnfcGrammarDir in BNFCConfig).value,
