@@ -3,16 +3,17 @@ package coop.rchain.storage.test
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-import coop.rchain.storage.{IStore, ITestableStore, Serialize}
+import coop.rchain.storage._
+import coop.rchain.storage.examples._
 import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K] private (
+class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, List[C]],
-    _psks: mutable.HashMap[String, List[(List[P], K)]],
-    _as: mutable.HashMap[String, List[A]],
+    _waitingContinuations: mutable.HashMap[String, List[WaitingContinuation[P, K]]],
+    _data: mutable.HashMap[String, List[Datum[A]]],
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
@@ -39,16 +40,16 @@ class InMemoryStore[C, P, A, K] private (
     f(txn)
 
   def collectGarbage(key: H): Unit = {
-    val as = _as.get(key).exists(_.nonEmpty)
+    val as = _data.get(key).exists(_.nonEmpty)
     if (!as) {
       //we still may have empty list, remove it as well
-      _as.remove(key)
+      _data.remove(key)
     }
 
-    val psks = _psks.get(key).exists(_.nonEmpty)
+    val psks = _waitingContinuations.get(key).exists(_.nonEmpty)
     if (!psks) {
       //we still may have empty list, remove it as well
-      _psks.remove(key)
+      _waitingContinuations.remove(key)
     }
 
     val cs    = _keys.getOrElse(key, List.empty[C])
@@ -59,44 +60,49 @@ class InMemoryStore[C, P, A, K] private (
     }
   }
 
-  def putA(txn: T, channels: List[C], a: A): Unit = {
+  def putA(txn: T, channels: List[C], datum: Datum[A]): Unit = {
     val key = hashCs(channels)
     putCs(txn, channels)
-    val as = _as.getOrElseUpdate(key, List.empty[A])
-    _as.update(key, scala.util.Random.shuffle(a +: as))
+    val datums = _data.getOrElseUpdate(key, List.empty[Datum[A]])
+    _data.update(key, datums :+ datum)
   }
 
-  def putK(txn: T, channels: List[C], patterns: List[P], k: K): Unit = {
+  def putK(txn: T, channels: List[C], continuation: WaitingContinuation[P, K]): Unit = {
     val key = hashCs(channels)
     putCs(txn, channels)
-    val ps = _psks.getOrElseUpdate(key, List.empty[(List[P], K)])
-    _psks.update(key, ps :+ (patterns, k))
+    val waitingContinuations =
+      _waitingContinuations.getOrElseUpdate(key, List.empty[WaitingContinuation[P, K]])
+    _waitingContinuations.update(key, waitingContinuations :+ continuation)
   }
 
-  def getPs(txn: T, channels: List[C]): List[List[P]] =
-    _psks.getOrElse(hashCs(channels), Nil).map(_._1)
+  private[storage] def getPs(txn: T, channels: List[C]): List[List[P]] =
+    _waitingContinuations.getOrElse(hashCs(channels), Nil).map(_.patterns)
 
-  def getAs(txn: T, channels: List[C]): List[A] =
-    _as.getOrElse(hashCs(channels), Nil)
+  def getAs(txn: T, channels: List[C]): List[Datum[A]] =
+    _data.getOrElse(hashCs(channels), List.empty[Datum[A]])
 
-  def getPsK(txn: T, curr: List[C]): List[(List[P], K)] =
-    _psks.getOrElse(hashCs(curr), List.empty[(List[P], K)])
+  def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] =
+    _waitingContinuations
+      .getOrElse(hashCs(curr), List.empty[WaitingContinuation[P, K]])
+      .map { (wk: WaitingContinuation[P, K]) =>
+        wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
+      }
 
   def removeA(txn: T, channel: C, index: Int): Unit =
     removeA(txn, List(channel), index)
 
   def removeA(txn: T, channels: List[C], index: Int): Unit = {
     val key = hashCs(channels)
-    for (as <- _as.get(key)) {
-      _as.update(key, dropIndex(as, index))
+    for (as <- _data.get(key)) {
+      _data.update(key, dropIndex(as, index))
     }
     collectGarbage(key)
   }
 
   def removePsK(txn: T, channels: List[C], index: Int): Unit = {
     val key = hashCs(channels)
-    for (psks <- _psks.get(key)) {
-      _psks.update(key, dropIndex(psks, index))
+    for (psks <- _waitingContinuations.get(key)) {
+      _waitingContinuations.update(key, dropIndex(psks, index))
     }
     collectGarbage(key)
   }
@@ -110,7 +116,7 @@ class InMemoryStore[C, P, A, K] private (
   def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
     val joinKey = hashCs(List(c))
     val csKey   = hashCs(cs)
-    if (_psks.get(csKey).forall(_.isEmpty)) {
+    if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
       _joinMap.removeBinding(c, csKey)
     }
     collectGarbage(joinKey)
@@ -124,10 +130,16 @@ class InMemoryStore[C, P, A, K] private (
   def close(): Unit = ()
 
   def isEmpty: Boolean =
-    _psks.isEmpty && _as.isEmpty && _keys.isEmpty && _joinMap.isEmpty
+    _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
 }
 
 object InMemoryStore {
+
+  /* UGLY HACK FOR TESTING */
+  def roundTrip[A <: Serializable](a: A): A = {
+    val ser = makeSerializeFromSerializable[A]
+    ser.decode(ser.encode(a)).fold(throw _, identity)
+  }
 
   def hashBytes(bs: Array[Byte]): Array[Byte] =
     MessageDigest.getInstance("SHA-256").digest(bs)
@@ -135,11 +147,11 @@ object InMemoryStore {
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
 
-  def create[C, P, A, K](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _keys = mutable.HashMap.empty[String, List[C]],
-      _psks = mutable.HashMap.empty[String, List[(List[P], K)]],
-      _as = mutable.HashMap.empty[String, List[A]],
+      _waitingContinuations = mutable.HashMap.empty[String, List[WaitingContinuation[P, K]]],
+      _data = mutable.HashMap.empty[String, List[Datum[A]]],
       _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
     )
 }
