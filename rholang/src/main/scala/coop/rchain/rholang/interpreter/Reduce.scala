@@ -89,10 +89,11 @@ object Reduce {
       val substBody = substitute(body)(env)
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
-        case bind +: Nil =>
+        case _ =>
+          val (patterns: List[List[Channel]], channels: List[Quote]) = binds.unzip
           internalConsume(tupleSpace,
-                          List(Channel(bind._2)),
-                          List(bind._1.toList),
+                          channels.map(q => Channel(q)),
+                          patterns,
                           substBody,
                           persist = persistent) match {
             case Some((continuation, dataList)) =>
@@ -101,8 +102,6 @@ object Reduce {
               Task.pure(Some((continuation, newEnv)))
             case None => Task.pure(None)
           }
-        // TODO: join should be almost free with internalConsume but test cases still need to be written
-        case _ => Task raiseError new Error("Error: joins are not currently implemented.")
       }
     }
 

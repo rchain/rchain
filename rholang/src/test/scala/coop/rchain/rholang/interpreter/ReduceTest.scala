@@ -242,4 +242,71 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       )
     )
   }
+
+  "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
+    val send1 =
+      Send(Quote(GString("channel1")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+    val send2 =
+      Send(Quote(GString("channel2")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+    val receive = Receive(
+      Seq(
+        ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+                    Quote(GString("channel1"))),
+        ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
+                    Quote(GString("channel2")))
+      ),
+      Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+      false,
+      3,
+      0,
+      BitSet()
+    )
+    val sendFirstResult = withTestStore(testStore) { store =>
+      val interpreter = Reduce.makeInterpreter(store)
+      val inspectTaskSendFirst = for {
+        _ <- interpreter.eval(send1)(Env())
+        _ <- interpreter.eval(send2)(Env())
+        _ <- interpreter.eval(receive)(Env())
+      } yield store.toHashMap
+      Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
+    }
+    sendFirstResult should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+      )
+    )
+
+    val receiveFirstResult = withTestStore(testStore) { store =>
+      val interpreter = Reduce.makeInterpreter(store)
+      val inspectTaskReceiveFirst = for {
+        _ <- interpreter.eval(receive)(Env())
+        _ <- interpreter.eval(send1)(Env())
+        _ <- interpreter.eval(send2)(Env())
+      } yield store.toHashMap
+      Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
+    }
+    receiveFirstResult should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+      )
+    )
+
+    val interleavedResult = withTestStore(testStore) { store =>
+      val interpreter = Reduce.makeInterpreter(store)
+      val inspectTaskInterleaved = for {
+        _ <- interpreter.eval(send1)(Env())
+        _ <- interpreter.eval(receive)(Env())
+        _ <- interpreter.eval(send2)(Env())
+      } yield store.toHashMap
+      Await.result(inspectTaskInterleaved.runAsync, 3.seconds)
+    }
+    interleavedResult should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+      )
+    )
+  }
 }
