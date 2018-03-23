@@ -10,7 +10,8 @@ import org.scalatest._
 
 abstract class StorageActionsBase extends FlatSpec with Matchers with OptionValues {
 
-  type TestStore = IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
+  type TestStore =
+    IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
 
   val logger: Logger = Logger[StorageActionsTests]
 

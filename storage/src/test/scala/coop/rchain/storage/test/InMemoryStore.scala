@@ -131,8 +131,25 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   def getPs(txn: T, channels: List[C]): List[List[P]] =
     _waitingContinuations.getOrElse(hashCs(channels), Nil).map(_.patterns)
 
+  def clear(): Unit = {
+    _keys.clear()
+    _waitingContinuations.clear()
+    _data.clear()
+    _joinMap.clear()
+  }
+
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
+
+  def keys(): List[List[C]] = _keys.values.toList
+
+  def toHashMap: mutable.HashMap[List[C], Row[P, A, K]] =
+    _keys.map {
+      case (hash, cs) =>
+        val data = _data.get(hash)
+        val wks  = _waitingContinuations.get(hash)
+        (cs, Row(data, wks))
+    }
 }
 
 object InMemoryStore {
