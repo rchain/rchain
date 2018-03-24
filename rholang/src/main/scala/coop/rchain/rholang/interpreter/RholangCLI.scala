@@ -1,16 +1,13 @@
 package coop.rchain.rholang.interpreter
 
 import java.io._
-import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.{Channel, ListChannel, Par, PrettyPrinter}
+import coop.rchain.models.{Channel, Par, PrettyPrinter}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.storage.examples.StringExamples.{Pattern, StringsCaptor}
-import coop.rchain.storage.{InMemoryStore, LMDBStore, Serialize}
+import coop.rchain.storage.{InMemoryStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
@@ -20,7 +17,7 @@ import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
