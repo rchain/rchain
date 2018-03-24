@@ -2,14 +2,13 @@ package coop.rchain.rholang.interpreter.storage
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
-import coop.rchain.storage.InMemoryStore
+import coop.rchain.storage.IStore
 import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rholang.interpreter.implicits._
 
 object StoragePrinter {
-  // TODO: Swap with IStore
-  def prettyPrint(store: InMemoryStore[Channel, List[Channel], List[Channel], Par]): Unit = {
-    val pars: Seq[Par] = store.toHashMap.map {
+  def prettyPrint(store: IStore[Channel, List[Channel], List[Channel], Par]): Unit = {
+    val pars: Seq[Par] = store.toMap.map {
       case ((channels: List[Channel], row: Row[List[Channel], List[Channel], Par])) => {
         def toSends(data: List[Datum[List[Channel]]]): Par = {
           val sends: Seq[Send] = data.flatMap {
