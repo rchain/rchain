@@ -63,7 +63,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val resultTask  = interpreter.eval(send)(Env())
       val inspectTask = for {
         _ <- resultTask
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
@@ -96,7 +96,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val resultTask  = interpreter.eval(receive)(Env())
       val inspectTask = for {
         _ <- resultTask
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
@@ -137,7 +137,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val inspectTaskSendFirst = for {
         _ <- interpreter.eval(send)(Env())
         _ <- interpreter.eval(receive)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
     sendFirstResult should be(
@@ -153,7 +153,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val inspectTaskReceiveFirst = for {
         _ <- interpreter.eval(receive)(Env())
         _ <- interpreter.eval(send)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
     receiveFirstResult should be(
@@ -184,7 +184,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val inspectTaskSendFirst = for {
         _ <- interpreter.eval(send)(Env())
         _ <- interpreter.eval(receive)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
     sendFirstResult should be(
@@ -200,7 +200,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val inspectTaskReceiveFirst = for {
         _ <- interpreter.eval(receive)(Env())
         _ <- interpreter.eval(send)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
     receiveFirstResult should be(
@@ -234,7 +234,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       val matchTask   = interpreter.eval(matchTerm)(env)
       val inspectTask = for {
         _ <- matchTask
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
@@ -276,7 +276,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
         _ <- interpreter.eval(send1)(Env())
         _ <- interpreter.eval(send2)(Env())
         _ <- interpreter.eval(receive)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
     }
     sendFirstResult should be(
@@ -293,7 +293,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
         _ <- interpreter.eval(receive)(Env())
         _ <- interpreter.eval(send1)(Env())
         _ <- interpreter.eval(send2)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
     }
     receiveFirstResult should be(
@@ -310,7 +310,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
         _ <- interpreter.eval(send1)(Env())
         _ <- interpreter.eval(receive)(Env())
         _ <- interpreter.eval(send2)(Env())
-      } yield store.toHashMap
+      } yield store.toMap
       Await.result(inspectTaskInterleaved.runAsync, 3.seconds)
     }
     interleavedResult should be(
