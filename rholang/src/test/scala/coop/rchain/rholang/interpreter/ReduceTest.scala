@@ -30,7 +30,7 @@ trait InMemoryStoreTester {
 
 class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
   implicit val serializer = Serialize.mkProtobufInstance(Channel)
-  val testStore           = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+  val testStore           = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
 
   "evalExpr" should "handle simple addition" in {
 
@@ -72,7 +72,9 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
         List(Channel(Quote(GString("channel")))) ->
           Row(
             Some(
-              List(Datum(List[Quote](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))), false))
+              List(
+                Datum[List[Channel]](List[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
+                                     false))
             ),
             None
           )
@@ -106,11 +108,11 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
             None,
             Some(
               List(
-                WaitingContinuation(List(List(Channel(ChanVar(FreeVar(0))),
-                                              Channel(ChanVar(FreeVar(1))),
-                                              Channel(ChanVar(FreeVar(2))))),
-                                    Par(),
-                                    false)
+                WaitingContinuation[List[Channel], Par](List(List(Channel(ChanVar(FreeVar(0))),
+                                                                  Channel(ChanVar(FreeVar(1))),
+                                                                  Channel(ChanVar(FreeVar(2))))),
+                                                        Par(),
+                                                        false)
               )
             )
           )
@@ -141,7 +143,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     sendFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
 
@@ -156,7 +159,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     receiveFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
   }
@@ -186,7 +190,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     sendFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
 
@@ -201,7 +206,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     receiveFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
   }
@@ -236,7 +242,10 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           Row(
-            Some(List(Datum(List(Quote(GPrivate("one")), Quote(GPrivate("zero"))), false))),
+            Some(
+              List(
+                Datum[List[Channel]](List[Channel](Quote(GPrivate("one")), Quote(GPrivate("zero"))),
+                                     false))),
             None
           )
       )
@@ -273,7 +282,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     sendFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
 
@@ -289,7 +299,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     receiveFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
 
@@ -305,7 +316,8 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     interleavedResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum(List(Quote(GString("Success"))), false))), None)
+          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
+              None)
       )
     )
   }

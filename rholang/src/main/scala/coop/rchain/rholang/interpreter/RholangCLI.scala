@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import java.io._
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.{Channel, Par, PrettyPrinter}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
@@ -18,7 +17,7 @@ import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -66,8 +65,9 @@ object RholangCLI {
 
   private def repl = {
     implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    val memStore            = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+    val memStore            = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
     val interp              = Reduce.makeInterpreter(memStore)
+
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
