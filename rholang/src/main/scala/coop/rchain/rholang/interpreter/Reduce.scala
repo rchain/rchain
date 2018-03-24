@@ -43,7 +43,7 @@ object Reduce {
   // TODO: How do I not define this twice?
   type Cont[Data, Body] = (Body, Env[Data])
 
-  class DebruijnInterpreter(tupleSpace: IStore[Channel, List[Channel], List[Quote], Par])
+  class DebruijnInterpreter(tupleSpace: IStore[Channel, List[Channel], List[Channel], Par])
       extends Reduce[Task, Quote, Par, Channel, Par] {
 
     // This makes sense. Run a Par in the empty environment.
@@ -62,11 +62,13 @@ object Reduce {
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
       // TODO: Handle the environment in the store
-      val substData: List[Quote] = data.toList.map(p => Quote(substitute(p)(env)))
+      val substData: List[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
       internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
-        case Some((body, dataList)) =>
+        case Some((body, dataList: List[List[Channel]])) =>
           val newEnv: Env[Par] =
-            Env.makeEnv(dataList.flatMap(identity).map({ case Quote(p) => p }): _*)
+            Env.makeEnv(
+              dataList.flatten
+                .map({ case Channel(Quote(p)) => p }): _*)
           Task.pure(Some((body, newEnv)))
         case None => Task.pure(None)
       }
@@ -90,15 +92,17 @@ object Reduce {
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case _ =>
-          val (patterns: List[List[Channel]], channels: List[Quote]) = binds.unzip
+          val (patterns: List[List[Channel]], sources: List[Quote]) = binds.unzip
           internalConsume(tupleSpace,
-                          channels.map(q => Channel(q)),
+                          sources.map(q => Channel(q)),
                           patterns,
                           substBody,
                           persist = persistent) match {
             case Some((continuation, dataList)) =>
               val newEnv: Env[Par] =
-                Env.makeEnv(dataList.flatten.map({ case Quote(p) => p }): _*)
+                Env.makeEnv(
+                  dataList.flatten
+                    .map({ case Channel(Quote(p)) => p }): _*)
               Task.pure(Some((continuation, newEnv)))
             case None => Task.pure(None)
           }
@@ -492,6 +496,6 @@ object Reduce {
   }
 
   def makeInterpreter(
-      tupleSpace: IStore[Channel, List[Channel], List[Quote], Par]): DebruijnInterpreter =
+      tupleSpace: IStore[Channel, List[Channel], List[Channel], Par]): DebruijnInterpreter =
     new DebruijnInterpreter(tupleSpace)
 }

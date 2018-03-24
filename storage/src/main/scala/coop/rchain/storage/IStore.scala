@@ -1,5 +1,9 @@
 package coop.rchain.storage
 
+import coop.rchain.storage.internal._
+
+import scala.collection.mutable
+
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
@@ -12,52 +16,52 @@ trait IStore[C, P, A, K] {
   /**
     * The type of hashes
     */
-  type H
+  private[storage] type H
+
+  /**
+    * The type of transactions
+    */
+  private[storage] type T
 
   private[storage] def hashCs(channels: List[C])(implicit sc: Serialize[C]): H
-
-  private[storage] def putCs(txn: T, channels: List[C]): Unit
 
   private[storage] def getKey(txn: T, hash: H): List[C]
 
   private[storage] def removeA(txn: T, channels: List[C], index: Int): Unit
 
-  /**
-    * The type of transactions
-    */
-  type T
+  private[storage] def createTxnRead(): T
 
-  def createTxnRead(): T
+  private[storage] def createTxnWrite(): T
 
-  def createTxnWrite(): T
+  private[storage] def withTxn[R](txn: T)(f: T => R): R
 
-  def withTxn[R](txn: T)(f: T => R): R
+  private[storage] def putA(txn: T, channels: List[C], datum: Datum[A]): Unit
 
-  def putA(txn: T, channels: List[C], datum: Datum[A]): Unit
+  private[storage] def putK(txn: T,
+                            channels: List[C],
+                            continuation: WaitingContinuation[P, K]): Unit
 
-  def putK(txn: T, channels: List[C], continuation: WaitingContinuation[P, K]): Unit
+  private[storage] def getAs(txn: T, channels: List[C]): List[Datum[A]]
 
-  private[storage] def getPs(txn: T, channels: List[C]): List[List[P]]
+  private[storage] def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]]
 
-  def getAs(txn: T, channels: List[C]): List[Datum[A]]
+  private[storage] def removeA(txn: T, channel: C, index: Int): Unit
 
-  def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]]
-
-  def removeA(txn: T, channel: C, index: Int): Unit
-
-  def removePsK(txn: T, channels: List[C], index: Int): Unit
+  private[storage] def removePsK(txn: T, channels: List[C], index: Int): Unit
 
   // compare to store.joinMap.addBinding
-  def addJoin(txn: T, c: C, cs: List[C]): Unit
+  private[storage] def addJoin(txn: T, c: C, cs: List[C]): Unit
 
   // compare to store.joinMap.get(c).toList.flatten
-  def getJoin(txn: T, c: C): List[List[C]]
+  private[storage] def getJoin(txn: T, c: C): List[List[C]]
 
   // compare to store.joinMap.removeBinding
-  def removeJoin(txn: T, c: C, cs: List[C]): Unit
+  private[storage] def removeJoin(txn: T, c: C, cs: List[C]): Unit
 
   // compare to store.joinMap.remove
-  def removeAllJoins(txn: T, c: C): Unit
+  private[storage] def removeAllJoins(txn: T, c: C): Unit
+
+  def toMap: Map[List[C], Row[P, A, K]]
 
   def close(): Unit
 }

@@ -1,16 +1,14 @@
-package coop.rchain.storage.test
+package coop.rchain.storage
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-import coop.rchain.storage._
 import coop.rchain.storage.examples._
+import coop.rchain.storage.internal._
 import coop.rchain.storage.util.dropIndex
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
-
-case class Row[P, A, K](data: Option[List[Datum[A]]], wks: Option[List[WaitingContinuation[P, K]]])
 
 class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, List[C]],
@@ -19,9 +17,11 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _joinMap: mutable.MultiMap[C, String]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
-    with ITestableStore {
+    with ITestableStore[C, P] {
 
-  type H = String
+  private[storage] type H = String
+
+  private[storage] type T = Unit
 
   private[storage] def hashCs(cs: List[C])(implicit sc: Serialize[C]): H =
     printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
@@ -32,23 +32,11 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   private[storage] def getKey(txn: T, s: H) =
     _keys.getOrElse(s, List.empty[C])
 
-  type T = Unit
+  private[storage] def createTxnRead(): Unit = ()
 
-  def createTxnRead(): Unit = ()
+  private[storage] def createTxnWrite(): Unit = ()
 
-  def createTxnWrite(): Unit = ()
-
-  def keys(): List[List[C]] = _keys.values.toList
-
-  def toHashMap: mutable.HashMap[List[C], Row[P, A, K]] =
-    _keys.map {
-      case (hash, cs) =>
-        val data = _data.get(hash)
-        val wks  = _waitingContinuations.get(hash)
-        (cs, Row(data, wks))
-    }
-
-  def withTxn[R](txn: T)(f: T => R): R =
+  private[storage] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
   def collectGarbage(key: H): Unit = {
@@ -72,14 +60,16 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     }
   }
 
-  def putA(txn: T, channels: List[C], datum: Datum[A]): Unit = {
+  private[storage] def putA(txn: T, channels: List[C], datum: Datum[A]): Unit = {
     val key = hashCs(channels)
     putCs(txn, channels)
     val datums = _data.getOrElseUpdate(key, List.empty[Datum[A]])
-    _data.update(key, datums :+ datum)
+    _data.update(key, datum +: datums)
   }
 
-  def putK(txn: T, channels: List[C], continuation: WaitingContinuation[P, K]): Unit = {
+  private[storage] def putK(txn: T,
+                            channels: List[C],
+                            continuation: WaitingContinuation[P, K]): Unit = {
     val key = hashCs(channels)
     putCs(txn, channels)
     val waitingContinuations =
@@ -87,23 +77,20 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _waitingContinuations.update(key, waitingContinuations :+ continuation)
   }
 
-  private[storage] def getPs(txn: T, channels: List[C]): List[List[P]] =
-    _waitingContinuations.getOrElse(hashCs(channels), Nil).map(_.patterns)
-
-  def getAs(txn: T, channels: List[C]): List[Datum[A]] =
+  private[storage] def getAs(txn: T, channels: List[C]): List[Datum[A]] =
     _data.getOrElse(hashCs(channels), List.empty[Datum[A]])
 
-  def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] =
+  private[storage] def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] =
     _waitingContinuations
       .getOrElse(hashCs(curr), List.empty[WaitingContinuation[P, K]])
       .map { (wk: WaitingContinuation[P, K]) =>
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
       }
 
-  def removeA(txn: T, channel: C, index: Int): Unit =
+  private[storage] def removeA(txn: T, channel: C, index: Int): Unit =
     removeA(txn, List(channel), index)
 
-  def removeA(txn: T, channels: List[C], index: Int): Unit = {
+  private[storage] def removeA(txn: T, channels: List[C], index: Int): Unit = {
     val key = hashCs(channels)
     for (as <- _data.get(key)) {
       _data.update(key, dropIndex(as, index))
@@ -111,7 +98,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     collectGarbage(key)
   }
 
-  def removePsK(txn: T, channels: List[C], index: Int): Unit = {
+  private[storage] def removePsK(txn: T, channels: List[C], index: Int): Unit = {
     val key = hashCs(channels)
     for (psks <- _waitingContinuations.get(key)) {
       _waitingContinuations.update(key, dropIndex(psks, index))
@@ -119,13 +106,13 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     collectGarbage(key)
   }
 
-  def addJoin(txn: T, c: C, cs: List[C]): Unit =
+  private[storage] def addJoin(txn: T, c: C, cs: List[C]): Unit =
     _joinMap.addBinding(c, hashCs(cs))
 
-  def getJoin(txn: T, c: C): List[List[C]] =
+  private[storage] def getJoin(txn: T, c: C): List[List[C]] =
     _joinMap.getOrElse(c, Set.empty[String]).toList.map(getKey(txn, _))
 
-  def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
+  private[storage] def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
     val joinKey = hashCs(List(c))
     val csKey   = hashCs(cs)
     if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
@@ -134,12 +121,15 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     collectGarbage(joinKey)
   }
 
-  def removeAllJoins(txn: T, c: C): Unit = {
+  private[storage] def removeAllJoins(txn: T, c: C): Unit = {
     _joinMap.remove(c)
     collectGarbage(hashCs(List(c)))
   }
 
   def close(): Unit = ()
+
+  def getPs(txn: T, channels: List[C]): List[List[P]] =
+    _waitingContinuations.getOrElse(hashCs(channels), Nil).map(_.patterns)
 
   def clear(): Unit = {
     _keys.clear()
@@ -150,6 +140,14 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
+
+  def toMap: Map[List[C], Row[P, A, K]] =
+    _keys.map {
+      case (hash, cs) =>
+        val data = _data.get(hash)
+        val wks  = _waitingContinuations.get(hash)
+        (cs, Row(data, wks))
+    }.toMap
 }
 
 object InMemoryStore {
