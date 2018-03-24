@@ -1,14 +1,16 @@
 package coop.rchain.rholang.interpreter
 
 import java.io._
+import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.{Channel, Par, PrettyPrinter}
+import coop.rchain.models.{Channel, ListChannel, Par, PrettyPrinter}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.storage.{InMemoryStore, Serialize}
+import coop.rchain.storage.examples.StringExamples.{Pattern, StringsCaptor}
+import coop.rchain.storage.{InMemoryStore, LMDBStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
@@ -66,8 +68,9 @@ object RholangCLI {
 
   private def repl = {
     implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    val memStore            = InMemoryStore.create[Channel, List[Channel], List[Quote], Par]
+    val memStore            = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
     val interp              = Reduce.makeInterpreter(memStore)
+
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")

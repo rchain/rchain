@@ -4,19 +4,18 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.storage.InMemoryStore
 import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
-
 import coop.rchain.rholang.interpreter.implicits._
 
 object StoragePrinter {
-  // TODO: Swap InMemoryStore with IStore
-  def prettyPrint(store: InMemoryStore[Channel, List[Channel], List[Quote], Par]): Unit = {
+  // TODO: Swap with IStore
+  def prettyPrint(store: InMemoryStore[Channel, List[Channel], List[Channel], Par]): Unit = {
     val pars: Seq[Par] = store.toHashMap.map {
-      case ((channels: List[Channel], row: Row[List[Channel], List[Quote], Par])) => {
-        def toSends(data: List[Datum[List[Quote]]]): Par = {
+      case ((channels: List[Channel], row: Row[List[Channel], List[Channel], Par])) => {
+        def toSends(data: List[Datum[List[Channel]]]): Par = {
           val sends: Seq[Send] = data.flatMap {
-            case Datum(as: List[Quote], persist: Boolean) =>
+            case Datum(as: List[Channel], persist: Boolean) =>
               channels.map { channel =>
-                Send(Some(channel), as.map { case Quote(p) => p }, persist)
+                Send(Some(channel), as.map { case Channel(Quote(p)) => p }, persist)
               }
           }
           sends.foldLeft(Par()) { (acc: Par, send: Send) =>
@@ -41,10 +40,10 @@ object StoragePrinter {
         }
 
         row match {
-          case Row(Some(data: List[Datum[List[Quote]]]),
+          case Row(Some(data: List[Datum[List[Channel]]]),
                    Some(wks: List[WaitingContinuation[List[Channel], Par]])) =>
             toSends(data) ++ toReceive(wks)
-          case Row(Some(data: List[Datum[List[Quote]]]), None) =>
+          case Row(Some(data: List[Datum[List[Channel]]]), None) =>
             toSends(data)
           case Row(None, Some(wks: List[WaitingContinuation[List[Channel], Par]])) =>
             toReceive(wks)
