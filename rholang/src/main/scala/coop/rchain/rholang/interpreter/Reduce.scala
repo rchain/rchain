@@ -86,9 +86,7 @@ object Reduce {
       *          will be @param body if the continuation is not None.
       */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
-      // TODO: Allow for the environment to be stored with the body in the Tuplespace
-      val substBody = substitute(body)(env)
+        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case _ =>
@@ -96,7 +94,7 @@ object Reduce {
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)),
                           patterns,
-                          substBody,
+                          body,
                           persist = persistent) match {
             case Some((continuation, dataList)) =>
               val newEnv: Env[Par] =
@@ -107,7 +105,6 @@ object Reduce {
             case None => Task.pure(None)
           }
       }
-    }
 
     /**
       * Variable "evaluation" is an environment lookup, but
@@ -127,7 +124,8 @@ object Reduce {
             case Some(par) =>
               Task.pure(par)
             case None =>
-              Task raiseError new IllegalStateException("Unbound variable")
+              Task raiseError new IllegalStateException(
+                "Unbound variable: " + level + " in " + env.envMap)
           }
         case Wildcard(_) =>
           Task raiseError new IllegalStateException(
@@ -175,15 +173,11 @@ object Reduce {
       * @param env0 An execution context
       * @return
       */
-    def eval(send: Send)(implicit env: Env[Par]): Task[Unit] = {
-      println("sending: " + send)
+    def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
       for {
         quote           <- eval(send.chan.get)
         data            <- send.data.toList.traverse(x => evalExpr(x)(env))
         subChan: Quote  = substitute(quote)
-        _               = println("quote is: " + quote)
-        _               = println("subChan is: " + subChan)
-        _               = println("data is: " + data)
         optContinuation <- produce(subChan, data, send.persistent)
 
         _ <- optContinuation match {
@@ -192,14 +186,15 @@ object Reduce {
               case None => Task.unit
             }
       } yield ()
-    }
 
     def eval(receive: Receive)(implicit env: Env[Par]): Task[Unit] =
       for {
         binds <- receive.binds.toList
                   .traverse((rb: ReceiveBind) =>
                     eval(rb.source.get).map(quote => (rb.patterns, substitute(quote))))
-        optContinuation <- consume(binds, receive.body.get, receive.persistent)
+        // TODO: Allow for the environment to be stored with the body in the Tuplespace
+        substBody       = substitute(receive.body.get)(env.shift(receive.bindCount))
+        optContinuation <- consume(binds, substBody, receive.persistent)
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
                 continue(body)(newEnv)
