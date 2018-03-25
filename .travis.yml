@@ -41,24 +41,8 @@ matrix:
           - haskell-platform
           - rpm
           - fakeroot
-  - language: scala
+  - language: nix 
     env: SUBPROJECT=rholang_more_tests
-    scala: 2.12.4
-    sbt_args: -no-colors
-    install:
-      - ./scripts/install_secp.sh
-      - ./scripts/install_sodium.sh
-      - ./scripts/install.sh
-    addons:
-      apt:
-        sources:
-          - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
-        packages:
-          - sbt
-          - jflex
-          - haskell-platform
-          - rpm
-          - fakeroot
 
 script:
   - ./ci/build-subprojects.sh

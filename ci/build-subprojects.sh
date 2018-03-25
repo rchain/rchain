@@ -26,8 +26,13 @@ case "$SUBPROJECT" in "rosette")
 
 "rholang_more_tests")
 
-    cd rosette
-    nix-build
+	# Prep nix 
+	nix-env -iA nixpkgs.openjdk8 nixpkgs.sbt
+	nix-env -f nix/default.nix -iA rchainPackages
+
+	# Build rosette binary
+	cd rosette
+	nix-build
 
     ci/rholang-more-tests-main.sh
     ;;
