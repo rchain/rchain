@@ -2,9 +2,10 @@ package coop.rchain.rholang.interpreter.storage
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.storage.IStore
 import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.rholang.interpreter.implicits._
 
 object StoragePrinter {
   def prettyPrint(store: IStore[Channel, List[Channel], List[Channel], Par]): Unit = {
@@ -58,7 +59,7 @@ object StoragePrinter {
       val par = pars.reduce { (p1: Par, p2: Par) =>
         p1 ++ p2
       }
-      PrettyPrinter.prettyPrint(par)
+      PrettyPrinter().buildString(par)
     }
   }
 }
