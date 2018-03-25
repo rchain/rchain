@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export PATH=$PATH:$(pwd -P)/ci
 source ci/header.sh
 
 # Remove rholang rbls used in testing
