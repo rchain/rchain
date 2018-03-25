@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -ev
+set -e
 
 case "$SUBPROJECT" in "rosette")
 
@@ -26,13 +26,13 @@ case "$SUBPROJECT" in "rosette")
 
 "rholang_more_tests")
 
-	# Prep nix 
-	nix-env -iA nixpkgs.openjdk8 nixpkgs.sbt
-	nix-env -f nix/default.nix -iA rchainPackages
+    # Prep nix 
+    nix-env -iA nixpkgs.openjdk8 nixpkgs.sbt
+    nix-env -f nix/default.nix -iA rchainPackages
 
-	# Build rosette binary
-	cd rosette
-	nix-build
+    # Build rosette binary
+    cd rosette
+    nix-build
 
     cd ${TRAVIS_BUILD_DIR}
 
