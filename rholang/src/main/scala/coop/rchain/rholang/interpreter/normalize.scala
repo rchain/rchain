@@ -353,8 +353,6 @@ object ProcNormalizeMatcher {
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
         val freeCount = bodyResult.knownFree.count - input.knownFree.count
-        println("Channel locallyFree is: " + ChannelLocallyFree.locallyFree(nameMatchResult.chan))
-        println("Body locallyFree is: " + bodyResult.par.locallyFree)
         ProcVisitOutputs(
           input.par.prepend(
             Receive(
