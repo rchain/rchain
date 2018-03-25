@@ -8,8 +8,7 @@ export ESS_SYSDIR=${ROSETTE_ROOT_DIR}/rbl/rosette
 test_rbl_pass () {
     rbl_file = $1
     ${ROSETTE_ROOT_DIR}/build.out/src/rosette --verbose \
-        --boot-dir=${ROSETTE_ROOT_DIR}/rbl/rosette ${rbl_file} \
-        grep ^Pass
+        --boot-dir=${ROSETTE_ROOT_DIR}/rbl/rosette ${rbl_file} | grep ^Pass
 }
 
 for rbl_file in $( ls ${RHOLANG_ROOT_DIR}/tests/*.rbl ); do
