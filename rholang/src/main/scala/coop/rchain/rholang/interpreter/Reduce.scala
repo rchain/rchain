@@ -16,6 +16,7 @@ import cats.implicits._
 import monix.eval.{MVar, Task}
 
 import scala.annotation.tailrec
+import scala.collection.immutable.BitSet
 import storage.implicits._
 import coop.rchain.storage.{IStore, consume => internalConsume, produce => internalProduce}
 
@@ -388,7 +389,13 @@ object Reduce {
             b2 <- evalToBool(p2.get)
           } yield GBool(b1 || b2)
         case EVarBody(ev) => Task.pure[Expr](ev)
-        case _            => Task raiseError new Error("Unimplemented expression.")
+        case EListBody(el) => {
+          for {
+            evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr)(env))
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
+        }
+        case _ => Task raiseError new Error("Unimplemented expression: " + expr)
       }
     }
 
@@ -490,6 +497,22 @@ object Reduce {
       for {
         evaledExprs <- par.exprs.toList.traverse(expr => evalExpr(expr)(env))
       } yield par.copy(exprs = evaledExprs)
+
+    def updateLocallyFree(par: Par): Par = {
+      val resultLocallyFree =
+        par.sends.foldLeft(BitSet())((acc, send) => acc | send.locallyFree) |
+          par.receives.foldLeft(BitSet())((acc, receive) => acc | receive.locallyFree) |
+          par.evals.foldLeft(BitSet())((acc, eval) => acc | EvalLocallyFree.locallyFree(eval)) |
+          par.news.foldLeft(BitSet())((acc, newProc) => acc | newProc.locallyFree) |
+          par.exprs.foldLeft(BitSet())((acc, expr) => acc | ExprLocallyFree.locallyFree(expr)) |
+          par.matches.foldLeft(BitSet())((acc, matchProc) => acc | matchProc.locallyFree)
+      par.copy(locallyFree = resultLocallyFree)
+    }
+
+    def updateLocallyFree(elist: EList): EList = {
+      val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
+      elist.copy(locallyFree = resultLocallyFree)
+    }
 
     def debug(msg: String): Unit = {
       val now = java.time.format.DateTimeFormatter.ISO_INSTANT
