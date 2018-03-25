@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-source ci/header.sh
+export PATH=$PATH:$(pwd -P)/ci
+source header.sh
 
-${project_root_dir}/ci/build-rosette.sh
-${project_root_dir}/ci/build-rhoscala-rbls.sh
-${project_root_dir}/ci/test-rhoscala-rbls.sh
-${project_root_dir}/ci/clean-up.sh
+${PROJECT_ROOT_DIR}/ci/build-ubuntu-rosette.sh
+${PROJECT_ROOT_DIR}/ci/build-rhoscala-rbls.sh
+${PROJECT_ROOT_DIR}/ci/test-rholang-rbls.sh
+${PROJECT_ROOT_DIR}/ci/clean-up.sh
 
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
