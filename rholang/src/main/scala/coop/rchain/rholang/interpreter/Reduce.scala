@@ -182,7 +182,12 @@ object Reduce {
 
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
-                continue(body)(newEnv)
+                if (send.persistent) {
+                  Task.gather(
+                    Seq(continue(body)(newEnv), produce(subChan, data, send.persistent)(env)))
+                } else {
+                  continue(body)(newEnv)
+                }
               case None => Task.unit
             }
       } yield ()
@@ -197,7 +202,12 @@ object Reduce {
         optContinuation <- consume(binds, substBody, receive.persistent)
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
-                continue(body)(newEnv)
+                if (receive.persistent) {
+                  Task.gather(
+                    Seq(continue(body)(newEnv), consume(binds, substBody, receive.persistent)(env)))
+                } else {
+                  continue(body)(newEnv)
+                }
               case None => Task.unit
             }
       } yield ()
