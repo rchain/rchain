@@ -34,6 +34,8 @@ case "$SUBPROJECT" in "rosette")
 	cd rosette
 	nix-build
 
+    cd ${TRAVIS_BUILD_DIR}
+
     ci/rholang-more-tests-main.sh
     ;;
 
