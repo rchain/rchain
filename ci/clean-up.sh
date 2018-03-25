@@ -2,5 +2,5 @@
 source ci/header.sh
 
 # Remove rholang rbls used in testing
-rm -f ${rholang_root_dir}/tests/*.rbl
-rm -f ${rholang_root_dir}/failure_tests/*.rbl
+rm -f ${RHOLANG_ROOT_DIR}/tests/*.rbl
+rm -f ${RHOLANG_ROOT_DIR}/failure_tests/*.rbl

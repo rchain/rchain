@@ -2,9 +2,9 @@
 set -exo pipefail
 
 if [ "$TRAVIS" = "true" ]; then 
-    project_root_dir=${TRAVIS_BUILD_DIR}
+    PROJECT_ROOT_DIR=${TRAVIS_BUILD_DIR}
 else
-    project_root_dir=$(pwd)
+    PROJECT_ROOT_DIR=$(pwd -P)
 fi
 
 ## Detect if running in docker container - setup using sudo accordingly
@@ -15,7 +15,7 @@ else
     sudo="sudo"
 fi
 
-rosette_root_dir=${project_root_dir}/rosette
-rholang_root_dir=${project_root_dir}/rholang
+ROSETTE_ROOT_DIR=${PROJECT_ROOT_DIR}/rosette
+RHOLANG_ROOT_DIR=${PROJECT_ROOT_DIR}/rholang
 
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
