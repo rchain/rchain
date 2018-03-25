@@ -1,19 +1,32 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -ev
 
-if [ -d "${SUBPROJECT}" -a -f "${SUBPROJECT}/build.sh" ]; then
-    echo "${SUBPROJECT}/build.sh"
-    (cd "${SUBPROJECT}"; bash ./build.sh)
-elif [ "${SUBPROJECT}" = "rholang-more-tests" ]; then
+case "$SUBPROJECT" in "rosette")
+    cd rosette
+    nix-build
+
+     ./run.sh rbl/rosette/tests/simple_add.rbl
+     ;;
+
+ "core")
+     sbt -Dsbt.log.noformat=true clean bnfc:generate coverage test coverageReport
+
+     for sub in crypto comm rholang roscala storage node
+     do
+         (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
+     done
+     ;;
+
+ "test_artifact_creation")
+     sbt -Dsbt.log.noformat=true clean bnfc:generate node/rpm:packageBin node/debian:packageBin
+     ;;
+
+ "rholang_more_tests")
     ci/rholang-more-tests-main.sh
-elif [ "$SUBPROJECT" = "test_artifact_creation" ]; then
-    sbt -Dsbt.log.noformat=true clean bnfc:generate node/rpm:packageBin node/debian:packageBin
-elif [ -f "build.sbt" ]; then
-    sbt -Dsbt.log.noformat=true clean bnfc:generate coverage test coverageReport
-    for sub in crypto comm rholang roscala storage node; do
-	(bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
-    done
-else
-    echo "No build/test files found!"
-    exit 1
-fi
+     ;;
+
+ *)
+     echo "$SUBPROJECT build instructions are missing"
+     exit 1
+
+esac
