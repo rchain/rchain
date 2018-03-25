@@ -79,10 +79,11 @@ object Substitute {
         subExp(term.exprs) ++
           subEval(term.evals) ++
           Par(
-            sends = term.sends.map(substitute),
             evals = Nil,
-            news = term.news.map(substitute),
             exprs = Nil,
+            sends = term.sends.map(substitute),
+            receives = term.receives.map(substitute),
+            news = term.news.map(substitute),
             matches = term.matches.map(substitute),
             ids = term.ids,
             freeCount = term.freeCount,
