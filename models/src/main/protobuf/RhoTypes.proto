@@ -28,6 +28,10 @@ message Channel {
     }
 }
 
+message ListChannel {
+    repeated Channel channels = 1;
+}
+
 // While we use vars in both positions, when producing the normalized
 // representation we need a discipline to track whether a var is a name or a
 // process.
