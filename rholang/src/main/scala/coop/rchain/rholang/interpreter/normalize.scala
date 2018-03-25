@@ -492,7 +492,7 @@ object ProcNormalizeMatcher {
       case p: PMatch => {
         import scala.collection.JavaConverters._
 
-        val targetResult = normalizeMatch(p.proc_, input)
+        val targetResult = normalizeMatch(p.proc_, input.copy(par = Par()))
         val cases = p.listcase_.asScala.toList.map {
           case ci: CaseImpl => (ci.proc_1, ci.proc_2)
           case _            => throw new Error("Unexpected Case implementation.")
