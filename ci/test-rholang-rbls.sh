@@ -7,7 +7,7 @@ export ESS_SYSDIR=${ROSETTE_ROOT_DIR}/result/lib/rosette
 ulimit -s unlimited
 
 test_rbl_pass () {
-    rbl_file = $1
+    rbl_file=$1
     ${ROSETTE_ROOT_DIR}/result/lib/rosette --verbose \
         --boot-dir ${ESS_SYSDIR} ${rbl_file} | grep ^Pass
 }
