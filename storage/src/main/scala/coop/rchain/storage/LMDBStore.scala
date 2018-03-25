@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.security.MessageDigest
 
+import scala.collection.JavaConverters._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.storage.Serialize.mkProtobufInstance
@@ -11,7 +12,9 @@ import coop.rchain.storage.datamodels._
 import coop.rchain.storage.internal._
 import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
-import org.lmdbjava.{Dbi, Env, Txn}
+import org.lmdbjava._
+
+import scala.collection.mutable
 
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
@@ -269,6 +272,19 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   def getPs(txn: T, channels: List[C]): List[List[P]] =
     getPsK(txn, channels).map(_.patterns)
+
+  def toMap: Map[List[C], Row[P, A, K]] =
+    withTxn(createTxnRead()) { txn =>
+      val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
+      withResource(_dbKeys.iterate(txn, keyRange)) { (it: CursorIterator[ByteBuffer]) =>
+        it.asScala.map { (x: CursorIterator.KeyVal[ByteBuffer]) =>
+          val channels: List[C] = getKey(txn, x.`key`())
+          val data              = getAs(txn, channels)
+          val wks               = getPsK(txn, channels)
+          (channels, Row(Some(data), Some(wks)))
+        }.toMap
+      }
+    }
 }
 
 object LMDBStore {

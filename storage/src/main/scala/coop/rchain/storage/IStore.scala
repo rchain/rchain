@@ -2,6 +2,8 @@ package coop.rchain.storage
 
 import coop.rchain.storage.internal._
 
+import scala.collection.mutable
+
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
@@ -58,6 +60,8 @@ trait IStore[C, P, A, K] {
 
   // compare to store.joinMap.remove
   private[storage] def removeAllJoins(txn: T, c: C): Unit
+
+  def toMap: Map[List[C], Row[P, A, K]]
 
   def close(): Unit
 }

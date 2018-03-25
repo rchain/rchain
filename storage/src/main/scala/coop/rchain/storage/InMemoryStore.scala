@@ -64,7 +64,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     val key = hashCs(channels)
     putCs(txn, channels)
     val datums = _data.getOrElseUpdate(key, List.empty[Datum[A]])
-    _data.update(key, datums :+ datum)
+    _data.update(key, datum +: datums)
   }
 
   private[storage] def putK(txn: T,
@@ -141,15 +141,13 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
 
-  def keys(): List[List[C]] = _keys.values.toList
-
-  def toHashMap: mutable.HashMap[List[C], Row[P, A, K]] =
+  def toMap: Map[List[C], Row[P, A, K]] =
     _keys.map {
       case (hash, cs) =>
         val data = _data.get(hash)
         val wks  = _waitingContinuations.get(hash)
         (cs, Row(data, wks))
-    }
+    }.toMap
 }
 
 object InMemoryStore {
