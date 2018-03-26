@@ -46,16 +46,7 @@ object SpatialMatcher {
         }
     }
 
-  @tailrec
-  def exists[T](prop: (T => Boolean), haystack: Seq[T]): Boolean =
-    haystack match {
-      case Nil => false
-      case head :: rest =>
-        if (prop(head))
-          true
-        else
-          exists(prop, rest)
-    }
+  def exists[T](prop: (T => Boolean), haystack: Seq[T]): Boolean = haystack.exists(prop)
 
   def emptyMap: FreeMap = Map.empty[Int, Par]
 
