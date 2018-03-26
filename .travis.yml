@@ -1,39 +1,56 @@
-language: scala
-scala:
-  - 2.12.4
-sbt_args: -no-colors
-dist: trusty
-env:
-  - SUBPROJECT=rosette
-  - SUBPROJECT=core
-  - SUBPROJECT=test_artifact_creation
-script:
-  - ./scripts/build-subprojects.sh
 sudo: required
-install:
-  - ./scripts/install_secp.sh
-  - ./scripts/install_sodium.sh
-  - ./scripts/install.sh
+dist: trusty
+
+matrix:
+  include:
+  - language: nix
+    env: SUBPROJECT=rosette
+  - language: scala
+    env: SUBPROJECT=core
+    scala: 2.12.4
+    sbt_args: -no-colors
+    install:
+      - ./scripts/install_secp.sh
+      - ./scripts/install_sodium.sh
+      - ./scripts/install.sh
+    addons:
+      apt:
+        sources:
+          - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
+        packages:
+          - sbt
+          - jflex
+          - haskell-platform
+          - rpm
+          - fakeroot
+  - language: scala
+    env: SUBPROJECT=test_artifact_creation
+    scala: 2.12.4
+    sbt_args: -no-colors
+    install:
+      - ./scripts/install_secp.sh
+      - ./scripts/install_sodium.sh
+      - ./scripts/install.sh
+    addons:
+      apt:
+        sources:
+          - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
+        packages:
+          - sbt
+          - jflex
+          - haskell-platform
+          - rpm
+          - fakeroot
+  - language: nix 
+    env: SUBPROJECT=rholang_more_tests
+
+script:
+  - ./ci/build-subprojects.sh
+
 cache:
   directories:
     - "$HOME/.ivy2/cache"
     - "$HOME/.sbt"
-notifications:
-  email:
-    recipients:
-      - rchain-makers@pyrofex.net
-    on_success: never
-    on_failure: always
-addons:
-    apt:
-        sources:
-            - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
-        packages:
-            - sbt
-            - jflex
-            - haskell-platform
-            - rpm
-            - fakeroot
 
 after_success:
   - "./scripts/create-artifacts.sh"
@@ -49,3 +66,9 @@ deploy:
   on:
     tags: true
     branch: master
+
+notifications:
+  email:
+    recipients: rchain-makers@pyrofex.net
+    on_success: never
+    on_failure: always
