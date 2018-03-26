@@ -4,10 +4,9 @@ import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.implicits.{GPrivate, _}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import implicits._
-import implicits.GPrivate
 
 import scala.collection.immutable.BitSet
 
@@ -61,7 +60,7 @@ class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
             ))))
 
     val result = PrettyPrinter().buildString(source)
-    val target = "new x0 in { for( x1 <- x0 ) { *x1 } }"
+    val target = "new x0 in { for( z1 <- x0 ) { *x1 } }"
     result shouldBe target
   }
 
@@ -87,7 +86,7 @@ class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
       )))
 
     val result = PrettyPrinter().buildString(source)
-    val target = "new x0 in { for( x1, x2 <- x0 ) { *x1 | *x2 } }"
+    val target = "new x0 in { for( z1, z2 <- x0 ) { *x1 | *x2 } }"
     result shouldBe target
   }
 
@@ -117,7 +116,7 @@ class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
       )))
 
     val result = PrettyPrinter().buildString(source)
-    val target = "new x0 in { for( x1 <- x0 ; x2 <- x0 ) { *x1 | *x2 } }"
+    val target = "new x0 in { for( z1 <- x0 ; z2 <- x0 ) { *x1 | *x2 } }"
     result shouldBe target
   }
 
@@ -150,7 +149,7 @@ class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
       )))
 
     val result = PrettyPrinter().buildString(source)
-    val target = "new x0, x1 in { for( x2, x3 <- x0 ; x4, x5 <- x1 ) { *x2 | *x3 | *x4 | *x5 } }"
+    val target = "new x0, x1 in { for( z2, z3 <- x0 ; z4, z5 <- x1 ) { *x2 | *x3 | *x4 | *x5 } }"
     result shouldBe target
   }
 
@@ -175,8 +174,7 @@ class PrettyPrinterTest extends FlatSpec with PropertyChecks with Matchers {
       )))
 
     val result = PrettyPrinter().buildString(source)
-    val target = "new x0 in { x0!(Nil) | for( x1 <- x0 ) { *x1 } }"
+    val target = "new x0 in { x0!(Nil) | for( z1 <- x0 ) { *x1 } }"
     result shouldBe target
   }
-
 }
