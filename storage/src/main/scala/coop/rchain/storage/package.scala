@@ -66,15 +66,16 @@ package object storage {
     *
     * If a match is found, then the continuation is returned along with the matching data.
     *
-    * If the matching data has been stored with the `persist` flag set to `true`, then the data
-    * will remain in the store.  Otherwise, the data will be removed from the store.
+    * Matching data stored with the `persist` flag set to `true` will not be removed when it is
+    * retrieved. See below for more information about using the `persist` flag.
     *
     * '''NOTE''':
     *
-    * If the persist flag is set to `true` and no matching data is found, then the continuation is
-    * put in the store and will remain there after subsequent matches are found. This means that
-    * in order to make a continuation "stick" in the store, the user will have to continue to
-    * [[consume]] until a `None` is received.
+    * A call to [[consume]] that is made with the persist flag set to `true` only persists when
+    * there is no matching data.
+    *
+    * This means that in order to make a continuation "stick" in the store, the user will have to
+    * continue to call [[consume]] until a `None` is received.
     *
     * @param store A store which satisfies the [[IStore]] interface.
     * @param channels A list of channels on which to search for matching data
@@ -164,19 +165,17 @@ package object storage {
     *
     * If a match is found, then the continuation is returned along with the matching data.
     *
-    * If pre-existing matching data has been stored with the `persist` flag set to `true`, then
-    * the data will remain in the store.  Otherwise, the data will be removed from the store.
-    *
-    * Similarly, if the continuation has been stored with the `persist` flag set to `true`, then the
-    * continuation will remain in the store.  Otherwise, the continuation will be removed from
-    * the store.
+    * Matching data or continuations stored with the `persist` flag set to `true` will not be
+    * removed when they are retrieved. See below for more information about using the `persist`
+    * flag.
     *
     * '''NOTE''':
     *
-    * If the persist flag is set to `true` and no matching continuation is found, then the data is
-    * put in the store and will remain there after subsequent matches are found.  This means that
-    * in order to make a piece of data "stick" in the store, the user will have to continue to
-    * [[produce]] until a `None` is received.
+    * A call to [[produce]] that is made with the persist flag set to `true` only persists when
+    * there are no matching continuations.
+    *
+    * This means that in order to make a piece of data "stick" in the store, the user will have to
+    * continue to call [[produce]] until a `None` is received.
     *
     * @param store A store which satisfies the [[IStore]] interface.
     * @param channel A channel on which to search for matching continuations and/or store data
