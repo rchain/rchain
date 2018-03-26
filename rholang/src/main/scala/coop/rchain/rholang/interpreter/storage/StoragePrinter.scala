@@ -59,7 +59,7 @@ object StoragePrinter {
       val par = pars.reduce { (p1: Par, p2: Par) =>
         p1 ++ p2
       }
-      PrettyPrinter().buildString(par)
+      println(PrettyPrinter().buildString(par))
     }
   }
 }
