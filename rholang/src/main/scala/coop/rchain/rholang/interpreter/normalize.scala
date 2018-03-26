@@ -353,8 +353,6 @@ object ProcNormalizeMatcher {
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
         val freeCount = bodyResult.knownFree.count - input.knownFree.count
-        println("Channel locallyFree is: " + ChannelLocallyFree.locallyFree(nameMatchResult.chan))
-        println("Body locallyFree is: " + bodyResult.par.locallyFree)
         ProcVisitOutputs(
           input.par.prepend(
             Receive(
@@ -494,7 +492,7 @@ object ProcNormalizeMatcher {
       case p: PMatch => {
         import scala.collection.JavaConverters._
 
-        val targetResult = normalizeMatch(p.proc_, input)
+        val targetResult = normalizeMatch(p.proc_, input.copy(par = Par()))
         val cases = p.listcase_.asScala.toList.map {
           case ci: CaseImpl => (ci.proc_1, ci.proc_2)
           case _            => throw new Error("Unexpected Case implementation.")

@@ -3,10 +3,10 @@ package coop.rchain.rholang.interpreter
 import java.io._
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.{Channel, Par, PrettyPrinter}
+import coop.rchain.models.{Channel, Par}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import coop.rchain.storage.{InMemoryStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
@@ -24,13 +24,14 @@ object RholangCLI {
     version("Rholang Mercury 0.2")
     banner("""
              |Takes in a rholang source file and
-             |outputs a normalized case class serialization for now.
+             |evaluates it.
              |
              |Options:
              |""".stripMargin)
     footer("\nWill add more options soon.")
 
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
+    val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
     val file   = trailArg[String](required = false, descr = "Rholang source file")
     verify()
   }
@@ -44,8 +45,10 @@ object RholangCLI {
 
       if (conf.binary()) {
         writeBinary(fileName, sortedTerm.get)
-      } else {
+      } else if (conf.text()) {
         writeHumanReadable(fileName, sortedTerm.get)
+      } else {
+        evaluate(sortedTerm.get)
       }
     } else {
       print("> ")
@@ -60,7 +63,8 @@ object RholangCLI {
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task {
       print("Evaluating:\n")
-      PrettyPrinter.prettyPrint(normalizedTerm)
+      println(PrettyPrinter().buildString(normalizedTerm))
+      print("\n> ")
     }
 
   private def repl = {
@@ -117,6 +121,27 @@ object RholangCLI {
       close()
     }
     println(s"Compiled $fileName to $compiledFileName")
+  }
+
+  private def evaluate(sortedTerm: Par): Unit = {
+    implicit val serializer                = Serialize.mkProtobufInstance(Channel)
+    val memStore                           = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
+    val interp                             = Reduce.makeInterpreter(memStore)
+    val evalTask                           = interp.inj(sortedTerm)
+    val evalFuture: CancelableFuture[Unit] = evalTask.runAsync
+    @tailrec
+    def keepTrying(): Unit =
+      Await.ready(evalFuture, 5.seconds).value match {
+        case Some(Success(_)) =>
+          print("Storage Contents:\n")
+          StoragePrinter.prettyPrint(memStore)
+        case Some(Failure(e: TimeoutException)) =>
+          println("This is taking a long time. Feel free to ^C and quit.")
+          keepTrying()
+        case Some(Failure(e)) => throw e
+        case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+      }
+    keepTrying()
   }
 
   private def writeBinary(fileName: String, sortedTerm: Par): Unit = {
