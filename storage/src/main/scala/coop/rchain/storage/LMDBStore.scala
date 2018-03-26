@@ -14,8 +14,6 @@ import coop.rchain.storage.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 
-import scala.collection.mutable
-
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbPsKs: Dbi[ByteBuffer],
@@ -281,7 +279,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
           val channels: List[C] = getKey(txn, x.`key`())
           val data              = getAs(txn, channels)
           val wks               = getPsK(txn, channels)
-          (channels, Row(Some(data), Some(wks)))
+          (channels, Row(data, wks))
         }.toMap
       }
     }

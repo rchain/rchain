@@ -144,8 +144,8 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   def toMap: Map[List[C], Row[P, A, K]] =
     _keys.map {
       case (hash, cs) =>
-        val data = _data.get(hash)
-        val wks  = _waitingContinuations.get(hash)
+        val data = _data.getOrElse(hash, List.empty[Datum[A]])
+        val wks  = _waitingContinuations.getOrElse(hash, List.empty[WaitingContinuation[P, K]])
         (cs, Row(data, wks))
     }.toMap
 }

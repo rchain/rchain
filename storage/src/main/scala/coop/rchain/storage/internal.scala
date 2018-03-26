@@ -13,6 +13,5 @@ object internal {
                                                 continuationIndex: Int,
                                                 dataCandidates: List[DataCandidate[C, A]])
 
-  case class Row[P, A, K](data: Option[List[Datum[A]]],
-                          wks: Option[List[WaitingContinuation[P, K]]])
+  case class Row[P, A, K](data: List[Datum[A]], wks: List[WaitingContinuation[P, K]])
 }

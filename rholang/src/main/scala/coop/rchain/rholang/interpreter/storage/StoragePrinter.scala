@@ -40,15 +40,15 @@ object StoragePrinter {
         }
 
         row match {
-          case Row(Some(data: List[Datum[List[Channel]]]),
-                   Some(wks: List[WaitingContinuation[List[Channel], Par]])) =>
-            toSends(data) ++ toReceive(wks)
-          case Row(Some(data: List[Datum[List[Channel]]]), None) =>
-            toSends(data)
-          case Row(None, Some(wks: List[WaitingContinuation[List[Channel], Par]])) =>
-            toReceive(wks)
-          case Row(None, None) =>
+          case Row(Nil, Nil) =>
             Par()
+          case Row(data: List[Datum[List[Channel]]], Nil) =>
+            toSends(data)
+          case Row(Nil, wks: List[WaitingContinuation[List[Channel], Par]]) =>
+            toReceive(wks)
+          case Row(data: List[Datum[List[Channel]]],
+                   wks: List[WaitingContinuation[List[Channel], Par]]) =>
+            toSends(data) ++ toReceive(wks)
         }
       }
     }.toList

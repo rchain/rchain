@@ -62,18 +62,18 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
         } + " }"
 
       case EVarBody(EVar(v)) => buildString(v.get)
-      case GBool(b) => b.toString
-      case GInt(i) => i.toString
-      case GString(s) => "\"" + s + "\""
-      case GUri(u) => s"`$u`"
+      case GBool(b)          => b.toString
+      case GInt(i)           => i.toString
+      case GString(s)        => "\"" + s + "\""
+      case GUri(u)           => s"`$u`"
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => "Nil"
-      case _ => throw new Error("Attempted to print unknown Expr type")
+      case _                  => throw new Error("Attempted to print unknown Expr type")
     }
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level) => s"z${freeShift + level}"
+      case FreeVar(level)  => s"z${freeShift + level}"
       case BoundVar(level) => s"x${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
@@ -82,7 +82,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   def buildString(c: Channel): String =
     c.channelInstance match {
-      case Quote(p) => "@{ " + buildString(p) + " }"
+      case Quote(p)    => "@{ " + buildString(p) + " }"
       case ChanVar(cv) => buildString(cv)
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ChannelInstance.Empty => "@Nil"
