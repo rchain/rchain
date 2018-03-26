@@ -28,7 +28,7 @@ import java.io.{File, PrintWriter, Reader, StringReader}
 import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.{Channel, ListChannel, Par, PrettyPrinter}
+import coop.rchain.models.{Channel, ListChannel, Par}
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -166,7 +166,7 @@ object Main {
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task {
       print("Evaluating:\n")
-      PrettyPrinter.prettyPrint(normalizedTerm)
+      println(PrettyPrinter().buildString(normalizedTerm))
     }
 
   private def buildNormalizedTerm(source: Reader): Option[Par] = {
