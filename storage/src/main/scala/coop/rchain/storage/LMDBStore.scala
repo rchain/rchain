@@ -16,6 +16,11 @@ import org.lmdbjava._
 
 import scala.collection.mutable
 
+/**
+  * The main store class.
+  *
+  * To create an instance, use [[LMDBStore.create]].
+  */
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbPsKs: Dbi[ByteBuffer],
@@ -294,10 +299,14 @@ object LMDBStore {
   private[this] val joinsTableName: String = "Joins"
 
   /**
-    * Creates an instance of [[IStore]]
+    * Creates an instance of [[LMDBStore]]
     *
     * @param path    Path to the database files
     * @param mapSize Maximum size of the database, in bytes
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
     */
   def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
                                                     sp: Serialize[P],
