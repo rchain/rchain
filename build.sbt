@@ -112,7 +112,7 @@ lazy val node = (project in file("node"))
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0")
   )
-  .dependsOn(comm, crypto)
+  .dependsOn(comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)

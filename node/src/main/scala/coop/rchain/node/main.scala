@@ -3,22 +3,45 @@ package coop.rchain.node
 import org.rogach.scallop._
 import java.util.UUID
 import java.net.{InetAddress, NetworkInterface}
+
 import scala.collection.JavaConverters._
 import coop.rchain.p2p
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
+import CommError._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.encryption.Curve25519
 import com.typesafe.scalalogging.Logger
 import com.google.common.io.BaseEncoding
 import monix.eval.Task
-import monix.execution.Scheduler
+import monix.execution.{CancelableFuture, Scheduler}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import java.io.{File, PrintWriter}
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
+import java.io.{File, PrintWriter, Reader, StringReader}
+import java.nio.file.Files
+import java.util.concurrent.TimeoutException
 
+import coop.rchain.models.{Channel, ListChannel, Par, PrettyPrinter}
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.storage.{LMDBStore, Serialize}
 import kamon._
+
+import scala.annotation.tailrec
+import scala.io.Source
+import scala.util.{Failure, Success}
+
+import monix.execution.Scheduler.Implicits.global
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
@@ -88,9 +111,100 @@ object Main {
     conf.repl().fold(executeP2p(conf), executeREPL(conf))
   }
 
-  private def executeREPL(conf: Conf): Unit =
-    // TODO run REPL here
-    println("here REPL will be running....")
+  private def executeREPL(conf: Conf): Unit = {
+    print("> ")
+    repl
+  }
+
+  private def repl = {
+    implicit val serializer = Serialize.mkProtobufInstance(Channel)
+    implicit val serializer2 = new Serialize[List[Channel]] {
+
+      override def encode(a: List[Channel]): Array[Byte] =
+        ListChannel.toByteArray(ListChannel(a))
+
+      override def decode(bytes: Array[Byte]): Either[Throwable, List[Channel]] =
+        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+    }
+
+    implicit val serializer3 = Serialize.mkProtobufInstance(Par)
+
+    val dbDir = Files.createTempDirectory("rchain-storage-test-")
+    val persistentStore =
+      LMDBStore.create[Channel, List[Channel], List[Channel], Par](dbDir, 1024 * 1024 * 1024)
+    val interp = Reduce.makeInterpreter(persistentStore)
+
+    for (ln <- Source.stdin.getLines) {
+      if (ln.isEmpty) {
+        print("> ")
+      } else {
+        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
+        val evaluatorTask = for {
+          _ <- printTask(normalizedTerm)
+          _ <- interp.inj(normalizedTerm)
+        } yield ()
+        val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+        @tailrec
+        def keepTrying(): Unit =
+          Await.ready(evaluatorFuture, 5.seconds).value match {
+            case Some(Success(_)) =>
+              println()
+              println("Storage Contents:")
+              StoragePrinter.prettyPrint(persistentStore)
+              print("\n> ")
+            case Some(Failure(e: TimeoutException)) =>
+              println("This is taking a long time. Feel free to ^C and quit.")
+              keepTrying()
+            case Some(Failure(e)) => throw e
+            case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+          }
+        keepTrying()
+      }
+    }
+  }
+
+  private def printTask(normalizedTerm: Par): Task[Unit] =
+    Task {
+      print("Evaluating:\n")
+      PrettyPrinter.prettyPrint(normalizedTerm)
+    }
+
+  private def buildNormalizedTerm(source: Reader): Option[Par] = {
+    val term = buildAST(source)
+    val inputs =
+      ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+    val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
+    ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term
+  }
+
+  private def buildAST(source: Reader): Proc = {
+    val lxr = lexer(source)
+    val ast = parser(lxr)
+    ast.pProc()
+  }
+
+  private def lexer(fileReader: Reader): Yylex = new Yylex(fileReader)
+  private def parser(lexer: Yylex): parser     = new parser(lexer, lexer.getSymbolFactory())
+
+  private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
+    val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
+    if (normalizedTerm.knownFree.count > 0) {
+      if (normalizedTerm.knownFree.wildcards.isEmpty) {
+        val topLevelFreeList = normalizedTerm.knownFree.env.map {
+          case (name, (_, _, line, col)) => s"$name at $line:$col"
+        }
+        throw new Error(
+          s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}.")
+      } else {
+        val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
+          case (line, col) => s"_ (wildcard) at $line:$col"
+        }
+        throw new Error(
+          s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}.")
+      }
+    }
+    normalizedTerm
+  }
 
   private def executeP2p(conf: Conf): Unit = {
     val name = conf.name.toOption match {
