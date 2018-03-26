@@ -3,10 +3,10 @@ package coop.rchain.rholang.interpreter
 import java.io._
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.{Channel, Par, PrettyPrinter}
+import coop.rchain.models.{Channel, Par}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import coop.rchain.storage.{InMemoryStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
@@ -63,7 +63,8 @@ object RholangCLI {
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task {
       print("Evaluating:\n")
-      PrettyPrinter.prettyPrint(normalizedTerm)
+      println(PrettyPrinter().buildString(normalizedTerm))
+      print("\n> ")
     }
 
   private def repl = {
