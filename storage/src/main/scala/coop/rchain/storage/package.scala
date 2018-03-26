@@ -59,17 +59,28 @@ package object storage {
     options.sequence[Option, DataCandidate[C, A]]
   }
 
-  /** `consume` does the "consume" thing
+  /** Searches the store for data matching all the given patterns at the given channels.
     *
-    * @param store
-    * @param channels
-    * @param patterns
-    * @param continuation
-    * @param persist
-    * @tparam C a type representing a channel
-    * @tparam P a type representing a pattern
-    * @tparam A a type representing a piece of data
-    * @tparam K a type representing a continuation
+    * If no match is found, then the continuation and patterns are put in the store at the given
+    * channels.
+    *
+    * If a match is found, then the continuation is returned along with the matching data.
+    *
+    * If the matching data has been stored with the `persist` flag set to `true`, then the data
+    * will remain in the store.  Otherwise, the data will be removed from the store.
+    *
+    * If the persist flag is set to `true` and no matching data is found, then the continuation is
+    * put in the store and will remain there after subsequent matches are found.
+    *
+    * @param store A store which satisfies the [[IStore]] interface.
+    * @param channels A list of channels on which to search for matching data
+    * @param patterns A list of patterns with which to search for matching data
+    * @param continuation A continuation
+    * @param persist Whether or not to attempt to persist the data
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
     */
   def consume[C, P, A, K](store: IStore[C, P, A, K],
                           channels: List[C],
@@ -106,6 +117,7 @@ package object storage {
   }
 
   /* Produce */
+
   @tailrec
   private[storage] final def extractFirstMatch[C, P, A, K](
       store: IStore[C, P, A, K],
@@ -141,16 +153,31 @@ package object storage {
         }
     }
 
-  /** `produce` does the "produce" thing
+  /** Searches the store for a continuation that has patterns that match the given data at the
+    * given channel.
     *
-    * @param store
-    * @param channel
-    * @param data
-    * @param persist
-    * @tparam C a type representing a channel
-    * @tparam P a type representing a pattern
-    * @tparam A a type representing a piece of data
-    * @tparam K a type representing a continuation
+    * If no match is found, then the data is put in the store at the given channel.
+    *
+    * If a match is found, then the continuation is returned along with the matching data.
+    *
+    * If pre-existing matching data has been stored with the `persist` flag set to `true`, then
+    * the data will remain in the store.  Otherwise, the data will be removed from the store.
+    *
+    * Similarly, if the continuation has been stored with the `persist` flag set to `true`, then the
+    * continuation will remain in the store.  Otherwise, the continuation will be removed from
+    * the store.
+    *
+    * If the persist flag is set to `true` and no matching continuation is found, then the data is
+    * put in the store and will remain there after subsequent matches are found.
+    *
+    * @param store A store which satisfies the [[IStore]] interface.
+    * @param channel A channel on which to search for matching continuations and/or store data
+    * @param data A piece of data
+    * @param persist Whether or not to attempt to persist the data
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
     */
   def produce[C, P, A, K](store: IStore[C, P, A, K], channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A]): Option[(K, List[A])] =
@@ -183,7 +210,6 @@ package object storage {
           store.putA(txn, List(channel), Datum(data, persist))
           logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
           None
-
       }
     }
 }
