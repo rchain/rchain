@@ -24,13 +24,14 @@ object RholangCLI {
     version("Rholang Mercury 0.2")
     banner("""
              |Takes in a rholang source file and
-             |outputs a normalized case class serialization for now.
+             |evaluates it.
              |
              |Options:
              |""".stripMargin)
     footer("\nWill add more options soon.")
 
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
+    val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
     val file   = trailArg[String](required = false, descr = "Rholang source file")
     verify()
   }
@@ -44,8 +45,10 @@ object RholangCLI {
 
       if (conf.binary()) {
         writeBinary(fileName, sortedTerm.get)
-      } else {
+      } else if (conf.text()) {
         writeHumanReadable(fileName, sortedTerm.get)
+      } else {
+        evaluate(sortedTerm.get)
       }
     } else {
       print("> ")
@@ -117,6 +120,27 @@ object RholangCLI {
       close()
     }
     println(s"Compiled $fileName to $compiledFileName")
+  }
+
+  private def evaluate(sortedTerm: Par): Unit = {
+    implicit val serializer                = Serialize.mkProtobufInstance(Channel)
+    val memStore                           = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
+    val interp                             = Reduce.makeInterpreter(memStore)
+    val evalTask                           = interp.inj(sortedTerm)
+    val evalFuture: CancelableFuture[Unit] = evalTask.runAsync
+    @tailrec
+    def keepTrying(): Unit =
+      Await.ready(evalFuture, 5.seconds).value match {
+        case Some(Success(_)) =>
+          print("Storage Contents:\n")
+          StoragePrinter.prettyPrint(memStore)
+        case Some(Failure(e: TimeoutException)) =>
+          println("This is taking a long time. Feel free to ^C and quit.")
+          keepTrying()
+        case Some(Failure(e)) => throw e
+        case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+      }
+    keepTrying()
   }
 
   private def writeBinary(fileName: String, sortedTerm: Par): Unit = {

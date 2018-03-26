@@ -16,6 +16,7 @@ import cats.implicits._
 import monix.eval.{MVar, Task}
 
 import scala.annotation.tailrec
+import scala.collection.immutable.BitSet
 import storage.implicits._
 import coop.rchain.storage.{IStore, consume => internalConsume, produce => internalProduce}
 
@@ -86,9 +87,7 @@ object Reduce {
       *          will be @param body if the continuation is not None.
       */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
-      // TODO: Allow for the environment to be stored with the body in the Tuplespace
-      val substBody = substitute(body)(env)
+        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case _ =>
@@ -96,7 +95,7 @@ object Reduce {
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)),
                           patterns,
-                          substBody,
+                          body,
                           persist = persistent) match {
             case Some((continuation, dataList)) =>
               val newEnv: Env[Par] =
@@ -107,7 +106,6 @@ object Reduce {
             case None => Task.pure(None)
           }
       }
-    }
 
     /**
       * Variable "evaluation" is an environment lookup, but
@@ -120,14 +118,15 @@ object Reduce {
       *         binding into the monadic context, else signal
       *         an exception.
       */
-    def eval(varue: Var)(implicit env: Env[Par]): Task[Par] =
-      varue.varInstance match {
+    def eval(valproc: Var)(implicit env: Env[Par]): Task[Par] =
+      valproc.varInstance match {
         case BoundVar(level) =>
           env.get(level) match {
             case Some(par) =>
               Task.pure(par)
             case None =>
-              Task raiseError new IllegalStateException("Unbound variable")
+              Task raiseError new IllegalStateException(
+                "Unbound variable: " + level + " in " + env.envMap)
           }
         case Wildcard(_) =>
           Task raiseError new IllegalStateException(
@@ -184,7 +183,12 @@ object Reduce {
 
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
-                continue(body)(newEnv)
+                if (send.persistent) {
+                  Task.gather(
+                    Seq(continue(body)(newEnv), produce(subChan, data, send.persistent)(env)))
+                } else {
+                  continue(body)(newEnv)
+                }
               case None => Task.unit
             }
       } yield ()
@@ -194,10 +198,17 @@ object Reduce {
         binds <- receive.binds.toList
                   .traverse((rb: ReceiveBind) =>
                     eval(rb.source.get).map(quote => (rb.patterns, substitute(quote))))
-        optContinuation <- consume(binds, receive.body.get, receive.persistent)
+        // TODO: Allow for the environment to be stored with the body in the Tuplespace
+        substBody       = substitute(receive.body.get)(env.shift(receive.bindCount))
+        optContinuation <- consume(binds, substBody, receive.persistent)
         _ <- optContinuation match {
               case Some((body: Par, newEnv: Env[Par])) =>
-                continue(body)(newEnv)
+                if (receive.persistent) {
+                  Task.gather(
+                    Seq(continue(body)(newEnv), consume(binds, substBody, receive.persistent)(env)))
+                } else {
+                  continue(body)(newEnv)
+                }
               case None => Task.unit
             }
       } yield ()
@@ -242,34 +253,151 @@ object Reduce {
       else
         p.exprs match {
           case Expr(GInt(v)) +: Nil => Task.pure(v)
-          case Expr(EPlusBody(EPlus(p1, p2))) +: Nil =>
-            for {
-              i1 <- evalToInt(p1.get)
-              i2 <- evalToInt(p2.get)
-            } yield i1 + i2
           case Expr(EVarBody(EVar(v))) +: Nil =>
             for {
-              lookup <- eval(v.get)
-              result <- evalToInt(lookup)
+              p      <- eval(v.get)
+              intVal <- evalToInt(p)
+            } yield intVal
+          case (e: Expr) +: Nil =>
+            for {
+              evaled <- evalExpr(e)
+              result <- evaled.exprInstance match {
+                         case GInt(v) => Task.pure(v)
+                         case _ =>
+                           Task raiseError new Error(
+                             "Error: expression didn't evaluate to integer.")
+                       }
             } yield result
           case _ =>
             Task raiseError new Error("Error: Integer expected, or unimplemented expression.")
         }
 
-    def evalExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] =
+    def evalToBool(p: Par)(implicit env: Env[Par]): Task[Boolean] =
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+        Task raiseError new Error(
+          "Error: parallel or non expression found where expression expected.")
+      else
+        p.exprs match {
+          case Expr(GBool(b)) +: Nil => Task.pure(b)
+          case Expr(EVarBody(EVar(v))) +: Nil =>
+            for {
+              p       <- eval(v.get)
+              boolVal <- evalToBool(p)
+            } yield boolVal
+          case (e: Expr) +: Nil =>
+            for {
+              evaled <- evalExpr(e)
+              result <- evaled.exprInstance match {
+                         case GBool(b) => Task.pure(b)
+                         case _ =>
+                           Task raiseError new Error(
+                             "Error: expression didn't evaluate to boolean.")
+                       }
+            } yield result
+          case _ =>
+            Task raiseError new Error("Error: Multiple expressions given.")
+        }
+
+    def evalSingleExpr(p: Par)(implicit env: Env[Par]): Task[Expr] =
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+        Task raiseError new Error(
+          "Error: parallel or non expression found where expression expected.")
+      else
+        p.exprs match {
+          case Expr(EVarBody(EVar(v))) +: Nil =>
+            for {
+              p       <- eval(v.get)
+              exprVal <- evalSingleExpr(p)
+            } yield exprVal
+          case (e: Expr) +: Nil => evalExpr(e)
+          case _ =>
+            Task raiseError new Error("Error: Multiple expressions given.")
+        }
+
+    def evalExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] = {
+      def relop(p1: Par,
+                p2: Par,
+                relopb: (Boolean, Boolean) => Boolean,
+                relopi: (Int, Int) => Boolean,
+                relops: (String, String) => Boolean): Task[Expr] =
+        for {
+          v1 <- evalSingleExpr(p1)
+          v2 <- evalSingleExpr(p2)
+          result <- (v1.exprInstance, v2.exprInstance) match {
+                     case (GBool(b1), GBool(b2))     => Task.pure(GBool(relopb(b1, b2)))
+                     case (GInt(i1), GInt(i2))       => Task.pure(GBool(relopi(i1, i2)))
+                     case (GString(s1), GString(s2)) => Task.pure(GBool(relops(s1, s2)))
+                     case _                          => Task raiseError new Error("Unexpected compare: " + v1 + " vs. " + v2)
+                   }
+        } yield result
+
       expr.exprInstance match {
-        case x: GBool     => Task.pure[Expr](x)
-        case x: GInt      => Task.pure[Expr](x)
-        case x: GString   => Task.pure[Expr](x)
-        case x: GUri      => Task.pure[Expr](x)
-        case EVarBody(ev) => Task.pure[Expr](ev)
+        case x: GBool   => Task.pure[Expr](x)
+        case x: GInt    => Task.pure[Expr](x)
+        case x: GString => Task.pure[Expr](x)
+        case x: GUri    => Task.pure[Expr](x)
+        case ENotBody(ENot(p)) =>
+          for {
+            b <- evalToBool(p.get)
+          } yield GBool(!b)
+        case ENegBody(ENeg(p)) =>
+          for {
+            v <- evalToInt(p.get)
+          } yield GInt(-v)
+        case EMultBody(EMult(p1, p2)) =>
+          for {
+            v1 <- evalToInt(p1.get)
+            v2 <- evalToInt(p2.get)
+          } yield GInt(v1 * v2)
+        case EDivBody(EDiv(p1, p2)) =>
+          for {
+            v1 <- evalToInt(p1.get)
+            v2 <- evalToInt(p2.get)
+          } yield GInt(v1 / v2)
         case EPlusBody(EPlus(p1, p2)) =>
           for {
             v1 <- evalToInt(p1.get)
             v2 <- evalToInt(p2.get)
           } yield GInt(v1 + v2)
-        case _ => Task raiseError new Error("Unimplemented expression.")
+        case EMinusBody(EMinus(p1, p2)) =>
+          for {
+            v1 <- evalToInt(p1.get)
+            v2 <- evalToInt(p2.get)
+          } yield GInt(v1 - v2)
+        case ELtBody(ELt(p1, p2))   => relop(p1.get, p2.get, (_ < _), (_ < _), (_ < _))
+        case ELteBody(ELte(p1, p2)) => relop(p1.get, p2.get, (_ <= _), (_ <= _), (_ <= _))
+        case EGtBody(EGt(p1, p2))   => relop(p1.get, p2.get, (_ > _), (_ > _), (_ > _))
+        case EGteBody(EGte(p1, p2)) => relop(p1.get, p2.get, (_ >= _), (_ >= _), (_ >= _))
+        case EEqBody(EEq(p1, p2)) =>
+          for {
+            v1 <- evalSingleExpr(p1.get)
+            v2 <- evalSingleExpr(p2.get)
+          } yield GBool(v1 == v2)
+        case ENeqBody(ENeq(p1, p2)) =>
+          for {
+            v1 <- evalSingleExpr(p1.get)
+            v2 <- evalSingleExpr(p2.get)
+          } yield GBool(v1 != v2)
+        case EAndBody(EAnd(p1, p2)) =>
+          for {
+            b1 <- evalToBool(p1.get)
+            b2 <- evalToBool(p2.get)
+          } yield GBool(b1 && b2)
+        case EOrBody(EOr(p1, p2)) =>
+          for {
+            b1 <- evalToBool(p1.get)
+            b2 <- evalToBool(p2.get)
+          } yield GBool(b1 || b2)
+        case EVarBody(ev) => Task.pure[Expr](ev)
+        case EListBody(el) => {
+          for {
+            evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr)(env))
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
+        }
+        case _ => Task raiseError new Error("Unimplemented expression: " + expr)
       }
+    }
 
     def eval(mat: Match)(implicit env: Env[Par]): Task[Unit] = {
       def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
@@ -335,6 +463,19 @@ object Reduce {
           },
           Task.wanderUnordered(par.matches) { mat =>
             eval(mat)(env)
+          },
+          Task.wanderUnordered(
+            par.exprs
+              .map(expr =>
+                expr.exprInstance match {
+                  case EVarBody(EVar(v)) => Some(v)
+                  case _                 => None
+              })
+              .flatten) { varproc =>
+            for {
+              varref <- eval(varproc.get)
+              _      <- eval(varref)
+            } yield ()
           }
         )
       ) { xs =>
@@ -356,6 +497,22 @@ object Reduce {
       for {
         evaledExprs <- par.exprs.toList.traverse(expr => evalExpr(expr)(env))
       } yield par.copy(exprs = evaledExprs)
+
+    def updateLocallyFree(par: Par): Par = {
+      val resultLocallyFree =
+        par.sends.foldLeft(BitSet())((acc, send) => acc | send.locallyFree) |
+          par.receives.foldLeft(BitSet())((acc, receive) => acc | receive.locallyFree) |
+          par.evals.foldLeft(BitSet())((acc, eval) => acc | EvalLocallyFree.locallyFree(eval)) |
+          par.news.foldLeft(BitSet())((acc, newProc) => acc | newProc.locallyFree) |
+          par.exprs.foldLeft(BitSet())((acc, expr) => acc | ExprLocallyFree.locallyFree(expr)) |
+          par.matches.foldLeft(BitSet())((acc, matchProc) => acc | matchProc.locallyFree)
+      par.copy(locallyFree = resultLocallyFree)
+    }
+
+    def updateLocallyFree(elist: EList): EList = {
+      val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
+      elist.copy(locallyFree = resultLocallyFree)
+    }
 
     def debug(msg: String): Unit = {
       val now = java.time.format.DateTimeFormatter.ISO_INSTANT
