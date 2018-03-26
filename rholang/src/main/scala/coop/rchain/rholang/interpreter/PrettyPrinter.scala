@@ -73,7 +73,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level) => s"x${freeShift + level}"
+      case FreeVar(level) => s"z${freeShift + level}"
       case BoundVar(level) => s"x${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
@@ -96,18 +96,10 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
         buildString(s.chan.get) + {
           if (s.persistent) "!!("
           else "!("
-        } + {
-          ("" /: s.data.zipWithIndex) {
-            case (string, (datum, i)) =>
-              string + buildString(datum) + {
-                if (i != s.data.length - 1) ", "
-                else ""
-              }
-          }
-        } + ")"
+        } + buildSeq(s.data) + ")"
 
       case r: Receive =>
-        val (totalFree, bindsString) = ((freeShift, "") /: r.binds.zipWithIndex) {
+        val (totalFree, bindsString) = ((0, "") /: r.binds.zipWithIndex) {
           case ((free, string), (bind, i)) =>
             val (patternFree, bindString) =
               PrettyPrinter(boundShift + free, 0)
@@ -166,9 +158,9 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
     }
 
   private def buildVariables(bindCount: Int): String =
-    buildSeq(
-      (0 until Math.min(MAX_NEW_VAR_COUNT, bindCount))
-        .map(i => GPrivate(s"x${boundShift + i}")))
+    (0 until Math.min(MAX_NEW_VAR_COUNT, bindCount))
+      .map(i => s"x${boundShift + i}")
+      .mkString(", ")
 
   private def buildSeq[T <: GeneratedMessage](s: Seq[T]): String =
     ("" /: s.zipWithIndex) {
