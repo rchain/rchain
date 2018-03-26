@@ -69,8 +69,12 @@ package object storage {
     * If the matching data has been stored with the `persist` flag set to `true`, then the data
     * will remain in the store.  Otherwise, the data will be removed from the store.
     *
+    * '''NOTE''':
+    *
     * If the persist flag is set to `true` and no matching data is found, then the continuation is
-    * put in the store and will remain there after subsequent matches are found.
+    * put in the store and will remain there after subsequent matches are found. This means that
+    * in order to make a continuation "stick" in the store, the user will have to continue to
+    * [[consume]] until a `None` is received.
     *
     * @param store A store which satisfies the [[IStore]] interface.
     * @param channels A list of channels on which to search for matching data
@@ -167,8 +171,12 @@ package object storage {
     * continuation will remain in the store.  Otherwise, the continuation will be removed from
     * the store.
     *
+    * '''NOTE''':
+    *
     * If the persist flag is set to `true` and no matching continuation is found, then the data is
-    * put in the store and will remain there after subsequent matches are found.
+    * put in the store and will remain there after subsequent matches are found.  This means that
+    * in order to make a piece of data "stick" in the store, the user will have to continue to
+    * [[produce]] until a `None` is received.
     *
     * @param store A store which satisfies the [[IStore]] interface.
     * @param channel A channel on which to search for matching continuations and/or store data
