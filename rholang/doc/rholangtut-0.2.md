@@ -150,18 +150,18 @@ In the code below, we show an example of iterating through a linked list impleme
      5       for(@"new", @arg, ack <= port) {
      6         new ticket in {
      7           ack!(*ticket) |
-     8           @(*ticket | *table)!(arg)
+     8           @{*ticket | *table}!(arg)
      9         }
     10       } |
     11       for(@"get", @arg, ack <= port) {
-    12         for (@value <- @(arg | *table)) {
-    13           @(arg | *table)!(value) |
+    12         for (@value <- @{arg | *table}) {
+    13           @{arg | *table}!(value) |
     14           ack!(value)
     15         }
     16       } |
     17       for(@"set", @arg1, @arg2, ack <= port) {
-    18         for (_ <- @(arg1 | *table)) {
-    19           @(arg1 | *table)!(arg2) |
+    18         for (_ <- @{arg1 | *table}) {
+    19           @{arg1 | *table}!(arg2) |
     20           ack!(true)
     21         }
     22       }
