@@ -5,7 +5,7 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.{Channel, HasLocallyFree, Par}
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.rholang.interpreter.implicits._
-import coop.rchain.storage.{Match => StorageMatch}
+import coop.rchain.rspace.{Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
 object implicits {
