@@ -122,6 +122,7 @@ In the code below, we show an example of iterating through a linked list impleme
     15   } |
     16   iCh!(1) |
     17   loop!([1, [2, [3, [4, []]]]], true, *chan)
+    18 }
 
 3) The `match` construction allows destructuring a variable through pattern matching.
 
