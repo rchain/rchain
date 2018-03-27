@@ -370,13 +370,13 @@ object Reduce {
         case EGteBody(EGte(p1, p2)) => relop(p1.get, p2.get, (_ >= _), (_ >= _), (_ >= _))
         case EEqBody(EEq(p1, p2)) =>
           for {
-            v1 <- evalSingleExpr(p1.get)
-            v2 <- evalSingleExpr(p2.get)
+            v1 <- evalExpr(p1.get)
+            v2 <- evalExpr(p2.get)
           } yield GBool(v1 == v2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
-            v1 <- evalSingleExpr(p1.get)
-            v2 <- evalSingleExpr(p2.get)
+            v1 <- evalExpr(p1.get)
+            v2 <- evalExpr(p2.get)
           } yield GBool(v1 != v2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
