@@ -110,7 +110,8 @@ lazy val node = (project in file("node"))
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
-    rpmLicense := Some("Apache 2.0")
+    rpmLicense := Some("Apache 2.0"),
+    rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
   )
   .dependsOn(comm, crypto, rholang)
 
