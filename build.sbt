@@ -160,7 +160,7 @@ lazy val rholangCLI = (project in file("rholang-cli"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, storage)
+  .dependsOn(models, rholang, storage)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)
