@@ -26,7 +26,7 @@ Rholang is "process-oriented": all computation is done by means of message passi
     1 contract @"HelloAgain"(_) = {
     2   new chan in {
     3     chan!("Hello again, world!") |
-    4     for (@text <- chan) { Nil }
+    4     for (@text <- chan) { Nil }}
     5   } |
     6 } | @"HelloAgain"!(Nil)
 
