@@ -2,7 +2,7 @@
 export PATH=$PATH:$(pwd -P)/ci
 source header.sh
 
-sbt -Dsbt.log.noformat=true clean bnfc:generate
+sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate
 sbt -Dsbt.log.noformat=true rholang/compile 
 sbt -Dsbt.log.noformat=true rholang/assembly 
 sbt -Dsbt.log.noformat=true rholangCLI/assembly
