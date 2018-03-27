@@ -8,12 +8,12 @@ import coop.rchain.storage.IStore
 import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
 
 object StoragePrinter {
-  def prettyPrint(store: IStore[Channel, List[Channel], List[Channel], Par]): Unit = {
+  def prettyPrint(store: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit = {
     val pars: Seq[Par] = store.toMap.map {
-      case ((channels: List[Channel], row: Row[List[Channel], List[Channel], Par])) => {
-        def toSends(data: List[Datum[List[Channel]]]): Par = {
+      case ((channels: Seq[Channel], row: Row[Seq[Channel], Seq[Channel], Par])) => {
+        def toSends(data: Seq[Datum[Seq[Channel]]]): Par = {
           val sends: Seq[Send] = data.flatMap {
-            case Datum(as: List[Channel], persist: Boolean) =>
+            case Datum(as: Seq[Channel], persist: Boolean) =>
               channels.map { channel =>
                 Send(Some(channel), as.map { case Channel(Quote(p)) => p }, persist)
               }
@@ -23,9 +23,9 @@ object StoragePrinter {
           }
         }
 
-        def toReceive(wks: List[WaitingContinuation[List[Channel], Par]]): Par = {
+        def toReceive(wks: Seq[WaitingContinuation[Seq[Channel], Par]]): Par = {
           val receives: Seq[Receive] = wks.map {
-            case WaitingContinuation(patterns: List[List[Channel]],
+            case WaitingContinuation(patterns: Seq[Seq[Channel]],
                                      continuation: Par,
                                      persist: Boolean) =>
               val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
@@ -42,12 +42,12 @@ object StoragePrinter {
         row match {
           case Row(Nil, Nil) =>
             Par()
-          case Row(data: List[Datum[List[Channel]]], Nil) =>
+          case Row(data: Seq[Datum[Seq[Channel]]], Nil) =>
             toSends(data)
-          case Row(Nil, wks: List[WaitingContinuation[List[Channel], Par]]) =>
+          case Row(Nil, wks: Seq[WaitingContinuation[Seq[Channel], Par]]) =>
             toReceive(wks)
-          case Row(data: List[Datum[List[Channel]]],
-                   wks: List[WaitingContinuation[List[Channel], Par]]) =>
+          case Row(data: Seq[Datum[Seq[Channel]]],
+                   wks: Seq[WaitingContinuation[Seq[Channel], Par]]) =>
             toSends(data) ++ toReceive(wks)
         }
       }

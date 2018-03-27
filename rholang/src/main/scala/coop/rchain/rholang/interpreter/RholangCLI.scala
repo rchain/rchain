@@ -65,14 +65,14 @@ object RholangCLI {
   private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
   private def evaluate(sortedTerm: Par): Unit = {
-    val persistentStore: LMDBStore[Channel, List[Channel], List[Channel], Par] = buildStore
-    val interp                                                                 = Reduce.makeInterpreter(persistentStore)
+    val persistentStore: LMDBStore[Channel, Seq[Channel], Seq[Channel], Par] = buildStore
+    val interp                                                               = Reduce.makeInterpreter(persistentStore)
     evaluate(interp, persistentStore, sortedTerm)
   }
 
   private def repl = {
-    val persistentStore: LMDBStore[Channel, List[Channel], List[Channel], Par] = buildStore
-    val interp                                                                 = Reduce.makeInterpreter(persistentStore)
+    val persistentStore: LMDBStore[Channel, Seq[Channel], Seq[Channel], Par] = buildStore
+    val interp                                                               = Reduce.makeInterpreter(persistentStore)
 
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
@@ -86,17 +86,17 @@ object RholangCLI {
 
   private def buildStore = {
     implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    implicit val serializer2 = new Serialize[List[Channel]] {
-      override def encode(a: List[Channel]): Array[Byte] =
+    implicit val serializer2 = new Serialize[Seq[Channel]] {
+      override def encode(a: Seq[Channel]): Array[Byte] =
         ListChannel.toByteArray(ListChannel(a))
 
-      override def decode(bytes: Array[Byte]): Either[Throwable, List[Channel]] =
+      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
         Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
     }
     implicit val serializer3 = Serialize.mkProtobufInstance(Par)
 
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    LMDBStore.create[Channel, List[Channel], List[Channel], Par](dbDir, 1024 * 1024 * 1024)
+    LMDBStore.create[Channel, Seq[Channel], Seq[Channel], Par](dbDir, 1024 * 1024 * 1024)
   }
 
   private def buildNormalizedTerm(source: Reader): Option[Par] = {
@@ -114,7 +114,7 @@ object RholangCLI {
   }
 
   private def evaluate(interpreter: DebruijnInterpreter,
-                       store: IStore[Channel, List[Channel], List[Channel], Par],
+                       store: IStore[Channel, Seq[Channel], Seq[Channel], Par],
                        normalizedTerm: Par): Unit = {
     val evaluatorTask = for {
       _ <- printTask(normalizedTerm)
@@ -132,9 +132,8 @@ object RholangCLI {
     }
 
   @tailrec
-  private def keepTrying(
-      evaluatorFuture: CancelableFuture[Unit],
-      persistentStore: IStore[Channel, List[Channel], List[Channel], Par]): Unit =
+  private def keepTrying(evaluatorFuture: CancelableFuture[Unit],
+                         persistentStore: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit =
     Await.ready(evaluatorFuture, 5.seconds).value match {
       case Some(Success(_)) =>
         print("Storage Contents:\n")

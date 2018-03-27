@@ -44,7 +44,7 @@ object Reduce {
   // TODO: How do I not define this twice?
   type Cont[Data, Body] = (Body, Env[Data])
 
-  class DebruijnInterpreter(tupleSpace: IStore[Channel, List[Channel], List[Channel], Par])
+  class DebruijnInterpreter(tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], Par])
       extends Reduce[Task, Quote, Par, Channel, Par] {
 
     // This makes sense. Run a Par in the empty environment.
@@ -63,9 +63,9 @@ object Reduce {
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
         implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
       // TODO: Handle the environment in the store
-      val substData: List[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
+      val substData: Seq[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
       internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
-        case Some((body, dataList: List[List[Channel]])) =>
+        case Some((body, dataList: Seq[Seq[Channel]])) =>
           val newEnv: Env[Par] =
             Env.makeEnv(
               dataList.flatten
@@ -91,10 +91,10 @@ object Reduce {
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case _ =>
-          val (patterns: List[List[Channel]], sources: List[Quote]) = binds.unzip
+          val (patterns: Seq[Seq[Channel]], sources: Seq[Quote]) = binds.unzip
           internalConsume(tupleSpace,
-                          sources.map(q => Channel(q)),
-                          patterns,
+                          sources.map(q => Channel(q)).toList,
+                          patterns.toList,
                           body,
                           persist = persistent) match {
             case Some((continuation, dataList)) =>
@@ -448,7 +448,7 @@ object Reduce {
       */
     def eval(par: Par)(implicit env: Env[Par]): Task[Unit] =
       Task.wanderUnordered(
-        List(
+        Seq(
           Task.wanderUnordered(par.sends) { send =>
             eval(send)(env)
           },
@@ -524,6 +524,6 @@ object Reduce {
   }
 
   def makeInterpreter(
-      tupleSpace: IStore[Channel, List[Channel], List[Channel], Par]): DebruijnInterpreter =
+      tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], Par]): DebruijnInterpreter =
     new DebruijnInterpreter(tupleSpace)
 }
