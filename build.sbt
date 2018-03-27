@@ -141,6 +141,7 @@ lazy val rholang = (project in file("rholang"))
   .dependsOn(models, storage)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
+  .settings(commonSettings: _*)
   .settings(
     mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
   )
