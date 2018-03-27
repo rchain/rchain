@@ -141,26 +141,10 @@ lazy val rholang = (project in file("rholang"))
   .dependsOn(models, storage)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
-  .settings(commonSettings: _*)
-  .settings(bnfcSettings: _*)
   .settings(
-    scalacOptions ++= Seq(
-      "-language:existentials",
-      "-language:higherKinds",
-      "-Yno-adapted-args"
-    ),
-    libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
-    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI"),
-    coverageExcludedFiles := Seq(
-      (javaSource in Compile).value,
-      (bnfcGrammarDir in BNFCConfig).value,
-      (bnfcOutputDir in BNFCConfig).value,
-      baseDirectory.value / "src" / "main" / "k",
-      baseDirectory.value / "src" / "main" / "rbl"
-    ).map(_.getPath ++ "/.*").mkString(";"),
-    fork in Test := true
+    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
   )
-  .dependsOn(models, storage)
+  .dependsOn(rholang)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)
