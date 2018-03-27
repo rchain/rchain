@@ -8,7 +8,7 @@ import coop.rchain.models.{Channel, ListChannel, Par}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.storage.{IStore, LMDBStore, Serialize}
+import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global

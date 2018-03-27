@@ -70,7 +70,7 @@ lazy val models = (project in file("models"))
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(storage)
+  .dependsOn(rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -98,6 +98,8 @@ lazy val node = (project in file("node"))
         add(artifact, artifactTargetPath)
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
+        run("apk", "update")
+        run("apk", "add", "libsodium")
         entryPoint("/bin/main.sh")
       }
     },
@@ -138,7 +140,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, storage)
+  .dependsOn(models, rspace)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
@@ -167,10 +169,11 @@ lazy val roscala = (project in file("roscala"))
   )
   .dependsOn(roscala_macros)
 
-lazy val storage = (project in file("storage"))
+lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
+    name := "rspace",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       lmdbjava,
       catsCore
@@ -178,15 +181,55 @@ lazy val storage = (project in file("storage"))
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
     ),
+    /* Publishing Settings */
     scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
-    git.remoteRepo := scmInfo.value.get.connection
+    git.remoteRepo := scmInfo.value.get.connection,
+    useGpg := true,
+    pomIncludeRepository := { _ => false },
+    publishMavenStyle := true,
+    publishTo := {
+      val nexus = "https://oss.sonatype.org/"
+      if (isSnapshot.value)
+        Some("snapshots" at nexus + "content/repositories/snapshots")
+      else
+        Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+    },
+    publishArtifact in Test := false,
+    licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
+    homepage := Some(url("https://www.rchain.coop")),
+    developers := List(
+      Developer(
+        id    = "guardbotmk3",
+        name  = "Kyle Butt",
+        email = "kyle@pyrofex.net",
+        url   = url("https://www.pyrofex.net")
+      ),
+      Developer(
+        id    = "ys-pyrofex",
+        name  = "Yaraslau Levashkevich",
+        email = "yaraslau@pyrofex.net",
+        url   = url("https://www.pyrofex.net")
+      ),
+      Developer(
+        id    = "KentShikama",
+        name  = "Kent Shikama",
+        email = "kent@kentshikama.com",
+        url   = url("https://www.rchain.coop")
+      ),
+      Developer(
+        id    = "henrytill",
+        name  = "Henry Till",
+        email = "henrytill@gmail.com",
+        url   = url("https://www.pyrofex.net")
+      )
+    )
   )
 
-lazy val storageBench = (project in file("storage-bench"))
+lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)
   .enablePlugins(JmhPlugin)
-  .dependsOn(storage)
+  .dependsOn(rspace)
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(crypto, comm, models, regex, storage, node, rholang, rholangCLI, roscala)
+  .aggregate(crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)

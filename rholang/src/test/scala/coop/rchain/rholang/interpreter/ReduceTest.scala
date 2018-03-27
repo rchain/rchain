@@ -16,8 +16,8 @@ import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
-import coop.rchain.storage.{IStore, LMDBStore, Serialize}
-import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
+import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import cats.syntax.either._
 
 trait PersistentStoreTester {

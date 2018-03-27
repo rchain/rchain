@@ -18,7 +18,7 @@ import monix.eval.{MVar, Task}
 import scala.annotation.tailrec
 import scala.collection.immutable.BitSet
 import storage.implicits._
-import coop.rchain.storage.{IStore, consume => internalConsume, produce => internalProduce}
+import coop.rchain.rspace.{IStore, consume => internalConsume, produce => internalProduce}
 
 // Notes: Caution, a type annotation is often needed for Env.
 
