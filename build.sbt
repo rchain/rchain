@@ -98,6 +98,8 @@ lazy val node = (project in file("node"))
         add(artifact, artifactTargetPath)
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
+        run("apk", "update")
+        run("apk", "add", "libsodium")
         entryPoint("/bin/main.sh")
       }
     },
