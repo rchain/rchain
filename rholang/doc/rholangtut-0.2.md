@@ -27,7 +27,7 @@ Rholang is "process-oriented": all computation is done by means of message passi
     2   new chan in {
     3     chan!("Hello again, world!") |
     4     for (@text <- chan) { Nil }
-    5   } |
+    5   }
     6 } | @"HelloAgain"!(Nil)
 
 1) Contracts take at least one parameter, but we can throw it away by binding it to the wildcard `_`.
