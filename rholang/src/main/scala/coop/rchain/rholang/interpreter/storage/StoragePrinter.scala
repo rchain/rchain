@@ -4,8 +4,8 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.implicits._
-import coop.rchain.storage.IStore
-import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.rspace.IStore
+import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 
 object StoragePrinter {
   def prettyPrint(store: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit = {

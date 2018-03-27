@@ -70,7 +70,7 @@ lazy val models = (project in file("models"))
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(storage)
+  .dependsOn(rspace)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -138,7 +138,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, storage)
+  .dependsOn(models, rspace)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
@@ -160,7 +160,7 @@ lazy val rholangCLI = (project in file("rholang-cli"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, rholang, storage)
+  .dependsOn(models, rholang, rspace)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
   .settings(commonSettings: _*)
@@ -182,10 +182,11 @@ lazy val roscala = (project in file("roscala"))
   )
   .dependsOn(roscala_macros)
 
-lazy val storage = (project in file("storage"))
+lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
+    name := "rspace",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       lmdbjava,
       catsCore
@@ -197,11 +198,11 @@ lazy val storage = (project in file("storage"))
     git.remoteRepo := scmInfo.value.get.connection
   )
 
-lazy val storageBench = (project in file("storage-bench"))
+lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)
   .enablePlugins(JmhPlugin)
-  .dependsOn(storage)
+  .dependsOn(rspace)
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(crypto, comm, models, regex, storage, node, rholang, rholangCLI, roscala)
+  .aggregate(crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)

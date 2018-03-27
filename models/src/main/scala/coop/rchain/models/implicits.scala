@@ -2,8 +2,8 @@ package coop.rchain.models
 
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.storage.Serialize._
-import coop.rchain.storage.{Serialize, Match => StorageMatch}
+import coop.rchain.rspace.Serialize._
+import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 object implicits {
 

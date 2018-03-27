@@ -34,7 +34,7 @@ import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.storage.{LMDBStore, Serialize}
+import coop.rchain.rspace.{LMDBStore, Serialize}
 import kamon._
 
 import scala.annotation.tailrec
