@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter
 
+import java.nio.file.Files
+
 import org.scalatest.{FlatSpec, Matchers}
 import Substitute._
 import Env._
@@ -13,28 +15,37 @@ import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import coop.rchain.storage.{InMemoryStore, Serialize}
+import coop.rchain.storage.{IStore, LMDBStore, Serialize}
 import coop.rchain.storage.internal.{Datum, Row, WaitingContinuation}
+import cats.syntax.either._
 
-trait InMemoryStoreTester {
-  def withTestStore[C, P, A, K <: Serializable, R](store: InMemoryStore[C, P, A, K])(
-      f: InMemoryStore[C, P, A, K] => R): R =
+trait PersistentStoreTester {
+  implicit val serializer = Serialize.mkProtobufInstance(Channel)
+  implicit val serializer2 = new Serialize[List[Channel]] {
+    override def encode(a: List[Channel]): Array[Byte] =
+      ListChannel.toByteArray(ListChannel(a))
+    override def decode(bytes: Array[Byte]): Either[Throwable, List[Channel]] =
+      Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+  }
+  implicit val serializer3 = Serialize.mkProtobufInstance(Par)
+  def withTestStore[R](f: IStore[Channel, List[Channel], List[Channel], Par] => R): R = {
+    val dbDir = Files.createTempDirectory("rchain-storage-test-")
+    val store: IStore[Channel, List[Channel], List[Channel], Par] =
+      LMDBStore.create[Channel, List[Channel], List[Channel], Par](dbDir, 1024 * 1024 * 1024)
     try {
       f(store)
     } finally {
-      store.clear()
+      store.close()
     }
+  }
 }
 
-class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
-  implicit val serializer = Serialize.mkProtobufInstance(Channel)
-  val testStore           = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
+class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "handle simple addition" in {
 
-    val result = withTestStore(testStore) { store =>
+    val result = withTestStore { store =>
       val addExpr    = EPlus(GInt(7), GInt(8))
       val resultTask = Reduce.makeInterpreter(store).evalExpr(addExpr)(Env())
       Await.result(resultTask.runAsync, 3.seconds)
@@ -45,7 +56,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
   }
 
   "evalExpr" should "leave ground values alone" in {
-    val result = withTestStore(testStore) { store =>
+    val result = withTestStore { store =>
       val groundExpr = GInt(7)
       val resultTask = Reduce.makeInterpreter(store).evalExpr(groundExpr)(Env())
       Await.result(resultTask.runAsync, 3.seconds)
@@ -56,7 +67,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
   }
 
   "eval of Send" should "place something in the tuplespace." in {
-    val result = withTestStore(testStore) { store =>
+    val result = withTestStore { store =>
       val send =
         Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
       val interpreter = Reduce.makeInterpreter(store)
@@ -71,18 +82,15 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       HashMap(
         List(Channel(Quote(GString("channel")))) ->
           Row(
-            Some(
-              List(
-                Datum[List[Channel]](List[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
-                                     false))
-            ),
-            None
+            List(Datum[List[Channel]](List[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
+                                      false)),
+            List()
           )
       ))
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
-    val result = withTestStore(testStore) { store =>
+    val result = withTestStore { store =>
       val receive =
         Receive(Seq(
                   ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
@@ -105,15 +113,13 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
         List(Channel(Quote(GString("channel")))) ->
 
           Row(
-            None,
-            Some(
-              List(
-                WaitingContinuation[List[Channel], Par](List(List(Channel(ChanVar(FreeVar(0))),
-                                                                  Channel(ChanVar(FreeVar(1))),
-                                                                  Channel(ChanVar(FreeVar(2))))),
-                                                        Par(),
-                                                        false)
-              )
+            List(),
+            List(
+              WaitingContinuation[List[Channel], Par](List(List(Channel(ChanVar(FreeVar(0))),
+                                                                Channel(ChanVar(FreeVar(1))),
+                                                                Channel(ChanVar(FreeVar(2))))),
+                                                      Par(),
+                                                      false)
             )
           )
       ))
@@ -132,7 +138,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       0,
       BitSet()
     )
-    val sendFirstResult = withTestStore(testStore) { store =>
+    val sendFirstResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskSendFirst = for {
         _ <- interpreter.eval(send)(Env())
@@ -143,12 +149,11 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     sendFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
 
-    val receiveFirstResult = withTestStore(testStore) { store =>
+    val receiveFirstResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskReceiveFirst = for {
         _ <- interpreter.eval(receive)(Env())
@@ -159,8 +164,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     receiveFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
   }
@@ -179,7 +183,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       BitSet()
     )
 
-    val sendFirstResult = withTestStore(testStore) { store =>
+    val sendFirstResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskSendFirst = for {
         _ <- interpreter.eval(send)(Env())
@@ -190,12 +194,11 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     sendFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
 
-    val receiveFirstResult = withTestStore(testStore) { store =>
+    val receiveFirstResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskReceiveFirst = for {
         _ <- interpreter.eval(receive)(Env())
@@ -206,14 +209,13 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     receiveFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
   }
 
   "Simple match" should "capture and add to the environment." in {
-    val result = withTestStore(testStore) { store =>
+    val result = withTestStore { store =>
       val pattern = Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
       val sendTarget =
         Send(ChanVar(BoundVar(1)), List(GInt(7), EVar(BoundVar(0))), false, 0, BitSet(0, 1))
@@ -242,11 +244,10 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           Row(
-            Some(
-              List(
-                Datum[List[Channel]](List[Channel](Quote(GPrivate("one")), Quote(GPrivate("zero"))),
-                                     false))),
-            None
+            List(
+              Datum[List[Channel]](List[Channel](Quote(GPrivate("one")), Quote(GPrivate("zero"))),
+                                   false)),
+            List()
           )
       )
     )
@@ -270,7 +271,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
       0,
       BitSet()
     )
-    val sendFirstResult = withTestStore(testStore) { store =>
+    val sendFirstResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskSendFirst = for {
         _ <- interpreter.eval(send1)(Env())
@@ -282,12 +283,11 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     sendFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
 
-    val receiveFirstResult = withTestStore(testStore) { store =>
+    val receiveFirstResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskReceiveFirst = for {
         _ <- interpreter.eval(receive)(Env())
@@ -299,12 +299,11 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     receiveFirstResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
 
-    val interleavedResult = withTestStore(testStore) { store =>
+    val interleavedResult = withTestStore { store =>
       val interpreter = Reduce.makeInterpreter(store)
       val inspectTaskInterleaved = for {
         _ <- interpreter.eval(send1)(Env())
@@ -316,8 +315,7 @@ class ReduceSpec extends FlatSpec with Matchers with InMemoryStoreTester {
     interleavedResult should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(Some(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false))),
-              None)
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
   }

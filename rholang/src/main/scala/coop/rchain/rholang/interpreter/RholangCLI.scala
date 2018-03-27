@@ -1,13 +1,14 @@
 package coop.rchain.rholang.interpreter
 
 import java.io._
+import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.{Channel, Par}
+import coop.rchain.models.{Channel, ListChannel, Par}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
-import coop.rchain.storage.{InMemoryStore, Serialize}
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.storage.{IStore, LMDBStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
@@ -18,6 +19,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.{Failure, Success}
+import cats.syntax.either._
+import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -37,6 +40,7 @@ object RholangCLI {
   }
 
   def main(args: Array[String]): Unit = {
+
     val conf = new Conf(args)
     if (conf.file.supplied) {
       val fileName: String        = conf.file()
@@ -60,44 +64,39 @@ object RholangCLI {
   private def lexer(fileReader: Reader): Yylex     = new Yylex(fileReader)
   private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
-  private def printTask(normalizedTerm: Par): Task[Unit] =
-    Task {
-      print("Evaluating:\n")
-      println(PrettyPrinter().buildString(normalizedTerm))
-      print("\n> ")
-    }
+  private def evaluate(sortedTerm: Par): Unit = {
+    val persistentStore: LMDBStore[Channel, List[Channel], List[Channel], Par] = buildStore
+    val interp                                                                 = Reduce.makeInterpreter(persistentStore)
+    evaluate(interp, persistentStore, sortedTerm)
+  }
 
   private def repl = {
-    implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    val memStore            = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
-    val interp              = Reduce.makeInterpreter(memStore)
+    val persistentStore: LMDBStore[Channel, List[Channel], List[Channel], Par] = buildStore
+    val interp                                                                 = Reduce.makeInterpreter(persistentStore)
 
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
       } else {
         val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
-        val evaluatorTask = for {
-          _ <- printTask(normalizedTerm)
-          _ <- interp.inj(normalizedTerm)
-        } yield ()
-        val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
-        @tailrec
-        def keepTrying(): Unit =
-          Await.ready(evaluatorFuture, 5.seconds).value match {
-            case Some(Success(_)) =>
-              print("Storage Contents:\n")
-              StoragePrinter.prettyPrint(memStore)
-              print("\n> ")
-            case Some(Failure(e: TimeoutException)) =>
-              println("This is taking a long time. Feel free to ^C and quit.")
-              keepTrying()
-            case Some(Failure(e)) => throw e
-            case None             => throw new Error("Error: Future claimed to be ready, but value was None")
-          }
-        keepTrying()
+        evaluate(interp, persistentStore, normalizedTerm)
       }
     }
+  }
+
+  private def buildStore = {
+    implicit val serializer = Serialize.mkProtobufInstance(Channel)
+    implicit val serializer2 = new Serialize[List[Channel]] {
+      override def encode(a: List[Channel]): Array[Byte] =
+        ListChannel.toByteArray(ListChannel(a))
+
+      override def decode(bytes: Array[Byte]): Either[Throwable, List[Channel]] =
+        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+    }
+    implicit val serializer3 = Serialize.mkProtobufInstance(Par)
+
+    val dbDir = Files.createTempDirectory("rchain-storage-test-")
+    LMDBStore.create[Channel, List[Channel], List[Channel], Par](dbDir, 1024 * 1024 * 1024)
   }
 
   private def buildNormalizedTerm(source: Reader): Option[Par] = {
@@ -114,6 +113,40 @@ object RholangCLI {
     ast.pProc()
   }
 
+  private def evaluate(interpreter: DebruijnInterpreter,
+                       store: IStore[Channel, List[Channel], List[Channel], Par],
+                       normalizedTerm: Par): Unit = {
+    val evaluatorTask = for {
+      _ <- printTask(normalizedTerm)
+      _ <- interpreter.inj(normalizedTerm)
+    } yield ()
+    val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+    keepTrying(evaluatorFuture, store)
+  }
+
+  private def printTask(normalizedTerm: Par): Task[Unit] =
+    Task {
+      print("Evaluating:\n")
+      println(PrettyPrinter().buildString(normalizedTerm))
+      print("\n> ")
+    }
+
+  @tailrec
+  private def keepTrying(
+      evaluatorFuture: CancelableFuture[Unit],
+      persistentStore: IStore[Channel, List[Channel], List[Channel], Par]): Unit =
+    Await.ready(evaluatorFuture, 5.seconds).value match {
+      case Some(Success(_)) =>
+        print("Storage Contents:\n")
+        StoragePrinter.prettyPrint(persistentStore)
+        print("\n> ")
+      case Some(Failure(e: TimeoutException)) =>
+        println("This is taking a long time. Feel free to ^C and quit.")
+        keepTrying(evaluatorFuture, persistentStore)
+      case Some(Failure(e)) => throw e
+      case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+    }
+
   private def writeHumanReadable(fileName: String, sortedTerm: Par): Unit = {
     val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
     new java.io.PrintWriter(compiledFileName) {
@@ -121,27 +154,6 @@ object RholangCLI {
       close()
     }
     println(s"Compiled $fileName to $compiledFileName")
-  }
-
-  private def evaluate(sortedTerm: Par): Unit = {
-    implicit val serializer                = Serialize.mkProtobufInstance(Channel)
-    val memStore                           = InMemoryStore.create[Channel, List[Channel], List[Channel], Par]
-    val interp                             = Reduce.makeInterpreter(memStore)
-    val evalTask                           = interp.inj(sortedTerm)
-    val evalFuture: CancelableFuture[Unit] = evalTask.runAsync
-    @tailrec
-    def keepTrying(): Unit =
-      Await.ready(evalFuture, 5.seconds).value match {
-        case Some(Success(_)) =>
-          print("Storage Contents:\n")
-          StoragePrinter.prettyPrint(memStore)
-        case Some(Failure(e: TimeoutException)) =>
-          println("This is taking a long time. Feel free to ^C and quit.")
-          keepTrying()
-        case Some(Failure(e)) => throw e
-        case None             => throw new Error("Error: Future claimed to be ready, but value was None")
-      }
-    keepTrying()
   }
 
   private def writeBinary(fileName: String, sortedTerm: Par): Unit = {
