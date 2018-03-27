@@ -11,7 +11,7 @@ case "$SUBPROJECT" in "rosette")
 
 "core")
 
-    sbt -Dsbt.log.noformat=true clean bnfc:generate coverage test coverageReport
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate coverage test coverageReport
 
     for sub in crypto comm rholang roscala storage node
     do
@@ -21,7 +21,7 @@ case "$SUBPROJECT" in "rosette")
 
 "test_artifact_creation")
 
-    sbt -Dsbt.log.noformat=true clean bnfc:generate node/rpm:packageBin node/debian:packageBin
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
     ;;
 
 "rholang_more_tests")
