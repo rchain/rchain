@@ -1,4 +1,4 @@
-package coop.rchain.storage
+package coop.rchain.storage.test
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -6,6 +6,7 @@ import java.security.MessageDigest
 import coop.rchain.storage.examples._
 import coop.rchain.storage.internal._
 import coop.rchain.storage.util.dropIndex
+import coop.rchain.storage.{IStore, ITestableStore, Serialize}
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.mutable
