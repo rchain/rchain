@@ -10,20 +10,20 @@ import coop.rchain.storage.{Match => StorageMatch}
 //noinspection ConvertExpressionToSAM
 object implicits {
 
-  private def toChannels(fm: FreeMap, max: Int): List[Channel] =
+  private def toChannels(fm: FreeMap, max: Int): Seq[Channel] =
     (0 until max).map { (i: Int) =>
       fm.get(i) match {
         case Some(par) => Channel(Quote(par))
         case None      => Channel(Quote(Par.defaultInstance))
       }
-    }.toList
+    }
 
   private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
 
-  implicit val matchListQuote: StorageMatch[List[Channel], List[Channel]] =
-    new StorageMatch[List[Channel], List[Channel]] {
+  implicit val matchListQuote: StorageMatch[Seq[Channel], Seq[Channel]] =
+    new StorageMatch[Seq[Channel], Seq[Channel]] {
 
-      def get(patterns: List[Channel], data: List[Channel]): Option[List[Channel]] =
+      def get(patterns: Seq[Channel], data: Seq[Channel]): Option[Seq[Channel]] =
         foldMatch(data, patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
           .runS(emptyMap)
           .map { (freeMap: FreeMap) =>

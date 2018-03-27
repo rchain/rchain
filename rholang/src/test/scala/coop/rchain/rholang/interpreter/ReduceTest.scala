@@ -22,17 +22,17 @@ import cats.syntax.either._
 
 trait PersistentStoreTester {
   implicit val serializer = Serialize.mkProtobufInstance(Channel)
-  implicit val serializer2 = new Serialize[List[Channel]] {
-    override def encode(a: List[Channel]): Array[Byte] =
+  implicit val serializer2 = new Serialize[Seq[Channel]] {
+    override def encode(a: Seq[Channel]): Array[Byte] =
       ListChannel.toByteArray(ListChannel(a))
-    override def decode(bytes: Array[Byte]): Either[Throwable, List[Channel]] =
+    override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
       Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
   }
   implicit val serializer3 = Serialize.mkProtobufInstance(Par)
-  def withTestStore[R](f: IStore[Channel, List[Channel], List[Channel], Par] => R): R = {
+  def withTestStore[R](f: IStore[Channel, Seq[Channel], Seq[Channel], Par] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    val store: IStore[Channel, List[Channel], List[Channel], Par] =
-      LMDBStore.create[Channel, List[Channel], List[Channel], Par](dbDir, 1024 * 1024 * 1024)
+    val store: IStore[Channel, Seq[Channel], Seq[Channel], Par] =
+      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], Par](dbDir, 1024 * 1024 * 1024)
     try {
       f(store)
     } finally {

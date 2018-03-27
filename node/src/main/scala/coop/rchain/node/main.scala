@@ -118,12 +118,12 @@ object Main {
 
   private def repl = {
     implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    implicit val serializer2 = new Serialize[List[Channel]] {
+    implicit val serializer2 = new Serialize[Seq[Channel]] {
 
-      override def encode(a: List[Channel]): Array[Byte] =
+      override def encode(a: Seq[Channel]): Array[Byte] =
         ListChannel.toByteArray(ListChannel(a))
 
-      override def decode(bytes: Array[Byte]): Either[Throwable, List[Channel]] =
+      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
         Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
     }
 
@@ -131,7 +131,7 @@ object Main {
 
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
     val persistentStore =
-      LMDBStore.create[Channel, List[Channel], List[Channel], Par](dbDir, 1024 * 1024 * 1024)
+      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], Par](dbDir, 1024 * 1024 * 1024)
     val interp = Reduce.makeInterpreter(persistentStore)
 
     for (ln <- Source.stdin.getLines) {
