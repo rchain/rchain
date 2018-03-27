@@ -44,7 +44,6 @@ trait PersistentStoreTester {
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "handle simple addition" in {
-
     val result = withTestStore { store =>
       val addExpr    = EPlus(GInt(7), GInt(8))
       val resultTask = Reduce.makeInterpreter(store).evalExpr(addExpr)(Env())
@@ -63,6 +62,16 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
     val expected: Expr = GInt(7)
+    result should be(expected)
+  }
+
+  "evalExpr" should "handle equality between arbitary processes" in {
+    val result = withTestStore { store =>
+      val eqExpr     = EEq(GPrivate("private_name"), GPrivate("private_name"))
+      val resultTask = Reduce.makeInterpreter(store).evalExpr(eqExpr)(Env())
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+    val expected: Expr = GBool(true)
     result should be(expected)
   }
 
