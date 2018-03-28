@@ -11,14 +11,15 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
 
 object PrettyPrinter {
-  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "a", 23, 128)
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "a", "x", 23, 128)
 
-  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "a", 23, 128)
+  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "a", "x", 23, 128)
 }
 
 case class PrettyPrinter(freeShift: Int,
                          boundShift: Int,
-                         currentId: String,
+                         freeId: String,
+                         boundId: String,
                          rotation: Int,
                          maxVarCount: Int) {
 
@@ -77,8 +78,8 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level) => s"$currentId${freeShift + level}"
-      case BoundVar(level) => s"$nextId${boundShift - level - 1}"
+      case FreeVar(level) => s"$freeId${freeShift + level}"
+      case BoundVar(level) => s"$boundId${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
       case VarInstance.Empty => "@Nil"
@@ -165,7 +166,7 @@ case class PrettyPrinter(freeShift: Int,
 
   private def buildVariables(bindCount: Int): String =
     (0 until Math.min(maxVarCount, bindCount))
-      .map(i => s"$nextId${boundShift + i}")
+      .map(i => s"$boundId${boundShift + i}")
       .mkString(", ")
 
   private def buildSeq[T <: GeneratedMessage](s: Seq[T]): String =
@@ -182,7 +183,9 @@ case class PrettyPrinter(freeShift: Int,
       case ((patternsFree, string), (pattern, i)) =>
         (patternsFree + freeCount(pattern),
           string +
-            this.copy(currentId = nextId).buildString(pattern) + {
+            this
+              .copy(freeId = boundId, boundId = rotate(boundId))
+              .buildString(pattern) + {
             if (i != patterns.length - 1) ", "
             else ""
           })
@@ -192,17 +195,17 @@ case class PrettyPrinter(freeShift: Int,
     val patternFree: Int = matchCase.pattern.get.freeCount
     "case " +
       this
-        .copy(currentId = nextId, freeShift = boundShift, boundShift = 0)
+        .copy(freeId = boundId, boundId = rotate(boundId), freeShift = boundShift, boundShift = 0)
         .buildString(matchCase.pattern.get) + " => " +
       this
         .copy(boundShift = boundShift + patternFree)
         .buildString(matchCase.source.get)
   }
 
-  private def nextId: String = {
-    val _id = ((currentId.toString.last - 'x' + rotation) % 26 + 'x').toChar
-    if (_id equals ('x' + rotation).toChar) currentId.dropRight(1) ++ _id.toString * 2
-    else currentId.dropRight(1) ++ _id.toString
+  private def rotate(id: String): String = {
+    val newId = ((id.last + rotation - 97) % 26 + 97).toChar
+    if (newId equals id(0)) id.dropRight(1) ++ newId.toString * 2
+    else id.dropRight(1) ++ newId.toString
   }
 
   private def isEmpty(p: Par) =
