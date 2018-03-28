@@ -12,7 +12,6 @@ import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0, "a", "x", 23, 128)
-
   def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "a", "x", 23, 128)
 }
 
