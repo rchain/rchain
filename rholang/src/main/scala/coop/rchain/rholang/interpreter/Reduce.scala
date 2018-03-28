@@ -372,12 +372,17 @@ object Reduce {
           for {
             v1 <- evalExpr(p1.get)
             v2 <- evalExpr(p2.get)
-          } yield GBool(v1 == v2)
+            // TODO: build an equality operator that takes in an environment.
+            sv1 = substitute(v1)
+            sv2 = substitute(v2)
+          } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
-            v1 <- evalExpr(p1.get)
-            v2 <- evalExpr(p2.get)
-          } yield GBool(v1 != v2)
+            v1  <- evalExpr(p1.get)
+            v2  <- evalExpr(p2.get)
+            sv1 = substitute(v1)
+            sv2 = substitute(v2)
+          } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
             b1 <- evalToBool(p1.get)
