@@ -64,17 +64,6 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     result shouldBe target
   }
 
-  "Set" should "Print" in {
-    val setData = new ListProc()
-    setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
-    setData.add(new PGround(new GroundInt(7)))
-    setData.add(new PPar(new PGround(new GroundInt(8)), new PVar(new ProcVarVar("Q"))))
-    val set = new PCollect(new CollectSet(setData))
-    val result =
-      PrettyPrinter(0, 2).buildString(ProcNormalizeMatcher.normalizeMatch(set, inputs).par)
-    result shouldBe "(x0 + a0, 7, a1 | 8)"
-  }
-
   "Map" should "Print" in {
     val mapData = new ListKeyValuePair()
     mapData.add(
@@ -367,7 +356,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val parDoubleFree = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
     val result =
       PrettyPrinter().buildString(ProcNormalizeMatcher.normalizeMatch(parDoubleFree, inputs).par)
-    result shouldBe "a1 | a0"
+    result shouldBe "INVALID1 | INVALID0"
   }
 
   "PInput" should "Print a receive" in {
