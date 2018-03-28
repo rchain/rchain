@@ -153,7 +153,7 @@ package object rspace {
       case channels :: remaining =>
         val matchCandidates: List[(WaitingContinuation[P, K], Int)] =
           store.getPsK(txn, channels).zipWithIndex
-        extractFirstMatch(store, channels, matchCandidates, channel, data)(txn) match {
+        extractFirstMatch(store, channels, Random.shuffle(matchCandidates), channel, data)(txn) match {
           case None             => extractProduceCandidateAlt(store, remaining, channel, data)(txn)
           case produceCandidate => produceCandidate
         }
