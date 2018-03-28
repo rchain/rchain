@@ -5,6 +5,9 @@ import coop.rchain.rosette.CtxtRegName._
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr._
 import coop.rchain.rosette.Location._
+import coop.rchain.rosette.Ob.SingletonOb
+import coop.rchain.rosette.prim.{fixnum, rblfloat}
+import coop.rchain.rosette.utils.Instances._
 import org.scalatest._
 
 /**
@@ -42,11 +45,13 @@ class TransitionSpec extends FlatSpec with Matchers {
     sleeperPool = Seq()
   )
 
-  val stdOprnPlus = StdOprn(null)
+  val fxPlus = fixnum.fxPlus
+  val flPlus = rblfloat.flPlus
 
-  val stdMeta = StdMeta()
+  val rblTable = RblTable(Map.empty)
+  val stdMeta  = StdMeta(StdExtension(null, null, Seq(rblTable)))
 
-  val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, stdOprnPlus)
+  val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, fxPlus).updated(667, flPlus)
 
   "Executing bytecode from expression \"(if #t 1 2)\"" should "result in state.ctxt.rslt == Fixnum(1)" in {
 
@@ -381,7 +386,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpAlloc(2),
       OpIndLitToArg(arg = 0, lit = 1),
       OpIndLitToArg(arg = 1, lit = 2),
-      OpXferGlobalToReg(reg = trgt, global = 668),
+      OpXferGlobalToReg(reg = trgt, global = 667),
       OpXmit(unwind = false, next = true, nargs = 2)
     )
 
@@ -1269,5 +1274,44 @@ class TransitionSpec extends FlatSpec with Matchers {
     val end = VirtualMachine.executeSeq(codevec, start)
 
     end.ctxt.rslt shouldBe Fixnum(2)
+  }
+
+  "Executing bytecode from expression (lookup + 1)" should "return fx+" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      * codevec:
+      *   0:   alloc 2
+      *   1:   xfer global[+],arg[0]
+      *   2:   lit 1,arg[1]
+      *   3:   lookup 2,arg[1]
+      *   4:   xmit/nxt 1
+      */
+    val template = Template(null, null, null, null, null)
+    val itemTraverse = new Ob {
+      override val meta   = null
+      override val parent = null
+    }
+
+    val codevec = Seq(
+      OpAlloc(2),
+      OpXferGlobalToArg(arg = 0, global = 668),
+      OpImmediateLitToArg(value = 1, arg = 1),
+      OpLookupToArg(arg = 1, lit = 2),
+      OpRtn(next = true)
+    )
+
+    val ob: Ob = new SingletonOb {}
+
+    val start =
+      testState
+        .set(_ >> 'code)(Code(Tuple(Seq(StdMthd(), template, itemTraverse)), codevec))
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'ctxt >> 'selfEnv)(ob)
+        .set(_ >> 'ctxt >> 'selfEnv >> 'meta)(stdMeta)
+
+    //val end = VirtualMachine.executeSeq(codevec, start)
   }
 }

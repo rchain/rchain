@@ -7,5 +7,5 @@ abstract class Actor extends Ob {
   val extension: StdExtension
 
   // TODO:
-  override def lookupAndInvoke: CtxtTransition[(Result, Option[Continuation])] = ???
+  override def lookupAndInvoke = ???
 }

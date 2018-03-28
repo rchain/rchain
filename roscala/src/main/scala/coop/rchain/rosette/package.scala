@@ -5,10 +5,9 @@ import coop.rchain.rosette.Ctxt.CtxtTransition
 import coop.rchain.rosette.parser.bytecode.ParseError
 import coop.rchain.rosette.prim.PrimError
 
-import reflect.runtime.universe._
-import reflect.runtime.currentMirror
-import scala.annotation.tailrec
 import scala.reflect.ClassTag
+import scala.reflect.runtime.currentMirror
+import scala.reflect.runtime.universe._
 
 package object rosette {
   sealed trait RblError
@@ -20,10 +19,11 @@ package object rosette {
   case object PrimNotFound                      extends RblError
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
+  case class Suicide(msg: String)               extends RblError
 
   type VMTransition[A] = State[VMState, A]
 
-  type Result = Either[RblError, Ob]
+  type Result[A] = Either[RblError, A]
 
   implicit class RichOb(ob: Ob) {
     def as[T <: Ob: ClassTag]: Option[T] =
@@ -60,10 +60,7 @@ package object rosette {
       def show: String = Show[A].show(a)
     }
 
-    implicit val parseErrorShow: Show[ParseError] =
-      _ match {
-        case e => e.toString
-      }
+    implicit val parseErrorShow: Show[ParseError] = _.toString
 
     implicit val opsShow: Show[Seq[Op]] = { ops =>
       ops

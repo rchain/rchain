@@ -3,8 +3,9 @@ package coop.rchain.rosette
 import cats.data.State
 import cats.data.State._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rosette.Ctxt.{setReg, CtxtTransition}
+import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob._
-import coop.rchain.rosette.Ctxt.{setReg, Continuation, CtxtTransition}
 import coop.rchain.rosette.prim.Prim
 
 sealed trait Work
@@ -18,10 +19,14 @@ object VirtualMachine {
 
   val unknownRegister: Int => String = reg => s"Unknown register: $reg"
 
+  val rblTable = RblTable(Map.empty)
+  val meta =
+    new StdMeta(meta = null, parent = null, extension = StdExtension(null, null, Seq(rblTable)))
+
   val vmLiterals: Seq[Ob] = Seq(
     Fixnum(0),
-    Fixnum(1),
-    Fixnum(2),
+    Fixnum(1, meta = meta),
+    Fixnum(2, meta = meta),
     Fixnum(3),
     Fixnum(4),
     Fixnum(5),
@@ -49,7 +54,7 @@ object VirtualMachine {
     state.ctxt.vmError(state)._2
    */
 
-  def handlePrimResult(primResult: Result, save: Ob => VMTransition[Unit]): VMTransition[Unit] =
+  def handlePrimResult(primResult: Result[Ob], save: Ob => VMTransition[Unit]): VMTransition[Unit] =
     primResult match {
       case Right(ob) => save(ob)
 
@@ -61,17 +66,17 @@ object VirtualMachine {
       case Left(_) => doNextThread
     }
 
-  def runPrim(unwind: Boolean, optPrim: Option[Prim]): VMTransition[Result] =
+  def runPrim(unwind: Boolean, optPrim: Option[Prim]): VMTransition[Result[Ob]] =
     for {
       result <- optPrim match {
                  case Some(prim) if unwind  => unwindAndApplyPrim(prim).embedCtxt
                  case Some(prim) if !unwind => prim.dispatchHelper.embedCtxt
-                 case None                  => pure[VMState, Result](Left(PrimNotFound))
+                 case None                  => pure[VMState, Result[Ob]](Left(PrimNotFound))
                }
     } yield result
 
   // TODO: Finish
-  def unwindAndApplyPrim(prim: Prim): CtxtTransition[Result] = {
+  def unwindAndApplyPrim(prim: Prim): CtxtTransition[Result[Ob]] = {
     val unwind: CtxtTransition[Unit]         = ???
     val recoil: Ctxt => CtxtTransition[Unit] = ???
 
@@ -345,7 +350,7 @@ object VirtualMachine {
   def doXmit: VMTransition[Unit] =
     for {
       target         <- inspect[VMState, Ob](_.ctxt.trgt)
-      dispatchResult <- target.dispatch.embedCtxt
+      dispatchResult <- target.dispatch
       next           <- inspect[VMState, Boolean](_.xmitData._2)
 
       (result, optContinuation) = dispatchResult
@@ -687,8 +692,11 @@ object VirtualMachine {
     val argno = op.arg
     val key   = state.code.lit(op.lit)
 
+    val meta = state.ctxt.selfEnv.meta.asInstanceOf[StdMeta]
+
+    import cats.instances.either._
     val value =
-      state.ctxt.selfEnv.meta.lookupOBO(state.ctxt.selfEnv, key, state.ctxt)
+      meta.lookupOBOStdMeta[Either[RblError, ?]](state.ctxt.selfEnv, key).run(state)
 
     value match {
       case Left(Upcall) =>
@@ -698,8 +706,8 @@ object VirtualMachine {
         handleMissingBinding(key, ArgRegister(argno))
         state.set(_ >> 'doNextThreadFlag)(true)
 
-      case Right(ob) =>
-        state.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(argno, ob))
+      case Right((newState, ob)) =>
+        newState.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(argno, ob))
     }
   }
 

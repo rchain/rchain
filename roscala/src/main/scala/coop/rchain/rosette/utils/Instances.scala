@@ -1,6 +1,6 @@
 package coop.rchain.rosette.utils
 
-import coop.rchain.rosette.{Actor, Ob, StdExtension}
+import coop.rchain.rosette.{Actor, Ctxt, Ob, StdExtension}
 import shapeless._
 
 import scala.annotation.tailrec
@@ -63,4 +63,30 @@ object Instances {
             setField(s, "extension")(a)
         }
     }
+
+  //instance to create lens for Ctxt over the `selfEnv` field, like:
+  //lens[Ctxt] >> 'selfEnv
+  implicit val mkSelfEnvFieldLens =
+    new MkFieldLens[Ctxt, Witness.`'selfEnv`.T] {
+      override type Elem = Ob
+      override def apply(): Lens[Ctxt, Ob] =
+        new Lens[Ctxt, Ob] {
+          override def get(s: Ctxt): Ob = s.selfEnv
+          override def set(s: Ctxt)(a: Ob): Ctxt =
+            setField(s, "selfEnv")(a)
+        }
+    }
+
+  //instance to create lens for Ob over the `meta` field, like:
+  //lens[Ob] >> 'meta
+  implicit val mkMetaFieldLens = new MkFieldLens[Ob, Witness.`'meta`.T] {
+    override type Elem = Ob
+    override def apply(): Lens[Ob, Ob] = new Lens[Ob, Ob] {
+      override def get(s: Ob): Ob =
+        if (s == null) throw InvalidLensParam
+        else s.meta
+      override def set(s: Ob)(a: Ob): Ob =
+        setField(s, "meta")(a)
+    }
+  }
 }

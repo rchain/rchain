@@ -1,9 +1,10 @@
 package coop.rchain.rosette
 
-import cats.data.State
+import cats.MonadError
+import cats.data.{ReaderT, State}
+import coop.rchain.rosette.Ctxt.setReg
 import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
-import coop.rchain.rosette.Ctxt.setReg
 
 sealed trait Location extends Ob {
   override val meta   = null
@@ -77,4 +78,27 @@ object Location {
       case _ => pure(Failure)
     }
   }
+
+  def valWrt[E[_]](loc: Location, v: Ob)(implicit E: MonadError[E, RblError]) =
+    ReaderT[E, TblObject, Ob] { globalEnv =>
+      val value: PartialFunction[Location, Ob] = {
+        case LexVariable(indirect, level, offset) =>
+          v.getLex(indirect, level, offset)
+        case AddrVariable(indirect, level, offset) =>
+          v.getAddr(indirect, level, offset)
+        case BitField(indirect, level, offset, spanSize, sign) =>
+          v.getField(indirect, level, offset, spanSize, sign)
+        case BitField00(offset, spanSize, sign) =>
+          v.getField(indirect = false, level = 0, offset, spanSize, sign)
+        case GlobalVariable(offset) =>
+          globalEnv.getLex(indirect = true, level = 0, offset)
+      }
+
+      val err: Location => RblError = {
+        case Limbo => Absent
+        case _     => Suicide("valWrt(Location, Ob*)")
+      }
+
+      (value andThen E.pure) applyOrElse (loc, err andThen E.raiseError[Ob])
+    }
 }

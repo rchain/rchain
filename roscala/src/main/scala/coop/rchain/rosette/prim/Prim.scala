@@ -28,7 +28,7 @@ abstract class Prim extends Ob {
     * Rosette seems to potentially return INVALID, UPCALL or DEADTHREAD here
     * Therefore we return RblError for the error case
     */
-  def dispatchHelper: CtxtTransition[Result] = State { ctxt =>
+  def dispatchHelper: CtxtTransition[Result[Ob]] = State { ctxt =>
     val n = ctxt.nargs
 
     if (minArgs <= n && n <= maxArgs)
@@ -46,14 +46,14 @@ abstract class Prim extends Ob {
     * return the parent ctxt which then has to be scheduled by
     * the caller.
     */
-  override def dispatch: CtxtTransition[(Result, Option[Continuation])] = {
+  override def dispatch: VMTransition[(Result[Ob], Option[Continuation])] = {
 
     /**
       * Try to return the primitive result to the parent ctxt.
       * This can potentially return the parent ctxt as a ctxt
       * that needs to be scheduled by the caller.
       */
-    def returnResultToParent(result: Ob): CtxtTransition[(Result, Option[Continuation])] =
+    def returnResultToParent(result: Ob): CtxtTransition[(Result[Ob], Option[Continuation])] =
       Ctxt
         .ret(result)
         .transform(
@@ -64,24 +64,27 @@ abstract class Prim extends Ob {
               (ctxt, (Right(result), res._2))
         )
 
-    for {
-      primResult <- dispatchHelper
+    val ctxtState: CtxtTransition[(Result[Ob], Option[Continuation])] =
+      for {
+        primResult <- dispatchHelper
 
-      result <- primResult match {
-                 case Right(ob) => returnResultToParent(ob)
+        result <- primResult match {
+                   case Right(ob) => returnResultToParent(ob)
 
-                 case _ =>
-                   /**
-                     * Something went wrong with running the primitive.
-                     * Report the error back and there is no ctxt to be
-                     * scheduled.
-                     */
-                   pure[Ctxt, (Result, Option[Continuation])]((primResult, None))
-               }
-    } yield result
+                   case _ =>
+                     /**
+                       * Something went wrong with running the primitive.
+                       * Report the error back and there is no ctxt to be
+                       * scheduled.
+                       */
+                     pure[Ctxt, (Result[Ob], Option[Continuation])]((primResult, None))
+                 }
+      } yield result
+
+    ctxtState.embedCtxt
   }
 
-  def invoke: CtxtTransition[(Result, Option[Continuation])] = dispatch
+  def invoke: VMTransition[(Result[Ob], Option[Continuation])] = dispatch
 }
 
 object Prim {

@@ -2,17 +2,19 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import cats.data.State
-import cats.data.State._
-import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
+import cats.data.State.pure
+import cats.data.{State, _}
+import cats.implicits._
+import cats.{Applicative, MonadError}
+import coop.rchain.rosette.Ctxt.Continuation
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import coop.rchain.rosette.utils.Instances._
+import coop.rchain.rosette.utils.implicits._
+import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
 import shapeless.OpticDefns.RootLens
 import shapeless._
-import cats.implicits._
-import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 
 trait Base
 
@@ -26,8 +28,9 @@ trait Ob extends Base with Cloneable {
   val meta: Ob
   val parent: Ob
 
-  def dispatch: CtxtTransition[(Result, Option[Continuation])] = pure((Right(Ob.NIV), None))
-  def extendWith(keyMeta: Ob): Ob                              = null
+  def dispatch: VMTransition[(Result[Ob], Option[Continuation])] =
+    pure((Right(Ob.NIV), None))
+  def extendWith(keyMeta: Ob): Ob = null
 
   def getAddr(indirect: Boolean, level: Int, offset: Int): Ob =
     getLex(indirect, level, offset)
@@ -45,21 +48,42 @@ trait Ob extends Base with Cloneable {
 
   def is(value: Ob.ObTag): Boolean = false
 
-  def lookup(key: Ob, ctxt: Ctxt): Result =
-    Right(null)
-
-  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
-    Right(null)
-
-  def lookupAndInvoke: CtxtTransition[(Result, Option[Continuation])] =
+  def lookup[F[_]: Applicative](key: Ob)(implicit
+                                         E: MonadError[F, RblError]): StateT[F, VMState, Ob] =
     for {
-      target <- State.inspect[Ctxt, Ob](_.trgt)
-      fn     <- meta.asInstanceOf[StdMeta].lookupOBOStdMeta(self, target)
-      result <- fn match {
-                 case Right(prim: Prim) => prim.invoke
-                 case _                 => pure[Ctxt, (Result, Option[Continuation])]((Left(Absent), None))
-               }
-    } yield result
+      interrupt <- StateT.inspect[F, VMState, Boolean](_.interruptPending)
+      res <- if (interrupt) Absent.liftE[F, RblError]: StateT[F, VMState, Ob]
+            else {
+              val result = meta
+                .asInstanceOf[StdMeta]
+                .get[F](self, key)
+
+              result.recoverWith {
+                case Absent => parent.lookup[F](key)
+              }
+            }
+    } yield res
+
+  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result[Ob] =
+    Right(null)
+
+  def lookupAndInvoke: VMTransition[(Result[Ob], Option[Continuation])] = {
+    def inspect[A] = StateT.inspect[Result, VMState, A] _
+
+    val fn = for {
+      target <- inspect(_.ctxt.trgt)
+      fn     <- meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
+    } yield fn
+
+    State[VMState, (Result[Ob], Option[Continuation])] { vmState =>
+      fn.run(vmState) match {
+        case Right((state, prim: Prim)) =>
+          prim.invoke.run(state).value
+        case _ =>
+          (vmState, (Left(Absent), None))
+      }
+    }
+  }
 
   def matches(ctxt: Ctxt): Boolean = false
   def numberOfSlots: Int           = slot.size
@@ -160,8 +184,8 @@ object Ob {
   case object SyscodeDeadThread extends SysCode
 
   trait SingletonOb extends Ob {
-    override val meta   = null
-    override val parent = null
+    override val meta: Ob   = null
+    override val parent: Ob = null
   }
   object ABSENT   extends SingletonOb
   object INVALID  extends SingletonOb
