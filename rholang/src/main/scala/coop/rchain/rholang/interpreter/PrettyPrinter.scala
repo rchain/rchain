@@ -11,14 +11,16 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
 
 object PrettyPrinter {
-  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "a", "x", 23, 128)
-  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "a", "x", 23, 128)
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "x", "a", 23, 128)
+
+  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "INVALID", "x", "a", 23, 128)
 }
 
 case class PrettyPrinter(freeShift: Int,
                          boundShift: Int,
                          freeId: String,
                          boundId: String,
+                         baseId: String,
                          rotation: Int,
                          maxVarCount: Int) {
 
@@ -107,7 +109,10 @@ case class PrettyPrinter(freeShift: Int,
           case ((free, string), (bind, i)) =>
             val (patternFree, bindString) =
               this
-                .copy(freeShift = boundShift + free, boundShift = 0)
+                .copy(
+                  freeShift = boundShift + free,
+                  boundShift = 0
+                )
                 .buildPattern(bind.patterns)
             (free + patternFree, string + bindString + {
               if (r.persistent) " <= " else " <- "
@@ -183,7 +188,11 @@ case class PrettyPrinter(freeShift: Int,
         (patternsFree + freeCount(pattern),
           string +
             this
-              .copy(freeId = boundId, boundId = rotate(boundId))
+              .copy(
+                freeId = boundId,
+                boundId = rotate(increment(baseId)),
+                baseId = increment(baseId)
+              )
               .buildString(pattern) + {
             if (i != patterns.length - 1) ", "
             else ""
@@ -194,15 +203,23 @@ case class PrettyPrinter(freeShift: Int,
     val patternFree: Int = matchCase.pattern.get.freeCount
     "case " +
       this
-        .copy(freeId = boundId, boundId = rotate(boundId), freeShift = boundShift, boundShift = 0)
+        .copy(
+          freeShift = boundShift,
+          boundShift = 0,
+          freeId = boundId,
+          boundId = rotate(increment(boundId))
+        )
         .buildString(matchCase.pattern.get) + " => " +
       this
         .copy(boundShift = boundShift + patternFree)
         .buildString(matchCase.source.get)
   }
 
-  private def rotate(id: String): String = {
-    val newId = ((id.last + rotation - 97) % 26 + 97).toChar
+  private def rotate(id: String): String =
+    id.map(char => ((char + rotation - 97) % 26 + 97).toChar)
+
+  private def increment(id: String): String = {
+    val newId = ((id.last + 1 - 97) % 26 + 97).toChar
     if (newId equals id(0)) id.dropRight(1) ++ newId.toString * 2
     else id.dropRight(1) ++ newId.toString
   }
