@@ -1,5 +1,5 @@
 export RhoClass in {
-  contract @{*RhoClass | "apply"}(name, @args) = {
+  contract @[*RhoClass, "apply"](name, @args) = {
     match args {
       [a]                => { name!(a) }
       [a, b]             => { name!(a, b) }
