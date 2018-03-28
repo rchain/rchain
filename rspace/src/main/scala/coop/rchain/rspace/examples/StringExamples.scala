@@ -67,14 +67,4 @@ object StringExamples {
     implicit val patternSerialize: Serialize[Pattern] =
       makeSerializeFromSerializable[Pattern]
   }
-
-  /* Convenience Functions */
-
-  /** Runs a given test continuation with given data as its arguments.
-    */
-  def runK(t: Option[(StringsCaptor, List[String])]): Unit =
-    t.foreach { case (k, data) => k(data) }
-
-  def getK(t: Option[(StringsCaptor, List[String])]): StringsCaptor =
-    t.map(_._1).get
 }
