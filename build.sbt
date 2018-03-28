@@ -171,7 +171,7 @@ lazy val roscala = (project in file("roscala"))
   .dependsOn(roscala_macros)
 
 lazy val rspace = (project in file("rspace"))
-  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "rspace",
