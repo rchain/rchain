@@ -6,6 +6,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.ignore
 
 import scala.annotation.tailrec
+import scala.util.Random
 
 package object rspace {
 
@@ -36,7 +37,7 @@ package object rspace {
       channels.zip(patterns).map {
         case (channel, pattern) =>
           val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
-          findMatchingDataCandidate(channel, indexedData, pattern)
+          findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
       }
     options.sequence[Option, DataCandidate[C, A]]
   }
@@ -54,7 +55,7 @@ package object rspace {
           findMatchingDataCandidate(channel, indexedData, pattern)
         case (channel, pattern) =>
           val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
-          findMatchingDataCandidate(channel, indexedData, pattern)
+          findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
       }
     options.sequence[Option, DataCandidate[C, A]]
   }
@@ -152,7 +153,7 @@ package object rspace {
       case channels :: remaining =>
         val matchCandidates: List[(WaitingContinuation[P, K], Int)] =
           store.getPsK(txn, channels).zipWithIndex
-        extractFirstMatch(store, channels, matchCandidates, channel, data)(txn) match {
+        extractFirstMatch(store, channels, Random.shuffle(matchCandidates), channel, data)(txn) match {
           case None             => extractProduceCandidateAlt(store, remaining, channel, data)(txn)
           case produceCandidate => produceCandidate
         }
