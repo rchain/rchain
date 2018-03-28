@@ -177,19 +177,19 @@ trait StorageActionsTests extends StorageActionsBase {
 
     runK(r4)
 
-    getK(r4).results should contain theSameElementsAs List(List("datum3"))
+    getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     val r5 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
     runK(r5)
 
-    getK(r5).results should contain theSameElementsAs List(List("datum2"))
+    getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     val r6 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
     runK(r6)
 
-    getK(r6).results should contain theSameElementsAs List(List("datum1"))
+    getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     store.isEmpty shouldBe true
   }
@@ -808,8 +808,11 @@ trait StorageActionsTests extends StorageActionsBase {
     val r4 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum2", persist = false),
-                                                  Datum("datum1", persist = false))
+      store.getAs(txn, List("ch1")) should contain atLeastOneOf (
+        Datum("datum1", persist = false),
+        Datum("datum2", persist = false),
+        Datum("datum3", persist = false)
+      )
       store.getPsK(txn, List("ch1")) shouldBe Nil
     }
 
@@ -817,13 +820,17 @@ trait StorageActionsTests extends StorageActionsBase {
 
     runK(r4)
 
-    getK(r4).results should contain theSameElementsAs List(List("datum3"))
+    getK(r4).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     // Matching data exists so the write will not "stick"
     val r5 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = false))
+      store.getAs(txn, List("ch1")) should contain oneOf (
+        Datum("datum1", persist = false),
+        Datum("datum2", persist = false),
+        Datum("datum3", persist = false)
+      )
       store.getPsK(txn, List("ch1")) shouldBe Nil
     }
 
@@ -831,7 +838,7 @@ trait StorageActionsTests extends StorageActionsBase {
 
     runK(r5)
 
-    getK(r5).results should contain theSameElementsAs List(List("datum2"))
+    getK(r5).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     // Matching data exists so the write will not "stick"
     val r6 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
@@ -842,7 +849,7 @@ trait StorageActionsTests extends StorageActionsBase {
 
     runK(r6)
 
-    getK(r6).results should contain theSameElementsAs List(List("datum1"))
+    getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     // All matching data has been consumed, so the write will "stick"
     val r7 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
