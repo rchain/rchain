@@ -5,6 +5,7 @@ import java.nio.file.Files
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.scalatest._

@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import cats.syntax.either._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.extended._
 import coop.rchain.rspace.{LMDBStore, _}
 import org.openjdk.jmh.annotations.{Benchmark, Scope, State}
 
