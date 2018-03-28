@@ -12,7 +12,7 @@ Traditionally, a key-value store provides two main functions for interacting wit
 
 Here are some key differences:
 
-* Rather than associating a piece of data with a particular key, in `rspace` a piece of data is associated a *channel*.  Roughly speaking, in `rspace`, a *channel* can be any Scala type that can be serialized to and deserialized from `Array[Byte]`.
+* Rather than associating a piece of data with a particular key, in `rspace`, a piece of data is associated with a *channel*.  Roughly speaking, in `rspace`, a *channel* can be any Scala type that can be serialized to and deserialized from `Array[Byte]`.
 
 * In addition to storing data, `rspace` can also store *continuations* which represent actions to carry out once the data is retrieved.  Roughly speaking, in `rspace`, a *continuation* can be any Scala type that can be serialized to and deserialized from`Array[Byte]`.
 
