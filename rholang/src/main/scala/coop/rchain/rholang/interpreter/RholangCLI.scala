@@ -8,7 +8,7 @@ import coop.rchain.models.{Channel, ListChannel, Par}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.storage.{IStore, LMDBStore, Serialize}
+import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
@@ -122,28 +122,36 @@ object RholangCLI {
     } yield ()
     val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
     keepTrying(evaluatorFuture, store)
+    print("\n> ")
   }
 
   private def printTask(normalizedTerm: Par): Task[Unit] =
     Task {
       print("Evaluating:\n")
       println(PrettyPrinter().buildString(normalizedTerm))
-      print("\n> ")
     }
 
   @tailrec
   private def keepTrying(evaluatorFuture: CancelableFuture[Unit],
                          persistentStore: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit =
-    Await.ready(evaluatorFuture, 5.seconds).value match {
-      case Some(Success(_)) =>
-        print("Storage Contents:\n")
-        StoragePrinter.prettyPrint(persistentStore)
-        print("\n> ")
-      case Some(Failure(e: TimeoutException)) =>
+    try {
+      Await.ready(evaluatorFuture, 5.seconds).value match {
+        case Some(Success(_)) =>
+          print("Storage Contents:\n")
+          StoragePrinter.prettyPrint(persistentStore)
+          print("\n> ")
+        case Some(Failure(e)) => {
+          println("Caught boxed exception: " + e)
+          throw e
+        }
+        case None => throw new Error("Error: Future claimed to be ready, but value was None")
+      }
+    } catch {
+      case e: TimeoutException => {
         println("This is taking a long time. Feel free to ^C and quit.")
         keepTrying(evaluatorFuture, persistentStore)
-      case Some(Failure(e)) => throw e
-      case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+      }
+      case e: Exception => throw e
     }
 
   private def writeHumanReadable(fileName: String, sortedTerm: Par): Unit = {
