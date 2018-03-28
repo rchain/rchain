@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import org.scalacheck.Arbitrary
 import org.scalacheck.ScalacheckShapeless._
-import org.scalacheck.Gen.{const, sized, frequency, resize}
+import org.scalacheck.Gen.{const, frequency, resize, sized}
 
 import scala.collection.immutable.BitSet
 
@@ -15,7 +15,7 @@ object testImplicits {
   // become Options. See https://github.com/scalapb/ScalaPB/issues/40 .
   // We override so that we cannot get None for these required objects.
   implicit def arbOption[T](implicit a: Arbitrary[T]): Arbitrary[Option[T]] =
-    Arbitrary(for {s <- a.arbitrary} yield Some(s))
+    Arbitrary(for { s <- a.arbitrary } yield Some(s))
 
   implicit val arbPar = implicitly[Arbitrary[Par]]
 }

@@ -4,8 +4,7 @@ import java.io.File
 
 import cats.data.State
 import cats.data.State._
-import coop.rchain.rosette
-import coop.rchain.rosette.utils.{lensTrans, printToFile, unsafeCastLens}
+import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
@@ -24,8 +23,8 @@ trait Ob extends Base with Cloneable {
   val sysval: SysCode = null
   val constantP       = true
 
-  def meta: Ob   = slot.head
-  def parent: Ob = slot(1)
+  val meta: Ob
+  val parent: Ob
 
   def dispatch: CtxtTransition[(Result, Option[Continuation])] = pure((Right(Ob.NIV), None))
   def extendWith(keyMeta: Ob): Ob                              = null
@@ -63,7 +62,7 @@ trait Ob extends Base with Cloneable {
     } yield result
 
   def matches(ctxt: Ctxt): Boolean = false
-  def numberOfSlots(): Int         = slot.size
+  def numberOfSlots: Int           = slot.size
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
@@ -160,12 +159,16 @@ object Ob {
   case object SyscodeSleep      extends SysCode
   case object SyscodeDeadThread extends SysCode
 
-  object ABSENT   extends Ob
-  object INVALID  extends Ob
-  object NIV      extends Ob
-  object RBLTRUE  extends Ob
-  object RBLFALSE extends Ob
-  object NilMeta  extends Ob
+  trait SingletonOb extends Ob {
+    override val meta   = null
+    override val parent = null
+  }
+  object ABSENT   extends SingletonOb
+  object INVALID  extends SingletonOb
+  object NIV      extends SingletonOb
+  object RBLTRUE  extends SingletonOb
+  object RBLFALSE extends SingletonOb
+  object NilMeta  extends SingletonOb
 
   object Lenses {
     def setA[T, A](a: A)(f: RootLens[A] ⇒ Lens[A, T])(value: T): A =
@@ -197,7 +200,7 @@ object Ob {
       def inSlotNum(lens: Lens[Ob, Ob]): Option[Lens[Ob, Ob]] =
         if (!indirect) Some(lens)
         else {
-          val numberOfSlots = lens.get(ob).numberOfSlots()
+          val numberOfSlots = lens.get(ob).numberOfSlots
           if (ob.slotNum() >= numberOfSlots) None
           else {
             val resLens = unsafeCastLens[Actor](lens) >> 'extension
@@ -206,10 +209,10 @@ object Ob {
         }
 
       def updateSlot(lens: Lens[Ob, Ob]): Option[Ob] =
-        if (offset >= ob.numberOfSlots) None
+        if (offset >= lens.get(ob).numberOfSlots) None
         else {
           val slotLens = lens >> 'slot
-          val res      = lensTrans(slotLens, ob)(_.updated(offset, value))
+          val res      = slotLens.modify(ob)(_.updated(offset, value))
           Some(res)
         }
 
@@ -220,7 +223,10 @@ object Ob {
         }
       } catch {
         // TODO: Add logging
-        case _: IndexOutOfBoundsException => (ob, Failure)
+        /** When parameter of an lens is null
+          * @see [[coop.rchain.rosette.utils.Instances.mkParentFieldLens]]
+          */
+        case InvalidLensParam => (ob, Failure)
       }
     }
 

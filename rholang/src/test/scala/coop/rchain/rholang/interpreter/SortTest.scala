@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import org.scalatest._
 import implicits._
@@ -77,6 +77,38 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
       )
     val result = ReceiveSortMatcher.preSortBinds(binds)
     result should be(sortedBinds)
+  }
+}
+
+class VarSortMatcherSpec extends FlatSpec with Matchers {
+  val p = Par()
+  "Different kinds of variables" should "bin separately" in {
+    val parVars = p.copy(
+      exprs = List(EVar(BoundVar(2)),
+                   EVar(Wildcard(Var.WildcardMsg())),
+                   EVar(BoundVar(1)),
+                   EVar(FreeVar(0)),
+                   EVar(FreeVar(2)),
+                   EVar(BoundVar(0)),
+                   EVar(FreeVar(1))),
+      freeCount = 4,
+      locallyFree = BitSet(0, 1, 2),
+      wildcard = true
+    )
+    val sortedParVars: Option[Par] = p.copy(
+      exprs = List(EVar(BoundVar(0)),
+                   EVar(BoundVar(1)),
+                   EVar(BoundVar(2)),
+                   EVar(FreeVar(0)),
+                   EVar(FreeVar(1)),
+                   EVar(FreeVar(2)),
+                   EVar(Wildcard(Var.WildcardMsg()))),
+      freeCount = 4,
+      locallyFree = BitSet(0, 1, 2),
+      wildcard = true
+    )
+    val result = ParSortMatcher.sortMatch(parVars)
+    result.term should be(sortedParVars)
   }
 }
 

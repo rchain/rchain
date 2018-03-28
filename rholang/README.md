@@ -43,8 +43,8 @@ compiled examples/token.rho to examples/token.rbl
 
 ### Running rbl with Rosette
 After generating the rbl:
-1. in ../rosette, run build.sh
-2.  (cd ../rosette && ./build.out/src/rosette --boot-dir=rbl/rosette --boot=boot.rbl ../rholang/token.rbl)
+1.  (cd ../rosette && ./build.sh)
+2.  (cd ../rosette && ./run.sh ../rholang/token.rbl)
 
 ## What's working, what's broken:
 See [the bugtracker](https://rchain.atlassian.net/projects/RHOL/issues/RHOL-95?filter=allopenissues) for an up-to-date list of known issues.

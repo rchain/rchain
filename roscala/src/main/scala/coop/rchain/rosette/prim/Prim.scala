@@ -19,6 +19,9 @@ abstract class Prim extends Ob {
   val minArgs: Int
   val maxArgs: Int
 
+  override val meta   = null
+  override val parent = null
+
   def fn(ctxt: Ctxt): Either[PrimError, Ob]
 
   /**

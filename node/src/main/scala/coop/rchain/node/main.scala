@@ -1,22 +1,49 @@
 package coop.rchain.node
 
 import org.rogach.scallop._
+import java.io.FileReader
 import java.util.UUID
 import java.net.{InetAddress, NetworkInterface}
+
 import scala.collection.JavaConverters._
 import coop.rchain.p2p
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
+import CommError._
 import coop.rchain.catscontrib.Capture
+import coop.rchain.crypto.encryption.Curve25519
 import com.typesafe.scalalogging.Logger
 import com.google.common.io.BaseEncoding
 import monix.eval.Task
-import monix.execution.Scheduler
+import monix.execution.{CancelableFuture, Scheduler}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
+import java.io.{File, PrintWriter, Reader, StringReader}
+import java.nio.file.Files
+import java.util.concurrent.TimeoutException
 
+import coop.rchain.models.{Channel, ListChannel, Par}
+import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
+import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
 import kamon._
+
+import scala.annotation.tailrec
+import scala.io.Source
+import scala.util.{Failure, Success}
+
+import monix.execution.Scheduler.Implicits.global
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
@@ -40,6 +67,12 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                                 descr = "Start a stand-alone node (no bootstrapping).")
 
   val host = opt[String](default = None, descr = "Hostname or IP of this node.")
+
+  val repl = opt[Boolean](default = Some(false),
+                          short = 'r',
+                          descr = "Start node with REPL (but without P2P network)")
+  val eval = opt[String](default = None,
+                         descr = "Start node to evaluate rholang in file (but without P2P network)")
 
   verify()
 }
@@ -77,10 +110,130 @@ object Main {
     }
   }
 
+  private def reader(fileName: String): FileReader = new FileReader(fileName)
+  private def lexer(fileReader: Reader): Yylex     = new Yylex(fileReader)
+  private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
+
   def main(args: Array[String]): Unit = {
-
     val conf = Conf(args)
+    conf.eval.toOption match {
+      case Some(fileName) => {
+        val source                  = reader(fileName)
+        val sortedTerm: Option[Par] = buildNormalizedTerm(source)
+        evaluate(sortedTerm.get)
+      }
+      case None =>
+        conf.repl().fold(executeP2p(conf), executeREPL(conf))
+    }
+  }
 
+  private def executeREPL(conf: Conf): Unit = {
+    print("> ")
+    repl
+  }
+
+  private def evaluate(sortedTerm: Par): Unit = {
+    val persistentStore: LMDBStore[Channel, Seq[Channel], Seq[Channel], Par] = buildStore
+    val interp                                                               = Reduce.makeInterpreter(persistentStore)
+    evaluate(interp, persistentStore, sortedTerm)
+  }
+
+  private def repl = {
+    val persistentStore: LMDBStore[Channel, Seq[Channel], Seq[Channel], Par] = buildStore
+    val interp                                                               = Reduce.makeInterpreter(persistentStore)
+
+    for (ln <- Source.stdin.getLines) {
+      if (ln.isEmpty) {
+        print("> ")
+      } else {
+        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
+        evaluate(interp, persistentStore, normalizedTerm)
+      }
+    }
+  }
+
+  private def evaluate(interpreter: DebruijnInterpreter,
+                       store: IStore[Channel, Seq[Channel], Seq[Channel], Par],
+                       normalizedTerm: Par): Unit = {
+    val evaluatorTask = for {
+      _ <- printTask(normalizedTerm)
+      _ <- interpreter.inj(normalizedTerm)
+    } yield ()
+    val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+    keepTrying(evaluatorFuture, store)
+  }
+
+  private def printTask(normalizedTerm: Par): Task[Unit] =
+    Task {
+      print("Evaluating:\n")
+      println(PrettyPrinter().buildString(normalizedTerm))
+      print("\n> ")
+    }
+
+  @tailrec
+  private def keepTrying(evaluatorFuture: CancelableFuture[Unit],
+                         persistentStore: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit =
+    Await.ready(evaluatorFuture, 5.seconds).value match {
+      case Some(Success(_)) =>
+        print("Storage Contents:\n")
+        StoragePrinter.prettyPrint(persistentStore)
+        print("\n> ")
+      case Some(Failure(e: TimeoutException)) =>
+        println("This is taking a long time. Feel free to ^C and quit.")
+        keepTrying(evaluatorFuture, persistentStore)
+      case Some(Failure(e)) => throw e
+      case None             => throw new Error("Error: Future claimed to be ready, but value was None")
+    }
+  private def buildStore = {
+    implicit val serializer = Serialize.mkProtobufInstance(Channel)
+    implicit val serializer2 = new Serialize[Seq[Channel]] {
+      override def encode(a: Seq[Channel]): Array[Byte] =
+        ListChannel.toByteArray(ListChannel(a))
+
+      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
+        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+    }
+    implicit val serializer3 = Serialize.mkProtobufInstance(Par)
+
+    val dbDir = Files.createTempDirectory("rchain-storage-test-")
+    LMDBStore.create[Channel, Seq[Channel], Seq[Channel], Par](dbDir, 1024 * 1024 * 1024)
+  }
+
+  private def buildNormalizedTerm(source: Reader): Option[Par] = {
+    val term = buildAST(source)
+    val inputs =
+      ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+    val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
+    ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term
+  }
+
+  private def buildAST(source: Reader): Proc = {
+    val lxr = lexer(source)
+    val ast = parser(lxr)
+    ast.pProc()
+  }
+
+  private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
+    val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
+    if (normalizedTerm.knownFree.count > 0) {
+      if (normalizedTerm.knownFree.wildcards.isEmpty) {
+        val topLevelFreeList = normalizedTerm.knownFree.env.map {
+          case (name, (_, _, line, col)) => s"$name at $line:$col"
+        }
+        throw new Error(
+          s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}.")
+      } else {
+        val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
+          case (line, col) => s"_ (wildcard) at $line:$col"
+        }
+        throw new Error(
+          s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}.")
+      }
+    }
+    normalizedTerm
+  }
+
+  private def executeP2p(conf: Conf): Unit = {
     val name = conf.name.toOption match {
       case Some(key) => key
       case None      => UUID.randomUUID.toString.replaceAll("-", "")
@@ -96,21 +249,53 @@ object Main {
 
     import ApplicativeError_._
 
-    // FIX-ME temp implemmentation, production shoul use crypto module
     implicit val encyption: Encryption[Task] = new Encryption[Task] {
       import Encryption._
       val encoder = BaseEncoding.base16().lowerCase()
-      def fetchKeys: Task[PublicPrivateKeys] = Task.delay {
-        val pub: Key =
-          encoder.decode("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
-        val sec: Key =
-          encoder.decode("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+
+      private def generateFresh: Task[PublicPrivateKeys] = Task.delay {
+        val (pub, sec) = Curve25519.newKeyPair
         PublicPrivateKeys(pub, sec)
       }
 
-      def generateNonce: Task[Nonce] = Task.delay {
-        encoder.decode("69696ee955b62b73cd62bda875fc73d68219e0036b7a0b37")
-      }
+      val storePath = System.getProperty("user.home") + File.separator + s".${name}-rnode.keys"
+
+      private def storeToFS: PublicPrivateKeys => Task[Unit] =
+        keys =>
+          Task
+            .delay {
+              val pw = new PrintWriter(new File(storePath))
+              pw.println(encoder.encode(keys.pub))
+              pw.println(encoder.encode(keys.priv))
+              pw.close
+            }
+            .attempt
+            .void
+
+      private def fetchFromFS: Task[Option[PublicPrivateKeys]] =
+        Task
+          .delay {
+            val lines  = scala.io.Source.fromFile(storePath).getLines.toList
+            val pubKey = encoder.decode(lines(0))
+            val secKey = encoder.decode(lines(1))
+            PublicPrivateKeys(pubKey, secKey)
+          }
+          .attempt
+          .map(_.toOption)
+
+      def fetchKeys: Task[PublicPrivateKeys] =
+        (fetchFromFS >>= {
+          case None     => generateFresh >>= (keys => (storeToFS(keys) *> keys.pure[Task]))
+          case Some(ks) => ks.pure[Task]
+        }).memoize
+
+      def generateNonce: Task[Nonce] = Task.delay(Curve25519.newNonce)
+
+      def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): Task[Array[Byte]] =
+        Task.delay(Curve25519.encrypt(pub, sec, nonce, message))
+
+      def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): Task[Array[Byte]] =
+        Task.delay(Curve25519.decrypt(pub, sec, nonce, cipher))
     }
 
     implicit def ioLog: Log[Task] = new Log[Task] {
@@ -127,35 +312,6 @@ object Main {
       def nanoTime: Task[Long] = Task.delay {
         System.nanoTime
       }
-    }
-
-    val net = new UnicastNetwork(src, Some(p2p.Network))
-
-    implicit lazy val communication: Communication[Task] = new Communication[Task] {
-      def roundTrip(
-          msg: ProtocolMessage,
-          remote: ProtocolNode,
-          timeout: Duration = Duration(500, MILLISECONDS)): Task[CommErr[ProtocolMessage]] =
-        net.roundTrip[Task](msg, remote, timeout)
-      def local: Task[ProtocolNode] = net.local.pure[Task]
-      def commSend(data: Seq[Byte], peer: PeerNode): Task[CommErr[Unit]] = Task.delay {
-        net.comm.send(data, peer)
-      }
-      def addNode(node: PeerNode): Task[Unit] =
-        for {
-          _ <- Task.delay(net.add(node))
-          _ <- Metrics[Task].incrementCounter("peers")
-        } yield ()
-      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] = Task.delay {
-        net.broadcast(msg)
-      }
-      def findMorePeers(limit: Int): Task[Seq[PeerNode]] = Task.delay {
-        net.findMorePeers(limit)
-      }
-      def countPeers: Task[Int] = Task.delay {
-        net.table.peers.size
-      }
-      def receiver: Task[Unit] = net.receiver[Task]
     }
 
     implicit def metrics: Metrics[Task] = new Metrics[Task] {
@@ -193,7 +349,7 @@ object Main {
     }
 
     /** will use database or file system */
-    implicit def inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
+    implicit val inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
       new Kvs.InMemoryKvs[Task, PeerNode, Array[Byte]]
 
     /** This is essentially a final effect that will accumulate all effects from the system */
@@ -206,6 +362,37 @@ object Main {
 
     implicit class TaskEffectOps[A](t: Task[A]) {
       def toEffect: Effect[A] = t.liftM[CommErrT]
+    }
+
+    val net = new UnicastNetwork(src, Some(p2p.Network))
+
+    implicit lazy val communication: Communication[Effect] = new Communication[Effect] {
+      def roundTrip(
+          msg: ProtocolMessage,
+          remote: ProtocolNode,
+          timeout: Duration = Duration(500, MILLISECONDS)): Effect[CommErr[ProtocolMessage]] =
+        net.roundTrip[Effect](msg, remote, timeout)
+      def local: Effect[ProtocolNode] = net.local.pure[Effect]
+      def commSend(msg: ProtocolMessage, peer: PeerNode): Effect[CommErr[Unit]] =
+        Task.delay(net.comm.send(msg.toByteSeq, peer)).toEffect
+      def addNode(node: PeerNode): Effect[Unit] =
+        for {
+          _ <- Task.delay(net.add(node)).toEffect
+          _ <- Metrics[Effect].incrementCounter("peers")
+        } yield ()
+      def broadcast(msg: ProtocolMessage): Effect[Seq[CommErr[Unit]]] =
+        Task.delay {
+          net.broadcast(msg)
+        }.toEffect
+      def findMorePeers(limit: Int): Effect[Seq[PeerNode]] =
+        Task.delay {
+          net.findMorePeers(limit)
+        }.toEffect
+      def countPeers: Effect[Int] =
+        Task.delay {
+          net.table.peers.size
+        }.toEffect
+      def receiver: Effect[Unit] = net.receiver[Effect]
     }
 
     val metricsServer = MetricsServer()
@@ -253,7 +440,6 @@ object Main {
           _ <- if (thisCount != lastCount) Log[Effect].info(s"Peers: $thisCount.")
               else ().pure[Effect]
         } yield thisCount)
-
     }
 
     val recipe: Effect[Unit] = for {
@@ -271,6 +457,5 @@ object Main {
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
     }
-
   }
 }

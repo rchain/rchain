@@ -16,18 +16,18 @@ new testResult, updateTestResult in {
           for(@"new", @arg, ack <= port) {
             new ticket in {
               ack!(*ticket) |
-              @(*ticket | *table)!(arg)
+              @{*ticket | *table}!(arg)
             }
           } |
           for(@"get", @arg, ack <= port) {
-            for (@value <- @(arg | *table)) {
-              @(arg | *table)!(value) |
+            for (@value <- @{arg | *table}) {
+              @{arg | *table}!(value) |
               ack!(value)
             }
           } |
           for(@"set", @arg1, @arg2, ack <= port) {
-            for (_ <- @(arg1 | *table)) {
-              @(arg1 | *table)!(arg2) |
+            for (_ <- @{arg1 | *table}) {
+              @{arg1 | *table}!(arg2) |
               ack!(true)
             }
           }
