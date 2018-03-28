@@ -4,7 +4,6 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.security.MessageDigest
 
-import scala.collection.JavaConverters._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.rspace.Serialize.mkProtobufInstance
@@ -14,7 +13,7 @@ import coop.rchain.rspace.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 
-import scala.collection.mutable
+import scala.collection.JavaConverters._
 
 /**
   * The main store class.

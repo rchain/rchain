@@ -2,8 +2,6 @@ package coop.rchain.rspace
 
 import coop.rchain.rspace.internal._
 
-import scala.collection.mutable
-
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel

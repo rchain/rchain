@@ -3,7 +3,6 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.ignore
 
 import scala.annotation.tailrec
 
