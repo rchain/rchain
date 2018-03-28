@@ -6,17 +6,17 @@ The **R**Chain Tuple **Space**
 
 `rspace` is a Scala library that has been designed to provide a disk-backed [tuple space](https://en.wikipedia.org/wiki/Tuple_space) to the [Rholang](http://rchain-architecture.readthedocs.io/en/latest/contracts/contract-design.html#rholang-a-concurrent-language) interpreter.  It is based on an earlier, in-memory implementation written in the Rosette Base Language (RBL) found [here](https://github.com/rchain/rchain/blob/05e3969cc999853ab57fb8c792e732beb92948d3/rosette/rbl/rosette/namespace.rbl).
 
-Traditionally, a key-value store provides two main functions for interacting with a given store: *put*, which persists a piece of data at given key, and *get*, which retrieves the data stored at a particular key.
+Traditionally, a key-value store provides two main functions for interacting with a given store: *put*, which persists a piece of data at a given key, and *get*, which retrieves the data stored at a particular key.
 
 `rspace` departs from this model and provides a novel approach to storing and retrieving data.
 
 Here are some key differences:
 
-* Rather than associating a piece of data with a particular key, in `rspace`, a piece of data is associated with a *channel*.  Roughly speaking, in `rspace`, a *channel* can be any Scala type that can be serialized to and deserialized from `Array[Byte]`.
+* Rather than associating a piece of data with a particular key, in `rspace`, a piece of data is associated with a *channel*.  Roughly speaking, in `rspace`, a *channel* can be any Scala type that can be serialized to and deserialized from an `Array[Byte]`.
 
-* In addition to storing data, `rspace` can also store *continuations* which represent actions to carry out once the data is retrieved.  Roughly speaking, in `rspace`, a *continuation* can be any Scala type that can be serialized to and deserialized from`Array[Byte]`.
+* In addition to storing data, `rspace` can also store *continuations*, which represent actions to carry out once the data is retrieved.  Roughly speaking, in `rspace`, a *continuation* can be any Scala type that can be serialized to and deserialized from an`Array[Byte]`.
 
-* A continuation is associated with a list of channels and a list of *patterns*.  Like channels and continuations, patterns can be any Scala type that can be serialized to and deserialized from `Array[Byte]`.  Users of `rspace` provide their own custom match function for matching patterns against data.
+* A continuation is associated with a list of channels and a list of *patterns*.  Like channels and continuations, patterns can be any Scala type that can be serialized to and deserialized from an `Array[Byte]`.  Users of `rspace` provide their own custom match function for matching patterns against data.
 
 * The two main functions for interacting with a given store are:
 
@@ -24,7 +24,7 @@ Here are some key differences:
 
   * *produce*, which, given a piece data at a given channel, searches the store for matching continuation, using existing data in the store to help satisfy the match.
 
-For more information and detailed instructions on using `rspace`, see the tutorial here.
+For more information and detailed instructions on using `rspace`, see the tutorial [here]().
 
 ### Prerequisites
 
