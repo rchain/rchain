@@ -1,6 +1,6 @@
 # A Rholang tutorial
 
-Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax that will be used in the 0.2 SDK release.
+Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax that will be used in the RNode-0.2 release.
 
 Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues but behave like sets rather than queues.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver. Note that throughout this document the words "name" and "channel" are used interchangeably. This is because in the rho-calculus (on which Rholang is based) the term name is used, however because you can send and receive information on names, semantically they are like channels.
 
@@ -27,7 +27,7 @@ Rholang is "process-oriented": all computation is done by means of message passi
     2   new chan in {
     3     chan!("Hello again, world!") |
     4     for (@text <- chan) { Nil }
-    5   } |
+    5   }
     6 } | @"HelloAgain"!(Nil)
 
 1) Contracts take at least one parameter, but we can throw it away by binding it to the wildcard `_`.
@@ -122,6 +122,7 @@ In the code below, we show an example of iterating through a linked list impleme
     15   } |
     16   iCh!(1) |
     17   loop!([1, [2, [3, [4, []]]]], true, *chan)
+    18 }
 
 3) The `match` construction allows destructuring a variable through pattern matching.
 

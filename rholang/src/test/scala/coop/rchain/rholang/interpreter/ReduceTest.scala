@@ -223,6 +223,71 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
   }
 
+  "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
+    val simpleReceive = Receive(
+      Seq(ReceiveBind(Seq(Quote(GInt(2))), Quote(GInt(2)))),
+      Par(),
+      false,
+      0,
+      0,
+      BitSet()
+    )
+    val send =
+      Send(Quote(GInt(1)), Seq[Par](simpleReceive), false, 0, BitSet())
+    val receive = Receive(
+      Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GInt(1)))),
+      Eval(ChanVar(BoundVar(0))),
+      false,
+      1,
+      0,
+      BitSet()
+    )
+
+    val sendFirstResult = withTestStore { store =>
+      val interpreter = Reduce.makeInterpreter(store)
+      val inspectTaskSendFirst = for {
+        _ <- interpreter.eval(send)(Env())
+        _ <- interpreter.eval(receive)(Env())
+      } yield store.toMap
+      Await.result(inspectTaskSendFirst.runAsync, 3.seconds)
+    }
+    sendFirstResult should be(
+      HashMap(
+        List(Channel(Quote(GInt(2)))) ->
+          Row(List(),
+              List(
+                WaitingContinuation[List[Channel], Par](List(
+                                                          List(Quote(GInt(2)))
+                                                        ),
+                                                        Par(),
+                                                        false)
+              ))
+      )
+    )
+
+    val receiveFirstResult = withTestStore { store =>
+      val interpreter = Reduce.makeInterpreter(store)
+      val inspectTaskReceiveFirst = for {
+        _ <- interpreter.eval(receive)(Env())
+        _ <- interpreter.eval(send)(Env())
+      } yield store.toMap
+      Await.result(inspectTaskReceiveFirst.runAsync, 3.seconds)
+    }
+    receiveFirstResult should be(
+      HashMap(
+        List(Channel(Quote(GInt(2)))) ->
+          Row(List(),
+              List(
+                WaitingContinuation[List[Channel], Par](List(
+                                                          List(Quote(GInt(2)))
+                                                        ),
+                                                        Par(),
+                                                        false)
+              ))
+      )
+    )
+  }
+
   "Simple match" should "capture and add to the environment." in {
     val result = withTestStore { store =>
       val pattern = Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
