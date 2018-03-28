@@ -75,6 +75,17 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result should be(expected)
   }
 
+  "evalExpr" should "substitute before comparison." in {
+    val result = withTestStore { store =>
+      val env        = Env.makeEnv(Par(), Par())
+      val eqExpr     = EEq(EVar(BoundVar(0)), EVar(BoundVar(1)))
+      val resultTask = Reduce.makeInterpreter(store).evalExpr(eqExpr)(env)
+      Await.result(resultTask.runAsync, 3.seconds)
+    }
+    val expected: Expr = GBool(true)
+    result should be(expected)
+  }
+
   "eval of Send" should "place something in the tuplespace." in {
     val result = withTestStore { store =>
       val send =
