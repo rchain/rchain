@@ -235,7 +235,59 @@ that you need a [cheatsheet](https://github.com/wsargent/docker-cheat-sheet#expo
 
 ### 5.2 Bootstrapping a Private Network
 
-TBD
+It is possible to set up a private RChain network by running a standalone node and using it for bootstrapping other nodes. Here we
+run one on port 4000:
+
+```
+$ java -Djava.net.preferIPv4Stack=true -jar /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar -s -p 4000
+11:21:00.164 [main] INFO  main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
+11:21:00.600 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+11:21:01.012 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
+11:21:01.013 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
+11:21:01.014 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
+11:21:01.014 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
+11:21:01.014 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
+11:21:01.014 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
+11:21:01.051 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
+11:21:01.121 [main] INFO  main - Listening for traffic on rnode://a96a6c152711416f869da7fe8c2ced61@192.168.1.123:4000.
+11:21:01.122 [main] INFO  main - Starting stand-alone node.
+```
+
+Now bootstrapping the other node just means giving the argument
+
+```
+--bootstrap rnode://a96a6c152711416f869da7fe8c2ced61@192.168.1.123:4000
+```
+
+For example:
+
+```
+$ java -Djava.net.preferIPv4Stack=true -jar /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar --bootstrap rnode://a96a6c152711416f869da7fe8c2ced61@192.168.1.123:4000 -p 4001 -x 8081
+11:24:09.885 [main] INFO  main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
+11:24:10.183 [kamon.prometheus.PrometheusReporter] ERROR kamon.ReporterRegistry - Metric reporter [kamon.prometheus.PrometheusReporter] failed to start.
+11:24:10.567 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8081
+11:24:10.568 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _     
+11:24:10.568 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
+11:24:10.568 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
+11:24:10.569 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
+11:24:10.569 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
+11:24:10.606 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8081/
+11:24:10.674 [main] INFO  main - Listening for traffic on rnode://5fb06848ea89457e82a9e37565df2d57@192.168.1.123:4001.
+11:24:10.678 [main] INFO  main - Bootstrapping from #{PeerNode a96a6c152711416f869da7fe8c2ced61}.
+11:24:10.694 [main] INFO  main - Initialize first phase handshake (encryption handshake) to #{PeerNode a96a6c152711416f869da7fe8c2ced61}
+11:24:11.201 [scala-execution-context-global-28] INFO  main - Initialize second phase handshake (protocol handshake) to #{PeerNode a96a6c152711416f869da7fe8c2ced61}
+11:24:11.253 [scala-execution-context-global-28] INFO  main - Connected #{PeerNode a96a6c152711416f869da7fe8c2ced61}.
+11:24:16.301 [scala-execution-context-global-28] INFO  main - Peers: 1.
+```
+
+where bootstrapped node will log 
+
+```
+11:23:34.784 [scala-execution-context-global-26] INFO  main - Responded to encryption handshake request from #{PeerNode c17855314fc743c6ac8df001b70b2963}.
+11:24:11.163 [scala-execution-context-global-26] INFO  main - Responded to encryption handshake request from #{PeerNode 5fb06848ea89457e82a9e37565df2d57}.
+11:24:11.249 [scala-execution-context-global-26] INFO  main - Responded to protocol handshake request from #{PeerNode 5fb06848ea89457e82a9e37565df2d57}
+11:24:11.334 [main] INFO  main - Peers: 1.
+```
 
 ### 5.3 Caveats
 
