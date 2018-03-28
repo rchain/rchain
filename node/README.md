@@ -2,12 +2,12 @@
 
 ## 1. Overview
 
-At the moment, you can execute Node in two separate modes: 
+At the moment, you can execute node in two separate modes: 
 
 1. REPL
 2. P2P
 
-In REPL mode user is given ability to execute Rho-lang commands in REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible.
+In REPL mode users have the ability to execute Rho-lang commands in a REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible.
 
 In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node).
 
@@ -15,16 +15,16 @@ In P2P mode, node will instantiate a peer-to-peer network. It will either connec
 
 ### Building from source
 
-Node is depending on following subprojects: 
+Node depends on the following subprojects: 
 
 1. comm
 2. crypto
 3. rholang
 4. storage
 
-Building some of them is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps in order to be build. See README.md of each subproject for details.
+Building some of them is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
 
-Once you can build each subproject individually, run `sbt node/assembly` to build an executable. Assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
+Once you can build each subproject individually, run `sbt node/assembly` to build an executable. The assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
 
 Example
 
@@ -87,7 +87,7 @@ sbt docker
 
 We recommend this method, as it is much quicker and builds a much slimmer image.
 
-#### Testing that image is build and available
+#### Testing that image is built and available
 
 To test if image is available to use, simply run `docker images`, `coop.rchain/rnode` should be on the list of available images.
 
@@ -100,7 +100,7 @@ coop.rchain/rnode                               latest              b1af7024d9bf
 
 ### 3.1 REPL mode
 
-In REPL mode user is given ability to execute Rho-lang commands in REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible
+In REPL mode users have the ability to execute Rho-lang commands in REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible
 
 In order to execute node in REPL mode you need to run it with `--repl` flag. Note that in REPL mode all other flags will be ignored.
 
@@ -289,7 +289,10 @@ where bootstrapped node will log
 11:24:11.334 [main] INFO  main - Peers: 1.
 ```
 
-### 5.3 Caveats
+### 5.3 Metrics
+The current version of the node produces metrics on some communications-related activities in Prometheus format. A local node and metrics visualizer may be started by following the instructions found [here](https://github.com/rchain/rchain/blob/master/docker/node/README.md).
+
+### 5.4 Caveats
 
 This is very much a work in progress. The networking overlay is only known to work when it can avail itself of visible IP addresses,
 either public or all contained within the same network. It does not yet include any special code for getting around a home firewall
