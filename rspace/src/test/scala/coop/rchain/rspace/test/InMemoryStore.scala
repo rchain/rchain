@@ -69,8 +69,8 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   }
 
   private[rspace] def putK(txn: T,
-                            channels: List[C],
-                            continuation: WaitingContinuation[P, K]): Unit = {
+                           channels: List[C],
+                           continuation: WaitingContinuation[P, K]): Unit = {
     val key = hashCs(channels)
     putCs(txn, channels)
     val waitingContinuations =
