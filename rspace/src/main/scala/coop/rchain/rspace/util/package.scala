@@ -1,8 +1,5 @@
 package coop.rchain.rspace
 
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
-
 package object util {
 
   /**
