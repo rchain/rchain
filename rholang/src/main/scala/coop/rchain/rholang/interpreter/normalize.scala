@@ -97,7 +97,7 @@ object CollectionNormalizeMatcher {
         }
       )
       val resultKnownFree = folded._2
-      val freeCount       = resultKnownFree.count - input.knownFree.count
+      val freeCount       = resultKnownFree.countNoWildcards - input.knownFree.countNoWildcards
       CollectVisitOutputs(constructor(folded._1.reverse, freeCount, folded._3, folded._4),
                           resultKnownFree)
     }
@@ -121,7 +121,7 @@ object CollectionNormalizeMatcher {
         }
       )
       val resultKnownFree = folded._2
-      val freeCount       = resultKnownFree.count - input.knownFree.count
+      val freeCount       = resultKnownFree.countNoWildcards - input.knownFree.countNoWildcards
       CollectVisitOutputs(EMap(folded._1.reverse, freeCount, folded._3, folded._4), resultKnownFree)
     }
     c match {
@@ -208,7 +208,7 @@ object ProcNormalizeMatcher {
         normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, targetResult.knownFree))
       val falseCaseBody =
         normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
-      val freeCount = falseCaseBody.knownFree.count - input.knownFree.count
+      val freeCount = falseCaseBody.knownFree.countNoWildcards - input.knownFree.countNoWildcards
 
       val desugaredIf = Match(
         targetResult.par,
@@ -314,7 +314,7 @@ object ProcNormalizeMatcher {
           case _: SendSingle   => false
           case _: SendMultiple => true
         }
-        val freeCount = dataResults._2.knownFree.count - input.knownFree.count
+        val freeCount = dataResults._2.knownFree.countNoWildcards - input.knownFree.countNoWildcards
         ProcVisitOutputs(
           input.par.prepend(
             Send(
@@ -352,7 +352,7 @@ object ProcNormalizeMatcher {
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
           ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
-        val freeCount = bodyResult.knownFree.count - input.knownFree.count
+        val freeCount = bodyResult.knownFree.countNoWildcards - input.knownFree.countNoWildcards
         ProcVisitOutputs(
           input.par.prepend(
             Receive(
@@ -446,7 +446,7 @@ object ProcNormalizeMatcher {
         val updatedEnv = input.env.absorbFree(mergedFrees)._1
         val bodyResult =
           normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
-        val freeCount = bodyResult.knownFree.count - input.knownFree.count
+        val freeCount = bodyResult.knownFree.countNoWildcards - input.knownFree.countNoWildcards
         val wildcard  = sourcesWildcards || bodyResult.par.wildcard
         ProcVisitOutputs(
           input.par.prepend(
@@ -517,7 +517,7 @@ object ProcNormalizeMatcher {
             }
           }
         }
-        val freeCount = casesResult._2.count - input.knownFree.count
+        val freeCount = casesResult._2.countNoWildcards - input.knownFree.countNoWildcards
         ProcVisitOutputs(
           input.par.prepend(
             Match(
