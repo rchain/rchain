@@ -27,3 +27,6 @@ Then linking Y.rho would result in the file Y.rho.linked with the contents
      new Y in { contract Y(return) = { X(5, return) } }
    }
 ```
+
+### Note
+The `v0.1` and `v.02` folders contain example packages as well as tests verifying their behaviour and showing their usage. The folder name indicates the Rholang syntax version that is used in the examples.

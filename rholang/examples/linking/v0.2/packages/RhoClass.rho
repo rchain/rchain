@@ -1,0 +1,13 @@
+export RhoClass in {
+  contract @{*RhoClass | "apply"}(name, @args) = {
+    match args {
+      [a]                => { name!(a) }
+      [a, b]             => { name!(a, b) }
+      [a, b, c]          => { name!(a, b, c) }
+      [a, b, c, d]       => { name!(a, b, c, d) }
+      [a, b, c, d, e]    => { name!(a, b, c, d, e) }
+      [a, b, c, d, e, f] => { name!(a, b, c, d, e, f) }
+      _                  => { name!(args) }
+    }
+  }
+}
