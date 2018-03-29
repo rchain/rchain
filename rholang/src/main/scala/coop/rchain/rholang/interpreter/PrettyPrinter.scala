@@ -12,7 +12,6 @@ import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "x", "a", 23, 128)
-
   def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "INVALID", "x", "a", 23, 128)
 }
 
@@ -168,6 +167,19 @@ case class PrettyPrinter(freeShift: Int,
       case _ => throw new Error("Attempt to print unknown GeneratedMessage type")
     }
 
+  def increment(id: String): String = {
+    def incChar(charId: Char): Char = ((charId + 1 - 97) % 26 + 97).toChar
+
+    val newId = incChar(id.last).toString
+    if (newId equals "a")
+      if (id.length > 1) increment(id.dropRight(1)) + newId
+      else newId * 2
+    else id.dropRight(1) + newId
+  }
+
+  def rotate(id: String): String =
+    id.map(char => ((char + rotation - 97) % 26 + 97).toChar)
+
   private def buildVariables(bindCount: Int): String =
     (0 until Math.min(maxVarCount, bindCount))
       .map(i => s"$boundId${boundShift + i}")
@@ -213,15 +225,6 @@ case class PrettyPrinter(freeShift: Int,
       this
         .copy(boundShift = boundShift + patternFree)
         .buildString(matchCase.source.get)
-  }
-
-  private def rotate(id: String): String =
-    id.map(char => ((char + rotation - 97) % 26 + 97).toChar)
-
-  private def increment(id: String): String = {
-    val newId = ((id.last + 1 - 97) % 26 + 97).toChar
-    if (newId equals id(0)) id.dropRight(1) ++ newId.toString * 2
-    else id.dropRight(1) ++ newId.toString
   }
 
   private def isEmpty(p: Par) =

@@ -510,6 +510,35 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
 }
 
+class IncrementTester extends FlatSpec with Matchers {
+
+  val printer = PrettyPrinter()
+
+  "Increment" should "increment the id prefix every 26 increments" in {
+    val id: String = ("a" /: (0 until 26)) { (s, _) =>
+      printer.increment(s)
+    }
+    val _id: String = (id /: (0 until 26)) { (s, _) =>
+      printer.increment(s)
+    }
+    id shouldBe "aa"
+    _id shouldBe "ba"
+  }
+
+  "Increment and Rotate" should "" in {
+    val _printer: PrettyPrinter = (printer /: (0 until 52)) { (p, _) =>
+      p.copy(
+        freeId = p.boundId,
+        boundId = p.rotate(p.increment(p.baseId)),
+        baseId = p.increment(p.baseId)
+      )
+    }
+    _printer.freeId shouldBe "xw"
+    _printer.boundId shouldBe "yx"
+    _printer.baseId shouldBe "ba"
+  }
+}
+
 class NamePrinterSpec extends FlatSpec with Matchers {
 
   val inputs = NameVisitInputs(DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
