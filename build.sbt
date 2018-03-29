@@ -183,6 +183,8 @@ lazy val rspace = (project in file("rspace"))
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
     ),
+    /* Tutorial */
+    tutTargetDirectory := (baseDirectory in Compile).value / "docs",
     /* Publishing Settings */
     scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
     git.remoteRepo := scmInfo.value.get.connection,
