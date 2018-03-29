@@ -175,6 +175,7 @@ lazy val rspace = (project in file("rspace"))
   .settings(commonSettings: _*)
   .settings(
     name := "rspace",
+    version := "0.1.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       lmdbjava,
       catsCore
