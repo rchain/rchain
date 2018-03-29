@@ -8,9 +8,9 @@ To start using `rspace`, we first import the library into our project.
 import coop.rchain.rspace._
 ```
 
-Before we start using the main `produce` and `consume` functions, we need to define data types for channels, patterns, data, and continuations.
+Before we can start using the main `produce` and `consume` functions, we need to define data types for channels, patterns, data, and continuations.
 
-For the purposes of our example, let's try writing types for a simple address book-style project, where we can store and retrieve information about people.
+Let's try writing types for a simple address book-style project, where we can store and retrieve information about people.
 
 We start with a simple channel.
 
@@ -43,6 +43,8 @@ In `rspace`, a continuation can be an arbitrary type just like our channels, pat
 However, the library was designed to be used in a context where continuations take produced data as their input.
 
 For our purposes we will design a continuation type as a Scala class which implements `Function1`, so that it can be easily called like a function.
+
+Our continuation will be a simple one which prints the entries it is given.
 
 ```scala
 class Printer extends ((List[Entry]) => Unit) with Serializable {
@@ -353,7 +355,7 @@ runK(pres10)
 
 So far we've seen that every matching piece of data or continuation returned to us has also been removed from the store.  We could obviously put it back into the store ourselves, but we can also use `produce` and `consume`'s persist parameter to put something in the store and "make it stick".
 
-Let's try to persist a continuation, but first let's put our Crystal Lake-dwelling friends back in the store
+Let's try to persist a continuation, but first let's put our Crystal Lake-dwelling friends back in the store.
 ```tut
 val pres10 = produce(store, Channel("friends"), alice, persist = false)
 val pres11 = produce(store, Channel("friends"), bob, persist = false)
@@ -371,7 +373,7 @@ Let's run with it.
 runK(cres8)
 ```
 
-As a side note, we should observe the fact there is no particular order to which we retrieve matching data (or continuations).  If multiple matches exist, one is non-deterministically chosen and returned to the caller.
+As a side note, we can observe the fact there is no particular order to which we retrieve matching data (or continuations).  If multiple matches exist, one is non-deterministically chosen and returned to the caller.
 
 So did our `consume` stick?
 
@@ -381,7 +383,7 @@ println(store.toMap)
 
 It did not!  That's strange...
 
-This quirk of `rspace` is to addresses the circumstance where matches already exist for a particular continuation that we are trying to persist.  If we were able to persist the continuation without retrieving the existing matches, those matches might end up "lost" in the store.  Instead, we should keep re-attempting to do a persistent consume until all existing matches have been "drained" from the store.  When we receive a `None`, we know that all existing matches have been returned from the store and the continuation has been persisted.
+This quirk of `rspace` is to address the circumstance where matches already exist for a particular continuation that we are trying to persist.  If we were able to persist the continuation without retrieving the existing matches, those matches might end up "lost" in the store.  Instead, we should keep re-attempting to do a persistent consume until all existing matches have been "drained" from the store.  When we receive a `None`, we know that all existing matches have been returned from the store and the continuation has been persisted.
 
 ```tut
 val cres9 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = true)
