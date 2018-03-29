@@ -171,10 +171,11 @@ lazy val roscala = (project in file("roscala"))
   .dependsOn(roscala_macros)
 
 lazy val rspace = (project in file("rspace"))
-  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "rspace",
+    version := "0.1.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       lmdbjava,
       catsCore
@@ -182,6 +183,8 @@ lazy val rspace = (project in file("rspace"))
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
     ),
+    /* Tutorial */
+    tutTargetDirectory := (baseDirectory in Compile).value / "docs",
     /* Publishing Settings */
     scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
     git.remoteRepo := scmInfo.value.get.connection,
