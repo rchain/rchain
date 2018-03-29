@@ -15,7 +15,7 @@ export LinkedList in {
     return!([value, tail])
   } |
   //A fold over the list which breaks early if a condition is met.
-  //both the condition and combinator are are combined into a single
+  //Both the condition and combinator are are combined into a single
   //function which returns a [boolean, value] pair.
   //Use cases: see get and indexOf
   contract @[*LinkedList, "partialFold"](@list, @start, combinatorAndCondition, return) = {
