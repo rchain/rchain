@@ -2,12 +2,15 @@
 
 ## 1. Overview
 
-At the moment, you can execute node in two separate modes: 
+At the moment, you can execute node in three separate modes: 
 
 1. REPL
-2. P2P
+2. EVAL
+3. P2P
 
 In REPL mode users have the ability to execute Rho-lang commands in a REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible.
+
+EVAL mode allows users run Rholang that is stored in a plain text file (filename.rho). In this mode the node wil lmake a directory on the local system available to the interpreter as a location where Rholang contracts can be executed.
 
 In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node).
 
@@ -121,7 +124,21 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar --repl
 > 
 ```
 
-### 3.2 P2P mode
+### 3.2 EVAL mode
+In EVAL mode, node runs in the interpreter mode and supports running Rholang code that is stored in a plain text file.
+
+### Running via Docker
+By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build docker image yourself](#building-via-docker) and then run it.
+
+To run Rholang that is stored in a plain text file (filename.rho), use
+
+'''
+docker run -it --mount type=bind,source="$(pwd)"/file_directory,target=/tmp rchain/rnode --eval /tmp/filename.rho
+'''
+
+This command will run the node in interpreter mode and will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed. When running your docker container, be aware of your current path - the 'pwd' command sticks you current path in the bind command.
+
+### 3.3 P2P mode
 
 In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node). Note that this release prints a great deal of diagnostic information. 
 
