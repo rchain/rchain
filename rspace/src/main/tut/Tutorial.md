@@ -357,8 +357,8 @@ So far we've seen that every matching piece of data or continuation returned to 
 
 Let's try to persist a continuation, but first let's put our Crystal Lake-dwelling friends back in the store.
 ```tut
-val pres10 = produce(store, Channel("friends"), alice, persist = false)
-val pres11 = produce(store, Channel("friends"), bob, persist = false)
+val pres11 = produce(store, Channel("friends"), alice, persist = false)
+val pres12 = produce(store, Channel("friends"), bob, persist = false)
 ```
 
 Now let's try to do a `consume` with the persist flag set to `true`.
@@ -397,10 +397,10 @@ The same rule applies for doing a persistent `produce` - if any matching continu
 For example,
 ```tut
 val cres11 = consume(store, List(Channel("friends")), List(CityMatch(city = "Peony")), new Printer, persist = false)
-val pres12 = produce(store, Channel("friends"), erin, persist = true)
-runK(pres12)
-println(store.toMap)
 val pres13 = produce(store, Channel("friends"), erin, persist = true)
+runK(pres13)
+println(store.toMap)
+val pres14 = produce(store, Channel("friends"), erin, persist = true)
 println(store.toMap)
 ```
 
