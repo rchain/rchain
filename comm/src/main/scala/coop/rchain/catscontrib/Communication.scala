@@ -15,8 +15,6 @@ trait Communication[F[_]] {
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
   def findMorePeers(limit: Int): F[Seq[PeerNode]]
   def countPeers: F[Int]
-  // TODO this has to be refactored, dispatch should become part of communication, receiver part of business logic
-  def receiver: F[Unit]
 }
 
 object Communication extends CommunicationInstances {
@@ -37,7 +35,6 @@ object Communication extends CommunicationInstances {
       def broadcast(msg: ProtocolMessage): T[F, Seq[CommErr[Unit]]] = C.broadcast(msg).liftM[T]
       def findMorePeers(limit: Int): T[F, Seq[PeerNode]]            = C.findMorePeers(limit).liftM[T]
       def countPeers: T[F, Int]                                     = C.countPeers.liftM[T]
-      def receiver: T[F, Unit]                                      = C.receiver.liftM[T]
     }
 }
 
