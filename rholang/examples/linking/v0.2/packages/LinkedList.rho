@@ -81,7 +81,7 @@ export LinkedList in {
   contract @[*LinkedList, "foreach"](@list, proc, isDone) = {
     new combinator, nilReturn in {
       contract combinator(@head, @accumulatedValue, return) = {
-        //need return flag from `proc` in order to guarantee execution order
+        //Need return flag from `proc` in order to guarantee execution order
         new isDone in { proc!(head, *isDone) | for(_ <- isDone){ return!(Nil) } }
       } | 
       @[*LinkedList, "fold"]!(list, Nil, *combinator, *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
@@ -99,7 +99,7 @@ export LinkedList in {
         for(@r <- result) {
           match r {
             [true, [_, v]] => { return!(v) }
-            _ => { return!(Nil) } //index out of bounds
+            _ => { return!(Nil) } //Index out of bounds
           }
         }
       }
@@ -115,7 +115,7 @@ export LinkedList in {
         for(@r <- result) {
           match r {
             [true, i] => { return!(i) }
-            _ => { return!(-1) } //element not found
+            _ => { return!(-1) } //Element not found
           }
         }
       }

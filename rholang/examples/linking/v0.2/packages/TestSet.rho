@@ -38,7 +38,7 @@ export TestSet in {
                 }
               }
             } |
-            //transform to linked list in order to have easy map and fold methods
+            //Transform to linked list in order to have easy map and fold methods
             LinkedList!("fromSmallList", [tests], *linkedListCh) |
             for(@linkedList <- linkedListCh) {
               LinkedList!("map", [linkedList, *toContract], *testsCh)
