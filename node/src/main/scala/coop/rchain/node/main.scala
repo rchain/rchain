@@ -6,13 +6,14 @@ import java.util.UUID
 import java.net.{InetAddress, NetworkInterface}
 
 import scala.collection.JavaConverters._
-import coop.rchain.p2p
+import coop.rchain.p2p, p2p.NetworkAddress
 import coop.rchain.comm._
 import CommError._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.encryption.Curve25519
 import com.typesafe.scalalogging.Logger
 import com.google.common.io.BaseEncoding
+import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.{CancelableFuture, Scheduler}
 
@@ -25,7 +26,7 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import ski._
 import TaskContrib._
-import java.io.{File, PrintWriter, Reader, StringReader}
+import java.io.{File, FileInputStream, FileOutputStream, PrintWriter, Reader, StringReader}
 import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
@@ -348,9 +349,47 @@ object Main {
       }
     }
 
-    /** will use database or file system */
-    implicit val inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] =
-      new Kvs.InMemoryKvs[Task, PeerNode, Array[Byte]]
+    def generateRemoteKeysKvs(path: String): Kvs[Task, PeerNode, Array[Byte]] =
+      new Kvs[Task, PeerNode, Array[Byte]] {
+        var m: Map[PeerNode, Array[Byte]] = fetch()
+
+        def keys: Task[Vector[PeerNode]] = Task.delay(m.keys.toVector)
+        def get(k: PeerNode): Task[Option[Array[Byte]]] = Task.delay(m.get(k))
+        def put(k: PeerNode, v: Array[Byte]): Task[Unit] = Task.delay {
+          m = m + (k -> v)
+          store()
+        }
+
+        def delete(k: PeerNode): Task[Unit] = Task.delay {
+          m = m - k
+          store()
+        }
+
+        private def fetch(): Map[PeerNode, Array[Byte]] = {
+          val file = new File(path)
+          file.createNewFile()
+          KeysStore
+            .parseFrom(new FileInputStream(file))
+            .keys
+            .map {
+              case (k, v) => (NetworkAddress.parse(k), v)
+            }
+            .flatMap {
+              case (Right(peerNode), v) => Map(peerNode -> v.toByteArray)
+              case (Left(_), _)         => Map.empty[PeerNode, Array[Byte]]
+            }
+        }
+
+        private def store(): Unit =
+          KeysStore(m.map {
+            case (k, v) => (k.toAddress, ByteString.copyFrom(v))
+          }).writeTo(new FileOutputStream(new File(path)))
+      }
+
+    implicit val inMemoryPeerKeys: Kvs[Task, PeerNode, Array[Byte]] = {
+      val remoteKeysPath = System.getProperty("user.home") + File.separator + s".${name}-rnode-remote.keys"
+      generateRemoteKeysKvs(remoteKeysPath)
+    }
 
     /** This is essentially a final effect that will accumulate all effects from the system */
     type CommErrT[F[_], A] = EitherT[F, CommError, A]
