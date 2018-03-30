@@ -141,9 +141,24 @@ export LinkedList in {
       } | loop!(end - 1, [])
     }
   } |
+  //Create a linked list from an ordinary list of length
+  //6 or less by pattern matching. This constructor is
+  //only temporary until list processes have methods.
+  contract @[*LinkedList, "fromSmallList"](@list, return) = {
+    match list {
+      []                 => { return!([]) }
+      [a]                => { return!([a, []]) }
+      [a, b]             => { return!([a, [b, []]]) }
+      [a, b, c]          => { return!([a, [b, [c, []]]]) }
+      [a, b, c, d]       => { return!([a, [b, [c, [d, []]]]]) }
+      [a, b, c, d, e]    => { return!([a, [b, [c, [d, [e, []]]]]]) }
+      [a, b, c, d, e, f] => { return!([a, [b, [c, [d, [e, [f, []]]]]]]) }
+      _ => { return!("Error! List to long for conversion to linked list.") }
+    }
+  } |
   import RhoClass in {
-    contract LinkedList(@method, @args) = {
-      @[*RhoClass, "apply"]!([*LinkedList, method], args)
+    contract LinkedList(@method, @input, return) = {
+      @[*RhoClass, "functionApply"]!([*LinkedList, method], input, *return)
     }
   }
 }
