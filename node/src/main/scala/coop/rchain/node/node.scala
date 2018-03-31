@@ -13,7 +13,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 
-class Node(conf: Conf) {
+class NodeRuntime(conf: Conf) {
 
   val logger = Logger("main")
   def whoami(port: Int): Option[InetAddress] = {
