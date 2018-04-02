@@ -178,7 +178,9 @@ lazy val rspace = (project in file("rspace"))
     version := "0.1.1",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       lmdbjava,
-      catsCore
+      catsCore,
+      scodecCore,
+      scodecBits
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value

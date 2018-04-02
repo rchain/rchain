@@ -9,6 +9,7 @@ import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.scalatest._
+import scodec.bits.ByteVector
 
 abstract class StorageActionsBase extends FlatSpec with Matchers with OptionValues {
 
@@ -896,4 +897,63 @@ class LMDBStoreStorageActionsTests
 
   override def afterAll(): Unit =
     recursivelyDeletePath(dbDir)
+}
+
+class LMDBStoreScodecActionsTests
+    extends StorageActionsTests
+    with JoinOperationsTests
+    with BeforeAndAfterAll {
+
+  private[this] val dbDir = Files.createTempDirectory("rchain-storage-test-")
+
+  override def withTestStore(f: TestStore => Unit): Unit = {
+    val testStore =
+      LMDBStoreScodec.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
+    testStore.clear()
+    try {
+      f(testStore)
+    } finally {
+      testStore.close()
+    }
+  }
+
+  override def afterAll(): Unit =
+    recursivelyDeletePath(dbDir)
+
+  import coop.rchain.rspace.scodecmodels._
+  import coop.rchain.rspace.scodecmodels.rscodecs._
+
+  "asBytesList" should "round-trip a list" in {
+    val bll =
+      AsBytesList(
+        List(AsBytes(ByteVector(Array[Byte](1, 2, 3)), false),
+             AsBytes(ByteVector(Array[Byte](4, 5, 6)), true)))
+
+    val arr = toBitVector(bll, rscodecs.asBytesListCodec)
+    val res = fromBitVector(arr, rscodecs.asBytesListCodec)
+
+    res shouldBe bll
+  }
+
+  "asData" should "round-trip" in {
+    val asd = AsBytes(ByteVector(Array[Byte](4, 5, 6)), true)
+
+    val arr = toBitVector(asd, rscodecs.asBytesCodec)
+    val res = fromBitVector(arr, rscodecs.asBytesCodec)
+
+    res shouldBe asd
+  }
+
+  "PsKs" should "round-trip" in {
+    val psks = PsKsBytesList(
+      List(
+        PsKsBytes(BytesList(List(ByteVector(Array[Byte](1, 2, 3)))),
+                  ByteVector(Array[Byte](4, 5, 6)),
+                  true)))
+
+    val arr = toBitVector(psks, rscodecs.psKsBytesListCodec)
+    val res = fromBitVector(arr, rscodecs.psKsBytesListCodec)
+
+    res shouldBe psks
+  }
 }
