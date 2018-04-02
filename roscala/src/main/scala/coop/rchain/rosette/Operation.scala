@@ -4,14 +4,14 @@ import cats.data.State._
 import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 
 case class StdOprn(meta: Ob, parent: Ob, override val extension: StdExtension) extends Actor {
-  override def dispatch: VMTransition[(Result[Ob], Option[Continuation])] =
+  override def dispatch(globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] =
     for {
-      optArg0 <- inspect[VMState, Option[Ob]](_.ctxt.arg(0))
+      optArg0 <- inspect[Ctxt, Option[Ob]](_.arg(0))
 
       result <- optArg0 match {
-                 case Some(ob) => ob.lookupAndInvoke
+                 case Some(ob) => ob.lookupAndInvoke(globalEnv)
                  case None =>
-                   pure[VMState, (Result[Ob], Option[Continuation])](
+                   pure[Ctxt, (Result[Ob], Option[Continuation])](
                      (Left(RuntimeError("no argument for dispatch")), None))
                }
     } yield result

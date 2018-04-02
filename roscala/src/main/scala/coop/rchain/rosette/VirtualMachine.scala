@@ -53,6 +53,8 @@ object VirtualMachine {
     state.ctxt.vmError(state)._2
    */
 
+  private def inspect[A] = State.inspect[VMState, A] _
+
   def handlePrimResult(primResult: Result[Ob], save: Ob => VMTransition[Unit]): VMTransition[Unit] =
     primResult match {
       case Right(ob) => save(ob)
@@ -323,9 +325,9 @@ object VirtualMachine {
     */
   def doRtn: VMTransition[Unit] =
     for {
-      rslt        <- inspect[VMState, Ob](_.ctxt.rslt)
+      rslt        <- inspect(_.ctxt.rslt)
       ctxtRet     <- Ctxt.ret(rslt).embedCtxt
-      isDoRtnFlag <- inspect[VMState, Boolean](_.doRtnFlag)
+      isDoRtnFlag <- inspect(_.doRtnFlag)
 
       (isError, optContinuation) = ctxtRet
 
@@ -348,9 +350,10 @@ object VirtualMachine {
     */
   def doXmit: VMTransition[Unit] =
     for {
-      target         <- inspect[VMState, Ob](_.ctxt.trgt)
-      dispatchResult <- target.dispatch
-      next           <- inspect[VMState, Boolean](_.xmitData._2)
+      target         <- inspect(_.ctxt.trgt)
+      globalEnv      <- inspect(_.globalEnv)
+      dispatchResult <- target.dispatch(globalEnv).embedCtxt
+      next           <- inspect(_.xmitData._2)
 
       (result, optContinuation) = dispatchResult
 
@@ -470,7 +473,7 @@ object VirtualMachine {
 
   def execute(op: OpFork): VMTransition[Unit] =
     for {
-      ctxt <- inspect[VMState, Ctxt](_.ctxt.copy(pc = PC(op.pc)))
+      ctxt <- inspect(_.ctxt.copy(pc = PC(op.pc)))
       _    <- modify[VMState](_.update(_ >> 'strandPool)(ctxt +: _))
     } yield ()
 
@@ -527,7 +530,7 @@ object VirtualMachine {
 
   def execute(op: OpApplyPrimTag): VMTransition[Unit] =
     for {
-      loc <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
+      loc <- inspect(_.code.lit(op.lit).asInstanceOf[Location])
       _   <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
       _   <- modify[VMState](_.set(_ >> 'loc)(loc))
 
@@ -637,8 +640,8 @@ object VirtualMachine {
 
   def execute(op: OpUpcallRtn): VMTransition[Unit] =
     for {
-      result   <- inspect[VMState, Ob](_.ctxt.rslt)
-      location <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
+      result   <- inspect(_.ctxt.rslt)
+      location <- inspect(_.code.lit(op.lit).asInstanceOf[Location])
 
       _ <- modify[VMState](_.set(_ >> 'ctxt >> 'tag)(location))
 
@@ -657,7 +660,7 @@ object VirtualMachine {
 
   def execute(op: OpUpcallResume): VMTransition[Unit] =
     for {
-      parentCtxt <- inspect[VMState, Ctxt](_.ctxt.ctxt)
+      parentCtxt <- inspect(_.ctxt.ctxt)
       _          <- schedule(parentCtxt)
       _          <- doNextThread
     } yield ()
@@ -768,9 +771,9 @@ object VirtualMachine {
 
   def execute(op: OpXferRsltToDest): VMTransition[Unit] =
     for {
-      location <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
+      location <- inspect(_.code.lit(op.lit).asInstanceOf[Location])
       _        <- modify[VMState](_.copy(loc = location))
-      rslt     <- inspect[VMState, Ob](_.ctxt.rslt)
+      rslt     <- inspect(_.ctxt.rslt)
 
       _ <- Location
             .store(location, rslt)
@@ -785,8 +788,8 @@ object VirtualMachine {
 
   def execute(op: OpXferSrcToRslt): VMTransition[Unit] =
     for {
-      location  <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
-      globalEnv <- inspect[VMState, TblObject](_.globalEnv)
+      location  <- inspect(_.code.lit(op.lit).asInstanceOf[Location])
+      globalEnv <- inspect(_.globalEnv)
       _         <- modify[VMState](_.copy(loc = location))
       _ <- Location
             .fetch(location, globalEnv)

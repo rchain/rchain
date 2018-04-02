@@ -6,7 +6,7 @@ import cats.data.State.pure
 import cats.data.{State, _}
 import cats.implicits._
 import cats.{Applicative, MonadError}
-import coop.rchain.rosette.Ctxt.Continuation
+import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
@@ -28,8 +28,9 @@ trait Ob extends Base with Cloneable {
   val meta: Ob
   val parent: Ob
 
-  def dispatch: VMTransition[(Result[Ob], Option[Continuation])] =
+  def dispatch(globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] =
     pure((Right(Ob.NIV), None))
+
   def extendWith(keyMeta: Ob): Ob = null
 
   def getAddr(indirect: Boolean, level: Int, offset: Int): Ob =
@@ -62,18 +63,17 @@ trait Ob extends Base with Cloneable {
   def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result[Ob] =
     Right(null)
 
-  def lookupAndInvoke: VMTransition[(Result[Ob], Option[Continuation])] = {
-    def inspect[A] = State.inspect[VMState, A] _
+  def lookupAndInvoke(globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] = {
+    def inspect[A] = State.inspect[Ctxt, A] _
 
     for {
-      target    <- inspect(_.ctxt.trgt)
-      globalEnv <- inspect(_.globalEnv)
-      fn        = meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
+      target <- inspect(_.trgt)
+      fn     = meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
       res <- fn.run(globalEnv) match {
               case Right(prim: Prim) =>
-                prim.invoke
+                prim.invoke(globalEnv)
               case _ =>
-                pure[VMState, (Result[Ob], Option[Continuation])]((Left(Absent), None))
+                pure[Ctxt, (Result[Ob], Option[Continuation])]((Left(Absent), None))
             }
     } yield res
   }

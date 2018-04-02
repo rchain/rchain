@@ -7,5 +7,5 @@ abstract class Actor extends Ob {
   val extension: StdExtension
 
   // TODO:
-  override def lookupAndInvoke = ???
+  override def lookupAndInvoke(globalEnv: TblObject) = ???
 }

@@ -46,7 +46,8 @@ abstract class Prim extends Ob {
     * return the parent ctxt which then has to be scheduled by
     * the caller.
     */
-  override def dispatch: VMTransition[(Result[Ob], Option[Continuation])] = {
+  override def dispatch(
+      globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] = {
 
     /**
       * Try to return the primitive result to the parent ctxt.
@@ -64,27 +65,25 @@ abstract class Prim extends Ob {
               (ctxt, (Right(result), res._2))
         )
 
-    val ctxtState: CtxtTransition[(Result[Ob], Option[Continuation])] =
-      for {
-        primResult <- dispatchHelper
+    for {
+      primResult <- dispatchHelper
 
-        result <- primResult match {
-                   case Right(ob) => returnResultToParent(ob)
+      result <- primResult match {
+                 case Right(ob) => returnResultToParent(ob)
 
-                   case _ =>
-                     /**
-                       * Something went wrong with running the primitive.
-                       * Report the error back and there is no ctxt to be
-                       * scheduled.
-                       */
-                     pure[Ctxt, (Result[Ob], Option[Continuation])]((primResult, None))
-                 }
-      } yield result
-
-    ctxtState.embedCtxt
+                 case _ =>
+                   /**
+                     * Something went wrong with running the primitive.
+                     * Report the error back and there is no ctxt to be
+                     * scheduled.
+                     */
+                   pure[Ctxt, (Result[Ob], Option[Continuation])]((primResult, None))
+               }
+    } yield result
   }
 
-  def invoke: VMTransition[(Result[Ob], Option[Continuation])] = dispatch
+  def invoke(globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] =
+    dispatch(globalEnv)
 }
 
 object Prim {
