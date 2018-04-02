@@ -19,6 +19,7 @@ import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import cats.syntax.either._
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 
 trait PersistentStoreTester {
   implicit val serializer = Serialize.mkProtobufInstance(Channel)
@@ -28,11 +29,13 @@ trait PersistentStoreTester {
     override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
       Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
   }
-  implicit val serializer3 = Serialize.mkProtobufInstance(Par)
-  def withTestStore[R](f: IStore[Channel, Seq[Channel], Seq[Channel], Par] => R): R = {
+  implicit val serializer3 = Serialize.mkProtobufInstance(TaggedContinuation)
+  def withTestStore[R](
+      f: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    val store: IStore[Channel, Seq[Channel], Seq[Channel], Par] =
-      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], Par](dbDir, 1024 * 1024 * 1024)
+    val store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] =
+      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
+                                                                                1024 * 1024 * 1024)
     try {
       f(store)
     } finally {
@@ -135,11 +138,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(
             List(),
             List(
-              WaitingContinuation[List[Channel], Par](List(List(Channel(ChanVar(FreeVar(0))),
-                                                                Channel(ChanVar(FreeVar(1))),
-                                                                Channel(ChanVar(FreeVar(2))))),
-                                                      Par(),
-                                                      false)
+              WaitingContinuation[List[Channel], TaggedContinuation](
+                List(List(Channel(ChanVar(FreeVar(0))),
+                          Channel(ChanVar(FreeVar(1))),
+                          Channel(ChanVar(FreeVar(2))))),
+                TaggedContinuation(ParBody(Par())),
+                false)
             )
           )
       ))
@@ -267,11 +271,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List(Channel(Quote(GInt(2)))) ->
           Row(List(),
               List(
-                WaitingContinuation[List[Channel], Par](List(
-                                                          List(Quote(GInt(2)))
-                                                        ),
-                                                        Par(),
-                                                        false)
+                WaitingContinuation[List[Channel], TaggedContinuation](
+                  List(
+                    List(Quote(GInt(2)))
+                  ),
+                  TaggedContinuation(ParBody(Par())),
+                  false)
               ))
       )
     )
@@ -289,11 +294,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List(Channel(Quote(GInt(2)))) ->
           Row(List(),
               List(
-                WaitingContinuation[List[Channel], Par](List(
-                                                          List(Quote(GInt(2)))
-                                                        ),
-                                                        Par(),
-                                                        false)
+                WaitingContinuation[List[Channel], TaggedContinuation](
+                  List(
+                    List(Quote(GInt(2)))
+                  ),
+                  TaggedContinuation(ParBody(Par())),
+                  false)
               ))
       )
     )

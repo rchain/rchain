@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.implicits._
@@ -8,9 +9,9 @@ import coop.rchain.rspace.IStore
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 
 object StoragePrinter {
-  def prettyPrint(store: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit = {
+  def prettyPrint(store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit = {
     val pars: Seq[Par] = store.toMap.map {
-      case ((channels: Seq[Channel], row: Row[Seq[Channel], Seq[Channel], Par])) => {
+      case ((channels: Seq[Channel], row: Row[Seq[Channel], Seq[Channel], TaggedContinuation])) => {
         def toSends(data: Seq[Datum[Seq[Channel]]]): Par = {
           val sends: Seq[Send] = data.flatMap {
             case Datum(as: Seq[Channel], persist: Boolean) =>
@@ -23,16 +24,19 @@ object StoragePrinter {
           }
         }
 
-        def toReceive(wks: Seq[WaitingContinuation[Seq[Channel], Par]]): Par = {
+        def toReceive(wks: Seq[WaitingContinuation[Seq[Channel], TaggedContinuation]]): Par = {
           val receives: Seq[Receive] = wks.map {
             case WaitingContinuation(patterns: Seq[Seq[Channel]],
-                                     continuation: Par,
+                                     continuation: TaggedContinuation,
                                      persist: Boolean) =>
               val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
                 case (channel, pattern) =>
                   ReceiveBind(pattern, Some(channel))
               }
-              Receive(receiveBinds, Some(continuation), persist)
+              continuation.taggedCont match {
+                case ParBody(p) => Receive(receiveBinds, Some(p), persist)
+                case _          => Receive(receiveBinds, Some(Par.defaultInstance), persist)
+              }
           }
           receives.foldLeft(Par()) { (acc: Par, receive: Receive) =>
             acc.prepend(receive)
@@ -44,10 +48,10 @@ object StoragePrinter {
             Par()
           case Row(data: Seq[Datum[Seq[Channel]]], Nil) =>
             toSends(data)
-          case Row(Nil, wks: Seq[WaitingContinuation[Seq[Channel], Par]]) =>
+          case Row(Nil, wks: Seq[WaitingContinuation[Seq[Channel], TaggedContinuation]]) =>
             toReceive(wks)
           case Row(data: Seq[Datum[Seq[Channel]]],
-                   wks: Seq[WaitingContinuation[Seq[Channel], Par]]) =>
+                   wks: Seq[WaitingContinuation[Seq[Channel], TaggedContinuation]]) =>
             toSends(data) ++ toReceive(wks)
         }
       }

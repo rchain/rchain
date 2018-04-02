@@ -2,16 +2,14 @@ package coop.rchain.node
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import coop.rchain.models.{Channel, ListChannel, Par}
+import coop.rchain.models.{Channel, ListChannel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
 import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
-
 import java.io.{FileReader, Reader, StringReader}
 import java.nio.file.Files
 
@@ -22,24 +20,26 @@ import java.util.concurrent.TimeoutException
 
 import scala.io.Source
 import scala.util.{Failure, Success}
-
 import monix.eval.Task
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 
 object InterpreterRuntime {
 
   def evaluateFile(fileName: String): Unit = {
-    val persistentStore: LMDBStore[Channel, Seq[Channel], Seq[Channel], Par] = buildStore
-    val interp                                                               = Reduce.makeInterpreter(persistentStore)
-    val source                                                               = reader(fileName)
-    val sortedTerm: Option[Par]                                              = buildNormalizedTerm(source)
+    val persistentStore = buildStore
+    val interp          = Reduce.makeInterpreter(persistentStore)
+    val source          = reader(fileName)
+    val sortedTerm      = buildNormalizedTerm(source)
 
     evaluate(interp, persistentStore, sortedTerm.get)
   }
 
   def repl = {
-    val persistentStore: LMDBStore[Channel, Seq[Channel], Seq[Channel], Par] = buildStore
-    val interp                                                               = Reduce.makeInterpreter(persistentStore)
+    val persistentStore = buildStore
+    val interp          = Reduce.makeInterpreter(persistentStore)
 
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
@@ -56,7 +56,7 @@ object InterpreterRuntime {
   private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
   private def evaluate(interpreter: DebruijnInterpreter,
-                       store: IStore[Channel, Seq[Channel], Seq[Channel], Par],
+                       store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                        normalizedTerm: Par): Unit = {
     val evaluatorTask = for {
       _ <- printTask(normalizedTerm)
@@ -88,8 +88,9 @@ object InterpreterRuntime {
     }
 
   @tailrec
-  private def keepTrying(evaluatorFuture: CancelableFuture[Unit],
-                         persistentStore: IStore[Channel, Seq[Channel], Seq[Channel], Par]): Unit =
+  private def keepTrying(
+      evaluatorFuture: CancelableFuture[Unit],
+      persistentStore: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit =
     Await.ready(evaluatorFuture, 5.seconds).value match {
       case Some(Success(_)) =>
         print("Storage Contents:\n")
@@ -110,10 +111,11 @@ object InterpreterRuntime {
       override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
         Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
     }
-    implicit val serializer3 = Serialize.mkProtobufInstance(Par)
+    implicit val serializer3 = Serialize.mkProtobufInstance(TaggedContinuation)
 
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    LMDBStore.create[Channel, Seq[Channel], Seq[Channel], Par](dbDir, 1024 * 1024 * 1024)
+    LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
+                                                                              1024 * 1024 * 1024)
   }
 
   private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {

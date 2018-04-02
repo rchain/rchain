@@ -13,6 +13,8 @@ import implicits._
 import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
+import coop.rchain.models.TaggedContinuation.TaggedCont.{ParBody, ScalaBodyRef}
+import coop.rchain.rholang.interpreter.Reduce.Cont
 import monix.eval.{MVar, Task}
 
 import scala.annotation.tailrec
@@ -44,8 +46,22 @@ object Reduce {
   // TODO: How do I not define this twice?
   type Cont[Data, Body] = (Body, Env[Data])
 
-  class DebruijnInterpreter(tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], Par])
+  class DebruijnInterpreter(
+      tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation])
       extends Reduce[Task, Quote, Par, Channel, Par] {
+
+    def buildEnv(dataList: List[Seq[Channel]]): Env[Par] =
+      Env.makeEnv(dataList.flatten.map({ case Channel(Quote(p)) => p }): _*)
+
+    def handleK(continuation: TaggedContinuation,
+                dataList: List[Seq[Channel]]): Task[Option[Cont[Par, Par]]] =
+      continuation.taggedCont match {
+        case ParBody(par) =>
+          val env = buildEnv(dataList)
+          Task.pure(Some((par, env)))
+        case ScalaBodyRef(ref) =>
+          Task.pure(None)
+      }
 
     // This makes sense. Run a Par in the empty environment.
     def inj(par: Par): Task[Unit] =
@@ -65,13 +81,8 @@ object Reduce {
       // TODO: Handle the environment in the store
       val substData: Seq[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
       internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
-        case Some((body, dataList: Seq[Seq[Channel]])) =>
-          val newEnv: Env[Par] =
-            Env.makeEnv(
-              dataList.flatten
-                .map({ case Channel(Quote(p)) => p }): _*)
-          Task.pure(Some((body, newEnv)))
-        case None => Task.pure(None)
+        case Some((continuation, dataList)) => handleK(continuation, dataList)
+        case None                           => Task.pure(None)
       }
     }
 
@@ -95,15 +106,10 @@ object Reduce {
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)).toList,
                           patterns.toList,
-                          body,
+                          TaggedContinuation(ParBody(body)),
                           persist = persistent) match {
-            case Some((continuation, dataList)) =>
-              val newEnv: Env[Par] =
-                Env.makeEnv(
-                  dataList.flatten
-                    .map({ case Channel(Quote(p)) => p }): _*)
-              Task.pure(Some((continuation, newEnv)))
-            case None => Task.pure(None)
+            case Some((continuation, dataList)) => handleK(continuation, dataList)
+            case None                           => Task.pure(None)
           }
       }
 
@@ -111,7 +117,7 @@ object Reduce {
       * Variable "evaluation" is an environment lookup, but
       * lookup of an unbound variable should be an error.
       *
-      * @param varue The variable to be evaluated
+      * @param valproc The variable to be evaluated
       * @param env   The environment (possibly) containing
       *              a binding for the given variable.
       * @return If the variable has a binding (par), lift the
@@ -528,7 +534,7 @@ object Reduce {
     }
   }
 
-  def makeInterpreter(
-      tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], Par]): DebruijnInterpreter =
+  def makeInterpreter(tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation])
+    : DebruijnInterpreter =
     new DebruijnInterpreter(tupleSpace)
 }
