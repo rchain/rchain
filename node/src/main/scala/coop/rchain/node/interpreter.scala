@@ -1,53 +1,49 @@
 package coop.rchain.node
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
+import java.io.{FileReader, Reader, StringReader}
+import java.nio.file.Files
+import java.util.concurrent.TimeoutException
+
+import cats.implicits._
 import coop.rchain.models.{Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter._
-import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
-import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
-import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import coop.rchain.rspace.{IStore, LMDBStore}
-import java.io.{FileReader, Reader, StringReader}
-import java.nio.file.Files
+import monix.eval.Task
+import monix.execution.CancelableFuture
+import monix.execution.Scheduler.Implicits.global
 
 import scala.annotation.tailrec
-import monix.execution.Scheduler.Implicits.global
-import monix.execution.{CancelableFuture, Scheduler}
-import java.util.concurrent.TimeoutException
-
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.{Failure, Success}
-import monix.eval.Task
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 
 object InterpreterRuntime {
 
   def evaluateFile(fileName: String): Unit = {
     val persistentStore = buildStore
-    val interp          = Reduce.makeInterpreter(persistentStore)
-    val source          = reader(fileName)
-    val sortedTerm      = buildNormalizedTerm(source)
+    val reducer         = RholangOnlyDispatcher.create(persistentStore).reducer
 
-    evaluate(interp, persistentStore, sortedTerm.get)
+    val source     = reader(fileName)
+    val sortedTerm = buildNormalizedTerm(source)
+
+    evaluate(reducer, persistentStore, sortedTerm.get)
   }
 
   def repl = {
     val persistentStore = buildStore
-    val interp          = Reduce.makeInterpreter(persistentStore)
+    val reducer         = RholangOnlyDispatcher.create(persistentStore).reducer
 
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
       } else {
         val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
-        evaluate(interp, persistentStore, normalizedTerm)
+        evaluate(reducer, persistentStore, normalizedTerm)
       }
     }
   }
@@ -56,7 +52,7 @@ object InterpreterRuntime {
   private def lexer(fileReader: Reader): Yylex     = new Yylex(fileReader)
   private def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
-  private def evaluate(interpreter: DebruijnInterpreter,
+  private def evaluate(interpreter: Reduce[Task],
                        store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                        normalizedTerm: Par): Unit = {
     val evaluatorTask = for {

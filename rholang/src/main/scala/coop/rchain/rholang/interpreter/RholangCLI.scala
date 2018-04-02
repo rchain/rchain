@@ -4,11 +4,12 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
+import cats.syntax.either._
 import coop.rchain.models.{Channel, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import coop.rchain.rspace.{IStore, LMDBStore}
 import monix.eval.Task
 import monix.execution.CancelableFuture
@@ -20,9 +21,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.{Failure, Success}
-import cats.syntax.either._
-import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
-import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
 
 object RholangCLI {
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -68,14 +66,13 @@ object RholangCLI {
 
   private def evaluate(sortedTerm: Par): Unit = {
     val persistentStore = buildStore
-    val interp          = Reduce.makeInterpreter(persistentStore)
+    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
     evaluate(interp, persistentStore, sortedTerm)
   }
 
   private def repl = {
     val persistentStore = buildStore
-    val interp          = Reduce.makeInterpreter(persistentStore)
-
+    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
@@ -106,7 +103,7 @@ object RholangCLI {
     ast.pProc()
   }
 
-  private def evaluate(interpreter: DebruijnInterpreter,
+  private def evaluate(interpreter: Reduce[Task],
                        store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                        normalizedTerm: Par): Unit = {
     val evaluatorTask = for {
