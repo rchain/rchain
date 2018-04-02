@@ -5,7 +5,6 @@ import coop.rchain.rosette.CtxtRegName._
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr._
 import coop.rchain.rosette.Location._
-import coop.rchain.rosette.Ob.RBLTRUE
 import org.scalatest._
 
 /**
