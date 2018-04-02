@@ -104,9 +104,10 @@ object Reduce {
               dispatcher.dispatch(continuation, dataList)
               if (persistent) {
                 Task
-                  .gather(
+                  .gather {
                     Seq(dispatcher.dispatch(continuation, dataList),
-                        consume(binds, body, persistent)(env)))
+                        consume(binds, body, persistent)(env))
+                  }
                   .map(_ => ())
               } else {
                 dispatcher.dispatch(continuation, dataList)
