@@ -153,7 +153,7 @@ export LinkedList in {
       [a, b, c, d]       => { return!([a, [b, [c, [d, []]]]]) }
       [a, b, c, d, e]    => { return!([a, [b, [c, [d, [e, []]]]]]) }
       [a, b, c, d, e, f] => { return!([a, [b, [c, [d, [e, [f, []]]]]]]) }
-      _ => { return!("Error! List to long for conversion to linked list.") }
+      _ => { return!("Error! List too long for conversion to linked list.") }
     }
   } |
   import RhoClass in {
