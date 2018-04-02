@@ -26,7 +26,7 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = buildEnv(dataList)
-        Task.pure(Some((par, env)))
+        reducer.eval(par)(env)
       case ScalaBodyRef(_) =>
         Task.unit
       case Empty =>
