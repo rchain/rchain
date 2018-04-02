@@ -1,0 +1,46 @@
+import MakeBrandPair, TestSet in {
+  MakeBrandPair!("bp1") | MakeBrandPair!("bp2") |
+  contract @"BrandPairTest"(method, @input, return) = { method!(input, *return) } |
+  for(@r1 <- @"bp1"; @r2 <- @"bp2") {
+    match [r1, r2] {
+      [[seal, unseal], [otherSeal, otherUnseal]] => {
+        //seal composed with unseal == identity (modulo that it is now a single element list)
+        contract @"identity"(@input, return) = {
+          new sealed in {
+            @{seal}!(input, *sealed) | for(@s <- sealed) {
+              @{unseal}!(s, *return)
+            }
+          }
+        } |
+        //mismatched sealers and unsealers do not return results
+        contract @"mismatch"(@input, return) = {
+          new sealed in {
+            @{seal}!(input, *sealed) | for(@s <- sealed) {
+              @{otherUnseal}!(s, *return)
+            }
+          }
+        } |
+        TestSet!(
+          "Sealing then unsealing should preserve the input.",
+          [
+            ["BrandPairTest", "identity", 1, [1]],
+            ["BrandPairTest", "identity", "x", ["x"]],
+            ["BrandPairTest", "identity", true, [true]],
+            ["BrandPairTest", "identity", false, [false]],
+            ["BrandPairTest", "identity", seal, [seal]]
+          ]
+        ) |
+        TestSet!(
+          "Mismatched sealer/unsealer should return nothing.",
+          [
+            ["BrandPairTest", "mismatch", 1, []],
+            ["BrandPairTest", "mismatch", "x", []],
+            ["BrandPairTest", "mismatch", true, []],
+            ["BrandPairTest", "mismatch", false, []],
+            ["BrandPairTest", "mismatch", seal, []]
+          ]
+        )
+      }
+    }
+  }
+}
