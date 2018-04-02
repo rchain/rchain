@@ -49,40 +49,33 @@ trait Ob extends Base with Cloneable {
   def is(value: Ob.ObTag): Boolean = false
 
   def lookup[F[_]: Applicative](key: Ob)(implicit
-                                         E: MonadError[F, RblError]): StateT[F, VMState, Ob] =
-    for {
-      interrupt <- StateT.inspect[F, VMState, Boolean](_.interruptPending)
-      res <- if (interrupt) Absent.liftE[F, RblError]: StateT[F, VMState, Ob]
-            else {
-              val result = meta
-                .asInstanceOf[StdMeta]
-                .get[F](self, key)
+                                         E: MonadError[F, RblError]): ReaderT[F, TblObject, Ob] = {
+    val result = meta
+      .asInstanceOf[StdMeta]
+      .get[F](self, key)
 
-              result.recoverWith {
-                case Absent => parent.lookup[F](key)
-              }
-            }
-    } yield res
+    result recoverWith {
+      case Absent => parent.lookup[F](key)
+    }
+  }
 
   def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result[Ob] =
     Right(null)
 
   def lookupAndInvoke: VMTransition[(Result[Ob], Option[Continuation])] = {
-    def inspect[A] = StateT.inspect[Result, VMState, A] _
+    def inspect[A] = State.inspect[VMState, A] _
 
-    val fn = for {
-      target <- inspect(_.ctxt.trgt)
-      fn     <- meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
-    } yield fn
-
-    State[VMState, (Result[Ob], Option[Continuation])] { vmState =>
-      fn.run(vmState) match {
-        case Right((state, prim: Prim)) =>
-          prim.invoke.run(state).value
-        case _ =>
-          (vmState, (Left(Absent), None))
-      }
-    }
+    for {
+      target    <- inspect(_.ctxt.trgt)
+      globalEnv <- inspect(_.globalEnv)
+      fn        = meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
+      res <- fn.run(globalEnv) match {
+              case Right(prim: Prim) =>
+                prim.invoke
+              case _ =>
+                pure[VMState, (Result[Ob], Option[Continuation])]((Left(Absent), None))
+            }
+    } yield res
   }
 
   def matches(ctxt: Ctxt): Boolean = false

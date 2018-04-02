@@ -1,11 +1,11 @@
 package coop.rchain.rosette.utils
 
-import cats.data.StateT
-import cats.{Applicative, MonadError}
+import cats.data.Kleisli
+import cats.MonadError
 
 package object implicits {
-  implicit class LiftOps[E, A, S](e: E) {
-    def liftE[F[_]: Applicative, EE >: E](implicit E: MonadError[F, EE]): StateT[F, S, A] =
-      StateT.liftF[F, S, A](E.raiseError(e))
+  implicit class LiftOps[E, A, B, F[_]](e: E) {
+    def liftE[EE >: E](implicit E: MonadError[F, EE]): Kleisli[F, A, B] =
+      Kleisli.liftF[F, A, B](E.raiseError(e))
   }
 }

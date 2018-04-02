@@ -2,6 +2,7 @@ package coop.rchain.rosette
 
 import cats.data.State
 import cats.data.State._
+import cats.instances.either.catsStdInstancesForEither
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rosette.Ctxt.{setReg, CtxtTransition}
 import coop.rchain.rosette.Meta.StdMeta
@@ -19,14 +20,10 @@ object VirtualMachine {
 
   val unknownRegister: Int => String = reg => s"Unknown register: $reg"
 
-  val rblTable = RblTable(Map.empty)
-  val meta =
-    new StdMeta(meta = null, parent = null, extension = StdExtension(null, null, Seq(rblTable)))
-
   val vmLiterals: Seq[Ob] = Seq(
     Fixnum(0),
-    Fixnum(1, meta = meta),
-    Fixnum(2, meta = meta),
+    Fixnum(1),
+    Fixnum(2),
     Fixnum(3),
     Fixnum(4),
     Fixnum(5),
@@ -42,12 +39,14 @@ object VirtualMachine {
   val doNothing    = pure[VMState, Unit](())
   val vmError      = modify[VMState](_.copy(exitFlag = true, exitCode = 1))
 
-  def handleApplyPrimSuspend(op: Op): Unit                = ()
-  def handleApplyPrimUpcall(op: Op, tag: Location): Unit  = ()
-  def handleFormalsMismatch(formals: Template): Ob        = null
-  def handleMissingBinding(key: Ob, argReg: Location): Ob = null
-  def handleSleep(): Unit                                 = ()
-  def handleXmitUpcall(op: Op, tag: Location): Unit       = ()
+  val missingBindingCtxt = Ctxt(null: Ob, null)
+
+  def handleApplyPrimSuspend(op: Op): Unit                              = ()
+  def handleApplyPrimUpcall(op: Op, tag: Location): Unit                = ()
+  def handleFormalsMismatch(formals: Template): Ob                      = null
+  def handleMissingBinding(key: Ob, argReg: Location, ctxt: Ctxt): Ctxt = missingBindingCtxt
+  def handleSleep(): Unit                                               = ()
+  def handleXmitUpcall(op: Op, tag: Location): Unit                     = ()
 
   /*
   def handleVirtualMachineError(state: VMState): VMState =
@@ -688,47 +687,13 @@ object VirtualMachine {
     modify(state =>
       state.update(_ >> 'pc >> 'relative)(if (state.ctxt.rslt == Ob.RBLFALSE) op.pc else _))
 
-  def execute(op: OpLookupToArg): VMTransition[Unit] = modify { state =>
-    val argno = op.arg
-    val key   = state.code.lit(op.lit)
+  def execute(op: OpLookupToArg): VMTransition[Unit] =
+    lookup(op.lit,
+           ArgRegister(op.arg),
+           (newState, ob) => newState.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(op.arg, ob)))
 
-    val meta = state.ctxt.selfEnv.meta.asInstanceOf[StdMeta]
-
-    import cats.instances.either._
-    val value =
-      meta.lookupOBOStdMeta[Either[RblError, ?]](state.ctxt.selfEnv, key).run(state)
-
-    value match {
-      case Left(Upcall) =>
-        state.set(_ >> 'doNextThreadFlag)(true)
-
-      case Left(Absent) =>
-        handleMissingBinding(key, ArgRegister(argno))
-        state.set(_ >> 'doNextThreadFlag)(true)
-
-      case Right((newState, ob)) =>
-        newState.update(_ >> 'ctxt >> 'argvec >> 'elem)(_.updated(argno, ob))
-    }
-  }
-
-  def execute(op: OpLookupToReg): VMTransition[Unit] = modify { state =>
-    val regno = op.reg
-    val key   = state.code.lit(op.lit)
-
-    val value =
-      state.ctxt.selfEnv.meta.lookupOBO(state.ctxt.selfEnv, key, state.ctxt)
-
-    value match {
-      case Left(Upcall) =>
-        state.set(_ >> 'doNextThreadFlag)(true)
-
-      case Left(Absent) =>
-        handleMissingBinding(key, CtxtRegister(regno))
-        state.set(_ >> 'doNextThreadFlag)(true)
-
-      case Right(ob) => setCtxtReg(regno, ob)(state)
-    }
-  }
+  def execute(op: OpLookupToReg): VMTransition[Unit] =
+    lookup(op.lit, CtxtRegister(op.reg), (state, ob) => setCtxtReg(op.reg, ob)(state))
 
   def execute(op: OpXferLexToArg): VMTransition[Unit] = modify { state =>
     val level = op.level
@@ -848,4 +813,28 @@ object VirtualMachine {
 
   def execute(op: OpUnknown): VMTransition[Unit] =
     modify(_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(1))
+
+  private def lookup(lit: Int,
+                     fallback: Location,
+                     onSuccess: (VMState, Ob) => VMState): VMTransition[Unit] = modify { state =>
+    val key = state.code.lit(lit)
+
+    val meta = state.ctxt.selfEnv.meta.asInstanceOf[StdMeta]
+
+    val value =
+      meta.lookupOBOStdMeta[Either[RblError, ?]](state.ctxt.selfEnv, key).run(state.globalEnv)
+
+    value match {
+      case Left(Upcall) =>
+        state.set(_ >> 'doNextThreadFlag)(true)
+
+      case Left(Absent) =>
+        state
+          .update(_ >> 'ctxt)(ctxt => handleMissingBinding(key, fallback, ctxt))
+          .set(_ >> 'doNextThreadFlag)(true)
+
+      case Right(ob) =>
+        onSuccess(state, ob)
+    }
+  }
 }

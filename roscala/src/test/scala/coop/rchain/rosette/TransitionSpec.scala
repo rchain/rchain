@@ -2,12 +2,11 @@ package coop.rchain.rosette
 
 import cats.data.State
 import coop.rchain.rosette.CtxtRegName._
+import coop.rchain.rosette.Location._
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr._
-import coop.rchain.rosette.Location._
-import coop.rchain.rosette.Ob.SingletonOb
 import coop.rchain.rosette.prim.{fixnum, rblfloat}
-import coop.rchain.rosette.utils.Instances._
+import coop.rchain.rosette.utils.Instances.{mkMetaFieldLens, mkParentFieldLens}
 import org.scalatest._
 
 /**
@@ -47,9 +46,6 @@ class TransitionSpec extends FlatSpec with Matchers {
 
   val fxPlus = fixnum.fxPlus
   val flPlus = rblfloat.flPlus
-
-  val rblTable = RblTable(Map.empty)
-  val stdMeta  = StdMeta(StdExtension(null, null, Seq(rblTable)))
 
   val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, fxPlus).updated(667, flPlus)
 
@@ -1276,42 +1272,48 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.rslt shouldBe Fixnum(2)
   }
 
-  "Executing bytecode from expression (lookup + 1)" should "return fx+" in {
+  "Executing bytecode from expression (cat 1)" should "return #absent" in {
 
     /**
       * litvec:
       *   0:   {RequestExpr}
+      *   1:   'cat
       * codevec:
-      *   0:   alloc 2
-      *   1:   xfer global[+],arg[0]
-      *   2:   lit 1,arg[1]
-      *   3:   lookup 2,arg[1]
-      *   4:   xmit/nxt 1
+      *   0:   alloc 1
+      *   1:   lit 1,arg[0]
+      *   2:   lookup 1,trgt
+      *   3:   xmit/nxt 1
       */
-    val template = Template(null, null, null, null, null)
-    val itemTraverse = new Ob {
-      override val meta   = null
-      override val parent = null
-    }
-
     val codevec = Seq(
-      OpAlloc(2),
-      OpXferGlobalToArg(arg = 0, global = 668),
-      OpImmediateLitToArg(value = 1, arg = 1),
-      OpLookupToArg(arg = 1, lit = 2),
-      OpRtn(next = true)
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpLookupToReg(trgt, 1),
+      OpXmit(unwind = false, next = true, nargs = 1)
     )
 
-    val ob: Ob = new SingletonOb {}
+    val ob: Ob = new Ob {
+      override val meta: Ob   = null
+      override val parent: Ob = null
+    }
+
+    val rblTable = RblTable(Map())
+    val stdMeta  = StdMeta(StdExtension(null, null, Seq(rblTable)))
 
     val start =
       testState
-        .set(_ >> 'code)(Code(Tuple(Seq(StdMthd(), template, itemTraverse)), codevec))
+        .set(_ >> 'code)(Code(Tuple(Seq(Ob.NIV, Symbol("cat"))), codevec))
         .set(_ >> 'globalEnv)(TblObject(globalEnv))
         .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
         .set(_ >> 'ctxt >> 'selfEnv)(ob)
         .set(_ >> 'ctxt >> 'selfEnv >> 'meta)(stdMeta)
+        .set(_ >> 'ctxt >> 'selfEnv >> 'parent)(RblTopEnv)
 
-    //val end = VirtualMachine.executeSeq(codevec, start)
+    val end = VirtualMachine.executeSeq(codevec, start)
+
+    /**
+      * Here we test that [[VirtualMachine.handleMissingBinding]] is executed,
+      * so the actual Ctxt is a [[VirtualMachine.missingBindingCtxt]]
+      */
+    end.ctxt should be theSameInstanceAs VirtualMachine.missingBindingCtxt
   }
 }
