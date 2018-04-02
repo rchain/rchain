@@ -4,11 +4,12 @@ import java.io._
 import java.nio.file.Files
 import java.util.concurrent.TimeoutException
 
-import coop.rchain.models.{Channel, ListChannel, Par, TaggedContinuation}
+import coop.rchain.models.{Channel, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
+import coop.rchain.rspace.{IStore, LMDBStore}
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
@@ -86,16 +87,6 @@ object RholangCLI {
   }
 
   private def buildStore = {
-    implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    implicit val serializer2 = new Serialize[Seq[Channel]] {
-      override def encode(a: Seq[Channel]): Array[Byte] =
-        ListChannel.toByteArray(ListChannel(a))
-
-      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
-        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
-    }
-    implicit val serializer3 = Serialize.mkProtobufInstance(TaggedContinuation)
-
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
     LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
                                                                               1024 * 1024 * 1024)

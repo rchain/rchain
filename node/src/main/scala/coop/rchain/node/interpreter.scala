@@ -2,14 +2,15 @@ package coop.rchain.node
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import coop.rchain.models.{Channel, ListChannel, Par, TaggedContinuation}
+import coop.rchain.models.{Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
 import coop.rchain.rholang.interpreter.RholangCLI.{lexer, normalizeTerm, parser}
+import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
-import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
+import coop.rchain.rspace.{IStore, LMDBStore}
 import java.io.{FileReader, Reader, StringReader}
 import java.nio.file.Files
 
@@ -102,17 +103,8 @@ object InterpreterRuntime {
       case Some(Failure(e)) => throw e
       case None             => throw new Error("Error: Future claimed to be ready, but value was None")
     }
+
   private def buildStore = {
-    implicit val serializer = Serialize.mkProtobufInstance(Channel)
-    implicit val serializer2 = new Serialize[Seq[Channel]] {
-      override def encode(a: Seq[Channel]): Array[Byte] =
-        ListChannel.toByteArray(ListChannel(a))
-
-      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
-        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
-    }
-    implicit val serializer3 = Serialize.mkProtobufInstance(TaggedContinuation)
-
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
     LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
                                                                               1024 * 1024 * 1024)

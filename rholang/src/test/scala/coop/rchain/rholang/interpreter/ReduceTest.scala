@@ -9,6 +9,7 @@ import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
+import coop.rchain.rholang.interpreter.storage.implicits._
 import implicits._
 
 import scala.collection.immutable.BitSet
@@ -22,14 +23,6 @@ import cats.syntax.either._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 
 trait PersistentStoreTester {
-  implicit val serializer = Serialize.mkProtobufInstance(Channel)
-  implicit val serializer2 = new Serialize[Seq[Channel]] {
-    override def encode(a: Seq[Channel]): Array[Byte] =
-      ListChannel.toByteArray(ListChannel(a))
-    override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
-      Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
-  }
-  implicit val serializer3 = Serialize.mkProtobufInstance(TaggedContinuation)
   def withTestStore[R](
       f: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
