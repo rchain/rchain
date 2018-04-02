@@ -1,0 +1,47 @@
+//This is a contract to explicitly implement the int >= 0 behavioural type
+export NonNegativeNumber in {
+  import RhoClass in {
+    contract NonNegativeNumber(@init, return) = {
+      new this, valueStore in {
+        contract @[*this, "add"](@x, success) = {
+          match x >= 0 {
+            true => {
+              for(@v <- valueStore){
+                valueStore!(v + x) | success!(true)
+              }
+            }
+            _ => { success!(false)  }
+          }
+        } |
+        contract @[*this, "sub"](@x, success) = {
+          match x >= 0 {
+            true => {
+              for(@v <- valueStore) {
+                match x <= v {
+                  true => {
+                    valueStore!(v - x) | success!(true)
+                  }
+                  _ => { valueStore!(v) | success!(false) }
+                }
+              }
+            }
+            _ => { success!(false) }
+          }
+        } |
+        contract @[*this, "value"](return) = {
+          for(@v <- valueStore) {
+            valueStore!(v) | return!(v)
+          }
+        } |
+        contract this(@method, @input, return) = {
+          @[*RhoClass, "functionApply"]!([*this, method], input, *return)
+        } |
+        return!(*this) |
+        match init >= 0 {
+          true => { valueStore!(init) }
+          _ => { valueStore!(0) } //Initial balance is zero if given is negative
+        }
+      }
+    }
+  }
+}

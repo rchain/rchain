@@ -1,21 +1,21 @@
 import LinkedList in {
-  LinkedList!("range", [0, 10, "myList"]) |
+  LinkedList!("range", [0, 10], "myList") |
   for(@myList <- @"myList") {
-    LinkedList!("head", [myList, "headResult"]) | LinkedList!("tail", [myList, "tailResult"]) |
+    LinkedList!("head", [myList], "headResult") | LinkedList!("tail", [myList], "tailResult") |
     for(@h <- @"headResult"; @t <- @"tailResult") {
-      LinkedList!("prepend", [h, t, "newList"]) | for(@l <- @"newList") {
+      LinkedList!("prepend", [h, t], "newList") | for(@l <- @"newList") {
         @"head/tail/prepend test"!(l == myList)
       }
     } |
     contract @"sum"(@x, @y, return) = { return!(x + y) } |
-    LinkedList!("fold", [myList, 0, "sum", "foldResult"]) | for(@r <- @"foldResult"){ @"foldTest"!(r == 45) } |
-    LinkedList!("get", [myList, 7, "getResult"]) | for(@r <- @"getResult"){ @"getTest"!(r == 7) } |
-    LinkedList!("reverse", [myList, "reversedList"]) | for(@r <- @"reversedList"){ @"reverseTest"!(r == [9, [8, [7, [6, [5, [4, [3, [2, [1, [0, []]]]]]]]]]]) } |
+    LinkedList!("fold", [myList, 0, "sum"], "foldResult") | for(@r <- @"foldResult"){ @"foldTest"!(r == 45) } |
+    LinkedList!("get", [myList, 7], "getResult") | for(@r <- @"getResult"){ @"getTest"!(r == 7) } |
+    LinkedList!("reverse", [myList], "reversedList") | for(@r <- @"reversedList"){ @"reverseTest"!(r == [9, [8, [7, [6, [5, [4, [3, [2, [1, [0, []]]]]]]]]]]) } |
     contract @"double"(@x, return) = { return!(2 * x) } |
-    LinkedList!("map", [myList, "double", "doubledList"]) | for(@r <- @"doubledList"){ @"mapTest"!(r == [0, [2, [4, [6, [8, [10, [12, [14, [16, [18, []]]]]]]]]]]) } |
+    LinkedList!("map", [myList, "double"], "doubledList") | for(@r <- @"doubledList"){ @"mapTest"!(r == [0, [2, [4, [6, [8, [10, [12, [14, [16, [18, []]]]]]]]]]]) } |
     contract @"selfSend"(x, isDone) = { x!(*x) | isDone!(true) } |
-    LinkedList!("foreach", [myList, "selfSend", "foreachTest"]) |
-    LinkedList!("indexOf", [myList, 4, "indexOfResult"]) | for(@r <- @"indexOfResult"){ @"indexOfTest"!(r == 4) } |
-    LinkedList!("length", [myList, "lengthResult"]) | for(@r <- @"lengthResult"){ @"lengthTest"!(r == 10) }
+    LinkedList!("foreach", [myList, "selfSend"], "foreachTest") |
+    LinkedList!("indexOf", [myList, 4], "indexOfResult") | for(@r <- @"indexOfResult"){ @"indexOfTest"!(r == 4) } |
+    LinkedList!("length", [myList], "lengthResult") | for(@r <- @"lengthResult"){ @"lengthTest"!(r == 10) }
   }
 }
