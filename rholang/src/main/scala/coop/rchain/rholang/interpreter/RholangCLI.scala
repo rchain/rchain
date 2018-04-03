@@ -66,28 +66,32 @@ object RholangCLI {
   def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
   private def evaluate(sortedTerm: Par): Unit = {
-    val persistentStore = buildStore()
-    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
-    evaluate(interp, persistentStore, sortedTerm)
+    val runtime = Runtime.create()
+    evaluate(runtime.reducer, runtime.store, sortedTerm)
   }
 
-  def repl() = {
-    val persistentStore = buildStore()
-    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
+  def evaluate(interpreter: Reduce[Task],
+               store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
+               normalizedTerm: Par): Unit = {
+    val evaluatorTask = for {
+      _ <- printTask(normalizedTerm)
+      _ <- interpreter.inj(normalizedTerm)
+    } yield ()
+    val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+    keepTrying(evaluatorFuture, store)
+  }
+
+  def repl(): Unit = {
+    val runtime = Runtime.create()
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
       } else {
         val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
-        evaluate(interp, persistentStore, normalizedTerm)
+        evaluate(runtime.reducer, runtime.store, normalizedTerm)
+        print("\n> ")
       }
     }
-  }
-
-  def buildStore(): LMDBStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] = {
-    val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
-                                                                              1024 * 1024 * 1024)
   }
 
   def buildNormalizedTerm(source: Reader): Option[Par] = {
@@ -102,18 +106,6 @@ object RholangCLI {
     val lxr = lexer(source)
     val ast = parser(lxr)
     ast.pProc()
-  }
-
-  def evaluate(interpreter: Reduce[Task],
-               store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
-               normalizedTerm: Par): Unit = {
-    val evaluatorTask = for {
-      _ <- printTask(normalizedTerm)
-      _ <- interpreter.inj(normalizedTerm)
-    } yield ()
-    val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
-    keepTrying(evaluatorFuture, store)
-    print("\n> ")
   }
 
   private def printTask(normalizedTerm: Par): Task[Unit] =
