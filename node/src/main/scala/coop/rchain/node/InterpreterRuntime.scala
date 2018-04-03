@@ -7,7 +7,7 @@ object InterpreterRuntime {
 
   def evaluateFile(fileName: String): Unit = {
     val persistentStore = RholangCLI.buildStore()
-    val interp          = Reduce.makeInterpreter(persistentStore)
+    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
     val source          = RholangCLI.reader(fileName)
     RholangCLI
       .buildNormalizedTerm(source)

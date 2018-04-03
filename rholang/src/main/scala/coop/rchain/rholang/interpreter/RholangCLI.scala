@@ -6,7 +6,6 @@ import java.util.concurrent.TimeoutException
 
 import cats.syntax.either._
 import coop.rchain.models.{Channel, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.Reduce.DebruijnInterpreter
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
@@ -68,14 +67,13 @@ object RholangCLI {
 
   private def evaluate(sortedTerm: Par): Unit = {
     val persistentStore = buildStore()
-    val interp          = Reduce.makeInterpreter(persistentStore)
+    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
     evaluate(interp, persistentStore, sortedTerm)
   }
 
-  def repl(): Unit = {
+  def repl() = {
     val persistentStore = buildStore()
-    val interp          = Reduce.makeInterpreter(persistentStore)
-
+    val interp          = RholangOnlyDispatcher.create(persistentStore).reducer
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
@@ -106,7 +104,7 @@ object RholangCLI {
     ast.pProc()
   }
 
-  def evaluate(interpreter: DebruijnInterpreter,
+  def evaluate(interpreter: Reduce[Task],
                store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                normalizedTerm: Par): Unit = {
     val evaluatorTask = for {
