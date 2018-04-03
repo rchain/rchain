@@ -80,10 +80,16 @@ lazy val node = (project in file("node"))
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+        scalapbRuntimegRrpc,
+        grpcNetty,
         catsCore,
         scallop,
         scalaUri
       ),
+    PB.targets in Compile := Seq(
+      PB.gens.java                        -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+    ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "coop.rchain.node",
     mainClass in assembly := Some("coop.rchain.node.Main"),
