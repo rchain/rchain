@@ -15,8 +15,8 @@ import monix.eval.Task
 
 class NodeRuntime(conf: Conf) {
 
-  val logger = Logger("main")
-  def whoami(port: Int): Option[InetAddress] = {
+  private val logger = Logger("main")
+  private def whoami(port: Int): Option[InetAddress] = {
 
     val upnp = new UPnP(port)
 
@@ -47,27 +47,22 @@ class NodeRuntime(conf: Conf) {
     }
   }
 
-  val name = conf.name.toOption match {
-    case Some(key) => key
-    case None      => UUID.randomUUID.toString.replaceAll("-", "")
-  }
-
-  val host = conf.host.toOption match {
-    case Some(host) => host
-    case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
-  }
-
-  val address = s"rnode://$name@$host:${conf.port()}"
-  val src     = p2p.NetworkAddress.parse(address).right.get
-
   import ApplicativeError_._
+
+  private val host =
+    conf.host.toOption match {
+      case Some(host) => host
+      case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
+    }
+  private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
+  private val address        = s"rnode://$name@$host:${conf.port()}"
+  private val src            = p2p.NetworkAddress.parse(address).right.get
+  private val remoteKeysPath = System.getProperty("user.home") + File.separator + s".${name}-rnode-remote.keys"
 
   val metricsServer = MetricsServer()
 
   val http = HttpServer(conf.httpPort())
   http.start
-
-  val remoteKeysPath = System.getProperty("user.home") + File.separator + s".${name}-rnode-remote.keys"
 
   val net = new UnicastNetwork(src, Some(p2p.Network))
 
