@@ -29,9 +29,9 @@ The `roscala` subproject contains a Scala translation of the Rosette VM.
 
 The `rosette` subproject contains code for a low level virtual machine for RChain.
 
-### Storage
+### Rspace
 
-The `storage` subproject contains code related to the key-value storage of the RChain blockchain.
+The `rspace` subproject contains code related to the key-value storage of the RChain blockchain.
 
 ### Filing Issues
 
@@ -53,18 +53,18 @@ $ sbt
 [info] Loading settings from build.sbt ...
 [info] Set current project to rchain (in build file:/home/kirkwood/src/rchain/)
 [info] sbt server started at local:///home/kirkwood/.sbt/1.0/server/e6a65c30ec6e52272d3a/sock
-sbt:rchain> project storage
-[info] Set current project to storage (in build file:/home/kirkwood/src/rchain/)
-sbt:storage> compile
-[... compiling storage ...]
+sbt:rchain> project rspace
+[info] Set current project to rspace (in build file:/home/kirkwood/src/rchain/)
+sbt:rspace> compile
+[... compiling rspace ...]
 ```
 but single-line commands work, too:
 ```
-$ sbt "project storage" clean compile test
+$ sbt "project rspace" clean compile test
 ```
 or
 ```
-$ sbt storage/clean storage/compile storage/test
+$ sbt rspace/clean rspace/compile rspace/test
 ```
 
 ### Building
@@ -85,59 +85,59 @@ sbt:rchain> projects
 [info] 	   rholang
 [info] 	   roscala
 [info] 	   roscala_macros
-[info] 	   storage
+[info] 	   rspace
 ```
 
 In most cases, simply building the project you care about is enough:
 
 ```
-sbt:rchain> storage/compile
-[info] Updating storage...
+sbt:rchain> rspace/compile
+[info] Updating rspace...
 [info] Done updating.
-[info] Compiling 3 protobuf files to /home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main
-[info] Compiling schema /home/kirkwood/src/rchain/storage/src/main/protobuf/Block.proto
-[info] Compiling schema /home/kirkwood/src/rchain/storage/src/main/protobuf/SystemContract.proto
-[info] Compiling schema /home/kirkwood/src/rchain/storage/src/main/protobuf/Contract.proto
+[info] Compiling 3 protobuf files to /home/kirkwood/src/rchain/rspace/target/scala-2.12/src_managed/main
+[info] Compiling schema /home/kirkwood/src/rchain/rspace/src/main/protobuf/Block.proto
+[info] Compiling schema /home/kirkwood/src/rchain/rspace/src/main/protobuf/SystemContract.proto
+[info] Compiling schema /home/kirkwood/src/rchain/rspace/src/main/protobuf/Contract.proto
 protoc-jar: protoc version: 340, detected platform: linux/amd64
-protoc-jar: executing: [/tmp/protocjar6602275461596807284/bin/protoc.exe, --plugin=protoc-gen-scala=/tmp/protocbridge191927131554276550, --scala_out=flat_package,grpc:/home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main, -I/home/kirkwood/src/rchain/storage/src/main/protobuf, -I/home/kirkwood/src/rchain/storage/target/protobuf_external, /home/kirkwood/src/rchain/storage/src/main/protobuf/Block.proto, /home/kirkwood/src/rchain/storage/src/main/protobuf/SystemContract.proto, /home/kirkwood/src/rchain/storage/src/main/protobuf/Contract.proto]
+protoc-jar: executing: [/tmp/protocjar6602275461596807284/bin/protoc.exe, --plugin=protoc-gen-scala=/tmp/protocbridge191927131554276550, --scala_out=flat_package,grpc:/home/kirkwood/src/rchain/rspace/target/scala-2.12/src_managed/main, -I/home/kirkwood/src/rchain/rspace/src/main/protobuf, -I/home/kirkwood/src/rchain/rspace/target/protobuf_external, /home/kirkwood/src/rchain/rspace/src/main/protobuf/Block.proto, /home/kirkwood/src/rchain/rspace/src/main/protobuf/SystemContract.proto, /home/kirkwood/src/rchain/rspace/src/main/protobuf/Contract.proto]
 [info] Compiling protobuf
-[info] Protoc target directory: /home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main
-[info] Compiling 18 Scala sources to /home/kirkwood/src/rchain/storage/target/scala-2.12/classes ...
+[info] Protoc target directory: /home/kirkwood/src/rchain/rspace/target/scala-2.12/src_managed/main
+[info] Compiling 18 Scala sources to /home/kirkwood/src/rchain/rspace/target/scala-2.12/classes ...
 [info] Done compiling.
 [success] Total time: 12 s, completed Feb 13, 2018 3:13:28 PM
 ```
 
 To work entirely within one of the subprojects, it's easy to keep a running `sbt` console up, and switch into the project. All subsequent commands are scoped to that subproject:
 ```
-sbt:rchain> project storage
-[info] Set current project to storage (in build file:/home/kirkwood/src/rchain/)
-sbt:storage> compile
+sbt:rchain> project rspace
+[info] Set current project to rspace (in build file:/home/kirkwood/src/rchain/)
+sbt:rspace> compile
 [info] Updating ...
 [info] Done updating.
-[info] Compiling 3 protobuf files to /home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main
-[info] Compiling schema /home/kirkwood/src/rchain/storage/src/main/protobuf/Block.proto
-[info] Compiling schema /home/kirkwood/src/rchain/storage/src/main/protobuf/SystemContract.proto
-[info] Compiling schema /home/kirkwood/src/rchain/storage/src/main/protobuf/Contract.proto
+[info] Compiling 3 protobuf files to /home/kirkwood/src/rchain/rspace/target/scala-2.12/src_managed/main
+[info] Compiling schema /home/kirkwood/src/rchain/rspace/src/main/protobuf/Block.proto
+[info] Compiling schema /home/kirkwood/src/rchain/rspace/src/main/protobuf/SystemContract.proto
+[info] Compiling schema /home/kirkwood/src/rchain/rspace/src/main/protobuf/Contract.proto
 protoc-jar: protoc version: 340, detected platform: linux/amd64
-protoc-jar: executing: [/tmp/protocjar9042295252462121263/bin/protoc.exe, --plugin=protoc-gen-scala=/tmp/protocbridge4033649966837455863, --scala_out=flat_package,grpc:/home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main, -I/home/kirkwood/src/rchain/storage/src/main/protobuf, -I/home/kirkwood/src/rchain/storage/target/protobuf_external, /home/kirkwood/src/rchain/storage/src/main/protobuf/Block.proto, /home/kirkwood/src/rchain/storage/src/main/protobuf/SystemContract.proto, /home/kirkwood/src/rchain/storage/src/main/protobuf/Contract.proto]
+protoc-jar: executing: [/tmp/protocjar9042295252462121263/bin/protoc.exe, --plugin=protoc-gen-scala=/tmp/protocbridge4033649966837455863, --scala_out=flat_package,grpc:/home/kirkwood/src/rchain/rspace/target/scala-2.12/src_managed/main, -I/home/kirkwood/src/rchain/rspace/src/main/protobuf, -I/home/kirkwood/src/rchain/rspace/target/protobuf_external, /home/kirkwood/src/rchain/rspace/src/main/protobuf/Block.proto, /home/kirkwood/src/rchain/rspace/src/main/protobuf/SystemContract.proto, /home/kirkwood/src/rchain/rspace/src/main/protobuf/Contract.proto]
 [info] Compiling protobuf
-[info] Protoc target directory: /home/kirkwood/src/rchain/storage/target/scala-2.12/src_managed/main
-[info] Compiling 18 Scala sources to /home/kirkwood/src/rchain/storage/target/scala-2.12/classes ...
+[info] Protoc target directory: /home/kirkwood/src/rchain/rspace/target/scala-2.12/src_managed/main
+[info] Compiling 18 Scala sources to /home/kirkwood/src/rchain/rspace/target/scala-2.12/classes ...
 [info] Done compiling.
 [success] Total time: 9 s, completed Feb 13, 2018 4:35:05 PM
-sbt:storage> test
-[info] Packaging /home/kirkwood/src/rchain/storage/target/scala-2.12/storage_2.12-0.1.0-SNAPSHOT.jar ...
+sbt:rspace> test
+[info] Packaging /home/kirkwood/src/rchain/rspace/target/scala-2.12/rspace_2.12-0.1.0-SNAPSHOT.jar ...
 [info] Done packaging.
-[info] Compiling 6 Scala sources to /home/kirkwood/src/rchain/storage/target/scala-2.12/test-classes ...
+[info] Compiling 6 Scala sources to /home/kirkwood/src/rchain/rspace/target/scala-2.12/test-classes ...
 [info] Done compiling.
-[info] Packaging /home/kirkwood/src/rchain/storage/target/scala-2.12/storage_2.12-0.1.0-SNAPSHOT-tests.jar ...
+[info] Packaging /home/kirkwood/src/rchain/rspace/target/scala-2.12/rspace_2.12-0.1.0-SNAPSHOT-tests.jar ...
 [info] Done packaging.
 [info] MultiplierUnitTests:
 [info] Multiplier tryParse
 [info] - should work
 [... eyerollingly thorough test output snipped...]
 [success] Total time: 7 s, completed Feb 13, 2018 4:35:13 PM
-sbt:storage> 
+sbt:rspace> 
 ```
 
 #### Whole-project Build
