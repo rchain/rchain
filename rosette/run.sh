@@ -4,6 +4,12 @@
 ulimit -s unlimited
 
 # Execute Rosette instance
-export ESS_SYSDIR="$(readlink -f $(pwd)/result/lib/rosette)"
+# Execute Rosette instance for local build or NixOS
+if [ -d "build.out" ]; then
+    export ESS_SYSDIR="rbl/rosette"
+    ./build.out/src/rosette --quiet --boot-dir ${ESS_SYSDIR} --boot boot.rbl $@
+else
+    export ESS_SYSDIR="$(readlink -f $(pwd)/result/lib/rosette)"
+    ./result/bin/rosette --quiet --boot-dir ${ESS_SYSDIR} --boot boot.rbl $@
+fi
 
-./result/bin/rosette --verbose --boot-dir ${ESS_SYSDIR} --boot boot.rbl $@
