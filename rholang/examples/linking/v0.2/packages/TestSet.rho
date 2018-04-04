@@ -1,5 +1,5 @@
 export TestSet in {
-  import RhoClass, LinkedList in {
+  import LinkedList in {
     contract TestSet(desc, @tests) = {
       new addTests, execTests, testsCh in {
         contract execTests(return) = {
