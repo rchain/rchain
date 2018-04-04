@@ -229,12 +229,13 @@ abstract class Store[C, P, A, K]()(implicit
     withTxn(createTxnRead()) { txn =>
       optionalWithResource(_dbKeys.iterateKeys(txn)) { it =>
         it.map(channelKey => {
-          val channels: List[C] = getKey(txn, channelKey)
-          val data              = getAs(txn, channels)
-          val wks               = getPsK(txn, channels)
-          (channels, Row(data, wks))
-        })
-      }.toMap
+            val channels: List[C] = getKey(txn, channelKey)
+            val data              = getAs(txn, channels)
+            val wks               = getPsK(txn, channels)
+            (channels, Row(data, wks))
+          })
+          .toMap
+      }
     }
 
   private[rspace] def clear(): Unit =
