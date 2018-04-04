@@ -31,7 +31,7 @@ object Main {
 
   private def executeP2p(conf: Conf): Unit = {
     import monix.execution.Scheduler.Implicits.global
-    new NodeRuntime(conf).recipe.value.unsafeRunSync {
+    new NodeRuntime(conf).recipe.value.unsafeRunSync match {
       case Right(_) => ()
       case Left(commError) =>
         throw new Exception(commError.toString) // TODO use Show instance instead
