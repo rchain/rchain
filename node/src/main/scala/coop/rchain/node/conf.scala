@@ -18,6 +18,13 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val httpPort =
     opt[Int](default = Some(8080), short = 'x', descr = "HTTP port.")
 
+  val grpcPort =
+    opt[Int](default = Some(50000), short = 'g', descr = "gRPC port.")
+
+  val grpcHost =
+    opt[String](default = Some("localhost"),
+                descr = "Hostname or IP of node you try to connect to via gRPC.")
+
   val bootstrap =
     opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
                 short = 'b',
