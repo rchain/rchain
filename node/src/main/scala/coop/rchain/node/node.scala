@@ -28,6 +28,9 @@ class NodeRuntime(conf: Conf) {
   val http = HttpServer(conf.httpPort())
   http.start
 
+  val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort())
+  grpc.start()
+
   val net = new UnicastNetwork(src, Some(p2p.Network))
 
   /** This is essentially a final effect that will accumulate all effects from the system */
@@ -63,6 +66,7 @@ class NodeRuntime(conf: Conf) {
     sys.addShutdownHook {
       metricsServer.stop
       http.stop
+      grpc.stop()
       net.broadcast(
         DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
       println("Goodbye.")
