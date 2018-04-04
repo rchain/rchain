@@ -703,6 +703,8 @@ void VirtualMachine::execute() {
     Location loc;
     pOb result = INVALID;
 
+    if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
+
 nextop:
 
     if (sigvec != 0)
@@ -712,6 +714,13 @@ nextop:
 
     instr = FETCH;
     bytecodes[OP_f0_opcode(instr)]++;
+
+    if (VerboseFlag) {
+        int opcode = OP_f0_opcode(instr);
+        if (0 <= opcode && opcode < MaxOpcodes) {
+            fprintf(stderr, "  %s:\n", opcodeStrings[opcode]);
+        }
+    }
 
     switch (OP_f0_opcode(instr)) {
     case opHalt:
