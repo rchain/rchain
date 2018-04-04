@@ -432,6 +432,27 @@ trait StorageActionsTests extends StorageActionsBase {
     store.isEmpty shouldBe true
   }
 
+  "A joined consume with the same channel given twice followed by a produce" should
+    "not raises any errors (CORE-365)" in withTestStore { store =>
+    var channels = List("ch1", "ch1")
+
+    val r1 = consume(store,
+                     channels,
+                     List(StringMatch("datum1"), StringMatch("datum1")),
+                     new StringsCaptor,
+                     persist = false)
+
+    val r2 = produce(store, "ch1", "datum1", persist = false)
+
+    r1 shouldBe None
+    r2 shouldBe defined
+
+    runK(r2)
+    getK(r2).results shouldBe List(List("datum1", "datum1"))
+
+    store.isEmpty shouldBe true
+  }
+
   "consuming twice on the same channels with different patterns, and then producing on those channels" should
     "return continuations with the expected data" in withTestStore { store =>
     val channels = List("ch1", "ch2")
