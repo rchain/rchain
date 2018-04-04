@@ -201,15 +201,18 @@ package object rspace {
           if (!persistK) {
             store.removePsK(txn, channels, continuationIndex)
           }
-          dataCandidates.foreach {
-            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
-              if (!persistData && dataIndex >= 0) {
-                store.removeA(txn, candidateChannel, dataIndex)
-              }
-              store.removeJoin(txn, candidateChannel, channels)
-            case _ =>
-              ()
-          }
+          dataCandidates
+            .flatMap {
+              case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
+                if (!persistData && dataIndex >= 0) {
+                  store.removeA(txn, candidateChannel, dataIndex)
+                }
+                Some(candidateChannel)
+              case _ => None
+            }
+            .distinct
+            .foreach(store.removeJoin(txn, _, channels))
+
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           Some(continuation, dataCandidates.map(_.datum.a))
         case None =>
