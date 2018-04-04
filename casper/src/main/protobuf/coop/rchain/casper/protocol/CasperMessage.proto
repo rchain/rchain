@@ -78,7 +78,7 @@ message Header {
 }
 
 message Body {
-  repeated bytes    parensList     = 1; //list of parent block hashes
+  repeated bytes    parentsList    = 1; //list of parent block hashes
   RChainState       postState      = 2; //will remove sending an explicit postState when history/rollback in tuplespace works
   repeated Resource newCode        = 3; //new rholang code that was added to the state before processing
   repeated Diff     commReductions = 4; //the comm. rule reductions that occurred to obtain the post-state
