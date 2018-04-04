@@ -72,6 +72,8 @@ extern "C" {
 
 #endif
 
+extern int DeferLookupFlag;
+
 extern Prim* tplNew;
 extern Prim* tplConsStar;
 extern Prim* tplConcat;
@@ -108,6 +110,7 @@ AttrNode::AttrNode(int sz, bool valueContext)
       word(0),
       dest(LocRslt),
       resume(NoParticularLabel),
+      deferredLookup(false),
       cu((CompilationUnit*)INVALID) {
     SET_ATTR(*this, f_valueContext, valueContext);
     SET_FLAG(word, f_producesValue);
@@ -716,6 +719,15 @@ void SymbolNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
          */
         if (GET_LEXVAR_LEVEL(loc) == 0) {
             loc = GlobalVar(GET_LEXVAR_OFFSET(loc));
+
+            // If this symbol is not a primitive, defer the lookup until runtime.
+            // This is part of the effort to separate the compile and execute
+            // phases. The ultimate goal being to validate the Roscala VM by cross
+            // utilizing the compilers and VMs.
+            if (DeferLookupFlag && primNumber() < 0) {
+                loc = LocLimbo;
+                deferredLookup = true;
+            }
             return;
         }
     }
@@ -737,6 +749,11 @@ void SymbolNode::emitDispatchCode(bool ctxtAvailable, bool, RtnCode rtn,
     }
 
     if (SELF->loc == LocLimbo) {
+        // If this is a deferred lookup, emit an indication of that.
+        if (deferredLookup) {
+            SELF->emitF0(opDeferLookup);
+            deferredLookup = false;
+        }
         SELF->emitLookup(SELF->sym);
     } else {
         SELF->emitXfer(SELF->loc);
