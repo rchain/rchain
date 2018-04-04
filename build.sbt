@@ -87,8 +87,8 @@ lazy val node = (project in file("node"))
         scalaUri
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java                        -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+      PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "coop.rchain.node",
