@@ -1,0 +1,46 @@
+import MakeMint, TestSet in {
+  MakeMint!("mintA") | MakeMint!("mintB") |
+  for(mintA <- @"mintA"; mintB <- @"mintB") {
+    mintA!("makePurse", [100], "aliceAPurse") | mintB!("makePurse", [50], "bobBPurse") |
+    for(@aliceAPurse <- @"aliceAPurse"; @bobBPurse <- @"bobBPurse") {
+      TestSet!(
+        "Purses should be created with the given balance.",
+        [
+          [aliceAPurse, "getBalance", [], 100],
+          [bobBPurse, "getBalance", [], 50]
+        ]
+      ) |
+      @[*TestSet, "after"]!("Purses should be created with the given balance.", {
+        TestSet!( //cannot deposit tokens across different mints
+          "Cross-currency deposits should fail.",
+          [
+            [aliceAPurse, "deposit", [10, bobBPurse], false],
+            [bobBPurse, "deposit", [10, aliceAPurse], false],
+          ]
+        )
+      }) |
+      @[*TestSet, "after"]!("Cross-currency deposits should fail.", {
+        @aliceAPurse!("sprout", [], "bobAPurse") |
+        @bobBPurse!("sprout", [], "aliceBPurse") |
+        for(@aliceBPurse <- @"aliceBPurse"; @bobAPurse <- @"bobAPurse") {
+          TestSet!(
+            "Deposit should work as expected.",
+            [
+              [aliceBPurse, "deposit", [10, bobBPurse], true], //10 from Bob to Alice
+              [aliceBPurse, "getBalance", [], 10], //0 + 10 = 10
+              [bobBPurse, "getBalance", [], 40], // 50 - 10 = 40
+              
+              [bobAPurse, "deposit", [20, aliceAPurse], true], //20 from Alice to Bob
+              [bobAPurse, "getBalance", [], 20], //0 + 20 = 20
+              [aliceAPurse, "getBalance", [], 80], // 100 - 20 = 80
+              
+              [bobAPurse, "deposit", [30, aliceAPurse], true], //30 from Alice to Bob again
+              [bobAPurse, "getBalance", [], 50], //20 + 30 = 50
+              [aliceAPurse, "getBalance", [], 50], // 80 - 30 = 50
+            ]
+          )
+        }
+      })
+    }
+  }
+}

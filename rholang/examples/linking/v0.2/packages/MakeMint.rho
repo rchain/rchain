@@ -1,0 +1,66 @@
+export MakeMint in {
+  import NonNegativeNumber, MakeBrandPair in {
+    contract @[*MakeMint, "int2NN"](@x, return) = {
+      new nnCh in {
+        NonNegativeNumber!(x, *nnCh) | for(@nn <- nnCh) {
+          return!(nn)
+        }
+      }
+    } |
+    contract MakeMint(return) = {
+      new pairCh, thisMint, internalMakePurse in {
+        MakeBrandPair!(*pairCh) | for(@p <- pairCh) {
+          match p {
+            [seal, unseal] => {
+              contract @[*thisMint, "makePurse"](@init, return) = {
+                new balanceCh in {
+                  @[*MakeMint, "int2NN"]!(init, *balanceCh) | for(@balance <- balanceCh) {
+                    internalMakePurse!(balance, *return)
+                  }
+                }
+              } |
+              contract internalMakePurse(balance, return) = {
+                //balance must be a name that NonNegativeNumber contract is listening on
+                new thisPurse in {
+                  contract @[*thisPurse, "decr"](@amount, success) = { balance!("sub", [amount], *success) } |
+                  contract @[*thisPurse, "getBalance"](return) = { balance!("value", [], *return) } |
+                  contract @[*thisPurse, "sprout"](return) = { @[*thisMint, "makePurse"]!(0, *return) } |
+                  contract @[*thisPurse, "getDecr"](return) = { @seal!([*thisPurse, "decr"], *return) } |
+                  contract @[*thisPurse, "deposit"](@amount, src, success) = {
+                    new result in {
+                      src!("getDecr", [], *result) | for(@sealedSrcDecr <- result) { //call getDecr function in src
+                        @unseal!(sealedSrcDecr, *result) | for(@r <- result) { //unseal resulting decr function
+                          match r {
+                            [srcDecr] => { //unseal success
+                              @srcDecr!(amount, *result) | for(@r <- result) { //call decr function
+                                match r {
+                                  true => { //decr success
+                                    balance!("add", [amount], *success) //add transferred amount to this purse
+                                  }
+                                  _ => { success!(false) }
+                                }
+                              }
+                            }
+                            _ => { success!(false) }
+                          }
+                        }
+                      }
+                    }
+                  } |
+                  contract thisPurse(@method, @input, return) = {
+                    @[*RhoClass, "functionApply"]!([*thisPurse, method], input, *return)
+                  } |
+                  return!(*thisPurse)
+                }
+              }
+            }
+          }
+        } |
+        contract thisMint(@method, @input, return) = {
+          @[*RhoClass, "functionApply"]!([*thisMint, method], input, *return)
+        } |
+        return!(*thisMint)
+      }
+    }
+  }
+}
