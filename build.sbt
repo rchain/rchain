@@ -80,7 +80,7 @@ lazy val node = (project in file("node"))
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
-        scalapbRuntimegRrpc,
+        scalapbRuntimegGrpc,
         grpcNetty,
         catsCore,
         scallop,
