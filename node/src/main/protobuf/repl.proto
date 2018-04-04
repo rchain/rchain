@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package cooop.rchain.node;
+package coop.rchain.node;
 
 service Repl {
   rpc Run (ReplRequest) returns (ReplResponse) {}
