@@ -865,9 +865,9 @@ trait StorageActionsTests extends StorageActionsBase {
 }
 
 class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOperationsTests {
-
   override def withTestStore(f: TestStore => Unit): Unit = {
-    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
+    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]()
+    testStore.clear()
     try {
       f(testStore)
     } finally {
