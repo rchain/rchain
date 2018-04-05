@@ -21,14 +21,16 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 # Copy and run build and push docker script in docker pusher container from above
 docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
 if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" ]] ; then
-docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:${TRAVIS_BRANCH}"
-elif
+    docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:${TRAVIS_BRANCH}"
+elif [[ ! "${TRAVIS}" = "true" ]]; then
     echo "Uncomment and modify docker repo in $1 if you want to push to custom repo"
     # docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:mytagname"
     docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain"
-else [[ "${TRAVIS}" = "true" ]]; then
+elif [[ "${TRAVIS}" = "true" ]]; then
     echo "Currently only Travis branches master and dev pushed to docker hub."
     echo "Your branch ${TRAVIS_BRANCH} will not be pushed"
+else
+    "Docker build and push not supported."
 fi
 
 # Clean up
