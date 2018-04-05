@@ -44,9 +44,6 @@ apt -y install git
 git clone ${git_repo} 
 cd rchain
 project_root_dir=$(pwd)
-echo ${project_root_dir}
-echo "sleep 10"
-sleep 10
 git checkout ${branch_name} 
 
 ### Install all dependencies on Ubuntu 16.04 LTS (Xenial Xerus) for RChain dev environment
@@ -130,7 +127,7 @@ apt-get install jflex -yqq
 ## Remove temporary files 
 rm -rf 
 
-# Build RChain via SBT build.sbt 
+## Build RChain via SBT build.sbt 
 cd ${project_root_dir}
 sbt rholang/bnfc:generate
 sbt rholang/compile
