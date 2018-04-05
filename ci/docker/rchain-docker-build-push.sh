@@ -85,7 +85,7 @@ apt-get install openjdk-8-jdk -yqq
 apt-get install autoconf libtool -yqq
 cd ${project_root_dir}
 cd crypto
-if [ -d "secp256k1" ]; then
+if [[ -d "secp256k1" ]]; then
     rm -rf secp256k1 
 fi
 git clone https://github.com/bitcoin-core/secp256k1
@@ -97,7 +97,7 @@ make
 # Build libsodium
 cd ${project_root_dir}
 cd crypto
-if [ -d "libsodium" ]; then
+if [[ -d "libsodium" ]]; then
     rm -rf libsodium 
 fi
 git clone https://github.com/jedisct1/libsodium --branch stable
