@@ -23,7 +23,7 @@ class CtxtSpec extends FlatSpec with Matchers {
     val ctxt0               = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
     val (conts, state, res) = Ctxt.applyK(Fixnum(1), LocTrgt).run((), (globalEnv, ctxt0)).value
 
-    conts.nonEmpty should be(true)
+    conts should not be empty
     conts.head.id should be(1)
     conts.head.outstanding should be(0)
   }
@@ -32,7 +32,7 @@ class CtxtSpec extends FlatSpec with Matchers {
     val ctxt0               = ctxt.copy(outstanding = 1)
     val (conts, state, res) = Ctxt.rcv(Fixnum(1), LocTrgt).run((), (globalEnv, ctxt0)).value
 
-    conts.nonEmpty should be(true)
+    conts should not be empty
     conts.head.id should be(0)
   }
 
@@ -58,7 +58,7 @@ class CtxtSpec extends FlatSpec with Matchers {
 
     res should be(false)
     ctxt1.ctxt.trgt should be(Fixnum(1))
-    conts.isEmpty should be(true)
+    conts should be(empty)
   }
 
   it should "schedule continuation if outstanding field of continuation is one" in {

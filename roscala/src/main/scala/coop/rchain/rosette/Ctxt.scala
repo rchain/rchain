@@ -101,17 +101,18 @@ object Ctxt {
       * This transformation is needed because `result` has to be received in
       * `ctxt.ctxt` (the continuation of the current `ctxt`) and not `ctxt` itself.
       */
-    val transformToRcvInCont: CtxtTransition[Boolean] => CtxtTransition[Boolean] = trans =>
-      trans.transformS[(GlobalEnv, Ctxt)](
-        state => (state._1, state._2.ctxt),
-        (state, rcvGlobalEnvAndCont) => {
-          val globalEnv = state._1
-          val ctxt      = state._2
-          val cont      = rcvGlobalEnvAndCont._2
+    def transformToRcvInCont: CtxtTransition[Boolean] => CtxtTransition[Boolean] =
+      trans =>
+        trans.transformS[(GlobalEnv, Ctxt)](
+          { case (globalEnv, ctxt) => (globalEnv, ctxt.ctxt) },
+          (state, rcvGlobalEnvAndCont) => {
+            val globalEnv = state._1
+            val ctxt      = state._2
+            val cont      = rcvGlobalEnvAndCont._2
 
-          (globalEnv, ctxt.copy(ctxt = cont))
-        }
-    )
+            (globalEnv, ctxt.copy(ctxt = cont))
+          }
+      )
 
     transformToRcvInCont(rcv(result, tag))
   }
@@ -146,9 +147,11 @@ object Ctxt {
 
   val transformCtxtToCtxtTrans: State[Ctxt, StoreResult] => CtxtTransition[StoreResult] = trans =>
     liftRWS[Eval, Unit, List[Continuation], (GlobalEnv, Ctxt), StoreResult](
-      trans.transformS[(GlobalEnv, Ctxt)](globalEnvAndCtxt => globalEnvAndCtxt._2,
-                                          (oldGlobalEnvAndCtxt, newCtxt) =>
-                                            oldGlobalEnvAndCtxt.copy(_2 = newCtxt)))
+      trans.transformS[(GlobalEnv, Ctxt)]({ case (globalEnv, ctxt) => ctxt },
+                                          (oldGlobalEnvAndCtxt, newCtxt) => {
+                                            val (oldGlobalEnv, oldCtxt) = oldGlobalEnvAndCtxt
+                                            (oldGlobalEnv, newCtxt)
+                                          }))
 
   /** Return result to the continuation of the given `ctxt`
     *

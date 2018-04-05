@@ -14,10 +14,9 @@ object ctxt {
 
     override def fn: CtxtTransition[PrimResult] =
       for {
-        ctxt      <- getCtxt
-        globalEnv <- getGlobalEnv
-        optArg0   = ctxt.arg(0).map(_.asInstanceOf[Ctxt])
-        optArg1   = ctxt.arg(1)
+        ctxt    <- getCtxt
+        optArg0 = ctxt.arg(0).map(_.asInstanceOf[Ctxt])
+        optArg1 = ctxt.arg(1)
 
         result <- (optArg0, optArg1) match {
                    // Both ARG(0) and ARG(1) are available

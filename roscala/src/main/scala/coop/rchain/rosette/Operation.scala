@@ -5,9 +5,8 @@ import cats.implicits._
 case class StdOprn(meta: Ob, parent: Ob, override val extension: StdExtension) extends Actor {
   override def dispatch: CtxtTransition[Result] =
     for {
-      ctxt      <- getCtxt
-      globalEnv <- getGlobalEnv
-      optArg0   = ctxt.arg(0)
+      ctxt    <- getCtxt
+      optArg0 = ctxt.arg(0)
 
       result <- optArg0 match {
                  case Some(ob) => ob.lookupAndInvoke
