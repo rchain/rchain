@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, Wildcard}
 import coop.rchain.rspace.internal._
 
-trait JoinOperationsTests extends StorageActionsBase {
+trait JoinOperationsTests extends StorageActionsTests {
 
   "joins" should "remove joins if no PsK" in withTestStore { store =>
     store.withTxn(store.createTxnWrite()) { txn =>
