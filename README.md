@@ -29,9 +29,9 @@ The `roscala` subproject contains a Scala translation of the Rosette VM.
 
 The `rosette` subproject contains code for a low level virtual machine for RChain.
 
-### Storage
+### RSpace
 
-The `storage` subproject contains code related to the key-value storage of the RChain blockchain.
+The `RSpace` subproject contains code related to the key-value storage of the RChain blockchain.
 
 ### Filing Issues
 
@@ -39,7 +39,26 @@ File issues in our Public Jira Instance: [File a bug](https://rchain.atlassian.n
 
 ## Building and Running
 
-This document is for do-it-yourselfers, who want to try out _very_ alpha versions of the RChain software. For those lacking in masochistic tendencies, periodic releases are available via Docker at [our Docker storefront](https://store.docker.com/profiles/rchain).
+This document is for do-it-yourselfers, who want to try out pre-release versions of the RChain software. For those lacking in masochistic tendencies, periodic releases are available via Docker at [our Docker storefront](https://store.docker.com/profiles/rchain).
+
+### Setting up your development environment
+
+#### Basic requirements
+* Java 8 or higher
+* [`sbt`](https://www.scala-sbt.org/0.13/docs/Installing-sbt-on-Linux.html) 
+* BNFC - must be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later
+
+The project is built using Scala 2.12.4 and sbt 1.0.3. Subprojects may have other requirements and dependencies. See the `build.sbt` files for more information.
+
+#### If cross-developing for Linux (e.g. Ubuntu) on a Mac
+You will need a virtual machine running hte appropriate version of Linux.
+1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
+2. Install the Linux distribution you need (e.g. [Ubuntu](http://releases.ubuntu.com/16.04/ubuntu-16.04.3-server-amd64.iso))
+3. Start VirtualBox and create a new virtual machine in the manager
+4. Boot your virtual machine using hte Linux distribution ISO installed in step 2.
+5. Configure your Linux VM as desired. You may need to install additional tools sucah as g++, g++-multilib, make, git, etc.
+
+For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).
 
 ### Developer Quick-Start
 
