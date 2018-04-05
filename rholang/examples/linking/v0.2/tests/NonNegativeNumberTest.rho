@@ -1,0 +1,47 @@
+import NonNegativeNumber, TestSet in {
+  NonNegativeNumber!(-5, "negBal") |
+  NonNegativeNumber!(15, "properBal") |
+  NonNegativeNumber!(100, "addTest") |
+  NonNegativeNumber!(100, "subTest") |
+  for(@negBal <- @"negBal"; @properBal <- @"properBal"; @addTest <- @"addTest"; @subTest <- @"subTest") {
+    TestSet!(
+      "Initially negative balances are be converted to 0.",
+      [
+        [negBal, "value", [], 0]
+      ]
+    ) |
+    TestSet!(
+      "Positive initial balances are preserved.",
+      [
+        [properBal, "value", [], 15]
+      ]
+    ) | 
+    TestSet!(
+      "Adding or subtracting a negative number fails.",
+      [
+        [properBal, "add", [-1], false],
+        [properBal, "sub", [-1], false]
+      ]
+    ) |
+    TestSet!(
+      "Subtracting an amount larger than the balance fails.",
+      [
+        [properBal, "sub", [27], false]
+      ]
+    ) |
+    TestSet!(
+      "Adding a positive number works.",
+      [
+        [addTest, "add", [50], true],
+        [addTest, "value", [], 150]
+      ]
+    ) |
+    TestSet!(
+      "Subtracting a positive number less than or equal to the balance works",
+      [
+        [subTest, "sub", [30], true],
+        [subTest, "value", [], 70]
+      ]
+    )
+  }
+}

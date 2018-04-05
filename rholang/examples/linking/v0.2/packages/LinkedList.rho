@@ -81,7 +81,7 @@ export LinkedList in {
   contract @[*LinkedList, "foreach"](@list, proc, isDone) = {
     new combinator, nilReturn in {
       contract combinator(@head, @accumulatedValue, return) = {
-        //need return flag from `proc` in order to guarantee execution order
+        //Need return flag from `proc` in order to guarantee execution order
         new isDone in { proc!(head, *isDone) | for(_ <- isDone){ return!(Nil) } }
       } | 
       @[*LinkedList, "fold"]!(list, Nil, *combinator, *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
@@ -99,7 +99,7 @@ export LinkedList in {
         for(@r <- result) {
           match r {
             [true, [_, v]] => { return!(v) }
-            _ => { return!(Nil) } //index out of bounds
+            _ => { return!(Nil) } //Index out of bounds
           }
         }
       }
@@ -115,7 +115,7 @@ export LinkedList in {
         for(@r <- result) {
           match r {
             [true, i] => { return!(i) }
-            _ => { return!(-1) } //element not found
+            _ => { return!(-1) } //Element not found
           }
         }
       }
@@ -141,9 +141,24 @@ export LinkedList in {
       } | loop!(end - 1, [])
     }
   } |
+  //Create a linked list from an ordinary list of length
+  //6 or less by pattern matching. This constructor is
+  //only temporary until list processes have methods.
+  contract @[*LinkedList, "fromSmallList"](@list, return) = {
+    match list {
+      []                 => { return!([]) }
+      [a]                => { return!([a, []]) }
+      [a, b]             => { return!([a, [b, []]]) }
+      [a, b, c]          => { return!([a, [b, [c, []]]]) }
+      [a, b, c, d]       => { return!([a, [b, [c, [d, []]]]]) }
+      [a, b, c, d, e]    => { return!([a, [b, [c, [d, [e, []]]]]]) }
+      [a, b, c, d, e, f] => { return!([a, [b, [c, [d, [e, [f, []]]]]]]) }
+      _ => { return!("Error! List too long for conversion to linked list.") }
+    }
+  } |
   import RhoClass in {
-    contract LinkedList(@method, @args) = {
-      @[*RhoClass, "apply"]!([*LinkedList, method], args)
+    contract LinkedList(@method, @input, return) = {
+      @[*RhoClass, "functionApply"]!([*LinkedList, method], input, *return)
     }
   }
 }
