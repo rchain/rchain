@@ -7,7 +7,11 @@ set -exo pipefail
 # Use the above vs below if you want unique build names every time. 
 # If build fails before last line with "rm -f" this can leave garbage containers running. 
 pusher_docker_name="rchain-pusher-tmp"
-docker rm -f ${pusher_docker_name} 
+
+# If container exists force remove it
+if [[ $(docker ps -aq -f name=${pusher_docker_name}) ]]; then
+    docker rm -f ${pusher_docker_name}
+fi
 
 # Start docker container with access to docker.sock so it can run view/run docker images
 docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
