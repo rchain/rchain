@@ -3,71 +3,33 @@ package coop.rchain.node
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
 import coop.rchain.comm._, CommError._
 import com.typesafe.scalalogging.Logger
-import java.net.{InetAddress, NetworkInterface}
+import coop.rchain.node.repl._
 import java.util.UUID
 import java.io.File
-
-import scala.collection.JavaConverters._
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 
+import scala.concurrent.{ExecutionContext, Future}
+
 class NodeRuntime(conf: Conf) {
 
-  val logger = Logger("main")
-  def whoami(port: Int): Option[InetAddress] = {
-
-    val upnp = new UPnP(port)
-
-    logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
-
-    upnp.localAddress match {
-      case Some(addy) => Some(addy)
-      case None => {
-        val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
-        val addresses = ifaces
-          .flatMap(_.asScala)
-          .map(_.getAddress)
-          .toList
-          .groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress || x.isSiteLocalAddress)
-        if (addresses.contains(false)) {
-          Some(addresses(false).head)
-        } else {
-          val locals = addresses(true).groupBy(x => x.isLoopbackAddress || x.isLinkLocalAddress)
-          if (locals.contains(false)) {
-            Some(locals(false).head)
-          } else if (locals.contains(true)) {
-            Some(locals(true).head)
-          } else {
-            None
-          }
-        }
-      }
-    }
-  }
-
-  val name = conf.name.toOption match {
-    case Some(key) => key
-    case None      => UUID.randomUUID.toString.replaceAll("-", "")
-  }
-
-  val host = conf.host.toOption match {
-    case Some(host) => host
-    case None       => whoami(conf.port()).fold("localhost")(_.getHostAddress)
-  }
-
-  val address = s"rnode://$name@$host:${conf.port()}"
-  val src     = p2p.NetworkAddress.parse(address).right.get
-
   import ApplicativeError_._
+
+  private val host           = conf.fetchHost()
+  private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
+  private val address        = s"rnode://$name@$host:${conf.port()}"
+  private val src            = p2p.NetworkAddress.parse(address).right.get
+  private val remoteKeysPath = System.getProperty("user.home") + File.separator + s".${name}-rnode-remote.keys"
 
   val metricsServer = MetricsServer()
 
   val http = HttpServer(conf.httpPort())
   http.start
 
-  val remoteKeysPath = System.getProperty("user.home") + File.separator + s".${name}-rnode-remote.keys"
+  val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort())
+  grpc.start()
 
   val net = new UnicastNetwork(src, Some(p2p.Network))
 
@@ -104,9 +66,10 @@ class NodeRuntime(conf: Conf) {
     sys.addShutdownHook {
       metricsServer.stop
       http.stop
+      grpc.stop()
       net.broadcast(
         DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
-      logger.info("Goodbye.")
+      println("Goodbye.")
     }
   }
 

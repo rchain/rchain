@@ -80,13 +80,25 @@ lazy val node = (project in file("node"))
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+        scalapbRuntimegGrpc,
+        grpcNetty,
         catsCore,
         scallop,
         scalaUri
       ),
+    PB.targets in Compile := Seq(
+      PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
+    ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "coop.rchain.node",
     mainClass in assembly := Some("coop.rchain.node.Main"),
+    assemblyMergeStrategy in assembly := {
+      case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
     /* Dockerization */
     dockerfile in docker := {
       val artifact: File     = assembly.value

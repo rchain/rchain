@@ -111,6 +111,10 @@
 (load "tests/consume-tests.rbl" 'silent)
 (load "tests/produce-tests.rbl" 'silent)
 
+;;; tests for transtion specification
+(load "tests/transition-spec.rbl"
+ 'silent)
+
 ;; Returning 1 or 0, not (value total-failures) on the off chance that
 ;;
 ;;    (= 0 (mod (value total-failures) 256))
