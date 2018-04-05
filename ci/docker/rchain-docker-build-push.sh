@@ -28,7 +28,7 @@ fi
 echo "branch: $branch_name"
 echo "git repo: $git_repo"
 echo "docker repo: $docker_dst_repo"
-echo "travis branch": ${TRAVIS_BRANCH}"
+echo "travis branch: ${TRAVIS_BRANCH}"
 
 
 # Install Docker-CE
