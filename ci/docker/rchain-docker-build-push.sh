@@ -145,14 +145,16 @@ sbt node/docker
 # Setup auth, source image(s) and target/destination image(s) name in variables 
 docker_src_repo="coop.rchain/rnode"
 docker_src_tag="latest"
-if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" ]] ; then
-    echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-    docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
-    docker push ${docker_dst_repo}
-else
-    docker login
-    docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
-    docker push ${docker_dst_repo}
+if [[ ! -z docker_dst_repo ]]; then
+    if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" ]] ; then
+        echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+        docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
+        docker push ${docker_dst_repo}
+    else
+        docker login
+        docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
+        docker push ${docker_dst_repo}
+    fi
 fi
 
 echo """Login to docker hub manually and push docker image 

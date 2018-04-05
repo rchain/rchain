@@ -27,6 +27,7 @@ elif [[ "${TRAVIS}" = "true" ]]; then
 else
     echo "Uncomment and modify docker repo in $1 if you want to push to custom repo"
     # docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:mytagname"
+    docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain"
 fi
 
 docker rm -f ${pusher_docker_name}
