@@ -188,12 +188,11 @@ lazy val rspace = (project in file("rspace"))
   .settings(
     name := "rspace",
     version := "0.1.1",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ Seq(
       lmdbjava,
-      catsCore
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+      catsCore,
+      scodecCore,
+      scodecBits
     ),
     /* Tutorial */
     tutTargetDirectory := (baseDirectory in Compile).value / "docs",
