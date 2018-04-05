@@ -287,6 +287,12 @@ object SpatialMatcher {
   def spatialMatch(target: Eval, pattern: Eval): OptionalFreeMap[Unit] =
     spatialMatch(target.channel.get, pattern.channel.get)
 
+  def spatialMatch(target: New, pattern: New): OptionalFreeMap[Unit] =
+    if (target.bindCount == pattern.bindCount)
+      spatialMatch(target.p.get, pattern.p.get)
+    else
+      StateT.liftF(None)
+
   def spatialMatch(target: Expr, pattern: Expr): OptionalFreeMap[Unit] =
     (target.exprInstance, pattern.exprInstance) match {
       case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, _))) => {
@@ -316,6 +322,14 @@ object SpatialMatcher {
         } yield Unit
       case _ => StateT.liftF(None)
     }
+
+  def spatialMatch(target: Match, pattern: Match): OptionalFreeMap[Unit] =
+    for {
+      _ <- spatialMatch(target.target.get, pattern.target.get)
+      _ <- foldMatch(target.cases,
+                     pattern.cases,
+                     (t: MatchCase, p: MatchCase) => spatialMatch(t, p))
+    } yield Unit
 
   /**
     * Note that currently there should be no way to put a GPrivate in a pattern
@@ -366,4 +380,10 @@ object SpatialMatcher {
           StateT.liftF[Option, FreeMap, Unit](None)
       }
     } yield Unit
+
+  def spatialMatch(target: MatchCase, pattern: MatchCase): OptionalFreeMap[Unit] =
+    if (target.pattern != pattern.pattern)
+      StateT.liftF(None)
+    else
+      spatialMatch(target.source.get, pattern.source.get)
 }

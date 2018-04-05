@@ -1,12 +1,13 @@
 package coop.rchain.rholang.interpreter
 
-import cats._
+import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
+import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
@@ -97,25 +98,15 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     result should be(Some(Map[Int, Par](0 -> GInt(9).prepend(GInt(7)))))
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
-    val pattern: Par =
-      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
     val sendTarget: Par =
       Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, 0, BitSet())
+    val pattern: Par =
+      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
     val result = spatialMatch(sendTarget, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one"))))
   }
 
   "Matching a receive with a free variable in the channel and a free variable in the body" should "capture for both variables." in {
-    val pattern: Receive = Receive(
-      List(
-        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
-        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), ChanVar(FreeVar(0)))
-      ),
-      EVar(FreeVar(1)),
-      false,
-      4,
-      2
-    )
     val target: Receive = Receive(
       List(
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
@@ -126,11 +117,69 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       4,
       2
     )
+    val pattern: Receive = Receive(
+      List(
+        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
+        ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), ChanVar(FreeVar(0)))
+      ),
+      EVar(FreeVar(1)),
+      false,
+      4,
+      2
+    )
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(
       Some(
         Map[Int, Par](
           0 -> GInt(8),
           1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, 0, BitSet()))))
+  }
+
+  "Matching an eval with no free variables" should "Succeed, but not capture anything." in {
+    val target: Eval  = Eval(ChanVar(BoundVar(0)))
+    val pattern: Eval = Eval(ChanVar(BoundVar(0)))
+    val result        = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map.empty[Int, Par]))
+  }
+
+  "Matching between New's" should "match the bodies if the new count is the same" in {
+    val target: New =
+      New(2,
+          Par()
+            .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
+            .prepend(Send(ChanVar(BoundVar(0)), Seq(GInt(43)), false, locallyFree = BitSet(0))))
+    val pattern: New =
+      New(2,
+          Par()
+            .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false, freeCount = 1))
+            .prepend(EVar(Wildcard(WildcardMsg()))))
+    val result = spatialMatch(target, pattern).runS(emptyMap)
+
+    result should be(Some(Map[Int, Par](0 -> GInt(42))))
+  }
+
+  "Matching between matches " should "require equality of cases, but match targets and inside bodies." in {
+    val target: Match =
+      Match(
+        EList(Seq(GInt(4), GInt(20))),
+        Seq(
+          MatchCase(EList(Seq(EVar(FreeVar(0)), EVar(FreeVar(1)))),
+                    Send(Quote(EVar(BoundVar(1))),
+                         Seq[Par](EVar(BoundVar(0))),
+                         false,
+                         locallyFree = BitSet(0, 1))),
+          MatchCase(EVar(Wildcard(WildcardMsg())), Par())
+        )
+      )
+    val pattern: Match =
+      Match(
+        EVar(FreeVar(0)),
+        Seq(MatchCase(EList(Seq(EVar(FreeVar(0)), EVar(FreeVar(1)))),
+                      EVar(Wildcard(WildcardMsg()))),
+            MatchCase(EVar(Wildcard(WildcardMsg())), EVar(FreeVar(1))))
+      )
+    val result = spatialMatch(target, pattern).runS(emptyMap)
+
+    result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(4), GInt(20))), 1 -> Par())))
   }
 }
