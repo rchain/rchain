@@ -4,8 +4,9 @@ import io.grpc.{Server, ServerBuilder}
 import scala.concurrent.{ExecutionContext, Future}
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.node.repl._
+import coop.rchain.rholang.interpreter.Runtime
 
-class GrpcServer(executionContext: ExecutionContext, port: Int) { self =>
+class GrpcServer(executionContext: ExecutionContext, port: Int, runtime: Runtime) { self =>
 
   var server: Option[Server] = None
 
