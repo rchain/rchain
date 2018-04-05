@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 ## Set BASH environment so it will fail properly throwing exit code
-#set -euxo pipefail
-# set -v # optional set if you want it verbose but not to fail hard
+set -exo pipefail
 
 ## Prep docker image - note to use docker within docker we need to mount /var/run/docker.sock to our docker build image. 
 # pusher_docker_name="rchain-pusher-$(mktemp | awk -F. '{print $2}')"
@@ -10,6 +9,7 @@
 pusher_docker_name="rchain-pusher-tmp"
 docker rm -f ${pusher_docker_name} 
 
+# Start docker container with access to docker.sock so it can run view/run docker images
 docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
     -e DOCKER_USERNAME="${DOCKER_USERNAME}" \
     -e DOCKER_PASSWORD="${DOCKER_PASSWORD}" \
@@ -18,6 +18,7 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 # Be aware of what "-v /var/run/docker.sock:/var/run/docker.sock" is doing above.
 # See https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/
 
+# Copy and run build and push docker script in docker pusher container from above
 docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
 if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" ]] ; then
 docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:${TRAVIS_BRANCH}"
@@ -30,4 +31,5 @@ else
     docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain"
 fi
 
+# Clean up
 docker rm -f ${pusher_docker_name}
