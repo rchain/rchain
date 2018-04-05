@@ -923,11 +923,10 @@ class LMDBStoreScodecActionsTests
   import coop.rchain.rspace.scodecmodels._
   import coop.rchain.rspace.scodecmodels.rscodecs._
 
-  "asBytesList" should "round-trip a list" in {
+  "List[AsBytes]" should "round-trip a list" in {
     val bll =
-      AsBytesList(
-        List(AsBytes(ByteVector(Array[Byte](1, 2, 3)), false),
-             AsBytes(ByteVector(Array[Byte](4, 5, 6)), true)))
+      List(AsBytes(ByteVector(Array[Byte](1, 2, 3)), false),
+           AsBytes(ByteVector(Array[Byte](4, 5, 6)), true))
 
     val arr = toBitVector(bll, rscodecs.asBytesListCodec)
     val res = fromBitVector(arr, rscodecs.asBytesListCodec)
@@ -945,11 +944,8 @@ class LMDBStoreScodecActionsTests
   }
 
   "PsKs" should "round-trip" in {
-    val psks = PsKsBytesList(
-      List(
-        PsKsBytes(BytesList(List(ByteVector(Array[Byte](1, 2, 3)))),
-                  ByteVector(Array[Byte](4, 5, 6)),
-                  true)))
+    val psks = List(
+      PsKsBytes(List(ByteVector(Array[Byte](1, 2, 3))), ByteVector(Array[Byte](4, 5, 6)), true))
 
     val arr = toBitVector(psks, rscodecs.psKsBytesListCodec)
     val res = fromBitVector(arr, rscodecs.psKsBytesListCodec)

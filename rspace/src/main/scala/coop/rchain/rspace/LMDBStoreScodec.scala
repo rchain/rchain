@@ -18,10 +18,10 @@ import scodec.bits._
 import coop.rchain.rspace.scodecmodels.rscodecs._
 
 /**
-	* The main store class.
-	*
-	* To create an instance, use [[LMDBStoreScodec.create]].
-	*/
+  * The main store class.
+  *
+  * To create an instance, use [[LMDBStoreScodec.create]].
+  */
 class LMDBStoreScodec[C, P, A, K] private (env: Env[ByteBuffer],
                                            _dbKeys: Dbi[ByteBuffer],
                                            _dbPsKs: Dbi[ByteBuffer],
@@ -71,11 +71,11 @@ class LMDBStoreScodec[C, P, A, K] private (env: Env[ByteBuffer],
     }
 
   private[this] def readAsBytesList(txn: T, keyCs: H): Option[List[AsBytes]] =
-    Option(_dbAs.get(txn, keyCs)).map(bytes => fromByteBuffer(bytes, asBytesListCodec).values)
+    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer(_, asBytesListCodec))
 
   private[this] def writeAsBytesList(txn: T, keyCs: H, values: List[AsBytes]): Unit =
     if (values.nonEmpty) {
-      _dbAs.put(txn, keyCs, toByteBuffer(AsBytesList(values), asBytesListCodec))
+      _dbAs.put(txn, keyCs, toByteBuffer(values, asBytesListCodec))
     } else {
       _dbAs.delete(txn, keyCs)
       collectGarbage(txn, keyCs, psksCollected = true)
@@ -127,11 +127,11 @@ class LMDBStoreScodec[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[this] def readPsKsBytesList(txn: T, keyCs: H): Option[List[PsKsBytes]] =
-    Option(_dbPsKs.get(txn, keyCs)).map(bytes => fromByteBuffer(bytes, psKsBytesListCodec).values)
+    Option(_dbPsKs.get(txn, keyCs)).map(fromByteBuffer(_, psKsBytesListCodec))
 
   private[this] def writePsKsBytesList(txn: T, keyCs: H, values: List[PsKsBytes]): Unit =
     if (values.nonEmpty) {
-      _dbPsKs.put(txn, keyCs, toByteBuffer(PsKsBytesList(values), psKsBytesListCodec))
+      _dbPsKs.put(txn, keyCs, toByteBuffer(values, psKsBytesListCodec))
     } else {
       _dbPsKs.delete(txn, keyCs)
       collectGarbage(txn, keyCs, psksCollected = true)
@@ -178,7 +178,7 @@ class LMDBStoreScodec[C, P, A, K] private (env: Env[ByteBuffer],
     val oldCsList =
       Option(_dbJoins.get(txn, joinKey))
         .map(toBytesLists)
-        .getOrElse(List.empty[BytesList])
+        .getOrElse(List.empty[List[ByteVector]])
 
     val addBl = toBytesList(cs)
     if (!oldCsList.contains(addBl)) {
@@ -272,15 +272,15 @@ object LMDBStoreScodec {
   private[this] val joinsTableName: String = "Joins"
 
   /**
-		* Creates an instance of [[LMDBStoreScodec]]
-		*
-		* @param path    Path to the database files
-		* @param mapSize Maximum size of the database, in bytes
-		* @tparam C A type representing a channel
-		* @tparam P A type representing a pattern
-		* @tparam A A type representing a piece of data
-		* @tparam K A type representing a continuation
-		*/
+    * Creates an instance of [[LMDBStoreScodec]]
+    *
+    * @param path    Path to the database files
+    * @param mapSize Maximum size of the database, in bytes
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
+    */
   def create[C, P, A, K](path: Path, mapSize: Long)(
       implicit sc: Serialize[C],
       sp: Serialize[P],
@@ -321,11 +321,12 @@ object LMDBStoreScodec {
     bb
   }
 
-  private[rspace] def toBytesList[T](values: List[T])(implicit st: Serialize[T]): BytesList =
-    BytesList(values.map(st.encode).map(ByteVector(_)))
+  private[rspace] def toBytesList[T](values: List[T])(implicit st: Serialize[T]): List[ByteVector] =
+    values.map(st.encode).map(ByteVector(_))
 
-  private[rspace] def fromBytesList[T](bytesList: BytesList)(implicit st: Serialize[T]): List[T] =
-    bytesList.values
+  private[rspace] def fromBytesList[T](bytesList: List[ByteVector])(
+      implicit st: Serialize[T]): List[T] =
+    bytesList
       .map(_.toArray)
       .map(st.decode)
       .sequence[Either[Throwable, ?], T] match {
@@ -333,18 +334,18 @@ object LMDBStoreScodec {
       case Right(values) => values
     }
 
-  private[rspace] def toBytesLists(byteBuffer: ByteBuffer): List[BytesList] =
-    fromBitVector(BitVector(byteBuffer), bytesListCodec).values
+  private[rspace] def toBytesLists(byteBuffer: ByteBuffer): List[List[ByteVector]] =
+    fromBitVector(BitVector(byteBuffer), bytesListCodec)
       .map(x => fromBitVector(x.bits, bytesListCodec))
 
-  private[rspace] def toByteBuffer(lists: List[BytesList]): ByteBuffer = {
-    val bl = BytesList(lists.map(toBitVector(_, bytesListCodec).toByteVector))
+  private[rspace] def toByteBuffer(lists: List[List[ByteVector]]): ByteBuffer = {
+    val bl = lists.map(toBitVector(_, bytesListCodec).toByteVector)
     toByteBuffer(bl, bytesListCodec)
   }
 
   private[rspace] def fromByteBuffer[T](byteBuffer: ByteBuffer)(
       implicit st: Serialize[T]): List[T] =
-    fromBitVector(BitVector(byteBuffer), bytesListCodec).values
+    fromBitVector(BitVector(byteBuffer), bytesListCodec)
       .map(_.toArray)
       .map(st.decode)
       .sequence[Either[Throwable, ?], T] match {
