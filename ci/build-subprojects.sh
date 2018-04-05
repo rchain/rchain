@@ -25,7 +25,8 @@ case "$SUBPROJECT" in "rosette")
     ;;
 
 "docker_build_and_push")
-    
+
+    cd ${TRAVIS_BUILD_DIR}
     cd ci/docker/
     ./run.sh
     ;;
