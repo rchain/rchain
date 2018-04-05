@@ -10,7 +10,7 @@
 pusher_docker_name="rchain-pusher-tmp"
 docker rm -f ${pusher_docker_name} 
 #docker run -dit -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_USERNAME DOCKER_PASSWORD -e TRAVIS --name ${pusher_docker_name} ubuntu:16.04
-docker run -dit -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_USERNAME="${DOCKER_USERNAME}" DOCKER_PASSWORD="${DOCKER_PASSWORD}" -e TRAVIS="${TRAVIS}" --name ${pusher_docker_name} ubuntu:16.04
+docker run -dit -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_USERNAME="${DOCKER_USERNAME}" -e DOCKER_PASSWORD="${DOCKER_PASSWORD}" -e TRAVIS="${TRAVIS}" --name ${pusher_docker_name} ubuntu:16.04
 # Be aware of what "-v /var/run/docker.sock:/var/run/docker.sock" is doing above.
 # See https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/
 docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
