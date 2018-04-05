@@ -9,9 +9,9 @@
 # If build fails before last line with "rm -f" this can leave garbage containers running. 
 pusher_docker_name="rchain-pusher-tmp"
 docker rm -f ${pusher_docker_name} 
-# Be aware of the security risks while this is running. 
+docker run -dit -v /var/run/docker.sock:/var/run/docker.sock -e DOCKER_USERNAME DOCKER_PASSWORD -e TRAVIS --name ${pusher_docker_name} ubuntu:16.04
+# Be aware of what "-v /var/run/docker.sock:/var/run/docker.sock" is doing above.
 # See https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/
-docker run -dit -v /var/run/docker.sock:/var/run/docker.sock --name ${pusher_docker_name} ubuntu:16.04
 docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
 docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:jtester"
 docker rm -f ${pusher_docker_name}

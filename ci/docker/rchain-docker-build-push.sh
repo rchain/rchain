@@ -145,10 +145,8 @@ sbt node/docker
 # Setup auth, source image(s) and target/destination image(s) name in variables 
 docker_src_repo="coop.rchain/rnode"
 docker_src_tag="latest"
-if [[ TRAVIS=true ]]; then
-    docker_user="$DOCKER_USERNAME" 
-    docker_pass="$DOCKER_PASSWORD" 
-    docker login -u "${docker_user}" -p "${docker_pass}"
+if [ "${TRAVIS}" = "false" ]; then
+    echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
     docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
     docker push ${docker_dst_repo}
 else
