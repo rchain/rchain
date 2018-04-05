@@ -43,7 +43,8 @@ matrix:
           - fakeroot
   - language: nix 
     env: SUBPROJECT=rholang_more_tests
-  - env: SUBPROJECT=docker_build_and_push
+  - language: 
+    env: SUBPROJECT=docker_build_and_push
 
 script:
   - ./ci/build-subprojects.sh
