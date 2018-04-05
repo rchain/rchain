@@ -1,5 +1,5 @@
 export TestSet in {
-  import RhoClass, LinkedList in {
+  import LinkedList in {
     contract TestSet(desc, @tests) = {
       new addTests, execTests, testsCh in {
         contract execTests(return) = {
@@ -47,6 +47,18 @@ export TestSet in {
         } |
         addTests!(tests) |
         execTests!(*desc)
+      }
+    } |
+    contract @[*TestSet, "after"](desc, continuation) = {
+      for(@result <- desc) {
+        match result {
+          true => {
+            desc!(true) | { *continuation }
+          }
+          _ => {
+            desc!(false)
+          }
+        }
       }
     }
   }
