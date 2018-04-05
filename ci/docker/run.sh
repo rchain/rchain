@@ -22,13 +22,13 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
 if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" ]] ; then
 docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:${TRAVIS_BRANCH}"
-elif [[ "${TRAVIS}" = "true" ]]; then
-    echo "Currently only Travis branches master and dev pushed to docker hub."
-    echo "Your branch ${TRAVIS_BRANCH} will not be pushed"
-else
+elif
     echo "Uncomment and modify docker repo in $1 if you want to push to custom repo"
     # docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:mytagname"
     docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain"
+else [[ "${TRAVIS}" = "true" ]]; then
+    echo "Currently only Travis branches master and dev pushed to docker hub."
+    echo "Your branch ${TRAVIS_BRANCH} will not be pushed"
 fi
 
 # Clean up
