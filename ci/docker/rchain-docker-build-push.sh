@@ -2,7 +2,6 @@
 ## Set BASH environment so it will fail properly throwing exit code
 set -exo pipefail
 
-# Set working branch
 if [[ $# -lt 1 ]]; then
     echo "You must specify at least branch name as parameter"
     echo "Example: $0 <branch name> <repo url> <docker hub repo>"
@@ -10,6 +9,7 @@ if [[ $# -lt 1 ]]; then
     exit
 fi
 
+# Set working branch
 branch_name=$1
 
 if [[ -z "$2" ]]; then
@@ -41,10 +41,9 @@ apt install -y docker-ce
 
 # Get RChain Repo
 apt -y install git
-#git clone https://github.com/rchain/rchain
 git clone ${git_repo} 
 cd rchain
-project_root_dir=$(pwd)
+PROJECT_ROOT_DIR=$(pwd -P)
 git checkout ${branch_name} 
 
 ### Install all dependencies on Ubuntu 16.04 LTS (Xenial Xerus) for RChain dev environment
@@ -81,7 +80,7 @@ apt-get install openjdk-8-jdk -yqq
 ## Build Needed Crypto
 ## Build secp 
 apt-get install autoconf libtool -yqq
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
 cd crypto
 if [[ -d "secp256k1" ]]; then
     rm -rf secp256k1 
@@ -93,7 +92,7 @@ cd secp256k1
 make
 
 # Build libsodium
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
 cd crypto
 if [[ -d "libsodium" ]]; then
     rm -rf libsodium 
@@ -107,7 +106,7 @@ make install
 ## Install Haskell Platform
 # ref: https://www.haskell.org/platform/#linux-ubuntu
 # ref: https://www.haskell.org/platform/ # all platforms
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
 apt-get install haskell-platform -yqq
 
 ## Install BNFC Converter 
@@ -117,7 +116,7 @@ cd bnfc/source
 cabal install --global
 
 ## Install SBT 
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
 apt-get install apt-transport-https -yqq
 echo "deb https://dl.bintray.com/sbt/debian /" |  tee -a /etc/apt/sources.list.d/sbt.list
 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
@@ -129,7 +128,7 @@ apt-get install jflex -yqq
 rm -rf 
 
 ## Build RChain via SBT build.sbt 
-cd ${project_root_dir}
+cd ${PROJECT_ROOT_DIR}
 sbt rholang/bnfc:generate
 sbt rholang/compile
 sbt rholang/assembly
