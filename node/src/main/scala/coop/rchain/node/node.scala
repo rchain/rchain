@@ -101,7 +101,7 @@ class NodeRuntime(conf: Conf) {
       } yield thisCount)
   }
 
-  val recipe: Effect[Unit] = for {
+  val nodeProgram: Effect[Unit] = for {
     _ <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
     _ <- addShutdownHook.toEffect
     _ <- Log[Effect].info(s"Listening for traffic on $address.")

@@ -84,7 +84,7 @@ object RholangCLI {
     keepTrying(evaluatorFuture, store)
   }
 
-  def repl(): Unit = {
+  private def repl(): Unit = {
     val runtime = Runtime.create()
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {

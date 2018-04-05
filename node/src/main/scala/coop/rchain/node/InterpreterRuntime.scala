@@ -14,6 +14,4 @@ object InterpreterRuntime {
       .buildNormalizedTerm(source)
       .foreach((par: Par) => RholangCLI.evaluate(runtime.reducer, runtime.store, par))
   }
-
-  def repl(): Unit = RholangCLI.repl()
 }
