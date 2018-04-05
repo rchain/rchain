@@ -122,7 +122,7 @@ object RholangCLI {
       Await.ready(evaluatorFuture, 5.seconds).value match {
         case Some(Success(_)) =>
           print("Storage Contents:\n")
-          StoragePrinter.prettyPrint(persistentStore)
+          println(StoragePrinter.prettyPrint(persistentStore))
           print("\n> ")
         case Some(Failure(e)) => {
           println("Caught boxed exception: " + e)

@@ -9,7 +9,8 @@ import coop.rchain.rspace.IStore
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 
 object StoragePrinter {
-  def prettyPrint(store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit = {
+  def prettyPrint(
+      store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): String = {
     val pars: Seq[Par] = store.toMap.map {
       case ((channels: Seq[Channel], row: Row[Seq[Channel], Seq[Channel], TaggedContinuation])) => {
         def toSends(data: Seq[Datum[Seq[Channel]]]): Par = {
@@ -57,13 +58,12 @@ object StoragePrinter {
       }
     }.toList
     if (pars.isEmpty) {
-      println(
-        "The store is empty. Note that top level terms that are not sends or receives are discarded.")
+      "The store is empty. Note that top level terms that are not sends or receives are discarded."
     } else {
       val par = pars.reduce { (p1: Par, p2: Par) =>
         p1 ++ p2
       }
-      println(PrettyPrinter().buildString(par))
+      PrettyPrinter().buildString(par)
     }
   }
 }
