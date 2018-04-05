@@ -51,7 +51,7 @@ This document is for do-it-yourselfers, who want to try out pre-release versions
 The project is built using Scala 2.12.4 and sbt 1.0.3. Subprojects may have other requirements and dependencies. See the `build.sbt` files for more information.
 
 #### If cross-developing for Linux (e.g. Ubuntu) on a Mac
-You will need a virtual machine running hte appropriate version of Linux.
+You will need a virtual machine running the appropriate version of Linux.
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
 2. Install the Linux distribution you need (e.g. [Ubuntu](http://releases.ubuntu.com/16.04/ubuntu-16.04.3-server-amd64.iso))
 3. Start VirtualBox and create a new virtual machine in the manager
