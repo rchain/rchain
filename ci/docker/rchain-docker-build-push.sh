@@ -146,7 +146,7 @@ sbt node/docker
 docker_src_repo="coop.rchain/rnode"
 docker_src_tag="latest"
 if [ "${TRAVIS}" = "false" ]; then
-    echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
     docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
     docker push ${docker_dst_repo}
 else
