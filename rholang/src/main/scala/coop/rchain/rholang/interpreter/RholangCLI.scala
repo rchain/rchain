@@ -1,16 +1,15 @@
 package coop.rchain.rholang.interpreter
 
-import java.io._
-import java.nio.file.Files
+import java.io.{BufferedOutputStream, FileOutputStream, FileReader, Reader, StringReader}
+import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import cats.syntax.either._
 import coop.rchain.models.{Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
-import coop.rchain.rspace.{IStore, LMDBStore}
+import coop.rchain.rspace.IStore
 import monix.eval.Task
 import monix.execution.CancelableFuture
 import monix.execution.Scheduler.Implicits.global
@@ -26,38 +25,48 @@ object RholangCLI {
 
   class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     version("Rholang Mercury 0.2")
-    banner("""
-             |Takes in a rholang source file and
-             |evaluates it.
-             |
-             |Options:
-             |""".stripMargin)
-    footer("\nWill add more options soon.")
+    banner("""Options:""")
 
     val binary = opt[Boolean](descr = "outputs binary protobuf serialization")
     val text   = opt[Boolean](descr = "outputs textual protobuf serialization")
-    val file   = trailArg[String](required = false, descr = "Rholang source file")
+
+    val data_dir = opt[Path](required = false,
+                             descr = "Path to data directory",
+                             default = Some(Files.createTempDirectory("rspace-store-")))
+
+    val map_size = opt[Long](required = false,
+                             descr = "Map size (in bytes)",
+                             default = Some(1024L * 1024L * 1024L))
+
+    val file = trailArg[String](required = false, descr = "Rholang source file")
+
     verify()
   }
 
   def main(args: Array[String]): Unit = {
 
     val conf = new Conf(args)
+
+    val runtime = Runtime.create(conf.data_dir(), conf.map_size())
+
     if (conf.file.supplied) {
       val fileName: String = conf.file()
       val source           = reader(fileName)
-      buildNormalizedTerm(source).foreach { (par: Par) =>
-        if (conf.binary()) {
-          writeBinary(fileName, par)
-        } else if (conf.text()) {
-          writeHumanReadable(fileName, par)
-        } else {
-          evaluate(par)
-        }
+      buildNormalizedTerm(source) match {
+        case Right(par) =>
+          if (conf.binary()) {
+            writeBinary(fileName, par)
+          } else if (conf.text()) {
+            writeHumanReadable(fileName, par)
+          } else {
+            val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+            waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+          }
+        case Left(error) =>
+          error.printStackTrace(Console.err)
       }
     } else {
-      print("> ")
-      repl()
+      repl(runtime)
     }
   }
 
@@ -65,51 +74,57 @@ object RholangCLI {
   def lexer(fileReader: Reader): Yylex     = new Yylex(fileReader)
   def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
-  private def evaluate(sortedTerm: Par): Unit = {
-    val runtime = Runtime.create()
-    evaluate(runtime.reducer, runtime.store, sortedTerm)
+  private def printPrompt(): Unit =
+    Console.print("\nrholang> ")
+
+  private def printNormalizedTerm(normalizedTerm: Par): Unit = {
+    Console.println("\nEvaluating:")
+    Console.println(PrettyPrinter().buildString(normalizedTerm))
   }
 
-  def evaluator(reducer: Reduce[Task], normalizedTerm: Par): Task[Unit] =
+  private def printStorageContents(
+      store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit = {
+    Console.println("\nStorage Contents:")
+    Console.println(StoragePrinter.prettyPrint(store))
+  }
+
+  def evaluate(reducer: Reduce[Task], normalizedTerm: Par): Task[Unit] =
     for {
-      _ <- printTask(normalizedTerm)
+      _ <- Task.now(printNormalizedTerm(normalizedTerm))
       _ <- reducer.inj(normalizedTerm)
     } yield ()
 
-  def evaluate(reducer: Reduce[Task],
-               store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
-               normalizedTerm: Par): Unit = {
-
-    val evaluatorFuture: CancelableFuture[Unit] = evaluator(reducer, normalizedTerm).runAsync
-    keepTrying(evaluatorFuture, store)
-  }
-
-  private def repl(): Unit = {
-    val runtime = Runtime.create()
-    for (ln <- Source.stdin.getLines) {
-      if (ln.isEmpty) {
-        print("> ")
-      } else {
-        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).right.get
-        evaluate(runtime.reducer, runtime.store, normalizedTerm)
-        print("\n> ")
+  @tailrec
+  def repl(runtime: Runtime): Unit = {
+    printPrompt()
+    val line = scala.io.StdIn.readLine()
+    if (line.nonEmpty) {
+      buildNormalizedTerm(new StringReader(line)) match {
+        case Right(par) =>
+          val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+          waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+        case Left(error) =>
+          error.printStackTrace(Console.err)
       }
     }
+    repl(runtime)
   }
 
-  def buildNormalizedTerm(source: Reader): Either[String, Par] = {
-    val term = buildAST(source)
-    val inputs =
-      ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
-    val normalizedTerm: Either[String, ProcVisitOutputs] =
-      normalizeTerm(term, inputs)
-
-    normalizedTerm flatMap (nt =>
-      ParSortMatcher
-        .sortMatch(Some(nt.par))
-        .term
-        .fold[Either[String, Par]](Left("ParSortMatcher failed"))(p => Right(p)))
-  }
+  def buildNormalizedTerm(source: Reader): Either[Throwable, Par] =
+    try {
+      val term           = buildAST(source)
+      val inputs         = ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+      val normalizedTerm = normalizeTerm(term, inputs).leftMap(s => new Exception(s))
+      normalizedTerm.flatMap { (nt: ProcVisitOutputs) =>
+        ParSortMatcher
+          .sortMatch(Some(nt.par))
+          .term
+          .fold[Either[Throwable, Par]](
+            Left[Throwable, Par](new Exception("ParSortMatcher failed")))(p => Right(p))
+      }
+    } catch {
+      case ex: Throwable => Left(ex)
+    }
 
   private def buildAST(source: Reader): Proc = {
     val lxr = lexer(source)
@@ -117,34 +132,22 @@ object RholangCLI {
     ast.pProc()
   }
 
-  private def printTask(normalizedTerm: Par): Task[Unit] =
-    Task {
-      print("Evaluating:\n")
-      println(PrettyPrinter().buildString(normalizedTerm))
-    }
-
   @tailrec
-  private def keepTrying(
+  def waitThenPrintStorageContents(
       evaluatorFuture: CancelableFuture[Unit],
-      persistentStore: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit =
+      store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(_)) =>
-          print("Storage Contents:\n")
-          println(StoragePrinter.prettyPrint(persistentStore))
-          print("\n> ")
-        case Some(Failure(e)) => {
-          println("Caught boxed exception: " + e)
-          throw e
-        }
-        case None => throw new Error("Error: Future claimed to be ready, but value was None")
+        case Some(Success(_)) => printStorageContents(store)
+        case Some(Failure(e)) => throw e
+        case None             => throw new Exception("Future claimed to be ready, but value was None")
       }
     } catch {
-      case _: TimeoutException => {
-        println("This is taking a long time. Feel free to ^C and quit.")
-        keepTrying(evaluatorFuture, persistentStore)
-      }
-      case e: Exception => throw e
+      case _: TimeoutException =>
+        Console.println("This is taking a long time. Feel free to ^C and quit.")
+        waitThenPrintStorageContents(evaluatorFuture, store)
+      case e: Exception =>
+        throw e
     }
 
   private def writeHumanReadable(fileName: String, sortedTerm: Par): Unit = {

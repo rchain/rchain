@@ -1,18 +1,20 @@
 package coop.rchain.node
 
-import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
-import coop.rchain.comm._, CommError._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.node.repl._
-import coop.rchain.rholang.interpreter.Runtime
-import java.util.UUID
 import java.io.File
+import java.util.UUID
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.catscontrib._
+import coop.rchain.catscontrib.ski._
+import coop.rchain.comm._
+import coop.rchain.p2p
+import coop.rchain.p2p.Network.KeysStore
+import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 class NodeRuntime(conf: Conf) {
 
@@ -32,7 +34,7 @@ class NodeRuntime(conf: Conf) {
   val http = HttpServer(conf.httpPort())
   http.start
 
-  val runtime = Runtime.create()
+  val runtime: Runtime = Runtime.create(conf.data_dir(), conf.map_size())
 
   val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort(), runtime)
   grpc.start()

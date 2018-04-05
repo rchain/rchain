@@ -45,6 +45,8 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removePsK(txn: T, channels: List[C], index: Int): Unit
 
+  private[rspace] def removeAll(txn: T, channels: List[C]): Unit
+
   // compare to store.joinMap.addBinding
   private[rspace] def addJoin(txn: T, c: C, cs: List[C]): Unit
 

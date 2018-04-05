@@ -1,9 +1,12 @@
 package coop.rchain.node
 
-import coop.rchain.comm.UPnP
-import com.typesafe.scalalogging.Logger
-import org.rogach.scallop._
 import java.net.{InetAddress, NetworkInterface}
+import java.nio.file.{Files, Path, Paths}
+
+import com.typesafe.scalalogging.Logger
+import coop.rchain.comm.UPnP
+import org.rogach.scallop._
+
 import scala.collection.JavaConverters._
 
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -41,6 +44,14 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                           descr = "Start node with REPL (but without P2P network)")
   val eval = opt[String](default = None,
                          descr = "Start node to evaluate rholang in file (but without P2P network)")
+
+  val data_dir = opt[Path](required = false,
+                           descr = "Path to data directory",
+                           default = Some(Paths.get("/var/lib/rnode")))
+
+  val map_size = opt[Long](required = false,
+                           descr = "Map size (in bytes)",
+                           default = Some(1024L * 1024L * 1024L))
 
   def fetchHost(): String =
     host.toOption match {
