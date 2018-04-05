@@ -693,6 +693,24 @@ void VirtualMachine::evaluate(pOb expr) {
 }
 
 
+// This routine is a quick and dirty global environment lookup.  I think there
+// may be a more efficient way to do this, but I haven't researched it yet.
+int idxGlobalEnv(pOb key) {
+    int size=TAGVAL(GlobalEnv->keyVec->indexedSize());
+    const char *keyStr = BASE(key)->asCstring();
+
+    for(int i = 0; i < size; i++) {
+        const char * val = BASE(GlobalEnv->keyVec->nth(i))->asCstring();
+
+        if (strcmp(keyStr, val) == 0) {
+            return i;
+        }
+    }
+//    if (VerboseFlag)
+        warning("  %s NOT found in GlobalEnv!\n", keyStr);
+    return -1;
+}
+
 #define FETCH (*pc.absolute++)
 #define ARG_LIMIT (ctxt->argvec->numberOfElements())
 
@@ -712,6 +730,7 @@ nextop:
     if (debugging_level)
         traceOpcode();
 
+    Instr previous = instr;
     instr = FETCH;
     bytecodes[OP_f0_opcode(instr)]++;
 
@@ -1108,14 +1127,30 @@ nextop:
     case opLookupToArg | 0xf: {
         const int argno = OP_f2_op0(instr);
         pOb key = code->lit(OP_f2_op1(instr));
-        pOb const val = BASE(BASE(ctxt->selfEnv)->meta())
+        pOb val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
         } else if (val == ABSENT) {
-            handleMissingBinding(key, ArgReg(argno));
-            goto doNextThread;
+            // If the preceding instruction was a NOP, this is a deferred
+            // lookup that was emitted on purpose by the compiler. In this
+            // case we need to also check the global environment for the symbol.
+            if (OP_f0_opcode(previous) == opDeferLookup) {
+                if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
+                // Perhaps it's in the GlobalEnv
+                int idx = idxGlobalEnv(key);
+                if (idx >= 0) {
+                    val = GlobalEnv->entry(idx);
+                }
+            } else {
+                warning("Absent but not deferred symbol lookup '%s'", BASE(key)->asCstring());
+            }
+
+            if (val == ABSENT) {
+                handleMissingBinding(key, ArgReg(argno));
+                goto doNextThread;
+            }
         }
 
         ASSIGN(ctxt->argvec, elem(argno), val);
@@ -1141,14 +1176,30 @@ nextop:
     case opLookupToReg | 0xf: {
         const int regno = OP_f2_op0(instr);
         pOb key = code->lit(OP_f2_op1(instr));
-        pOb const val = BASE(BASE(ctxt->selfEnv)->meta())
+        pOb val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
         } else if (val == ABSENT) {
-            handleMissingBinding(key, CtxtReg((CtxtRegName)regno));
-            goto doNextThread;
+            // If the preceding instruction was a NOP, this is a deferred
+            // lookup that was emitted on purpose by the compiler. In this
+            // case we need to also check the global environment for the symbol.
+            if (OP_f0_opcode(previous) == opDeferLookup) {
+                if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
+                // Perhaps it's in the GlobalEnv
+                int idx = idxGlobalEnv(key);
+                if (idx >= 0) {
+                    val = GlobalEnv->entry(idx);
+                }
+            } else {
+                warning("Absent but not deferred symbol lookup '%s'", BASE(key)->asCstring());
+            }
+
+            if (val == ABSENT) {
+                handleMissingBinding(key, ArgReg(regno));
+                goto doNextThread;
+            }
         }
 
         ASSIGN(ctxt, reg(regno), val);
@@ -1328,6 +1379,8 @@ nextop:
         ctxt->reg(OP_f2_op1(instr)) = vmLiterals[OP_f2_op0(instr)];
         goto nextop;
 
+    case opDeferLookup:
+        goto nextop;
 
     default:
         warning("illegal instruction (0x%.4x)", (int)instr.word);
