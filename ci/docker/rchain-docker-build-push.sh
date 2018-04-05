@@ -143,7 +143,7 @@ sbt node/docker
 docker_src_repo="coop.rchain/rnode"
 docker_src_tag="latest"
 if [[ ! -z docker_dst_repo ]]; then
-    if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" ]] ; then
+    if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" || "${TRAVIS_BRANCH}" = "OPS-117" ]] ; then
         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
         docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
         docker push ${docker_dst_repo}
