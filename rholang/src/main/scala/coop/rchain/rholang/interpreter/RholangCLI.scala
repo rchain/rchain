@@ -70,14 +70,17 @@ object RholangCLI {
     evaluate(runtime.reducer, runtime.store, sortedTerm)
   }
 
-  def evaluate(interpreter: Reduce[Task],
+  def evaluator(reducer: Reduce[Task], normalizedTerm: Par): Task[Unit] =
+    for {
+      _ <- printTask(normalizedTerm)
+      _ <- reducer.inj(normalizedTerm)
+    } yield ()
+
+  def evaluate(reducer: Reduce[Task],
                store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                normalizedTerm: Par): Unit = {
-    val evaluatorTask = for {
-      _ <- printTask(normalizedTerm)
-      _ <- interpreter.inj(normalizedTerm)
-    } yield ()
-    val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+
+    val evaluatorFuture: CancelableFuture[Unit] = evaluator(reducer, normalizedTerm).runAsync
     keepTrying(evaluatorFuture, store)
   }
 
