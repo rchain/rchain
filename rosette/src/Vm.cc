@@ -699,7 +699,7 @@ int idxGlobalEnv(pOb key) {
     int size=TAGVAL(GlobalEnv->keyVec->indexedSize());
     const char *keyStr = BASE(key)->asCstring();
 
-    for(int i=0; i<size; i++) {
+    for(int i = 0; i < size; i++) {
         const char * val = BASE(GlobalEnv->keyVec->nth(i))->asCstring();
 
         if (strcmp(keyStr, val) == 0) {
@@ -1140,7 +1140,7 @@ nextop:
                 if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
                 // Perhaps it's in the GlobalEnv
                 int idx = idxGlobalEnv(key);
-                if (idx>=0) {
+                if (idx >= 0) {
                     val = GlobalEnv->entry(idx);
                 }
             } else {
@@ -1189,7 +1189,7 @@ nextop:
                 if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
                 // Perhaps it's in the GlobalEnv
                 int idx = idxGlobalEnv(key);
-                if (idx>=0) {
+                if (idx >= 0) {
                     val = GlobalEnv->entry(idx);
                 }
             } else {
