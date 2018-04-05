@@ -25,7 +25,14 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 # Copy and run build and push docker script in docker pusher container from above
 docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
 if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" || "${TRAVIS_BRANCH}" = "OPS-117" ]]; then
-    docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:${TRAVIS_BRANCH}"
+    docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh \
+        dev \
+        https://github.com/rchain/rchain \
+        rchain/rnode:${TRAVIS_BRANCH}" \
+        ${TRAVIS_BRANCH} \
+        ${DOCKER_USERNAME} \
+        ${DOCKER_PASSWORD} \
+        
 elif [[ ! "${TRAVIS}" = "true" ]]; then
     echo "Uncomment and modify docker repo in $1 if you want to push to custom repo"
     # docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:mytagname"
