@@ -31,7 +31,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" || "${TRAVIS_B
         rchain/rnode:${TRAVIS_BRANCH}" \
         ${TRAVIS_BRANCH} \
         ${DOCKER_USERNAME} \
-        ${DOCKER_PASSWORD} \
+        ${DOCKER_PASSWORD}
         
 elif [[ ! "${TRAVIS}" = "true" ]]; then
     echo "Uncomment and modify docker repo in $1 if you want to push to custom repo"
