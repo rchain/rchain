@@ -4,6 +4,7 @@ import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
 import coop.rchain.comm._, CommError._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.node.repl._
+import coop.rchain.rholang.interpreter.Runtime
 import java.util.UUID
 import java.io.File
 
@@ -17,23 +18,28 @@ class NodeRuntime(conf: Conf) {
 
   import ApplicativeError_._
 
+  /** Configuration */
   private val host           = conf.fetchHost()
   private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
   private val remoteKeysPath = System.getProperty("user.home") + File.separator + s".${name}-rnode-remote.keys"
 
+  /** Run services */
+  /** TODO all services should be defined in terms of `nodeProgram` */
   val metricsServer = MetricsServer()
 
   val http = HttpServer(conf.httpPort())
   http.start
 
-  val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort())
+  val runtime = Runtime.create()
+
+  val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort(), runtime)
   grpc.start()
 
   val net = new UnicastNetwork(src, Some(p2p.Network))
 
-  /** This is essentially a final effect that will accumulate all effects from the system */
+  /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
 
@@ -44,6 +50,7 @@ class NodeRuntime(conf: Conf) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
+  /** Capabilities for Effect */
   implicit val encryptionEffect: Encryption[Task]        = effects.encryption(name)
   implicit val logEffect: Log[Task]                      = effects.log
   implicit val timeEffect: Time[Task]                    = effects.time
@@ -94,7 +101,7 @@ class NodeRuntime(conf: Conf) {
       } yield thisCount)
   }
 
-  val recipe: Effect[Unit] = for {
+  val nodeProgram: Effect[Unit] = for {
     _ <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
     _ <- addShutdownHook.toEffect
     _ <- Log[Effect].info(s"Listening for traffic on $address.")

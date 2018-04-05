@@ -70,36 +70,45 @@ object RholangCLI {
     evaluate(runtime.reducer, runtime.store, sortedTerm)
   }
 
-  def evaluate(interpreter: Reduce[Task],
+  def evaluator(reducer: Reduce[Task], normalizedTerm: Par): Task[Unit] =
+    for {
+      _ <- printTask(normalizedTerm)
+      _ <- reducer.inj(normalizedTerm)
+    } yield ()
+
+  def evaluate(reducer: Reduce[Task],
                store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                normalizedTerm: Par): Unit = {
-    val evaluatorTask = for {
-      _ <- printTask(normalizedTerm)
-      _ <- interpreter.inj(normalizedTerm)
-    } yield ()
-    val evaluatorFuture: CancelableFuture[Unit] = evaluatorTask.runAsync
+
+    val evaluatorFuture: CancelableFuture[Unit] = evaluator(reducer, normalizedTerm).runAsync
     keepTrying(evaluatorFuture, store)
   }
 
-  def repl(): Unit = {
+  private def repl(): Unit = {
     val runtime = Runtime.create()
     for (ln <- Source.stdin.getLines) {
       if (ln.isEmpty) {
         print("> ")
       } else {
-        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
+        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).right.get
         evaluate(runtime.reducer, runtime.store, normalizedTerm)
         print("\n> ")
       }
     }
   }
 
-  def buildNormalizedTerm(source: Reader): Option[Par] = {
+  def buildNormalizedTerm(source: Reader): Either[String, Par] = {
     val term = buildAST(source)
     val inputs =
       ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
-    val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
-    ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term
+    val normalizedTerm: Either[String, ProcVisitOutputs] =
+      normalizeTerm(term, inputs)
+
+    normalizedTerm flatMap (nt =>
+      ParSortMatcher
+        .sortMatch(Some(nt.par))
+        .term
+        .fold[Either[String, Par]](Left("ParSortMatcher failed"))(p => Right(p)))
   }
 
   private def buildAST(source: Reader): Proc = {
@@ -122,7 +131,7 @@ object RholangCLI {
       Await.ready(evaluatorFuture, 5.seconds).value match {
         case Some(Success(_)) =>
           print("Storage Contents:\n")
-          StoragePrinter.prettyPrint(persistentStore)
+          println(StoragePrinter.prettyPrint(persistentStore))
           print("\n> ")
         case Some(Failure(e)) => {
           println("Caught boxed exception: " + e)
@@ -155,23 +164,23 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
+  private def normalizeTerm(term: Proc,
+                            inputs: ProcVisitInputs): Either[String, ProcVisitOutputs] = {
     val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
     if (normalizedTerm.knownFree.count > 0) {
       if (normalizedTerm.knownFree.wildcards.isEmpty) {
         val topLevelFreeList = normalizedTerm.knownFree.env.map {
           case (name, (_, _, line, col)) => s"$name at $line:$col"
         }
-        throw new Error(
+        Left(
           s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}.")
       } else {
         val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
           case (line, col) => s"_ (wildcard) at $line:$col"
         }
-        throw new Error(
+        Left(
           s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}.")
       }
-    }
-    normalizedTerm
+    } else Right(normalizedTerm)
   }
 }
