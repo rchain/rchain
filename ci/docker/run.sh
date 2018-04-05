@@ -16,5 +16,5 @@ docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/
 echo "tester"
 pwd
 echo "tester"
-docker exec -it ${pusher_docker_name} /bin/bash -c "rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:jtester"
+docker exec -it ${pusher_docker_name} sh -c "rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:jtester"
 docker rm -f ${pusher_docker_name}
