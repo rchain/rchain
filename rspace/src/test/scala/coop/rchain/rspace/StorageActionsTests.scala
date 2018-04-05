@@ -10,12 +10,8 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.scalatest._
 
-abstract class StorageActionsBase extends FlatSpec with Matchers with OptionValues {
-
-  type TestStore =
-    IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
-
-  val logger: Logger = Logger[StorageActionsTests]
+abstract class StorageActionsBase[T] extends FlatSpec with Matchers with OptionValues {
+  val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   override def withFixture(test: NoArgTest): Outcome = {
     logger.debug(s"Test: ${test.name}")
@@ -24,10 +20,15 @@ abstract class StorageActionsBase extends FlatSpec with Matchers with OptionValu
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestStore(f: TestStore => Unit): Unit
+  def withTestStore(f: T => Unit): Unit
 }
 
-trait StorageActionsTests extends StorageActionsBase {
+trait StorageActionsTests
+    extends StorageActionsBase[
+      IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]] {
+
+  type TestStore =
+    IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
 
   /* Tests */
 
@@ -434,7 +435,7 @@ trait StorageActionsTests extends StorageActionsBase {
 
   "A joined consume with the same channel given twice followed by a produce" should
     "not raises any errors (CORE-365)" in withTestStore { store =>
-    var channels = List("ch1", "ch1")
+    val channels = List("ch1", "ch1")
 
     val r1 = consume(store,
                      channels,
@@ -889,6 +890,7 @@ class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOper
 
   override def withTestStore(f: TestStore => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
+    testStore.clear()
     try {
       f(testStore)
     } finally {
