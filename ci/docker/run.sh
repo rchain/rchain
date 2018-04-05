@@ -12,6 +12,9 @@ docker rm -f ${pusher_docker_name}
 # Be aware of the security risks while this is running. 
 # See https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/
 docker run -dit -v /var/run/docker.sock:/var/run/docker.sock --name ${pusher_docker_name} ubuntu:16.04
-#docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
-docker exec -it ${pusher_docker_name} /bin/bash -c "./rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:jtester"
+docker cp rchain-docker-build-push.sh ${pusher_docker_name}:/ 
+echo "tester"
+pwd
+echo "tester"
+docker exec -it ${pusher_docker_name} /bin/bash -c "rchain-docker-build-push.sh dev https://github.com/rchain/rchain rchain/rnode:jtester"
 docker rm -f ${pusher_docker_name}
