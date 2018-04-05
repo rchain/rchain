@@ -19,12 +19,12 @@ object Main {
     val conf = Conf(args)
     (conf.eval.toOption, conf.repl()) match {
       case (Some(fileName), _) => InterpreterRuntime.evaluateFile(fileName)
-      case (None, true)        => executeREPL(conf)
-      case (None, false)       => executeP2p(conf)
+      case (None, true)        => executeRepl(conf)
+      case (None, false)       => executeNode(conf)
     }
   }
 
-  private def executeREPL(conf: Conf): Unit = {
+  private def executeRepl(conf: Conf): Unit = {
     import monix.execution.Scheduler.Implicits.global
 
     val repl = new Repl(conf.grpcHost(), conf.grpcPort())
@@ -32,7 +32,7 @@ object Main {
       _    <- Task.delay(print("> "))
       line <- Task.delay(scala.io.StdIn.readLine())
       _ <- line.trim match {
-            case ""   => Task.delay(println("\n"))
+            case ""   => Task.delay(print("\n"))
             case line => repl.run(line) >>= (output => Task.delay(println(output)))
 
           }
@@ -41,7 +41,7 @@ object Main {
     (Task.delay(println(repl.logo)) *> MonadOps.forever(recipe)).unsafeRunSync
   }
 
-  private def executeP2p(conf: Conf): Unit = {
+  private def executeNode(conf: Conf): Unit = {
     import monix.execution.Scheduler.Implicits.global
     new NodeRuntime(conf).nodeProgram.value.unsafeRunSync match {
       case Right(_) => ()
