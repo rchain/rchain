@@ -381,4 +381,14 @@ object implicits {
         case Wildcard(_)     => BitSet()
       }
   }
+
+  implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
+    new HasLocallyFree[ReceiveBind] {
+      def wildcard(rb: ReceiveBind) =
+        ChannelLocallyFree.wildcard(rb.source.get)
+      def freeCount(rb: ReceiveBind) =
+        ChannelLocallyFree.freeCount(rb.source.get)
+      def locallyFree(rb: ReceiveBind) =
+        ChannelLocallyFree.locallyFree(rb.source.get)
+    }
 }

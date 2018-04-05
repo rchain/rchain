@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats._
+import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
 
@@ -12,7 +12,13 @@ import coop.rchain.models.Var.VarInstance._
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
 
-import implicits.{ExprLocallyFree, GPrivateLocallyFree, ParExtension, SendLocallyFree}
+import implicits.{
+  ExprLocallyFree,
+  GPrivateLocallyFree,
+  ParExtension,
+  ReceiveBindLocallyFree,
+  SendLocallyFree
+}
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -291,6 +297,34 @@ object SpatialMatcher {
         _           <- spatialMatch(target.chan.get, pattern.chan.get)
         forcedYield <- foldMatch(target.data, pattern.data, (t: Par, p: Par) => spatialMatch(t, p))
       } yield forcedYield
+
+  def spatialMatch(target: Receive, pattern: Receive): OptionalFreeMap[Unit] =
+    if (target.persistent != pattern.persistent)
+      StateT.liftF(None)
+    else
+      for {
+        _ <- listMatchSingle[ReceiveBind](target.binds,
+                                          pattern.binds,
+                                          spatialMatch,
+                                          (p, rb) => p,
+                                          None,
+                                          false)
+        _ <- spatialMatch(target.body.get, pattern.body.get)
+      } yield Unit
+
+  def spatialMatch(target: ReceiveBind, pattern: ReceiveBind): OptionalFreeMap[Unit] =
+    for {
+      _ <- spatialMatch(target.source.get, pattern.source.get)
+      _ <- {
+        if (target.patterns == pattern.patterns)
+          StateT.pure[Option, FreeMap, Unit](Unit)
+        else
+          StateT.liftF[Option, FreeMap, Unit](None)
+      }
+    } yield Unit
+
+  def spatialMatch(target: Eval, pattern: Eval): OptionalFreeMap[Unit] =
+    spatialMatch(target.channel.get, pattern.channel.get)
 
   /**
     * Note that currently there should be no way to put a GPrivate in a pattern
