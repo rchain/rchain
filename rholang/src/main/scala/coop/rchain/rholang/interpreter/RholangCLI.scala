@@ -90,19 +90,25 @@ object RholangCLI {
       if (ln.isEmpty) {
         print("> ")
       } else {
-        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).get
+        val normalizedTerm = buildNormalizedTerm(new StringReader(ln)).right.get
         evaluate(runtime.reducer, runtime.store, normalizedTerm)
         print("\n> ")
       }
     }
   }
 
-  def buildNormalizedTerm(source: Reader): Option[Par] = {
+  def buildNormalizedTerm(source: Reader): Either[String, Par] = {
     val term = buildAST(source)
     val inputs =
       ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
-    val normalizedTerm: ProcVisitOutputs = normalizeTerm(term, inputs)
-    ParSortMatcher.sortMatch(Some(normalizedTerm.par)).term
+    val normalizedTerm: Either[String, ProcVisitOutputs] =
+      normalizeTerm(term, inputs)
+
+    normalizedTerm flatMap (nt =>
+      ParSortMatcher
+        .sortMatch(Some(nt.par))
+        .term
+        .fold[Either[String, Par]](Left("ParSortMatcher failed"))(p => Right(p)))
   }
 
   private def buildAST(source: Reader): Proc = {
@@ -158,23 +164,23 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  private def normalizeTerm(term: Proc, inputs: ProcVisitInputs) = {
+  private def normalizeTerm(term: Proc,
+                            inputs: ProcVisitInputs): Either[String, ProcVisitOutputs] = {
     val normalizedTerm = ProcNormalizeMatcher.normalizeMatch(term, inputs)
     if (normalizedTerm.knownFree.count > 0) {
       if (normalizedTerm.knownFree.wildcards.isEmpty) {
         val topLevelFreeList = normalizedTerm.knownFree.env.map {
           case (name, (_, _, line, col)) => s"$name at $line:$col"
         }
-        throw new Error(
+        Left(
           s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}.")
       } else {
         val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
           case (line, col) => s"_ (wildcard) at $line:$col"
         }
-        throw new Error(
+        Left(
           s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}.")
       }
-    }
-    normalizedTerm
+    } else Right(normalizedTerm)
   }
 }

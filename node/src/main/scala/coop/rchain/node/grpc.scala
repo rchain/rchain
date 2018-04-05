@@ -43,8 +43,9 @@ class GrpcServer(executionContext: ExecutionContext, port: Int, runtime: Runtime
       val normalizedTerm = buildNormalizedTerm(new StringReader(line))
 
       normalizedTerm match {
-        case None => Future.successful(ReplResponse(s"Could not build a term from '$line'"))
-        case Some(term) =>
+        case Left(er) =>
+          Future.successful(ReplResponse(s"Could not build a term from '$line'. Error: $er"))
+        case Right(term) =>
           evaluator(runtime.reducer, term).attempt
             .map {
               case Left(ex) => s"Caught boxed exception: $ex"
