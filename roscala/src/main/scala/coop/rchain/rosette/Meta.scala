@@ -1,13 +1,10 @@
 package coop.rchain.rosette
 
-import cats.data.State._
-import coop.rchain.rosette.Ctxt.CtxtTransition
-
 object Meta {
   case class StdMeta(meta: Ob, parent: Ob, override val extension: StdExtension) extends Actor {
     // TODO:
     def get(client: Ob, key: Ob): CtxtTransition[Result] =
-      pure[Ctxt, Result](Left(Absent))
+      pureCtxt[Result](Left(Absent))
 
     // TODO:
     def lookupOBOStdMeta(client: Ob, key: Ob): CtxtTransition[Result] =
