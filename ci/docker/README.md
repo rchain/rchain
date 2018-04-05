@@ -13,6 +13,8 @@ You may also want to install `docker-compose` version that supports Docker Compo
 ### Quick Start 
 
 In the directory of this README run 
-```./run.sh
+```sudo ./run.sh
 ```
 Docker and the script will take care of the rest. From the code you can see that it creates a Ubuntu 16.04 LTS container and runs the "rchain-docker-build-push.sh" script in it. 
+
+You must edit bottom of run.sh for custom pushing to custom repo. We may enable passing a parameter to run.sh in the future.
