@@ -11,20 +11,19 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
 
 object PrettyPrinter {
-  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "x", "a", 23, 128)
-  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "INVALID", "x", "a", 23, 128)
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
+
+  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "INVALID", "a", 23, 128)
 }
 
 case class PrettyPrinter(freeShift: Int,
                          boundShift: Int,
                          freeId: String,
-                         boundId: String,
                          baseId: String,
                          rotation: Int,
                          maxVarCount: Int) {
 
-  def setBoundId(): String = rotate(increment(baseId))
-
+  def boundId: String = rotate(baseId)
   def setBaseId(): String = increment(baseId)
 
   def buildString(e: Expr): String =
@@ -143,13 +142,7 @@ case class PrettyPrinter(freeShift: Int,
         "match " + buildString(m.target.get) + " { " +
           ("" /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
-              string +
-                this
-                  .copy(
-                    freeShift = boundShift,
-                    freeId = boundId
-                  )
-                  .buildMatchCase(matchCase) + {
+              string + buildMatchCase(matchCase) + {
                 if (i != m.cases.length - 1) " ; "
                 else ""
               }
@@ -213,7 +206,6 @@ case class PrettyPrinter(freeShift: Int,
             this
               .copy(
                 boundShift = 0,
-                boundId = setBoundId(),
                 baseId = setBaseId()
               )
               .buildString(pattern) + {
@@ -226,8 +218,9 @@ case class PrettyPrinter(freeShift: Int,
     val patternFree: Int = matchCase.pattern.get.freeCount
     this
       .copy(
+        freeShift = boundShift,
         boundShift = 0,
-        boundId = setBoundId(),
+        freeId = boundId,
         baseId = setBaseId()
       )
       .buildString(matchCase.pattern.get) + " => " +

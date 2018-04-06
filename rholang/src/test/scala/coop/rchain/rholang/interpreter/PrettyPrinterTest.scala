@@ -521,10 +521,10 @@ class IncrementTester extends FlatSpec with Matchers {
   }
 
   "Increment and Rotate" should "" in {
+
     val _printer: PrettyPrinter = (printer /: (0 until 52)) { (p, _) =>
       p.copy(
         freeId = p.boundId,
-        boundId = p.setBoundId(),
         baseId = p.setBaseId()
       )
     }
