@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
+# Prep CI Enviroment
 if [[ "${CI}" = "true" ]]; then
     set -exo pipefail
 fi
 
-if [[ "$#" != "0" && "$#" != "3" ]]; then
+if [[ "$#" != "3" ]]; then
     echo "Invalid amount of parameters."
     echo "Example: sudo $0 <branch name> <repo url> <docker hub repo>"
     echo "Example: sudo $0 mybranch https://github.com/myrepo/rchain myrepo/rchain:latest"
@@ -39,8 +40,8 @@ cd rchain
 PROJECT_ROOT_DIR=$(pwd -P)
 git checkout ${branch_name} 
 
-### Install all dependencies on Ubuntu 16.04 LTS (Xenial Xerus) for RChain dev environment
-## Detect if running in docker container - setup using sudo accordingly
+### Install all dependencies on Ubuntu 16.04 LTS (Xenial Xerus) for RChain dev environment.
+## Detect if running in docker container - setup using sudo accordingly.
 if [[ $(cat /proc/self/cgroup  | grep docker) = *docker* ]]; then
     echo "Running in docker container!"
     sudo=""
@@ -61,7 +62,7 @@ fi
 
 ## Resynchronize the package index files from their sources
 apt-get update -yqq
-## Install g++ multilib for cross-compiling as rosette is currently only 32-bit 
+## Install g++ multilib for cross-compiling as rosette is currently only 32-bit
 apt-get install g++-multilib -yqq
 ## Install misc tools 
 apt-get install cmake curl git -yqq
