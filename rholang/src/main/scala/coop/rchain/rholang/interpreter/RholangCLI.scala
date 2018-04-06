@@ -49,24 +49,28 @@ object RholangCLI {
 
     val runtime = Runtime.create(conf.data_dir(), conf.map_size())
 
-    if (conf.file.supplied) {
-      val fileName: String = conf.file()
-      val source           = reader(fileName)
-      buildNormalizedTerm(source) match {
-        case Right(par) =>
-          if (conf.binary()) {
-            writeBinary(fileName, par)
-          } else if (conf.text()) {
-            writeHumanReadable(fileName, par)
-          } else {
-            val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-            waitThenPrintStorageContents(evaluatorFuture, runtime.store)
-          }
-        case Left(error) =>
-          error.printStackTrace(Console.err)
+    try {
+      if (conf.file.supplied) {
+        val fileName: String = conf.file()
+        val source           = reader(fileName)
+        buildNormalizedTerm(source) match {
+          case Right(par) =>
+            if (conf.binary()) {
+              writeBinary(fileName, par)
+            } else if (conf.text()) {
+              writeHumanReadable(fileName, par)
+            } else {
+              val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+              waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+            }
+          case Left(error) =>
+            error.printStackTrace(Console.err)
+        }
+      } else {
+        repl(runtime)
       }
-    } else {
-      repl(runtime)
+    } finally {
+      runtime.store.close()
     }
   }
 

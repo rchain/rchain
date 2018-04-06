@@ -73,6 +73,7 @@ class NodeRuntime(conf: Conf) {
 
   def addShutdownHook: Task[Unit] = Task.delay {
     sys.addShutdownHook {
+      runtime.store.close()
       metricsServer.stop
       http.stop
       grpc.stop()

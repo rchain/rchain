@@ -22,14 +22,18 @@ object Main {
   private def evaluateFile(conf: Conf, fileName: String): Unit = {
     import monix.execution.Scheduler.Implicits.global
 
-    val runtime: Runtime   = Runtime.create(conf.data_dir(), conf.map_size())
-    val source: FileReader = RholangCLI.reader(fileName)
-    RholangCLI.buildNormalizedTerm(source) match {
-      case Right(par) =>
-        val evaluatorFuture = RholangCLI.evaluate(runtime.reducer, par).runAsync
-        RholangCLI.waitThenPrintStorageContents(evaluatorFuture, runtime.store)
-      case Left(error) =>
-        Console.err.println(error)
+    val runtime: Runtime = Runtime.create(conf.data_dir(), conf.map_size())
+    try {
+      val source: FileReader = RholangCLI.reader(fileName)
+      RholangCLI.buildNormalizedTerm(source) match {
+        case Right(par) =>
+          val evaluatorFuture = RholangCLI.evaluate(runtime.reducer, par).runAsync
+          RholangCLI.waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+        case Left(error) =>
+          Console.err.println(error)
+      }
+    } finally {
+      runtime.store.close()
     }
   }
 
