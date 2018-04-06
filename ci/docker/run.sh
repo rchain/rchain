@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 ## Set BASH environment so it will fail properly throwing exit code
-#set -exo pipefail
+set -exo pipefail
 
-# Must 
-if [[ ! -z "$1" && ! -z "$2" && ! -z "$3" ]] || [[ $# -eq 0 ]]; then
+if [[ "$#" != "0" && "$#" != "3" ]]; then
     echo "Invalid number of parameters."
     echo "Example: $0 dev https://github.com/rchain/rchain jeremybusk/rnode:mytagname"
     echo "You will be asked for you docker repo password." 
