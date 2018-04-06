@@ -145,15 +145,19 @@ sbt node/docker
 # Setup auth, source image(s) and target/destination image(s) name in variables 
 docker_src_repo="coop.rchain/rnode"
 docker_src_tag="latest"
-if [[ ! -z docker_dst_repo ]]; then
-    if [[ "${TRAVIS_BRANCH}" = "master" || "${TRAVIS_BRANCH}" = "dev" || "${TRAVIS_BRANCH}" = "OPS-117" ]] ; then
+if [[ ! -z ${docker_dst_repo} ]]; then
+    if [[ "${TRAVIS_BRANCH}" = "master" || \
+        "${TRAVIS_BRANCH}" = "dev" || \
+        "${TRAVIS_BRANCH}" = "ops-test" ]] ; then
         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
         docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
         docker push ${docker_dst_repo}
-    else
+    elif [[ "${TRAVIS}" != "true" ]]; then
         docker login
         docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
         docker push ${docker_dst_repo}
+    else
+        echo "Container image not pushed."
     fi
 fi
 
