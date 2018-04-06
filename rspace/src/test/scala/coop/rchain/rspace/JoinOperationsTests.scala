@@ -7,8 +7,8 @@ trait JoinOperationsTests extends StorageActionsBase {
 
   "joins" should "remove joins if no PsK" in withTestStore { store =>
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.putA(txn, List("ch1"), Datum("datum1", persist = false))
-      store.putA(txn, List("ch2"), Datum("datum2", persist = false))
+      store.putDatum(txn, List("ch1"), Datum("datum1", persist = false))
+      store.putDatum(txn, List("ch2"), Datum("datum2", persist = false))
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
 
@@ -16,7 +16,7 @@ trait JoinOperationsTests extends StorageActionsBase {
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
 
-      store.putA(txn, List("ch1", "ch2"), Datum("datum_ch1_ch2", persist = false))
+      store.putDatum(txn, List("ch1", "ch2"), Datum("datum_ch1_ch2", persist = false))
     }
 
     store.withTxn(store.createTxnRead()) { txn =>
@@ -39,9 +39,9 @@ trait JoinOperationsTests extends StorageActionsBase {
     //now ensure that garbage-collection works and all joins
     //are removed when we remove As
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.removeA(txn, "ch1", 0)
-      store.removeA(txn, "ch2", 0)
-      store.removeA(txn, List("ch1", "ch2"), 0)
+      store.removeDatum(txn, "ch1", 0)
+      store.removeDatum(txn, "ch2", 0)
+      store.removeDatum(txn, List("ch1", "ch2"), 0)
     }
 
     store.isEmpty shouldBe true
@@ -49,15 +49,21 @@ trait JoinOperationsTests extends StorageActionsBase {
 
   "removeAllJoins" should "should not clear joins if PsK exists" in withTestStore { store =>
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.putK(txn,
-                 List("ch1"),
-                 WaitingContinuation(List(Wildcard), new StringsCaptor, persist = false))
-      store.putK(txn,
-                 List("ch2"),
-                 WaitingContinuation(List(Wildcard), new StringsCaptor, persist = false))
-      store.putK(txn,
-                 List("ch1", "ch2"),
-                 WaitingContinuation(List(Wildcard), new StringsCaptor, persist = false))
+      store.putWaitingContinuation(txn,
+                                   List("ch1"),
+                                   WaitingContinuation(List(Wildcard),
+                                                       new StringsCaptor,
+                                                       persist = false))
+      store.putWaitingContinuation(txn,
+                                   List("ch2"),
+                                   WaitingContinuation(List(Wildcard),
+                                                       new StringsCaptor,
+                                                       persist = false))
+      store.putWaitingContinuation(txn,
+                                   List("ch1", "ch2"),
+                                   WaitingContinuation(List(Wildcard),
+                                                       new StringsCaptor,
+                                                       persist = false))
       store.addJoin(txn, "ch1", List("ch1", "ch2"))
       store.addJoin(txn, "ch2", List("ch1", "ch2"))
     }
@@ -90,9 +96,9 @@ trait JoinOperationsTests extends StorageActionsBase {
     //now ensure that garbage-collection works and all joins
     //are removed when we remove PsK
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.removePsK(txn, List("ch1", "ch2"), 0)
-      store.removePsK(txn, List("ch1"), 0)
-      store.removePsK(txn, List("ch2"), 0)
+      store.removeWaitingContinuations(txn, List("ch1", "ch2"), 0)
+      store.removeWaitingContinuations(txn, List("ch1"), 0)
+      store.removeWaitingContinuations(txn, List("ch2"), 0)
     }
 
     store.isEmpty shouldBe true
