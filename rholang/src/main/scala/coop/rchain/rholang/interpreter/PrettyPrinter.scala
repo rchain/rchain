@@ -113,7 +113,9 @@ case class PrettyPrinter(freeShift: Int,
               this
                 .copy(
                   freeShift = boundShift + free,
-                  freeId = boundId
+                  boundShift = 0,
+                  freeId = boundId,
+                  baseId = setBaseId()
                 )
                 .buildPattern(bind.patterns)
             (free + patternFree, string + bindString + {
@@ -202,13 +204,7 @@ case class PrettyPrinter(freeShift: Int,
     ((0, "") /: patterns.zipWithIndex) {
       case ((patternsFree, string), (pattern, i)) =>
         (patternsFree + freeCount(pattern),
-          string +
-            this
-              .copy(
-                boundShift = 0,
-                baseId = setBaseId()
-              )
-              .buildString(pattern) + {
+          string + buildString(pattern) + {
             if (i != patterns.length - 1) ", "
             else ""
           })
