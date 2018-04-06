@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-## Set BASH environment so it will fail properly throwing exit code
-set -exo pipefail
+if [[ "${CI}" = "true" ]]; then
+    set -exo pipefail
+fi
 
-if [[ $# -lt 1 ]]; then
-    echo "You must specify at least branch name as parameter"
+if [[ "$#" != "0" && "$#" != "3" ]]; then
+    echo "Invalid amount of parameters."
     echo "Example: $0 <branch name> <repo url> <docker hub repo>"
     echo "Example: $0 mybranch https://github.com/myrepo/rchain myrepo/rchain:latest"
     exit
@@ -11,24 +12,16 @@ fi
 
 # Set working branch
 branch_name=$1
+git_repo=$2
+docker_dst_repo=$3
 
-if [[ -z "$2" ]]; then
-    git_repo="https://github.com/rchain/rchain"
-else
-    git_repo=$2
-fi
-
-if [[ -z "$3" ]]; then
-    # docker_dst_repo="rchain/rchain:${branch_name}"
-    echo "Default repo disabled"
-else
-    docker_dst_repo=$3
-fi
-
-echo "branch: $branch_name"
-echo "git repo: $git_repo"
-echo "docker repo: $docker_dst_repo"
-echo "travis branch: ${TRAVIS_BRANCH}"
+echo "Branch Name: $branch_name"
+echo "Git Repo: $git_repo"
+echo "Docker Repo: $docker_dst_repo"
+echo "Travis Branch: ${TRAVIS_BRANCH}"
+echo "Travis Docker Username: ${DOCKER_USERNAME}"
+echo "5 seconds to cancel if this information is not correct."
+sleep 5 
 
 
 # Install Docker-CE
@@ -143,19 +136,19 @@ sbt node/docker
 
 ## Tag and push newly built docker image(s).
 # Setup auth, source image(s) and target/destination image(s) name in variables 
-docker_src_repo="coop.rchain/rnode"
-docker_src_tag="latest"
-if [[ ! -z ${docker_dst_repo} ]]; then
+DOCKER_SRC_REPO="coop.rchain/rnode"
+DOCKER_SRC_TAG="latest"
+if [[ ${docker_dst_repo} ]]; then
     if [[ "${TRAVIS_BRANCH}" = "master" || \
         "${TRAVIS_BRANCH}" = "dev" || \
         "${TRAVIS_BRANCH}" = "OPS-117" || \
         "${TRAVIS_BRANCH}" = "ops-test" ]] ; then
         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-        docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
+        docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
         docker push ${docker_dst_repo}
     elif [[ "${TRAVIS}" != "true" ]]; then
         docker login
-        docker tag  ${docker_src_repo}:${docker_src_tag} ${docker_dst_repo}
+        docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
         docker push ${docker_dst_repo}
     else
         echo "Container image not pushed."

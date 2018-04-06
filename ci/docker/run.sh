@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-## Set BASH environment so it will fail properly throwing exit code
-set -exo pipefail
+## Set BASH environment if on CI so it will fail properly throwing exit code
+if [[ "${CI}" = "true" ]]; then
+    set -exo pipefail
+fi
 
 if [[ "$#" != "0" && "$#" != "3" ]]; then
     echo "Invalid number of parameters."
@@ -32,19 +34,15 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 
 # Copy and run build and push docker script in docker pusher container from above
 docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
-if [[ "${TRAVIS_BRANCH}" = "master" \
-    || "${TRAVIS_BRANCH}" = "dev" \
-    || "${TRAVIS_BRANCH}" = "OPS-117" \
-    || "${TRAVIS_BRANCH}" = "ops-test" ]]; then
-    echo "Running Travis build and push."
+if [[ "${TRAVIS}" = "true" ]]; then
+    echo "Running Travis build and will push to Docker Hub repo deppending on branch name."
     docker exec -it ${PUSHER_DOCKER_NAME} bash -c "./rchain-docker-build-push.sh \
         dev \
         https://github.com/rchain/rchain \
         rchain/rnode:${TRAVIS_BRANCH}"
-elif [[ "${TRAVIS}" = "true" ]]; then
     echo "Currently the only Travis branches master and dev pushed to docker hub."
     echo "Your branch ${TRAVIS_BRANCH} will not be pushed"
-elif [[ ! -z "$1" && ! -z "$2" && ! -z "$3" ]]; then
+elif [[ $1 && $2 && $3 ]]; then
     echo "Running custom build"
     custom_branch_name=$1
     custom_git_repo=$2
