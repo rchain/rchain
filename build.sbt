@@ -24,6 +24,16 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 
 lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings
 
+lazy val casper = (project in file("casper"))
+  .settings(commonSettings: _*)
+  .settings(
+    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    PB.targets in Compile := Seq(
+      scalapb.gen() -> (sourceManaged in Compile).value
+    )
+  )
+  .dependsOn(models, rspace, comm)
+
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
@@ -247,4 +257,4 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
+  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
