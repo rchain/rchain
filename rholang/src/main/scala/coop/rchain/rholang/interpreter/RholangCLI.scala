@@ -97,15 +97,18 @@ object RholangCLI {
   @tailrec
   def repl(runtime: Runtime): Unit = {
     printPrompt()
-    val line = scala.io.StdIn.readLine()
-    if (line.nonEmpty) {
-      buildNormalizedTerm(new StringReader(line)) match {
-        case Right(par) =>
-          val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-          waitThenPrintStorageContents(evaluatorFuture, runtime.store)
-        case Left(error) =>
-          error.printStackTrace(Console.err)
-      }
+    Option(scala.io.StdIn.readLine()) match {
+      case Some(line) =>
+        buildNormalizedTerm(new StringReader(line)) match {
+          case Right(par) =>
+            val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+            waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+          case Left(error) =>
+            error.printStackTrace(Console.err)
+        }
+      case None =>
+        Console.println("\nExiting...")
+        return
     }
     repl(runtime)
   }
