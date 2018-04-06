@@ -78,7 +78,7 @@ apt-get update -yqq
 apt-get install openjdk-8-jdk -yqq
 
 ## Build Needed Crypto
-## Build secp 
+# Build secp 
 apt-get install autoconf libtool -yqq
 cd ${PROJECT_ROOT_DIR}
 cd crypto
@@ -111,9 +111,12 @@ apt-get install haskell-platform -yqq
 
 ## Install BNFC Converter 
 # ref: http://bnfc.digitalgrammars.com/
+bnfc_tmp_dir="$(mktemp -dt bnfcbuild.XXXXXX)"
+cd ${bnfc_tmp_dir}
 git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
-cabal install --global
+${sudo} cabal install --global
+cd ${project_root}
 
 ## Install SBT 
 cd ${PROJECT_ROOT_DIR}
