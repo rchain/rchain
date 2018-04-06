@@ -23,6 +23,10 @@ case class PrettyPrinter(freeShift: Int,
                          rotation: Int,
                          maxVarCount: Int) {
 
+  def setBoundId(): String = rotate(increment(baseId))
+
+  def setBaseId(): String = increment(baseId)
+
   def buildString(e: Expr): String =
     e.exprInstance match {
       case ENegBody(ENeg(p)) => "-" + buildString(p.get)
@@ -110,7 +114,7 @@ case class PrettyPrinter(freeShift: Int,
               this
                 .copy(
                   freeShift = boundShift + free,
-                  boundShift = 0
+                  freeId = boundId
                 )
                 .buildPattern(bind.patterns)
             (free + patternFree, string + bindString + {
@@ -120,6 +124,7 @@ case class PrettyPrinter(freeShift: Int,
               else ""
             })
         }
+
         "for( " + bindsString + " ) { " + this
           .copy(boundShift = boundShift + totalFree)
           .buildString(r.body.get) + " }"
@@ -138,7 +143,13 @@ case class PrettyPrinter(freeShift: Int,
         "match " + buildString(m.target.get) + " { " +
           ("" /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
-              string + buildMatchCase(matchCase) + {
+              string +
+                this
+                  .copy(
+                    freeShift = boundShift,
+                    freeId = boundId
+                  )
+                  .buildMatchCase(matchCase) + {
                 if (i != m.cases.length - 1) " ; "
                 else ""
               }
@@ -173,7 +184,7 @@ case class PrettyPrinter(freeShift: Int,
     val newId = incChar(id.last).toString
     if (newId equals "a")
       if (id.length > 1) increment(id.dropRight(1)) + newId
-      else newId * 2
+      else "aa"
     else id.dropRight(1) + newId
   }
 
@@ -201,9 +212,9 @@ case class PrettyPrinter(freeShift: Int,
           string +
             this
               .copy(
-                freeId = boundId,
-                boundId = rotate(increment(baseId)),
-                baseId = increment(baseId)
+                boundShift = 0,
+                boundId = setBoundId(),
+                baseId = setBaseId()
               )
               .buildString(pattern) + {
             if (i != patterns.length - 1) ", "
@@ -213,15 +224,13 @@ case class PrettyPrinter(freeShift: Int,
 
   private def buildMatchCase(matchCase: MatchCase): String = {
     val patternFree: Int = matchCase.pattern.get.freeCount
-    "case " +
-      this
-        .copy(
-          freeShift = boundShift,
-          boundShift = 0,
-          freeId = boundId,
-          boundId = rotate(increment(boundId))
-        )
-        .buildString(matchCase.pattern.get) + " => " +
+    this
+      .copy(
+        boundShift = 0,
+        boundId = setBoundId(),
+        baseId = setBaseId()
+      )
+      .buildString(matchCase.pattern.get) + " => " +
       this
         .copy(boundShift = boundShift + patternFree)
         .buildString(matchCase.source.get)
