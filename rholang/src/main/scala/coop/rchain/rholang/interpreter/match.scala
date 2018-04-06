@@ -371,15 +371,10 @@ object SpatialMatcher {
     }
 
   def spatialMatch(target: ReceiveBind, pattern: ReceiveBind): OptionalFreeMap[Unit] =
-    for {
-      _ <- spatialMatch(target.source.get, pattern.source.get)
-      _ <- {
-        if (target.patterns == pattern.patterns)
-          StateT.pure[Option, FreeMap, Unit](Unit)
-        else
-          StateT.liftF[Option, FreeMap, Unit](None)
-      }
-    } yield Unit
+    if (target.patterns != pattern.patterns)
+      StateT.liftF[Option, FreeMap, Unit](None)
+    else
+      spatialMatch(target.source.get, pattern.source.get)
 
   def spatialMatch(target: MatchCase, pattern: MatchCase): OptionalFreeMap[Unit] =
     if (target.pattern != pattern.pattern)
