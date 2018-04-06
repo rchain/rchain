@@ -34,6 +34,7 @@ docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
 docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
 if [[ "${TRAVIS_BRANCH}" = "master" \
     || "${TRAVIS_BRANCH}" = "dev" \
+    || "${TRAVIS_BRANCH}" = "OPS-117" \
     || "${TRAVIS_BRANCH}" = "ops-test" ]]; then
     echo "Running Travis build and push."
     docker exec -it ${PUSHER_DOCKER_NAME} bash -c "./rchain-docker-build-push.sh \
