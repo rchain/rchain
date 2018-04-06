@@ -6,9 +6,9 @@ fi
 
 if [[ "$#" != "0" && "$#" != "3" ]]; then
     echo "Invalid number of parameters."
-    echo "Example: $0 dev https://github.com/rchain/rchain jeremybusk/rnode:mytagname"
-    echo "You will be asked for you docker repo password." 
-    echo "Type Docker repo user/pass in correctly the first time or script will fail."
+    echo "Example: sudo $0 <branch name> <repo url> <docker hub repo:tag>"
+    echo "Example: sudo $0 dev https://github.com/rchain/rchain myrepo/rnode:mytagname"
+    echo "If local build/push you will be asked for you Docker repo user/password." 
     exit
 fi
 

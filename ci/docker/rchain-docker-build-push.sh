@@ -5,8 +5,8 @@ fi
 
 if [[ "$#" != "0" && "$#" != "3" ]]; then
     echo "Invalid amount of parameters."
-    echo "Example: $0 <branch name> <repo url> <docker hub repo>"
-    echo "Example: $0 mybranch https://github.com/myrepo/rchain myrepo/rchain:latest"
+    echo "Example: sudo $0 <branch name> <repo url> <docker hub repo>"
+    echo "Example: sudo $0 mybranch https://github.com/myrepo/rchain myrepo/rchain:latest"
     exit
 fi
 
