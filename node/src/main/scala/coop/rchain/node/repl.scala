@@ -13,7 +13,11 @@ class Repl(host: String, port: Int) {
   private val blockingStub = ReplGrpc.blockingStub(channel)
 
   def run(line: String): Task[String] = Task.delay {
-    blockingStub.run(ReplRequest(line)).output
+    blockingStub.run(CmdRequest(line)).output
+  }
+
+  def eval(fileName: String): Task[String] = Task.delay {
+    blockingStub.eval(EvalRequest(fileName)).output
   }
 
   def shutdown(): Unit =

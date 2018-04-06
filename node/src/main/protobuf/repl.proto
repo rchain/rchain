@@ -3,14 +3,18 @@ syntax = "proto3";
 package coop.rchain.node;
 
 service Repl {
-  rpc Run (ReplRequest) returns (ReplResponse) {}
+  rpc Run (CmdRequest) returns (ReplResponse) {}
+  rpc Eval (EvalRequest) returns (ReplResponse) {}
 }
 
-message ReplRequest {
+message CmdRequest {
   string line = 1;
+}
+
+message EvalRequest {
+  string fileName = 1;
 }
 
 message ReplResponse {
   string output = 1;
 }
-
