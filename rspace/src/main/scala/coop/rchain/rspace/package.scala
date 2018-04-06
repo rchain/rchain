@@ -3,7 +3,6 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.sequence
 
 import scala.annotation.tailrec
 import scala.util.Random
@@ -30,17 +29,17 @@ package object rspace {
         }
     }
 
-  private[rspace] def extractDataCandidates[C, P, A, K](
-      store: IStore[C, P, A, K],
-      channels: Seq[C],
-      patterns: Seq[P])(txn: store.T)(implicit m: Match[P, A]): Option[Seq[DataCandidate[C, A]]] = {
+  private[rspace] def extractDataCandidates[C, P, A, K](store: IStore[C, P, A, K],
+                                                        channels: Seq[C],
+                                                        patterns: Seq[P])(txn: store.T)(
+      implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
     val options: Seq[Option[DataCandidate[C, A]]] =
       channels.zip(patterns).map {
         case (channel, pattern) =>
           val indexedData: Seq[(Datum[A], Int)] = store.getData(txn, Seq(channel)).zipWithIndex
           findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
       }
-    sequence(options)
+    options.toList.sequence[Option, DataCandidate[C, A]]
   }
 
   private[rspace] def extractDataCandidates[C, P, A, K](
@@ -48,7 +47,7 @@ package object rspace {
       channels: Seq[C],
       patterns: Seq[P],
       batChannel: C,
-      data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[Seq[DataCandidate[C, A]]] = {
+      data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
     val options: Seq[Option[DataCandidate[C, A]]] =
       channels.zip(patterns).map {
         case (channel, pattern) if channel == batChannel =>
@@ -58,7 +57,7 @@ package object rspace {
           val indexedData: Seq[(Datum[A], Int)] = store.getData(txn, Seq(channel)).zipWithIndex
           findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
       }
-    sequence(options)
+    options.toList.sequence[Option, DataCandidate[C, A]]
   }
 
   /** Searches the store for data matching all the given patterns at the given channels.
@@ -93,7 +92,7 @@ package object rspace {
                           channels: Seq[C],
                           patterns: Seq[P],
                           continuation: K,
-                          persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])] = {
+                          persist: Boolean)(implicit m: Match[P, A]): Option[(K, List[A])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -128,7 +127,7 @@ package object rspace {
   def install[C, P, A, K](store: IStore[C, P, A, K],
                           channels: Seq[C],
                           patterns: Seq[P],
-                          continuation: K)(implicit m: Match[P, A]): Option[(K, Seq[A])] = {
+                          continuation: K)(implicit m: Match[P, A]): Option[(K, List[A])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -227,7 +226,7 @@ package object rspace {
     * @tparam K A type representing a continuation
     */
   def produce[C, P, A, K](store: IStore[C, P, A, K], channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, A]): Option[(K, Seq[A])] =
+      implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
       logger.debug(
@@ -251,7 +250,7 @@ package object rspace {
               ()
           }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
-          Some(continuation, dataCandidates.map(_.datum.a))
+          Some(continuation, dataCandidates.map(_.datum.a).toList)
         case None =>
           logger.debug(s"produce: no matching continuation found")
           store.putDatum(txn, Seq(channel), Datum(data, persist))
