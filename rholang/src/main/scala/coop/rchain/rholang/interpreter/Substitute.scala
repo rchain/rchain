@@ -55,7 +55,7 @@ object Substitute {
   def substitute(term: Par)(implicit env: Env[Par]): Par = {
 
     def subExp(expxs: Seq[Expr]): Par =
-      (expxs :\ Par()) { (expr, par) =>
+      (expxs :\ VectorPar()) { (expr, par) =>
         expr.exprInstance match {
           case EVarBody(e @ EVar(_)) =>
             maybeSubstitute(e) match {
@@ -67,7 +67,7 @@ object Substitute {
       }
 
     def subEval(evals: Seq[Eval]): Par =
-      evals.foldRight(Par()) { (eval: Eval, par: Par) =>
+      evals.foldRight(VectorPar()) { (eval: Eval, par: Par) =>
         maybeSubstitute(eval) match {
           case Left(plainEval)   => par.prepend(plainEval)
           case Right(droppedPar) => droppedPar ++ par

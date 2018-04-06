@@ -12,7 +12,7 @@ import coop.rchain.models.Var.VarInstance._
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
 
-import implicits.{ExprLocallyFree, GPrivateLocallyFree, ParExtension, SendLocallyFree}
+import implicits.{ExprLocallyFree, GPrivateLocallyFree, ParExtension, SendLocallyFree, VectorPar}
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -147,7 +147,8 @@ object SpatialMatcher {
                     StateT.liftF(Stream.Empty)
               }
             for {
-              p          <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) => m.getOrElse(level, Par()))
+              p <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) =>
+                    m.getOrElse(level, VectorPar()))
               collectPar <- foldRemainder(rem, p)
               _          <- StateT.modify[Stream, FreeMap]((m: FreeMap) => m + (level -> collectPar))
             } yield Unit
