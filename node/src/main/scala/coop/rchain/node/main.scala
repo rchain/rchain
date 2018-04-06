@@ -44,7 +44,7 @@ object Main {
   private def executeEvaluate(fileName: String, conf: Conf): Unit = {
     import monix.execution.Scheduler.Implicits.global
     val repl = new Repl(conf.grpcHost(), conf.grpcPort())
-    repl.eval(fileName) >>= (result => Task.delay(println(result)))
+    println(repl.eval(fileName).unsafeRunSync)
   }
 
   private def executeNode(conf: Conf): Unit = {
