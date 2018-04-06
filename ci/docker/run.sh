@@ -34,8 +34,6 @@ if [[ $(docker ps -aq -f name=${PUSHER_DOCKER_NAME}) ]]; then
     docker rm -f ${PUSHER_DOCKER_NAME}
 fi
 
-# Copy and run build and push docker script in docker pusher container from above.
-docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
 if [[ "${TRAVIS}" = "true" ]]; then
     # Start docker container with access to docker.sock so it can run view/run docker images.
     docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
@@ -47,12 +45,16 @@ if [[ "${TRAVIS}" = "true" ]]; then
     # See https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/.
 
     echo "Running Travis build and will push to Docker Hub repo deppending on branch name."
+    # Copy and run build and push docker script in docker pusher container from above.
+    docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
     docker exec -it ${PUSHER_DOCKER_NAME} bash -c "./rchain-docker-build-push.sh \
         ${branch_name} ${git_repo} ${docker_dst_repo}"
 else
     echo "Running local build and push to Docker repo."
     docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
         --name ${PUSHER_DOCKER_NAME} ubuntu:16.04
+    # Copy and run build and push docker script in docker pusher container from above.
+    docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
     docker exec -it ${PUSHER_DOCKER_NAME} bash -c "./rchain-docker-build-push.sh \
         ${branch_name} ${git_repo} ${docker_dst_repo}"
 fi
