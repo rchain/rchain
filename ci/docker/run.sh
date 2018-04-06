@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ## Set BASH environment so it will fail properly throwing exit code
-set -exo pipefail
+#set -exo pipefail
 
 # Must 
 if [[ ! -z "$1" && ! -z "$2" && ! -z "$3" ]] || [[ $# -eq 0 ]]; then
@@ -8,8 +8,8 @@ if [[ ! -z "$1" && ! -z "$2" && ! -z "$3" ]] || [[ $# -eq 0 ]]; then
     echo "Example: $0 dev https://github.com/rchain/rchain jeremybusk/rnode:mytagname"
     echo "You will be asked for you docker repo password." 
     echo "Type Docker repo user/pass in correctly the first time or script will fail."
+    exit
 fi
-
 
 ## Prep docker image 
 # pusher_docker_name="rchain-pusher-$(mktemp | awk -F. '{print $2}')"
