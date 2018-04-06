@@ -45,12 +45,10 @@ elif [[ "${TRAVIS}" = "true" ]]; then
     echo "Currently the only Travis branches master and dev pushed to docker hub."
     echo "Your branch ${TRAVIS_BRANCH} will not be pushed"
 elif [[ ! -z "$1" && ! -z "$2" && ! -z "$3" ]]; then
-    # $(git rev-parse --abbrev-ref HEAD)
-    # dev https://github.com/rchain/rchain rchain/rnode:mytagname
     echo "Running custom build"
     custom_branch_name=$1
     custom_git_repo=$2
-	custom_docker_dst_repo="$3"
+    custom_docker_dst_repo="$3"
     docker exec -it ${pusher_docker_name} bash -c "./rchain-docker-build-push.sh \
         ${custom_branch_name} ${custom_git_repo} ${custom_docker_dst_repo}"
 else
