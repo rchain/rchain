@@ -42,7 +42,7 @@ class GrpcServer(executionContext: ExecutionContext, port: Int, runtime: Runtime
       case Left(er) =>
         Future.successful(ReplResponse(s"Error: $er"))
       case Right(term) =>
-        evaluator(runtime.reducer, term).attempt
+        evaluate(runtime.reducer, term).attempt
           .map {
             case Left(ex) => s"Caught boxed exception: $ex"
             case Right(_) => s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"

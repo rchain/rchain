@@ -6,14 +6,14 @@ import java.security.MessageDigest
 
 import cats.implicits._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
-
-import coop.rchain.rspace.internal.scodecs._
-import scala.collection.JavaConverters._
 import scodec.Codec
 import scodec.bits._
+
+import scala.collection.JavaConverters._
 
 /**
   * The main store class.
@@ -174,6 +174,17 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
+  private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: List[C]): Unit = {
+    val keyCs = hashCs(channels)
+    readWaitingContinuationBytesList(txn, keyCs).foreach { _ =>
+      writeWaitingContinuationBytesList(txn, keyCs, List.empty)
+    }
+    readDatumBytesList(txn, keyCs).foreach { _ =>
+      writeDatumBytesList(txn, keyCs, List.empty)
+    }
+    for (c <- channels) removeJoin(txn, c, channels)
+  }
+
   private[rspace] def addJoin(txn: T, c: C, cs: List[C]): Unit = {
     val joinKey = hashCs(List(c))
     val oldCsList =
@@ -197,26 +208,28 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
     val joinKey = hashCs(List(c))
-    val exList =
-      Option(_dbJoins.get(txn, joinKey))
-        .map(toBytesLists)
-        .map(_.map(fromBytesList[C]))
-        .getOrElse(List.empty[List[C]])
-    val idx = exList.indexOf(cs)
-    if (idx >= 0) {
-      val csKey = hashCs(cs)
-      if (_dbPsKs.get(txn, csKey) == null) {
-        val resList = dropIndex(exList, idx)
-        if (resList.nonEmpty) {
-          _dbJoins.put(txn, joinKey, toByteBuffer(resList.map(toBytesList(_))))
-        } else {
-          _dbJoins.delete(txn, joinKey)
-          collectGarbage(txn, joinKey, joinsCollected = true)
-        }
+    Option(_dbJoins.get(txn, joinKey))
+      .map(toBytesLists)
+      .map(_.map(fromBytesList[C]))
+      .map(exList => (exList, exList.indexOf(cs)))
+      .map {
+        case (exList, idx) =>
+          if (idx >= 0) {
+            val csKey = hashCs(cs)
+            if (_dbPsKs.get(txn, csKey) == null) {
+              val resList = dropIndex(exList, idx)
+              if (resList.nonEmpty) {
+                _dbJoins.put(txn, joinKey, toByteBuffer(resList.map(toBytesList(_))))
+              } else {
+                _dbJoins.delete(txn, joinKey)
+                collectGarbage(txn, joinKey, joinsCollected = true)
+              }
+            }
+          } else {
+            throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exList")
+          }
       }
-    } else {
-      throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exList")
-    }
+      .getOrElse(())
   }
 
   private[rspace] def removeAllJoins(txn: T, c: C): Unit = {

@@ -1,17 +1,9 @@
 package coop.rchain.node
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import java.util.concurrent.TimeoutException
-import coop.rchain.models.Par
-import coop.rchain.node.repl._
-
-import cats._, cats.data._, cats.implicits._
+import cats.implicits._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
-import Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
-import monix.execution.{CancelableFuture, Scheduler}
-import scala.concurrent.{ExecutionContext, Future}
 
 object Main {
 
@@ -24,12 +16,18 @@ object Main {
     }
   }
 
+  private def executeEvaluate(fileName: String, conf: Conf): Unit = {
+    import monix.execution.Scheduler.Implicits.global
+    val repl = new Repl(conf.grpcHost(), conf.grpcPort())
+    println(repl.eval(fileName).unsafeRunSync)
+  }
+
   private def executeRepl(conf: Conf): Unit = {
     import monix.execution.Scheduler.Implicits.global
 
     val repl = new Repl(conf.grpcHost(), conf.grpcPort())
     val recipe: Task[Unit] = for {
-      _    <- Task.delay(print("> "))
+      _    <- Task.delay(print("rholang> "))
       line <- Task.delay(scala.io.StdIn.readLine())
       _ <- line.trim match {
             case ""   => Task.delay(print("\n"))
@@ -39,12 +37,6 @@ object Main {
     } yield ()
 
     (Task.delay(println(repl.logo)) *> MonadOps.forever(recipe)).unsafeRunSync
-  }
-
-  private def executeEvaluate(fileName: String, conf: Conf): Unit = {
-    import monix.execution.Scheduler.Implicits.global
-    val repl = new Repl(conf.grpcHost(), conf.grpcPort())
-    println(repl.eval(fileName).unsafeRunSync)
   }
 
   private def executeNode(conf: Conf): Unit = {
