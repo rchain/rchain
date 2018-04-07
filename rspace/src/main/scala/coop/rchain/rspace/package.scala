@@ -4,6 +4,8 @@ import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.internal._
 
+import scala.collection.immutable.Set
+
 import scala.annotation.tailrec
 import scala.util.Random
 
@@ -36,7 +38,7 @@ package object rspace {
       channels.zip(patterns).map {
         case (channel, pattern) =>
           val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
-          findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
+          findMatchingDataCandidate(channel, indexedData, pattern)
       }
     options.sequence[Option, DataCandidate[C, A]]
   }
@@ -47,15 +49,30 @@ package object rspace {
       patterns: List[P],
       batChannel: C,
       data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
-    val options: List[Option[DataCandidate[C, A]]] =
-      channels.zip(patterns).map {
-        case (channel, pattern) if channel == batChannel =>
-          val indexedData: List[(Datum[A], Int)] = List((data, -1))
-          findMatchingDataCandidate(channel, indexedData, pattern)
-        case (channel, pattern) =>
-          val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
-          findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
+
+    @tailrec
+    def loop(channelPatternPairs: List[(C, P)],
+             supply: Set[C],
+             acc: List[Option[DataCandidate[C, A]]]): List[Option[DataCandidate[C, A]]] =
+      channelPatternPairs match {
+        case Nil =>
+          acc.reverse
+        case (channel, pattern) :: tail if channel == batChannel && supply.contains(channel) =>
+          val indexedData = List((data, -1))
+          val maybeCand   = findMatchingDataCandidate(channel, indexedData, pattern)
+          loop(tail, supply - channel, maybeCand :: acc)
+        case (channel, pattern) :: tail if supply.contains(channel) =>
+          val indexedData = store.getAs(txn, List(channel)).zipWithIndex
+          val maybeCand   = findMatchingDataCandidate(channel, indexedData, pattern)
+          loop(tail, supply - channel, maybeCand :: acc)
+        case (channel, pattern) :: tail if supply.isEmpty =>
+          val indexedData = store.getAs(txn, List(channel)).zipWithIndex
+          val maybeCand   = findMatchingDataCandidate(channel, indexedData, pattern)
+          loop(tail, supply, maybeCand :: acc)
       }
+
+    val channelPatternPairs: List[(C, P)]          = channels.zip(patterns)
+    val options: List[Option[DataCandidate[C, A]]] = loop(channelPatternPairs, channels.toSet, Nil)
     options.sequence[Option, DataCandidate[C, A]]
   }
 
@@ -235,18 +252,15 @@ package object rspace {
           if (!persistK) {
             store.removePsK(txn, channels, continuationIndex)
           }
-          dataCandidates
-            .flatMap {
-              case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
-                if (!persistData && dataIndex >= 0) {
-                  store.removeA(txn, candidateChannel, dataIndex)
-                }
-                Some(candidateChannel)
-              case _ => None
-            }
-            .distinct
-            .foreach(store.removeJoin(txn, _, channels))
-
+          dataCandidates.foreach {
+            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
+              if (!persistData && dataIndex >= 0) {
+                store.removeA(txn, candidateChannel, dataIndex)
+              }
+              store.removeJoin(txn, candidateChannel, channels)
+            case _ =>
+              ()
+          }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           Some(continuation, dataCandidates.map(_.datum.a))
         case None =>

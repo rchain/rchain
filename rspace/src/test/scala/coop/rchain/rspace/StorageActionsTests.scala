@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
@@ -10,7 +10,10 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.scalatest._
 
-abstract class StorageActionsBase[T] extends FlatSpec with Matchers with OptionValues {
+trait StorageActionsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
+
+  type T = IStore[C, P, A, K] with ITestableStore[C, P]
+
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
   override def withFixture(test: NoArgTest): Outcome = {
@@ -23,12 +26,7 @@ abstract class StorageActionsBase[T] extends FlatSpec with Matchers with OptionV
   def withTestStore(f: T => Unit): Unit
 }
 
-trait StorageActionsTests
-    extends StorageActionsBase[
-      IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]] {
-
-  type TestStore =
-    IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
+trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
 
   /* Tests */
 
@@ -444,12 +442,14 @@ trait StorageActionsTests
                      persist = false)
 
     val r2 = produce(store, "ch1", "datum1", persist = false)
+    val r3 = produce(store, "ch1", "datum1", persist = false)
 
     r1 shouldBe None
-    r2 shouldBe defined
+    r2 shouldBe None
+    r3 shouldBe defined
 
-    runK(r2)
-    getK(r2).results shouldBe List(List("datum1", "datum1"))
+    runK(r3)
+    getK(r3).results shouldBe List(List("datum1", "datum1"))
 
     store.isEmpty shouldBe true
   }
@@ -888,7 +888,7 @@ trait StorageActionsTests
 
 class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOperationsTests {
 
-  override def withTestStore(f: TestStore => Unit): Unit = {
+  override def withTestStore(f: T => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
     testStore.clear()
     try {
@@ -904,11 +904,11 @@ class LMDBStoreActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll {
 
-  private[this] val dbDir = Files.createTempDirectory("rchain-storage-test-")
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 1024L
 
-  override def withTestStore(f: TestStore => Unit): Unit = {
-    val testStore =
-      LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
+  override def withTestStore(f: T => Unit): Unit = {
+    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     testStore.clear()
     try {
       f(testStore)
