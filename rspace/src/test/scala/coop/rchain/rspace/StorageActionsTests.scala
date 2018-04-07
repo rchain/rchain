@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import java.nio.file.{Files, Path}
 
-import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.extended._
@@ -10,25 +9,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.scalatest._
 
-trait StorageActionsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
-
-  type T = IStore[C, P, A, K] with ITestableStore[C, P]
-
-  val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
-
-  override def withFixture(test: NoArgTest): Outcome = {
-    logger.debug(s"Test: ${test.name}")
-    super.withFixture(test)
-  }
-
-  /** A fixture for creating and running a test with a fresh instance of the test store.
-    */
-  def withTestStore(f: T => Unit): Unit
-}
-
 trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
-
-  /* Tests */
 
   "produce" should
     "persist a piece of data in the store" in withTestStore { store =>
