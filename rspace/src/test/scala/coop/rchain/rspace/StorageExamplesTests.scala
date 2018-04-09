@@ -93,7 +93,178 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     runK(r4)
     getK(r4).results shouldBe List(List(alice, bob, bob))
 
-    println(store.toMap)
+    store.isEmpty shouldBe true
+  }
+
+  "CORE-365: A joined consume on multiple duplicate channels followed by the requisite produces" should
+    "return a continuation and the produced data" in withTestStore { store =>
+    val r1 = consume(
+      store,
+      List(
+        Channel("family"),
+        Channel("family"),
+        Channel("family"),
+        Channel("family"),
+        Channel("colleagues"),
+        Channel("colleagues"),
+        Channel("colleagues"),
+        Channel("friends"),
+        Channel("friends")
+      ),
+      List(
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake")
+      ),
+      new EntriesCaptor,
+      persist = false
+    )
+
+    r1 shouldBe None
+
+    val r2  = produce(store, Channel("friends"), bob, persist = false)
+    val r3  = produce(store, Channel("family"), carol, persist = false)
+    val r4  = produce(store, Channel("colleagues"), alice, persist = false)
+    val r5  = produce(store, Channel("friends"), bob, persist = false)
+    val r6  = produce(store, Channel("family"), carol, persist = false)
+    val r7  = produce(store, Channel("colleagues"), alice, persist = false)
+    val r8  = produce(store, Channel("colleagues"), alice, persist = false)
+    val r9  = produce(store, Channel("family"), carol, persist = false)
+    val r10 = produce(store, Channel("family"), carol, persist = false)
+
+    r2 shouldBe None
+    r3 shouldBe None
+    r4 shouldBe None
+    r5 shouldBe None
+    r6 shouldBe None
+    r7 shouldBe None
+    r8 shouldBe None
+    r9 shouldBe None
+    r10 shouldBe defined
+
+    runK(r10)
+    getK(r10).results shouldBe List(List(carol, carol, carol, carol, alice, alice, alice, bob, bob))
+
+    store.isEmpty shouldBe true
+  }
+
+  "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
+    "return a continuation and the produced data" in withTestStore { store =>
+    val r1 = produce(store, Channel("friends"), bob, persist = false)
+    val r2 = produce(store, Channel("family"), carol, persist = false)
+    val r3 = produce(store, Channel("colleagues"), alice, persist = false)
+    val r4 = produce(store, Channel("friends"), bob, persist = false)
+    val r5 = produce(store, Channel("family"), carol, persist = false)
+    val r6 = produce(store, Channel("colleagues"), alice, persist = false)
+    val r7 = produce(store, Channel("colleagues"), alice, persist = false)
+    val r8 = produce(store, Channel("family"), carol, persist = false)
+    val r9 = produce(store, Channel("family"), carol, persist = false)
+
+    r1 shouldBe None
+    r2 shouldBe None
+    r3 shouldBe None
+    r4 shouldBe None
+    r5 shouldBe None
+    r6 shouldBe None
+    r7 shouldBe None
+    r8 shouldBe None
+    r9 shouldBe None
+
+    val r10 = consume(
+      store,
+      List(
+        Channel("family"),
+        Channel("family"),
+        Channel("family"),
+        Channel("family"),
+        Channel("colleagues"),
+        Channel("colleagues"),
+        Channel("colleagues"),
+        Channel("friends"),
+        Channel("friends")
+      ),
+      List(
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake")
+      ),
+      new EntriesCaptor,
+      persist = false
+    )
+
+    r10 shouldBe defined
+    runK(r10)
+    getK(r10).results shouldBe List(List(carol, carol, carol, carol, alice, alice, alice, bob, bob))
+
+    store.isEmpty shouldBe true
+  }
+
+  "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
+    "return a continuation and the produced data" in withTestStore { store =>
+    val r1 = consume(
+      store,
+      List(
+        Channel("family"),
+        Channel("colleagues"),
+        Channel("family"),
+        Channel("friends"),
+        Channel("friends"),
+        Channel("family"),
+        Channel("colleagues"),
+        Channel("colleagues"),
+        Channel("family")
+      ),
+      List(
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Herbert"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Crystal Lake"),
+        CityMatch(city = "Herbert")
+      ),
+      new EntriesCaptor,
+      persist = false
+    )
+
+    r1 shouldBe None
+
+    val r2  = produce(store, Channel("friends"), bob, persist = false)
+    val r3  = produce(store, Channel("family"), carol, persist = false)
+    val r4  = produce(store, Channel("colleagues"), alice, persist = false)
+    val r5  = produce(store, Channel("friends"), bob, persist = false)
+    val r6  = produce(store, Channel("family"), carol, persist = false)
+    val r7  = produce(store, Channel("colleagues"), alice, persist = false)
+    val r8  = produce(store, Channel("colleagues"), alice, persist = false)
+    val r9  = produce(store, Channel("family"), carol, persist = false)
+    val r10 = produce(store, Channel("family"), carol, persist = false)
+
+    r2 shouldBe None
+    r3 shouldBe None
+    r4 shouldBe None
+    r5 shouldBe None
+    r6 shouldBe None
+    r7 shouldBe None
+    r8 shouldBe None
+    r9 shouldBe None
+    r10 shouldBe defined
+
+    runK(r10)
+    getK(r10).results shouldBe List(List(carol, alice, carol, bob, bob, carol, alice, alice, carol))
 
     store.isEmpty shouldBe true
   }
