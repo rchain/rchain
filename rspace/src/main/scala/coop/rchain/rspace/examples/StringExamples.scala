@@ -7,7 +7,6 @@ import coop.rchain.rspace.{Match, Serialize}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.collection.immutable.Seq
 
 object StringExamples {
 
@@ -28,14 +27,14 @@ object StringExamples {
     *
     * It captures the data it consumes.
     */
-  class StringsCaptor extends ((Seq[String]) => Unit) with Serializable {
+  class StringsCaptor extends ((List[String]) => Unit) with Serializable {
 
     @transient
-    private final lazy val res: ListBuffer[Seq[String]] = mutable.ListBuffer.empty[Seq[String]]
+    private final lazy val res: ListBuffer[List[String]] = mutable.ListBuffer.empty[List[String]]
 
-    final def results: Seq[Seq[String]] = res.toList
+    final def results: List[List[String]] = res.toList
 
-    final def apply(v1: Seq[String]): Unit = ignore(res += v1)
+    final def apply(v1: List[String]): Unit = ignore(res += v1)
 
     override def hashCode(): Int =
       res.hashCode() * 37
