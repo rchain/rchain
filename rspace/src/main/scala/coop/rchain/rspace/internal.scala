@@ -41,7 +41,7 @@ object internal {
     lazy val psKsBytesCodec: Codec[WaitingContinuationBytes] =
       (bytesListCodec :: byteVectorCodec :: bool).as[WaitingContinuationBytes]
 
-    lazy val psKsBytesListCodec: Codec[List[WaitingContinuationBytes]] =
+    lazy val waitingContinuationsBytesListCodec: Codec[List[WaitingContinuationBytes]] =
       listOfN(int32, psKsBytesCodec).as[List[WaitingContinuationBytes]]
 
     private[this] def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =

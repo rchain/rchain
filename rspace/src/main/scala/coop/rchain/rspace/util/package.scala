@@ -47,7 +47,7 @@ package object util {
       a.close()
     }
 
-  /** Drops the 'i'th element of a List.
+  /** Drops the 'i'th element of a list.
     */
   def dropIndex[T](xs: List[T], n: Int): List[T] = {
     val (l1, l2) = xs splitAt n

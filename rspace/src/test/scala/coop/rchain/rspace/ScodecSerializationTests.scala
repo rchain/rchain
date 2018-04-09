@@ -33,8 +33,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
                                ByteVector(Array[Byte](4, 5, 6)),
                                true))
 
-    val arr = toBitVector(psks, scodecs.psKsBytesListCodec)
-    val res = fromBitVector(arr, scodecs.psKsBytesListCodec)
+    val arr = toBitVector(psks, scodecs.waitingContinuationsBytesListCodec)
+    val res = fromBitVector(arr, scodecs.waitingContinuationsBytesListCodec)
 
     res shouldBe psks
   }

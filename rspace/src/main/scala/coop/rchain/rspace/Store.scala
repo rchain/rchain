@@ -124,13 +124,13 @@ abstract class Store[C, P, A, K]()(implicit
   private[this] def readPsKsBytesList(txn: T, keyCs: H): Option[List[WaitingContinuationBytes]] =
     _dbPsKs
       .get(txn, keyCs)
-      .map(fromByteBuffer(_, psKsBytesListCodec))
+      .map(fromByteBuffer(_, waitingContinuationsBytesListCodec))
 
   private[this] def writePsKsBytesList(txn: T,
                                        keyCs: H,
                                        values: List[WaitingContinuationBytes]): Unit =
     if (values.nonEmpty) {
-      _dbPsKs.put(txn, keyCs, toByteBuffer(values, psKsBytesListCodec))
+      _dbPsKs.put(txn, keyCs, toByteBuffer(values, waitingContinuationsBytesListCodec))
     } else {
       _dbPsKs.delete(txn, keyCs)
       collectGarbage(txn, keyCs, psKsCollected = true)
