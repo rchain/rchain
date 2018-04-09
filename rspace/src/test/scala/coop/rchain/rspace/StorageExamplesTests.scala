@@ -10,8 +10,8 @@ import org.scalatest.BeforeAndAfterAll
 
 trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
 
-  "CORE-365: A joined consume on duplicate channels given twice followed by two produces on the same channel" should
-    "work" in withTestStore { store =>
+  "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
+    "return a continuation and the produced data" in withTestStore { store =>
     val r1 = consume(
       store,
       List(Channel("friends"), Channel("friends")),
@@ -37,7 +37,7 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 
   "CORE-365: Two produces on the same channel followed by a joined consume on duplicates of that channel" should
-    "work" in withTestStore { store =>
+    "return a continuation and the produced data" in withTestStore { store =>
     val r1 = produce(store, Channel("friends"), bob, persist = false)
 
     r1 shouldBe None
@@ -59,13 +59,11 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     runK(r3)
     getK(r3).results shouldBe List(List(bob, bob))
 
-    println(store.toMap)
-
     store.isEmpty shouldBe true
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
-    "work" in withTestStore { store =>
+    "return a continuation and the produced data" in withTestStore { store =>
     val r1 = consume(
       store,
       List(Channel("colleagues"), Channel("friends"), Channel("friends")),
