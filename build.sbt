@@ -24,6 +24,16 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 
 lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings
 
+lazy val shared = (project in file("shared"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      monix
+    )
+  )
+
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
@@ -50,7 +60,7 @@ lazy val comm = (project in file("comm"))
       PB.gens.java                        -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
     )
-  )
+  ).dependsOn(shared)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
