@@ -19,13 +19,13 @@ package object util {
       true
     } else {
       val mainParent = for {
-        hdr <- target.header
+        hdr        <- target.header
         parentHash <- hdr.parentsHashList.headOption
         mainParent <- blocks.get(parentHash)
       } yield mainParent
       mainParent match {
         case Some(parent) => isInMainChain(blocks, candidate, parent)
-        case None => false
+        case None         => false
       }
     }
 }
