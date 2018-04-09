@@ -245,7 +245,7 @@ package object rspace {
               ()
           }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
-          Some(continuation, dataCandidates.map(_.datum.a).toList)
+          Some(continuation, dataCandidates.map(_.datum.a))
         case None =>
           logger.debug(s"produce: no matching continuation found")
           store.putA(txn, List(channel), Datum(data, persist))
