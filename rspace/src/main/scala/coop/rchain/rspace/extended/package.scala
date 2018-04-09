@@ -1,5 +1,4 @@
 package coop.rchain.rspace
-import scala.collection.immutable.Seq
 
 package object extended {
 
@@ -13,6 +12,6 @@ package object extended {
 
   /** Runs a list of continuations with the accompanying data
     */
-  def runKs[T](t: Seq[Option[(Function1[T, Unit], T)]]): Unit =
+  def runKs[T](t: List[Option[(Function1[T, Unit], T)]]): Unit =
     t.foreach { case Some((k, data)) => k(data); case None => () }
 }
