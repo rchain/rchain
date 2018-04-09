@@ -9,18 +9,18 @@ import coop.rchain.crypto.hash.Sha256
 import scala.collection.mutable
 
 class CasperUtilTest extends FlatSpec with Matchers {
-  var resourceCounter = 0
+  val resourceCounter: Iterator[Int] = Iterator.from(0)
 
   "isInMainChain" should "classify appropriately" in {
     val chain = mutable.HashMap[ByteString, BlockMessage]()
 
-    val genesis: BlockMessage = createBlockWithCounterBump(Seq())
+    val genesis: BlockMessage = createBlock(Seq())
     chain += (genesis.blockHash -> genesis)
 
-    val blockMessage2: BlockMessage = createBlockWithCounterBump(Seq(genesis.blockHash))
+    val blockMessage2: BlockMessage = createBlock(Seq(genesis.blockHash))
     chain += (blockMessage2.blockHash -> blockMessage2)
 
-    val blockMessage3: BlockMessage = createBlockWithCounterBump(Seq(blockMessage2.blockHash))
+    val blockMessage3: BlockMessage = createBlock(Seq(blockMessage2.blockHash))
     chain += (blockMessage3.blockHash -> blockMessage3)
 
     isInMainChain(chain, genesis, blockMessage3) should be(true)
@@ -32,17 +32,17 @@ class CasperUtilTest extends FlatSpec with Matchers {
   "isInMainChain" should "classify diamond DAGs appropriately" in {
     val chain = mutable.HashMap[ByteString, BlockMessage]()
 
-    val genesis: BlockMessage = createBlockWithCounterBump(Seq())
+    val genesis: BlockMessage = createBlock(Seq())
     chain += (genesis.blockHash -> genesis)
 
-    val blockMessage2: BlockMessage = createBlockWithCounterBump(Seq(genesis.blockHash))
+    val blockMessage2: BlockMessage = createBlock(Seq(genesis.blockHash))
     chain += (blockMessage2.blockHash -> blockMessage2)
 
-    val blockMessage3: BlockMessage = createBlockWithCounterBump(Seq(genesis.blockHash))
+    val blockMessage3: BlockMessage = createBlock(Seq(genesis.blockHash))
     chain += (blockMessage3.blockHash -> blockMessage3)
 
     val blockMessage4: BlockMessage =
-      createBlockWithCounterBump(Seq(blockMessage2.blockHash, blockMessage3.blockHash))
+      createBlock(Seq(blockMessage2.blockHash, blockMessage3.blockHash))
     chain += (blockMessage4.blockHash -> blockMessage4)
 
     isInMainChain(chain, genesis, blockMessage2) should be(true)
@@ -52,13 +52,9 @@ class CasperUtilTest extends FlatSpec with Matchers {
     isInMainChain(chain, blockMessage3, blockMessage4) should be(false)
   }
 
-  private def createBlockWithCounterBump(parentsHashList: Seq[ByteString]) = {
-    resourceCounter += 1
-    createBlock(parentsHashList)
-  }
-
   private def createBlock(parentsHashList: Seq[ByteString]) = {
-    val uniqueResource = Resource(ProduceResource(Produce(resourceCounter)))
+    val resourceId     = resourceCounter.next()
+    val uniqueResource = Resource(ProduceResource(Produce(resourceId)))
     val postState      = RChainState().withResources(Seq(uniqueResource))
     val postStateHash  = Sha256.hash(postState.toByteArray)
     val header = Header()
