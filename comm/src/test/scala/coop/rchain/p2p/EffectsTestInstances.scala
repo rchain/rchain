@@ -2,6 +2,7 @@ package coop.rchain.p2p
 
 import coop.rchain.comm._, CommError._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
+import coop.rchain.p2p.effects._
 import coop.rchain.catscontrib._
 import cats._, cats.data._, cats.implicits._
 

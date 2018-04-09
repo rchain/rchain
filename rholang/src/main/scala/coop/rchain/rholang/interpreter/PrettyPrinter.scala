@@ -23,7 +23,7 @@ case class PrettyPrinter(freeShift: Int,
                          rotation: Int,
                          maxVarCount: Int) {
 
-  def boundId: String = rotate(baseId)
+  def boundId: String     = rotate(baseId)
   def setBaseId(): String = increment(baseId)
 
   def buildString(e: Expr): String =
@@ -81,7 +81,7 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level) => s"$freeId${freeShift + level}"
+      case FreeVar(level)  => s"$freeId${freeShift + level}"
       case BoundVar(level) => s"$boundId${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
@@ -90,7 +90,7 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(c: Channel): String =
     c.channelInstance match {
-      case Quote(p) => "@{" + buildString(p) + "}"
+      case Quote(p)    => "@{" + buildString(p) + "}"
       case ChanVar(cv) => buildString(cv)
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ChannelInstance.Empty => "@Nil"
@@ -203,11 +203,10 @@ case class PrettyPrinter(freeShift: Int,
   private def buildPattern(patterns: Seq[Channel]): (Int, String) =
     ((0, "") /: patterns.zipWithIndex) {
       case ((patternsFree, string), (pattern, i)) =>
-        (patternsFree + freeCount(pattern),
-          string + buildString(pattern) + {
-            if (i != patterns.length - 1) ", "
-            else ""
-          })
+        (patternsFree + freeCount(pattern), string + buildString(pattern) + {
+          if (i != patterns.length - 1) ", "
+          else ""
+        })
     }
 
   private def buildMatchCase(matchCase: MatchCase): String = {
