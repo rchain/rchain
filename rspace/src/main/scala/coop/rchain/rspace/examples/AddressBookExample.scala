@@ -2,7 +2,7 @@ package coop.rchain.rspace.examples
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
-import cats.implicits._
+import scala.collection.immutable.Seq
 
 import coop.rchain.rspace._
 import coop.rchain.rspace.extended._
@@ -28,9 +28,9 @@ object AddressBookExample {
 
   /* Here we define a type for continuations */
 
-  class Printer extends ((List[Entry]) => Unit) with Serializable {
+  class Printer extends ((Seq[Entry]) => Unit) with Serializable {
 
-    def apply(entries: List[Entry]): Unit =
+    def apply(entries: Seq[Entry]): Unit =
       entries.foreach {
         case Entry(name, address, email, phone) =>
           val nameStr = s"${name.last}, ${name.first}"
@@ -159,7 +159,7 @@ object AddressBookExample {
     assert(pres2.nonEmpty)
     assert(pres3.isEmpty)
 
-    runKs(List(pres1, pres2))
+    runKs(Seq(pres1, pres2))
 
     store.close()
   }
@@ -198,7 +198,7 @@ object AddressBookExample {
     assert(cres2.isDefined)
     assert(cres3.isEmpty)
 
-    runKs(List(cres1, cres2))
+    runKs(Seq(cres1, cres2))
 
     Console.printf(store.toMap.toString())
 
