@@ -58,8 +58,8 @@ case class LMDBStore[C, P, A, K](env: Env[ByteBuffer])(implicit
   import coop.rchain.rspace.LMDBStore._
 
   override val _dbKeys  = LMDBKvTable(env.openDbi(keysTableName, MDB_CREATE))
-  override val _dbPsKs  = LMDBKvTable(env.openDbi(waitingContinuationsTableName, MDB_CREATE))
-  override val _dbAs    = LMDBKvTable(env.openDbi(dataTableName, MDB_CREATE))
+  override val _dbPsKs  = LMDBKvTable(env.openDbi(psKsTableName, MDB_CREATE))
+  override val _dbAs    = LMDBKvTable(env.openDbi(asTableName, MDB_CREATE))
   override val _dbJoins = LMDBKvTable(env.openDbi(joinsTableName, MDB_CREATE))
 
   private[rspace] type T = Txn[ByteBuffer]
@@ -91,10 +91,10 @@ case class LMDBStore[C, P, A, K](env: Env[ByteBuffer])(implicit
 }
 
 object LMDBStore {
-  private[LMDBStore] val keysTableName: String                 = "Keys"
-  private[LMDBStore] val waitingContinuationsTableName: String = "WaitingContinuations"
-  private[LMDBStore] val dataTableName: String                 = "Data"
-  private[LMDBStore] val joinsTableName: String                = "Joins"
+  private[LMDBStore] val keysTableName: String  = "Keys"
+  private[LMDBStore] val psKsTableName: String  = "PsKs"
+  private[LMDBStore] val asTableName: String    = "As"
+  private[LMDBStore] val joinsTableName: String = "Joins"
 
   object directBufferAllocator extends IBufferAllocator {
     override def toByteBuffer(bytes: Array[Byte]): ByteBuffer = {
