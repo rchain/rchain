@@ -13,10 +13,22 @@ You may also want to install `docker-compose` version that supports Docker Compo
 ### Quick Start 
 
 In the directory of this README run 
-```
-sudo ./run.sh
-```
-The script and Docker will take care of the rest. From the code you can see that it creates a Ubuntu 16.04 LTS container and runs the "rchain-docker-build-push.sh" script in it. 
+./run.sh <branch name> <git repo url> <docker hub destination repo>
 
-Example: ./run.sh <branch name> <repo url> <docker hub repo>
-Example: ./run.sh dev https://github.com/rchain/rchain jeremybusk/rnode:yourtagname
+```
+./run.sh dev https://github.com/rchain/rchain yourdestinationrepo/rnode:yourtagname
+```
+
+If on CI platform, like Travis, just run
+```
+./run.sh
+```
+
+The "run.sh" script builds a docker container with docker.sock privileges, creates an Ubuntu 16.04 LTS container and runs the "rchain-docker-build-push.sh" script in it. This was built to be fully autonomous. It requires Docker running on the build host. 
+
+To login to Docker repo manually and push local container image 
+docker tag <my source image id or name> <my destination repo:tag>
+docker login
+<enter username>
+<enter pass>
+docker push myuserorg/myrepo:mytag

@@ -149,9 +149,3 @@ if [[ ${docker_dst_repo} ]]; then
         echo "Container image not pushed."
     fi
 fi
-
-echo """Login to docker hub manually and push docker image 
-docker login -u <username>
-<enter pass>
-docker push ${docker_dst_repo}:<your specific tag>
-"""
