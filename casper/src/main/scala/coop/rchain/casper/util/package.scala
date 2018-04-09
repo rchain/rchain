@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Bond, RChainState}
 
 import scala.annotation.tailrec
-import scala.collection.mutable
+import scala.collection
 
 package object util {
   /*
@@ -16,7 +16,7 @@ package object util {
    */
   // TODO: Move into BlockDAG and remove corresponding param once that is moved over from simulator
   @tailrec
-  def isInMainChain(blocks: mutable.Map[ByteString, BlockMessage],
+  def isInMainChain(blocks: collection.Map[ByteString, BlockMessage],
                     candidate: BlockMessage,
                     target: BlockMessage): Boolean =
     if (candidate == target) {
