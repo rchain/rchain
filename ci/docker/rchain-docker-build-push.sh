@@ -42,13 +42,6 @@ PROJECT_ROOT_DIR=$(pwd -P)
 git checkout ${branch_name} 
 
 ### Install all dependencies on Ubuntu 16.04 LTS (Xenial Xerus) for RChain dev environment.
-## Detect if running in docker container - setup using sudo accordingly.
-if [[ $(cat /proc/self/cgroup  | grep docker) = *docker* ]]; then
-    echo "Running in docker container!"
-    sudo=""
-else
-    sudo="sudo"
-fi
 
 ## Verify operating system (OS) version is Ubuntu 16.04 LTS (Xenial Xerus)
 # Add more OS versions as necessary. 
@@ -110,7 +103,7 @@ bnfc_tmp_dir="$(mktemp -dt bnfcbuild.XXXXXX)"
 cd ${bnfc_tmp_dir}
 git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
-${sudo} cabal install --global
+cabal install --global
 cd ${project_root}
 
 ## Install SBT 
