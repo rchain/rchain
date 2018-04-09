@@ -41,10 +41,10 @@ case class InMemoryStore[C, P, A, K]()(implicit
 
   val lock = new StampedLock()
 
-  override val _dbKeys: KeyValueTable                 = InMemoryKeyValueTable()
-  override val _dbData: KeyValueTable                 = InMemoryKeyValueTable()
-  override val _dbWaitingContinuations: KeyValueTable = InMemoryKeyValueTable()
-  override val _dbJoins: KeyValueTable                = InMemoryKeyValueTable()
+  override val _dbKeys: KeyValueTable  = InMemoryKeyValueTable()
+  override val _dbAs: KeyValueTable    = InMemoryKeyValueTable()
+  override val _dbPsKs: KeyValueTable  = InMemoryKeyValueTable()
+  override val _dbJoins: KeyValueTable = InMemoryKeyValueTable()
 
   private[rspace] def createTxnRead(): T = lock.readLock()
 

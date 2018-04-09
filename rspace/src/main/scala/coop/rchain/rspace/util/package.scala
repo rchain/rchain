@@ -1,5 +1,4 @@
 package coop.rchain.rspace
-import scala.collection.immutable.Seq
 
 package object util {
 
@@ -50,7 +49,7 @@ package object util {
 
   /** Drops the 'i'th element of a Seq.
     */
-  def dropIndex[T](xs: Seq[T], n: Int): Seq[T] = {
+  def dropIndex[T](xs: List[T], n: Int): List[T] = {
     val (l1, l2) = xs splitAt n
     l1 ++ (l2 drop 1)
   }

@@ -1,30 +1,27 @@
 package coop.rchain.rspace
 
-import scala.collection.immutable.Seq
-import coop.rchain.rspace.SeqCodec.seqOfN
-
 object internal {
 
   final case class Datum[A](a: A, persist: Boolean)
 
   final case class DataCandidate[C, A](channel: C, datum: Datum[A], datumIndex: Int)
 
-  final case class WaitingContinuation[P, K](patterns: Seq[P], continuation: K, persist: Boolean)
+  final case class WaitingContinuation[P, K](patterns: List[P], continuation: K, persist: Boolean)
 
-  final case class ProduceCandidate[C, P, A, K](channels: Seq[C],
+  final case class ProduceCandidate[C, P, A, K](channels: List[C],
                                                 continuation: WaitingContinuation[P, K],
                                                 continuationIndex: Int,
-                                                dataCandidates: Seq[DataCandidate[C, A]])
+                                                dataCandidates: List[DataCandidate[C, A]])
 
-  case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
+  case class Row[P, A, K](data: List[Datum[A]], wks: List[WaitingContinuation[P, K]])
 
   private[rspace] object scodecs {
 
     import scodec.{Attempt, Codec, DecodeResult}
     import scodec.bits.{BitVector, ByteVector}
-    import scodec.codecs.{bool, bytes, int32, variableSizeBytes}
+    import scodec.codecs.{bool, bytes, int32, listOfN, variableSizeBytes}
 
-    private[rspace] case class WaitingContinuationBytes(patterns: Seq[ByteVector],
+    private[rspace] case class WaitingContinuationBytes(patterns: List[ByteVector],
                                                         kvalue: ByteVector,
                                                         persist: Boolean)
 
@@ -33,19 +30,19 @@ object internal {
     lazy val byteVectorCodec: Codec[ByteVector] =
       variableSizeBytes(int32, bytes.xmap(x => x, x => x))
 
-    lazy val bytesListCodec: Codec[Seq[ByteVector]] =
-      seqOfN(int32, byteVectorCodec).as[Seq[ByteVector]]
+    lazy val bytesListCodec: Codec[List[ByteVector]] =
+      listOfN(int32, byteVectorCodec).as[List[ByteVector]]
 
-    lazy val datumBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
+    lazy val asBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
 
-    lazy val dataBytesListCodec: Codec[Seq[DatumBytes]] =
-      seqOfN(int32, datumBytesCodec).as[Seq[DatumBytes]]
+    lazy val asBytesListCodec: Codec[List[DatumBytes]] =
+      listOfN(int32, asBytesCodec).as[List[DatumBytes]]
 
-    lazy val waitingContinuationBytesCodec: Codec[WaitingContinuationBytes] =
+    lazy val psKsBytesCodec: Codec[WaitingContinuationBytes] =
       (bytesListCodec :: byteVectorCodec :: bool).as[WaitingContinuationBytes]
 
-    lazy val waitingContinuationBytesListCodec: Codec[Seq[WaitingContinuationBytes]] =
-      seqOfN(int32, waitingContinuationBytesCodec).as[Seq[WaitingContinuationBytes]]
+    lazy val psKsBytesListCodec: Codec[List[WaitingContinuationBytes]] =
+      listOfN(int32, psKsBytesCodec).as[List[WaitingContinuationBytes]]
 
     private[this] def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =
       attempt.toEither match {

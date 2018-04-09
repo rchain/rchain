@@ -6,7 +6,6 @@ import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec
 import scala.util.Random
-import scala.collection.immutable.Seq
 
 package object rspace {
 
@@ -17,7 +16,7 @@ package object rspace {
   @tailrec
   private[rspace] final def findMatchingDataCandidate[C, P, A](
       channel: C,
-      data: Seq[(Datum[A], Int)],
+      data: List[(Datum[A], Int)],
       pattern: P
   )(implicit m: Match[P, A]): Option[DataCandidate[C, A]] =
     data match {
@@ -30,34 +29,34 @@ package object rspace {
     }
 
   private[rspace] def extractDataCandidates[C, P, A, K](store: IStore[C, P, A, K],
-                                                        channels: Seq[C],
-                                                        patterns: Seq[P])(txn: store.T)(
+                                                        channels: List[C],
+                                                        patterns: List[P])(txn: store.T)(
       implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
-    val options: Seq[Option[DataCandidate[C, A]]] =
+    val options: List[Option[DataCandidate[C, A]]] =
       channels.zip(patterns).map {
         case (channel, pattern) =>
-          val indexedData: Seq[(Datum[A], Int)] = store.getData(txn, Seq(channel)).zipWithIndex
+          val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
           findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
       }
-    options.toList.sequence[Option, DataCandidate[C, A]]
+    options.sequence[Option, DataCandidate[C, A]]
   }
 
   private[rspace] def extractDataCandidates[C, P, A, K](
       store: IStore[C, P, A, K],
-      channels: Seq[C],
-      patterns: Seq[P],
+      channels: List[C],
+      patterns: List[P],
       batChannel: C,
       data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
-    val options: Seq[Option[DataCandidate[C, A]]] =
+    val options: List[Option[DataCandidate[C, A]]] =
       channels.zip(patterns).map {
         case (channel, pattern) if channel == batChannel =>
-          val indexedData: Seq[(Datum[A], Int)] = Seq((data, -1))
+          val indexedData: List[(Datum[A], Int)] = List((data, -1))
           findMatchingDataCandidate(channel, indexedData, pattern)
         case (channel, pattern) =>
-          val indexedData: Seq[(Datum[A], Int)] = store.getData(txn, Seq(channel)).zipWithIndex
+          val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
           findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
       }
-    options.toList.sequence[Option, DataCandidate[C, A]]
+    options.sequence[Option, DataCandidate[C, A]]
   }
 
   /** Searches the store for data matching all the given patterns at the given channels.
@@ -89,8 +88,8 @@ package object rspace {
     * @tparam K A type representing a continuation
     */
   def consume[C, P, A, K](store: IStore[C, P, A, K],
-                          channels: Seq[C],
-                          patterns: Seq[P],
+                          channels: List[C],
+                          patterns: List[P],
                           continuation: K,
                           persist: Boolean)(implicit m: Match[P, A]): Option[(K, List[A])] = {
     if (channels.length =!= patterns.length) {
@@ -103,9 +102,7 @@ package object rspace {
         s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>")
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
-          store.putWaitingContinuation(txn,
-                                       channels,
-                                       WaitingContinuation(patterns, continuation, persist))
+          store.putK(txn, channels, WaitingContinuation(patterns, continuation, persist))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(
             s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
@@ -114,7 +111,7 @@ package object rspace {
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                 if !persistData =>
-              store.removeDatum(txn, candidateChannel, dataIndex)
+              store.removeA(txn, candidateChannel, dataIndex)
             case _ =>
               ()
           }
@@ -125,8 +122,8 @@ package object rspace {
   }
 
   def install[C, P, A, K](store: IStore[C, P, A, K],
-                          channels: Seq[C],
-                          patterns: Seq[P],
+                          channels: List[C],
+                          patterns: List[P],
                           continuation: K)(implicit m: Match[P, A]): Option[(K, List[A])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
@@ -139,9 +136,7 @@ package object rspace {
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
           store.removeAll(txn, channels)
-          store.putWaitingContinuation(txn,
-                                       channels,
-                                       WaitingContinuation(patterns, continuation, true))
+          store.putK(txn, channels, WaitingContinuation(patterns, continuation, true))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(
             s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
@@ -150,7 +145,7 @@ package object rspace {
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                 if !persistData =>
-              store.removeDatum(txn, candidateChannel, dataIndex)
+              store.removeA(txn, candidateChannel, dataIndex)
             case _ =>
               ()
           }
@@ -165,8 +160,8 @@ package object rspace {
   @tailrec
   private[rspace] final def extractFirstMatch[C, P, A, K](
       store: IStore[C, P, A, K],
-      channels: Seq[C],
-      matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
+      channels: List[C],
+      matchCandidates: List[(WaitingContinuation[P, K], Int)],
       channel: C,
       data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
     matchCandidates match {
@@ -183,14 +178,14 @@ package object rspace {
   @tailrec
   private[rspace] final def extractProduceCandidateAlt[C, P, A, K](
       store: IStore[C, P, A, K],
-      groupedChannels: Seq[Seq[C]],
+      groupedChannels: List[List[C]],
       channel: C,
       data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
     groupedChannels match {
       case Nil => None
       case channels :: remaining =>
-        val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
-          store.getWaitingContinuations(txn, channels).zipWithIndex
+        val matchCandidates: List[(WaitingContinuation[P, K], Int)] =
+          store.getPsK(txn, channels).zipWithIndex
         extractFirstMatch(store, channels, Random.shuffle(matchCandidates), channel, data)(txn) match {
           case None             => extractProduceCandidateAlt(store, remaining, channel, data)(txn)
           case produceCandidate => produceCandidate
@@ -228,7 +223,7 @@ package object rspace {
   def produce[C, P, A, K](store: IStore[C, P, A, K], channel: C, data: A, persist: Boolean)(
       implicit m: Match[P, A]): Option[(K, List[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
-      val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
+      val groupedChannels: List[List[C]] = store.getJoin(txn, channel)
       logger.debug(
         s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>")
       extractProduceCandidateAlt(store, groupedChannels, channel, Datum(data, persist))(txn) match {
@@ -238,12 +233,12 @@ package object rspace {
                              continuationIndex,
                              dataCandidates)) =>
           if (!persistK) {
-            store.removeWaitingContinuations(txn, channels, continuationIndex)
+            store.removePsK(txn, channels, continuationIndex)
           }
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
               if (!persistData && dataIndex >= 0) {
-                store.removeDatum(txn, candidateChannel, dataIndex)
+                store.removeA(txn, candidateChannel, dataIndex)
               }
               store.removeJoin(txn, candidateChannel, channels)
             case _ =>
@@ -253,7 +248,7 @@ package object rspace {
           Some(continuation, dataCandidates.map(_.datum.a).toList)
         case None =>
           logger.debug(s"produce: no matching continuation found")
-          store.putDatum(txn, Seq(channel), Datum(data, persist))
+          store.putA(txn, List(channel), Datum(data, persist))
           logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
           None
       }

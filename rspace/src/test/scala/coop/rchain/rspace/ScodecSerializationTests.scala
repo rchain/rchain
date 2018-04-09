@@ -12,8 +12,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
       List(DatumBytes(ByteVector(Array[Byte](1, 2, 3)), false),
            DatumBytes(ByteVector(Array[Byte](4, 5, 6)), true))
 
-    val arr = toBitVector(bll, scodecs.dataBytesListCodec)
-    val res = fromBitVector(arr, scodecs.dataBytesListCodec)
+    val arr = toBitVector(bll, scodecs.asBytesListCodec)
+    val res = fromBitVector(arr, scodecs.asBytesListCodec)
 
     res shouldBe bll
   }
@@ -21,8 +21,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
   "DatumBytes" should "round-trip" in {
     val asd = DatumBytes(ByteVector(Array[Byte](4, 5, 6)), true)
 
-    val arr = toBitVector(asd, scodecs.datumBytesCodec)
-    val res = fromBitVector(arr, scodecs.datumBytesCodec)
+    val arr = toBitVector(asd, scodecs.asBytesCodec)
+    val res = fromBitVector(arr, scodecs.asBytesCodec)
 
     res shouldBe asd
   }
@@ -33,8 +33,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
                                ByteVector(Array[Byte](4, 5, 6)),
                                true))
 
-    val arr = toBitVector(psks, scodecs.waitingContinuationBytesListCodec)
-    val res = fromBitVector(arr, scodecs.waitingContinuationBytesListCodec)
+    val arr = toBitVector(psks, scodecs.psKsBytesListCodec)
+    val res = fromBitVector(arr, scodecs.psKsBytesListCodec)
 
     res shouldBe psks
   }
