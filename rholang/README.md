@@ -34,7 +34,7 @@ Currently we have a working interpreter for the language. It should be considere
 ### Command-line usage
 
 ```
-$ java -jar rholang-cli/target/scala-2.12/rholangCLI-assembly-0.1.0-SNAPSHOT.jar rholang/examples/token.rho
+$ java -jar rholang-cli/target/scala-2.12/rholangCLI-assembly-0.1.0-SNAPSHOT.jar rholang/tests/mercury-tut/coat_check_test.rho
 <interpreter output follows.>
 ```
 
@@ -51,4 +51,4 @@ In general:
   * There is work in progress to support stdout and stderr, but it hasn't landed yet.
   * There is also work to support native functions. It hasn't landed yet.
 ### The good
-Several working examples have been included in the examples/ directory, and the tests in tests/ also work. If you run into something that doesn't work, check the bugtracker to see if it's a known issue, and if not, feel free to file a bug. We want rholang to be a useful programming environment.
+Several working examples have been included in the examples/0.2 directory, and the tests in tests/mercury-tut also work. If you run into something that doesn't work, check the bugtracker to see if it's a known issue, and if not, feel free to file a bug. We want rholang to be a useful programming environment.
