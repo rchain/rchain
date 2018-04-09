@@ -26,7 +26,6 @@ echo "Travis Docker Username: ${DOCKER_USERNAME}"
 echo "5 seconds to cancel if this information is not correct."
 sleep 5 
 
-
 # Install Docker-CE
 apt update
 apt-get install -y apt-transport-https ca-certificates curl software-properties-common
