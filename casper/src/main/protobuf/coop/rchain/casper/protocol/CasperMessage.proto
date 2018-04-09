@@ -28,9 +28,9 @@ message Stopped { }
 //simulation of process
 message Resource {
   oneof resourceClass {
-    Produce produce = 1;
-    Consume consume = 2;
-    Stopped stopped = 3;
+    Produce produceResource = 1;
+    Consume consumeResource = 2;
+    Stopped stoppedResource = 3;
   }
 }
 
@@ -71,17 +71,16 @@ message Diff {
 //------------------------------------
 
 message Header {
-  bytes parentsListHash    = 1;
+  repeated bytes parentsHashList = 1; //list of parent block hashes
   bytes postStateHash      = 2;
   bytes newCodeHash        = 3;
   bytes commReductionsHash = 4;
 }
 
 message Body {
-  repeated bytes    parentsList    = 1; //list of parent block hashes
-  RChainState       postState      = 2; //will remove sending an explicit postState when history/rollback in tuplespace works
-  repeated Resource newCode        = 3; //new rholang code that was added to the state before processing
-  repeated Diff     commReductions = 4; //the comm. rule reductions that occurred to obtain the post-state
+  RChainState       postState      = 1; //will remove sending an explicit postState when history/rollback in tuplespace works
+  repeated Resource newCode        = 2; //new rholang code that was added to the state before processing
+  repeated Diff     commReductions = 3; //the comm. rule reductions that occurred to obtain the post-state
 }
 
 message BlockMessage {
