@@ -1,7 +1,7 @@
 package coop.rchain.rosette
 
-import cats.Eval
-import cats.data.{ReaderWriterState, ReaderWriterStateT, State}
+import cats.MonadError
+import cats.data.{ReaderT, State}
 import cats.implicits._
 import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
@@ -85,7 +85,7 @@ object Location {
   }
 
   def valWrt[E[_]](loc: Location, v: Ob)(implicit E: MonadError[E, RblError]) =
-    ReaderT[E, TblObject, Ob] { globalEnv =>
+    ReaderT[E, GlobalEnv, Ob] { globalEnv =>
       val value: PartialFunction[Location, Ob] = {
         case LexVariable(indirect, level, offset) =>
           v.getLex(indirect, level, offset)

@@ -27,10 +27,9 @@ abstract class Prim extends Ob {
       primResult = fnSimple(ctxt)
     } yield primResult
 
-
   def fnSimple(ctxt: Ctxt): PrimResult = ???
 
-  def dispatchHelper: CtxtTransition[Result] =
+  def dispatchHelper: CtxtTransition[Result[Ob]] =
     for {
       ctxt      <- getCtxt
       globalEnv <- getGlobalEnv
@@ -40,7 +39,7 @@ abstract class Prim extends Ob {
                  fn.transform((writer, state, res) =>
                    (writer, state, res.left.map(PrimErrorWrapper)))
                else
-                 pureCtxt[Result](Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs))))
+                 pureCtxt[Result[Ob]](Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs))))
     } yield result
 
   /** Dispatch primitive
@@ -56,7 +55,7 @@ abstract class Prim extends Ob {
     * return a ctxt that has to be scheduled (see `ctxt-rtn`). Therefore `dispatchPrim`
     * returns a `List[Continuation]`.
     */
-  override def dispatch: CtxtTransition[Result] =
+  override def dispatch: CtxtTransition[Result[Ob]] =
     for {
       primResult <- dispatchHelper
 
@@ -73,7 +72,7 @@ abstract class Prim extends Ob {
                      * Something went wrong with running the primitive.
                      * Report the error back.
                      */
-                   pureCtxt[Result](error)
+                   pureCtxt[Result[Ob]](error)
                }
     } yield result
 

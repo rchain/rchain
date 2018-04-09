@@ -2,9 +2,9 @@ package coop.rchain.rosette
 
 import cats.data.State
 import cats.data.State._
-import cats.instances.either.catsStdInstancesForEither
+import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.rosette.Ctxt.{setReg, CtxtTransition}
+import coop.rchain.rosette.Ctxt.setReg
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob._
 import coop.rchain.rosette.Ctxt.{NIV => _, apply => _, _}
@@ -44,12 +44,12 @@ object VirtualMachine {
 
   val missingBindingCtxt = Ctxt(null: Ob, null)
 
-  def handleApplyPrimSuspend(op: Op): Unit                = ()
-  def handleApplyPrimUpcall(op: Op, tag: Location): Unit  = ()
-  def handleFormalsMismatch(formals: Template): Ob        = null
-  def handleMissingBinding(key: Ob, argReg: Location): Ob = null
-  def handleSleep(): Unit                                 = ()
-  def handleXmitUpcall(op: Op, tag: Location): Unit       = ()
+  def handleApplyPrimSuspend(op: Op): Unit                              = ()
+  def handleApplyPrimUpcall(op: Op, tag: Location): Unit                = ()
+  def handleFormalsMismatch(formals: Template): Ob                      = null
+  def handleMissingBinding(key: Ob, argReg: Location, ctxt: Ctxt): Ctxt = missingBindingCtxt
+  def handleSleep(): Unit                                               = ()
+  def handleXmitUpcall(op: Op, tag: Location): Unit                     = ()
 
   /*
   def handleVirtualMachineError(state: VMState): VMState =
@@ -77,11 +77,11 @@ object VirtualMachine {
     * For example `ctxt-rtn` is a primitive that can return a continuation.
     */
   def runPrim(unwind: Boolean,
-              optPrim: Option[Prim]): VMTransition[(Result, List[Continuation])] = {
-    val primRes: CtxtTransition[Result] = optPrim match {
+              optPrim: Option[Prim]): VMTransition[(Result[Ob], List[Continuation])] = {
+    val primRes: CtxtTransition[Result[Ob]] = optPrim match {
       case Some(prim) if unwind  => unwindAndApplyPrim(prim)
       case Some(prim) if !unwind => prim.dispatchHelper
-      case None                  => pureCtxt[Result](Left(PrimNotFound))
+      case None                  => pureCtxt[Result[Ob]](Left(PrimNotFound))
     }
 
     /**
@@ -89,7 +89,7 @@ object VirtualMachine {
       * Involves updating `ctxt` and `globalEnv` and pulling out continuations into
       * the result.
       */
-    transformCtxtTransToVMTrans[Result](primRes)
+    transformCtxtTransToVMTrans[Result[Ob]](primRes)
   }
 
   // TODO: Finish
@@ -344,10 +344,10 @@ object VirtualMachine {
     */
   def doRtn: VMTransition[Unit] =
     for {
-      rslt    <- inspect[VMState, Ob](_.ctxt.rslt)
+      rslt    <- inspect(_.ctxt.rslt)
       ctxtRet <- transformCtxtTransToVMTrans[Boolean](Ctxt.ret(rslt))
 
-      isDoRtnFlag <- inspect[VMState, Boolean](_.doRtnFlag)
+      isDoRtnFlag <- inspect(_.doRtnFlag)
 
       (isError, continuations) = ctxtRet
 
@@ -371,9 +371,9 @@ object VirtualMachine {
     */
   def doXmit: VMTransition[Unit] =
     for {
-      target         <- inspect[VMState, Ob](_.ctxt.trgt)
+      target         <- inspect(_.ctxt.trgt)
       dispatchResult <- transformCtxtTransToVMTrans(target.dispatch)
-      next           <- inspect[VMState, Boolean](_.xmitData._2)
+      next           <- inspect(_.xmitData._2)
 
       (result, conts) = dispatchResult
 

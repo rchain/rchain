@@ -22,7 +22,7 @@ object Meta {
 
     def get[F[_]](client: Ob, key: Ob)(
         implicit E: MonadError[F, RblError]
-    ): ReaderT[F, TblObject, Ob] = {
+    ): ReaderT[F, GlobalEnv, Ob] = {
       val container = client
 
       def extension(ob: Ob, indirect: Boolean): Option[Ob] =
@@ -32,7 +32,7 @@ object Meta {
 
       keyLoc(key, client) match {
         case LexVariable(indirect, _, offset) =>
-          Kleisli.pure[F, TblObject, Ob](
+          Kleisli.pure[F, GlobalEnv, Ob](
             extension(container, indirect)
               .getOrElse(container)
               .slot(offset))
@@ -44,7 +44,7 @@ object Meta {
     }
 
     def lookupOBOStdMeta[F[_]](client: Ob, key: Ob)(
-        implicit E: MonadError[F, RblError]): ReaderT[F, TblObject, Ob] =
+        implicit E: MonadError[F, RblError]): ReaderT[F, GlobalEnv, Ob] =
       get[F](client, key) recoverWith {
         case Absent => client.parent.lookup[F](key)
       }

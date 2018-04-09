@@ -2,7 +2,6 @@ package coop.rchain.rosette.prim
 
 import cats.implicits._
 import coop.rchain.rosette._
-import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.{Ctxt, CtxtTransition, Ob}
 import coop.rchain.rosette.Ob.Lenses._
 
