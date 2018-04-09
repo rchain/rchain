@@ -37,6 +37,8 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/produce-tests.rbl
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/namespace-util-tests.rbl
   DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/tests/transition-spec.rbl
+  DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/tests)
 
 add_test(NAME test_scripts
     COMMAND rosette --boot-dir lib/rosette tests/run-tests.ros)

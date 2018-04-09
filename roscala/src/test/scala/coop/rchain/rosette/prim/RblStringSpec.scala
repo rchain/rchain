@@ -34,7 +34,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings do not match" in {
@@ -47,17 +47,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringEq.fn(newCtxt) should be('left)
+    stringEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string!= */
@@ -71,7 +71,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringNEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringNEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings do match" in {
@@ -84,17 +84,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringNEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringNEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringNEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringNEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringNEq.fn(newCtxt) should be('left)
+    stringNEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string< */
@@ -108,7 +108,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringLess.fn(newCtxt) should be(Right(RblBool(true)))
+    stringLess.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings are equal" in {
@@ -121,7 +121,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringLess.fn(newCtxt) should be(Right(RblBool(false)))
+    stringLess.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return false if the right string is less than the left one" in {
@@ -134,17 +134,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringLess.fn(newCtxt) should be(Right(RblBool(false)))
+    stringLess.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringLess.fn(newCtxt) should be(Right(RblBool(false)))
+    stringLess.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringLess.fn(newCtxt) should be('left)
+    stringLess.fnSimple(newCtxt) should be('left)
   }
 
   /** string<= */
@@ -158,7 +158,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringLEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringLEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return true if the strings are equal" in {
@@ -171,7 +171,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringLEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringLEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the right string is less than the left one" in {
@@ -184,17 +184,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringLEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringLEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringLEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringLEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringLEq.fn(newCtxt) should be('left)
+    stringLEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string> */
@@ -208,7 +208,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringGtr.fn(newCtxt) should be(Right(RblBool(true)))
+    stringGtr.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings are equal" in {
@@ -221,7 +221,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringGtr.fn(newCtxt) should be(Right(RblBool(false)))
+    stringGtr.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return false if the right string is greater than the left one" in {
@@ -234,17 +234,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringGtr.fn(newCtxt) should be(Right(RblBool(false)))
+    stringGtr.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringGtr.fn(newCtxt) should be(Right(RblBool(false)))
+    stringGtr.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringGtr.fn(newCtxt) should be('left)
+    stringGtr.fnSimple(newCtxt) should be('left)
   }
 
   /** string>= */
@@ -258,7 +258,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringGEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringGEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return true if the strings are equal" in {
@@ -271,7 +271,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringGEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringGEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the right string is greater than the left one" in {
@@ -284,17 +284,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringGEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringGEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringGEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringGEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringGEq.fn(newCtxt) should be('left)
+    stringGEq.fnSimple(newCtxt) should be('left)
   }
 
   /** Case Insensitive compares */
@@ -309,7 +309,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings do not match" in {
@@ -322,17 +322,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringCiEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringCiEq.fn(newCtxt) should be('left)
+    stringCiEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string-ci!= */
@@ -346,7 +346,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiNEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiNEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings do match" in {
@@ -359,17 +359,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiNEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiNEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringCiNEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiNEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringCiNEq.fn(newCtxt) should be('left)
+    stringCiNEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string-ci< */
@@ -383,7 +383,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiLess.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiLess.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings are equal" in {
@@ -396,7 +396,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiLess.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiLess.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return false if the right string is less than the left one" in {
@@ -409,17 +409,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiLess.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiLess.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringCiLess.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiLess.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringCiLess.fn(newCtxt) should be('left)
+    stringCiLess.fnSimple(newCtxt) should be('left)
   }
 
   /** string-ci<= */
@@ -433,7 +433,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiLEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiLEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return true if the strings are equal" in {
@@ -446,7 +446,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiLEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiLEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the right string is less than the left one" in {
@@ -459,17 +459,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiLEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiLEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringCiLEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiLEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringCiLEq.fn(newCtxt) should be('left)
+    stringCiLEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string-ci> */
@@ -483,7 +483,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiGtr.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiGtr.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the strings are equal" in {
@@ -496,7 +496,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiGtr.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiGtr.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return false if the right string is greater than the left one" in {
@@ -509,17 +509,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiGtr.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiGtr.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringCiGtr.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiGtr.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringCiGtr.fn(newCtxt) should be('left)
+    stringCiGtr.fnSimple(newCtxt) should be('left)
   }
 
   /** string-ci>= */
@@ -533,7 +533,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiGEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiGEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return true if the strings are equal" in {
@@ -546,7 +546,7 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiGEq.fn(newCtxt) should be(Right(RblBool(true)))
+    stringCiGEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the right string is greater than the left one" in {
@@ -559,17 +559,17 @@ class RblStringSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(strs)
       )
-    stringCiGEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiGEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return RblBool(false) for invalid right side argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(RblString("foo")), Fixnum(42)))
-    stringCiGEq.fn(newCtxt) should be(Right(RblBool(false)))
+    stringCiGEq.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringCiGEq.fn(newCtxt) should be('left)
+    stringCiGEq.fnSimple(newCtxt) should be('left)
   }
 
   /** string-concat */
@@ -582,7 +582,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = strs.length, argvec = Tuple(strs))
 
-    stringConcat.fn(newCtxt) should be(Right(RblString(res)))
+    stringConcat.fnSimple(newCtxt) should be(Right(RblString(res)))
   }
 
   it should "return an empty string with no input strings" in {
@@ -591,12 +591,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = strs.length, argvec = Tuple(strs))
 
-    stringConcat.fn(newCtxt) should be(Right(RblString(res)))
+    stringConcat.fnSimple(newCtxt) should be(Right(RblString(res)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringConcat.fn(newCtxt) should be('left)
+    stringConcat.fnSimple(newCtxt) should be('left)
   }
 
   /** string-join */
@@ -619,10 +619,10 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val res = s1 + sep + s2 + sep + s3
 
-    stringJoin.fn(ctxtNeither) should be(Right(RblString(res)))
-    stringJoin.fn(ctxtFront) should be(Right(RblString(sep + res)))
-    stringJoin.fn(ctxtRear) should be(Right(RblString(res + sep)))
-    stringJoin.fn(ctxtBoth) should be(Right(RblString(sep + res + sep)))
+    stringJoin.fnSimple(ctxtNeither) should be(Right(RblString(res)))
+    stringJoin.fnSimple(ctxtFront) should be(Right(RblString(sep + res)))
+    stringJoin.fnSimple(ctxtRear) should be(Right(RblString(res + sep)))
+    stringJoin.fnSimple(ctxtBoth) should be(Right(RblString(sep + res + sep)))
   }
 
   it should "return an empty string for an empty Tuple" in {
@@ -632,7 +632,7 @@ class RblStringSpec extends FlatSpec with Matchers {
     val res       = ""
 
     val ctxtBoth = ctxt.copy(nargs = 3, argvec = parmsBoth)
-    stringJoin.fn(ctxtBoth) should be(Right(RblString(res)))
+    stringJoin.fnSimple(ctxtBoth) should be(Right(RblString(res)))
   }
 
   it should "fail if tuple contains non-RblString objects" in {
@@ -642,12 +642,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val ctxtBoth = ctxt.copy(nargs = 3, argvec = parms)
 
-    stringJoin.fn(ctxtBoth) should be('left)
+    stringJoin.fnSimple(ctxtBoth) should be('left)
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringJoin.fn(newCtxt) should be('left)
+    stringJoin.fnSimple(newCtxt) should be('left)
   }
 
   /** string-length */
@@ -657,7 +657,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(strs))
 
-    stringLength.fn(newCtxt) should be(Right(Fixnum(9)))
+    stringLength.fnSimple(newCtxt) should be(Right(Fixnum(9)))
   }
 
   it should "return 0 for an empty string" in {
@@ -666,12 +666,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(strs))
 
-    stringLength.fn(newCtxt) should be(Right(Fixnum(0)))
+    stringLength.fnSimple(newCtxt) should be(Right(Fixnum(0)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringJoin.fn(newCtxt) should be('left)
+    stringJoin.fnSimple(newCtxt) should be('left)
   }
 
   /** string-set-nth */
@@ -681,7 +681,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
 
-    stringSetNth.fn(newCtxt) should be(Right(RblString("abCdefghi")))
+    stringSetNth.fnSimple(newCtxt) should be(Right(RblString("abCdefghi")))
 
   }
 
@@ -691,12 +691,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
 
-    stringSetNth.fn(newCtxt) should be('left)
+    stringSetNth.fnSimple(newCtxt) should be('left)
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringSetNth.fn(newCtxt) should be('left)
+    stringSetNth.fnSimple(newCtxt) should be('left)
   }
 
   /** string-new */
@@ -704,19 +704,19 @@ class RblStringSpec extends FlatSpec with Matchers {
     val parms   = Tuple(Seq(Fixnum(5), RblChar('C')))
     val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
 
-    stringNew.fn(newCtxt) should be(Right(RblString("CCCCC")))
+    stringNew.fnSimple(newCtxt) should be(Right(RblString("CCCCC")))
   }
 
   it should "create a string of n spaces if no character specified" in {
     val parms   = Tuple(Seq(Fixnum(5)))
     val newCtxt = ctxt.copy(nargs = 1, argvec = parms)
 
-    stringNew.fn(newCtxt) should be(Right(RblString("     ")))
+    stringNew.fnSimple(newCtxt) should be(Right(RblString("     ")))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringNew.fn(newCtxt) should be('left)
+    stringNew.fnSimple(newCtxt) should be('left)
   }
 
   /** string-mem? */
@@ -726,7 +726,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
 
-    stringMemQ.fn(newCtxt) should be(Right(RblBool(true)))
+    stringMemQ.fnSimple(newCtxt) should be(Right(RblBool(true)))
 
   }
 
@@ -736,13 +736,13 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
 
-    stringMemQ.fn(newCtxt) should be(Right(RblBool(false)))
+    stringMemQ.fnSimple(newCtxt) should be(Right(RblBool(false)))
 
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringMemQ.fn(newCtxt) should be('left)
+    stringMemQ.fnSimple(newCtxt) should be('left)
   }
 
   /** string-get-token */
@@ -752,7 +752,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), Fixnum(0), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringGetToken.fn(newCtxt) should be(Right(RblString("aZ")))
+    stringGetToken.fnSimple(newCtxt) should be(Right(RblString("aZ")))
   }
 
   it should "correctly return the last token" in {
@@ -761,7 +761,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), Fixnum(6), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringGetToken.fn(newCtxt) should be(Right(RblString("gT")))
+    stringGetToken.fnSimple(newCtxt) should be(Right(RblString("gT")))
   }
 
   it should "correctly return a token from the middle" in {
@@ -770,7 +770,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), Fixnum(3), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringGetToken.fn(newCtxt) should be(Right(RblString("dW")))
+    stringGetToken.fnSimple(newCtxt) should be(Right(RblString("dW")))
   }
 
   it should "return an empty string for index out of bounds" in {
@@ -779,7 +779,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), Fixnum(8), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringGetToken.fn(newCtxt) should be(Right(RblString("")))
+    stringGetToken.fnSimple(newCtxt) should be(Right(RblString("")))
   }
 
   it should "return an empty string if delimiter not found" in {
@@ -788,7 +788,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), Fixnum(8), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringGetToken.fn(newCtxt) should be(Right(RblString("")))
+    stringGetToken.fnSimple(newCtxt) should be(Right(RblString("")))
   }
 
   it should "return an empty string for an empty string" in {
@@ -797,12 +797,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), Fixnum(8), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringGetToken.fn(newCtxt) should be(Right(RblString("")))
+    stringGetToken.fnSimple(newCtxt) should be(Right(RblString("")))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringMemQ.fn(newCtxt) should be('left)
+    stringMemQ.fnSimple(newCtxt) should be('left)
   }
 
   /** string-split */
@@ -821,7 +821,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(33)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(res))
+    stringSplit.fnSimple(newCtxt) should be(Right(res))
   }
 
   it should "correctly tokenize a full string with unspecified count" in {
@@ -839,7 +839,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(res))
+    stringSplit.fnSimple(newCtxt) should be(Right(res))
   }
 
   it should "correctly ignore leading and trailing separators" in {
@@ -857,7 +857,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(res))
+    stringSplit.fnSimple(newCtxt) should be(Right(res))
   }
 
   it should "return an empty Tuple with a count of zero" in {
@@ -866,7 +866,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(0)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(Tuple.NIL))
+    stringSplit.fnSimple(newCtxt) should be(Right(Tuple.NIL))
   }
 
   it should "return an empty Tuple with a count less than zero" in {
@@ -875,7 +875,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(-1)))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(Tuple.NIL))
+    stringSplit.fnSimple(newCtxt) should be(Right(Tuple.NIL))
   }
 
   it should "return a Tuple of chars if no separators" in {
@@ -885,7 +885,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep)))
     val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(res))
+    stringSplit.fnSimple(newCtxt) should be(Right(res))
   }
 
   it should "correctly return a Tuple of selected tokens and the remaining string" in {
@@ -895,7 +895,7 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep), Fixnum(2)))
     val newCtxt = ctxt.copy(nargs = 2, argvec = parms)
-    stringSplit.fn(newCtxt) should be(Right(res))
+    stringSplit.fnSimple(newCtxt) should be(Right(res))
   }
 
   it should "fail for invalid Count type" in {
@@ -905,12 +905,12 @@ class RblStringSpec extends FlatSpec with Matchers {
 
     val parms   = Tuple(Seq(RblString(str), RblString(sep), RblString("foo")))
     val newCtxt = ctxt.copy(nargs = 3, argvec = parms)
-    stringSplit.fn(newCtxt) should be('left)
+    stringSplit.fnSimple(newCtxt) should be('left)
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    stringSplit.fn(newCtxt) should be('left)
+    stringSplit.fnSimple(newCtxt) should be('left)
   }
 
 }

@@ -573,6 +573,38 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
+  "PMatch" should "have a freeCount of 1 if the case contains a wildcard and a free variable." in {
+    val listCases = new ListCase()
+    val listProc  = new ListProc()
+    listProc.add(new PVar(new ProcVarVar("y")))
+    listProc.add(new PVar(new ProcVarWildcard()))
+    listCases.add(new CaseImpl(new PCollect(new CollectList(listProc)), new PNil()))
+    listCases.add(new CaseImpl(new PVar(new ProcVarWildcard()), new PNil()))
+    val pMatch = new PMatch(new PVar(new ProcVarVar("x")), listCases)
+
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val result      = ProcNormalizeMatcher.normalizeMatch(pMatch, boundInputs)
+
+    val expectedResult =
+      inputs.par.prepend(
+        Match(
+          EVar(BoundVar(0)),
+          List(
+            MatchCase(EList(Seq[Par](EVar(FreeVar(0)), EVar(Wildcard(Var.WildcardMsg()))),
+                            1,
+                            BitSet(),
+                            true),
+                      Par()),
+            MatchCase(EVar(Wildcard(Var.WildcardMsg())), Par())
+          ),
+          0,
+          BitSet(0),
+          false
+        ))
+    result.par should be(expectedResult)
+    result.par.matches.head.cases.head.pattern.get.freeCount should be(1)
+  }
+
   "PIf" should "Desugar to match with true/false cases" in {
     // if (true) { @Nil!(47) }
     val condition = new PGround(new GroundBool(new BoolTrue()))
@@ -687,12 +719,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 class NameMatcherSpec extends FlatSpec with Matchers {
   val inputs = NameVisitInputs(DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
 
-  "NameWildcard" should "Set wildcard flag in knownFree" in {
+  "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                      = new NameWildcard()
     val result                  = NameNormalizeMatcher.normalizeMatch(nw, inputs)
     val expectedResult: Channel = ChanVar(Wildcard(Var.WildcardMsg()))
     result.chan should be(expectedResult)
-    result.knownFree shouldEqual (inputs.knownFree.setWildcardUsed(1))
+    result.knownFree.count shouldEqual 1
   }
 
   val nvar = new NameVar("x")

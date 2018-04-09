@@ -9,51 +9,65 @@ class CtxtSpec extends FlatSpec with Matchers {
     .copy(id = 0)
     .copy(ctxt = Ctxt.empty.copy(id = 1))
 
-  "applyK" should "save result into parent ctxt" in {
-    val ctxt0 = Ctxt.applyK(Fixnum(1), LocTrgt).runS(ctxt).value
+  val globalEnv = TblObject(Seq())
+
+  val initial = (globalEnv, ctxt)
+
+  "applyK" should "save result into ctxt's continuation" in {
+    val (conts, (_, ctxt0), res) = Ctxt.applyK(Fixnum(1), LocTrgt).run((), initial).value
 
     ctxt0.ctxt.trgt should be(Fixnum(1))
   }
 
-  it should "return parent ctxt as a continuation if outstanding field of parent is one" in {
-    val ctxt0                = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
-    val (_, optContinuation) = Ctxt.applyK(Fixnum(1), LocTrgt).runA(ctxt0).value
+  it should "return continuation if outstanding field of continuation is one" in {
+    val ctxt0               = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
+    val (conts, state, res) = Ctxt.applyK(Fixnum(1), LocTrgt).run((), (globalEnv, ctxt0)).value
 
-    optContinuation.isDefined should be(true)
-    optContinuation.get.id should be(1)
-    optContinuation.get.outstanding should be(0)
+    conts should not be empty
+    conts.head.id should be(1)
+    conts.head.outstanding should be(0)
   }
 
-  "rcv" should "return itself as a continuation if outstanding field is one" in {
-    val ctxt0                = ctxt.copy(outstanding = 1)
-    val (_, optContinuation) = Ctxt.rcv(Fixnum(1), LocTrgt).runA(ctxt0).value
+  "rcv" should "schedule itself if outstanding field is one" in {
+    val ctxt0               = ctxt.copy(outstanding = 1)
+    val (conts, state, res) = Ctxt.rcv(Fixnum(1), LocTrgt).run((), (globalEnv, ctxt0)).value
 
-    optContinuation.isDefined should be(true)
-    optContinuation.get.id should be(0)
+    conts should not be empty
+    conts.head.id should be(0)
   }
 
   it should "decrease the outstanding field by one if storing was successful" in {
-    val ctxt0           = ctxt.copy(outstanding = 1)
-    val (ctxt1, result) = Ctxt.rcv(Fixnum(1), LocTrgt).run(ctxt0).value
+    val ctxt0                    = ctxt.copy(outstanding = 1)
+    val (conts, (_, ctxt1), res) = Ctxt.rcv(Fixnum(1), LocTrgt).run((), (globalEnv, ctxt0)).value
 
     ctxt1.trgt should be(Fixnum(1))
-    result._1 should be(false)
+    res should be(false)
     ctxt1.outstanding should be(0)
   }
 
-  "ret" should "return false if tag is Limbo" in {
-    val ctxt0  = ctxt.copy(tag = Limbo)
-    val result = Ctxt.rcv(Fixnum(1), LocTrgt).runA(ctxt0).value
+  it should "return false if tag is `Limbo`" in {
+    val ctxt0 = ctxt.copy(tag = Limbo)
+    val res   = Ctxt.rcv(Fixnum(1), LocTrgt).runA((), (globalEnv, ctxt0)).value
 
-    result._1 should be(false)
+    res should be(false)
   }
 
-  it should "return parent ctxt as a continuation if outstanding field of parent is one" in {
-    val ctxt0                = ctxt.set(_ >> 'ctxt >> 'outstanding)(1)
-    val (_, optContinuation) = Ctxt.applyK(Fixnum(1), LocTrgt).runA(ctxt0).value
+  "ret" should "save result to given location in its continuation" in {
+    val ctxt0                    = ctxt.copy(tag = LocTrgt)
+    val (conts, (_, ctxt1), res) = Ctxt.ret(Fixnum(1)).run((), (globalEnv, ctxt0)).value
 
-    optContinuation.isDefined should be(true)
-    optContinuation.get.id should be(1)
-    optContinuation.get.outstanding should be(0)
+    res should be(false)
+    ctxt1.ctxt.trgt should be(Fixnum(1))
+    conts should be(empty)
+  }
+
+  it should "schedule continuation if outstanding field of continuation is one" in {
+    val ctxt0                    = ctxt.set(_ >> 'ctxt >> 'outstanding)(1).set(_ >> 'tag)(LocTrgt)
+    val (conts, (_, ctxt1), res) = Ctxt.ret(Fixnum(1)).run((), (globalEnv, ctxt0)).value
+
+    res should be(false)
+    ctxt1.ctxt.trgt should be(Fixnum(1))
+    conts.nonEmpty should be(true)
+    conts.head.trgt should be(Fixnum(1))
   }
 }

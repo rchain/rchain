@@ -21,11 +21,23 @@ message Par {
     bool wildcard = 10;
 }
 
+
+message TaggedContinuation {
+    oneof tagged_cont {
+        Par par_body = 1;
+        int64 scala_body_ref = 2;
+    }
+}
+
 message Channel {
     oneof channel_instance {
         Par quote = 1;
         Var chanVar = 2;
     }
+}
+
+message ListChannel {
+    repeated Channel channels = 1;
 }
 
 // While we use vars in both positions, when producing the normalized

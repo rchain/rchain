@@ -20,8 +20,8 @@ object ArgumentMismatchMacro {
 
     val result =
       annottees.map(_.tree).toList match {
-        case q"$mods def fn(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
-          q"""$mods def fn(ctxt: Ctxt): $returnType =  {
+        case q"$mods def fnSimple(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
+          q"""$mods def fnSimple(ctxt: Ctxt): $returnType =  {
               if(ctxt.nargs < minArgs || ctxt.nargs > maxArgs)
                 Left(mismatchArgs(ctxt, minArgs, maxArgs))
               else
@@ -48,8 +48,8 @@ object TypeMismatchMacro {
 
     val result =
       annottees.map(_.tree).toList match {
-        case q"$mods def fn(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
-          q"""$mods def fn(ctxt: Ctxt): $returnType =  {
+        case q"$mods def fnSimple(ctxt: Ctxt): $returnType = { ..$body }" :: Nil =>
+          q"""$mods def fnSimple(ctxt: Ctxt): $returnType =  {
               mismatchType[$typeParam](ctxt) match {
                 case Some(typeMismatch) => Left(typeMismatch)
                 case None => {..$body}

@@ -664,6 +664,10 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
         dest = CtxtReg((CtxtRegName)OP_f2_op1(insn));
         goto formatDest;
 
+    case opDeferLookup:
+        sprintf(buf, "opDeferLookup");
+        goto noDest;
+
     default:
         sprintf(buf, "illegal 0x%.4x", (int)insn.word);
         goto noDest;
@@ -979,6 +983,8 @@ MODULE_INIT(Code) {
         opcodeStrings[opImmediateLitToReg | 0x9] = "lit #f/reg";
         opcodeStrings[opImmediateLitToReg | 0xa] = "lit nil/reg";
         opcodeStrings[opImmediateLitToReg | 0xb] = "lit #niv/reg";
+
+        opcodeStrings[opDeferLookup] = "opDeferLookup";
     }
 }
 

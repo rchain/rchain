@@ -2,36 +2,53 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.{Channel, HasLocallyFree, Par}
+import coop.rchain.models._
+import coop.rchain.models.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.rholang.interpreter.implicits._
-import coop.rchain.storage.{Match => StorageMatch}
-
-import scala.collection.immutable.SortedMap
+import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
 object implicits {
 
-  private def toQuotes(fm: FreeMap, max: Int): List[Quote] = {
-    val sortedParList: SortedMap[Int, Par] = SortedMap.empty[Int, Par] ++ fm
-    (0 to max).map { (i: Int) =>
-      sortedParList.get(i) match {
-        case Some(par) => Quote(par)
-        case None      => Quote(Par.defaultInstance)
+  /* Match instance */
+
+  private def toChannels(fm: FreeMap, max: Int): Seq[Channel] =
+    (0 until max).map { (i: Int) =>
+      fm.get(i) match {
+        case Some(par) => Channel(Quote(par))
+        case None      => Channel(Quote(Par.defaultInstance))
       }
-    }.toList
-  }
+    }
 
   private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
 
-  implicit val matchListChannelListQuote: StorageMatch[List[Channel], List[Quote]] =
-    new StorageMatch[List[Channel], List[Quote]] {
+  implicit val matchListQuote: StorageMatch[Seq[Channel], Seq[Channel]] =
+    new StorageMatch[Seq[Channel], Seq[Channel]] {
 
-      def get(patterns: List[Channel], data: List[Quote]): Option[List[Quote]] =
-        foldMatch(patterns, data.map(Channel.apply), (t: Channel, p: Channel) => spatialMatch(t, p))
+      def get(patterns: Seq[Channel], data: Seq[Channel]): Option[Seq[Channel]] =
+        foldMatch(data, patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
           .runS(emptyMap)
           .map { (freeMap: FreeMap) =>
-            toQuotes(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)
+            toChannels(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)
           }
     }
+
+  /* Serialize instances */
+
+  implicit val serializeChannel: Serialize[Channel] =
+    mkProtobufInstance(Channel)
+
+  implicit val serializeChannels: Serialize[Seq[Channel]] =
+    new Serialize[Seq[Channel]] {
+
+      override def encode(a: Seq[Channel]): Array[Byte] =
+        ListChannel.toByteArray(ListChannel(a))
+
+      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
+        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+    }
+
+  implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =
+    mkProtobufInstance(TaggedContinuation)
 }

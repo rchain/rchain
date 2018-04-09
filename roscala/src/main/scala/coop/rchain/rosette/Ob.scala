@@ -14,7 +14,10 @@ import coop.rchain.rosette.utils.Instances._
 import coop.rchain.rosette.utils.implicits._
 import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
 import shapeless.OpticDefns.RootLens
+import coop.rchain.rosette.Ctxt.Continuation
 import shapeless._
+import cats.implicits._
+import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
 
 trait Base
 
@@ -28,8 +31,8 @@ trait Ob extends Base with Cloneable {
   val meta: Ob
   val parent: Ob
 
-  def dispatch(globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] =
-    pure((Right(Ob.NIV), None))
+  def dispatch: CtxtTransition[Result] =
+    pureCtxt[Result](Right(Ob.NIV))
 
   def extendWith(keyMeta: Ob): Ob = null
 
@@ -63,19 +66,24 @@ trait Ob extends Base with Cloneable {
   def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result[Ob] =
     Right(null)
 
-  def lookupAndInvoke(globalEnv: TblObject): CtxtTransition[(Result[Ob], Option[Continuation])] = {
-    def inspect[A] = State.inspect[Ctxt, A] _
+  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
+    Right(null)
 
+  def lookupAndInvoke: CtxtTransition[Result] =
     for {
-      target <- inspect(_.trgt)
+      ctxt      <- getCtxt
+      globalEnv <- getGlobalEnv
+      target    = ctxt.trgt
+
       fn     = meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
-      res <- fn.run(globalEnv) match {
+
+      result <- fn.run(globalEnv) match {
               case Right(prim: Prim) =>
                 prim.invoke(globalEnv)
               case _ =>
-                pure[Ctxt, (Result[Ob], Option[Continuation])]((Left(Absent), None))
+                pureCtxt[Result](Left(Absent))
             }
-    } yield res
+    } yield result
   }
 
   def matches(ctxt: Ctxt): Boolean = false

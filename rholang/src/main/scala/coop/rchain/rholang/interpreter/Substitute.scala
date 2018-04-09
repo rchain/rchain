@@ -21,8 +21,18 @@ object Substitute {
 
   def maybeSubstitute(term: EVar)(implicit env: Env[Par]): Either[EVar, Par] =
     maybeSubstitute(term.v.get) match {
-      case Left(varue) => Left(EVar(varue))
-      case Right(par)  => Right(par)
+      case Left(v)    => Left(EVar(v))
+      case Right(par) => Right(par)
+    }
+
+  def maybeSubstitute(term: Eval)(implicit env: Env[Par]): Either[Eval, Par] =
+    term.channel.get.channelInstance match {
+      case Quote(p) => Right(substitute(p))
+      case ChanVar(v) =>
+        maybeSubstitute(v) match {
+          case Left(v)    => Left(Eval(ChanVar(v)))
+          case Right(par) => Right(par)
+        }
     }
 
   def substitute(term: Quote)(implicit env: Env[Par]): Quote =
@@ -44,7 +54,7 @@ object Substitute {
 
   def substitute(term: Par)(implicit env: Env[Par]): Par = {
 
-    def subExp(expxs: List[Expr]): Par =
+    def subExp(expxs: Seq[Expr]): Par =
       (expxs :\ Par()) { (expr, par) =>
         expr.exprInstance match {
           case EVarBody(e @ EVar(_)) =>
@@ -56,18 +66,29 @@ object Substitute {
         }
       }
 
+    def subEval(evals: Seq[Eval]): Par =
+      evals.foldRight(Par()) { (eval: Eval, par: Par) =>
+        maybeSubstitute(eval) match {
+          case Left(plainEval)   => par.prepend(plainEval)
+          case Right(droppedPar) => droppedPar ++ par
+        }
+      }
+
     ParSortMatcher
       .sortMatch(
-        Par(
-          sends = term.sends.map(substitute),
-          evals = term.evals.map(substitute),
-          news = term.news.map(substitute),
-          exprs = Nil,
-          matches = term.matches.map(substitute),
-          ids = term.ids,
-          freeCount = term.freeCount,
-          locallyFree = term.locallyFree.until(env.shift)
-        ) ++ subExp(term.exprs.toList)
+        subExp(term.exprs) ++
+          subEval(term.evals) ++
+          Par(
+            evals = Nil,
+            exprs = Nil,
+            sends = term.sends.map(substitute),
+            receives = term.receives.map(substitute),
+            news = term.news.map(substitute),
+            matches = term.matches.map(substitute),
+            ids = term.ids,
+            freeCount = term.freeCount,
+            locallyFree = term.locallyFree.until(env.shift)
+          )
       )
       .term
       .get
@@ -104,9 +125,6 @@ object Substitute {
         )
       )
       .term
-
-  def substitute(term: Eval)(implicit env: Env[Par]): Eval =
-    EvalSortMatcher.sortMatch(Eval(substitute(term.channel.get))).term
 
   def substitute(term: New)(implicit env: Env[Par]): New =
     NewSortMatcher

@@ -869,9 +869,14 @@ pOb Ob::unquote() { return self(); }
 Code* Ob::compileWrt(pOb env, pOb info) {
     PROTECT(env);
     pOb me = self();
+    if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
     CompilationUnit* cu = CompilationUnit::create(me, info, me);
     cu->atTopLevel();
-    return cu->compileExpr(env, TopEnv);
+
+    Code * cp = cu->compileExpr(env, TopEnv);
+    if (VerboseFlag) cp->dumpOn(stderr);
+
+    return cp;
 }
 
 

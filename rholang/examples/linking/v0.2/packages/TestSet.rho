@@ -1,0 +1,65 @@
+export TestSet in {
+  import LinkedList in {
+    contract TestSet(desc, @tests) = {
+      new addTests, execTests, testsCh in {
+        contract execTests(return) = {
+          new combinator in {
+            contract combinator(head, @accumulatedValue, return) = {
+              new result in {
+                head!(*result) |
+                for(@r <- result) {
+                  match [r, accumulatedValue] {
+                    [true, true] => return!(true)
+                    _            => return!(false)
+                  }
+                }
+              }
+            } |
+            for(@tests <- testsCh) {
+              LinkedList!("fold", [tests, true, *combinator], *return)
+            }
+          }
+        } |
+        contract addTests(@tests) = {
+          new toContract, linkedListCh, rListCh in {
+            contract toContract(@test, return) = {
+              match test {
+                [class, function, input, answer] => {
+                  new tContract in {
+                    contract tContract(return) = {
+                      new result in {
+                        @class!(function, input, *result) | for(@r <- result) {
+                          return!(r == answer)
+                        }
+                      }
+                    } |
+                    return!(*tContract)
+                  }
+                }
+              }
+            } |
+            //Transform to linked list in order to have easy map and fold methods
+            LinkedList!("fromSmallList", [tests], *linkedListCh) |
+            for(@linkedList <- linkedListCh) {
+              LinkedList!("map", [linkedList, *toContract], *testsCh)
+            }
+          }
+        } |
+        addTests!(tests) |
+        execTests!(*desc)
+      }
+    } |
+    contract @[*TestSet, "after"](desc, continuation) = {
+      for(@result <- desc) {
+        match result {
+          true => {
+            desc!(true) | { *continuation }
+          }
+          _ => {
+            desc!(false)
+          }
+        }
+      }
+    }
+  }
+}

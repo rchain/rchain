@@ -51,7 +51,8 @@
             tutorial</a>.
           </p>
           <div class="panel-body">
-            {% render_field form.rho class="form-control" rows="16" cols="80" style="font-family: monospace;" placeholder='print(5)' %}
+            {{ form.media }}
+            {{ form.rho }}
             <button type="submit" class="btn btn-primary">Compile and Run</button>
             <button type="button" class="btn" data-toggle="modal" data-target="#saveDialog">
               Save As...
@@ -154,11 +155,11 @@
           var name;
           $('#examples option:selected').each(
             (_ix, opt) => { name = $(opt).attr('value') });
-          $('#id_rho').text(exByName[name]);
+          editor.setValue(exByName[name]);
         });
 
         $('#save').click(function (e) {
-          $('#rhoSave').val($('#id_rho').val());
+          $('#rhoSave').val(editor.getValue());
           $(this.form).submit();
           $('#saveDialog').modal('hide');
         });

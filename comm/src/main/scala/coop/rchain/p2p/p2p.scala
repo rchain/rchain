@@ -1,5 +1,6 @@
 package coop.rchain.p2p
 
+import coop.rchain.p2p.effects._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header

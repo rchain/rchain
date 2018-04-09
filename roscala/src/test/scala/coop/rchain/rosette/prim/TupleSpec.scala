@@ -27,12 +27,12 @@ class TupleSpec extends FlatSpec with Matchers {
     val tup = Seq(Fixnum(2), Fixnum(3), Fixnum(4))
     val newCtxt =
       ctxt.copy(nargs = 2, argvec = Tuple.cons(Fixnum(1), Tuple(Tuple(tup))))
-    tplCons.fn(newCtxt) should be(Right(Tuple.cons(Fixnum(1), Tuple(tup))))
+    tplCons.fnSimple(newCtxt) should be(Right(Tuple.cons(Fixnum(1), Tuple(tup))))
   }
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplCons.fn(newCtxt) should be('left)
+    tplCons.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-cons* */
@@ -45,7 +45,7 @@ class TupleSpec extends FlatSpec with Matchers {
         argvec =
           Tuple.cons(Fixnum(1), Tuple.cons(Fixnum(2), Tuple.cons(Fixnum(3), Tuple(Tuple(tup))))))
 
-    tplConsStar.fn(newCtxt) should be(
+    tplConsStar.fnSimple(newCtxt) should be(
       Right(Tuple.cons(Fixnum(1), Tuple.cons(Fixnum(2), Tuple.cons(Fixnum(3), Tuple(tup))))))
   }
 
@@ -55,12 +55,12 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
 
-    tplConsStar.fn(newCtxt) should be(Right(Tuple(tup)))
+    tplConsStar.fnSimple(newCtxt) should be(Right(Tuple(tup)))
   }
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplCons.fn(newCtxt) should be('left)
+    tplCons.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-rcons */
@@ -68,12 +68,12 @@ class TupleSpec extends FlatSpec with Matchers {
     val tup = Seq(Fixnum(1), Fixnum(2), Fixnum(3))
     val newCtxt =
       ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(4)))
-    tplRcons.fn(newCtxt) should be(Right(Tuple.rcons(Tuple(tup), Fixnum(4))))
+    tplRcons.fnSimple(newCtxt) should be(Right(Tuple.rcons(Tuple(tup), Fixnum(4))))
   }
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, Ob.NIV))
-    tplRcons.fn(newCtxt) should be('left)
+    tplRcons.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-concat */
@@ -88,7 +88,7 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 3, argvec = Tuple(tups))
 
-    tplConcat.fn(newCtxt) should be(Right(Tuple(result)))
+    tplConcat.fnSimple(newCtxt) should be(Right(Tuple(result)))
   }
 
   "tplConcat" should "correctly concat 1 Tuple" in {
@@ -98,7 +98,7 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(tups))
 
-    tplConcat.fn(newCtxt) should be(
+    tplConcat.fnSimple(newCtxt) should be(
       Right(Tuple(tup1))
     )
   }
@@ -109,14 +109,14 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 0, argvec = Tuple(tups))
 
-    tplConcat.fn(newCtxt) should be(
+    tplConcat.fnSimple(newCtxt) should be(
       Right(Tuple(Seq.empty))
     )
   }
 
   it should "fail for non-tuple arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplCons.fn(newCtxt) should be('left)
+    tplCons.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-safe-nth */
@@ -127,14 +127,14 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 2, argvec = Tuple.rcons(Tuple(Tuple(tup)), n))
 
-    tplSafeNth.fn(newCtxt) should be(
+    tplSafeNth.fnSimple(newCtxt) should be(
       Right(Fixnum(4))
     )
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplSafeNth.fn(newCtxt) should be('left)
+    tplSafeNth.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-xchg */
@@ -146,7 +146,7 @@ class TupleSpec extends FlatSpec with Matchers {
       ctxt.copy(nargs = 3,
                 argvec = Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(1)), Fixnum(3)))
 
-    tplXchg.fn(newCtxt) should be(Right(Tuple(result)))
+    tplXchg.fnSimple(newCtxt) should be(Right(Tuple(result)))
   }
 
   it should "fail for out of bounds arguments" in {
@@ -154,12 +154,12 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 3,
                 argvec = Tuple.rcons(Tuple.rcons(Tuple(Tuple(tup)), Fixnum(-100)), Fixnum(100)))
-    tplXchg.fn(newCtxt) should be('left)
+    tplXchg.fnSimple(newCtxt) should be('left)
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplXchg.fn(newCtxt) should be('left)
+    tplXchg.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-head */
@@ -169,20 +169,20 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
 
-    tplHead.fn(newCtxt) should be(
+    tplHead.fnSimple(newCtxt) should be(
       Right(Fixnum(1))
     )
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplHead.fn(newCtxt) should be('left)
+    tplHead.fnSimple(newCtxt) should be('left)
   }
 
   it should "return NIL for an empty Tuple" in {
     val tup     = Seq()
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
-    tplHead.fn(newCtxt) should be(Right(Tuple.NIL))
+    tplHead.fnSimple(newCtxt) should be(Right(Tuple.NIL))
   }
 
   /** tuple-last */
@@ -192,20 +192,20 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
 
-    tplLast.fn(newCtxt) should be(
+    tplLast.fnSimple(newCtxt) should be(
       Right(Fixnum(6))
     )
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplLast.fn(newCtxt) should be('left)
+    tplLast.fnSimple(newCtxt) should be('left)
   }
 
   it should "return NIL for an empty Tuple" in {
     val tup     = Seq()
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
-    tplLast.fn(newCtxt) should be(Right(Tuple.NIL))
+    tplLast.fnSimple(newCtxt) should be(Right(Tuple.NIL))
   }
 
   /** tuple-tail */
@@ -216,27 +216,27 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
 
-    tplTail.fn(newCtxt) should be(
+    tplTail.fnSimple(newCtxt) should be(
       Right(Tuple(tail))
     )
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplTail.fn(newCtxt) should be('left)
+    tplTail.fnSimple(newCtxt) should be('left)
   }
 
   it should "return empty Tuple for an empty Tuple input" in {
     val empty   = Seq.empty
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(empty)))
-    tplTail.fn(newCtxt) should be(Right(Tuple.NIL))
+    tplTail.fnSimple(newCtxt) should be(Right(Tuple.NIL))
   }
 
   it should "return empty Tuple for a single element Tuple input" in {
     val tup     = Seq(Fixnum(1))
     val empty   = Seq.empty
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(tup)))
-    tplTail.fn(newCtxt) should be(Right(Tuple(empty)))
+    tplTail.fnSimple(newCtxt) should be(Right(Tuple(empty)))
   }
 
   /** tuple-new */
@@ -249,7 +249,7 @@ class TupleSpec extends FlatSpec with Matchers {
         argvec = Tuple.cons(Fixnum(1), Tuple(tup))
       )
 
-    tplNew.fn(newCtxt) should be(Right(Tuple(tup)))
+    tplNew.fnSimple(newCtxt) should be(Right(Tuple(tup)))
   }
 
   it should "correctly create a new Tuple with 0 Obs" in {
@@ -258,7 +258,7 @@ class TupleSpec extends FlatSpec with Matchers {
     val newCtxt =
       ctxt.copy(nargs = 1, argvec = Tuple(Tuple(empty)))
 
-    tplNew.fn(newCtxt) should be(Right(Tuple(empty)))
+    tplNew.fnSimple(newCtxt) should be(Right(Tuple(empty)))
   }
 
   /** tuple-new-n */
@@ -269,7 +269,7 @@ class TupleSpec extends FlatSpec with Matchers {
         nargs = 3,
         argvec = Tuple(Seq(Fixnum(0), Fixnum(6), Fixnum(1)))
       )
-    tplNewN.fn(newCtxt) should be(Right(tup))
+    tplNewN.fnSimple(newCtxt) should be(Right(tup))
   }
 
   it should "return NIL for n<=0" in {
@@ -279,12 +279,12 @@ class TupleSpec extends FlatSpec with Matchers {
         argvec = Tuple(Seq(Fixnum(0), Fixnum(0), Fixnum(1)))
       )
 
-    tplNewN.fn(newCtxt) should be(Right(Tuple.NIL))
+    tplNewN.fnSimple(newCtxt) should be(Right(Tuple.NIL))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplNewN.fn(newCtxt) should be('left)
+    tplNewN.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-mem? */
@@ -295,7 +295,7 @@ class TupleSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(4))
       )
-    tplMemQ.fn(newCtxt) should be(Right(RblBool(true)))
+    tplMemQ.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the Ob is not in the Tuple" in {
@@ -306,7 +306,7 @@ class TupleSpec extends FlatSpec with Matchers {
         argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(17))
       )
 
-    tplMemQ.fn(newCtxt) should be(Right(RblBool(false)))
+    tplMemQ.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return false for an empty Tuple" in {
@@ -317,12 +317,12 @@ class TupleSpec extends FlatSpec with Matchers {
         argvec = Tuple.rcons(Tuple(Tuple(tup)), Fixnum(17))
       )
 
-    tplMemQ.fn(newCtxt) should be(Right(RblBool(false)))
+    tplMemQ.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplMemQ.fn(newCtxt) should be('left)
+    tplMemQ.fnSimple(newCtxt) should be('left)
   }
 
   /** tuple-matches? */
@@ -336,7 +336,7 @@ class TupleSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(tups)
       )
-    tplMatchesP.fn(newCtxt) should be(Right(RblBool(true)))
+    tplMatchesP.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "return false if the Tuple does not match the pattern" in {
@@ -349,7 +349,7 @@ class TupleSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(tups)
       )
-    tplMatchesP.fn(newCtxt) should be(Right(RblBool(false)))
+    tplMatchesP.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "return false for an empty Tuple" in {
@@ -362,12 +362,12 @@ class TupleSpec extends FlatSpec with Matchers {
         nargs = 2,
         argvec = Tuple(tups)
       )
-    tplMatchesP.fn(newCtxt) should be(Right(RblBool(false)))
+    tplMatchesP.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for invalid arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    tplMemQ.fn(newCtxt) should be('left)
+    tplMemQ.fnSimple(newCtxt) should be('left)
   }
 
 }

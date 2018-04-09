@@ -1,0 +1,6 @@
+new ack in {
+  @"stdoutAck"!("hello, world!", *ack) |
+  for (_ <- ack) {
+    @"stdout"!("received")
+  }
+}
