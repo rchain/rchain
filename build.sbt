@@ -27,7 +27,9 @@ lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSetting
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
-    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      catsCore,
+    ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )
