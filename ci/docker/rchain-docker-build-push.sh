@@ -142,7 +142,6 @@ DOCKER_SRC_TAG="latest"
 if [[ ${docker_dst_repo} ]]; then
     if [[ "${TRAVIS_BRANCH}" = "master" || \
         "${TRAVIS_BRANCH}" = "dev" || \
-        "${TRAVIS_BRANCH}" = "OPS-117" || \
         "${TRAVIS_BRANCH}" = "ops-test" ]] ; then
         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
         docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
