@@ -104,7 +104,6 @@ cd ${bnfc_tmp_dir}
 git clone https://github.com/BNFC/bnfc.git
 cd bnfc/source
 cabal install --global
-cd ${project_root}
 
 ## Install SBT 
 cd ${PROJECT_ROOT_DIR}
