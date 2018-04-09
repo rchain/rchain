@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
+import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.node.repl._

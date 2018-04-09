@@ -1,9 +1,9 @@
-package coop.rchain.catscontrib
+package coop.rchain.p2p.effects
 
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.comm._, CommError._
 import cats._, cats.data._, cats.implicits._
-import Catscontrib._
+import coop.rchain.catscontrib._, Catscontrib._
 
 trait Communication[F[_]] {
   def roundTrip(msg: ProtocolMessage,
