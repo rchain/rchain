@@ -1,7 +1,7 @@
-package coop.rchain.catscontrib
+package coop.rchain.p2p.effects
 
 import cats._, cats.data._, cats.implicits._
-import Catscontrib._
+import coop.rchain.catscontrib._, Catscontrib._
 
 trait Time[F[_]] {
   def currentMillis: F[Long]
