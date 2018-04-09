@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Prep CI Enviroment
+# Prep "set" for CI if CI environment variable is set
 if [[ "${CI}" = "true" ]]; then
     set -exo pipefail
+else
+    set -e
 fi
 
 # Receive and set variables.
@@ -17,8 +19,8 @@ elif [[ $1 && $2 && $3 ]]; then
     docker_dst_repo="$3"
 else
     echo "Invalid number of parameters."
-    echo "Example: sudo $0 <branch name> <repo url> <docker hub repo:tag>"
-    echo "Example: sudo $0 dev https://github.com/rchain/rchain myrepo/rnode:mytagname"
+    echo "Usage: $0 <branch name> <repo url> <docker hub repo:tag>"
+    echo "Usage: $0 dev https://github.com/rchain/rchain myrepo/rnode:mytagname"
     echo "You will be asked for you Docker repo user/password." 
     exit
 fi
@@ -41,10 +43,9 @@ if [[ "${TRAVIS}" = "true" ]]; then
         -e DOCKER_PASSWORD="${DOCKER_PASSWORD}" \
         -e TRAVIS="${TRAVIS}" -e TRAVIS_BRANCH=${TRAVIS_BRANCH} \
         --name ${PUSHER_DOCKER_NAME} ubuntu:16.04
-    # Be aware of what "-v /var/run/docker.sock:/var/run/docker.sock" is doing above.
-    # See https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/.
 
     echo "Running Travis build and will push to Docker Hub repo deppending on branch name."
+
     # Copy and run build and push docker script in docker pusher container from above.
     docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
     docker exec -it ${PUSHER_DOCKER_NAME} bash -c "./rchain-docker-build-push.sh \

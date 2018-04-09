@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Prep CI Enviroment
+# Prep "set" for CI if CI environment variable is set
 if [[ "${CI}" = "true" ]]; then
     set -exo pipefail
+else
+    set -e
 fi
 
 if [[ "$#" != "3" ]]; then
     echo "Invalid amount of parameters."
-    echo "Example: sudo $0 <branch name> <repo url> <docker hub repo>"
-    echo "Example: sudo $0 mybranch https://github.com/myrepo/rchain myrepo/rchain:latest"
+    echo "Usage: $0 <branch name> <repo url> <docker hub repo>"
+    echo "Usage: $0 mybranch https://github.com/myrepo/rchain myrepo/rchain:latest"
     exit
 fi
 
@@ -126,14 +128,7 @@ rm -rf
 
 ## Build RChain via SBT build.sbt 
 cd ${PROJECT_ROOT_DIR}
-sbt rholang/bnfc:generate
-sbt rholang/compile
-sbt rholang/assembly
-sbt rspace/compile
-sbt rspace/assembly
-sbt node/compile
-sbt node/assembly
-sbt node/docker
+sbt bnfc:generate node/docker
 
 ## Tag and push newly built docker image(s).
 # Setup auth, source image(s) and target/destination image(s) name in variables 
