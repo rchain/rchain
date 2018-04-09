@@ -107,6 +107,13 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     collectGarbage(key)
   }
 
+  private[rspace] def removeAll(txn: Unit, channels: List[C]): Unit = {
+    val key = hashCs(channels)
+    _data.put(key, List.empty)
+    _waitingContinuations.put(key, List.empty)
+    for (c <- channels) removeJoin(txn, c, channels)
+  }
+
   private[rspace] def addJoin(txn: T, c: C, cs: List[C]): Unit =
     _joinMap.addBinding(c, hashCs(cs))
 

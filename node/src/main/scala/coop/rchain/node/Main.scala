@@ -1,27 +1,25 @@
 package coop.rchain.node
 
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import java.util.concurrent.TimeoutException
-import coop.rchain.models.Par
-import coop.rchain.node.repl._
-
-import cats._, cats.data._, cats.implicits._
+import cats.implicits._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
-import Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
-import monix.execution.{CancelableFuture, Scheduler}
-import scala.concurrent.{ExecutionContext, Future}
 
 object Main {
 
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
     (conf.eval.toOption, conf.repl()) match {
-      case (Some(fileName), _) => InterpreterRuntime.evaluateFile(fileName)
+      case (Some(fileName), _) => executeEvaluate(fileName, conf)
       case (None, true)        => executeRepl(conf)
       case (None, false)       => executeNode(conf)
     }
+  }
+
+  private def executeEvaluate(fileName: String, conf: Conf): Unit = {
+    import monix.execution.Scheduler.Implicits.global
+    val repl = new Repl(conf.grpcHost(), conf.grpcPort())
+    println(repl.eval(fileName).unsafeRunSync)
   }
 
   private def executeRepl(conf: Conf): Unit = {
@@ -29,7 +27,7 @@ object Main {
 
     val repl = new Repl(conf.grpcHost(), conf.grpcPort())
     val recipe: Task[Unit] = for {
-      _    <- Task.delay(print("> "))
+      _    <- Task.delay(print("rholang> "))
       line <- Task.delay(scala.io.StdIn.readLine())
       _ <- line.trim match {
             case ""   => Task.delay(print("\n"))

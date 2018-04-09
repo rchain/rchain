@@ -121,6 +121,40 @@ package object rspace {
     }
   }
 
+  def install[C, P, A, K](store: IStore[C, P, A, K],
+                          channels: List[C],
+                          patterns: List[P],
+                          continuation: K)(implicit m: Match[P, A]): Option[(K, List[A])] = {
+    if (channels.length =!= patterns.length) {
+      val msg = "channels.length must equal patterns.length"
+      logger.error(msg)
+      throw new IllegalArgumentException(msg)
+    }
+    store.withTxn(store.createTxnWrite()) { txn =>
+      logger.debug(
+        s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>")
+      extractDataCandidates(store, channels, patterns)(txn) match {
+        case None =>
+          store.removeAll(txn, channels)
+          store.putK(txn, channels, WaitingContinuation(patterns, continuation, true))
+          for (channel <- channels) store.addJoin(txn, channel, channels)
+          logger.debug(
+            s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
+          None
+        case Some(dataCandidates) =>
+          dataCandidates.foreach {
+            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
+                if !persistData =>
+              store.removeA(txn, candidateChannel, dataIndex)
+            case _ =>
+              ()
+          }
+          logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
+          Some((continuation, dataCandidates.map(_.datum.a)))
+      }
+    }
+  }
+
   /* Produce */
 
   @tailrec

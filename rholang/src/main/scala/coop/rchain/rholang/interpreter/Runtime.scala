@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -9,7 +9,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{Channel, TaggedContinuation}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{consume, IStore, LMDBStore}
+import coop.rchain.rspace.{install, IStore, LMDBStore}
 import monix.eval.Task
 
 import scala.collection.immutable
@@ -29,26 +29,15 @@ object Runtime {
     : Seq[Option[(TaggedContinuation, List[Seq[Channel]])]] =
     processes.map {
       case (name, arity, ref) =>
-        consume(
-          store,
-          List(Channel(Quote(GString(name)))),
-          List((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i)))),
-          TaggedContinuation(ScalaBodyRef(ref)),
-          true
-        )
+        install(store,
+                List(Channel(Quote(GString(name)))),
+                List((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i)))),
+                TaggedContinuation(ScalaBodyRef(ref)))
     }
 
-  private def createTemporaryStore()
-    : IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] = {
-    val dbDir: Path = Files.createTempDirectory("rspace-store-")
-    LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
-                                                                              1024L * 1024L * 1024L)
-  }
-
-  def create(): Runtime = {
-
-    val store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] =
-      createTemporaryStore()
+  def create(dataDir: Path, mapSize: Long): Runtime = {
+    val store =
+      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dataDir, mapSize)
 
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       RholangAndScalaDispatcher.create(store, dispatchTable)

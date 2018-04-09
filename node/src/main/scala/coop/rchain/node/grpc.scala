@@ -8,7 +8,7 @@ import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.execution.Scheduler
 
-import java.io.StringReader
+import java.io.{Reader, StringReader}
 
 class GrpcServer(executionContext: ExecutionContext, port: Int, runtime: Runtime) { self =>
 
@@ -38,24 +38,23 @@ class GrpcServer(executionContext: ExecutionContext, port: Int, runtime: Runtime
     // TODO we need to handle this better
     import monix.execution.Scheduler.Implicits.global
 
-    def run(request: ReplRequest): Future[ReplResponse] = {
-      val line           = request.line
-      val normalizedTerm = buildNormalizedTerm(new StringReader(line))
-
-      normalizedTerm match {
-        case Left(er) =>
-          Future.successful(ReplResponse(s"Could not build a term from '$line'. Error: $er"))
-        case Right(term) =>
-          evaluator(runtime.reducer, term).attempt
-            .map {
-              case Left(ex) => s"Caught boxed exception: $ex"
-              case Right(_) => s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
-            }
-            .map(ReplResponse(_))
-            .runAsync
-      }
-
+    def exec(reader: Reader): Future[ReplResponse] = buildNormalizedTerm(reader) match {
+      case Left(er) =>
+        Future.successful(ReplResponse(s"Error: $er"))
+      case Right(term) =>
+        evaluate(runtime.reducer, term).attempt
+          .map {
+            case Left(ex) => s"Caught boxed exception: $ex"
+            case Right(_) => s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
+          }
+          .map(ReplResponse(_))
+          .runAsync
     }
-  }
 
+    def run(request: CmdRequest): Future[ReplResponse] =
+      exec(new StringReader(request.line))
+
+    def eval(request: EvalRequest): Future[ReplResponse] =
+      exec(RholangCLI.reader(request.fileName))
+  }
 }
