@@ -3,6 +3,7 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.util.removeFirst
 
 import scala.annotation.tailrec
 import scala.util.Random
@@ -13,49 +14,114 @@ package object rspace {
 
   /* Consume */
 
+  /** Searches through data, looking for a match with a given pattern.
+    *
+    * If there is a match, we return the matching [[DataCandidate]],
+    * along with the remaining unmatched data.
+    *
+    * The unmatched data is used to update the cache in [[extractDataCandidates]].
+    */
   @tailrec
   private[rspace] final def findMatchingDataCandidate[C, P, A](
       channel: C,
       data: List[(Datum[A], Int)],
-      pattern: P
-  )(implicit m: Match[P, A]): Option[DataCandidate[C, A]] =
+      pattern: P,
+      prefix: List[(Datum[A], Int)]
+  )(implicit m: Match[P, A]): Option[(DataCandidate[C, A], List[(Datum[A], Int)])] =
     data match {
       case Nil => None
-      case (Datum(matchCandidate, persist), dataIndex) :: remaining =>
+      case (indexedDatum @ (Datum(matchCandidate, persist), dataIndex)) :: remaining =>
         m.get(pattern, matchCandidate) match {
-          case None      => findMatchingDataCandidate(channel, remaining, pattern)
-          case Some(mat) => Some(DataCandidate(channel, Datum(mat, persist), dataIndex))
+          case None =>
+            findMatchingDataCandidate(channel, remaining, pattern, indexedDatum :: prefix)
+          case Some(mat) =>
+            Some((DataCandidate(channel, Datum(mat, persist), dataIndex), prefix ++ remaining))
         }
     }
 
+  /** Iterates through (channel, pattern) pairs looking for matching data.
+    *
+    * Potential match candidates are supplied by the `channelToIndexedData` cache.
+    *
+    * After a match is found, we remove the matching datum from the candidate cache for
+    * remaining matches.
+    */
+  @tailrec
+  private[rspace] def extractDataCandidatesLoop[C, P, A](
+      channelPatternPairs: List[(C, P)],
+      channelToIndexedData: Map[C, List[(Datum[A], Int)]],
+      acc: List[Option[DataCandidate[C, A]]])(
+      implicit m: Match[P, A]): List[Option[DataCandidate[C, A]]] =
+    channelPatternPairs match {
+      case Nil =>
+        acc.reverse
+      case (channel, pattern) :: tail =>
+        val maybeTuple: Option[(DataCandidate[C, A], List[(Datum[A], Int)])] =
+          for {
+            indexedData <- channelToIndexedData.get(channel)
+            result      <- findMatchingDataCandidate(channel, indexedData, pattern, Nil)
+          } yield result
+
+        maybeTuple match {
+          case Some((cand, rem)) =>
+            extractDataCandidatesLoop(tail,
+                                      channelToIndexedData.updated(channel, rem),
+                                      Some(cand) :: acc)
+          case None =>
+            extractDataCandidatesLoop(tail, channelToIndexedData, None :: acc)
+        }
+    }
+
+  /** Finds matching data candidates in the store.
+    *
+    * This version is used by [[consume]] and [[install]].
+    *
+    * Here, we create a cache of the data at each channel as `channelToIndexedData`
+    * which is used for finding matches.  When a speculative match is found, we can
+    * remove the matching datum from the remaining data candidates in the cache.
+    *
+    * Put another way, this allows us to speculatively remove matching data without
+    * affecting the actual store contents.
+    */
   private[rspace] def extractDataCandidates[C, P, A, K](store: IStore[C, P, A, K],
                                                         channels: List[C],
                                                         patterns: List[P])(txn: store.T)(
       implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
-    val options: List[Option[DataCandidate[C, A]]] =
-      channels.zip(patterns).map {
-        case (channel, pattern) =>
-          val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
-          findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
-      }
+
+    val channelToIndexedData = channels.map { (c: C) =>
+      c -> Random.shuffle(store.getAs(txn, List(c)).zipWithIndex)
+    }.toMap
+
+    val options = extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil)
     options.sequence[Option, DataCandidate[C, A]]
   }
 
+  /** Finds matching data candidates in the store.
+    *
+    * This version is used by [[produce]].
+    *
+    * Here, we create a cache of the data at each channel as `channelToIndexedData`
+    * which is used for finding matches.  When a speculative match is found, we can
+    * remove the matching datum from the remaining data candidates in the cache.
+    *
+    * Put another way, this allows us to speculatively remove matching data without
+    * affecting the actual store contents.
+    *
+    * In this version, we also add the produced data directly to this cache.
+    */
   private[rspace] def extractDataCandidates[C, P, A, K](
       store: IStore[C, P, A, K],
       channels: List[C],
       patterns: List[P],
       batChannel: C,
       data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[List[DataCandidate[C, A]]] = {
-    val options: List[Option[DataCandidate[C, A]]] =
-      channels.zip(patterns).map {
-        case (channel, pattern) if channel == batChannel =>
-          val indexedData: List[(Datum[A], Int)] = List((data, -1))
-          findMatchingDataCandidate(channel, indexedData, pattern)
-        case (channel, pattern) =>
-          val indexedData: List[(Datum[A], Int)] = store.getAs(txn, List(channel)).zipWithIndex
-          findMatchingDataCandidate(channel, Random.shuffle(indexedData), pattern)
-      }
+
+    val channelToIndexedData = channels.map { (c: C) =>
+      val as = Random.shuffle(store.getAs(txn, List(c)).zipWithIndex)
+      c -> { if (c == batChannel) (data, -1) :: as else as }
+    }.toMap
+
+    val options = extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil)
     options.sequence[Option, DataCandidate[C, A]]
   }
 
@@ -108,13 +174,15 @@ package object rspace {
             s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
           None
         case Some(dataCandidates) =>
-          dataCandidates.foreach {
-            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
-                if !persistData =>
-              store.removeA(txn, candidateChannel, dataIndex)
-            case _ =>
-              ()
-          }
+          dataCandidates
+            .sortBy(_.datumIndex)(Ordering[Int].reverse)
+            .foreach {
+              case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
+                  if !persistData =>
+                store.removeA(txn, candidateChannel, dataIndex)
+              case _ =>
+                ()
+            }
           logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
           Some((continuation, dataCandidates.map(_.datum.a)))
       }
@@ -235,15 +303,17 @@ package object rspace {
           if (!persistK) {
             store.removePsK(txn, channels, continuationIndex)
           }
-          dataCandidates.foreach {
-            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
-              if (!persistData && dataIndex >= 0) {
-                store.removeA(txn, candidateChannel, dataIndex)
-              }
-              store.removeJoin(txn, candidateChannel, channels)
-            case _ =>
-              ()
-          }
+          dataCandidates
+            .sortBy(_.datumIndex)(Ordering[Int].reverse)
+            .foreach {
+              case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
+                if (!persistData && dataIndex >= 0) {
+                  store.removeA(txn, candidateChannel, dataIndex)
+                }
+                store.removeJoin(txn, candidateChannel, channels)
+              case _ =>
+                ()
+            }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
           Some(continuation, dataCandidates.map(_.datum.a))
         case None =>

@@ -1,8 +1,7 @@
 package coop.rchain.rspace
 
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
-import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.extended._
@@ -10,26 +9,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import org.scalatest._
 
-abstract class StorageActionsBase extends FlatSpec with Matchers with OptionValues {
-
-  type TestStore =
-    IStore[String, Pattern, String, StringsCaptor] with ITestableStore[String, Pattern]
-
-  val logger: Logger = Logger[StorageActionsTests]
-
-  override def withFixture(test: NoArgTest): Outcome = {
-    logger.debug(s"Test: ${test.name}")
-    super.withFixture(test)
-  }
-
-  /** A fixture for creating and running a test with a fresh instance of the test store.
-    */
-  def withTestStore(f: TestStore => Unit): Unit
-}
-
-trait StorageActionsTests extends StorageActionsBase {
-
-  /* Tests */
+trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
 
   "produce" should
     "persist a piece of data in the store" in withTestStore { store =>
@@ -428,6 +408,29 @@ trait StorageActionsTests extends StorageActionsBase {
     runK(r3)
 
     getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
+
+    store.isEmpty shouldBe true
+  }
+
+  "A joined consume with the same channel given twice followed by a produce" should
+    "not raises any errors (CORE-365)" in withTestStore { store =>
+    val channels = List("ch1", "ch1")
+
+    val r1 = consume(store,
+                     channels,
+                     List(StringMatch("datum1"), StringMatch("datum1")),
+                     new StringsCaptor,
+                     persist = false)
+
+    val r2 = produce(store, "ch1", "datum1", persist = false)
+    val r3 = produce(store, "ch1", "datum1", persist = false)
+
+    r1 shouldBe None
+    r2 shouldBe None
+    r3 shouldBe defined
+
+    runK(r3)
+    getK(r3).results shouldBe List(List("datum1", "datum1"))
 
     store.isEmpty shouldBe true
   }
@@ -866,8 +869,9 @@ trait StorageActionsTests extends StorageActionsBase {
 
 class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOperationsTests {
 
-  override def withTestStore(f: TestStore => Unit): Unit = {
+  override def withTestStore(f: T => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
+    testStore.clear()
     try {
       f(testStore)
     } finally {
@@ -881,11 +885,11 @@ class LMDBStoreActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll {
 
-  private[this] val dbDir = Files.createTempDirectory("rchain-storage-test-")
+  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
+  val mapSize: Long = 1024L * 1024L * 1024L
 
-  override def withTestStore(f: TestStore => Unit): Unit = {
-    val testStore =
-      LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, 1024 * 1024 * 1024)
+  override def withTestStore(f: T => Unit): Unit = {
+    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     testStore.clear()
     try {
       f(testStore)
