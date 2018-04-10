@@ -14,6 +14,13 @@ package object rspace {
 
   /* Consume */
 
+  /** Searches through data, looking for a match with a given pattern.
+    *
+    * If there is a match, we return the matching [[DataCandidate]],
+    * along with the remaining unmatched data.
+    *
+    * The unmatched data is used to update the cache in [[extractDataCandidates]].
+    */
   @tailrec
   private[rspace] final def findMatchingDataCandidate[C, P, A](
       channel: C,
@@ -32,10 +39,13 @@ package object rspace {
         }
     }
 
-  /*
-   * When searching for matching data candidates, we must ensure that after match is made,
-   * we remove the matching datum from the list of candidates for remaining matches.
-   */
+  /** Iterates through (channel, pattern) pairs looking for matching data.
+    *
+    * Potential match candidates are supplied by the `channelToIndexedData` cache.
+    *
+    * After a match is found, we remove the matching datum from the candidate cache for
+    * remaining matches.
+    */
   @tailrec
   private[rspace] def extractDataCandidatesLoop[C, P, A](
       channelPatternPairs: List[(C, P)],
@@ -62,7 +72,17 @@ package object rspace {
         }
     }
 
-  /** Used by [[consume]] and [[install]] */
+  /** Finds matching data candidates in the store.
+    *
+    * This version is used by [[consume]] and [[install]].
+    *
+    * Here, we create a cache of the data at each channel as `channelToIndexedData`
+    * which is used for finding matches.  When a speculative match is found, we can
+    * remove the matching datum from the remaining data candidates in the cache.
+    *
+    * Put another way, this allows us to speculatively remove matching data without
+    * affecting the actual store contents.
+    */
   private[rspace] def extractDataCandidates[C, P, A, K](store: IStore[C, P, A, K],
                                                         channels: List[C],
                                                         patterns: List[P])(txn: store.T)(
@@ -76,7 +96,19 @@ package object rspace {
     options.sequence[Option, DataCandidate[C, A]]
   }
 
-  /** Used by [[produce]] */
+  /** Finds matching data candidates in the store.
+    *
+    * This version is used by [[produce]].
+    *
+    * Here, we create a cache of the data at each channel as `channelToIndexedData`
+    * which is used for finding matches.  When a speculative match is found, we can
+    * remove the matching datum from the remaining data candidates in the cache.
+    *
+    * Put another way, this allows us to speculatively remove matching data without
+    * affecting the actual store contents.
+    *
+    * In this version, we also add the produced data directly to this cache.
+    */
   private[rspace] def extractDataCandidates[C, P, A, K](
       store: IStore[C, P, A, K],
       channels: List[C],
