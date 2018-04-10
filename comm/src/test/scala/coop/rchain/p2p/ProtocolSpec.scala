@@ -4,6 +4,7 @@ import org.scalatest._
 import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._, NetworkProtocol._
+import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
 

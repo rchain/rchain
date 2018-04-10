@@ -11,6 +11,7 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
+import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 

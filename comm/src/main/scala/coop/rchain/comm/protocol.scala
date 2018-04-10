@@ -9,6 +9,7 @@ import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm._, CommError._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.p2p.effects._
 import kamon._
 
 // TODO: In message construction, the system clock is used for nonce
