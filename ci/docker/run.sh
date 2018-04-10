@@ -44,7 +44,7 @@ if [[ "${TRAVIS}" = "true" ]]; then
         -e TRAVIS="${TRAVIS}" -e TRAVIS_BRANCH=${TRAVIS_BRANCH} \
         --name ${PUSHER_DOCKER_NAME} ubuntu:16.04
 
-    echo "Running Travis build and will push to Docker Hub repo deppending on branch name."
+    echo "Running Travis build and will push to Docker Hub repo depending on branch name."
 
     # Copy and run build and push docker script in docker pusher container from above.
     docker cp rchain-docker-build-push.sh ${PUSHER_DOCKER_NAME}:/ 
