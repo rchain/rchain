@@ -23,8 +23,8 @@ private[rspace] final class SeqCodec[A](codec: Codec[A], limit: Option[Int] = No
 private[rspace] object SeqCodec {
 
   /**
-		* Codec that encodes/decodes a `Seq[A]` of `N` elements using a `Codec[A]`.
-		*/
+    * Codec that encodes/decodes a `Seq[A]` of `N` elements using a `Codec[A]`.
+    */
   def seqOfN[A](countCodec: Codec[Int], valueCodec: Codec[A]): Codec[Seq[A]] =
     countCodec
       .flatZip(count => new SeqCodec(valueCodec, Some(count)))
