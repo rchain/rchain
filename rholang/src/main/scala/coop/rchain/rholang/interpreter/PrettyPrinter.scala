@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import com.trueaccord.scalapb.GeneratedMessage
+import scalapb.GeneratedMessage
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
