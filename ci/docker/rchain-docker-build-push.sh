@@ -32,7 +32,7 @@ apt-get install -y apt-transport-https ca-certificates curl software-properties-
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg |  apt-key add -
 add-apt-repository    "deb [arch=amd64] https://download.docker.com/linux/ubuntu    xenial    stable"
 apt update
-apt install -y docker-ce
+apt install -y docker-ce sudo
 
 # Get RChain Repo
 apt -y install git
@@ -69,27 +69,11 @@ apt-get install openjdk-8-jdk -yqq
 # Build secp 
 apt-get install autoconf libtool -yqq
 cd ${PROJECT_ROOT_DIR}
-cd crypto
-if [[ -d "secp256k1" ]]; then
-    rm -rf secp256k1 
-fi
-git clone https://github.com/bitcoin-core/secp256k1
-cd secp256k1
-./autogen.sh
-./configure --enable-jni --enable-experimental --enable-module-schnorr --enable-module-ecdh --prefix=/tmp/f/rchain/.tmp
-make
+./scripts/install_secp.sh
 
 # Build libsodium
 cd ${PROJECT_ROOT_DIR}
-cd crypto
-if [[ -d "libsodium" ]]; then
-    rm -rf libsodium 
-fi
-git clone https://github.com/jedisct1/libsodium --branch stable
-cd libsodium
-./configure
-make && make check
-make install
+./scripts/install_sodium.sh
 
 ## Install Haskell Platform
 # ref: https://www.haskell.org/platform/#linux-ubuntu
@@ -99,11 +83,7 @@ apt-get install haskell-platform -yqq
 
 ## Install BNFC Converter 
 # ref: http://bnfc.digitalgrammars.com/
-bnfc_tmp_dir="$(mktemp -dt bnfcbuild.XXXXXX)"
-cd ${bnfc_tmp_dir}
-git clone https://github.com/BNFC/bnfc.git
-cd bnfc/source
-cabal install --global
+./scripts/install_bnfc.sh
 
 ## Install SBT 
 cd ${PROJECT_ROOT_DIR}
@@ -114,8 +94,6 @@ apt-get update -yqq
 apt-get install sbt -yqq
 ## Install JFlex 
 apt-get install jflex -yqq
-## Remove temporary files 
-rm -rf 
 
 ## Build RChain via SBT build.sbt 
 cd ${PROJECT_ROOT_DIR}
