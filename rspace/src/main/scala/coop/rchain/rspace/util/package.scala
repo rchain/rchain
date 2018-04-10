@@ -35,4 +35,23 @@ package object util {
     val (l1, l2) = xs splitAt n
     l1 ++ (l2 drop 1)
   }
+
+  /** Removes the first occurrence of an element that matches the given predicate.
+    */
+  def removeFirst[T](xs: List[T])(p: T => Boolean): List[T] = {
+    val (l1, l2) = xs.span(x => !p(x))
+    l1 ::: l2.drop(1)
+  }
+
+  /**
+    * scala cats sequence
+    * returns None if any element in the list is None, and return Some of values in the list otherwise
+    */
+  def sequence[T](xs: Seq[Option[T]]): Option[Seq[T]] =
+    //return is bad operator, however fold and recursive implementations
+    //generate enormous memory traffic due to Seq concatenations
+    Some(xs.map {
+      case None    => return None
+      case Some(x) => x
+    })
 }

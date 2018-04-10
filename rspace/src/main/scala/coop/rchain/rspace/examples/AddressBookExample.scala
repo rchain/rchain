@@ -2,10 +2,15 @@ package coop.rchain.rspace.examples
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
-import scala.collection.immutable.Seq
 
+import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.extended._
+import coop.rchain.rspace.util.ignore
+
+import scala.collection.immutable.Seq
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 object AddressBookExample {
 
@@ -43,6 +48,24 @@ object AddressBookExample {
                              |phone:   $phone
                              |""".stripMargin)
       }
+  }
+
+  class EntriesCaptor extends ((Seq[Entry]) => Unit) with Serializable {
+
+    @transient
+    private final lazy val res: ListBuffer[Seq[Entry]] = mutable.ListBuffer.empty[Seq[Entry]]
+
+    final def results: Seq[Seq[Entry]] = res.toList
+
+    final def apply(v1: Seq[Entry]): Unit = ignore(res += v1)
+
+    override def hashCode(): Int =
+      res.hashCode() * 37
+
+    override def equals(obj: scala.Any): Boolean = obj match {
+      case ec: EntriesCaptor => ec.res == res
+      case _                 => false
+    }
   }
 
   object implicits {
@@ -95,6 +118,12 @@ object AddressBookExample {
       * An instance of [[Serialize]] for [[Printer]]
       */
     implicit val serializePrinter: Serialize[Printer] = makeSerializeFromSerializable[Printer]
+
+    /**
+      * An instance of [[Serialize]] for [[EntriesCaptor]]
+      */
+    implicit val serializeEntriesCaptor: Serialize[EntriesCaptor] =
+      makeSerializeFromSerializable[EntriesCaptor]
 
     /* Match instance */
 
