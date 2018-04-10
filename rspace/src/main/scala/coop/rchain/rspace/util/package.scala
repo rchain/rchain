@@ -13,6 +13,25 @@ package object util {
   }
 
   /**
+    * Executes a function `f` with a given `a` as its argument,
+    * returning the result of the function and closing the `a`
+    *
+    * Compare to Java's "try-with-resources"
+    *
+    * @param a A given resource that will be closed if it implements [[AutoCloseable]]
+    * @param f A function that takes this resource as its argument
+    */
+  def optionalWithResource[A, B](a: A)(f: A => B): B =
+    try {
+      f(a)
+    } finally {
+      a match {
+        case ac: AutoCloseable => ac.close()
+        case _                 =>
+      }
+    }
+
+  /**
     * Executes a function `f` with a given [[AutoCloseable]] `a` as its argument,
     * returning the result of the function and closing the `a`
     *

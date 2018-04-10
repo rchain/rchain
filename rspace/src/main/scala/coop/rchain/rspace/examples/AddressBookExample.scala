@@ -2,7 +2,6 @@ package coop.rchain.rspace.examples
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
-import cats.implicits._
 
 import coop.rchain.rspace._
 import coop.rchain.rspace.extended._

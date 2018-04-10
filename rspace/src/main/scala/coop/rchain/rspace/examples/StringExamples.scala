@@ -2,7 +2,6 @@ package coop.rchain.rspace.examples
 
 import java.nio.charset.StandardCharsets
 
-import cats.syntax.either._
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.{Match, Serialize}
 

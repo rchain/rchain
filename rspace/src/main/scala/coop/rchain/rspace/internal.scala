@@ -59,5 +59,4 @@ object internal {
     def fromBitVector[T](vector: BitVector, codec: Codec[T]): T =
       fromAttempt(codec.decode(vector))
   }
-
 }

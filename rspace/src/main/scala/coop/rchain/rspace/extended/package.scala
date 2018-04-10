@@ -1,7 +1,5 @@
 package coop.rchain.rspace
 
-import scala.annotation.tailrec
-
 package object extended {
 
   def getK[A, K](t: Option[(K, A)]): K =
