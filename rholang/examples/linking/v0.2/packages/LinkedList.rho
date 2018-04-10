@@ -129,6 +129,24 @@ export LinkedList in {
       @[*LinkedList, "fold"]!(list, 0, *combinator, *return)
     }
   } |
+  contract @[*LinkedList, "zip"](@list1, @list2, return) = {
+    new loop in {
+      contract loop(@pair, @acc, return) = {
+        match pair {
+          [[h1, t1], [h2, t2]] => {
+            loop!([t1, t2], [[h1, h2], acc], *return)
+          }
+          _ => {
+            return!(acc)
+          }
+        }
+      } |
+      new zippedCh in {
+        loop!([list1, list2], [], *zippedCh) |
+        for(@zipped <- zippedCh){ @[*LinkedList, "reverse"]!(zipped, *return) }
+      }
+    }
+  } |
   contract @[*LinkedList, "range"](@start, @end, return) = {
     new loop in {
       contract loop(@i, @list) = {

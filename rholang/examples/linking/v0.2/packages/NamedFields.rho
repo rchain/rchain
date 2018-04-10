@@ -1,0 +1,42 @@
+//Rholang contract to give behaviour similar
+//to a Scala case class. Fields can be accessed
+//by name and the object can be pattern matched
+//to extract the values.
+//Example usage:
+//NamedFields!(["a", "b", "c"], [1, 2, 3], "myFields") |
+//for(@myFields <- @"myFields"){ 
+//  @[myFields, "a"]!("w") | // stores value 1 at channel @"w"
+//  match myFields { //extract values via pattern matching
+//    [_, [a, b, c]] => { @"x"!(a) | @"y"!(b) | @"z"!(c) } 
+//  }
+//}
+export NamedFields in {
+  import LinkedList, RhoClass in {
+    contract NamedFields(@names, @values, return) = {
+      new this, llNamesCh, llValuesCh, zippedCh, fieldsContract in {
+        contract fieldsContract(@pair, isDone) = {
+          match pair {
+            [name, value] => { @[*NamedFields, "createFieldContract"]!([*this, values], name, value, *isDone) }
+          }
+        } |
+        LinkedList!("fromSmallList", [names], *llNamesCh) |
+        LinkedList!("fromSmallList", [values], *llValuesCh) |
+        for(@llNames <- llNamesCh; @llValues <- llValuesCh) {
+          LinkedList!("zip", [llNames, llValues], *zippedCh) |
+          for(@zipped <- zippedCh) {
+            LinkedList!("foreach", [zipped, *fieldsContract], Nil) |
+            for(_ <- @Nil){ Nil } //throw away useless send on @Nil
+          }
+        } |
+        contract @[*this, values](@method, @input, return) = {
+          @[*RhoClass, "functionApply"]!([[*this, values], method], input, *return)
+        } |
+        return!([*this, values])
+      }
+    } |
+    contract @[*NamedFields, "createFieldContract"](namedField, @name, @value, isDone) = {
+      contract @[*namedField, name](return) = {return!(value) } |
+      isDone!(true)
+    }
+  }
+}
