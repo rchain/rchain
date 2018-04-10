@@ -18,14 +18,17 @@ package object rspace {
   private[rspace] final def findMatchingDataCandidate[C, P, A](
       channel: C,
       data: List[(Datum[A], Int)],
-      pattern: P
-  )(implicit m: Match[P, A]): Option[DataCandidate[C, A]] =
+      pattern: P,
+      prefix: List[(Datum[A], Int)]
+  )(implicit m: Match[P, A]): Option[(DataCandidate[C, A], List[(Datum[A], Int)])] =
     data match {
       case Nil => None
-      case (Datum(matchCandidate, persist), dataIndex) :: remaining =>
+      case (indexedDatum @ (Datum(matchCandidate, persist), dataIndex)) :: remaining =>
         m.get(pattern, matchCandidate) match {
-          case None      => findMatchingDataCandidate(channel, remaining, pattern)
-          case Some(mat) => Some(DataCandidate(channel, Datum(mat, persist), dataIndex))
+          case None =>
+            findMatchingDataCandidate(channel, remaining, pattern, indexedDatum :: prefix)
+          case Some(mat) =>
+            Some((DataCandidate(channel, Datum(mat, persist), dataIndex), prefix ++ remaining))
         }
     }
 
@@ -43,14 +46,13 @@ package object rspace {
       case Nil =>
         acc.reverse
       case (channel, pattern) :: tail =>
-        val maybeTuple: Option[(DataCandidate[C, A], List[(Datum[A], Int)])] = for {
-          indexedData <- channelToIndexedData.get(channel)
-          cand        <- findMatchingDataCandidate(channel, indexedData, pattern)
-        } yield (cand, removeFirst(indexedData) { _ == (cand.datum, cand.datumIndex) })
+        val maybeTuple: Option[(DataCandidate[C, A], List[(Datum[A], Int)])] =
+          for {
+            indexedData <- channelToIndexedData.get(channel)
+            result      <- findMatchingDataCandidate(channel, indexedData, pattern, Nil)
+          } yield result
 
         maybeTuple match {
-          case Some((cand, Nil)) =>
-            extractDataCandidatesLoop(tail, channelToIndexedData - channel, Some(cand) :: acc)
           case Some((cand, rem)) =>
             extractDataCandidatesLoop(tail,
                                       channelToIndexedData.updated(channel, rem),
