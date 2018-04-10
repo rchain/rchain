@@ -191,7 +191,7 @@ package object rspace {
   def install[C, P, A, K](store: IStore[C, P, A, K],
                           channels: Seq[C],
                           patterns: Seq[P],
-                          continuation: K)(implicit m: Match[P, A]): Option[(K, List[A])] = {
+                          continuation: K)(implicit m: Match[P, A]): Option[(K, Seq[A])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -217,7 +217,7 @@ package object rspace {
               ()
           }
           logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-          Some((continuation, dataCandidates.map(_.datum.a).toList))
+          Some((continuation, dataCandidates.map(_.datum.a)))
       }
     }
   }

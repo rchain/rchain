@@ -56,7 +56,7 @@ object Runtime {
       ("stderrAck", 2, 3L)
     )
 
-    val res: Seq[Option[(TaggedContinuation, List[Seq[Channel]])]] =
+    val res: Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
       introduceSystemProcesses(store, procDefs)
 
     assert(res.forall(_.isEmpty))
