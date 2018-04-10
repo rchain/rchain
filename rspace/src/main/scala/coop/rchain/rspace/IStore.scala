@@ -22,9 +22,9 @@ trait IStore[C, P, A, K] {
     */
   private[rspace] type T
 
-  private[rspace] def hashCs(channels: Seq[C])(implicit sc: Serialize[C]): H
+  private[rspace] def hashChannels(channels: Seq[C])(implicit sc: Serialize[C]): H
 
-  private[rspace] def getKey(txn: T, hash: H): Seq[C]
+  private[rspace] def getChannels(txn: T, hash: H): Seq[C]
 
   private[rspace] def removeA(txn: T, channels: Seq[C], index: Int): Unit
 

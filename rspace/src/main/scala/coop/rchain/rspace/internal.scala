@@ -33,7 +33,7 @@ object internal {
     lazy val byteVectorCodec: Codec[ByteVector] =
       variableSizeBytes(int32, bytes.xmap(x => x, x => x))
 
-    lazy val bytesSeqCodec: Codec[Seq[ByteVector]] =
+    lazy val byteVectorsCodec: Codec[Seq[ByteVector]] =
       seqOfN(int32, byteVectorCodec).as[Seq[ByteVector]]
 
     lazy val asBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
@@ -42,7 +42,7 @@ object internal {
       seqOfN(int32, asBytesCodec).as[Seq[DatumBytes]]
 
     lazy val psKsBytesCodec: Codec[WaitingContinuationBytes] =
-      (bytesSeqCodec :: byteVectorCodec :: bool).as[WaitingContinuationBytes]
+      (byteVectorsCodec :: byteVectorCodec :: bool).as[WaitingContinuationBytes]
 
     lazy val waitingContinuationsSeqCodec: Codec[Seq[WaitingContinuationBytes]] =
       seqOfN(int32, psKsBytesCodec).as[Seq[WaitingContinuationBytes]]

@@ -25,13 +25,13 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   private[rspace] type T = Unit
 
-  private[rspace] def hashCs(cs: Seq[C])(implicit sc: Serialize[C]): H =
+  private[rspace] def hashChannels(cs: Seq[C])(implicit sc: Serialize[C]): H =
     printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
 
   private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
-    _keys.update(hashCs(channels), channels)
+    _keys.update(hashChannels(channels), channels)
 
-  private[rspace] def getKey(txn: T, s: H) =
+  private[rspace] def getChannels(txn: T, s: H) =
     _keys.getOrElse(s, Seq.empty[C])
 
   private[rspace] def createTxnRead(): Unit = ()
@@ -63,7 +63,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   }
 
   private[rspace] def putA(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
-    val key = hashCs(channels)
+    val key = hashChannels(channels)
     putCs(txn, channels)
     val datums = _data.getOrElseUpdate(key, Seq.empty[Datum[A]])
     _data.update(key, datum +: datums)
@@ -72,7 +72,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   private[rspace] def putK(txn: T,
                            channels: Seq[C],
                            continuation: WaitingContinuation[P, K]): Unit = {
-    val key = hashCs(channels)
+    val key = hashChannels(channels)
     putCs(txn, channels)
     val waitingContinuations =
       _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
@@ -80,11 +80,11 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   }
 
   private[rspace] def getAs(txn: T, channels: Seq[C]): Seq[Datum[A]] =
-    _data.getOrElse(hashCs(channels), Seq.empty[Datum[A]])
+    _data.getOrElse(hashChannels(channels), Seq.empty[Datum[A]])
 
   private[rspace] def getPsK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
     _waitingContinuations
-      .getOrElse(hashCs(curr), Seq.empty[WaitingContinuation[P, K]])
+      .getOrElse(hashChannels(curr), Seq.empty[WaitingContinuation[P, K]])
       .map { (wk: WaitingContinuation[P, K]) =>
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
       }
@@ -93,7 +93,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     removeA(txn, Seq(channel), index)
 
   private[rspace] def removeA(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashCs(channels)
+    val key = hashChannels(channels)
     for (as <- _data.get(key)) {
       _data.update(key, dropIndex(as, index))
     }
@@ -101,7 +101,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   }
 
   private[rspace] def removePsK(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashCs(channels)
+    val key = hashChannels(channels)
     for (psks <- _waitingContinuations.get(key)) {
       _waitingContinuations.update(key, dropIndex(psks, index))
     }
@@ -109,21 +109,21 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   }
 
   private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
-    val key = hashCs(channels)
+    val key = hashChannels(channels)
     _data.put(key, Seq.empty)
     _waitingContinuations.put(key, Seq.empty)
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
   private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
-    _joinMap.addBinding(c, hashCs(cs))
+    _joinMap.addBinding(c, hashChannels(cs))
 
   private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getKey(txn, _))
+    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getChannels(txn, _))
 
   private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashCs(Seq(c))
-    val csKey   = hashCs(cs)
+    val joinKey = hashChannels(Seq(c))
+    val csKey   = hashChannels(cs)
     if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
       _joinMap.removeBinding(c, csKey)
     }
@@ -132,13 +132,13 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
     _joinMap.remove(c)
-    collectGarbage(hashCs(Seq(c)))
+    collectGarbage(hashChannels(Seq(c)))
   }
 
   def close(): Unit = ()
 
   def getPs(txn: T, channels: Seq[C]): Seq[Seq[P]] =
-    _waitingContinuations.getOrElse(hashCs(channels), Nil).map(_.patterns)
+    _waitingContinuations.getOrElse(hashChannels(channels), Nil).map(_.patterns)
 
   def clear(): Unit = {
     _keys.clear()

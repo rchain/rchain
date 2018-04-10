@@ -38,13 +38,13 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] type T = Txn[ByteBuffer]
 
-  private[rspace] def hashCs(cs: Seq[C])(implicit st: Serialize[C]): H =
+  private[rspace] def hashChannels(cs: Seq[C])(implicit st: Serialize[C]): H =
     hashBytes(toByteBuffer(cs)(st))
 
-  private[rspace] def getKey(txn: T, s: H): Seq[C] =
+  private[rspace] def getChannels(txn: T, s: H): Seq[C] =
     Option(_dbKeys.get(txn, s)).map(fromByteBuffer[C]).getOrElse(Seq.empty[C])
 
-  private[rspace] def putCsH(txn: T, channels: Seq[C]): H = {
+  private[rspace] def putChannels(txn: T, channels: Seq[C]): H = {
     val packedCs = toByteBuffer(channels)
     val keyCs    = hashBytes(packedCs)
     _dbKeys.put(txn, keyCs, packedCs)
@@ -68,10 +68,10 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       txn.close()
     }
 
-  private[this] def readDatumBytesSeq(txn: T, keyCs: H): Option[Seq[DatumBytes]] =
+  private[this] def readDatumByteses(txn: T, keyCs: H): Option[Seq[DatumBytes]] =
     Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer(_, asBytesSeqCodec))
 
-  private[this] def writeDatumBytesSeq(txn: T, keyCs: H, values: Seq[DatumBytes]): Unit =
+  private[this] def writeDatumByteses(txn: T, keyCs: H, values: Seq[DatumBytes]): Unit =
     if (values.nonEmpty) {
       _dbAs.put(txn, keyCs, toByteBuffer(values, asBytesSeqCodec))
     } else {
@@ -80,15 +80,15 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
 
   private[rspace] def putA(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
-    val keyCs   = putCsH(txn, channels)
+    val keyCs   = putChannels(txn, channels)
     val binAs   = DatumBytes(toByteVector(datum.a), datum.persist)
-    val asksSeq = readDatumBytesSeq(txn, keyCs).getOrElse(Seq.empty[DatumBytes])
-    writeDatumBytesSeq(txn, keyCs, binAs +: asksSeq)
+    val asksSeq = readDatumByteses(txn, keyCs).getOrElse(Seq.empty[DatumBytes])
+    writeDatumByteses(txn, keyCs, binAs +: asksSeq)
   }
 
   private[rspace] def getAs(txn: T, channels: Seq[C]): Seq[Datum[A]] = {
-    val keyCs = hashCs(channels)
-    readDatumBytesSeq(txn, keyCs)
+    val keyCs = hashChannels(channels)
+    readDatumByteses(txn, keyCs)
       .map { (byteses: Seq[DatumBytes]) =>
         byteses.map((bytes: DatumBytes) =>
           Datum(fromByteVector[A](bytes.datumBytes), bytes.persist))
@@ -118,9 +118,9 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     removeA(txn, Seq(channel), index)
 
   private[rspace] def removeA(txn: T, channels: Seq[C], index: Int): Unit = {
-    val keyCs = hashCs(channels)
-    readDatumBytesSeq(txn, keyCs) match {
-      case Some(as) => writeDatumBytesSeq(txn, keyCs, util.dropIndex(as, index))
+    val keyCs = hashChannels(channels)
+    readDatumByteses(txn, keyCs) match {
+      case Some(as) => writeDatumByteses(txn, keyCs, util.dropIndex(as, index))
       case None     => throw new IllegalArgumentException(s"removeA: no values at $channels")
     }
   }
@@ -142,7 +142,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private[rspace] def putK(txn: T,
                            channels: Seq[C],
                            continuation: WaitingContinuation[P, K]): Unit = {
-    val keyCs = putCsH(txn, channels)
+    val keyCs = putChannels(txn, channels)
     val binWcs =
       WaitingContinuationBytes(toByteVectorSeq(continuation.patterns),
                                toByteVector(continuation.continuation),
@@ -153,19 +153,19 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[rspace] def getPsK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] = {
-    val keyCs = hashCs(curr)
+    val keyCs = hashChannels(curr)
     readWaitingContinuations(txn, keyCs)
       .map(
         _.map(
           wcs =>
-            WaitingContinuation(fromByteVectorSeq[P](wcs.patterns),
+            WaitingContinuation(fromByteVectors[P](wcs.patterns),
                                 fromByteVector[K](wcs.kvalue),
                                 wcs.persist)))
       .getOrElse(Seq.empty[WaitingContinuation[P, K]])
   }
 
   private[rspace] def removePsK(txn: T, channels: Seq[C], index: Int): Unit = {
-    val keyCs = hashCs(channels)
+    val keyCs = hashChannels(channels)
     readWaitingContinuations(txn, keyCs) match {
       case Some(wcs) => writeWaitingContinuations(txn, keyCs, util.dropIndex(wcs, index))
       case None      => throw new IllegalArgumentException(s"removePsK: no values at $channels")
@@ -173,21 +173,21 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
-    val keyCs = hashCs(channels)
+    val keyCs = hashChannels(channels)
     readWaitingContinuations(txn, keyCs).foreach { _ =>
       writeWaitingContinuations(txn, keyCs, Seq.empty)
     }
-    readDatumBytesSeq(txn, keyCs).foreach { _ =>
-      writeDatumBytesSeq(txn, keyCs, Seq.empty)
+    readDatumByteses(txn, keyCs).foreach { _ =>
+      writeDatumByteses(txn, keyCs, Seq.empty)
     }
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
   private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashCs(Seq(c))
+    val joinKey = hashChannels(Seq(c))
     val oldJoinsBv =
       Option(_dbJoins.get(txn, joinKey))
-        .map(toByteVectorSeqs)
+        .map(toByteVectors)
         .getOrElse(Seq.empty[Seq[ByteVector]])
 
     val addBv = toByteVectorSeq(cs)
@@ -197,23 +197,23 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] = {
-    val joinKey = hashCs(Seq(c))
+    val joinKey = hashChannels(Seq(c))
     Option(_dbJoins.get(txn, joinKey))
-      .map(toByteVectorSeqs)
-      .map(_.map(fromByteVectorSeq[C]))
+      .map(toByteVectors)
+      .map(_.map(fromByteVectors[C]))
       .getOrElse(Seq.empty[Seq[C]])
   }
 
   private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashCs(Seq(c))
+    val joinKey = hashChannels(Seq(c))
     Option(_dbJoins.get(txn, joinKey))
-      .map(toByteVectorSeqs)
-      .map(_.map(fromByteVectorSeq[C]))
+      .map(toByteVectors)
+      .map(_.map(fromByteVectors[C]))
       .map(exSeq => (exSeq, exSeq.indexOf(cs)))
       .map {
         case (exSeq, idx) =>
           if (idx >= 0) {
-            val csKey = hashCs(cs)
+            val csKey = hashChannels(cs)
             if (_dbPsKs.get(txn, csKey) == null) {
               val resSeq = dropIndex(exSeq, idx)
               if (resSeq.nonEmpty) {
@@ -231,7 +231,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
-    val joinKey = hashCs(Seq(c))
+    val joinKey = hashChannels(Seq(c))
     _dbJoins.delete(txn, joinKey)
     collectGarbage(txn, joinKey)
   }
@@ -268,7 +268,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
       withResource(_dbKeys.iterate(txn, keyRange)) { (it: CursorIterator[ByteBuffer]) =>
         it.asScala.map { (x: CursorIterator.KeyVal[ByteBuffer]) =>
-          val channels: Seq[C] = getKey(txn, x.`key`())
+          val channels: Seq[C] = getChannels(txn, x.`key`())
           val data             = getAs(txn, channels)
           val wks              = getPsK(txn, channels)
           (channels, Row(data, wks))
@@ -322,7 +322,7 @@ object LMDBStore {
     toByteBuffer(toBitVector(value, codec))
 
   private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
-    toByteBuffer(toBitVector(toByteVectorSeq(values), bytesSeqCodec))
+    toByteBuffer(toBitVector(toByteVectorSeq(values), byteVectorsCodec))
 
   private[rspace] def toByteBuffer(vector: BitVector): ByteBuffer = {
     val bytes          = vector.bytes
@@ -336,7 +336,7 @@ object LMDBStore {
       implicit st: Serialize[T]): Seq[ByteVector] =
     values.map(st.encode).map(ByteVector(_))
 
-  private[rspace] def fromByteVectorSeq[T](vectors: Seq[ByteVector])(
+  private[rspace] def fromByteVectors[T](vectors: Seq[ByteVector])(
       implicit st: Serialize[T]): Seq[T] =
     vectors
       .map(_.toArray)
@@ -346,17 +346,17 @@ object LMDBStore {
         case Right(values) => values
       }
 
-  private[rspace] def toByteVectorSeqs(byteBuffer: ByteBuffer): Seq[Seq[ByteVector]] =
-    fromBitVector(BitVector(byteBuffer), bytesSeqCodec)
-      .map(x => fromBitVector(x.bits, bytesSeqCodec))
+  private[rspace] def toByteVectors(byteBuffer: ByteBuffer): Seq[Seq[ByteVector]] =
+    fromBitVector(BitVector(byteBuffer), byteVectorsCodec)
+      .map(x => fromBitVector(x.bits, byteVectorsCodec))
 
   private[rspace] def toByteBuffer(vectors: Seq[Seq[ByteVector]]): ByteBuffer = {
-    val bl = vectors.map(toBitVector(_, bytesSeqCodec).toByteVector)
-    toByteBuffer(bl, bytesSeqCodec)
+    val bl = vectors.map(toBitVector(_, byteVectorsCodec).toByteVector)
+    toByteBuffer(bl, byteVectorsCodec)
   }
 
   private[rspace] def fromByteBuffer[T](byteBuffer: ByteBuffer)(implicit st: Serialize[T]): Seq[T] =
-    fromBitVector(BitVector(byteBuffer), bytesSeqCodec)
+    fromBitVector(BitVector(byteBuffer), byteVectorsCodec)
       .map(_.toArray)
       .map(st.decode)
       .map {

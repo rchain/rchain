@@ -14,12 +14,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   "produce" should
     "persist a piece of data in the store" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashCs(key)
+    val keyHash = store.hashChannels(key)
 
     val r = produce(store, key.head, "datum", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getChannels(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
       store.getPsK(txn, key) shouldBe Nil
@@ -33,12 +33,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   "producing twice on the same channel" should
     "persist two pieces of data in the store" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashCs(key)
+    val keyHash = store.hashChannels(key)
 
     val r1 = produce(store, key.head, "datum1", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getChannels(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, key) shouldBe Nil
@@ -49,7 +49,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r2 = produce(store, key.head, "datum2", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getChannels(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) should contain theSameElementsAs List(Datum("datum1", persist = false),
                                                                   Datum("datum2", persist = false))
@@ -65,12 +65,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     "persist a continuation in the store" in withTestStore { store =>
     val key      = List("ch1")
     val patterns = List(Wildcard)
-    val keyHash  = store.hashCs(key)
+    val keyHash  = store.hashChannels(key)
 
     val r = consume(store, key, patterns, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe List("ch1")
+      store.getChannels(txn, keyHash) shouldBe List("ch1")
       store.getPs(txn, key) shouldBe List(patterns)
       store.getAs(txn, key) shouldBe Nil
       store.getPsK(txn, key) should not be empty
@@ -93,12 +93,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     "persist a continuation in the store" in withTestStore { store =>
     val key      = List("ch1", "ch2", "ch3")
     val patterns = List(Wildcard, Wildcard, Wildcard)
-    val keyHash  = store.hashCs(key)
+    val keyHash  = store.hashChannels(key)
 
     val r = consume(store, key, patterns, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getChannels(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe List(patterns)
       store.getAs(txn, key) shouldBe Nil
       store.getPsK(txn, key) should not be empty
@@ -112,12 +112,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   "producing and then consuming on the same channel" should
     "return the continuation and data" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashCs(key)
+    val keyHash = store.hashChannels(key)
 
     val r1 = produce(store, key.head, "datum", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getChannels(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
       store.getPsK(txn, key) shouldBe Nil
@@ -130,7 +130,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     store.isEmpty shouldBe true
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe Nil
+      store.getChannels(txn, keyHash) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
       store.getPsK(txn, key) shouldBe Nil
@@ -178,12 +178,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
     "return a continuation and all the data" in withTestStore { store =>
     val produceKey1     = List("ch1")
-    val produceKey1Hash = store.hashCs(produceKey1)
+    val produceKey1Hash = store.hashChannels(produceKey1)
 
     val r1 = produce(store, produceKey1.head, "datum1", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, produceKey1Hash) shouldBe produceKey1
+      store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, produceKey1) shouldBe Nil
@@ -192,17 +192,17 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r1 shouldBe None
 
     val consumeKey     = List("ch1", "ch2")
-    val consumeKeyHash = store.hashCs(consumeKey)
+    val consumeKeyHash = store.hashChannels(consumeKey)
     val consumePattern = List(Wildcard, Wildcard)
 
     val r2 = consume(store, consumeKey, consumePattern, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, produceKey1Hash) shouldBe produceKey1
+      store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, produceKey1) shouldBe Nil
-      store.getKey(txn, consumeKeyHash) shouldBe consumeKey
+      store.getChannels(txn, consumeKeyHash) shouldBe consumeKey
       store.getPs(txn, consumeKey) shouldBe List(consumePattern)
       store.getAs(txn, consumeKey) shouldBe Nil
       store.getPsK(txn, consumeKey) should not be empty
@@ -211,20 +211,20 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r2 shouldBe None
 
     val produceKey2     = List("ch2")
-    val produceKey2Hash = store.hashCs(produceKey2)
+    val produceKey2Hash = store.hashChannels(produceKey2)
 
     val r3 = produce(store, produceKey2.head, "datum2", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, produceKey1Hash) shouldBe Nil
+      store.getChannels(txn, produceKey1Hash) shouldBe Nil
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe Nil
       store.getPsK(txn, produceKey1) shouldBe Nil
-      store.getKey(txn, consumeKeyHash) shouldBe Nil
+      store.getChannels(txn, consumeKeyHash) shouldBe Nil
       store.getPs(txn, consumeKey) shouldBe Nil
       store.getAs(txn, consumeKey) shouldBe Nil
       store.getPsK(txn, consumeKey) shouldBe Nil
-      store.getKey(txn, produceKey2Hash) shouldBe Nil
+      store.getChannels(txn, produceKey2Hash) shouldBe Nil
       store.getPs(txn, produceKey2) shouldBe Nil
       store.getAs(txn, produceKey2) shouldBe Nil
       store.getPsK(txn, produceKey2) shouldBe Nil
@@ -246,15 +246,15 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val produceKey3     = List("ch3")
     val consumeKey      = List("ch1", "ch2", "ch3")
     val patterns        = List(Wildcard, Wildcard, Wildcard)
-    val produceKey1Hash = store.hashCs(produceKey1)
-    val produceKey2Hash = store.hashCs(produceKey2)
-    val produceKey3Hash = store.hashCs(produceKey3)
-    val consumeKeyHash  = store.hashCs(consumeKey)
+    val produceKey1Hash = store.hashChannels(produceKey1)
+    val produceKey2Hash = store.hashChannels(produceKey2)
+    val produceKey3Hash = store.hashChannels(produceKey3)
+    val consumeKeyHash  = store.hashChannels(consumeKey)
 
     val r1 = produce(store, produceKey1.head, "datum1", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, produceKey1Hash) shouldBe produceKey1
+      store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
       store.getPs(txn, produceKey1) shouldBe Nil
       store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
       store.getPsK(txn, produceKey1) shouldBe Nil
@@ -265,7 +265,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r2 = produce(store, produceKey2.head, "datum2", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, produceKey2Hash) shouldBe produceKey2
+      store.getChannels(txn, produceKey2Hash) shouldBe produceKey2
       store.getPs(txn, produceKey2) shouldBe Nil
       store.getAs(txn, produceKey2) shouldBe List(Datum("datum2", persist = false))
       store.getPsK(txn, produceKey2) shouldBe Nil
@@ -276,7 +276,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r3 = produce(store, produceKey3.head, "datum3", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, produceKey3Hash) shouldBe produceKey3
+      store.getChannels(txn, produceKey3Hash) shouldBe produceKey3
       store.getPs(txn, produceKey3) shouldBe Nil
       store.getAs(txn, produceKey3) shouldBe List(Datum("datum3", persist = false))
       store.getPsK(txn, produceKey3) shouldBe Nil
@@ -287,7 +287,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r4 = consume(store, List("ch1", "ch2", "ch3"), patterns, new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, consumeKeyHash) shouldBe Nil
+      store.getChannels(txn, consumeKeyHash) shouldBe Nil
       store.getPs(txn, consumeKey) shouldBe Nil
       store.getAs(txn, consumeKey) shouldBe Nil
       store.getPsK(txn, consumeKey) shouldBe Nil
@@ -321,7 +321,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r6 = consume(store, key, List(Wildcard), captor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, store.hashCs(key)) shouldBe Nil
+      store.getChannels(txn, store.hashChannels(key)) shouldBe Nil
       store.getAs(txn, key) shouldBe Nil
       store.getPs(txn, key) shouldBe Nil
       store.getPsK(txn, key) shouldBe Nil
@@ -562,12 +562,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   "producing and then doing a persistent consume on the same channel" should
     "return the continuation and data" in withTestStore { store =>
     val key     = List("ch1")
-    val keyHash = store.hashCs(key)
+    val keyHash = store.hashChannels(key)
 
     val r1 = produce(store, key.head, "datum", persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe key
+      store.getChannels(txn, keyHash) shouldBe key
       store.getPs(txn, key) shouldBe Nil
       store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
       store.getPsK(txn, key) shouldBe Nil
@@ -590,7 +590,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r3 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getKey(txn, keyHash) shouldBe List("ch1")
+      store.getChannels(txn, keyHash) shouldBe List("ch1")
       store.getPs(txn, key) shouldBe List(List(Wildcard))
       store.getAs(txn, key) shouldBe Nil
       store.getPsK(txn, key) should not be empty
@@ -603,12 +603,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     "return the continuation for the first produce, and then the second produce" in withTestStore {
     store =>
       val key     = List("ch1")
-      val keyHash = store.hashCs(key)
+      val keyHash = store.hashChannels(key)
 
       val r1 = produce(store, key.head, "datum1", persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getKey(txn, keyHash) shouldBe key
+        store.getChannels(txn, keyHash) shouldBe key
         store.getPs(txn, key) shouldBe Nil
         store.getAs(txn, key) shouldBe List(Datum("datum1", persist = false))
         store.getPsK(txn, key) shouldBe Nil
@@ -631,7 +631,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r3 = consume(store, key, List(Wildcard), new StringsCaptor, persist = true)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getKey(txn, keyHash) shouldBe List("ch1")
+        store.getChannels(txn, keyHash) shouldBe List("ch1")
         store.getPs(txn, key) shouldBe List(List(Wildcard))
         store.getAs(txn, key) shouldBe Nil
         store.getPsK(txn, key) should not be empty
@@ -642,7 +642,7 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r4 = produce(store, key.head, "datum2", persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getKey(txn, keyHash) shouldBe List("ch1")
+        store.getChannels(txn, keyHash) shouldBe List("ch1")
         store.getPs(txn, key) shouldBe List(List(Wildcard))
         store.getAs(txn, key) shouldBe Nil
         store.getPsK(txn, key) should not be empty
