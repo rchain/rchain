@@ -20,8 +20,9 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum + fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(0)) {
+        (accum, fixnum: Fixnum) =>
+          accum + fixnum
       })
     }
   }
@@ -56,8 +57,9 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(1)) {
-        case (accum, fixnum: Fixnum) => accum * fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(1)) {
+        (accum, fixnum: Fixnum) =>
+          accum * fixnum
       })
     }
   }
@@ -202,8 +204,8 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(Int.MaxValue)) {
-        case (minVal, fixnum: Fixnum) =>
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(Int.MaxValue)) {
+        (minVal, fixnum: Fixnum) =>
           if (minVal.value < fixnum.value) minVal else fixnum
       })
     }
@@ -219,8 +221,8 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(Int.MinValue)) {
-        case (maxVal, fixnum: Fixnum) =>
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(Int.MinValue)) {
+        (maxVal, fixnum: Fixnum) =>
           if (maxVal.value > fixnum.value) maxVal else fixnum
       })
     }
@@ -251,7 +253,7 @@ object fixnum {
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
       try {
-        Right(Fixnum(Math.pow(m.value, n.value).toInt))
+        Right(Fixnum(Math.pow(m.value.toDouble, n.value.toDouble).toInt))
       } catch {
         case _: ArithmeticException =>
           Left(ArithmeticError)
@@ -321,8 +323,9 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(~0)) {
-        case (accum, fixnum: Fixnum) => accum & fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(~0)) {
+        (accum, fixnum: Fixnum) =>
+          accum & fixnum
       })
     }
   }
@@ -337,8 +340,9 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum | fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(0)) {
+        (accum, fixnum: Fixnum) =>
+          accum | fixnum
       })
     }
   }
@@ -353,8 +357,9 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum ^ fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(0)) {
+        (accum, fixnum: Fixnum) =>
+          accum ^ fixnum
       })
     }
   }
@@ -383,7 +388,7 @@ object fixnum {
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      val commonBits = ctxt.argvec.elem.take(n).foldLeft(Fixnum(~0)) {
+      val commonBits = ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(~0)) {
         case (accum, fixnum: Fixnum) => accum & fixnum
       }
 
@@ -475,7 +480,7 @@ object fixnum {
     }
   }
 
-  private def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
+  def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
     if (!elem(n).isInstanceOf[Fixnum]) {
       Left(TypeMismatch(n, Fixnum.getClass().getName()))
     } else {
