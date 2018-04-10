@@ -6,7 +6,7 @@ else
     set -e
 fi
 
-# Receive and set variables.
+# Receive Params and Set Variables
 if [[ "${TRAVIS}" = "true" ]]; then
     echo "Running build on Travis CI"
     branch_name="dev"
@@ -25,10 +25,10 @@ else
     exit
 fi
 
-## Prep docker image 
+## Prep Docker Image 
 # PUSHER_DOCKER_NAME="rchain-pusher-$(mktemp | awk -F. '{print $2}')"
 # Use the above vs below if you want unique build names every time. 
-# If build fails before last line with "rm -f" this can leave garbage containers running. 
+# If build fails before last line with "rm -f" the container will stay running for more exploration. 
 PUSHER_DOCKER_NAME="rchain-pusher-tmp"
 
 # If container exists force remove it.
@@ -37,7 +37,7 @@ if [[ $(docker ps -aq -f name=${PUSHER_DOCKER_NAME}) ]]; then
 fi
 
 if [[ "${TRAVIS}" = "true" ]]; then
-    # Start docker container with access to docker.sock so it can run view/run docker images.
+    # Start docker container with access to docker.sock so it can create and push docker images.
     docker run -dit -v /var/run/docker.sock:/var/run/docker.sock \
         -e DOCKER_USERNAME="${DOCKER_USERNAME}" \
         -e DOCKER_PASSWORD="${DOCKER_PASSWORD}" \
@@ -60,5 +60,5 @@ else
         ${branch_name} ${git_repo} ${docker_dst_repo}"
 fi
 
-# Clean up
+# Clean Up
 docker rm -f ${PUSHER_DOCKER_NAME}
