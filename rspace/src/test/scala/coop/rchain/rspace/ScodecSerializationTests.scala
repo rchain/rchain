@@ -5,7 +5,7 @@ import coop.rchain.rspace.internal.scodecs._
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
-trait ScodecSerializationTests extends FlatSpec with Matchers {
+class ScodecSerializationTests extends FlatSpec with Matchers {
 
   "List[DatumBytes]" should "round-trip" in {
     val bll =
