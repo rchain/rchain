@@ -3,8 +3,8 @@ package coop.rchain.rspace
 import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.security.MessageDigest
+import scala.collection.immutable.Seq
 
-import cats.implicits._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
@@ -38,13 +38,13 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] type T = Txn[ByteBuffer]
 
-  private[rspace] def hashCs(cs: List[C])(implicit st: Serialize[C]): H =
+  private[rspace] def hashCs(cs: Seq[C])(implicit st: Serialize[C]): H =
     hashBytes(toByteBuffer(cs)(st))
 
-  private[rspace] def getKey(txn: T, s: H): List[C] =
-    Option(_dbKeys.get(txn, s)).map(fromByteBuffer[C]).getOrElse(List.empty[C])
+  private[rspace] def getKey(txn: T, s: H): Seq[C] =
+    Option(_dbKeys.get(txn, s)).map(fromByteBuffer[C]).getOrElse(Seq.empty[C])
 
-  private[rspace] def putCsH(txn: T, channels: List[C]): H = {
+  private[rspace] def putCsH(txn: T, channels: Seq[C]): H = {
     val packedCs = toByteBuffer(channels)
     val keyCs    = hashBytes(packedCs)
     _dbKeys.put(txn, keyCs, packedCs)
@@ -68,32 +68,32 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       txn.close()
     }
 
-  private[this] def readDatumBytesList(txn: T, keyCs: H): Option[List[DatumBytes]] =
-    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer(_, asBytesListCodec))
+  private[this] def readDatumBytesSeq(txn: T, keyCs: H): Option[Seq[DatumBytes]] =
+    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer(_, asBytesSeqCodec))
 
-  private[this] def writeDatumBytesList(txn: T, keyCs: H, values: List[DatumBytes]): Unit =
+  private[this] def writeDatumBytesSeq(txn: T, keyCs: H, values: Seq[DatumBytes]): Unit =
     if (values.nonEmpty) {
-      _dbAs.put(txn, keyCs, toByteBuffer(values, asBytesListCodec))
+      _dbAs.put(txn, keyCs, toByteBuffer(values, asBytesSeqCodec))
     } else {
       _dbAs.delete(txn, keyCs)
       collectGarbage(txn, keyCs, wcsCollected = true)
     }
 
-  private[rspace] def putA(txn: T, channels: List[C], datum: Datum[A]): Unit = {
+  private[rspace] def putA(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
     val keyCs   = putCsH(txn, channels)
     val binAs   = DatumBytes(toByteVector(datum.a), datum.persist)
-    val asksLst = readDatumBytesList(txn, keyCs).getOrElse(List.empty[DatumBytes])
-    writeDatumBytesList(txn, keyCs, binAs :: asksLst)
+    val asksSeq = readDatumBytesSeq(txn, keyCs).getOrElse(Seq.empty[DatumBytes])
+    writeDatumBytesSeq(txn, keyCs, binAs +: asksSeq)
   }
 
-  private[rspace] def getAs(txn: T, channels: List[C]): List[Datum[A]] = {
+  private[rspace] def getAs(txn: T, channels: Seq[C]): Seq[Datum[A]] = {
     val keyCs = hashCs(channels)
-    readDatumBytesList(txn, keyCs)
-      .map { (byteses: List[DatumBytes]) =>
+    readDatumBytesSeq(txn, keyCs)
+      .map { (byteses: Seq[DatumBytes]) =>
         byteses.map((bytes: DatumBytes) =>
           Datum(fromByteVector[A](bytes.datumBytes), bytes.persist))
       }
-      .getOrElse(List.empty[Datum[A]])
+      .getOrElse(Seq.empty[Datum[A]])
   }
 
   def collectGarbage(txn: T,
@@ -115,125 +115,123 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[rspace] def removeA(txn: T, channel: C, index: Int): Unit =
-    removeA(txn, List(channel), index)
+    removeA(txn, Seq(channel), index)
 
-  private[rspace] def removeA(txn: T, channels: List[C], index: Int): Unit = {
+  private[rspace] def removeA(txn: T, channels: Seq[C], index: Int): Unit = {
     val keyCs = hashCs(channels)
-    readDatumBytesList(txn, keyCs) match {
-      case Some(as) => writeDatumBytesList(txn, keyCs, util.dropIndex(as, index))
+    readDatumBytesSeq(txn, keyCs) match {
+      case Some(as) => writeDatumBytesSeq(txn, keyCs, util.dropIndex(as, index))
       case None     => throw new IllegalArgumentException(s"removeA: no values at $channels")
     }
   }
 
-  private[this] def readWaitingContinuationBytesList(
-      txn: T,
-      keyCs: H): Option[List[WaitingContinuationBytes]] =
-    Option(_dbPsKs.get(txn, keyCs)).map(fromByteBuffer(_, waitingContinuationsBytesListCodec))
+  private[this] def readWaitingContinuations(txn: T,
+                                             keyCs: H): Option[Seq[WaitingContinuationBytes]] =
+    Option(_dbPsKs.get(txn, keyCs)).map(fromByteBuffer(_, waitingContinuationsSeqCodec))
 
-  private[this] def writeWaitingContinuationBytesList(
-      txn: T,
-      keyCs: H,
-      values: List[WaitingContinuationBytes]): Unit =
+  private[this] def writeWaitingContinuations(txn: T,
+                                              keyCs: H,
+                                              values: Seq[WaitingContinuationBytes]): Unit =
     if (values.nonEmpty) {
-      _dbPsKs.put(txn, keyCs, toByteBuffer(values, waitingContinuationsBytesListCodec))
+      _dbPsKs.put(txn, keyCs, toByteBuffer(values, waitingContinuationsSeqCodec))
     } else {
       _dbPsKs.delete(txn, keyCs)
       collectGarbage(txn, keyCs, wcsCollected = true)
     }
 
   private[rspace] def putK(txn: T,
-                           channels: List[C],
+                           channels: Seq[C],
                            continuation: WaitingContinuation[P, K]): Unit = {
     val keyCs = putCsH(txn, channels)
     val binWcs =
-      WaitingContinuationBytes(toBytesList(continuation.patterns),
+      WaitingContinuationBytes(toByteVectorSeq(continuation.patterns),
                                toByteVector(continuation.continuation),
                                continuation.persist)
     val wcsLst =
-      readWaitingContinuationBytesList(txn, keyCs).getOrElse(List.empty[WaitingContinuationBytes])
-    writeWaitingContinuationBytesList(txn, keyCs, binWcs +: wcsLst)
+      readWaitingContinuations(txn, keyCs).getOrElse(Seq.empty[WaitingContinuationBytes])
+    writeWaitingContinuations(txn, keyCs, binWcs +: wcsLst)
   }
 
-  private[rspace] def getPsK(txn: T, curr: List[C]): List[WaitingContinuation[P, K]] = {
+  private[rspace] def getPsK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] = {
     val keyCs = hashCs(curr)
-    readWaitingContinuationBytesList(txn, keyCs)
+    readWaitingContinuations(txn, keyCs)
       .map(
         _.map(
           wcs =>
-            WaitingContinuation(fromBytesList[P](wcs.patterns),
+            WaitingContinuation(fromByteVectorSeq[P](wcs.patterns),
                                 fromByteVector[K](wcs.kvalue),
                                 wcs.persist)))
-      .getOrElse(List.empty[WaitingContinuation[P, K]])
+      .getOrElse(Seq.empty[WaitingContinuation[P, K]])
   }
 
-  private[rspace] def removePsK(txn: T, channels: List[C], index: Int): Unit = {
+  private[rspace] def removePsK(txn: T, channels: Seq[C], index: Int): Unit = {
     val keyCs = hashCs(channels)
-    readWaitingContinuationBytesList(txn, keyCs) match {
-      case Some(wcs) => writeWaitingContinuationBytesList(txn, keyCs, util.dropIndex(wcs, index))
+    readWaitingContinuations(txn, keyCs) match {
+      case Some(wcs) => writeWaitingContinuations(txn, keyCs, util.dropIndex(wcs, index))
       case None      => throw new IllegalArgumentException(s"removePsK: no values at $channels")
     }
   }
 
-  private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: List[C]): Unit = {
+  private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
     val keyCs = hashCs(channels)
-    readWaitingContinuationBytesList(txn, keyCs).foreach { _ =>
-      writeWaitingContinuationBytesList(txn, keyCs, List.empty)
+    readWaitingContinuations(txn, keyCs).foreach { _ =>
+      writeWaitingContinuations(txn, keyCs, Seq.empty)
     }
-    readDatumBytesList(txn, keyCs).foreach { _ =>
-      writeDatumBytesList(txn, keyCs, List.empty)
+    readDatumBytesSeq(txn, keyCs).foreach { _ =>
+      writeDatumBytesSeq(txn, keyCs, Seq.empty)
     }
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def addJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val joinKey = hashCs(List(c))
-    val oldCsList =
+  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
+    val joinKey = hashCs(Seq(c))
+    val oldJoinsBv =
       Option(_dbJoins.get(txn, joinKey))
-        .map(toBytesLists)
-        .getOrElse(List.empty[List[ByteVector]])
+        .map(toByteVectorSeqs)
+        .getOrElse(Seq.empty[Seq[ByteVector]])
 
-    val addBl = toBytesList(cs)
-    if (!oldCsList.contains(addBl)) {
-      _dbJoins.put(txn, joinKey, toByteBuffer(addBl :: oldCsList))
+    val addBv = toByteVectorSeq(cs)
+    if (!oldJoinsBv.contains(addBv)) {
+      _dbJoins.put(txn, joinKey, toByteBuffer(addBv +: oldJoinsBv))
     }
   }
 
-  private[rspace] def getJoin(txn: T, c: C): List[List[C]] = {
-    val joinKey = hashCs(List(c))
+  private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] = {
+    val joinKey = hashCs(Seq(c))
     Option(_dbJoins.get(txn, joinKey))
-      .map(toBytesLists)
-      .map(_.map(fromBytesList[C]))
-      .getOrElse(List.empty[List[C]])
+      .map(toByteVectorSeqs)
+      .map(_.map(fromByteVectorSeq[C]))
+      .getOrElse(Seq.empty[Seq[C]])
   }
 
-  private[rspace] def removeJoin(txn: T, c: C, cs: List[C]): Unit = {
-    val joinKey = hashCs(List(c))
+  private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
+    val joinKey = hashCs(Seq(c))
     Option(_dbJoins.get(txn, joinKey))
-      .map(toBytesLists)
-      .map(_.map(fromBytesList[C]))
-      .map(exList => (exList, exList.indexOf(cs)))
+      .map(toByteVectorSeqs)
+      .map(_.map(fromByteVectorSeq[C]))
+      .map(exSeq => (exSeq, exSeq.indexOf(cs)))
       .map {
-        case (exList, idx) =>
+        case (exSeq, idx) =>
           if (idx >= 0) {
             val csKey = hashCs(cs)
             if (_dbPsKs.get(txn, csKey) == null) {
-              val resList = dropIndex(exList, idx)
-              if (resList.nonEmpty) {
-                _dbJoins.put(txn, joinKey, toByteBuffer(resList.map(toBytesList(_))))
+              val resSeq = dropIndex(exSeq, idx)
+              if (resSeq.nonEmpty) {
+                _dbJoins.put(txn, joinKey, toByteBuffer(resSeq.map(toByteVectorSeq(_))))
               } else {
                 _dbJoins.delete(txn, joinKey)
                 collectGarbage(txn, joinKey, joinsCollected = true)
               }
             }
           } else {
-            throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exList")
+            throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exSeq")
           }
       }
       .getOrElse(())
   }
 
   private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
-    val joinKey = hashCs(List(c))
+    val joinKey = hashCs(Seq(c))
     _dbJoins.delete(txn, joinKey)
     collectGarbage(txn, joinKey)
   }
@@ -262,17 +260,17 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       !_dbJoins.iterate(txn).hasNext
     }
 
-  def getPs(txn: T, channels: List[C]): List[List[P]] =
+  def getPs(txn: T, channels: Seq[C]): Seq[Seq[P]] =
     getPsK(txn, channels).map(_.patterns)
 
-  def toMap: Map[List[C], Row[P, A, K]] =
+  def toMap: Map[Seq[C], Row[P, A, K]] =
     withTxn(createTxnRead()) { txn =>
       val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
       withResource(_dbKeys.iterate(txn, keyRange)) { (it: CursorIterator[ByteBuffer]) =>
         it.asScala.map { (x: CursorIterator.KeyVal[ByteBuffer]) =>
-          val channels: List[C] = getKey(txn, x.`key`())
-          val data              = getAs(txn, channels)
-          val wks               = getPsK(txn, channels)
+          val channels: Seq[C] = getKey(txn, x.`key`())
+          val data             = getAs(txn, channels)
+          val wks              = getPsK(txn, channels)
           (channels, Row(data, wks))
         }.toMap
       }
@@ -323,8 +321,8 @@ object LMDBStore {
   private[rspace] def toByteBuffer[T](value: T, codec: Codec[T]): ByteBuffer =
     toByteBuffer(toBitVector(value, codec))
 
-  private[rspace] def toByteBuffer[T](values: List[T])(implicit st: Serialize[T]): ByteBuffer =
-    toByteBuffer(toBitVector(toBytesList(values), bytesListCodec))
+  private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
+    toByteBuffer(toBitVector(toByteVectorSeq(values), bytesSeqCodec))
 
   private[rspace] def toByteBuffer(vector: BitVector): ByteBuffer = {
     val bytes          = vector.bytes
@@ -334,37 +332,37 @@ object LMDBStore {
     bb
   }
 
-  private[rspace] def toBytesList[T](values: List[T])(implicit st: Serialize[T]): List[ByteVector] =
+  private[rspace] def toByteVectorSeq[T](values: Seq[T])(
+      implicit st: Serialize[T]): Seq[ByteVector] =
     values.map(st.encode).map(ByteVector(_))
 
-  private[rspace] def fromBytesList[T](bytesList: List[ByteVector])(
-      implicit st: Serialize[T]): List[T] =
-    bytesList
+  private[rspace] def fromByteVectorSeq[T](vectors: Seq[ByteVector])(
+      implicit st: Serialize[T]): Seq[T] =
+    vectors
       .map(_.toArray)
       .map(st.decode)
-      .sequence[Either[Throwable, ?], T] match {
-      case Left(err)     => throw new Exception(err)
-      case Right(values) => values
-    }
+      .map {
+        case Left(err)     => throw new Exception(err)
+        case Right(values) => values
+      }
 
-  private[rspace] def toBytesLists(byteBuffer: ByteBuffer): List[List[ByteVector]] =
-    fromBitVector(BitVector(byteBuffer), bytesListCodec)
-      .map(x => fromBitVector(x.bits, bytesListCodec))
+  private[rspace] def toByteVectorSeqs(byteBuffer: ByteBuffer): Seq[Seq[ByteVector]] =
+    fromBitVector(BitVector(byteBuffer), bytesSeqCodec)
+      .map(x => fromBitVector(x.bits, bytesSeqCodec))
 
-  private[rspace] def toByteBuffer(lists: List[List[ByteVector]]): ByteBuffer = {
-    val bl = lists.map(toBitVector(_, bytesListCodec).toByteVector)
-    toByteBuffer(bl, bytesListCodec)
+  private[rspace] def toByteBuffer(vectors: Seq[Seq[ByteVector]]): ByteBuffer = {
+    val bl = vectors.map(toBitVector(_, bytesSeqCodec).toByteVector)
+    toByteBuffer(bl, bytesSeqCodec)
   }
 
-  private[rspace] def fromByteBuffer[T](byteBuffer: ByteBuffer)(
-      implicit st: Serialize[T]): List[T] =
-    fromBitVector(BitVector(byteBuffer), bytesListCodec)
+  private[rspace] def fromByteBuffer[T](byteBuffer: ByteBuffer)(implicit st: Serialize[T]): Seq[T] =
+    fromBitVector(BitVector(byteBuffer), bytesSeqCodec)
       .map(_.toArray)
       .map(st.decode)
-      .sequence[Either[Throwable, ?], T] match {
-      case Left(err)     => throw new Exception(err)
-      case Right(values) => values
-    }
+      .map {
+        case Left(err)     => throw new Exception(err)
+        case Right(values) => values
+      }
 
   private[rspace] def fromByteBuffer[T](byteBuffer: ByteBuffer, codec: Codec[T]): T =
     fromBitVector(BitVector(byteBuffer), codec)
