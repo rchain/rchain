@@ -21,8 +21,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
   "DatumBytes" should "round-trip" in {
     val asd = DatumBytes(ByteVector(Array[Byte](4, 5, 6)), true)
 
-    val arr = toBitVector(asd, scodecs.asBytesCodec)
-    val res = fromBitVector(arr, scodecs.asBytesCodec)
+    val arr = toBitVector(asd, scodecs.datumBytesCodec)
+    val res = fromBitVector(arr, scodecs.datumBytesCodec)
 
     res shouldBe asd
   }

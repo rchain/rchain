@@ -9,7 +9,7 @@ private[rspace] trait ITestableStore[C, P] {
 
   private[rspace] type T
 
-  def getPs(txn: T, channels: Seq[C]): Seq[Seq[P]]
+  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]]
 
   def isEmpty: Boolean
 }

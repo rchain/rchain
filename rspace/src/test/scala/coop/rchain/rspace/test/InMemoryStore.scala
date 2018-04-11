@@ -62,16 +62,16 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     }
   }
 
-  private[rspace] def putA(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
+  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
     val key = hashChannels(channels)
     putCs(txn, channels)
     val datums = _data.getOrElseUpdate(key, Seq.empty[Datum[A]])
     _data.update(key, datum +: datums)
   }
 
-  private[rspace] def putK(txn: T,
-                           channels: Seq[C],
-                           continuation: WaitingContinuation[P, K]): Unit = {
+  private[rspace] def putWaitingContinuation(txn: T,
+                                             channels: Seq[C],
+                                             continuation: WaitingContinuation[P, K]): Unit = {
     val key = hashChannels(channels)
     putCs(txn, channels)
     val waitingContinuations =
@@ -79,20 +79,20 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _waitingContinuations.update(key, waitingContinuations :+ continuation)
   }
 
-  private[rspace] def getAs(txn: T, channels: Seq[C]): Seq[Datum[A]] =
+  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
     _data.getOrElse(hashChannels(channels), Seq.empty[Datum[A]])
 
-  private[rspace] def getPsK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
+  private[rspace] def getWaitingContinuation(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
     _waitingContinuations
       .getOrElse(hashChannels(curr), Seq.empty[WaitingContinuation[P, K]])
       .map { (wk: WaitingContinuation[P, K]) =>
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
       }
 
-  private[rspace] def removeA(txn: T, channel: C, index: Int): Unit =
-    removeA(txn, Seq(channel), index)
+  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit =
+    removeDatum(txn, Seq(channel), index)
 
-  private[rspace] def removeA(txn: T, channels: Seq[C], index: Int): Unit = {
+  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
     val key = hashChannels(channels)
     for (as <- _data.get(key)) {
       _data.update(key, dropIndex(as, index))
@@ -100,7 +100,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     collectGarbage(key)
   }
 
-  private[rspace] def removePsK(txn: T, channels: Seq[C], index: Int): Unit = {
+  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
     val key = hashChannels(channels)
     for (psks <- _waitingContinuations.get(key)) {
       _waitingContinuations.update(key, dropIndex(psks, index))
@@ -137,7 +137,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   def close(): Unit = ()
 
-  def getPs(txn: T, channels: Seq[C]): Seq[Seq[P]] =
+  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
     _waitingContinuations.getOrElse(hashChannels(channels), Nil).map(_.patterns)
 
   def clear(): Unit = {

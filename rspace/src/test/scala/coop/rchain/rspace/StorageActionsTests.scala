@@ -20,9 +20,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe key
-      store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
-      store.getPsK(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getData(txn, key) shouldBe List(Datum("datum", persist = false))
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     r shouldBe None
@@ -39,9 +39,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe key
-      store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List(Datum("datum1", persist = false))
-      store.getPsK(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getData(txn, key) shouldBe List(Datum("datum1", persist = false))
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     r1 shouldBe None
@@ -50,10 +50,11 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe key
-      store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) should contain theSameElementsAs List(Datum("datum1", persist = false),
-                                                                  Datum("datum2", persist = false))
-      store.getPsK(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getData(txn, key) should contain theSameElementsAs List(
+        Datum("datum1", persist = false),
+        Datum("datum2", persist = false))
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     r2 shouldBe None
@@ -71,9 +72,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe List("ch1")
-      store.getPs(txn, key) shouldBe List(patterns)
-      store.getAs(txn, key) shouldBe Nil
-      store.getPsK(txn, key) should not be empty
+      store.getPatterns(txn, key) shouldBe List(patterns)
+      store.getData(txn, key) shouldBe Nil
+      store.getWaitingContinuation(txn, key) should not be empty
     }
 
     r shouldBe None
@@ -99,9 +100,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe key
-      store.getPs(txn, key) shouldBe List(patterns)
-      store.getAs(txn, key) shouldBe Nil
-      store.getPsK(txn, key) should not be empty
+      store.getPatterns(txn, key) shouldBe List(patterns)
+      store.getData(txn, key) shouldBe Nil
+      store.getWaitingContinuation(txn, key) should not be empty
     }
 
     r shouldBe None
@@ -118,9 +119,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe key
-      store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
-      store.getPsK(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getData(txn, key) shouldBe List(Datum("datum", persist = false))
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     r1 shouldBe None
@@ -131,9 +132,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe Nil
-      store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe Nil
-      store.getPsK(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getData(txn, key) shouldBe Nil
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     r2 shouldBe defined
@@ -184,9 +185,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
-      store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
-      store.getPsK(txn, produceKey1) shouldBe Nil
+      store.getPatterns(txn, produceKey1) shouldBe Nil
+      store.getData(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
+      store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
     }
 
     r1 shouldBe None
@@ -199,13 +200,13 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
-      store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
-      store.getPsK(txn, produceKey1) shouldBe Nil
+      store.getPatterns(txn, produceKey1) shouldBe Nil
+      store.getData(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
+      store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
       store.getChannels(txn, consumeKeyHash) shouldBe consumeKey
-      store.getPs(txn, consumeKey) shouldBe List(consumePattern)
-      store.getAs(txn, consumeKey) shouldBe Nil
-      store.getPsK(txn, consumeKey) should not be empty
+      store.getPatterns(txn, consumeKey) shouldBe List(consumePattern)
+      store.getData(txn, consumeKey) shouldBe Nil
+      store.getWaitingContinuation(txn, consumeKey) should not be empty
     }
 
     r2 shouldBe None
@@ -217,17 +218,17 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, produceKey1Hash) shouldBe Nil
-      store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe Nil
-      store.getPsK(txn, produceKey1) shouldBe Nil
+      store.getPatterns(txn, produceKey1) shouldBe Nil
+      store.getData(txn, produceKey1) shouldBe Nil
+      store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
       store.getChannels(txn, consumeKeyHash) shouldBe Nil
-      store.getPs(txn, consumeKey) shouldBe Nil
-      store.getAs(txn, consumeKey) shouldBe Nil
-      store.getPsK(txn, consumeKey) shouldBe Nil
+      store.getPatterns(txn, consumeKey) shouldBe Nil
+      store.getData(txn, consumeKey) shouldBe Nil
+      store.getWaitingContinuation(txn, consumeKey) shouldBe Nil
       store.getChannels(txn, produceKey2Hash) shouldBe Nil
-      store.getPs(txn, produceKey2) shouldBe Nil
-      store.getAs(txn, produceKey2) shouldBe Nil
-      store.getPsK(txn, produceKey2) shouldBe Nil
+      store.getPatterns(txn, produceKey2) shouldBe Nil
+      store.getData(txn, produceKey2) shouldBe Nil
+      store.getWaitingContinuation(txn, produceKey2) shouldBe Nil
     }
 
     r3 shouldBe defined
@@ -255,9 +256,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, produceKey1Hash) shouldBe produceKey1
-      store.getPs(txn, produceKey1) shouldBe Nil
-      store.getAs(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
-      store.getPsK(txn, produceKey1) shouldBe Nil
+      store.getPatterns(txn, produceKey1) shouldBe Nil
+      store.getData(txn, produceKey1) shouldBe List(Datum("datum1", persist = false))
+      store.getWaitingContinuation(txn, produceKey1) shouldBe Nil
     }
 
     r1 shouldBe None
@@ -266,9 +267,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, produceKey2Hash) shouldBe produceKey2
-      store.getPs(txn, produceKey2) shouldBe Nil
-      store.getAs(txn, produceKey2) shouldBe List(Datum("datum2", persist = false))
-      store.getPsK(txn, produceKey2) shouldBe Nil
+      store.getPatterns(txn, produceKey2) shouldBe Nil
+      store.getData(txn, produceKey2) shouldBe List(Datum("datum2", persist = false))
+      store.getWaitingContinuation(txn, produceKey2) shouldBe Nil
     }
 
     r2 shouldBe None
@@ -277,9 +278,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, produceKey3Hash) shouldBe produceKey3
-      store.getPs(txn, produceKey3) shouldBe Nil
-      store.getAs(txn, produceKey3) shouldBe List(Datum("datum3", persist = false))
-      store.getPsK(txn, produceKey3) shouldBe Nil
+      store.getPatterns(txn, produceKey3) shouldBe Nil
+      store.getData(txn, produceKey3) shouldBe List(Datum("datum3", persist = false))
+      store.getWaitingContinuation(txn, produceKey3) shouldBe Nil
     }
 
     r3 shouldBe None
@@ -288,9 +289,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, consumeKeyHash) shouldBe Nil
-      store.getPs(txn, consumeKey) shouldBe Nil
-      store.getAs(txn, consumeKey) shouldBe Nil
-      store.getPsK(txn, consumeKey) shouldBe Nil
+      store.getPatterns(txn, consumeKey) shouldBe Nil
+      store.getData(txn, consumeKey) shouldBe Nil
+      store.getWaitingContinuation(txn, consumeKey) shouldBe Nil
     }
 
     r4 shouldBe defined
@@ -322,9 +323,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, store.hashChannels(key)) shouldBe Nil
-      store.getAs(txn, key) shouldBe Nil
-      store.getPs(txn, key) shouldBe Nil
-      store.getPsK(txn, key) shouldBe Nil
+      store.getData(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     val continuations = List(r4, r5, r6)
@@ -486,12 +487,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r2 shouldBe None
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1", "ch2")) shouldBe Nil
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = false))
+      store.getData(txn, List("ch1", "ch2")) shouldBe Nil
+      store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = false))
     }
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getPsK(txn, List("ch1", "ch2")) should not be empty
+      store.getWaitingContinuation(txn, List("ch1", "ch2")) should not be empty
       store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
       store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
     }
@@ -511,8 +512,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     List(r1, r2, r3, r4).foreach(runK)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe Nil
-      store.getAs(txn, List("ch2")) shouldBe Nil
+      store.getData(txn, List("ch1")) shouldBe Nil
+      store.getData(txn, List("ch2")) shouldBe Nil
     }
 
     getK(r3).results should contain theSameElementsAs List(List("datum1"))
@@ -535,11 +536,11 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r4 = produce(store, "ch2", "datum2", persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getPsK(txn, List("ch1", "ch2")) should not be empty
-        store.getPsK(txn, List("ch1")) shouldBe Nil
-        store.getPsK(txn, List("ch2")) shouldBe Nil
-        store.getAs(txn, List("ch1")) shouldBe Nil
-        store.getAs(txn, List("ch2")) shouldBe List(Datum("datum2", persist = false))
+        store.getWaitingContinuation(txn, List("ch1", "ch2")) should not be empty
+        store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
+        store.getWaitingContinuation(txn, List("ch2")) shouldBe Nil
+        store.getData(txn, List("ch1")) shouldBe Nil
+        store.getData(txn, List("ch2")) shouldBe List(Datum("datum2", persist = false))
       }
 
       r3 shouldBe defined
@@ -568,9 +569,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe key
-      store.getPs(txn, key) shouldBe Nil
-      store.getAs(txn, key) shouldBe List(Datum("datum", persist = false))
-      store.getPsK(txn, key) shouldBe Nil
+      store.getPatterns(txn, key) shouldBe Nil
+      store.getData(txn, key) shouldBe List(Datum("datum", persist = false))
+      store.getWaitingContinuation(txn, key) shouldBe Nil
     }
 
     r1 shouldBe None
@@ -591,9 +592,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
     store.withTxn(store.createTxnRead()) { txn =>
       store.getChannels(txn, keyHash) shouldBe List("ch1")
-      store.getPs(txn, key) shouldBe List(List(Wildcard))
-      store.getAs(txn, key) shouldBe Nil
-      store.getPsK(txn, key) should not be empty
+      store.getPatterns(txn, key) shouldBe List(List(Wildcard))
+      store.getData(txn, key) shouldBe Nil
+      store.getWaitingContinuation(txn, key) should not be empty
     }
 
     r3 shouldBe None
@@ -609,9 +610,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getChannels(txn, keyHash) shouldBe key
-        store.getPs(txn, key) shouldBe Nil
-        store.getAs(txn, key) shouldBe List(Datum("datum1", persist = false))
-        store.getPsK(txn, key) shouldBe Nil
+        store.getPatterns(txn, key) shouldBe Nil
+        store.getData(txn, key) shouldBe List(Datum("datum1", persist = false))
+        store.getWaitingContinuation(txn, key) shouldBe Nil
       }
 
       r1 shouldBe None
@@ -632,9 +633,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getChannels(txn, keyHash) shouldBe List("ch1")
-        store.getPs(txn, key) shouldBe List(List(Wildcard))
-        store.getAs(txn, key) shouldBe Nil
-        store.getPsK(txn, key) should not be empty
+        store.getPatterns(txn, key) shouldBe List(List(Wildcard))
+        store.getData(txn, key) shouldBe Nil
+        store.getWaitingContinuation(txn, key) should not be empty
       }
 
       r3 shouldBe None
@@ -643,9 +644,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
       store.withTxn(store.createTxnRead()) { txn =>
         store.getChannels(txn, keyHash) shouldBe List("ch1")
-        store.getPs(txn, key) shouldBe List(List(Wildcard))
-        store.getAs(txn, key) shouldBe Nil
-        store.getPsK(txn, key) should not be empty
+        store.getPatterns(txn, key) shouldBe List(List(Wildcard))
+        store.getData(txn, key) shouldBe Nil
+        store.getWaitingContinuation(txn, key) should not be empty
       }
 
       r4 shouldBe defined
@@ -660,8 +661,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r1 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe Nil
-        store.getPsK(txn, List("ch1")) should not be empty
+        store.getData(txn, List("ch1")) shouldBe Nil
+        store.getWaitingContinuation(txn, List("ch1")) should not be empty
       }
 
       r1 shouldBe None
@@ -669,8 +670,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r2 = produce(store, "ch1", "datum1", persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe Nil
-        store.getPsK(txn, List("ch1")) should not be empty
+        store.getData(txn, List("ch1")) shouldBe Nil
+        store.getWaitingContinuation(txn, List("ch1")) should not be empty
       }
 
       r2 shouldBe defined
@@ -682,8 +683,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r3 = produce(store, "ch1", "datum2", persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe Nil
-        store.getPsK(txn, List("ch1")) should not be empty
+        store.getData(txn, List("ch1")) shouldBe Nil
+        store.getWaitingContinuation(txn, List("ch1")) should not be empty
       }
 
       r3 shouldBe defined
@@ -715,8 +716,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r3 shouldBe None
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-      store.getPsK(txn, List("ch1")) shouldBe Nil
+      store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
   }
 
@@ -741,8 +742,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r3 = produce(store, "ch1", "datum1", persist = true)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-        store.getPsK(txn, List("ch1")) shouldBe Nil
+        store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+        store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
       }
 
       r3 shouldBe None
@@ -750,8 +751,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       val r4 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
       store.withTxn(store.createTxnRead()) { txn =>
-        store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-        store.getPsK(txn, List("ch1")) shouldBe Nil
+        store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+        store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
       }
 
       r4 shouldBe defined
@@ -766,8 +767,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r1 = produce(store, "ch1", "datum1", persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-      store.getPsK(txn, List("ch1")) shouldBe Nil
+      store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
     r1 shouldBe None
@@ -775,8 +776,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r2 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-      store.getPsK(txn, List("ch1")) shouldBe Nil
+      store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
     r2 shouldBe defined
@@ -788,8 +789,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r3 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = false)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
-      store.getPsK(txn, List("ch1")) shouldBe Nil
+      store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
+      store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
     r3 shouldBe defined
@@ -812,12 +813,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r4 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) should contain atLeastOneOf (
+      store.getData(txn, List("ch1")) should contain atLeastOneOf (
         Datum("datum1", persist = false),
         Datum("datum2", persist = false),
         Datum("datum3", persist = false)
       )
-      store.getPsK(txn, List("ch1")) shouldBe Nil
+      store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
     r4 shouldBe defined
@@ -830,12 +831,12 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r5 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) should contain oneOf (
+      store.getData(txn, List("ch1")) should contain oneOf (
         Datum("datum1", persist = false),
         Datum("datum2", persist = false),
         Datum("datum3", persist = false)
       )
-      store.getPsK(txn, List("ch1")) shouldBe Nil
+      store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
 
     r5 shouldBe defined
@@ -859,8 +860,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     val r7 = consume(store, List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
 
     store.withTxn(store.createTxnRead()) { txn =>
-      store.getAs(txn, List("ch1")) shouldBe Nil
-      store.getPsK(txn, List("ch1")) should not be empty
+      store.getData(txn, List("ch1")) shouldBe Nil
+      store.getWaitingContinuation(txn, List("ch1")) should not be empty
     }
 
     r7 shouldBe None

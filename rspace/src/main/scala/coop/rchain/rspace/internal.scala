@@ -36,16 +36,16 @@ object internal {
     lazy val byteVectorsCodec: Codec[Seq[ByteVector]] =
       seqOfN(int32, byteVectorCodec).as[Seq[ByteVector]]
 
-    lazy val asBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
+    lazy val datumBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
 
     lazy val datumBytesesCodec: Codec[Seq[DatumBytes]] =
-      seqOfN(int32, asBytesCodec).as[Seq[DatumBytes]]
+      seqOfN(int32, datumBytesCodec).as[Seq[DatumBytes]]
 
-    lazy val psKsBytesCodec: Codec[WaitingContinuationBytes] =
+    lazy val waitingContinuationBytesCodec: Codec[WaitingContinuationBytes] =
       (byteVectorsCodec :: byteVectorCodec :: bool).as[WaitingContinuationBytes]
 
     lazy val waitingContinuationsSeqCodec: Codec[Seq[WaitingContinuationBytes]] =
-      seqOfN(int32, psKsBytesCodec).as[Seq[WaitingContinuationBytes]]
+      seqOfN(int32, waitingContinuationBytesCodec).as[Seq[WaitingContinuationBytes]]
 
     private[this] def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =
       attempt.toEither match {
