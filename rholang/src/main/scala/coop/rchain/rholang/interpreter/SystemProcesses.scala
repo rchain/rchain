@@ -8,14 +8,14 @@ import monix.eval.Task
 
 object SystemProcesses {
 
-  def stdout: List[Seq[Channel]] => Task[Unit] = { arg: List[Seq[Channel]] =>
+  def stdout: Seq[Seq[Channel]] => Task[Unit] = { arg: Seq[Seq[Channel]] =>
     Task(Console.println(arg))
   }
 
   def stdoutAck(store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
-    : List[Seq[Channel]] => Task[Unit] = {
-    case List(Seq(arg, ack)) =>
+    : Seq[Seq[Channel]] => Task[Unit] = {
+    case Seq(Seq(arg, ack)) =>
       Task(Console.println(arg)).flatMap { (_: Unit) =>
         produce(store, ack, Seq(Channel(Quote(Par.defaultInstance))), false) match {
           case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
@@ -24,14 +24,14 @@ object SystemProcesses {
       }
   }
 
-  def stderr: List[Seq[Channel]] => Task[Unit] = { arg: List[Seq[Channel]] =>
+  def stderr: Seq[Seq[Channel]] => Task[Unit] = { arg: Seq[Seq[Channel]] =>
     Task(Console.err.println(arg))
   }
 
   def stderrAck(store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
-    : List[Seq[Channel]] => Task[Unit] = {
-    case List(Seq(arg, ack)) =>
+    : Seq[Seq[Channel]] => Task[Unit] = {
+    case Seq(Seq(arg, ack)) =>
       Task(Console.err.println(arg)).flatMap { (_: Unit) =>
         produce(store, ack, Seq(Channel(Quote(Par.defaultInstance))), false) match {
           case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
