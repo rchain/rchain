@@ -41,14 +41,14 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private[rspace] def hashChannels(cs: Seq[C])(implicit st: Serialize[C]): H =
     hashBytes(toByteBuffer(cs)(st))
 
-  private[rspace] def getChannels(txn: T, s: H): Seq[C] =
-    Option(_dbKeys.get(txn, s)).map(fromByteBuffer[C]).getOrElse(Seq.empty[C])
+  private[rspace] def getChannels(txn: T, channelsHash: H): Seq[C] =
+    Option(_dbKeys.get(txn, channelsHash)).map(fromByteBuffer[C]).getOrElse(Seq.empty[C])
 
   private[rspace] def putChannels(txn: T, channels: Seq[C]): H = {
-    val packedCs = toByteBuffer(channels)
-    val keyCs    = hashBytes(packedCs)
-    _dbKeys.put(txn, keyCs, packedCs)
-    keyCs
+    val packedCs     = toByteBuffer(channels)
+    val channelsHash = hashBytes(packedCs)
+    _dbKeys.put(txn, channelsHash, packedCs)
+    channelsHash
   }
 
   private[rspace] def createTxnRead(): T = env.txnRead
@@ -68,46 +68,46 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       txn.close()
     }
 
-  private[this] def readDatumByteses(txn: T, keyCs: H): Option[Seq[DatumBytes]] =
-    Option(_dbData.get(txn, keyCs)).map(fromByteBuffer(_, datumBytesesCodec))
+  private[this] def readDatumByteses(txn: T, channelsHash: H): Option[Seq[DatumBytes]] =
+    Option(_dbData.get(txn, channelsHash)).map(fromByteBuffer(_, datumBytesesCodec))
 
-  private[this] def writeDatumByteses(txn: T, keyCs: H, values: Seq[DatumBytes]): Unit =
+  private[this] def writeDatumByteses(txn: T, channelsHash: H, values: Seq[DatumBytes]): Unit =
     if (values.nonEmpty) {
-      _dbData.put(txn, keyCs, toByteBuffer(values, datumBytesesCodec))
+      _dbData.put(txn, channelsHash, toByteBuffer(values, datumBytesesCodec))
     } else {
-      _dbData.delete(txn, keyCs)
-      collectGarbage(txn, keyCs, wcsCollected = true)
+      _dbData.delete(txn, channelsHash)
+      collectGarbage(txn, channelsHash, waitingContinuationsCollected = true)
     }
 
   private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
-    val keyCs     = putChannels(txn, channels)
-    val newDatum  = DatumBytes(toByteVector(datum.a), datum.persist)
-    val oldDatums = readDatumByteses(txn, keyCs).getOrElse(Seq.empty[DatumBytes])
-    writeDatumByteses(txn, keyCs, newDatum +: oldDatums)
+    val channelsHash    = putChannels(txn, channels)
+    val newDatumBytes   = DatumBytes(toByteVector(datum.a), datum.persist)
+    val oldDatumByteses = readDatumByteses(txn, channelsHash).getOrElse(Seq.empty[DatumBytes])
+    writeDatumByteses(txn, channelsHash, newDatumBytes +: oldDatumByteses)
   }
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] = {
-    val keyCs = hashChannels(channels)
-    readDatumByteses(txn, keyCs)
+    val channelsHash = hashChannels(channels)
+    readDatumByteses(txn, channelsHash)
       .map(_.map(bytes => Datum(fromByteVector[A](bytes.datumBytes), bytes.persist)))
       .getOrElse(Seq.empty[Datum[A]])
   }
 
   def collectGarbage(txn: T,
-                     keyCs: H,
+                     channelsHash: H,
                      dataCollected: Boolean = false,
-                     wcsCollected: Boolean = false,
+                     waitingContinuationsCollected: Boolean = false,
                      joinsCollected: Boolean = false): Unit = {
 
     def isEmpty(dbi: Dbi[ByteBuffer]): Boolean =
-      dbi.get(txn, keyCs) == null
+      dbi.get(txn, channelsHash) == null
 
     val readyToCollect = (dataCollected || isEmpty(_dbData)) &&
-      (wcsCollected || isEmpty(_dbWaitingContinuations)) &&
+      (waitingContinuationsCollected || isEmpty(_dbWaitingContinuations)) &&
       (joinsCollected || isEmpty(_dbJoins))
 
     if (readyToCollect) {
-      _dbKeys.delete(txn, keyCs)
+      _dbKeys.delete(txn, channelsHash)
     }
   }
 
@@ -115,46 +115,50 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     removeDatum(txn, Seq(channel), index)
 
   private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
-    val keyCs = hashChannels(channels)
-    readDatumByteses(txn, keyCs) match {
-      case Some(datumByteses) => writeDatumByteses(txn, keyCs, util.dropIndex(datumByteses, index))
-      case None               => throw new IllegalArgumentException(s"removeA: no values at $channels")
+    val channelsHash = hashChannels(channels)
+    readDatumByteses(txn, channelsHash) match {
+      case Some(datumByteses) =>
+        writeDatumByteses(txn, channelsHash, util.dropIndex(datumByteses, index))
+      case None => throw new IllegalArgumentException(s"removeDatum: no values at $channels")
     }
   }
 
   private[this] def readWaitingContinuationByteses(
       txn: T,
-      keyCs: H): Option[Seq[WaitingContinuationBytes]] =
-    Option(_dbWaitingContinuations.get(txn, keyCs))
+      channelsHash: H): Option[Seq[WaitingContinuationBytes]] =
+    Option(_dbWaitingContinuations.get(txn, channelsHash))
       .map(fromByteBuffer(_, waitingContinuationsSeqCodec))
 
   private[this] def writeWaitingContinuationByteses(txn: T,
-                                                    keyCs: H,
+                                                    channelsHash: H,
                                                     values: Seq[WaitingContinuationBytes]): Unit =
     if (values.nonEmpty) {
-      _dbWaitingContinuations.put(txn, keyCs, toByteBuffer(values, waitingContinuationsSeqCodec))
+      _dbWaitingContinuations.put(txn,
+                                  channelsHash,
+                                  toByteBuffer(values, waitingContinuationsSeqCodec))
     } else {
-      _dbWaitingContinuations.delete(txn, keyCs)
-      collectGarbage(txn, keyCs, wcsCollected = true)
+      _dbWaitingContinuations.delete(txn, channelsHash)
+      collectGarbage(txn, channelsHash, waitingContinuationsCollected = true)
     }
 
   private[rspace] def putWaitingContinuation(txn: T,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit = {
-    val keyCs = putChannels(txn, channels)
+    val channelsHash = putChannels(txn, channels)
     val binWcs =
       WaitingContinuationBytes(toByteVectorSeq(continuation.patterns),
                                toByteVector(continuation.continuation),
                                continuation.persist)
     val wcsLst =
-      readWaitingContinuationByteses(txn, keyCs).getOrElse(Seq.empty[WaitingContinuationBytes])
-    writeWaitingContinuationByteses(txn, keyCs, binWcs +: wcsLst)
+      readWaitingContinuationByteses(txn, channelsHash).getOrElse(
+        Seq.empty[WaitingContinuationBytes])
+    writeWaitingContinuationByteses(txn, channelsHash, binWcs +: wcsLst)
   }
 
   private[rspace] def getWaitingContinuation(txn: T,
-                                             curr: Seq[C]): Seq[WaitingContinuation[P, K]] = {
-    val keyCs = hashChannels(curr)
-    readWaitingContinuationByteses(txn, keyCs)
+                                             channels: Seq[C]): Seq[WaitingContinuation[P, K]] = {
+    val channelsHash = hashChannels(channels)
+    readWaitingContinuationByteses(txn, channelsHash)
       .map(
         _.map(
           wcs =>
@@ -165,21 +169,22 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   }
 
   private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
-    val keyCs = hashChannels(channels)
-    readWaitingContinuationByteses(txn, keyCs) match {
-      case Some(wcs) => writeWaitingContinuationByteses(txn, keyCs, util.dropIndex(wcs, index))
+    val channelsHash = hashChannels(channels)
+    readWaitingContinuationByteses(txn, channelsHash) match {
+      case Some(wcs) =>
+        writeWaitingContinuationByteses(txn, channelsHash, util.dropIndex(wcs, index))
       case None =>
         throw new IllegalArgumentException(s"removeWaitingContinuation: no values at $channels")
     }
   }
 
   private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
-    val keyCs = hashChannels(channels)
-    readWaitingContinuationByteses(txn, keyCs).foreach { _ =>
-      writeWaitingContinuationByteses(txn, keyCs, Seq.empty)
+    val channelsHash = hashChannels(channels)
+    readWaitingContinuationByteses(txn, channelsHash).foreach { _ =>
+      writeWaitingContinuationByteses(txn, channelsHash, Seq.empty)
     }
-    readDatumByteses(txn, keyCs).foreach { _ =>
-      writeDatumByteses(txn, keyCs, Seq.empty)
+    readDatumByteses(txn, channelsHash).foreach { _ =>
+      writeDatumByteses(txn, channelsHash, Seq.empty)
     }
     for (c <- channels) removeJoin(txn, c, channels)
   }

@@ -24,7 +24,7 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def hashChannels(channels: Seq[C])(implicit sc: Serialize[C]): H
 
-  private[rspace] def getChannels(txn: T, hash: H): Seq[C]
+  private[rspace] def getChannels(txn: T, channelsHash: H): Seq[C]
 
   private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit
 
@@ -42,7 +42,8 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]]
 
-  private[rspace] def getWaitingContinuation(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]]
+  private[rspace] def getWaitingContinuation(txn: T,
+                                             channels: Seq[C]): Seq[WaitingContinuation[P, K]]
 
   private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit
 
