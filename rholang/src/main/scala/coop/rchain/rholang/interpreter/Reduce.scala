@@ -388,9 +388,37 @@ object Reduce {
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
         }
+        case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+          for {
+            evaledTarget <- evalExpr(target.get)
+            evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr)(env))
+            methodLookup = methodTable.get(method)
+            resultPar <- methodLookup match {
+                          case None    => Task raiseError new Error("Unimplemented method: " + method)
+                          case Some(f) => f(target.get, evaledArgs)(env)
+                        }
+            resultExpr <- evalSingleExpr(resultPar)
+          } yield resultExpr
+        }
         case _ => Task raiseError new Error("Unimplemented expression: " + expr)
       }
     }
+
+    def evalExprToPar(expr: Expr)(implicit env: Env[Par]): Task[Par] =
+      expr.exprInstance match {
+        case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+          for {
+            evaledTarget <- evalExpr(target.get)
+            evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr)(env))
+            methodLookup = methodTable.get(method)
+            resultPar <- methodLookup match {
+                          case None    => Task raiseError new Error("Unimplemented method: " + method)
+                          case Some(f) => f(target.get, evaledArgs)(env)
+                        }
+          } yield resultPar
+        }
+        case _ => evalExpr(expr).map(e => (fromExpr(e)(identity)))
+      }
 
     def eval(mat: Match)(implicit env: Env[Par]): Task[Unit] = {
       def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
@@ -457,18 +485,26 @@ object Reduce {
           Task.wanderUnordered(par.matches) { mat =>
             eval(mat)(env)
           },
-          Task.wanderUnordered(
-            par.exprs
-              .map(expr =>
-                expr.exprInstance match {
-                  case EVarBody(EVar(v)) => Some(v)
-                  case _                 => None
-              })
-              .flatten) { varproc =>
-            for {
-              varref <- eval(varproc.get)
-              _      <- eval(varref)
-            } yield ()
+          Task.wanderUnordered(par.exprs.filter { expr =>
+            expr.exprInstance match {
+              case _: EVarBody    => true
+              case _: EMethodBody => true
+              case _              => false
+            }
+          }) { expr =>
+            expr.exprInstance match {
+              case EVarBody(EVar(v)) =>
+                for {
+                  varref <- eval(v.get)
+                  _      <- eval(varref)
+                } yield ()
+              case e: EMethodBody =>
+                for {
+                  p <- evalExprToPar(Expr(e))
+                  _ <- eval(p)
+                } yield ()
+              case _ => Task.unit
+            }
           }
         )
       ) { xs =>
@@ -514,5 +550,30 @@ object Reduce {
       val thread = Thread.currentThread.getName
       println(s"$now [$thread]" + "\n" + msg)
     }
+
+    val methodTable: Map[String, ((Par, Seq[Par]) => (Env[Par] => Task[Par]))] =
+      Map("nth" -> {
+        def localNth(ps: Seq[Par], nth: Int): Task[Par] =
+          if (ps.isDefinedAt(nth))
+            Task.pure(ps(nth))
+          else
+            Task raiseError new Error("Error: index out of bound: " + nth)
+        (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+          {
+            if (args.length != 1)
+              Task raiseError new Error("Error: nth expects 1 argument")
+            for {
+              nth <- evalToInt(args(0))(env)
+              v   <- evalSingleExpr(p)(env)
+              result <- v.exprInstance match {
+                         case EListBody(EList(ps, _, _, _))   => localNth(ps, nth)
+                         case ETupleBody(ETuple(ps, _, _, _)) => localNth(ps, nth)
+                         case _ =>
+                           Task raiseError new Error(
+                             "Error: nth applied to something that wasn't a list or tuple.")
+                       }
+            } yield result
+          }
+      })
   }
 }
