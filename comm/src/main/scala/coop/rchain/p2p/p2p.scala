@@ -53,7 +53,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
   import NetworkProtocol._
   import Encryption._
 
-  val defaultTimeout: Duration = Duration(100, MILLISECONDS)
+  val defaultTimeout: Duration = Duration(500, MILLISECONDS)
 
   def unsafeRoundTrip[F[_]: Capture: Communication]
     : (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
