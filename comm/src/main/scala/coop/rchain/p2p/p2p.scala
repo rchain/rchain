@@ -251,8 +251,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
          * synchronous, request-response messaging.
          */
         case upstream @ UpstreamResponse(proto, _) =>
-          Log[F].error(s"Out-of-sequence message: $upstream")
-        case _ => Log[F].warn(s"Unrecognized msg ${msg}")
+          Log[F].debug(s"Out-of-sequence message: $upstream")
+        case _ => Log[F].error(s"Unrecognized msg ${msg}")
       }
     }
 
