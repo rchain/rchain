@@ -177,6 +177,24 @@ export LinkedList in {
       _ => { return!("Error! List too long for conversion to linked list.") }
     }
   } |
+  //Create an ordinary list from linked list of length
+  //9 or less by pattern matching. This constructor is
+  //only temporary until list processes have methods.
+  contract @[*LinkedList, "toSmallList"](@linkedList, return) = {
+    match linkedList {
+      []                                              => { return!([]) }
+      [a, []]                                         => { return!([a]) }
+      [a, [b, []]]                                    => { return!([a, b]) }
+      [a, [b, [c, []]]]                               => { return!([a, b, c]) }
+      [a, [b, [c, [d, []]]]]                          => { return!([a, b, c, d]) }
+      [a, [b, [c, [d, [e, []]]]]]                     => { return!([a, b, c, d, e]) }
+      [a, [b, [c, [d, [e, [f, []]]]]]]                => { return!([a, b, c, d, e, f]) }
+      [a, [b, [c, [d, [e, [f, [g, []]]]]]]]           => { return!([a, b, c, d, e, f, g]) }
+      [a, [b, [c, [d, [e, [f, [g, [h, []]]]]]]]]      => { return!([a, b, c, d, e, f, g, h]) }
+      [a, [b, [c, [d, [e, [f, [g, [h, [i, []]]]]]]]]] => { return!([a, b, c, d, e, f, g, h, i]) }
+      _ => { return!("Error! LinkedList too long for conversion to list.") }
+    }
+  } |
   import RhoClass in {
     contract LinkedList(@method, @input, return) = {
       @[*RhoClass, "functionApply"]!([*LinkedList, method], input, *return)

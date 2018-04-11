@@ -3,7 +3,7 @@
 //by name and the object can be pattern matched
 //to extract the values.
 //Example usage:
-//NamedFields!(["a", "b", "c"], [1, 2, 3], "myFields") |
+//NamedFields!([["a", 1], ["b", 2], ["c", 3]], "myFields") |
 //for(@myFields <- @"myFields"){ 
 //  @[myFields, "a"]!("w") | // stores value 1 at channel @"w"
 //  match myFields { //extract values via pattern matching
@@ -12,26 +12,35 @@
 //}
 export NamedFields in {
   import LinkedList, RhoClass in {
-    contract NamedFields(@names, @values, return) = {
-      new this, llNamesCh, llValuesCh, zippedCh, fieldsContract in {
-        contract fieldsContract(@pair, isDone) = {
-          match pair {
-            [name, value] => { @[*NamedFields, "createFieldContract"]!([*this, values], name, value, *isDone) }
+    contract NamedFields(@nameValuePairs, return) = {
+      new this, llNameVaulePairsCh, valuesCh, getValues, fieldsContract in {
+        //convert to LinkedList for easy `map` and `foreach` methods
+        LinkedList!("fromSmallList", [nameValuePairs], *llNameVaulePairsCh) |
+        for(@llNameVaulePairs <- llNameVaulePairsCh) {
+          //extract the values from the nameValuePairs
+          contract getValues(@pair, return) = { match pair { [_, value] => { return!(value) } } } |
+          LinkedList!("map", [llNameVaulePairs, *getValues], *valuesCh) |
+          
+          for (@llValues <- valuesCh) {
+            //convert values back to normal list
+            LinkedList!("toSmallList", [llValues], *valuesCh) | for(@values <- valuesCh) {
+              //create the contracts used to get values by name
+              contract fieldsContract(@pair, isDone) = {
+                match pair {
+                  [name, value] => { @[*NamedFields, "createFieldContract"]!([*this, values], name, value, *isDone) }
+                }
+              } |
+              LinkedList!("foreach", [llNameVaulePairs, *fieldsContract], Nil) |
+              for(_ <- @Nil){ Nil } | //throw away useless send on @Nil
+              
+              contract @[*this, values](@method, @input, return) = {
+                @[*RhoClass, "functionApply"]!([[*this, values], method], input, *return)
+              } |
+              //return a compound name to enable extracting values by pattern matching
+              return!([*this, values])
+            }
           }
-        } |
-        LinkedList!("fromSmallList", [names], *llNamesCh) |
-        LinkedList!("fromSmallList", [values], *llValuesCh) |
-        for(@llNames <- llNamesCh; @llValues <- llValuesCh) {
-          LinkedList!("zip", [llNames, llValues], *zippedCh) |
-          for(@zipped <- zippedCh) {
-            LinkedList!("foreach", [zipped, *fieldsContract], Nil) |
-            for(_ <- @Nil){ Nil } //throw away useless send on @Nil
-          }
-        } |
-        contract @[*this, values](@method, @input, return) = {
-          @[*RhoClass, "functionApply"]!([[*this, values], method], input, *return)
-        } |
-        return!([*this, values])
+        }
       }
     } |
     contract @[*NamedFields, "createFieldContract"](namedField, @name, @value, isDone) = {
