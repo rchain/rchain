@@ -480,7 +480,7 @@ object fixnum {
     }
   }
 
-  def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
+  private def checkFixnum(n: Int, elem: Seq[Ob]): Either[PrimError, Fixnum] =
     if (!elem(n).isInstanceOf[Fixnum]) {
       Left(TypeMismatch(n, Fixnum.getClass().getName()))
     } else {
