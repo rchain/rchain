@@ -1,165 +1,70 @@
 package coop.rchain.rspace.test
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-
 import coop.rchain.rspace.examples._
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize}
-import javax.xml.bind.DatatypeConverter.printHexBinary
+import java.nio.ByteBuffer
+import java.util.concurrent.locks.StampedLock
 
-import scala.collection.immutable.Seq
+import coop.rchain.rspace.{IBufferAllocator, KeyValueAmbry, Serialize, Store}
+import scodec.bits.BitVector
+
 import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K <: Serializable] private (
-    _keys: mutable.HashMap[String, Seq[C]],
-    _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
-    _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.MultiMap[C, String]
-)(implicit sc: Serialize[C])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+case class InMemoryStore[C, P, A, K]()(implicit
+                                       sc: Serialize[C],
+                                       sp: Serialize[P],
+                                       sa: Serialize[A],
+                                       sk: Serialize[K],
+                                       allocator: IBufferAllocator)
+    extends Store[C, P, A, K]
+    with KeyValueAmbry {
 
-  private[rspace] type H = String
+  case class InMemoryKeyValueTable() extends KeyValueTable {
+    private[InMemoryStore] val _hashMap = new mutable.HashMap[H, ByteBuffer]()
 
-  private[rspace] type T = Unit
+    override def put(txn: T, keyBuffer: H, valueBuffer: ByteBuffer): Unit =
+      _hashMap.put(keyBuffer, valueBuffer)
 
-  private[rspace] def hashChannels(cs: Seq[C])(implicit sc: Serialize[C]): H =
-    printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
+    override def get(txn: T, keyBuffer: H): Option[ByteBuffer] =
+      _hashMap.get(keyBuffer)
 
-  private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
-    _keys.update(hashChannels(channels), channels)
+    override def delete(txn: T, keyBuffer: H): Unit =
+      _hashMap.remove(keyBuffer)
 
-  private[rspace] def getChannels(txn: T, s: H) =
-    _keys.getOrElse(s, Seq.empty[C])
+    override def isEmpty(txn: T): Boolean = _hashMap.isEmpty
 
-  private[rspace] def createTxnRead(): Unit = ()
+    override def drop(txn: T): Unit = _hashMap.clear()
 
-  private[rspace] def createTxnWrite(): Unit = ()
+    override def iterateKeys(txn: T): Iterator[H] = _hashMap.keysIterator
+  }
+
+  private[rspace] type T = Long
+
+  val lock = new StampedLock()
+
+  override val _dbKeys: KeyValueTable                 = InMemoryKeyValueTable()
+  override val _dbData: KeyValueTable                 = InMemoryKeyValueTable()
+  override val _dbWaitingContinuations: KeyValueTable = InMemoryKeyValueTable()
+  override val _dbJoins: KeyValueTable                = InMemoryKeyValueTable()
+
+  private[rspace] def createTxnRead(): T = lock.readLock()
+
+  private[rspace] def createTxnWrite(): T = lock.writeLock()
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
-    f(txn)
-
-  def collectGarbage(key: H): Unit = {
-    val as = _data.get(key).exists(_.nonEmpty)
-    if (!as) {
-      //we still may have empty list, remove it as well
-      _data.remove(key)
+    try {
+      f(txn)
+    } finally {
+      lock.unlock(txn)
     }
 
-    val psks = _waitingContinuations.get(key).exists(_.nonEmpty)
-    if (!psks) {
-      //we still may have empty list, remove it as well
-      _waitingContinuations.remove(key)
-    }
-
-    val cs    = _keys.getOrElse(key, Seq.empty[C])
-    val joins = cs.size == 1 && _joinMap.contains(cs.head)
-
-    if (!as && !psks && !joins) {
-      _keys.remove(key)
-    }
-  }
-
-  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
-    val datums = _data.getOrElseUpdate(key, Seq.empty[Datum[A]])
-    _data.update(key, datum +: datums)
-  }
-
-  private[rspace] def putWaitingContinuation(txn: T,
-                                             channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
-    val waitingContinuations =
-      _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
-    _waitingContinuations.update(key, waitingContinuations :+ continuation)
-  }
-
-  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
-    _data.getOrElse(hashChannels(channels), Seq.empty[Datum[A]])
-
-  private[rspace] def getWaitingContinuation(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
-    _waitingContinuations
-      .getOrElse(hashChannels(curr), Seq.empty[WaitingContinuation[P, K]])
-      .map { (wk: WaitingContinuation[P, K]) =>
-        wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
-      }
-
-  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit =
-    removeDatum(txn, Seq(channel), index)
-
-  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    for (as <- _data.get(key)) {
-      _data.update(key, dropIndex(as, index))
-    }
-    collectGarbage(key)
-  }
-
-  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    for (psks <- _waitingContinuations.get(key)) {
-      _waitingContinuations.update(key, dropIndex(psks, index))
-    }
-    collectGarbage(key)
-  }
-
-  private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
-    val key = hashChannels(channels)
-    _data.put(key, Seq.empty)
-    _waitingContinuations.put(key, Seq.empty)
-    for (c <- channels) removeJoin(txn, c, channels)
-  }
-
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
-    _joinMap.addBinding(c, hashChannels(cs))
-
-  private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getChannels(txn, _))
-
-  private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashChannels(Seq(c))
-    val csKey   = hashChannels(cs)
-    if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
-      _joinMap.removeBinding(c, csKey)
-    }
-    collectGarbage(joinKey)
-  }
-
-  private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
-    _joinMap.remove(c)
-    collectGarbage(hashChannels(Seq(c)))
-  }
-
-  def close(): Unit = ()
-
-  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
-    _waitingContinuations.getOrElse(hashChannels(channels), Nil).map(_.patterns)
-
-  def clear(): Unit = {
-    _keys.clear()
-    _waitingContinuations.clear()
-    _data.clear()
-    _joinMap.clear()
-  }
-
-  def isEmpty: Boolean =
-    _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
-
-  def toMap: Map[Seq[C], Row[P, A, K]] =
-    _keys.map {
-      case (hash, cs) =>
-        val data = _data.getOrElse(hash, Seq.empty[Datum[A]])
-        val wks  = _waitingContinuations.getOrElse(hash, Seq.empty[WaitingContinuation[P, K]])
-        (cs, Row(data, wks))
-    }.toMap
+  override def close(): Unit = ()
 }
 
 object InMemoryStore {
+  object fastBufferAllocator extends IBufferAllocator {
+    def toByteBuffer(bytes: Array[Byte]): ByteBuffer   = ByteBuffer.wrap(bytes)
+    def toByteBuffer(bitVector: BitVector): ByteBuffer = bitVector.toByteBuffer
+  }
 
   /* UGLY HACK FOR TESTING */
   def roundTrip[A <: Serializable](a: A): A = {
@@ -167,17 +72,9 @@ object InMemoryStore {
     ser.decode(ser.encode(a)).fold(throw _, identity)
   }
 
-  def hashBytes(bs: Array[Byte]): Array[Byte] =
-    MessageDigest.getInstance("SHA-256").digest(bs)
-
-  def hashString(s: String): Array[Byte] =
-    hashBytes(s.getBytes(StandardCharsets.UTF_8))
-
-  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
-    new InMemoryStore[C, P, A, K](
-      _keys = mutable.HashMap.empty[String, Seq[C]],
-      _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
-      _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
-    )
+  def create[C, P, A, K]()(implicit sc: Serialize[C],
+                           sp: Serialize[P],
+                           sa: Serialize[A],
+                           sk: Serialize[K]): InMemoryStore[C, P, A, K] =
+    new InMemoryStore[C, P, A, K]()(sc, sp, sa, sk, fastBufferAllocator)
 }
