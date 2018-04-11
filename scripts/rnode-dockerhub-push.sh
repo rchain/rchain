@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 ## Tag and push newly built image if correct repo and branch.
+set -exo pipefail
 
 # ${DOCKER_DST_REPO}
 DOCKER_DST_REPO="rchain/rnode"
@@ -9,16 +10,18 @@ DOCKER_DST_TAG="${TRAVIS_BRANCH}"
 DOCKER_SRC_REPO="coop.rchain/rnode"
 DOCKER_SRC_TAG="latest"
 
+echo "TRAVIS_BRANCH = ${TRAVIS_BRANCH}"
+echo "TRAVIS_PULL_REQUEST = ${TRAVIS_PULL_REQUEST}"
+echo "TRAVIS_REPO_SLUG = ${TRAVIS_REPO_SLUG}"
+
 # Tag and push rnode docker container when it meets criteria.
 if [[ "${TRAVIS_BRANCH}" = "master" || \
       "${TRAVIS_BRANCH}" = "dev" || \
-      "${TRAVIS_BRANCH}" = "ci-docker-push" || \
-      "${TRAVIS_BRANCH}" = "ops-test" ]] ; then 
-#       "${TRAVIS_BRANCH}" = "ops-test" ]] \
-# && [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
+      "${TRAVIS_BRANCH}" = "ops-test" ]] \
+&& [[ "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
+# && [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then # alternate if
 
     # Generate RChain "RNode" network node docker container
-    # sbt bnfc:generate node/docker
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
 
     # Note: Secret Travis environmental variables are not available on pull requests as a means of protection.
@@ -30,5 +33,5 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
     docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${DOCKER_DST_REPO}:${DOCKER_DST_TAG} 
     docker push ${DOCKER_DST_REPO}:${DOCKER_DST_TAG} 
 else
-    echo "Container image not pushed as doesn't meet push criteria."
+    echo "Container image not pushed as it is not correct branch and not a pull request for rchain/rchain repo."
 fi
