@@ -67,19 +67,11 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
     : Int => F[Int] =
     (lastCount: Int) =>
       (for {
-        _     <- IOUtil.sleep[F](5000L)
-        peers <- Communication[F].findMorePeers(10)
-        _ <- peers.toList
-              .traverse(p => errorHandler[F].attempt(connect[F](p, defaultTimeout)))
-              .map { attempts =>
-                attempts.filter {
-                  case Left(_) => false
-                  case _       => true
-                }
-              }
-        thisCount <- Communication[F].countPeers
-        _ <- if (thisCount != lastCount) Log[F].info(s"Peers: $thisCount.")
-            else ().pure[F]
+        _              <- IOUtil.sleep[F](5000L)
+        peers          <- Communication[F].findMorePeers(10)
+        peersSuccedded <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
+        thisCount      <- Communication[F].countPeers
+        _              <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
       } yield thisCount)
 
   def connectToBootstrap[
