@@ -156,7 +156,7 @@ package object rspace {
                           channels: Seq[C],
                           patterns: Seq[P],
                           continuation: K,
-                          persist: Boolean)(implicit m: Match[P, A]): Option[(K, List[A])] = {
+                          persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -183,7 +183,7 @@ package object rspace {
                 ()
             }
           logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-          Some((continuation, dataCandidates.map(_.datum.a).toList))
+          Some((continuation, dataCandidates.map(_.datum.a)))
       }
     }
   }
@@ -288,7 +288,7 @@ package object rspace {
     * @tparam K A type representing a continuation
     */
   def produce[C, P, A, K](store: IStore[C, P, A, K], channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, A]): Option[(K, List[A])] =
+      implicit m: Match[P, A]): Option[(K, Seq[A])] =
     store.withTxn(store.createTxnWrite()) { txn =>
       val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
       logger.debug(
@@ -314,7 +314,7 @@ package object rspace {
                 ()
             }
           logger.debug(s"produce: matching continuation found at <channels: $channels>")
-          Some(continuation, dataCandidates.map(_.datum.a).toList)
+          Some(continuation, dataCandidates.map(_.datum.a))
         case None =>
           logger.debug(s"produce: no matching continuation found")
           store.putA(txn, Seq(channel), Datum(data, persist))

@@ -5,18 +5,19 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models.{Channel, Par, TaggedContinuation}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
+import scala.collection.immutable.{Seq => immutableSeq}
 
 trait Dispatch[M[_], A, K] {
 
   val reducer: Reduce[M]
 
-  def dispatch(continuation: K, dataList: List[A]): M[Unit]
+  def dispatch(continuation: K, dataList: immutableSeq[A]): M[Unit]
 }
 
 object Dispatch {
 
   // TODO: Make this function total
-  def buildEnv(dataList: List[Seq[Channel]]): Env[Par] =
+  def buildEnv(dataList: immutableSeq[Seq[Channel]]): Env[Par] =
     Env.makeEnv(dataList.flatten.map({ case Channel(Quote(p)) => p }): _*)
 }
 
@@ -25,7 +26,7 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
 
   val reducer: Reduce[Task] = _reducer
 
-  def dispatch(continuation: TaggedContinuation, dataList: List[Seq[Channel]]): Task[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: immutableSeq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
@@ -56,14 +57,14 @@ class RholangAndScalaDispatcher private (
 
   val reducer: Reduce[Task] = _reducer
 
-  def dispatch(continuation: TaggedContinuation, dataList: List[Seq[Channel]]): Task[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: immutableSeq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
         reducer.eval(par)(env)
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
-          case Some(f) => f(dataList)
+          case Some(f) => f(dataList.toList)
           case None    => Task.raiseError(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
