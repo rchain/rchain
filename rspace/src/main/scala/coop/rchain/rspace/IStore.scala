@@ -52,16 +52,16 @@ trait IStore[C, P, A, K] {
   private[rspace] def removeAll(txn: T, channels: Seq[C]): Unit
 
   // compare to store.joinMap.addBinding
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit
+  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit
 
   // compare to store.joinMap.get(c).toList.flatten
-  private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]]
+  private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]]
 
   // compare to store.joinMap.removeBinding
-  private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit
+  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit
 
   // compare to store.joinMap.remove
-  private[rspace] def removeAllJoins(txn: T, c: C): Unit
+  private[rspace] def removeAllJoins(txn: T, channel: C): Unit
 
   def toMap: Map[Seq[C], Row[P, A, K]]
 

@@ -38,16 +38,16 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] type T = Txn[ByteBuffer]
 
-  private[rspace] def hashChannels(cs: Seq[C])(implicit st: Serialize[C]): H =
-    hashBytes(toByteBuffer(cs)(st))
+  private[rspace] def hashChannels(channels: Seq[C])(implicit st: Serialize[C]): H =
+    hashBytes(toByteBuffer(channels)(st))
 
   private[rspace] def getChannels(txn: T, channelsHash: H): Seq[C] =
     Option(_dbKeys.get(txn, channelsHash)).map(fromByteBuffer[C]).getOrElse(Seq.empty[C])
 
   private[rspace] def putChannels(txn: T, channels: Seq[C]): H = {
-    val packedCs     = toByteBuffer(channels)
-    val channelsHash = hashBytes(packedCs)
-    _dbKeys.put(txn, channelsHash, packedCs)
+    val channelsBytes = toByteBuffer(channels)
+    val channelsHash  = hashBytes(channelsBytes)
+    _dbKeys.put(txn, channelsHash, channelsBytes)
     channelsHash
   }
 
@@ -145,14 +145,16 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit = {
     val channelsHash = putChannels(txn, channels)
-    val binWcs =
+    val waitingContinuationBytes =
       WaitingContinuationBytes(toByteVectorSeq(continuation.patterns),
                                toByteVector(continuation.continuation),
                                continuation.persist)
-    val wcsLst =
+    val waitingContinuationByteses =
       readWaitingContinuationByteses(txn, channelsHash).getOrElse(
         Seq.empty[WaitingContinuationBytes])
-    writeWaitingContinuationByteses(txn, channelsHash, binWcs +: wcsLst)
+    writeWaitingContinuationByteses(txn,
+                                    channelsHash,
+                                    waitingContinuationBytes +: waitingContinuationByteses)
   }
 
   private[rspace] def getWaitingContinuation(txn: T,
@@ -161,18 +163,20 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     readWaitingContinuationByteses(txn, channelsHash)
       .map(
         _.map(
-          wcs =>
-            WaitingContinuation(fromByteVectors[P](wcs.patterns),
-                                fromByteVector[K](wcs.kvalue),
-                                wcs.persist)))
+          waitingContinuations =>
+            WaitingContinuation(fromByteVectors[P](waitingContinuations.patterns),
+                                fromByteVector[K](waitingContinuations.kvalue),
+                                waitingContinuations.persist)))
       .getOrElse(Seq.empty[WaitingContinuation[P, K]])
   }
 
   private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
     val channelsHash = hashChannels(channels)
     readWaitingContinuationByteses(txn, channelsHash) match {
-      case Some(wcs) =>
-        writeWaitingContinuationByteses(txn, channelsHash, util.dropIndex(wcs, index))
+      case Some(waitingContinuationByteses) =>
+        writeWaitingContinuationByteses(txn,
+                                        channelsHash,
+                                        util.dropIndex(waitingContinuationByteses, index))
       case None =>
         throw new IllegalArgumentException(s"removeWaitingContinuation: no values at $channels")
     }
@@ -189,38 +193,38 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashChannels(Seq(c))
+  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+    val joinKey = hashChannels(Seq(channel))
     val oldJoinsBv =
       Option(_dbJoins.get(txn, joinKey))
         .map(toByteVectors)
         .getOrElse(Seq.empty[Seq[ByteVector]])
 
-    val newJoin = toByteVectorSeq(cs)
+    val newJoin = toByteVectorSeq(channels)
     if (!oldJoinsBv.contains(newJoin)) {
       _dbJoins.put(txn, joinKey, toByteBuffer(newJoin +: oldJoinsBv))
     }
   }
 
-  private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] = {
-    val joinKey = hashChannels(Seq(c))
+  private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]] = {
+    val joinKey = hashChannels(Seq(channel))
     Option(_dbJoins.get(txn, joinKey))
       .map(toByteVectors)
       .map(_.map(fromByteVectors[C]))
       .getOrElse(Seq.empty[Seq[C]])
   }
 
-  private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashChannels(Seq(c))
+  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+    val joinKey = hashChannels(Seq(channel))
     Option(_dbJoins.get(txn, joinKey))
       .map(toByteVectors)
       .map(_.map(fromByteVectors[C]))
-      .map(exSeq => (exSeq, exSeq.indexOf(cs)))
+      .map(exSeq => (exSeq, exSeq.indexOf(channels)))
       .map {
         case (exSeq, idx) =>
           if (idx >= 0) {
-            val csKey = hashChannels(cs)
-            if (_dbWaitingContinuations.get(txn, csKey) == null) {
+            val channelsHash = hashChannels(channels)
+            if (_dbWaitingContinuations.get(txn, channelsHash) == null) {
               val resSeq = dropIndex(exSeq, idx)
               if (resSeq.nonEmpty) {
                 _dbJoins.put(txn, joinKey, toByteBuffer(resSeq.map(toByteVectorSeq(_))))
@@ -230,14 +234,14 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
               }
             }
           } else {
-            throw new IllegalArgumentException(s"removeJoin: $cs is not a member of $exSeq")
+            throw new IllegalArgumentException(s"removeJoin: $channels is not a member of $exSeq")
           }
       }
       .getOrElse(())
   }
 
-  private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
-    val joinKey = hashChannels(Seq(c))
+  private[rspace] def removeAllJoins(txn: T, channel: C): Unit = {
+    val joinKey = hashChannels(Seq(channel))
     _dbJoins.delete(txn, joinKey)
     collectGarbage(txn, joinKey)
   }
@@ -274,10 +278,10 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
       withResource(_dbKeys.iterate(txn, keyRange)) { (it: CursorIterator[ByteBuffer]) =>
         it.asScala.map { (x: CursorIterator.KeyVal[ByteBuffer]) =>
-          val channels: Seq[C] = getChannels(txn, x.`key`())
-          val data             = getData(txn, channels)
-          val wks              = getWaitingContinuation(txn, channels)
-          (channels, Row(data, wks))
+          val channels: Seq[C]     = getChannels(txn, x.`key`())
+          val data                 = getData(txn, channels)
+          val waitingContinuations = getWaitingContinuation(txn, channels)
+          (channels, Row(data, waitingContinuations))
         }.toMap
       }
     }
