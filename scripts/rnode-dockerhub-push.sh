@@ -25,7 +25,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
 
     # Note: Secret Travis environmental variables are not available on pull requests as a means of protection.
-    # Hence, the TRAVIS_PULL_REQUEST check.
+    # Hence, the TRAVIS_REPO_SLUG check and only commit on rchain/rchain.
     # ref https://docs.travis-ci.com/user/pull-requests/#Pull-Requests-and-Security-Restrictions
 
     echo "Travis branch ${TRAVIS_BRANCH} matched and not a pull request. Pushing rnode to Docker repo."
