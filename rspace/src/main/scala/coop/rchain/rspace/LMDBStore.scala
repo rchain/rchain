@@ -69,11 +69,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
 
   private[this] def readDatumByteses(txn: T, keyCs: H): Option[Seq[DatumBytes]] =
-    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer(_, asBytesSeqCodec))
+    Option(_dbAs.get(txn, keyCs)).map(fromByteBuffer(_, datumBytesesCodec))
 
   private[this] def writeDatumByteses(txn: T, keyCs: H, values: Seq[DatumBytes]): Unit =
     if (values.nonEmpty) {
-      _dbAs.put(txn, keyCs, toByteBuffer(values, asBytesSeqCodec))
+      _dbAs.put(txn, keyCs, toByteBuffer(values, datumBytesesCodec))
     } else {
       _dbAs.delete(txn, keyCs)
       collectGarbage(txn, keyCs, wcsCollected = true)
@@ -125,11 +125,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
-  private[this] def readWaitingContinuations(txn: T,
+  private[this] def readWaitingContinuationByteses(txn: T,
                                              keyCs: H): Option[Seq[WaitingContinuationBytes]] =
     Option(_dbPsKs.get(txn, keyCs)).map(fromByteBuffer(_, waitingContinuationsSeqCodec))
 
-  private[this] def writeWaitingContinuations(txn: T,
+  private[this] def writeWaitingContinuationByteses(txn: T,
                                               keyCs: H,
                                               values: Seq[WaitingContinuationBytes]): Unit =
     if (values.nonEmpty) {
@@ -148,13 +148,13 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                toByteVector(continuation.continuation),
                                continuation.persist)
     val wcsLst =
-      readWaitingContinuations(txn, keyCs).getOrElse(Seq.empty[WaitingContinuationBytes])
-    writeWaitingContinuations(txn, keyCs, binWcs +: wcsLst)
+      readWaitingContinuationByteses(txn, keyCs).getOrElse(Seq.empty[WaitingContinuationBytes])
+    writeWaitingContinuationByteses(txn, keyCs, binWcs +: wcsLst)
   }
 
   private[rspace] def getPsK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] = {
     val keyCs = hashChannels(curr)
-    readWaitingContinuations(txn, keyCs)
+    readWaitingContinuationByteses(txn, keyCs)
       .map(
         _.map(
           wcs =>
@@ -166,16 +166,16 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] def removePsK(txn: T, channels: Seq[C], index: Int): Unit = {
     val keyCs = hashChannels(channels)
-    readWaitingContinuations(txn, keyCs) match {
-      case Some(wcs) => writeWaitingContinuations(txn, keyCs, util.dropIndex(wcs, index))
+    readWaitingContinuationByteses(txn, keyCs) match {
+      case Some(wcs) => writeWaitingContinuationByteses(txn, keyCs, util.dropIndex(wcs, index))
       case None      => throw new IllegalArgumentException(s"removePsK: no values at $channels")
     }
   }
 
   private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
     val keyCs = hashChannels(channels)
-    readWaitingContinuations(txn, keyCs).foreach { _ =>
-      writeWaitingContinuations(txn, keyCs, Seq.empty)
+    readWaitingContinuationByteses(txn, keyCs).foreach { _ =>
+      writeWaitingContinuationByteses(txn, keyCs, Seq.empty)
     }
     readDatumByteses(txn, keyCs).foreach { _ =>
       writeDatumByteses(txn, keyCs, Seq.empty)
@@ -190,9 +190,9 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
         .map(toByteVectors)
         .getOrElse(Seq.empty[Seq[ByteVector]])
 
-    val addBv = toByteVectorSeq(cs)
-    if (!oldJoinsBv.contains(addBv)) {
-      _dbJoins.put(txn, joinKey, toByteBuffer(addBv +: oldJoinsBv))
+    val newJoin = toByteVectorSeq(cs)
+    if (!oldJoinsBv.contains(newJoin)) {
+      _dbJoins.put(txn, joinKey, toByteBuffer(newJoin +: oldJoinsBv))
     }
   }
 

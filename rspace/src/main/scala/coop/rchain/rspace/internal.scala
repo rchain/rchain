@@ -38,7 +38,7 @@ object internal {
 
     lazy val asBytesCodec: Codec[DatumBytes] = (byteVectorCodec :: bool).as[DatumBytes]
 
-    lazy val asBytesSeqCodec: Codec[Seq[DatumBytes]] =
+    lazy val datumBytesesCodec: Codec[Seq[DatumBytes]] =
       seqOfN(int32, asBytesCodec).as[Seq[DatumBytes]]
 
     lazy val psKsBytesCodec: Codec[WaitingContinuationBytes] =

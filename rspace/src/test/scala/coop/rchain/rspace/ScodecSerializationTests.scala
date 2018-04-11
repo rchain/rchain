@@ -12,8 +12,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
       List(DatumBytes(ByteVector(Array[Byte](1, 2, 3)), false),
            DatumBytes(ByteVector(Array[Byte](4, 5, 6)), true))
 
-    val arr = toBitVector(bll, scodecs.asBytesSeqCodec)
-    val res = fromBitVector(arr, scodecs.asBytesSeqCodec)
+    val arr = toBitVector(bll, scodecs.datumBytesesCodec)
+    val res = fromBitVector(arr, scodecs.datumBytesesCodec)
 
     res shouldBe bll
   }
