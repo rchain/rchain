@@ -90,7 +90,7 @@ package object rspace {
       patterns: Seq[P])(txn: store.T)(implicit m: Match[P, A]): Option[Seq[DataCandidate[C, A]]] = {
 
     val channelToIndexedData = channels.map { (c: C) =>
-      c -> Random.shuffle(store.getAs(txn, Seq(c)).zipWithIndex)
+      c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
     sequence(extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil))
@@ -117,7 +117,7 @@ package object rspace {
       data: Datum[A])(txn: store.T)(implicit m: Match[P, A]): Option[Seq[DataCandidate[C, A]]] = {
 
     val channelToIndexedData = channels.map { (c: C) =>
-      val as = Random.shuffle(store.getAs(txn, Seq(c)).zipWithIndex)
+      val as = Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
       c -> { if (c == batChannel) (data, -1) +: as else as }
     }.toMap
 
@@ -167,7 +167,9 @@ package object rspace {
         s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>")
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
-          store.putK(txn, channels, WaitingContinuation(patterns, continuation, persist))
+          store.putWaitingContinuation(txn,
+                                       channels,
+                                       WaitingContinuation(patterns, continuation, persist))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(
             s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
@@ -178,7 +180,7 @@ package object rspace {
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                   if !persistData =>
-                store.removeA(txn, candidateChannel, dataIndex)
+                store.removeDatum(txn, candidateChannel, dataIndex)
               case _ =>
                 ()
             }
@@ -203,7 +205,9 @@ package object rspace {
       extractDataCandidates(store, channels, patterns)(txn) match {
         case None =>
           store.removeAll(txn, channels)
-          store.putK(txn, channels, WaitingContinuation(patterns, continuation, true))
+          store.putWaitingContinuation(txn,
+                                       channels,
+                                       WaitingContinuation(patterns, continuation, true))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(
             s"consume: no data found, storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>")
@@ -212,7 +216,7 @@ package object rspace {
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                 if !persistData =>
-              store.removeA(txn, candidateChannel, dataIndex)
+              store.removeDatum(txn, candidateChannel, dataIndex)
             case _ =>
               ()
           }
@@ -252,7 +256,7 @@ package object rspace {
       case Nil => None
       case channels :: remaining =>
         val matchCandidates: Seq[(WaitingContinuation[P, K], Int)] =
-          store.getPsK(txn, channels).zipWithIndex
+          store.getWaitingContinuation(txn, channels).zipWithIndex
         extractFirstMatch(store, channels, Random.shuffle(matchCandidates), channel, data)(txn) match {
           case None             => extractProduceCandidateAlt(store, remaining, channel, data)(txn)
           case produceCandidate => produceCandidate
@@ -300,14 +304,14 @@ package object rspace {
                              continuationIndex,
                              dataCandidates)) =>
           if (!persistK) {
-            store.removePsK(txn, channels, continuationIndex)
+            store.removeWaitingContinuation(txn, channels, continuationIndex)
           }
           dataCandidates
             .sortBy(_.datumIndex)(Ordering[Int].reverse)
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
                 if (!persistData && dataIndex >= 0) {
-                  store.removeA(txn, candidateChannel, dataIndex)
+                  store.removeDatum(txn, candidateChannel, dataIndex)
                 }
                 store.removeJoin(txn, candidateChannel, channels)
               case _ =>
@@ -317,7 +321,7 @@ package object rspace {
           Some(continuation, dataCandidates.map(_.datum.a))
         case None =>
           logger.debug(s"produce: no matching continuation found")
-          store.putA(txn, Seq(channel), Datum(data, persist))
+          store.putDatum(txn, Seq(channel), Datum(data, persist))
           logger.debug(s"produce: persisted <data: $data> at <channel: $channel>")
           None
       }

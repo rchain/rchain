@@ -26,7 +26,7 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def getChannels(txn: T, hash: H): Seq[C]
 
-  private[rspace] def removeA(txn: T, channels: Seq[C], index: Int): Unit
+  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit
 
   private[rspace] def createTxnRead(): T
 
@@ -34,17 +34,19 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R
 
-  private[rspace] def putA(txn: T, channels: Seq[C], datum: Datum[A]): Unit
+  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit
 
-  private[rspace] def putK(txn: T, channels: Seq[C], continuation: WaitingContinuation[P, K]): Unit
+  private[rspace] def putWaitingContinuation(txn: T,
+                                             channels: Seq[C],
+                                             continuation: WaitingContinuation[P, K]): Unit
 
-  private[rspace] def getAs(txn: T, channels: Seq[C]): Seq[Datum[A]]
+  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]]
 
-  private[rspace] def getPsK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]]
+  private[rspace] def getWaitingContinuation(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]]
 
-  private[rspace] def removeA(txn: T, channel: C, index: Int): Unit
+  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit
 
-  private[rspace] def removePsK(txn: T, channels: Seq[C], index: Int): Unit
+  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit
 
   private[rspace] def removeAll(txn: T, channels: Seq[C]): Unit
 
