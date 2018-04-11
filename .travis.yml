@@ -73,4 +73,4 @@ notifications:
   email:
     recipients: rchain-makers@pyrofex.net
     on_success: never
-    on_failure: never 
+    on_failure: always 
