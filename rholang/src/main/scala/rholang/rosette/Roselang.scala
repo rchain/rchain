@@ -336,12 +336,8 @@ trait RholangASTToTerm extends AllVisitor[VisitorTypes.R, VisitorTypes.A] {
     def cBranchToParPair(b: CBranch) =
       b match {
         case branch: Choice => {
-          // bverity = 1, babsurdity = 0
-          val (_, babsurdity) =
-            (
-              new PValue(new VQuant(new QInt(1))),
-              new PValue(new VQuant(new QInt(0)))
-            )
+          // babsurdity = 0
+          val babsurdity = new PValue(new VQuant(new QInt(0)))
 
           // bmsg <- bchan
           val bmsgVStr = Fresh()
