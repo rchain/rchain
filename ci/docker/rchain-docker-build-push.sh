@@ -106,9 +106,9 @@ DOCKER_SRC_TAG="latest"
 if [[ ${docker_dst_repo} ]]; then
     if [[ "${TRAVIS_BRANCH}" = "master" || \
         "${TRAVIS_BRANCH}" = "dev" || \
-        "${TRAVIS_BRANCH}" = "ops-test" ]] ; then
-        echo "Travis branch matched. Pushing rnode to Docker repo."
-        # echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin # alt method but having issues with docker
+        "${TRAVIS_BRANCH}" = "ops-test" ]] && \
+       [[ "$TRAVIS_PULL_REQUEST" = "false" ]] ; then
+        echo "Travis branch ${TRAVIS_BRANCH} matched and not a pull request. Pushing rnode to Docker repo."
         docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" 
         docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
         docker push ${docker_dst_repo}
