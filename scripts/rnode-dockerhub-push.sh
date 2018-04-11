@@ -28,10 +28,10 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
     # Hence, the TRAVIS_REPO_SLUG check and only commit on rchain/rchain.
     # ref https://docs.travis-ci.com/user/pull-requests/#Pull-Requests-and-Security-Restrictions
 
-    echo "Travis branch ${TRAVIS_BRANCH} matched and not a pull request. Pushing rnode to Docker repo."
+    echo "Travis branch ${TRAVIS_BRANCH} matched and from repo rchain/rchain. Pushing rnode to Docker repo."
     docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" 
     docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${DOCKER_DST_REPO}:${DOCKER_DST_TAG} 
     docker push ${DOCKER_DST_REPO}:${DOCKER_DST_TAG} 
 else
-    echo "Container image not pushed as it is not correct branch and not a pull request for rchain/rchain repo."
+    echo "Container image not pushed as it is not correct branch and from rchain/rchain repo."
 fi
