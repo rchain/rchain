@@ -27,10 +27,8 @@ In P2P mode, node will instantiate a peer-to-peer network. It will either connec
 * For Rholang
     - [CUP](http://www2.cs.tum.edu/projects/cup/install.php) 0.11b-2014-06-11 or later. See [Rholang README](https://github.com/rchain/rchain/blob/master/rholang/README.md) for notes on installation requirements.
      - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: BNFC/bnfc@7c9e859
- 
- 
-     
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859)
+      
 #### Node depends on the following subprojects: 
 
 1. comm
