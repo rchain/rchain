@@ -108,7 +108,8 @@ if [[ ${docker_dst_repo} ]]; then
         "${TRAVIS_BRANCH}" = "dev" || \
         "${TRAVIS_BRANCH}" = "ops-test" ]] ; then
         echo "Travis branch matched. Pushing rnode to Docker repo."
-        echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+        # echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin # alt method but having issues with docker
+        docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" 
         docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
         docker push ${docker_dst_repo}
     elif [[ "${TRAVIS}" != "true" ]]; then
