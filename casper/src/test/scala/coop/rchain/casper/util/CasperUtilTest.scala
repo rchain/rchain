@@ -1,15 +1,13 @@
 package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockGenerator
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.crypto.hash.Sha256
 
 import scala.collection.mutable
 
-class CasperUtilTest extends FlatSpec with Matchers {
-  val resourceCounter: Iterator[Int] = Iterator.from(0)
+class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
   "isInMainChain" should "classify appropriately" in {
     val chain = mutable.HashMap[ByteString, BlockMessage]()
@@ -50,18 +48,5 @@ class CasperUtilTest extends FlatSpec with Matchers {
     isInMainChain(chain, genesis, blockMessage4) should be(true)
     isInMainChain(chain, blockMessage2, blockMessage4) should be(true)
     isInMainChain(chain, blockMessage3, blockMessage4) should be(false)
-  }
-
-  private def createBlock(parentsHashList: Seq[ByteString]) = {
-    val resourceId     = resourceCounter.next()
-    val uniqueResource = Resource(ProduceResource(Produce(resourceId)))
-    val postState      = RChainState().withResources(Seq(uniqueResource))
-    val postStateHash  = Sha256.hash(postState.toByteArray)
-    val header = Header()
-      .withPostStateHash(ByteString.copyFrom(postStateHash))
-      .withParentsHashList(parentsHashList)
-    val blockHash = Sha256.hash(header.toByteArray)
-    val body      = Body().withPostState(postState)
-    BlockMessage(ByteString.copyFrom(blockHash), Some(header), Some(body))
   }
 }
