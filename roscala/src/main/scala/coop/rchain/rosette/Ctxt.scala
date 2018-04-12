@@ -149,9 +149,9 @@ object Ctxt {
 
   val transformCtxtToCtxtTrans: State[Ctxt, StoreResult] => CtxtTransition[StoreResult] = trans =>
     liftRWS[Eval, Unit, List[Continuation], (GlobalEnv, Ctxt), StoreResult](
-      trans.transformS[(GlobalEnv, Ctxt)]({ case (globalEnv, ctxt) => ctxt },
+      trans.transformS[(GlobalEnv, Ctxt)]({ case (_, ctxt) => ctxt },
                                           (oldGlobalEnvAndCtxt, newCtxt) => {
-                                            val (oldGlobalEnv, oldCtxt) = oldGlobalEnvAndCtxt
+                                            val (oldGlobalEnv, _) = oldGlobalEnvAndCtxt
                                             (oldGlobalEnv, newCtxt)
                                           }))
 

@@ -773,7 +773,6 @@ object VirtualMachine {
         setCtxtReg(op.reg, e.slot(op.offset))(state)
       case None => die("OpXferLexToReg: Type mismatch")(state)
     }
-
   }
 
   def execute(op: OpXferGlobalToArg): VMTransition[Unit] =

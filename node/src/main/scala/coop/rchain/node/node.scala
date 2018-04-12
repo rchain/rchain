@@ -61,17 +61,6 @@ class NodeRuntime(conf: Conf) {
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]   = effects.remoteKeysKvs(remoteKeysPath)
   implicit val communicatonEffect: Communication[Effect] = effects.communication[Effect](net)
 
-  def connectToBootstrap: Effect[Unit] =
-    for {
-      bootstrapAddrStr <- conf.bootstrap.toOption
-                           .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-                           .toEffect
-      bootstrapAddr <- p2p.NetworkAddress.parse(bootstrapAddrStr).toEffect
-      _             <- Log[Effect].info(s"Bootstrapping from $bootstrapAddr.")
-      _             <- p2p.Network.connect[Effect](bootstrapAddr)
-      _             <- Log[Effect].info(s"Connected $bootstrapAddr.")
-    } yield ()
-
   def addShutdownHook: Task[Unit] = Task.delay {
     sys.addShutdownHook {
       runtime.store.close()
@@ -84,34 +73,16 @@ class NodeRuntime(conf: Conf) {
     }
   }
 
-  def findAndConnect: Int => Effect[Int] = {
-
-    val err: ApplicativeError_[Effect, CommError] = ApplicativeError_[Effect, CommError]
-
-    (lastCount: Int) =>
-      (for {
-        _     <- IOUtil.sleep[Effect](5000L)
-        peers <- Communication[Effect].findMorePeers(10)
-        _ <- peers.toList.traverse(p => err.attempt(p2p.Network.connect[Effect](p))).map {
-              attempts =>
-                attempts.filter {
-                  case Left(_) => false
-                  case _       => true
-                }
-            }
-        thisCount <- Communication[Effect].countPeers
-        _ <- if (thisCount != lastCount) Log[Effect].info(s"Peers: $thisCount.")
-            else ().pure[Effect]
-      } yield thisCount)
-  }
-
   val nodeProgram: Effect[Unit] = for {
     _ <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
     _ <- addShutdownHook.toEffect
     _ <- Log[Effect].info(s"Listening for traffic on $address.")
     _ <- if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
-        else connectToBootstrap
-    _ <- MonadOps.forever(findAndConnect, 0)
+        else
+          conf.bootstrap.toOption
+            .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+            .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr))
+    _ <- MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
   } yield ()
 
 }
