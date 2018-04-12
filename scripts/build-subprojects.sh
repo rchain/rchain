@@ -24,6 +24,11 @@ case "$SUBPROJECT" in "rosette")
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
     ;;
 
+"rnode-dockerhub-push")
+
+    ./scripts/rnode-dockerhub-push.sh
+    ;;
+
 "rholang_more_tests")
 
     # Prep nix 

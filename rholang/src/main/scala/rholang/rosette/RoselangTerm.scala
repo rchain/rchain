@@ -8,7 +8,7 @@ import coop.rchain.lib.term._
 trait RosetteSerialization[Namespace, VarType, TagType] {
   def rosetteSerializeOperation: String =
     this match {
-      case leaf: StrTermPtdCtxtLf   => ""
+      case _: StrTermPtdCtxtLf      => ""
       case branch: StrTermPtdCtxtBr => branch.rosetteSerializeOperation
       case _                        => throw new Exception("unexpected CCL type")
     }

@@ -1,8 +1,6 @@
 package coop.rchain.rosette.prim
 
-import cats.data.State
-import cats.data.State._
-import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
+import cats.implicits._
 import coop.rchain.rosette._
 import coop.rchain.rosette.prim.Prim.mismatchArgs
 
@@ -22,66 +20,63 @@ abstract class Prim extends Ob {
   override val meta   = null
   override val parent = null
 
-  def fn(ctxt: Ctxt): Either[PrimError, Ob]
+  def fn: CtxtTransition[PrimResult] =
+    for {
+      ctxt       <- getCtxt
+      globalEnv  <- getGlobalEnv
+      primResult = fnSimple(ctxt)
+    } yield primResult
 
-  /**
-    * Rosette seems to potentially return INVALID, UPCALL or DEADTHREAD here
-    * Therefore we return RblError for the error case
-    */
-  def dispatchHelper: CtxtTransition[Result] = State { ctxt =>
-    val n = ctxt.nargs
+  def fnSimple(ctxt: Ctxt): PrimResult = ???
 
-    if (minArgs <= n && n <= maxArgs)
-      (ctxt, fn(ctxt).left.map(PrimErrorWrapper))
-    else
-      (ctxt, Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs))))
-  }
+  def dispatchHelper: CtxtTransition[Result] =
+    for {
+      ctxt      <- getCtxt
+      globalEnv <- getGlobalEnv
+      n         = ctxt.nargs
+
+      result <- if (minArgs <= n && n <= maxArgs)
+                 fn.transform((writer, state, res) =>
+                   (writer, state, res.left.map(PrimErrorWrapper)))
+               else
+                 pureCtxt[Result](Left(PrimErrorWrapper(mismatchArgs(ctxt, minArgs, maxArgs))))
+    } yield result
 
   /** Dispatch primitive
     *
     * This runs a primitive with dispatchHelper and tries
-    * to return the result to the parent ctxt.
+    * to return the result to the parent `ctxt`.
     *
-    * Returning the result to the parent ctxt, will potentially
-    * return the parent ctxt which then has to be scheduled by
+    * Returning the result to the parent `ctxt` will potentially
+    * return the parent `ctxt` which then has to be scheduled by
     * the caller.
+    *
+    * Running a primitive through `dispatchHelper` can also potentially
+    * return a ctxt that has to be scheduled (see `ctxt-rtn`). Therefore `dispatchPrim`
+    * returns a `List[Continuation]`.
     */
-  override def dispatch: CtxtTransition[(Result, Option[Continuation])] = {
-
-    /**
-      * Try to return the primitive result to the parent ctxt.
-      * This can potentially return the parent ctxt as a ctxt
-      * that needs to be scheduled by the caller.
-      */
-    def returnResultToParent(result: Ob): CtxtTransition[(Result, Option[Continuation])] =
-      Ctxt
-        .ret(result)
-        .transform(
-          (ctxt, res) =>
-            if (res._1)
-              (ctxt, (Right(result), res._2))
-            else
-              (ctxt, (Right(result), res._2))
-        )
-
+  override def dispatch: CtxtTransition[Result] =
     for {
       primResult <- dispatchHelper
 
       result <- primResult match {
-                 case Right(ob) => returnResultToParent(ob)
 
-                 case _ =>
+                 /**
+                   * Return the primitive result to the continuation
+                   * of the current `ctxt`.
+                   */
+                 case Right(res) => Ctxt.ret(res).map(_ => primResult)
+
+                 case error =>
                    /**
                      * Something went wrong with running the primitive.
-                     * Report the error back and there is no ctxt to be
-                     * scheduled.
+                     * Report the error back.
                      */
-                   pure[Ctxt, (Result, Option[Continuation])]((primResult, None))
+                   pureCtxt[Result](error)
                }
     } yield result
-  }
 
-  def invoke: CtxtTransition[(Result, Option[Continuation])] = dispatch
+  def invoke: CtxtTransition[Result] = dispatch
 }
 
 object Prim {
@@ -93,7 +88,7 @@ object Prim {
     val typeName = classTag[T].runtimeClass.getName
 
     val nonT = ctxt.argvec.elem.take(n).find {
-      case e: T => false
+      case _: T => false
       case _    => true
     }
 

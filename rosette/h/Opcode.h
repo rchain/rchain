@@ -193,6 +193,8 @@ enum Opcode {
 
     opImmediateLitToReg = 0xd0,
 
+    opDeferLookup = 0xe0,
+
     MaxOpcodes = 256
 };
 

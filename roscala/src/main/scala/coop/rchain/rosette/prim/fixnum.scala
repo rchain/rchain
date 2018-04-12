@@ -17,11 +17,12 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum + fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(0)) {
+        (accum, fixnum: Fixnum) =>
+          accum + fixnum
       })
     }
   }
@@ -33,7 +34,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] =
       ctxt.nargs match {
         case 1 =>
           val fixval = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
@@ -53,11 +54,12 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(1)) {
-        case (accum, fixnum: Fixnum) => accum * fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(1)) {
+        (accum, fixnum: Fixnum) =>
+          accum * fixnum
       })
     }
   }
@@ -69,7 +71,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
@@ -89,7 +91,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
@@ -108,7 +110,7 @@ object fixnum {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] =
       checkFixnum(0, ctxt.argvec.elem).map { m =>
         checkFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m < n
@@ -123,7 +125,7 @@ object fixnum {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] =
       checkFixnum(0, ctxt.argvec.elem).map { m =>
         checkFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m <= n
@@ -138,7 +140,7 @@ object fixnum {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] =
       checkFixnum(0, ctxt.argvec.elem).map { m =>
         checkFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m > n
@@ -153,7 +155,7 @@ object fixnum {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] =
       checkFixnum(0, ctxt.argvec.elem).map { m =>
         checkFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m >= n
@@ -168,7 +170,7 @@ object fixnum {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] =
       checkFixnum(0, ctxt.argvec.elem).map { m =>
         checkFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m == n
@@ -183,7 +185,7 @@ object fixnum {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] =
       checkFixnum(0, ctxt.argvec.elem).map { m =>
         checkFixnum(1, ctxt.argvec.elem) match {
           case Right(n) => m != n
@@ -199,11 +201,11 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(Int.MaxValue)) {
-        case (minVal, fixnum: Fixnum) =>
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(Int.MaxValue)) {
+        (minVal, fixnum: Fixnum) =>
           if (minVal.value < fixnum.value) minVal else fixnum
       })
     }
@@ -216,11 +218,11 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(Int.MinValue)) {
-        case (maxVal, fixnum: Fixnum) =>
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(Int.MinValue)) {
+        (maxVal, fixnum: Fixnum) =>
           if (maxVal.value > fixnum.value) maxVal else fixnum
       })
     }
@@ -233,7 +235,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       Right(Fixnum(Math.abs(m.value)))
     }
@@ -246,12 +248,12 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
       try {
-        Right(Fixnum(Math.pow(m.value, n.value).toInt))
+        Right(Fixnum(Math.pow(m.value.toDouble, n.value.toDouble).toInt))
       } catch {
         case _: ArithmeticException =>
           Left(ArithmeticError)
@@ -266,7 +268,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
 
       if (m <= 0) {
@@ -292,7 +294,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum].value
 
       if (m <= 0) {
@@ -318,11 +320,12 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(~0)) {
-        case (accum, fixnum: Fixnum) => accum & fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(~0)) {
+        (accum, fixnum: Fixnum) =>
+          accum & fixnum
       })
     }
   }
@@ -334,11 +337,12 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum | fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(0)) {
+        (accum, fixnum: Fixnum) =>
+          accum | fixnum
       })
     }
   }
@@ -350,11 +354,12 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(Fixnum(0)) {
-        case (accum, fixnum: Fixnum) => accum ^ fixnum
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(0)) {
+        (accum, fixnum: Fixnum) =>
+          accum ^ fixnum
       })
     }
   }
@@ -366,7 +371,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
 
       Right(Fixnum(~m.value))
@@ -380,10 +385,10 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val n = ctxt.nargs
 
-      val commonBits = ctxt.argvec.elem.take(n).foldLeft(Fixnum(~0)) {
+      val commonBits = ctxt.argvec.elem.take(n).asInstanceOf[Seq[Fixnum]].foldLeft(Fixnum(~0)) {
         case (accum, fixnum: Fixnum) => accum & fixnum
       }
 
@@ -402,7 +407,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
@@ -422,7 +427,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
@@ -437,7 +442,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
@@ -452,7 +457,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 
@@ -467,7 +472,7 @@ object fixnum {
 
     @checkTypeMismatch[Fixnum]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[Fixnum]
       val n = ctxt.argvec.elem(1).asInstanceOf[Fixnum]
 

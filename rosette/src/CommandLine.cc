@@ -41,6 +41,7 @@ char BootFile[MAXPATHLEN] = "boot.rbl";
 char RunFile[MAXPATHLEN] = "";
 bool ForceEnableRepl = false;
 int VerboseFlag = 0;
+int DeferLookupFlag = 0;
 
 /*
  * RestoringImage is set to 0 in the initial boot-rosette image, but it
@@ -61,6 +62,7 @@ void usage(const char* name, bool fatal = false, const char* msg = NULL) {
             " -h, --help             Prints this message and exits.\n"
             " -v, --verbose          Verbose mode\n"
             " -q, --quiet            Disable verbose mode\n"
+            " -l, --defer-lookup     Defer nonprimitive symbol lookup until runtime\n"
             " -t, --tenure=NUM_GCS   Number of GCs before tenuring an object\n"
             " -p, --paranoid-gc      Enable paranoid GC\n"
             " -I, --infant-size=KB   RAM to allocate for infant objects\n"
@@ -105,6 +107,7 @@ int ParseCommandLine(int argc, char** argv) {
         /* Flags */
         {"verbose", no_argument, NULL, 'v'},
         {"quiet", no_argument, NULL, 'q'},
+        {"defer-lookup", no_argument, NULL, 'l'},
         {"interactive-repl", no_argument, NULL, 'i'},
 
         /* Non-flags */
@@ -152,6 +155,10 @@ int ParseCommandLine(int argc, char** argv) {
 
         case 'q':
             VerboseFlag = 0;
+            break;
+
+        case 'l':
+            DeferLookupFlag = 1;
             break;
 
         case 'h':

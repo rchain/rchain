@@ -8,7 +8,7 @@ import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 
-import scala.collection.immutable.BitSet
+import scala.collection.immutable.{BitSet, Vector}
 
 object implicits {
 
@@ -18,7 +18,6 @@ object implicits {
   implicit def fromChannel[T](c: T)(implicit toChannel: T => Channel): Option[Channel] = Some(c)
 
   // Var Related
-
   def apply(v: VarInstance): Var                                       = new Var(v)
   implicit def fromVarInstance(v: VarInstance): Var                    = apply(v)
   implicit def fromVar[T](v: T)(implicit toVar: T => Var): Option[Var] = Some(v)
@@ -107,7 +106,6 @@ object implicits {
   implicit def fromEOr(e: EOr): Expr = apply(e)
 
   // Par Related
-
   def apply(): Par = new Par()
   def apply(s: Send): Par =
     new Par(sends = List(s),
@@ -149,6 +147,18 @@ object implicits {
   implicit def fromExpr[T](e: T)(implicit toExpr: T => Expr): Par = apply(e)
   implicit def fromMatch(m: Match): Par                           = apply(m)
   implicit def fromGPrivate(g: GPrivate): Par                     = apply(g)
+
+  object VectorPar {
+    def apply(): Par = new Par(
+      sends = Vector.empty[Send],
+      receives = Vector.empty[Receive],
+      evals = Vector.empty[Eval],
+      news = Vector.empty[New],
+      exprs = Vector.empty[Expr],
+      matches = Vector.empty[Match],
+      ids = Vector.empty[GPrivate],
+    )
+  }
 
   object GPrivate {
     def apply(): GPrivate          = new GPrivate(java.util.UUID.randomUUID.toString)
@@ -381,4 +391,14 @@ object implicits {
         case Wildcard(_)     => BitSet()
       }
   }
+
+  implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
+    new HasLocallyFree[ReceiveBind] {
+      def wildcard(rb: ReceiveBind) =
+        ChannelLocallyFree.wildcard(rb.source.get)
+      def freeCount(rb: ReceiveBind) =
+        ChannelLocallyFree.freeCount(rb.source.get)
+      def locallyFree(rb: ReceiveBind) =
+        ChannelLocallyFree.locallyFree(rb.source.get)
+    }
 }

@@ -11,6 +11,7 @@ import scala.collection.mutable
 import scala.util.{Failure, Success}
 import CommError._
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.p2p.effects._
 import coop.rchain.catscontrib._, Catscontrib._
 import cats._, cats.data._, cats.implicits._
 import scala.util.Try

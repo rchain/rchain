@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
+import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 
@@ -162,7 +163,7 @@ object effects {
 
       def roundTrip(msg: ProtocolMessage,
                     remote: ProtocolNode,
-                    timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
+                    timeout: Duration): F[CommErr[ProtocolMessage]] =
         net.roundTrip[F](msg, remote, timeout)
       def local: F[ProtocolNode] = net.local.pure[F]
       def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =

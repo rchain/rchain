@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter.storage
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
+import coop.rchain.models.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
@@ -36,7 +37,7 @@ object implicits {
   /* Serialize instances */
 
   implicit val serializeChannel: Serialize[Channel] =
-    Serialize.mkProtobufInstance(Channel)
+    mkProtobufInstance(Channel)
 
   implicit val serializeChannels: Serialize[Seq[Channel]] =
     new Serialize[Seq[Channel]] {
@@ -49,5 +50,5 @@ object implicits {
     }
 
   implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =
-    Serialize.mkProtobufInstance(TaggedContinuation)
+    mkProtobufInstance(TaggedContinuation)
 }

@@ -39,7 +39,7 @@ object Curve25519 {
 
   def newNonce: Array[Byte] = {
     import org.abstractj.kalium.NaCl.Sodium._
-    var nonce = new Array[Byte](CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES)
+    val nonce = new Array[Byte](CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES)
     scala.util.Random.nextBytes(nonce)
     nonce
   }

@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import cats._
+import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
 
@@ -12,7 +12,14 @@ import coop.rchain.models.Var.VarInstance._
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
 
-import implicits.{ExprLocallyFree, GPrivateLocallyFree, ParExtension, SendLocallyFree}
+import implicits.{
+  ExprLocallyFree,
+  GPrivateLocallyFree,
+  ParExtension,
+  ReceiveBindLocallyFree,
+  SendLocallyFree,
+  VectorPar
+}
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -147,7 +154,8 @@ object SpatialMatcher {
                     StateT.liftF(Stream.Empty)
               }
             for {
-              p          <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) => m.getOrElse(level, Par()))
+              p <- StateT.inspect[Stream, FreeMap, Par]((m: FreeMap) =>
+                    m.getOrElse(level, VectorPar()))
               collectPar <- foldRemainder(rem, p)
               _          <- StateT.modify[Stream, FreeMap]((m: FreeMap) => m + (level -> collectPar))
             } yield Unit
@@ -255,34 +263,6 @@ object SpatialMatcher {
       } yield Unit
     }
 
-  def spatialMatch(target: Channel, pattern: Channel): OptionalFreeMap[Unit] =
-    (target.channelInstance, pattern.channelInstance) match {
-      case (_, ChanVar(v)) if v.varInstance.isWildcard => StateT.pure(Unit)
-      case (Quote(p), ChanVar(v)) => {
-        v.varInstance match {
-          case FreeVar(level) => {
-            if (p.locallyFree.isEmpty)
-              StateT.modify(m => m + (level -> p))
-            else
-              StateT.liftF(None)
-          }
-          case _ => StateT.liftF(None)
-        }
-      }
-      case (ChanVar(tv), ChanVar(pv)) =>
-        (tv.varInstance, pv.varInstance) match {
-          case (BoundVar(tlevel), BoundVar(plevel)) => {
-            if (tlevel === plevel)
-              StateT.pure(Unit)
-            else
-              StateT.liftF(None)
-          }
-          case _ => StateT.liftF(None)
-        }
-      case (Quote(tproc), Quote(pproc)) => spatialMatch(tproc, pproc)
-      case _                            => StateT.liftF(None)
-    }
-
   def spatialMatch(target: Send, pattern: Send): OptionalFreeMap[Unit] =
     if (target.persistent != pattern.persistent)
       StateT.liftF(None)
@@ -292,14 +272,26 @@ object SpatialMatcher {
         forcedYield <- foldMatch(target.data, pattern.data, (t: Par, p: Par) => spatialMatch(t, p))
       } yield forcedYield
 
-  /**
-    * Note that currently there should be no way to put a GPrivate in a pattern
-    * because patterns start with an empty environment.
-    * We're going to write the obvious definition anyway.
-    */
-  def spatialMatch(target: GPrivate, pattern: GPrivate): OptionalFreeMap[Unit] =
-    if (target == pattern)
-      StateT.pure(Unit)
+  def spatialMatch(target: Receive, pattern: Receive): OptionalFreeMap[Unit] =
+    if (target.persistent != pattern.persistent)
+      StateT.liftF(None)
+    else
+      for {
+        _ <- listMatchSingle[ReceiveBind](target.binds,
+                                          pattern.binds,
+                                          spatialMatch,
+                                          (p, rb) => p,
+                                          None,
+                                          false)
+        _ <- spatialMatch(target.body.get, pattern.body.get)
+      } yield Unit
+
+  def spatialMatch(target: Eval, pattern: Eval): OptionalFreeMap[Unit] =
+    spatialMatch(target.channel.get, pattern.channel.get)
+
+  def spatialMatch(target: New, pattern: New): OptionalFreeMap[Unit] =
+    if (target.bindCount == pattern.bindCount)
+      spatialMatch(target.p.get, pattern.p.get)
     else
       StateT.liftF(None)
 
@@ -332,4 +324,63 @@ object SpatialMatcher {
         } yield Unit
       case _ => StateT.liftF(None)
     }
+
+  def spatialMatch(target: Match, pattern: Match): OptionalFreeMap[Unit] =
+    for {
+      _ <- spatialMatch(target.target.get, pattern.target.get)
+      _ <- foldMatch(target.cases,
+                     pattern.cases,
+                     (t: MatchCase, p: MatchCase) => spatialMatch(t, p))
+    } yield Unit
+
+  /**
+    * Note that currently there should be no way to put a GPrivate in a pattern
+    * because patterns start with an empty environment.
+    * We're going to write the obvious definition anyway.
+    */
+  def spatialMatch(target: GPrivate, pattern: GPrivate): OptionalFreeMap[Unit] =
+    if (target == pattern)
+      StateT.pure(Unit)
+    else
+      StateT.liftF(None)
+
+  def spatialMatch(target: Channel, pattern: Channel): OptionalFreeMap[Unit] =
+    (target.channelInstance, pattern.channelInstance) match {
+      case (_, ChanVar(v)) if v.varInstance.isWildcard => StateT.pure(Unit)
+      case (Quote(p), ChanVar(v)) => {
+        v.varInstance match {
+          case FreeVar(level) => {
+            if (p.locallyFree.isEmpty)
+              StateT.modify(m => m + (level -> p))
+            else
+              StateT.liftF(None)
+          }
+          case _ => StateT.liftF(None)
+        }
+      }
+      case (ChanVar(tv), ChanVar(pv)) =>
+        (tv.varInstance, pv.varInstance) match {
+          case (BoundVar(tlevel), BoundVar(plevel)) => {
+            if (tlevel === plevel)
+              StateT.pure(Unit)
+            else
+              StateT.liftF(None)
+          }
+          case _ => StateT.liftF(None)
+        }
+      case (Quote(tproc), Quote(pproc)) => spatialMatch(tproc, pproc)
+      case _                            => StateT.liftF(None)
+    }
+
+  def spatialMatch(target: ReceiveBind, pattern: ReceiveBind): OptionalFreeMap[Unit] =
+    if (target.patterns != pattern.patterns)
+      StateT.liftF[Option, FreeMap, Unit](None)
+    else
+      spatialMatch(target.source.get, pattern.source.get)
+
+  def spatialMatch(target: MatchCase, pattern: MatchCase): OptionalFreeMap[Unit] =
+    if (target.pattern != pattern.pattern)
+      StateT.liftF(None)
+    else
+      spatialMatch(target.source.get, pattern.source.get)
 }

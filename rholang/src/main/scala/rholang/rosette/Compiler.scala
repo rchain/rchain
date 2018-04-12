@@ -43,7 +43,7 @@ object Rholang2RosetteCompiler extends RholangASTToTerm with Rholang2RosetteComp
       val ast  = prsr.pContr()
       Some(visit(ast, Set[String]()))
     } catch {
-      case e: FileNotFoundException => {
+      case _: FileNotFoundException => {
         System.err.println(s"""Error: File not found: ${fileName}""")
         None
       }

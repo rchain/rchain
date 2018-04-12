@@ -544,6 +544,7 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         Define("envp", GetEnvp(envp));
         Define("flag-enable-repl", GetReplFlag());
         Define("flag-verbose", VerboseFlag ? RBLTRUE : RBLFALSE);
+        Define("flag-defer-lookup", DeferLookupFlag ? RBLTRUE: RBLFALSE);
         vm->resetSignals();
 
         /**
@@ -589,6 +590,7 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         Define("envp", GetEnvp(envp));
         Define("flag-enable-repl", GetReplFlag());
         Define("flag-verbose", VerboseFlag ? RBLTRUE : RBLFALSE);
+        Define("flag-deferLookup", DeferLookupFlag ? RBLTRUE: RBLFALSE);
         did_run_file = LoadRunFile();
         LoadBootFiles();
         heap->tenureEverything();

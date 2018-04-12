@@ -2,9 +2,10 @@ package coop.rchain.rosette
 
 import cats.data.State
 import cats.data.State._
+import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rosette.Ob._
-import coop.rchain.rosette.Ctxt.{setReg, Continuation, CtxtTransition}
+import coop.rchain.rosette.Ctxt.{NIV => _, apply => _, _}
 import coop.rchain.rosette.prim.Prim
 
 sealed trait Work
@@ -34,8 +35,10 @@ object VirtualMachine {
   )
 
   val doNextThread = modify[VMState](_.copy(doNextThreadFlag = true))
-  val doNothing    = pure[VMState, Unit](())
+  val doNothing    = pureVm[Unit](())
   val vmError      = modify[VMState](_.copy(exitFlag = true, exitCode = 1))
+
+  def pureVm[A](a: A) = State.pure[VMState, A](a)
 
   def handleApplyPrimSuspend(op: Op): Unit                = ()
   def handleApplyPrimUpcall(op: Op, tag: Location): Unit  = ()
@@ -61,14 +64,27 @@ object VirtualMachine {
       case Left(_) => doNextThread
     }
 
-  def runPrim(unwind: Boolean, optPrim: Option[Prim]): VMTransition[Result] =
-    for {
-      result <- optPrim match {
-                 case Some(prim) if unwind  => unwindAndApplyPrim(prim).embedCtxt
-                 case Some(prim) if !unwind => prim.dispatchHelper.embedCtxt
-                 case None                  => pure[VMState, Result](Left(PrimNotFound))
-               }
-    } yield result
+  /** Executes a primitive which will return a result.
+    *
+    * Executing a primitive returns a list of continuations that has to be
+    * scheduled by the VM. The list can be empty.
+    * For example `ctxt-rtn` is a primitive that can return a continuation.
+    */
+  def runPrim(unwind: Boolean,
+              optPrim: Option[Prim]): VMTransition[(Result, List[Continuation])] = {
+    val primRes: CtxtTransition[Result] = optPrim match {
+      case Some(prim) if unwind  => unwindAndApplyPrim(prim)
+      case Some(prim) if !unwind => prim.dispatchHelper
+      case None                  => pureCtxt[Result](Left(PrimNotFound))
+    }
+
+    /**
+      * Transform `CtxtTransition` into `VMTransition`.
+      * Involves updating `ctxt` and `globalEnv` and pulling out continuations into
+      * the result.
+      */
+    transformCtxtTransToVMTrans[Result](primRes)
+  }
 
   // TODO: Finish
   def unwindAndApplyPrim(prim: Prim): CtxtTransition[Result] = {
@@ -76,7 +92,7 @@ object VirtualMachine {
     val recoil: Ctxt => CtxtTransition[Unit] = ???
 
     for {
-      oldCtxt    <- get[Ctxt]
+      oldCtxt    <- getCtxt
       _          <- unwind
       primResult <- prim.dispatchHelper
       _          <- recoil(oldCtxt)
@@ -312,6 +328,9 @@ object VirtualMachine {
     modify[VMState](_.update(_ >> 'strandPool)(_ :+ ctxt))
   }
 
+  def scheduleConts(ctxts: Seq[Ctxt]): VMTransition[Unit] =
+    ctxts.foldLeft(pureVm[Unit](()))((state, cont) => state.flatMap(_ => schedule(cont)))
+
   /** Return current result
     *
     * This returns the current result to the parent ctxt.
@@ -319,13 +338,15 @@ object VirtualMachine {
     */
   def doRtn: VMTransition[Unit] =
     for {
-      rslt        <- inspect[VMState, Ob](_.ctxt.rslt)
-      ctxtRet     <- Ctxt.ret(rslt).embedCtxt
+      rslt    <- inspect[VMState, Ob](_.ctxt.rslt)
+      ctxtRet <- transformCtxtTransToVMTrans[Boolean](Ctxt.ret(rslt))
+
       isDoRtnFlag <- inspect[VMState, Boolean](_.doRtnFlag)
 
-      (isError, optContinuation) = ctxtRet
+      (isError, continuations) = ctxtRet
 
-      _ <- optContinuation.map(schedule).getOrElse(pure(()))
+      // Schedule continuations to `strandPool`
+      _ <- scheduleConts(continuations)
 
       _ <- if (isError)
             modify[VMState](_.copy(vmErrorFlag = true))
@@ -345,12 +366,13 @@ object VirtualMachine {
   def doXmit: VMTransition[Unit] =
     for {
       target         <- inspect[VMState, Ob](_.ctxt.trgt)
-      dispatchResult <- target.dispatch.embedCtxt
+      dispatchResult <- transformCtxtTransToVMTrans(target.dispatch)
       next           <- inspect[VMState, Boolean](_.xmitData._2)
 
-      (result, optContinuation) = dispatchResult
+      (result, conts) = dispatchResult
 
-      _ <- optContinuation.map(schedule).getOrElse(pure(()))
+      // Schedule continuations to `strandPool`
+      _ <- scheduleConts(conts)
 
       _ <- result match {
             // TODO: Add missing case where result is OTsysval
@@ -527,8 +549,13 @@ object VirtualMachine {
       _   <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
       _   <- modify[VMState](_.set(_ >> 'loc)(loc))
 
-      prim   = Prim.nthPrim(op.primNum)
-      result <- runPrim(op.unwind, prim)
+      prim          = Prim.nthPrim(op.primNum)
+      runPrimResult <- runPrim(op.unwind, prim)
+
+      (result, continuations) = runPrimResult
+
+      // Schedule continuations to `strandPool`
+      _ <- scheduleConts(continuations)
 
       _ <- handlePrimResult(
             result,
@@ -552,8 +579,13 @@ object VirtualMachine {
     for {
       _ <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim   = Prim.nthPrim(op.primNum)
-      result <- runPrim(op.unwind, prim)
+      prim          = Prim.nthPrim(op.primNum)
+      runPrimResult <- runPrim(op.unwind, prim)
+
+      (result, continuations) = runPrimResult
+
+      // Schedule continuation to `strandPool`
+      _ <- scheduleConts(continuations)
 
       _ <- handlePrimResult(
             result,
@@ -577,13 +609,18 @@ object VirtualMachine {
     for {
       _ <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim   = Prim.nthPrim(op.primNum)
-      result <- runPrim(op.unwind, prim)
+      prim          = Prim.nthPrim(op.primNum)
+      runPrimResult <- runPrim(op.unwind, prim)
+
+      (result, continuations) = runPrimResult
+
+      // Schedule continuation to `strandPool`
+      _ <- scheduleConts(continuations)
 
       _ <- handlePrimResult(
             result,
             ob =>
-              setReg(op.reg, ob).embedCtxt
+              setReg(op.reg, ob).embedCtxtInVM
                 .transform { (vmState, storeResult) =>
                   storeResult match {
                     case Success =>
@@ -599,8 +636,13 @@ object VirtualMachine {
     for {
       _ <- modify[VMState](_.set(_ >> 'ctxt >> 'nargs)(op.nargs))
 
-      prim   = Prim.nthPrim(op.primNum)
-      result <- runPrim(op.unwind, prim)
+      prim          = Prim.nthPrim(op.primNum)
+      runPrimResult <- runPrim(op.unwind, prim)
+
+      (result, continuations) = runPrimResult
+
+      // Schedule continuation to `strandPool`
+      _ <- scheduleConts(continuations)
 
       _ <- handlePrimResult(
             result,
@@ -664,7 +706,7 @@ object VirtualMachine {
       _ <- if (exit)
             modify[VMState](_.set(_ >> 'exitFlag)(true).set(_ >> 'exitCode)(0))
           else
-            pure[VMState, Unit](())
+            pureVm[Unit](())
     } yield ()
 
   def execute(op: OpJmp): VMTransition[Unit] = modify(_.set(_ >> 'pc >> 'relative)(op.pc))
@@ -756,7 +798,6 @@ object VirtualMachine {
         setCtxtReg(op.reg, e.slot(op.offset))(state)
       case None => die("OpXferLexToReg: Type mismatch")(state)
     }
-
   }
 
   def execute(op: OpXferGlobalToArg): VMTransition[Unit] =
@@ -789,7 +830,7 @@ object VirtualMachine {
       optOb <- getCtxtReg(op.reg)
       _ <- optOb match {
             case Some(ob) => modify[VMState](_.set(_ >> 'ctxt >> 'rslt)(ob))
-            case None     => pure[VMState, Unit](())
+            case None     => pureVm[Unit](())
           }
     } yield ()
 
@@ -801,7 +842,7 @@ object VirtualMachine {
 
       _ <- Location
             .store(location, rslt)
-            .embedCtxt
+            .embedCtxtInVM
             .transform { (vmState, storeRes) =>
               storeRes match {
                 case Success => (vmState, ())
@@ -815,10 +856,9 @@ object VirtualMachine {
       location  <- inspect[VMState, Location](_.code.lit(op.lit).asInstanceOf[Location])
       globalEnv <- inspect[VMState, TblObject](_.globalEnv)
       _         <- modify[VMState](_.copy(loc = location))
-      _ <- Location
-            .fetch(location, globalEnv)
-            .transform((ctxt, optRes) => (ctxt.copy(rslt = optRes.getOrElse(Ob.INVALID)), ()))
-            .transformS[VMState](_.ctxt, (vmState, ctxt) => vmState.copy(ctxt = ctxt))
+      optRes <- transformCtxtTransToVMTrans(Location.fetch(location))
+                 .map(_._1) // `fetch` doesn't emit continuations
+      _ <- modify[VMState](_.set(_ >> 'ctxt >> 'rslt)(optRes.getOrElse(Ob.INVALID)))
     } yield ()
 
   def execute(op: OpIndLitToArg): VMTransition[Unit] =
