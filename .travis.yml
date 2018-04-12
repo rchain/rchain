@@ -45,7 +45,7 @@ matrix:
     env: SUBPROJECT=rholang_more_tests
 
 script:
-  - ./ci/build-subprojects.sh
+  - ./scripts/build-subprojects.sh
 
 cache:
   directories:
