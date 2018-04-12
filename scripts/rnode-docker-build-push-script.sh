@@ -3,7 +3,7 @@
 if [[ "${CI}" = "true" ]]; then
     set -exo pipefail
 else
-    set -e
+    set
 fi
 
 if [[ "$#" != "3" ]]; then
@@ -21,9 +21,6 @@ docker_dst_repo=$3
 echo "Branch Name: $branch_name"
 echo "Git Repo: $git_repo"
 echo "Docker Repo: $docker_dst_repo"
-echo "Travis git repo slug: ${TRAVIS_REPO_SLUG}"
-echo "Travis Branch: ${TRAVIS_BRANCH}"
-echo "Travis Docker Username: ${DOCKER_USERNAME}"
 echo "5 seconds to cancel if this information is not correct."
 sleep 5 
 
@@ -104,24 +101,8 @@ sbt bnfc:generate node/docker
 # Setup auth, source image(s) and target/destination image(s) name in variables 
 DOCKER_SRC_REPO="coop.rchain/rnode"
 DOCKER_SRC_TAG="latest"
-if [[ ${docker_dst_repo} ]]; then
-    if [[ "${TRAVIS_BRANCH}" = "master" || \
-          "${TRAVIS_BRANCH}" = "dev" || \
-          "${TRAVIS_BRANCH}" = "ops-test" ]] \
-    && [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
-        # Secret Travis environmental variables are not available on pull requests as a means of protection.
-        # Hence, the TRAVIS_PULL_REQUEST check.
-        # ref https://docs.travis-ci.com/user/pull-requests/#Pull-Requests-and-Security-Restrictions
-        echo "Travis branch ${TRAVIS_BRANCH} matched and not a pull request. Pushing rnode to Docker repo."
-        docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}" 
-        docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
-        docker push ${docker_dst_repo}
-    elif [[ "${TRAVIS}" != "true" ]]; then
-        echo "Manual docker login to push to Docker repo:"
-        docker login
-        docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
-        docker push ${docker_dst_repo}
-    else
-        echo "Container image not pushed."
-    fi
-fi
+echo "Manual docker login to push to Docker repo:"
+docker login
+docker tag  ${DOCKER_SRC_REPO}:${DOCKER_SRC_TAG} ${docker_dst_repo}
+docker push ${docker_dst_repo}
+echo "Script is complete!"
