@@ -248,7 +248,7 @@ object Reduce {
             } yield intVal
           case (e: Expr) +: Nil =>
             for {
-              evaled <- evalExpr(e)
+              evaled <- evalExprToExpr(e)
               result <- evaled.exprInstance match {
                          case GInt(v) => Task.pure(v)
                          case _ =>
@@ -274,7 +274,7 @@ object Reduce {
             } yield boolVal
           case (e: Expr) +: Nil =>
             for {
-              evaled <- evalExpr(e)
+              evaled <- evalExprToExpr(e)
               result <- evaled.exprInstance match {
                          case GBool(b) => Task.pure(b)
                          case _ =>
@@ -292,17 +292,12 @@ object Reduce {
           "Error: parallel or non expression found where expression expected.")
       else
         p.exprs match {
-          case Expr(EVarBody(EVar(v))) +: Nil =>
-            for {
-              p       <- eval(v.get)
-              exprVal <- evalSingleExpr(p)
-            } yield exprVal
-          case (e: Expr) +: Nil => evalExpr(e)
+          case (e: Expr) +: Nil => evalExprToExpr(e)
           case _ =>
             Task raiseError new Error("Error: Multiple expressions given.")
         }
 
-    def evalExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] = {
+    def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): Task[Expr] = {
       def relop(p1: Par,
                 p2: Par,
                 relopb: (Boolean, Boolean) => Boolean,
@@ -381,7 +376,11 @@ object Reduce {
             b1 <- evalToBool(p1.get)
             b2 <- evalToBool(p2.get)
           } yield GBool(b1 || b2)
-        case EVarBody(ev) => Task.pure[Expr](ev)
+        case EVarBody(EVar(v)) =>
+          for {
+            p       <- eval(v.get)
+            exprVal <- evalSingleExpr(p)
+          } yield exprVal
         case EListBody(el) => {
           for {
             evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr)(env))
@@ -406,6 +405,11 @@ object Reduce {
 
     def evalExprToPar(expr: Expr)(implicit env: Env[Par]): Task[Par] =
       expr.exprInstance match {
+        case EVarBody(EVar(v)) =>
+          for {
+            p       <- eval(v.get)
+            evaledP <- evalExpr(p)
+          } yield evaledP
         case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
           for {
             evaledTarget <- evalExpr(target.get)
@@ -417,7 +421,7 @@ object Reduce {
                         }
           } yield resultPar
         }
-        case _ => evalExpr(expr).map(e => (fromExpr(e)(identity)))
+        case _ => evalExprToExpr(expr).map(e => (fromExpr(e)(identity)))
       }
 
     def eval(mat: Match)(implicit env: Env[Par]): Task[Unit] = {
@@ -524,8 +528,11 @@ object Reduce {
       */
     def evalExpr(par: Par)(implicit env: Env[Par]): Task[Par] =
       for {
-        evaledExprs <- par.exprs.toList.traverse(expr => evalExpr(expr)(env))
-      } yield par.copy(exprs = evaledExprs)
+        evaledExprs <- par.exprs.toList.traverse(expr => evalExprToPar(expr)(env))
+        result = evaledExprs.foldLeft(par.copy(exprs = Vector())) { (acc, newPar) =>
+          acc ++ newPar
+        }
+      } yield result
 
     def updateLocallyFree(par: Par): Par = {
       val resultLocallyFree =
