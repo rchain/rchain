@@ -24,13 +24,6 @@ case "$SUBPROJECT" in "rosette")
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
     ;;
 
-"docker_build_and_push")
-
-    cd ${TRAVIS_BUILD_DIR}
-    cd ci/docker/
-    ./run.sh
-    ;;
-
 "rholang_more_tests")
 
     # Prep nix 
