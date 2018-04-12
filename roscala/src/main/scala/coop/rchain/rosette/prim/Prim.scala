@@ -88,7 +88,7 @@ object Prim {
     val typeName = classTag[T].runtimeClass.getName
 
     val nonT = ctxt.argvec.elem.take(n).find {
-      case e: T => false
+      case _: T => false
       case _    => true
     }
 

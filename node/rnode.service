@@ -1,0 +1,9 @@
+[Unit]
+Description=RChain Node
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/rnode
+
+[Install]
+WantedBy=multi-user.target

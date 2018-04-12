@@ -3,7 +3,7 @@ package coop.rchain.p2p
 import org.scalatest._
 import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, NetworkProtocol._
+import coop.rchain.comm._, CommError._, NetworkProtocol._, Network.defaultTimeout
 import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
@@ -45,7 +45,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           // given
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           val EncryptionHandshakeMessage(proto, _) = communicationEff.requests(0)
           val Right(EncryptionHandshake(pk))       = NetworkProtocol.toEncryptionHandshake(proto)
@@ -56,7 +56,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           // given
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           value(keysStoreEff.get(remote)).get should equal(remoteKeys.pub)
         }
@@ -65,7 +65,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           // given
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           val FrameMessage(proto, _) = communicationEff.requests(1)
           val Right(Frame(n, f))     = NetworkProtocol.toFrame(proto)
@@ -87,7 +87,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           // given
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           communicationEff.nodes should not be empty
         }
@@ -99,7 +99,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           keysStoreEff.put(remote, remoteKeys.pub)
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           communicationEff.requests(0) should not be an[EncryptionHandshakeMessage]
         }
@@ -108,7 +108,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           keysStoreEff.put(remote, remoteKeys.pub)
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           val FrameMessage(proto, _) = communicationEff.requests(0)
           val Right(Frame(n, f))     = NetworkProtocol.toFrame(proto)
@@ -131,7 +131,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
           keysStoreEff.put(remote, remoteKeys.pub)
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           communicationEff.nodes should not be empty
         }
@@ -141,7 +141,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
           communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseFailure)))
           keysStoreEff.put(remote, remoteKeys.pub)
           // when
-          Network.connect[Effect](remote)
+          Network.connect[Effect](remote, defaultTimeout)
           // then
           communicationEff.requests(0) should be(an[FrameMessage])
           communicationEff.requests(1) should be(an[EncryptionHandshakeMessage])

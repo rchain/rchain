@@ -8,7 +8,7 @@ import coop.rchain.catscontrib._, Catscontrib._
 trait Communication[F[_]] {
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
-                timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]]
+                timeout: Duration): F[CommErr[ProtocolMessage]]
   def local: F[ProtocolNode]
   def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def addNode(node: PeerNode): F[Unit]

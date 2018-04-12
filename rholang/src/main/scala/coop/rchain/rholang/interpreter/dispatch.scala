@@ -10,13 +10,13 @@ trait Dispatch[M[_], A, K] {
 
   val reducer: Reduce[M]
 
-  def dispatch(continuation: K, dataList: List[A]): M[Unit]
+  def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
 }
 
 object Dispatch {
 
   // TODO: Make this function total
-  def buildEnv(dataList: List[Seq[Channel]]): Env[Par] =
+  def buildEnv(dataList: Seq[Seq[Channel]]): Env[Par] =
     Env.makeEnv(dataList.flatten.map({ case Channel(Quote(p)) => p }): _*)
 }
 
@@ -25,7 +25,7 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
 
   val reducer: Reduce[Task] = _reducer
 
-  def dispatch(continuation: TaggedContinuation, dataList: List[Seq[Channel]]): Task[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
@@ -51,12 +51,12 @@ object RholangOnlyDispatcher {
 
 class RholangAndScalaDispatcher private (
     _reducer: => Reduce[Task],
-    _dispatchTable: => Map[Long, Function1[List[Seq[Channel]], Task[Unit]]])
+    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])
     extends Dispatch[Task, Seq[Channel], TaggedContinuation] {
 
   val reducer: Reduce[Task] = _reducer
 
-  def dispatch(continuation: TaggedContinuation, dataList: List[Seq[Channel]]): Task[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
@@ -74,7 +74,7 @@ class RholangAndScalaDispatcher private (
 object RholangAndScalaDispatcher {
 
   def create(tuplespace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
-             dispatchTable: => Map[Long, Function1[List[Seq[Channel]], Task[Unit]]])
+             dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])
     : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)

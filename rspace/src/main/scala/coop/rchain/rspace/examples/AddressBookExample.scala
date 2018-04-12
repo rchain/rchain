@@ -2,10 +2,15 @@ package coop.rchain.rspace.examples
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
-import cats.implicits._
 
+import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.extended._
+import coop.rchain.rspace.util.ignore
+
+import scala.collection.immutable.Seq
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 object AddressBookExample {
 
@@ -28,9 +33,9 @@ object AddressBookExample {
 
   /* Here we define a type for continuations */
 
-  class Printer extends ((List[Entry]) => Unit) with Serializable {
+  class Printer extends ((Seq[Entry]) => Unit) with Serializable {
 
-    def apply(entries: List[Entry]): Unit =
+    def apply(entries: Seq[Entry]): Unit =
       entries.foreach {
         case Entry(name, address, email, phone) =>
           val nameStr = s"${name.last}, ${name.first}"
@@ -43,6 +48,24 @@ object AddressBookExample {
                              |phone:   $phone
                              |""".stripMargin)
       }
+  }
+
+  class EntriesCaptor extends ((Seq[Entry]) => Unit) with Serializable {
+
+    @transient
+    private final lazy val res: ListBuffer[Seq[Entry]] = mutable.ListBuffer.empty[Seq[Entry]]
+
+    final def results: Seq[Seq[Entry]] = res.toList
+
+    final def apply(v1: Seq[Entry]): Unit = ignore(res += v1)
+
+    override def hashCode(): Int =
+      res.hashCode() * 37
+
+    override def equals(obj: scala.Any): Boolean = obj match {
+      case ec: EntriesCaptor => ec.res == res
+      case _                 => false
+    }
   }
 
   object implicits {
@@ -96,6 +119,12 @@ object AddressBookExample {
       */
     implicit val serializePrinter: Serialize[Printer] = makeSerializeFromSerializable[Printer]
 
+    /**
+      * An instance of [[Serialize]] for [[EntriesCaptor]]
+      */
+    implicit val serializeEntriesCaptor: Serialize[EntriesCaptor] =
+      makeSerializeFromSerializable[EntriesCaptor]
+
     /* Match instance */
 
     /**
@@ -144,8 +173,8 @@ object AddressBookExample {
 
     val cres =
       consume(store,
-              List(Channel("friends")),
-              List(CityMatch(city = "Crystal Lake")),
+              Seq(Channel("friends")),
+              Seq(CityMatch(city = "Crystal Lake")),
               new Printer,
               persist = true)
 
@@ -159,7 +188,7 @@ object AddressBookExample {
     assert(pres2.nonEmpty)
     assert(pres3.isEmpty)
 
-    runKs(List(pres1, pres2))
+    runKs(Seq(pres1, pres2))
 
     store.close()
   }
@@ -185,8 +214,8 @@ object AddressBookExample {
 
     val consumer = () =>
       consume(store,
-              List(Channel("friends")),
-              List(NameMatch(last = "Lahblah")),
+              Seq(Channel("friends")),
+              Seq(NameMatch(last = "Lahblah")),
               new Printer,
               persist = false)
 
@@ -198,7 +227,7 @@ object AddressBookExample {
     assert(cres2.isDefined)
     assert(cres3.isEmpty)
 
-    runKs(List(cres1, cres2))
+    runKs(Seq(cres1, cres2))
 
     Console.printf(store.toMap.toString())
 
