@@ -18,14 +18,13 @@ echo "TRAVIS_REPO_SLUG = ${TRAVIS_REPO_SLUG}"
 if [[ "${TRAVIS_BRANCH}" = "master" || \
       "${TRAVIS_BRANCH}" = "dev" || \
       "${TRAVIS_BRANCH}" = "ops-test" ]] \
-&& [[ "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
-# && [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then # alternate if
+&& [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then # alternate if
 
     # Generate RChain "RNode" network node docker container
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
 
     # Note: Secret Travis environmental variables are not available on pull requests as a means of protection.
-    # Hence, the TRAVIS_REPO_SLUG check and only commit on rchain/rchain.
+    # Hence, the TRAVIS_PULL_REQUEST check and only commit on rchain/rchain repo.
     # ref https://docs.travis-ci.com/user/pull-requests/#Pull-Requests-and-Security-Restrictions
 
     echo "Travis branch ${TRAVIS_BRANCH} matched and from repo rchain/rchain. Pushing rnode to Docker repo."
