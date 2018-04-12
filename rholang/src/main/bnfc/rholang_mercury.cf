@@ -41,7 +41,7 @@ PNeq.         Proc6  ::= Proc6 "!=" Proc7 ;
 PAnd.         Proc5  ::= Proc5 "and" Proc6 ;
 POr.          Proc4  ::= Proc4 "or" Proc5 ;
 PSend.        Proc3  ::= Name Send "(" [Proc] ")" ;
-PContr.       Proc2 ::= "contract" Name "(" [Name] ")" "=" "{" Proc "}" ;
+PContr.       Proc2 ::= "contract" Name "(" [Name] Remainder")" "=" "{" Proc "}" ;
 PInput.       Proc2 ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.      Proc2 ::= "select" "{" [Branch] "}" ;
 PMatch.       Proc2 ::= "match" Proc4 "{" [Case] "}" ;
@@ -74,13 +74,13 @@ LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
 -- LinearCond.   Linear ::= [LinearBind] "if" Proc ;
 
 -- Single Linear Bind
-LinearBindImpl. LinearBind ::= [Name] "<-" Name ;
+LinearBindImpl. LinearBind ::= [Name] Remainder "<-" Name ;
 separator nonempty LinearBind ";" ;
 
 -- Repeated Receipts
 RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
 -- Single Repeated Bind
-RepeatedBindImpl. RepeatedBind ::= [Name] "<=" Name ;
+RepeatedBindImpl. RepeatedBind ::= [Name] Remainder "<=" Name ;
 separator nonempty RepeatedBind ";" ;
 
 -- Types of Send:
@@ -110,12 +110,16 @@ GroundString.  Ground ::= String ;
 GroundUri.     Ground ::= Uri ;
 token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 -- Collections:
-CollectList.   Collection ::= "[" [Proc] "]" ;
+CollectList.   Collection ::= "[" [Proc] Remainder "]" ;
 CollectTuple.  Collection ::= "(" [Proc] ")" ;
 CollectSet.    Collection ::= "Set" "(" [Proc] ")" ;
 CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
+
+-- Remainders:
+RemainderVar.   Remainder ::= "..." ProcVar ;
+RemainderEmpty. Remainder ::= "" ;
 
 token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 

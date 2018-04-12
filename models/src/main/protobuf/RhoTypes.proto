@@ -67,6 +67,7 @@ message Send {
 message ReceiveBind {
     repeated Channel patterns = 1;
     Channel source = 2;
+    Var remainder = 3;
 }
 
 // [Par] is an n-arity Pattern.
@@ -146,6 +147,7 @@ message EList {
     int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool wildcard = 4;
+    Var remainder = 5;
 }
 
 message ETuple {
