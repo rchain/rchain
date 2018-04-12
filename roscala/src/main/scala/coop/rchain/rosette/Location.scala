@@ -52,9 +52,9 @@ object Location {
 
               case GlobalVariable(offset) => pureCtxt(globalEnv.slot.lift(offset))
 
-              case BitField(indirect, level, offset, spanSize, sign) => pureCtxt(None)
+              case _: BitField => pureCtxt(None)
 
-              case BitField00(offset, spanSize, sign) => pureCtxt(None)
+              case _: BitField00 => pureCtxt(None)
 
               // TODO:
               case _ => pureCtxt(None)
