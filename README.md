@@ -5,7 +5,8 @@
 
 The open-source RChain project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
-[RChain Developer](https://developer.rchain.coop/) is for building on top of the platform.
+[RChain Developer](https://developer.rchain.coop/) has a [Rholang tutorial](https://developer.rchain.coop/tutorial)
+and other information for building on top of the platform, including a roadmap of planned features and releases.
 This repository is the evolving platform itself.
 
 ### Communication
