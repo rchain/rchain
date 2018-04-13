@@ -24,6 +24,26 @@ lazy val compilerSettings = CompilerSettings.options ++ Seq(
 
 lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings
 
+lazy val shared = (project in file("shared"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      monix
+    )
+  )
+
+lazy val casper = (project in file("casper"))
+  .settings(commonSettings: _*)
+  .settings(
+    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    PB.targets in Compile := Seq(
+      scalapb.gen() -> (sourceManaged in Compile).value
+    )
+  )
+  .dependsOn(crypto) // TODO: Add models, rspace, comm
+
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
@@ -40,7 +60,7 @@ lazy val comm = (project in file("comm"))
       PB.gens.java                        -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
     )
-  )
+  ).dependsOn(shared)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -80,13 +100,25 @@ lazy val node = (project in file("node"))
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+        scalapbRuntimegGrpc,
+        grpcNetty,
         catsCore,
         scallop,
         scalaUri
       ),
+    PB.targets in Compile := Seq(
+      PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
+    ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "coop.rchain.node",
     mainClass in assembly := Some("coop.rchain.node.Main"),
+    assemblyMergeStrategy in assembly := {
+      case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
     /* Dockerization */
     dockerfile in docker := {
       val artifact: File     = assembly.value
@@ -176,12 +208,11 @@ lazy val rspace = (project in file("rspace"))
   .settings(
     name := "rspace",
     version := "0.1.1",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ Seq(
       lmdbjava,
-      catsCore
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
+      catsCore,
+      scodecCore,
+      scodecBits
     ),
     /* Tutorial */
     tutTargetDirectory := (baseDirectory in Compile).value / "docs",
@@ -236,4 +267,4 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
+  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)

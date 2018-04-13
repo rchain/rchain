@@ -2,6 +2,7 @@ package coop.rchain.p2p
 
 import coop.rchain.comm._, CommError._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
+import coop.rchain.p2p.effects._
 import coop.rchain.catscontrib._
 import cats._, cats.data._, cats.implicits._
 
@@ -84,6 +85,32 @@ object EffectsTestInstances {
     def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]] = {
       decryptions = decryptions :+ (pub, sec, nonce, cipher)
       cipher.pure[F]
+    }
+  }
+
+  class LogStub[F[_]: Applicative] extends Log[F] {
+
+    var infos: List[String]  = List.empty[String]
+    var warns: List[String]  = List.empty[String]
+    var errors: List[String] = List.empty[String]
+
+    def reset(): Unit = {
+      infos = List.empty[String]
+      warns = List.empty[String]
+      errors = List.empty[String]
+    }
+    def debug(msg: String): F[Unit] = ().pure[F]
+    def info(msg: String): F[Unit] = {
+      infos = infos :+ msg
+      ().pure[F]
+    }
+    def warn(msg: String): F[Unit] = {
+      warns = warns :+ msg
+      ().pure[F]
+    }
+    def error(msg: String): F[Unit] = {
+      errors = errors :+ msg
+      ().pure[F]
     }
   }
 

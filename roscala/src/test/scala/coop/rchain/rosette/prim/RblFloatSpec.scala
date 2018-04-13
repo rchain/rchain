@@ -24,243 +24,243 @@ class RblFloatSpec extends FlatSpec with Matchers {
 
   "flPlus" should "correctly add float numbers" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, RFloat(.1)))
-    flPlus.fn(newCtxt) should be(Right(RFloat(.5)))
+    flPlus.fnSimple(newCtxt) should be(Right(RFloat(.5)))
 
     val newCtxt2 = ctxt.copy(nargs = 0, argvec = Tuple.NIL)
-    flPlus.fn(newCtxt2) should be(Right(RFloat(0)))
+    flPlus.fnSimple(newCtxt2) should be(Right(RFloat(0)))
 
     val newCtxt3 = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(.1)))
-    flPlus.fn(newCtxt3) should be(Right(RFloat(0.1)))
+    flPlus.fnSimple(newCtxt3) should be(Right(RFloat(0.1)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 5, argvec = Tuple(5, Ob.NIV))
-    flPlus.fn(newCtxt) should be('left)
+    flPlus.fnSimple(newCtxt) should be('left)
   }
 
   "flMinus" should "correctly subtract RblFloat" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, RFloat(1.1)))
-    flMinus.fn(newCtxt) should be(Right(RFloat(0.0)))
+    flMinus.fnSimple(newCtxt) should be(Right(RFloat(0.0)))
   }
 
   it should "correctly invert the RblFloat" in {
     val newCtxt2 = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(1.1)))
-    flMinus.fn(newCtxt2) should be(Right(RFloat(-1.1)))
+    flMinus.fnSimple(newCtxt2) should be(Right(RFloat(-1.1)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, Ob.NIV))
-    flMinus.fn(newCtxt) should be('left)
+    flMinus.fnSimple(newCtxt) should be('left)
   }
 
   "flTimes" should "correctly multiply float number" in {
     val newCtxt = ctxt.copy(nargs = 3, argvec = Tuple(3, RFloat(0.5)))
-    flTimes.fn(newCtxt) should be(Right(RFloat(0.125)))
+    flTimes.fnSimple(newCtxt) should be(Right(RFloat(0.125)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 3, argvec = Tuple(3, Ob.NIV))
-    flTimes.fn(newCtxt) should be('left)
+    flTimes.fnSimple(newCtxt) should be('left)
   }
 
   "flDiv" should "correctly divide float numbers" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(7.5)), Tuple(RFloat(2.5))))
-    flDiv.fn(newCtxt) should be(Right(RFloat(3)))
+    flDiv.fnSimple(newCtxt) should be(Right(RFloat(3)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, Ob.NIV))
-    flDiv.fn(newCtxt) should be('left)
+    flDiv.fnSimple(newCtxt) should be('left)
   }
 
   "flLt" should "correctly return whether former smaller than latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.1)), Tuple(RFloat(2.2))))
-    flLt.fn(newCtxt) should be(Right(RblBool(true)))
+    flLt.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.1)), Tuple(Ob.NIV)))
-    flLt.fn(newCtxt) should be('left)
+    flLt.fnSimple(newCtxt) should be('left)
   }
 
   "flLe" should "correctly return whether former smaller than or equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, RFloat(2.1)))
-    flLe.fn(newCtxt) should be(Right(RblBool(true)))
+    flLe.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "fail for non-fixnum arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2)), Tuple(Ob.NIV)))
-    flLe.fn(newCtxt) should be('left)
+    flLe.fnSimple(newCtxt) should be('left)
   }
 
   "flGt" should "correctly return whether former greater than latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.3)), Tuple(RFloat(2.2))))
-    flGt.fn(newCtxt) should be(Right(RblBool(true)))
+    flGt.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "fail for non-fixnum arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.1)), Tuple(Ob.NIV)))
-    flGt.fn(newCtxt) should be('left)
+    flGt.fnSimple(newCtxt) should be('left)
   }
 
   "flGe" should "correctly return whether former greater than or equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.2)), Tuple(RFloat(2.2))))
-    flGe.fn(newCtxt) should be(Right(RblBool(true)))
+    flGe.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.1)), Tuple(Ob.NIV)))
-    flGe.fn(newCtxt) should be('left)
+    flGe.fnSimple(newCtxt) should be('left)
   }
 
   "flEq" should "correctly return whether former equal to the latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2.2)), Tuple(RFloat(2.2))))
-    flEq.fn(newCtxt) should be(Right(RblBool(true)))
+    flEq.fnSimple(newCtxt) should be(Right(RblBool(true)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(Fixnum(2)), Tuple(Ob.NIV)))
-    flEq.fn(newCtxt) should be('left)
+    flEq.fnSimple(newCtxt) should be('left)
   }
 
   "flNe" should "correctly return whether former is not equal to latter" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(5)), Tuple(RFloat(5))))
-    flNe.fn(newCtxt) should be(Right(RblBool(false)))
+    flNe.fnSimple(newCtxt) should be(Right(RblBool(false)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2)), Tuple(Ob.NIV)))
-    flNe.fn(newCtxt) should be('left)
+    flNe.fnSimple(newCtxt) should be('left)
   }
 
   "flMin" should "correctly return the smallest input value" in {
     val newCtxt = ctxt.copy(nargs = 4, argvec = Tuple(Tuple(3, RFloat(2.1)), Tuple(RFloat(2.2))))
-    flMin.fn(newCtxt) should be(Right(RFloat(2.1)))
+    flMin.fnSimple(newCtxt) should be(Right(RFloat(2.1)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, Ob.NIV))
-    flMin.fn(newCtxt) should be('left)
+    flMin.fnSimple(newCtxt) should be('left)
   }
 
   "flMax" should "correctly return the greatest input value" in {
     val newCtxt = ctxt.copy(nargs = 4, argvec = Tuple(Tuple(3, RFloat(2.1)), Tuple(RFloat(2.2))))
-    flMax.fn(newCtxt) should be(Right(RFloat(2.2)))
+    flMax.fnSimple(newCtxt) should be(Right(RFloat(2.2)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, Ob.NIV))
-    flMax.fn(newCtxt) should be('left)
+    flMax.fnSimple(newCtxt) should be('left)
   }
 
   "flAbs" should "correctly return absolute value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(-2.1)))
-    flAbs.fn(newCtxt) should be(Right(RFloat(2.1)))
+    flAbs.fnSimple(newCtxt) should be(Right(RFloat(2.1)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(1, Ob.NIV))
-    flAbs.fn(newCtxt) should be('left)
+    flAbs.fnSimple(newCtxt) should be('left)
   }
 
   "flExp" should "correctly return e to the power of the input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(2.5)))
-    flExp.fn(newCtxt) should be(Right(RFloat(math.exp(2.5))))
+    flExp.fnSimple(newCtxt) should be(Right(RFloat(math.exp(2.5))))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flExp.fn(newCtxt) should be('left)
+    flExp.fnSimple(newCtxt) should be('left)
   }
 
   "flExpt" should "correctly return first argument to the power of second argument" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(Tuple(RFloat(2)), Tuple(RFloat(.5))))
-    flExpt.fn(newCtxt) should be(Right(RFloat(math.pow(2, .5))))
+    flExpt.fnSimple(newCtxt) should be(Right(RFloat(math.pow(2, .5))))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 2, argvec = Tuple(2, Ob.NIV))
-    flExpt.fn(newCtxt) should be('left)
+    flExpt.fnSimple(newCtxt) should be('left)
   }
 
   "flLog" should "correctly return result of natural logarithm for input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(Math.E)))
-    flLog.fn(newCtxt) should be(Right(RFloat(1)))
+    flLog.fnSimple(newCtxt) should be(Right(RFloat(1)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flLog.fn(newCtxt) should be('left)
+    flLog.fnSimple(newCtxt) should be('left)
   }
 
   "flLog10" should "correctly return result of common logarithm for input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(100.0)))
-    flLog10.fn(newCtxt) should be(Right(RFloat(2.0)))
+    flLog10.fnSimple(newCtxt) should be(Right(RFloat(2.0)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flLog10.fn(newCtxt) should be('left)
+    flLog10.fnSimple(newCtxt) should be('left)
   }
 
   "flCeil" should "correctly return ceiling of input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(2.1)))
-    flCeil.fn(newCtxt) should be(Right(RFloat(3.0)))
+    flCeil.fnSimple(newCtxt) should be(Right(RFloat(3.0)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flCeil.fn(newCtxt) should be('left)
+    flCeil.fnSimple(newCtxt) should be('left)
   }
 
   "flFloor" should "correctly return floor of input value" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(2.1)))
-    flFloor.fn(newCtxt) should be(Right(RFloat(2.0)))
+    flFloor.fnSimple(newCtxt) should be(Right(RFloat(2.0)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flFloor.fn(newCtxt) should be('left)
+    flFloor.fnSimple(newCtxt) should be('left)
   }
 
   "flAtan" should "correctly return the arc tangent of a value " in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(1.0)))
     // the returned angle is in the range -pi/2 through pi/2.
-    flAtan.fn(newCtxt) should be(Right(RFloat(Math.PI / 4)))
+    flAtan.fnSimple(newCtxt) should be(Right(RFloat(Math.PI / 4)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flAtan.fn(newCtxt) should be('left)
+    flAtan.fnSimple(newCtxt) should be('left)
   }
 
   "flSin" should "correctly return the trigonometric sine of an angle." in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(Math.PI)))
-    flSin.fn(newCtxt) should be(Right(RFloat(Math.sin(Math.PI))))
+    flSin.fnSimple(newCtxt) should be(Right(RFloat(Math.sin(Math.PI))))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flSin.fn(newCtxt) should be('left)
+    flSin.fnSimple(newCtxt) should be('left)
   }
 
   "flCos" should "correctly return the trigonometric cosine of an angle." in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(Math.PI)))
-    flCos.fn(newCtxt) should be(Right(RFloat(Math.cos(Math.PI))))
+    flCos.fnSimple(newCtxt) should be(Right(RFloat(Math.cos(Math.PI))))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flFloor.fn(newCtxt) should be('left)
+    flFloor.fnSimple(newCtxt) should be('left)
   }
 
   "flToFx" should "correctly convert the RblFloat value to Fixnum" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(RFloat(2.1)))
-    flToFx.fn(newCtxt) should be(Right(Fixnum(2)))
+    flToFx.fnSimple(newCtxt) should be(Right(Fixnum(2)))
   }
 
   it should "fail for non-RblFloat arguments" in {
     val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Ob.NIV))
-    flToFx.fn(newCtxt) should be('left)
+    flToFx.fnSimple(newCtxt) should be('left)
   }
 }

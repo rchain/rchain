@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import com.trueaccord.scalapb.GeneratedMessage
+import scalapb.GeneratedMessage
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
@@ -11,12 +11,20 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
 
 object PrettyPrinter {
-  def apply(): PrettyPrinter = PrettyPrinter(0, 0)
+  def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
+
+  def apply(i: Int, j: Int): PrettyPrinter = PrettyPrinter(i, j, "INVALID", "a", 23, 128)
 }
 
-case class PrettyPrinter(freeShift: Int, boundShift: Int) {
+case class PrettyPrinter(freeShift: Int,
+                         boundShift: Int,
+                         freeId: String,
+                         baseId: String,
+                         rotation: Int,
+                         maxVarCount: Int) {
 
-  val MAX_NEW_VAR_COUNT = 128
+  def boundId: String     = rotate(baseId)
+  def setBaseId(): String = increment(baseId)
 
   def buildString(e: Expr): String =
     e.exprInstance match {
@@ -53,13 +61,13 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
       case ESetBody(ESet(s, _, _, _)) =>
         "(" + buildSeq(s) + ")"
       case EMapBody(EMap(kvs, _, _, _)) =>
-        "{ " + ("" /: kvs.zipWithIndex) {
+        "{" + ("" /: kvs.zipWithIndex) {
           case (string, (kv, i)) =>
-            string + buildString(kv.key.get) + ": " + buildString(kv.value.get) + {
+            string + buildString(kv.key.get) + " : " + buildString(kv.value.get) + {
               if (i != kvs.length - 1) ", "
               else ""
             }
-        } + " }"
+        } + "}"
 
       case EVarBody(EVar(v)) => buildString(v.get)
       case GBool(b)          => b.toString
@@ -73,8 +81,8 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   def buildString(v: Var): String =
     v.varInstance match {
-      case FreeVar(level)  => s"z${freeShift + level}"
-      case BoundVar(level) => s"x${boundShift - level - 1}"
+      case FreeVar(level)  => s"$freeId${freeShift + level}"
+      case BoundVar(level) => s"$boundId${boundShift - level - 1}"
       case Wildcard(_)     => "_"
       // TODO: Figure out if we can prevent ScalaPB from generating
       case VarInstance.Empty => "@Nil"
@@ -82,7 +90,7 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   def buildString(c: Channel): String =
     c.channelInstance match {
-      case Quote(p)    => "@{ " + buildString(p) + " }"
+      case Quote(p)    => "@{" + buildString(p) + "}"
       case ChanVar(cv) => buildString(cv)
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ChannelInstance.Empty => "@Nil"
@@ -102,7 +110,13 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
         val (totalFree, bindsString) = ((0, "") /: r.binds.zipWithIndex) {
           case ((free, string), (bind, i)) =>
             val (patternFree, bindString) =
-              PrettyPrinter(boundShift + free, 0)
+              this
+                .copy(
+                  freeShift = boundShift + free,
+                  boundShift = 0,
+                  freeId = boundId,
+                  baseId = setBaseId()
+                )
                 .buildPattern(bind.patterns)
             (free + patternFree, string + bindString + {
               if (r.persistent) " <= " else " <- "
@@ -111,28 +125,30 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
               else ""
             })
         }
-        "for( " + bindsString + " ) { " + PrettyPrinter(freeShift, boundShift + totalFree)
+
+        "for( " + bindsString + " ) { " + this
+          .copy(boundShift = boundShift + totalFree)
           .buildString(r.body.get) + " }"
 
       case e: Eval => "*" + buildString(e.channel.get)
 
       case n: New =>
-        "new " + buildVariables(n.bindCount) + " in { " + PrettyPrinter(
-          freeShift,
-          boundShift + n.bindCount).buildString(n.p.get) + " }"
+        "new " + buildVariables(n.bindCount) + " in { " + this
+          .copy(boundShift = boundShift + n.bindCount)
+          .buildString(n.p.get) + " }"
 
       case e: Expr =>
         buildString(e)
 
       case m: Match =>
-        "match { " + buildString(m.target.get) + " } { " + {
-          for { (matchCase, i) <- m.cases.zipWithIndex } yield {
-            buildMatchCase(matchCase) + {
-              if (i != m.cases.length - 1) "; "
-              else ""
-            }
-          }
-        } + " }"
+        "match " + buildString(m.target.get) + " { " +
+          ("" /: m.cases.zipWithIndex) {
+            case (string, (matchCase, i)) =>
+              string + buildMatchCase(matchCase) + {
+                if (i != m.cases.length - 1) " ; "
+                else ""
+              }
+          } + " }"
 
       case g: GPrivate => g.id
 
@@ -157,9 +173,22 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
       case _ => throw new Error("Attempt to print unknown GeneratedMessage type")
     }
 
+  def increment(id: String): String = {
+    def incChar(charId: Char): Char = ((charId + 1 - 97) % 26 + 97).toChar
+
+    val newId = incChar(id.last).toString
+    if (newId equals "a")
+      if (id.length > 1) increment(id.dropRight(1)) + newId
+      else "aa"
+    else id.dropRight(1) + newId
+  }
+
+  def rotate(id: String): String =
+    id.map(char => ((char + rotation - 97) % 26 + 97).toChar)
+
   private def buildVariables(bindCount: Int): String =
-    (0 until Math.min(MAX_NEW_VAR_COUNT, bindCount))
-      .map(i => s"x${boundShift + i}")
+    (0 until Math.min(maxVarCount, bindCount))
+      .map(i => s"$boundId${boundShift + i}")
       .mkString(", ")
 
   private def buildSeq[T <: GeneratedMessage](s: Seq[T]): String =
@@ -182,8 +211,17 @@ case class PrettyPrinter(freeShift: Int, boundShift: Int) {
 
   private def buildMatchCase(matchCase: MatchCase): String = {
     val patternFree: Int = matchCase.pattern.get.freeCount
-    PrettyPrinter(boundShift, 0).buildString(matchCase.pattern.get) + " => " +
-      PrettyPrinter(freeShift, boundShift + patternFree).buildString(matchCase.source.get)
+    this
+      .copy(
+        freeShift = boundShift,
+        boundShift = 0,
+        freeId = boundId,
+        baseId = setBaseId()
+      )
+      .buildString(matchCase.pattern.get) + " => " +
+      this
+        .copy(boundShift = boundShift + patternFree)
+        .buildString(matchCase.source.get)
   }
 
   private def isEmpty(p: Par) =

@@ -15,7 +15,7 @@ class PrimPropertySpec extends PropSpec with PropertyChecks with Matchers {
           val ctxt =
             utils.opcodes.ctxt.copy(nargs = i, argvec = Tuple(i, Fixnum(1)))
 
-          prim.fn(ctxt) should be('left)
+          prim.fnSimple(ctxt) should be('left)
         }
       }
     }

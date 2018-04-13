@@ -1,0 +1,6 @@
+new ack in {
+  @"stderrAck"!("hello, world!", *ack) |
+  for (_ <- ack) {
+    @"stderr"!("received")
+  }
+}

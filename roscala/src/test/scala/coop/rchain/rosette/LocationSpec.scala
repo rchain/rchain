@@ -30,6 +30,10 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
     monitor = null
   )
 
+  val globalEnv = TblObject(Seq())
+
+  val initial = (globalEnv, testCtxt)
+
   "Location.store" should {
 
     "store to register" in {
@@ -148,15 +152,15 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
       regs.map(
         reg =>
           Location
-            .fetch(CtxtRegister(reg), null)
-            .runA(testCtxt)
+            .fetch(CtxtRegister(reg))
+            .runA((), initial)
             .value shouldBe testCtxt.getReg(reg))
     }
 
     "return None for invalid register" in {
       Location
-        .fetch(CtxtRegister(100), null)
-        .runA(testCtxt)
+        .fetch(CtxtRegister(100))
+        .runA((), initial)
         .value shouldBe None
     }
 
@@ -166,16 +170,16 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
       argRegs.map(
         argReg =>
           Location
-            .fetch(ArgRegister(argReg), null)
-            .runA(testCtxt)
+            .fetch(ArgRegister(argReg))
+            .runA((), initial)
             .value shouldBe testCtxt.argvec.elem.lift(argReg)
       )
     }
 
     "return None for invalid argvec position" in {
       Location
-        .fetch(ArgRegister(100), null)
-        .runA(testCtxt)
+        .fetch(ArgRegister(100))
+        .runA((), initial)
         .value shouldBe None
     }
 

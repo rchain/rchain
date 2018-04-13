@@ -154,6 +154,7 @@ class AttrNode : public BinaryOb {
 
     Location dest;
     Label resume;
+    bool deferredLookup;
 
     /*
      * The gc routines (traversPtrs and friends) use the address of the

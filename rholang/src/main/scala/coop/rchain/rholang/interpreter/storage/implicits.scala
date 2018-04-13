@@ -2,13 +2,16 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.{Channel, HasLocallyFree, Par}
+import coop.rchain.models._
+import coop.rchain.models.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.rholang.interpreter.implicits._
-import coop.rchain.rspace.{Match => StorageMatch}
+import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
 object implicits {
+
+  /* Match instance */
 
   private def toChannels(fm: FreeMap, max: Int): Seq[Channel] =
     (0 until max).map { (i: Int) =>
@@ -30,4 +33,22 @@ object implicits {
             toChannels(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)
           }
     }
+
+  /* Serialize instances */
+
+  implicit val serializeChannel: Serialize[Channel] =
+    mkProtobufInstance(Channel)
+
+  implicit val serializeChannels: Serialize[Seq[Channel]] =
+    new Serialize[Seq[Channel]] {
+
+      override def encode(a: Seq[Channel]): Array[Byte] =
+        ListChannel.toByteArray(ListChannel(a))
+
+      override def decode(bytes: Array[Byte]): Either[Throwable, Seq[Channel]] =
+        Either.catchNonFatal(ListChannel.parseFrom(bytes).channels.toList)
+    }
+
+  implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =
+    mkProtobufInstance(TaggedContinuation)
 }

@@ -1,0 +1,26 @@
+import NamedFields, TestSet in {
+  contract @"NamedFieldsTest"(method, @input, return) = { method!(input, *return) } |
+  contract @"patternMatch"(@fields, return) = {
+    match fields {
+      [_, [x, y, z]] => { return!([x == 1, y == 2, z == 3]) }
+      _ => { return!(false) }
+    }
+  } |
+  NamedFields!([["a", 1], ["b", 2], ["c", 3]], "fields") |
+  for(@fields <- @"fields") {
+    TestSet!(
+      "NamedFields should admit pattern matching value extraction.",
+      [
+        ["NamedFieldsTest", "patternMatch", fields, [true, true, true]]
+      ]
+    ) |
+    TestSet!(
+      "NamedFields should admit value extraction by field names.",
+      [
+        [fields, "a", [], 1],
+        [fields, "b", [], 2],
+        [fields, "c", [], 3]
+      ]
+    )
+  }
+}

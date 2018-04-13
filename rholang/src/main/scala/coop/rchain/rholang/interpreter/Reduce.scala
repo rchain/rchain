@@ -1,51 +1,49 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Expr.ExprInstance
-import coop.rchain.models.Match
-import coop.rchain.models.MatchCase
-import coop.rchain.models.{GPrivate => _, _}
-import Substitute._
-import Env._
-import implicits._
-import cats.{Eval => _, _}
-import cats.data._
 import cats.implicits._
-import monix.eval.{MVar, Task}
+import cats.{Eval => _}
+import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
+import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
+import coop.rchain.rholang.interpreter.Substitute._
+import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.rholang.interpreter.storage.implicits._
+import coop.rchain.rspace.{IStore, consume => internalConsume, produce => internalProduce}
+import monix.eval.Task
 
 import scala.annotation.tailrec
 import scala.collection.immutable.BitSet
-import storage.implicits._
-import coop.rchain.rspace.{IStore, consume => internalConsume, produce => internalProduce}
 
 // Notes: Caution, a type annotation is often needed for Env.
 
-/** Reduce is a type-class for evaluating Rholang expressions.
+/** Reduce is the interface for evaluating Rholang expressions.
   *
   * @tparam M The kind of Monad used for evaluation.
-  * @tparam C The type of a channel.
-  * @tparam A The type of data in the environment.
-  * @tparam P The type of a pattern.
-  * @tparam B The type of a read body
   */
-trait Reduce[M[_], C, A, P, B] {
-  type Cont[Data, Body] = (Body, Env[Data])
-  def produce(chan: C, data: Seq[A], persistent: Boolean)(
-      implicit env: Env[A]): M[Option[Cont[A, B]]]
-  def consume(binds: Seq[(Seq[P], C)], body: B, persistent: Boolean)(
-      implicit env: Env[A]): M[Option[Cont[A, B]]]
-  def eval(par: Par)(implicit env: Env[Par]): Task[Unit]
-  def continue(b: B)(implicit env: Env[Par]): Task[Unit]
+trait Reduce[M[_]] {
+
+  def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(implicit env: Env[Par]): M[Unit]
+
+  def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
+      implicit env: Env[Par]): M[Unit]
+
+  def eval(par: Par)(implicit env: Env[Par]): M[Unit]
+
+  def evalExpr(par: Par)(implicit env: Env[Par]): M[Par]
+
+  def inj(par: Par): M[Unit]
 }
 
 object Reduce {
-  // TODO: How do I not define this twice?
-  type Cont[Data, Body] = (Body, Env[Data])
 
-  class DebruijnInterpreter(tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], Par])
-      extends Reduce[Task, Quote, Par, Channel, Par] {
+  class DebruijnInterpreter(
+      tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
+      dispatcher: => Dispatch[Task, Seq[Channel], TaggedContinuation])
+      extends Reduce[Task] {
+
+    type Cont[Data, Body] = (Body, Env[Data])
 
     // This makes sense. Run a Par in the empty environment.
     def inj(par: Par): Task[Unit] =
@@ -61,17 +59,22 @@ object Reduce {
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] = {
+        implicit env: Env[Par]): Task[Unit] = {
       // TODO: Handle the environment in the store
       val substData: Seq[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
       internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
-        case Some((body, dataList: Seq[Seq[Channel]])) =>
-          val newEnv: Env[Par] =
-            Env.makeEnv(
-              dataList.flatten
-                .map({ case Channel(Quote(p)) => p }): _*)
-          Task.pure(Some((body, newEnv)))
-        case None => Task.pure(None)
+        case Some((continuation, dataList)) =>
+          if (persistent) {
+            Task
+              .gather {
+                Seq(dispatcher.dispatch(continuation, dataList),
+                    produce(chan, data, persistent)(env))
+              }
+              .map(_ => ())
+          } else {
+            dispatcher.dispatch(continuation, dataList)
+          }
+        case None => Task.unit
       }
     }
 
@@ -87,7 +90,7 @@ object Reduce {
       *          will be @param body if the continuation is not None.
       */
     def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
-        implicit env: Env[Par]): Task[Option[Cont[Par, Par]]] =
+        implicit env: Env[Par]): Task[Unit] =
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case _ =>
@@ -95,15 +98,21 @@ object Reduce {
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)).toList,
                           patterns.toList,
-                          body,
+                          TaggedContinuation(ParBody(body)),
                           persist = persistent) match {
             case Some((continuation, dataList)) =>
-              val newEnv: Env[Par] =
-                Env.makeEnv(
-                  dataList.flatten
-                    .map({ case Channel(Quote(p)) => p }): _*)
-              Task.pure(Some((continuation, newEnv)))
-            case None => Task.pure(None)
+              dispatcher.dispatch(continuation, dataList)
+              if (persistent) {
+                Task
+                  .gather {
+                    Seq(dispatcher.dispatch(continuation, dataList),
+                        consume(binds, body, persistent)(env))
+                  }
+                  .map(_ => ())
+              } else {
+                dispatcher.dispatch(continuation, dataList)
+              }
+            case None => Task.unit
           }
       }
 
@@ -111,7 +120,7 @@ object Reduce {
       * Variable "evaluation" is an environment lookup, but
       * lookup of an unbound variable should be an error.
       *
-      * @param varue The variable to be evaluated
+      * @param valproc The variable to be evaluated
       * @param env   The environment (possibly) containing
       *              a binding for the given variable.
       * @return If the variable has a binding (par), lift the
@@ -176,21 +185,10 @@ object Reduce {
       */
     def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
       for {
-        quote           <- eval(send.chan.get)
-        data            <- send.data.toList.traverse(x => evalExpr(x)(env))
-        subChan: Quote  = substitute(quote)
-        optContinuation <- produce(subChan, data, send.persistent)
-
-        _ <- optContinuation match {
-              case Some((body: Par, newEnv: Env[Par])) =>
-                if (send.persistent) {
-                  Task.gather(
-                    Seq(continue(body)(newEnv), produce(subChan, data, send.persistent)(env)))
-                } else {
-                  continue(body)(newEnv)
-                }
-              case None => Task.unit
-            }
+        quote          <- eval(send.chan.get)
+        data           <- send.data.toList.traverse(x => evalExpr(x)(env))
+        subChan: Quote = substitute(quote)
+        _              <- produce(subChan, data, send.persistent)
       } yield ()
 
     def eval(receive: Receive)(implicit env: Env[Par]): Task[Unit] =
@@ -199,18 +197,8 @@ object Reduce {
                   .traverse((rb: ReceiveBind) =>
                     eval(rb.source.get).map(quote => (rb.patterns, substitute(quote))))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody       = substitute(receive.body.get)(env.shift(receive.bindCount))
-        optContinuation <- consume(binds, substBody, receive.persistent)
-        _ <- optContinuation match {
-              case Some((body: Par, newEnv: Env[Par])) =>
-                if (receive.persistent) {
-                  Task.gather(
-                    Seq(continue(body)(newEnv), consume(binds, substBody, receive.persistent)(env)))
-                } else {
-                  continue(body)(newEnv)
-                }
-              case None => Task.unit
-            }
+        substBody = substitute(receive.body.get)(env.shift(receive.bindCount))
+        _         <- consume(binds, substBody, receive.persistent)
       } yield ()
 
     /**
@@ -527,8 +515,4 @@ object Reduce {
       println(s"$now [$thread]" + "\n" + msg)
     }
   }
-
-  def makeInterpreter(
-      tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], Par]): DebruijnInterpreter =
-    new DebruijnInterpreter(tupleSpace)
 }

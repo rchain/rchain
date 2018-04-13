@@ -1,0 +1,51 @@
+//Rholang contract to give behaviour similar
+//to a Scala case class. Fields can be accessed
+//by name and the object can be pattern matched
+//to extract the values.
+//Example usage:
+//NamedFields!([["a", 1], ["b", 2], ["c", 3]], "myFields") |
+//for(@myFields <- @"myFields"){ 
+//  @[myFields, "a"]!("w") | // stores value 1 at channel @"w"
+//  match myFields { //extract values via pattern matching
+//    [_, [a, b, c]] => { @"x"!(a) | @"y"!(b) | @"z"!(c) } 
+//  }
+//}
+export NamedFields in {
+  import LinkedList, RhoClass in {
+    contract NamedFields(@nameValuePairs, return) = {
+      new this, llNameVaulePairsCh, valuesCh, getValues, fieldsContract in {
+        //convert to LinkedList for easy `map` and `foreach` methods
+        LinkedList!("fromSmallList", [nameValuePairs], *llNameVaulePairsCh) |
+        for(@llNameVaulePairs <- llNameVaulePairsCh) {
+          //extract the values from the nameValuePairs
+          contract getValues(@pair, return) = { match pair { [_, value] => { return!(value) } } } |
+          LinkedList!("map", [llNameVaulePairs, *getValues], *valuesCh) |
+          
+          for (@llValues <- valuesCh) {
+            //convert values back to normal list
+            LinkedList!("toSmallList", [llValues], *valuesCh) | for(@values <- valuesCh) {
+              //create the contracts used to get values by name
+              contract fieldsContract(@pair, isDone) = {
+                match pair {
+                  [name, value] => { @[*NamedFields, "createFieldContract"]!([*this, values], name, value, *isDone) }
+                }
+              } |
+              LinkedList!("foreach", [llNameVaulePairs, *fieldsContract], Nil) |
+              for(_ <- @Nil){ Nil } | //throw away useless send on @Nil
+              
+              contract @[*this, values](@method, @input, return) = {
+                @[*RhoClass, "functionApply"]!([[*this, values], method], input, *return)
+              } |
+              //return a compound name to enable extracting values by pattern matching
+              return!([*this, values])
+            }
+          }
+        }
+      }
+    } |
+    contract @[*NamedFields, "createFieldContract"](namedField, @name, @value, isDone) = {
+      contract @[*namedField, name](return) = {return!(value) } |
+      isDone!(true)
+    }
+  }
+}

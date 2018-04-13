@@ -14,7 +14,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
 }
 import implicits._
 
-import scala.collection.immutable.BitSet
+import scala.collection.immutable.{BitSet, Vector}
 
 sealed trait VarSort
 case object ProcSort extends VarSort
@@ -86,11 +86,11 @@ object CollectionNormalizeMatcher {
   def normalizeMatch(c: Collection, input: CollectVisitInputs): CollectVisitOutputs = {
     def foldMatch[T](listproc: List[Proc], constructor: (Seq[Par], Int, BitSet, Boolean) => T)(
         implicit toExpr: T => Expr): CollectVisitOutputs = {
-      val folded = ((List[Par](), input.knownFree, BitSet(), false) /: listproc)(
+      val folded = ((Vector[Par](), input.knownFree, BitSet(), false) /: listproc)(
         (acc, e) => {
           val result =
-            ProcNormalizeMatcher.normalizeMatch(e, ProcVisitInputs(Par(), input.env, acc._2))
-          (result.par :: acc._1,
+            ProcNormalizeMatcher.normalizeMatch(e, ProcVisitInputs(VectorPar(), input.env, acc._2))
+          (result.par +: acc._1,
            result.knownFree,
            acc._3 | result.par.locallyFree,
            acc._4 || result.par.wildcard)
@@ -108,10 +108,11 @@ object CollectionNormalizeMatcher {
           e match {
             case e: KeyValuePairImpl => {
               val keyResult =
-                ProcNormalizeMatcher.normalizeMatch(e.proc_1,
-                                                    ProcVisitInputs(Par(), input.env, acc._2))
+                ProcNormalizeMatcher
+                  .normalizeMatch(e.proc_1, ProcVisitInputs(VectorPar(), input.env, acc._2))
               val valResult = ProcNormalizeMatcher
-                .normalizeMatch(e.proc_2, ProcVisitInputs(Par(), input.env, keyResult.knownFree))
+                .normalizeMatch(e.proc_2,
+                                ProcVisitInputs(VectorPar(), input.env, keyResult.knownFree))
               (Seq(KeyValuePair(keyResult.par, valResult.par)) ++ acc._1,
                valResult.knownFree,
                acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
@@ -168,7 +169,7 @@ object NameNormalizeMatcher {
 
         val procVisitResult: ProcVisitOutputs = ProcNormalizeMatcher.normalizeMatch(
           n.proc_,
-          ProcVisitInputs(Par(), input.env, input.knownFree))
+          ProcVisitInputs(VectorPar(), input.env, input.knownFree))
 
         NameVisitOutputs(collapseQuoteEval(procVisitResult.par), procVisitResult.knownFree)
       }
@@ -180,7 +181,7 @@ object ProcNormalizeMatcher {
   def normalizeMatch(p: Proc, input: ProcVisitInputs): ProcVisitOutputs = {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Option[Par] => T)(
         implicit toExprInstance: T => Expr): ProcVisitOutputs = {
-      val subResult    = normalizeMatch(subProc, input.copy(par = Par()))
+      val subResult    = normalizeMatch(subProc, input.copy(par = VectorPar()))
       val subResultPar = subResult.par
       ProcVisitOutputs(
         input.par.prepend(constructor(subResultPar)),
@@ -192,9 +193,10 @@ object ProcNormalizeMatcher {
                      input: ProcVisitInputs,
                      constructor: (Option[Par], Option[Par]) => T)(
         implicit toExprInstance: T => Expr): ProcVisitOutputs = {
-      val leftResult = normalizeMatch(subProcLeft, input.copy(par = Par()))
+      val leftResult = normalizeMatch(subProcLeft, input.copy(par = VectorPar()))
       val rightResult =
-        normalizeMatch(subProcRight, input.copy(par = Par(), knownFree = leftResult.knownFree))
+        normalizeMatch(subProcRight,
+                       input.copy(par = VectorPar(), knownFree = leftResult.knownFree))
       ProcVisitOutputs(
         input.par.prepend(constructor(leftResult.par, rightResult.par)),
         rightResult.knownFree
@@ -205,14 +207,17 @@ object ProcNormalizeMatcher {
 
       val targetResult = normalizeMatch(valueProc, input)
       val trueCaseBody =
-        normalizeMatch(trueBodyProc, ProcVisitInputs(Par(), input.env, targetResult.knownFree))
+        normalizeMatch(trueBodyProc,
+                       ProcVisitInputs(VectorPar(), input.env, targetResult.knownFree))
       val falseCaseBody =
-        normalizeMatch(falseBodyProc, ProcVisitInputs(Par(), input.env, trueCaseBody.knownFree))
+        normalizeMatch(falseBodyProc,
+                       ProcVisitInputs(VectorPar(), input.env, trueCaseBody.knownFree))
       val freeCount = falseCaseBody.knownFree.countNoWildcards - input.knownFree.countNoWildcards
 
       val desugaredIf = Match(
         targetResult.par,
-        List(MatchCase(GBool(true), trueCaseBody.par), MatchCase(GBool(false), falseCaseBody.par)),
+        Vector(MatchCase(GBool(true), trueCaseBody.par),
+               MatchCase(GBool(false), falseCaseBody.par)),
         freeCount,
         targetResult.par.locallyFree | trueCaseBody.par.locallyFree | falseCaseBody.par.locallyFree
       )
@@ -297,15 +302,15 @@ object ProcNormalizeMatcher {
         val nameMatchResult =
           NameNormalizeMatcher.normalizeMatch(p.name_, NameVisitInputs(input.env, input.knownFree))
         val initAcc =
-          (List[Par](),
-           ProcVisitInputs(Par(), input.env, nameMatchResult.knownFree),
+          (Vector[Par](),
+           ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
            BitSet(),
            false)
         val dataResults = (initAcc /: p.listproc_.asScala.toList.reverse)(
           (acc, e) => {
             val procMatchResult = normalizeMatch(e, acc._2)
-            (procMatchResult.par :: acc._1,
-             ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
+            (procMatchResult.par +: acc._1,
+             ProcVisitInputs(VectorPar(), input.env, procMatchResult.knownFree),
              acc._3 | procMatchResult.par.locallyFree,
              acc._4 || procMatchResult.par.wildcard)
           }
@@ -334,7 +339,7 @@ object ProcNormalizeMatcher {
         // A free variable can only be used once in any of the parameters.
         // And we start with the empty free variable map because these free
         // variables aren't free in the surrounding context: they're binders.
-        val initAcc = (List[Channel](), DebruijnLevelMap[VarSort]())
+        val initAcc = (Vector[Channel](), DebruijnLevelMap[VarSort]())
         val nameMatchResult =
           NameNormalizeMatcher.normalizeMatch(p.name_, NameVisitInputs(input.env, input.knownFree))
         // Note that we go over these in the order they were given and reverse
@@ -344,14 +349,14 @@ object ProcNormalizeMatcher {
           (acc, n: Name) => {
             val result =
               NameNormalizeMatcher.normalizeMatch(n, NameVisitInputs(DebruijnIndexMap(), acc._2))
-            (result.chan :: acc._1, result.knownFree)
+            (result.chan +: acc._1, result.knownFree)
           }
         )
         val newEnv     = input.env.absorbFree(formalsResults._2)._1
         val boundCount = formalsResults._2.countNoWildcards
         val bodyResult = ProcNormalizeMatcher.normalizeMatch(
           p.proc_,
-          ProcVisitInputs(Par(), newEnv, nameMatchResult.knownFree))
+          ProcVisitInputs(VectorPar(), newEnv, nameMatchResult.knownFree))
         val freeCount = bodyResult.knownFree.countNoWildcards - input.knownFree.countNoWildcards
         ProcVisitOutputs(
           input.par.prepend(
@@ -379,29 +384,29 @@ object ProcNormalizeMatcher {
 
         // We split this into parts. First we process all the sources, then we process all the bindings.
         def processSources(bindings: List[(List[Name], Name)])
-          : (List[(List[Name], Channel)], DebruijnLevelMap[VarSort], BitSet, Boolean) = {
-          val initAcc = (List[(List[Name], Channel)](), input.knownFree, BitSet(), false)
+          : (Vector[(List[Name], Channel)], DebruijnLevelMap[VarSort], BitSet, Boolean) = {
+          val initAcc = (Vector[(List[Name], Channel)](), input.knownFree, BitSet(), false)
           val foldResult = (initAcc /: bindings)((acc, e) => {
             val sourceResult =
               NameNormalizeMatcher.normalizeMatch(e._2, NameVisitInputs(input.env, acc._2))
-            ((e._1, sourceResult.chan) :: acc._1,
+            ((e._1, sourceResult.chan) +: acc._1,
              sourceResult.knownFree,
              acc._3 | ChannelLocallyFree.locallyFree(sourceResult.chan),
              acc._4 || ChannelLocallyFree.wildcard(sourceResult.chan))
           })
           (foldResult._1.reverse, foldResult._2, foldResult._3, foldResult._4)
         }
-        def processBindings(bindings: List[(List[Name], Channel)])
-          : List[(List[Channel], Channel, DebruijnLevelMap[VarSort])] =
+        def processBindings(bindings: Vector[(List[Name], Channel)])
+          : Vector[(Vector[Channel], Channel, DebruijnLevelMap[VarSort])] =
           bindings map {
             case (names: List[Name], chan: Channel) => {
-              val initAcc = (List[Channel](), DebruijnLevelMap[VarSort]())
+              val initAcc = (Vector[Channel](), DebruijnLevelMap[VarSort]())
               val formalsResults = (initAcc /: names)(
                 (acc, n: Name) => {
                   val result =
                     NameNormalizeMatcher.normalizeMatch(n,
                                                         NameVisitInputs(DebruijnIndexMap(), acc._2))
-                  (result.chan :: acc._1, result.knownFree)
+                  (result.chan +: acc._1, result.knownFree)
                 }
               )
               (formalsResults._1.reverse, chan, formalsResults._2)
@@ -445,7 +450,7 @@ object ProcNormalizeMatcher {
         val binds      = receipts.map((receipt) => ReceiveBind(receipt._1, receipt._2))
         val updatedEnv = input.env.absorbFree(mergedFrees)._1
         val bodyResult =
-          normalizeMatch(p.proc_, ProcVisitInputs(Par(), updatedEnv, thisLevelFree))
+          normalizeMatch(p.proc_, ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree))
         val freeCount = bodyResult.knownFree.countNoWildcards - input.knownFree.countNoWildcards
         val wildcard  = sourcesWildcards || bodyResult.par.wildcard
         ProcVisitOutputs(
@@ -475,9 +480,10 @@ object ProcNormalizeMatcher {
         val newBindings = p.listnamedecl_.asScala.toList.map {
           case n: NameDeclSimpl => (n.var_, NameSort, n.line_num, n.col_num)
         }
-        val newEnv     = input.env.newBindings(newBindings)
-        val newCount   = newEnv.count - input.env.count
-        val bodyResult = normalizeMatch(p.proc_, ProcVisitInputs(Par(), newEnv, input.knownFree))
+        val newEnv   = input.env.newBindings(newBindings)
+        val newCount = newEnv.count - input.env.count
+        val bodyResult =
+          normalizeMatch(p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree))
         val foldedNew = bodyResult.par.singleNew() match {
           case Some(New(count, body, locallyFree)) =>
             New(newCount + count, body, locallyFree.from(newCount).map(x => x - newCount))
@@ -492,25 +498,26 @@ object ProcNormalizeMatcher {
       case p: PMatch => {
         import scala.collection.JavaConverters._
 
-        val targetResult = normalizeMatch(p.proc_, input.copy(par = Par()))
+        val targetResult = normalizeMatch(p.proc_, input.copy(par = VectorPar()))
         val cases = p.listcase_.asScala.toList.map {
           case ci: CaseImpl => (ci.proc_1, ci.proc_2)
           case _            => throw new Error("Unexpected Case implementation.")
         }
 
-        val initAcc = (Seq[MatchCase](), targetResult.knownFree, BitSet(), false)
+        val initAcc = (Vector[MatchCase](), targetResult.knownFree, BitSet(), false)
         val casesResult = (initAcc /: cases) { (acc, caseImpl) =>
           caseImpl match {
             case (pattern, caseBody) => {
               val patternResult =
-                normalizeMatch(
-                  pattern,
-                  ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]()))
+                normalizeMatch(pattern,
+                               ProcVisitInputs(VectorPar(),
+                                               DebruijnIndexMap[VarSort](),
+                                               DebruijnLevelMap[VarSort]()))
               val caseEnv    = input.env.absorbFree(patternResult.knownFree)._1
               val boundCount = patternResult.knownFree.countNoWildcards
               val caseBodyResult =
-                normalizeMatch(caseBody, ProcVisitInputs(Par(), caseEnv, acc._2))
-              (Seq(MatchCase(patternResult.par, caseBodyResult.par)) ++ acc._1,
+                normalizeMatch(caseBody, ProcVisitInputs(VectorPar(), caseEnv, acc._2))
+              (MatchCase(patternResult.par, caseBodyResult.par) +: acc._1,
                caseBodyResult.knownFree,
                acc._3 | caseBodyResult.par.locallyFree.from(boundCount).map(x => x - boundCount),
                acc._4 || caseBodyResult.par.wildcard)

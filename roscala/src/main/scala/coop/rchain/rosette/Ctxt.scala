@@ -2,8 +2,9 @@ package coop.rchain.rosette
 
 import coop.rchain.rosette.VirtualMachine.loggerStrand
 import Location._
+import cats.Eval
 import cats.data.State
-import cats.data.State._
+import cats.implicits._
 import coop.rchain.rosette.Ob.Lenses._
 
 case class Ctxt(tag: Location,
@@ -47,8 +48,6 @@ case class Ctxt(tag: Location,
 }
 
 object Ctxt {
-  type CtxtTransition[A] = State[Ctxt, A]
-
   type Continuation = Ctxt
 
   val empty = Ctxt(
@@ -86,59 +85,103 @@ object Ctxt {
     id = ctxt.id + 1000
   )
 
-  /** Save result to a location in the parent ctxt.
+  /** Save result to a location in the continuation of a given `ctxt`
     *
-    * The location is defined by tag.
-    * applyK potentially returns a ctxt which needs to be scheduled to the VM.
+    * The location is defined by `tag`.
+    * `applyK` potentially returns a `ctxt` which needs to be scheduled to the VM.
+    *
+    * The first element in the return tuple is false if storing was successful
+    * and true if it failed.
+    *
+    * TODO: `applyK` does not need access to `GlobalEnv`
     */
-  def applyK(result: Ob, tag: Location): CtxtTransition[(Boolean, Option[Continuation])] =
-    rcv(result, tag)
-      .transformS[Ctxt](_.ctxt, (child, updatedParent) => child.copy(ctxt = updatedParent))
+  def applyK(result: Ob, tag: Location): CtxtTransition[Boolean] = {
+
+    /**
+      * This transformation is needed because `result` has to be received in
+      * `ctxt.ctxt` (the continuation of the current `ctxt`) and not `ctxt` itself.
+      */
+    def transformToRcvInCont: CtxtTransition[Boolean] => CtxtTransition[Boolean] =
+      trans =>
+        trans.transformS[(GlobalEnv, Ctxt)](
+          { case (globalEnv, ctxt) => (globalEnv, ctxt.ctxt) },
+          (state, rcvGlobalEnvAndCont) => {
+            val globalEnv = state._1
+            val ctxt      = state._2
+            val cont      = rcvGlobalEnvAndCont._2
+
+            (globalEnv, ctxt.copy(ctxt = cont))
+          }
+      )
+
+    transformToRcvInCont(rcv(result, tag))
+  }
 
   /**
-    * Try to save a value to a particular location in the given ctxt.
-    * If successfully saved and outstanding equals zero, schedule the ctxt.
-    */
-  def rcv(result: Ob, loc: Location): CtxtTransition[(Boolean, Option[Continuation])] =
-    for {
-      storeRes         <- store(loc, result)
-      _                <- modify[Ctxt](_.update(_ >> 'outstanding)(_ - 1))
-      outstanding      <- inspect[Ctxt, Int](_.outstanding)
-      continuationCtxt <- get[Ctxt]
-    } yield {
-      storeRes match {
-        case Success =>
-          if (outstanding == 0)
-            (false, Some(continuationCtxt))
-          else
-            (false, None)
-
-        case Failure => (true, None)
-      }
-    }
-
-  /** Return result to parent ctxt.
+    * Try to save a value to a particular location in the given `ctxt`.
+    * If successfully saved and `outstanding` equals zero, schedule the `ctxt`.
     *
-    * This potentially returns the parent ctxt which then has to be scheduled
-    * to the VM by the caller of ret.
+    * The return value is false if storing was successful and true if it failed.
+    *
+    * TODO: `rcv` does not need access to `GlobalEnv`
+    */
+  def rcv(result: Ob, loc: Location): CtxtTransition[Boolean] = {
+    def scheduleIfStoredAndOutstandingIsZero(storeResult: StoreResult,
+                                             outstanding: Int,
+                                             ctxt: Ctxt): CtxtTransition[Boolean] =
+      storeResult match {
+        case Success =>
+          for (_ <- if (outstanding == 0) tellCont(List(ctxt)) else pureCtxt[Unit](())) yield false
+
+        case Failure => pureCtxt[Boolean](true)
+      }
+
+    for {
+      storeRes     <- transformCtxtToCtxtTrans(store(loc, result))
+      _            <- modifyCtxt(_.update(_ >> 'outstanding)(_ - 1))
+      outstanding  <- inspectCtxt[Int](_.outstanding)
+      continuation <- getCtxt
+      res          <- scheduleIfStoredAndOutstandingIsZero(storeRes, outstanding, continuation)
+    } yield res
+  }
+
+  val transformCtxtToCtxtTrans: State[Ctxt, StoreResult] => CtxtTransition[StoreResult] = trans =>
+    liftRWS[Eval, Unit, List[Continuation], (GlobalEnv, Ctxt), StoreResult](
+      trans.transformS[(GlobalEnv, Ctxt)]({ case (_, ctxt) => ctxt },
+                                          (oldGlobalEnvAndCtxt, newCtxt) => {
+                                            val (oldGlobalEnv, _) = oldGlobalEnvAndCtxt
+                                            (oldGlobalEnv, newCtxt)
+                                          }))
+
+  /** Return result to the continuation of the given `ctxt`
+    *
+    * The return value is false if storing was successful and true if it failed.
+    *
+    * `ret` potentially schedules the continuation of the given `ctxt`.
+    * This happens when `outstanding` equals 1 and the last argument is about
+    * to be received.
+    * A scheduled continuation is captured in the writer monad of the
+    * `CtxtTransition` type.
     *
     * The location we want to save the result to is given by the tag field.
-    * If the tag field contains no location (equals LocLimbo), (false, None) is returned.
+    * If the tag field contains no location (`LocLimbo`), false is returned.
     * Otherwise the result of applyK is returned.
+    *
+    * TODO: `ret` does not need the `GlobalEnv`.
     */
-  def ret(result: Ob): CtxtTransition[(Boolean, Option[Continuation])] =
+  def ret(result: Ob): CtxtTransition[Boolean] =
     for {
-      tag <- inspect[Ctxt, Location](_.tag)
+      tag <- inspectCtxt[Location](_.tag)
       res <- tag match {
-              case Limbo => pure[Ctxt, (Boolean, Option[Continuation])](false, None)
+              case Limbo => pureCtxt[Boolean](false)
               case _     => applyK(result, tag)
             }
     } yield res
 
-  def setReg(r: Int, ob: Ob): CtxtTransition[StoreResult] = {
-    lazy val p = pure[Ctxt, StoreResult](Failure)
+  def setReg(r: Int, ob: Ob): State[Ctxt, StoreResult] = {
+    lazy val p = State.pure[Ctxt, StoreResult](Failure)
 
-    def modify(f: Ctxt => Ctxt): CtxtTransition[StoreResult] =
+    def modify(f: Ctxt => Ctxt): State[Ctxt, StoreResult] =
       State.apply[Ctxt, StoreResult](f andThen ((_, Success)))
 
     r match {

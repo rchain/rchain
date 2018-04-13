@@ -1,0 +1,203 @@
+export LinkedList in {
+  contract @[*LinkedList, "head"](@list, return) = {
+    match list {
+      [head, _] => { return!(head) }
+      _ => { return!(Nil) }
+    }
+  } | 
+  contract @[*LinkedList, "tail"](@list, return) = {
+    match list {
+      [_, tail] => { return!(tail) }
+      _ => { return!(Nil) }
+    }
+  } |
+  contract @[*LinkedList, "prepend"](@value, @tail, return) = {
+    return!([value, tail])
+  } |
+  //A fold over the list which breaks early if a condition is met.
+  //Both the condition and combinator are are combined into a single
+  //function which returns a [boolean, value] pair.
+  //Use cases: see get and indexOf
+  contract @[*LinkedList, "partialFold"](@list, @start, combinatorAndCondition, return) = {
+    new loop in {
+      contract loop(@accumulatedValue, @lst) = {
+        match lst {
+          [head, tail] => {
+            new result in {
+              combinatorAndCondition!(head, accumulatedValue, *result) |
+              for (@r <- result) {
+                match r {
+                  [true, _] => { return!(r) }
+                  [false, newValue] => { loop!(newValue, tail) }
+                }
+              }
+            }
+          }
+          _ => { return!([false, accumulatedValue]) }
+        }
+      } | loop!(start, list)
+    }
+  } |
+  contract @[*LinkedList, "fold"](@list, @start, combinator, return) = {
+    new combinatorAndCondition in {
+      contract combinatorAndCondition(@head, @accumulatedValue, return) = {
+        new result in {
+          combinator!(head, accumulatedValue, *result) |
+          for(@r <- result){ return!([false, r]) }
+        }
+      } |
+      new result in {
+        @[*LinkedList, "partialFold"]!(list, start, *combinatorAndCondition, *result) |
+        for(@r <- result) {
+          match r { [_, v] => { return!(v) } }
+        }
+      }
+    }
+  } |
+  contract @[*LinkedList, "reverse"](@list, return) = {
+    new combinator in {
+      contract combinator(@head, @accumulatedValue, return) = {
+        @[*LinkedList, "prepend"]!(head, accumulatedValue, *return)
+      } | @[*LinkedList, "fold"]!(list, [], *combinator, *return)
+    }
+  } |
+  contract @[*LinkedList, "map"](@list, function, return) = {
+    new combinator in {
+      contract combinator(@head, @accumulatedValue, return) = {
+        new mappedHead in {
+          function!(head, *mappedHead) |
+          for(@x <- mappedHead) {
+            @[*LinkedList, "prepend"]!(x, accumulatedValue, *return)
+          }
+        }
+      } | new reversedMappedList in {
+        @[*LinkedList, "fold"]!(list, [], *combinator, *reversedMappedList) |
+        for (@rml <- reversedMappedList) {
+          @[*LinkedList, "reverse"]!(rml, *return)
+        }
+      }
+    }
+  } |
+  contract @[*LinkedList, "foreach"](@list, proc, isDone) = {
+    new combinator, nilReturn in {
+      contract combinator(@head, @accumulatedValue, return) = {
+        //Need return flag from `proc` in order to guarantee execution order
+        new isDone in { proc!(head, *isDone) | for(_ <- isDone){ return!(Nil) } }
+      } | 
+      @[*LinkedList, "fold"]!(list, Nil, *combinator, *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
+    }
+  } |
+  contract @[*LinkedList, "get"](@list, @index, return) = {
+    new combinatorAndCondition in {
+      contract combinatorAndCondition(@head, @accumulatedValue, return) = {
+        match accumulatedValue {
+          [i, _] => { return!([i == index, [i + 1, head]]) }
+        }
+      } |
+      new result in {
+        @[*LinkedList, "partialFold"]!(list, [0, Nil], *combinatorAndCondition, *result) |
+        for(@r <- result) {
+          match r {
+            [true, [_, v]] => { return!(v) }
+            _ => { return!(Nil) } //Index out of bounds
+          }
+        }
+      }
+    }
+  } |
+  contract @[*LinkedList, "indexOf"](@list, @value, return) = {
+    new combinatorAndCondition in {
+      contract combinatorAndCondition(@head, @accumulatedValue, return) = {
+        return!([head == value, accumulatedValue + 1])
+      } |
+      new result in {
+        @[*LinkedList, "partialFold"]!(list, -1, *combinatorAndCondition, *result) |
+        for(@r <- result) {
+          match r {
+            [true, i] => { return!(i) }
+            _ => { return!(-1) } //Element not found
+          }
+        }
+      }
+    }
+  } |
+  contract @[*LinkedList, "length"](@list, return) = {
+    new combinator in {
+      contract combinator(@head, @accumulatedValue, return) = {
+        return!(accumulatedValue + 1)
+      } | 
+      @[*LinkedList, "fold"]!(list, 0, *combinator, *return)
+    }
+  } |
+  contract @[*LinkedList, "zip"](@list1, @list2, return) = {
+    new loop in {
+      contract loop(@pair, @acc, return) = {
+        match pair {
+          [[h1, t1], [h2, t2]] => {
+            loop!([t1, t2], [[h1, h2], acc], *return)
+          }
+          _ => {
+            return!(acc)
+          }
+        }
+      } |
+      new zippedCh in {
+        loop!([list1, list2], [], *zippedCh) |
+        for(@zipped <- zippedCh){ @[*LinkedList, "reverse"]!(zipped, *return) }
+      }
+    }
+  } |
+  contract @[*LinkedList, "range"](@start, @end, return) = {
+    new loop in {
+      contract loop(@i, @list) = {
+        match i < start {
+          true => { return!(list) } 
+          _ => {
+            loop!(i - 1, [i, list])
+          }
+        }
+      } | loop!(end - 1, [])
+    }
+  } |
+  //Create a linked list from an ordinary list of length
+  //9 or less by pattern matching. This constructor is
+  //only temporary until list processes have methods.
+  contract @[*LinkedList, "fromSmallList"](@list, return) = {
+    match list {
+      []                          => { return!([]) }
+      [a]                         => { return!([a, []]) }
+      [a, b]                      => { return!([a, [b, []]]) }
+      [a, b, c]                   => { return!([a, [b, [c, []]]]) }
+      [a, b, c, d]                => { return!([a, [b, [c, [d, []]]]]) }
+      [a, b, c, d, e]             => { return!([a, [b, [c, [d, [e, []]]]]]) }
+      [a, b, c, d, e, f]          => { return!([a, [b, [c, [d, [e, [f, []]]]]]]) }
+      [a, b, c, d, e, f, g]       => { return!([a, [b, [c, [d, [e, [f, [g, []]]]]]]]) }
+      [a, b, c, d, e, f, g, h]    => { return!([a, [b, [c, [d, [e, [f, [g, [h, []]]]]]]]]) }
+      [a, b, c, d, e, f, g, h, i] => { return!([a, [b, [c, [d, [e, [f, [g, [h, [i, []]]]]]]]]]) }
+      _ => { return!("Error! List too long for conversion to linked list.") }
+    }
+  } |
+  //Create an ordinary list from linked list of length
+  //9 or less by pattern matching. This constructor is
+  //only temporary until list processes have methods.
+  contract @[*LinkedList, "toSmallList"](@linkedList, return) = {
+    match linkedList {
+      []                                              => { return!([]) }
+      [a, []]                                         => { return!([a]) }
+      [a, [b, []]]                                    => { return!([a, b]) }
+      [a, [b, [c, []]]]                               => { return!([a, b, c]) }
+      [a, [b, [c, [d, []]]]]                          => { return!([a, b, c, d]) }
+      [a, [b, [c, [d, [e, []]]]]]                     => { return!([a, b, c, d, e]) }
+      [a, [b, [c, [d, [e, [f, []]]]]]]                => { return!([a, b, c, d, e, f]) }
+      [a, [b, [c, [d, [e, [f, [g, []]]]]]]]           => { return!([a, b, c, d, e, f, g]) }
+      [a, [b, [c, [d, [e, [f, [g, [h, []]]]]]]]]      => { return!([a, b, c, d, e, f, g, h]) }
+      [a, [b, [c, [d, [e, [f, [g, [h, [i, []]]]]]]]]] => { return!([a, b, c, d, e, f, g, h, i]) }
+      _ => { return!("Error! LinkedList too long for conversion to list.") }
+    }
+  } |
+  import RhoClass in {
+    contract LinkedList(@method, @input, return) = {
+      @[*RhoClass, "functionApply"]!([*LinkedList, method], input, *return)
+    }
+  }
+}
