@@ -297,7 +297,7 @@ object SpatialMatcher {
 
   def spatialMatch(target: Expr, pattern: Expr): OptionalFreeMap[Unit] =
     (target.exprInstance, pattern.exprInstance) match {
-      case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, _))) => {
+      case (EListBody(EList(tlist, _, _, _, _)), EListBody(EList(plist, _, _, _, _))) => {
         foldMatch(tlist, plist, (t: Par, p: Par) => spatialMatch(t, p))
       }
       case (ETupleBody(ETuple(tlist, _, _, _)), ETupleBody(ETuple(plist, _, _, _))) => {

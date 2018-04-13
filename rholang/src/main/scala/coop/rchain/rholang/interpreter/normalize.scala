@@ -81,12 +81,51 @@ object GroundNormalizeMatcher {
     }
 }
 
+object RemainderNormalizeMatcher {
+  def normalizeMatchParametered[E <: Exception](
+      r: Remainder,
+      knownFree: DebruijnLevelMap[VarSort],
+      sort: VarSort,
+      exceptionConstructor: (String, Int, Int, Int, Int) => E)
+    : (Option[Var], DebruijnLevelMap[VarSort]) =
+    r match {
+      case _: RemainderEmpty => (None, knownFree)
+      case r: RemainderVar =>
+        r.procvar_ match {
+          case pvw: ProcVarWildcard =>
+            (Some(Var(Wildcard(Var.WildcardMsg()))),
+             knownFree.addWildcard(pvw.line_num, pvw.col_num))
+          case pvv: ProcVarVar =>
+            knownFree.get(pvv.var_) match {
+              case None =>
+                val newBindingsPair =
+                  knownFree.newBinding((pvv.var_, sort, pvv.line_num, pvv.col_num))
+                (Some(FreeVar(newBindingsPair._2)), newBindingsPair._1)
+              case Some((_, _, line, col)) =>
+                throw exceptionConstructor(pvv.var_, line, col, pvv.line_num, pvv.col_num)
+            }
+        }
+    }
+
+  def normalizeMatchProc(
+      r: Remainder,
+      knownFree: DebruijnLevelMap[VarSort]): (Option[Var], DebruijnLevelMap[VarSort]) =
+    normalizeMatchParametered(r, knownFree, ProcSort, UnexpectedReuseOfProcContextFree.apply)
+
+  def normalizeMatchName(
+      r: Remainder,
+      knownFree: DebruijnLevelMap[VarSort]): (Option[Var], DebruijnLevelMap[VarSort]) =
+    normalizeMatchParametered(r, knownFree, NameSort, UnexpectedReuseOfNameContextFree.apply)
+}
+
 object CollectionNormalizeMatcher {
   import scala.collection.JavaConverters._
   def normalizeMatch(c: Collection, input: CollectVisitInputs): CollectVisitOutputs = {
-    def foldMatch[T](listproc: List[Proc], constructor: (Seq[Par], Int, BitSet, Boolean) => T)(
+    def foldMatch[T](knownFree: DebruijnLevelMap[VarSort],
+                     listproc: List[Proc],
+                     constructor: (Seq[Par], Int, BitSet, Boolean) => T)(
         implicit toExpr: T => Expr): CollectVisitOutputs = {
-      val folded = ((Vector[Par](), input.knownFree, BitSet(), false) /: listproc)(
+      val folded = ((Vector[Par](), knownFree, BitSet(), false) /: listproc)(
         (acc, e) => {
           val result =
             ProcNormalizeMatcher.normalizeMatch(e, ProcVisitInputs(VectorPar(), input.env, acc._2))
@@ -126,9 +165,15 @@ object CollectionNormalizeMatcher {
       CollectVisitOutputs(EMap(folded._1.reverse, freeCount, folded._3, folded._4), resultKnownFree)
     }
     c match {
-      case cl: CollectList  => foldMatch(cl.listproc_.asScala.toList, EList.apply)
-      case ct: CollectTuple => foldMatch(ct.listproc_.asScala.toList, ETuple.apply)
-      case cs: CollectSet   => foldMatch(cs.listproc_.asScala.toList, ESet.apply)
+      case cl: CollectList =>
+        val remainderResult =
+          RemainderNormalizeMatcher.normalizeMatchProc(cl.remainder_, input.knownFree)
+        foldMatch(remainderResult._2,
+                  cl.listproc_.asScala.toList,
+                  (ps, fc, lf, wc) =>
+                    EList.apply(ps, fc, lf, wc).update(_.optionalRemainder := remainderResult._1))
+      case ct: CollectTuple => foldMatch(input.knownFree, ct.listproc_.asScala.toList, ETuple.apply)
+      case cs: CollectSet   => foldMatch(input.knownFree, cs.listproc_.asScala.toList, ESet.apply)
       case cm: CollectMap   => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
     }
   }

@@ -115,7 +115,7 @@ object Substitute {
         Receive(
           binds = term.binds
             .map({
-              case ReceiveBind(xs, Some(chan)) => ReceiveBind(xs, substitute(chan))
+              case ReceiveBind(xs, Some(chan), _) => ReceiveBind(xs, substitute(chan))
             }),
           body = substitute(term.body.get)(env.shift(term.bindCount)),
           persistent = term.persistent,
@@ -168,7 +168,7 @@ object Substitute {
           case ENeqBody(ENeq(par1, par2))     => ENeq(substitute(par1.get), substitute(par2.get))
           case EAndBody(EAnd(par1, par2))     => EAnd(substitute(par1.get), substitute(par2.get))
           case EOrBody(EOr(par1, par2))       => EOr(substitute(par1.get), substitute(par2.get))
-          case EListBody(EList(ps, freeCount, locallyFree, wildcard)) =>
+          case EListBody(EList(ps, freeCount, locallyFree, wildcard, _)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }

@@ -54,7 +54,7 @@ case class PrettyPrinter(freeShift: Int,
         buildString(p1.get) + " < " + buildString(p2.get)
       case ELteBody(ELte(p1, p2)) =>
         buildString(p1.get) + " <= " + buildString(p2.get)
-      case EListBody(EList(s, _, _, _)) =>
+      case EListBody(EList(s, _, _, _, _)) =>
         "[" + buildSeq(s) + "]"
       case ETupleBody(ETuple(s, _, _, _)) =>
         "[" + buildSeq(s) + "]"
