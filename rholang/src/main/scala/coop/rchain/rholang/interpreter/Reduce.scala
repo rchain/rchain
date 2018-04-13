@@ -388,10 +388,10 @@ object Reduce {
           } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
         }
         case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+          val methodLookup = methodTable.get(method)
           for {
             evaledTarget <- evalExpr(target.get)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr)(env))
-            methodLookup = methodTable.get(method)
             resultPar <- methodLookup match {
                           case None    => Task raiseError new Error("Unimplemented method: " + method)
                           case Some(f) => f(target.get, evaledArgs)(env)
@@ -411,10 +411,10 @@ object Reduce {
             evaledP <- evalExpr(p)
           } yield evaledP
         case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+          val methodLookup = methodTable.get(method)
           for {
             evaledTarget <- evalExpr(target.get)
             evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr)(env))
-            methodLookup = methodTable.get(method)
             resultPar <- methodLookup match {
                           case None    => Task raiseError new Error("Unimplemented method: " + method)
                           case Some(f) => f(target.get, evaledArgs)(env)
