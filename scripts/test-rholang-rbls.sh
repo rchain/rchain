@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-export PATH=$PATH:$(pwd -P)/ci
+export PATH=$PATH:$(pwd -P)/scripts
 source header.sh
 
 export ESS_SYSDIR=${ROSETTE_ROOT_DIR}/result/lib/rosette

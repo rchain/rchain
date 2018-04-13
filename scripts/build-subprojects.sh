@@ -41,7 +41,7 @@ case "$SUBPROJECT" in "rosette")
 
     cd ${TRAVIS_BUILD_DIR}
 
-    ci/rholang-more-tests-main.sh
+    scripts/rholang-more-tests-main.sh
     ;;
 
 *)
