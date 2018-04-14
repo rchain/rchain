@@ -1,7 +1,7 @@
 package coop.rchain.rosette
 
-import cats.Eval
-import cats.data.{ReaderWriterState, ReaderWriterStateT, State}
+import cats.MonadError
+import cats.data.{ReaderT, State}
 import cats.implicits._
 import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
@@ -61,7 +61,9 @@ object Location {
             }
     } yield res
 
-  def store(loc: Location, value: Ob): State[Ctxt, StoreResult] =
+  def store(loc: Location, value: Ob): State[Ctxt, StoreResult] = {
+    val pure = State.pure[Ctxt, StoreResult] _
+
     loc match {
       case CtxtRegister(reg) => setReg(reg, value)
 
@@ -78,6 +80,30 @@ object Location {
           .transformS[Ctxt](_.env, (ctxt, env) => ctxt.copy(env = env))
 
       // TODO:
-      case _ => State.pure[Ctxt, StoreResult](Failure)
+      case _ => pure(Failure)
+    }
+  }
+
+  def valWrt[E[_]](loc: Location, v: Ob)(implicit E: MonadError[E, RblError]) =
+    ReaderT[E, GlobalEnv, Ob] { globalEnv =>
+      val value: PartialFunction[Location, Ob] = {
+        case LexVariable(indirect, level, offset) =>
+          v.getLex(indirect, level, offset)
+        case AddrVariable(indirect, level, offset) =>
+          v.getAddr(indirect, level, offset)
+        case BitField(indirect, level, offset, spanSize, sign) =>
+          v.getField(indirect, level, offset, spanSize, sign)
+        case BitField00(offset, spanSize, sign) =>
+          v.getField(indirect = false, level = 0, offset, spanSize, sign)
+        case GlobalVariable(offset) =>
+          globalEnv.getLex(indirect = true, level = 0, offset)
+      }
+
+      val err: Location => RblError = {
+        case Limbo => Absent
+        case _     => Suicide("valWrt(Location, Ob*)")
+      }
+
+      (value andThen E.pure) applyOrElse (loc, err andThen E.raiseError[Ob])
     }
 }
