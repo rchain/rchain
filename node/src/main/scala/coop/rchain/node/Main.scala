@@ -25,7 +25,7 @@ object Main {
   private def executeRepl(conf: Conf): Unit = {
     import monix.execution.Scheduler.Implicits.global
 
-    val repl = new Repl(conf.grpcHost(), conf.grpcPort())
+    val repl = new ReplClient(conf.grpcHost(), conf.grpcPort())
     val recipe: Task[Unit] = for {
       _    <- Task.delay(print("rholang> "))
       line <- Task.delay(scala.io.StdIn.readLine())
