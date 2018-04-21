@@ -68,4 +68,6 @@ object Dependencies {
 
   val commonDependencies: Seq[ModuleID] =
     logging ++ testing :+ kindProjector
+
+  val scalazDependencies: Seq[ModuleID] = Seq( scalaz )
 }
