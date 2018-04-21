@@ -6,6 +6,7 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond, RChainState}
 import scala.annotation.tailrec
 
 package object util {
+  final val GENESIS : BlockMessage = BlockMessage.defaultInstance
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
@@ -58,6 +59,6 @@ package object util {
       mainParent <- blocks.get(parentHash)
     } yield mainParent) match {
       case Some(parent) => parent
-      case None         => BlockMessage.defaultInstance // TODO: Replace with genesis
+      case None         => GENESIS
     }
 }
