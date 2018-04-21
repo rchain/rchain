@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
 import util._
 
 import scala.collection
@@ -49,7 +49,10 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
 
   private def candidates(): Map[ByteString, Int] = {
     val estimateMainParent = mainParent(blocks, estimate)
-    val weights            = weightMap(estimateMainParent)
+    val weights = estimateMainParent match {
+      case Some(parent) => weightMap(parent)
+      case None         => weightMap(estimate) // Genesis
+    }
     for {
       (validator, stake) <- weights
       latestBlock        <- latestBlocks.get(validator) if compatible(estimate, latestBlock)
@@ -61,10 +64,17 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                               estimate: BlockMessage,
                               latestBlocks: collection.Map[ByteString, BlockMessage],
                               candidates: Map[ByteString, Int]): Int = {
-    def seesAgreement(self: ByteString, other: ByteString) =
+    def seesAgreement(self: ByteString, other: ByteString): Boolean =
       (for {
-        selfLatest         <- latestBlocks.get(self).toList
-        justification      <- selfLatest.justification.toList
+        selfLatest <- latestBlocks.get(self).toList
+        justification <- selfLatest.justifications
+                          .map {
+                            case Justification(creator: ByteString, latestBlock: ByteString) =>
+                              creator -> latestBlock
+                          }
+                          .toMap
+                          .values
+                          .toList
         justificationBlock <- blocks.get(justification)
         if justificationBlock.sig == other
         if compatible(estimate, justificationBlock)
@@ -74,7 +84,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
       x <- candidates.keys
       y <- candidates.keys
       if x.toString > y.toString // TODO: Order ByteString
-    } yield (x, y)) filterNot {
+    } yield (x, y)) filter {
       case (validatorOne: ByteString, validatorTwo: ByteString) =>
         seesAgreement(validatorOne, validatorTwo) && seesAgreement(validatorTwo, validatorOne)
     }
