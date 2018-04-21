@@ -1,23 +1,34 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.internals._
 import coop.rchain.casper.protocol.{Resource => ResourceProto, _}
 import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.crypto.hash.Sha256
 
-trait BlockGenerator {
-  val resourceCounter: Iterator[Int] = Iterator.from(0)
+import scalaz._, Scalaz._
 
-  def createBlock(parentsHashList: Seq[ByteString]): BlockMessage = {
-    val resourceId     = resourceCounter.next()
-    val uniqueResource = ResourceProto(ProduceResource(Produce(resourceId)))
-    val postState      = RChainState().withResources(Seq(uniqueResource))
-    val postStateHash  = Sha256.hash(postState.toByteArray)
-    val header = Header()
-      .withPostStateHash(ByteString.copyFrom(postStateHash))
-      .withParentsHashList(parentsHashList)
-    val blockHash = Sha256.hash(header.toByteArray)
-    val body      = Body().withPostState(postState)
-    BlockMessage(ByteString.copyFrom(blockHash), Some(header), Some(body))
-  }
+import scala.language.higherKinds
+
+trait BlockGenerator {
+  def chainState[F[_]: ChainState]: ChainState[F] = MonadState[F, Chain]
+  def createBlock[F[_]: ChainState](parentsHashList: Seq[ByteString]): F[BlockMessage] =
+    for {
+      chain          <- chainState[F].get
+      nextId         = chain.currentId + 1
+      uniqueResource = ResourceProto(ProduceResource(Produce(nextId)))
+      postState      = RChainState().withResources(Seq(uniqueResource))
+      postStateHash  = Sha256.hash(postState.toByteArray)
+      header = Header()
+        .withPostStateHash(ByteString.copyFrom(postStateHash))
+        .withParentsHashList(parentsHashList)
+      blockHash                                     = Sha256.hash(header.toByteArray)
+      body                                          = Body().withPostState(postState)
+      block                                         = BlockMessage(ByteString.copyFrom(blockHash), Some(header), Some(body))
+      idToBlocks: collection.Map[Int, BlockMessage] = chain.idToBlocks + (nextId -> block)
+      hashToBlocks: collection.Map[ByteString, BlockMessage] = chain.hashToBlocks + (ByteString
+        .copyFrom(blockHash) -> block)
+      newChain: Chain = Chain(idToBlocks, hashToBlocks, nextId)
+      _               <- chainState[F].put(newChain)
+    } yield block
 }
