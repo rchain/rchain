@@ -32,14 +32,15 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                   estimate: BlockMessage,
                   latestBlocks: collection.Map[ByteString, BlockMessage],
                   fault_tolerance_threshold: Float) {
-  def total_weight(): Int = weightMapTotal(estimate)
-  def is_safe(): Boolean = {
-    val fault_tolerance = 2 * min_max_clique_weight() - total_weight()
-    fault_tolerance >= fault_tolerance_threshold * total_weight()
+  def totalWeight(): Int = weightMapTotal(estimate)
+  def isSafe: Boolean = {
+    val fault_tolerance = 2 * min_max_clique_weight() - totalWeight()
+    fault_tolerance >= fault_tolerance_threshold * totalWeight()
   }
 
   private def min_max_clique_weight(): Int =
-    if (2 * candidates().values.sum < total_weight()) {
+    // To have a maximum clique of half the total weight, you need at least twice the weight of the candidates to be greater than the total weight
+    if (2 * candidates().values.sum < totalWeight()) {
       0
     } else {
       val vertexCount = candidates().keys.size
@@ -64,9 +65,9 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                               estimate: BlockMessage,
                               latestBlocks: collection.Map[ByteString, BlockMessage],
                               candidates: Map[ByteString, Int]): Int = {
-    def seesAgreement(self: ByteString, other: ByteString): Boolean =
+    def seesAgreement(that: ByteString, other: ByteString): Boolean =
       (for {
-        selfLatest <- latestBlocks.get(self).toList
+        selfLatest <- latestBlocks.get(that).toList
         justification <- selfLatest.justifications
                           .map {
                             case Justification(creator: ByteString, latestBlock: ByteString) =>
@@ -76,8 +77,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                           .values
                           .toList
         justificationBlock <- blocks.get(justification)
-        if justificationBlock.sig == other
-        if compatible(estimate, justificationBlock)
+        if justificationBlock.sig == other && compatible(estimate, justificationBlock)
       } yield justificationBlock).size == 1
 
     val edges = (for {

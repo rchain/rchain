@@ -12,7 +12,6 @@ import scala.collection.immutable.HashMap
 import scala.language.higherKinds
 
 trait BlockGenerator {
-  def chainState[F[_]: ChainState]: ChainState[F] = MonadState[F, Chain]
   def createBlock[F[_]: ChainState](parentsHashList: Seq[ByteString]): F[BlockMessage] =
     createBlock(parentsHashList, ByteString.EMPTY)
   def createBlock[F[_]: ChainState](parentsHashList: Seq[ByteString],
@@ -39,7 +38,7 @@ trait BlockGenerator {
       blockHash = Sha256.hash(header.toByteArray)
       body      = Body().withPostState(postState)
       serializedJustifications = justifications.toList.map {
-        case ((creator: ByteString, latestBlockHash: ByteString)) =>
+        case (creator: ByteString, latestBlockHash: ByteString) =>
           Justification(creator, latestBlockHash)
       }
       block = BlockMessage(ByteString.copyFrom(blockHash),
