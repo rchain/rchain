@@ -6,7 +6,16 @@ import coop.rchain.node.repl._
 
 import monix.eval.Task
 
-class Repl(host: String, port: Int) {
+trait ReplService[F[_]] {
+  def run(line: String): F[String]
+  def eval(line: String): F[String]
+}
+
+object ReplService {
+  def apply[F[_]](implicit ev: ReplService[F]): ReplService[F] = ev
+}
+
+class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
@@ -19,16 +28,4 @@ class Repl(host: String, port: Int) {
   def eval(fileName: String): Task[String] = Task.delay {
     blockingStub.eval(EvalRequest(fileName)).output
   }
-
-  def shutdown(): Unit =
-    channel.shutdown.awaitTermination(5, TimeUnit.SECONDS)
-
-  def logo: String =
-    """
-
-      ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
-      ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
-      ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
-
-    """
 }

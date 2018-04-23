@@ -100,11 +100,12 @@ lazy val node = (project in file("node"))
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
-        scalapbRuntimegGrpc,
-        grpcNetty,
         catsCore,
+        grpcNetty,
+        jline, 
         scallop,
-        scalaUri
+        scalaUri,
+        scalapbRuntimegGrpc
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
