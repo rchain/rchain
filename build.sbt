@@ -37,7 +37,9 @@ lazy val shared = (project in file("shared"))
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
-    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      scalaz
+    ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )

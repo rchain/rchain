@@ -1,67 +1,60 @@
 package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.BlockGenerator
+import coop.rchain.casper.internals._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.crypto.hash.Sha256
+import scalaz.{State}
 
-import scala.collection.mutable
+import scala.collection.immutable.HashMap
 
-class CasperUtilTest extends FlatSpec with Matchers {
-  val resourceCounter: Iterator[Int] = Iterator.from(0)
+class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
+
+  type StateWithChain[A] = State[Chain, A]
 
   "isInMainChain" should "classify appropriately" in {
-    val chain = mutable.HashMap[ByteString, BlockMessage]()
+    val createChain =
+      for {
+        genesis <- createBlock[StateWithChain](Seq())
+        b2      <- createBlock[StateWithChain](Seq(genesis.blockHash))
+        b3      <- createBlock[StateWithChain](Seq(b2.blockHash))
+      } yield b3
 
-    val genesis: BlockMessage = createBlock(Seq())
-    chain += (genesis.blockHash -> genesis)
+    val initState =
+      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+    val (chain: Chain, lastBlock: BlockMessage) = createChain.run(initState)
 
-    val blockMessage2: BlockMessage = createBlock(Seq(genesis.blockHash))
-    chain += (blockMessage2.blockHash -> blockMessage2)
-
-    val blockMessage3: BlockMessage = createBlock(Seq(blockMessage2.blockHash))
-    chain += (blockMessage3.blockHash -> blockMessage3)
-
-    isInMainChain(chain, genesis, blockMessage3) should be(true)
-    isInMainChain(chain, blockMessage2, blockMessage3) should be(true)
-    isInMainChain(chain, blockMessage3, blockMessage2) should be(false)
-    isInMainChain(chain, blockMessage3, genesis) should be(false)
+    val genesis = chain.idToBlocks(1)
+    val b2      = chain.idToBlocks(2)
+    val b3      = chain.idToBlocks(3)
+    isInMainChain(chain.hashToBlocks, genesis, b3) should be(true)
+    isInMainChain(chain.hashToBlocks, b2, b3) should be(true)
+    isInMainChain(chain.hashToBlocks, b3, b2) should be(false)
+    isInMainChain(chain.hashToBlocks, b3, genesis) should be(false)
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in {
-    val chain = mutable.HashMap[ByteString, BlockMessage]()
+    val createChain =
+      for {
+        genesis <- createBlock[StateWithChain](Seq())
+        b2      <- createBlock[StateWithChain](Seq(genesis.blockHash))
+        b3      <- createBlock[StateWithChain](Seq(genesis.blockHash))
+        b4      <- createBlock[StateWithChain](Seq(b2.blockHash, b3.blockHash))
+      } yield b4
 
-    val genesis: BlockMessage = createBlock(Seq())
-    chain += (genesis.blockHash -> genesis)
+    val initState =
+      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+    val (chain: Chain, lastBlock: BlockMessage) = createChain.run(initState)
 
-    val blockMessage2: BlockMessage = createBlock(Seq(genesis.blockHash))
-    chain += (blockMessage2.blockHash -> blockMessage2)
-
-    val blockMessage3: BlockMessage = createBlock(Seq(genesis.blockHash))
-    chain += (blockMessage3.blockHash -> blockMessage3)
-
-    val blockMessage4: BlockMessage =
-      createBlock(Seq(blockMessage2.blockHash, blockMessage3.blockHash))
-    chain += (blockMessage4.blockHash -> blockMessage4)
-
-    isInMainChain(chain, genesis, blockMessage2) should be(true)
-    isInMainChain(chain, genesis, blockMessage3) should be(true)
-    isInMainChain(chain, genesis, blockMessage4) should be(true)
-    isInMainChain(chain, blockMessage2, blockMessage4) should be(true)
-    isInMainChain(chain, blockMessage3, blockMessage4) should be(false)
-  }
-
-  private def createBlock(parentsHashList: Seq[ByteString]) = {
-    val resourceId     = resourceCounter.next()
-    val uniqueResource = Resource(ProduceResource(Produce(resourceId)))
-    val postState      = RChainState().withResources(Seq(uniqueResource))
-    val postStateHash  = Sha256.hash(postState.toByteArray)
-    val header = Header()
-      .withPostStateHash(ByteString.copyFrom(postStateHash))
-      .withParentsHashList(parentsHashList)
-    val blockHash = Sha256.hash(header.toByteArray)
-    val body      = Body().withPostState(postState)
-    BlockMessage(ByteString.copyFrom(blockHash), Some(header), Some(body))
+    val genesis = chain.idToBlocks(1)
+    val b2      = chain.idToBlocks(2)
+    val b3      = chain.idToBlocks(3)
+    val b4      = chain.idToBlocks(4)
+    isInMainChain(chain.hashToBlocks, genesis, b2) should be(true)
+    isInMainChain(chain.hashToBlocks, genesis, b3) should be(true)
+    isInMainChain(chain.hashToBlocks, genesis, b4) should be(true)
+    isInMainChain(chain.hashToBlocks, b2, b4) should be(true)
+    isInMainChain(chain.hashToBlocks, b3, b4) should be(false)
   }
 }
