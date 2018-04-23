@@ -74,21 +74,22 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val latestBlocks: collection.Map[ByteString, BlockMessage] =
       HashMap[ByteString, BlockMessage](v1 -> b8, v2 -> b6)
 
-    implicit def turanOracleEffect: TuranOracle[Task] =
-      new TuranOracleImpl(chain.hashToBlocks, latestBlocks)
+    implicit def turanOracleEffect: SafetyOracle[Task] =
+      new TuranOracle(chain.hashToBlocks, latestBlocks)
 
-    def runSafetyOracle[F[_]: Monad: TuranOracle]: F[Unit] =
+    def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
-        isGenesisSafe              <- TuranOracle[F].isSafe(genesis, 1)
-        _                          = assert(isGenesisSafe)
-        isB2Safe                   <- TuranOracle[F].isSafe(b2, 1)
-        _                          = assert(isB2Safe)
-        isB3Safe                   <- TuranOracle[F].isSafe(b3, 1)
-        _                          = assert(!isB3Safe)
-        isB4SafeConservatively     <- TuranOracle[F].isSafe(b4, 1)
-        _                          = assert(!isB4SafeConservatively)
-        isB4SafeLessConservatively <- TuranOracle[F].isSafe(b4, 0.2f) // Clique oracle would be safe
-        _                          = assert(!isB4SafeLessConservatively)
+        isGenesisSafe          <- SafetyOracle[F].isSafe(genesis, 1)
+        _                      = assert(isGenesisSafe)
+        isB2Safe               <- SafetyOracle[F].isSafe(b2, 1)
+        _                      = assert(isB2Safe)
+        isB3Safe               <- SafetyOracle[F].isSafe(b3, 1)
+        _                      = assert(!isB3Safe)
+        isB4SafeConservatively <- SafetyOracle[F].isSafe(b4, 1)
+        _                      = assert(!isB4SafeConservatively)
+        isB4SafeLessConservatively <- SafetyOracle[F]
+                                       .isSafe(b4, 0.2f) // Clique oracle would be safe
+        _ = assert(!isB4SafeLessConservatively)
       } yield ()
     runSafetyOracle[Task].unsafeRunSync
   }

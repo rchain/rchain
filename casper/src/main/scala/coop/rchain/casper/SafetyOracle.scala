@@ -29,17 +29,17 @@ import scala.collection
  * If all validators are indeed part of the clique, minMaxCliqueWeight will hopefully be equal to total_weight
  * and is_safe will reduce to total_weight >= total_weight and evaluate to true.
  */
-trait TuranOracle[F[_]] {
+trait SafetyOracle[F[_]] {
   def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): F[Boolean]
 }
 
-object TuranOracle {
-  def apply[F[_]](implicit ev: TuranOracle[F]): TuranOracle[F] = ev
+object SafetyOracle {
+  def apply[F[_]](implicit ev: SafetyOracle[F]): SafetyOracle[F] = ev
 }
 
-class TuranOracleImpl(blocks: collection.Map[ByteString, BlockMessage],
-                      latestBlocks: collection.Map[ByteString, BlockMessage])
-    extends TuranOracle[Task] {
+class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
+                  latestBlocks: collection.Map[ByteString, BlockMessage])
+    extends SafetyOracle[Task] {
   def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): Task[Boolean] = Task.delay {
     val faultTolerance = 2 * minMaxCliqueWeight(estimate) - totalWeight(estimate)
     faultTolerance >= faultToleranceThreshold * totalWeight(estimate)
