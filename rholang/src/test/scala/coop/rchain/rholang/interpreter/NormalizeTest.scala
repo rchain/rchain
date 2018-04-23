@@ -714,6 +714,20 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
+
+  "PMethod" should "Produce a method call" in {
+    val listProc = new ListProc()
+    listProc.add(new PGround(new GroundInt(0)))
+    val methodName  = "nth"
+    val target      = new PVar(new ProcVarVar("x"))
+    val pMethod     = new PMethod(target, methodName, listProc)
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val result      = ProcNormalizeMatcher.normalizeMatch(pMethod, boundInputs)
+    val expectedResult =
+      inputs.par.prepend(EMethod("nth", EVar(BoundVar(0)), List(GInt(0)), 0, BitSet(0), false))
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {

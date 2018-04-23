@@ -285,7 +285,7 @@ trait RholangASTToTerm extends AllVisitor[VisitorTypes.R, VisitorTypes.A] {
           val quotedPtrnTerm = doQuote(ptrnTerm)._1
           (List(chanTerm, ptrnTerm, quotedPtrnTerm, productFresh), newlyBound)
         }
-        case condBind: CondInputBind =>
+        case _: CondInputBind =>
           throw new NotImplementedError("TODO: Handle condBind inside consume")
         case bind => throw new UnexpectedBindingType(bind)
       }
@@ -336,12 +336,8 @@ trait RholangASTToTerm extends AllVisitor[VisitorTypes.R, VisitorTypes.A] {
     def cBranchToParPair(b: CBranch) =
       b match {
         case branch: Choice => {
-          // bverity = 1, babsurdity = 0
-          val (bverity, babsurdity) =
-            (
-              new PValue(new VQuant(new QInt(1))),
-              new PValue(new VQuant(new QInt(0)))
-            )
+          // babsurdity = 0
+          val babsurdity = new PValue(new VQuant(new QInt(0)))
 
           // bmsg <- bchan
           val bmsgVStr = Fresh()
@@ -509,8 +505,8 @@ trait RholangASTToTerm extends AllVisitor[VisitorTypes.R, VisitorTypes.A] {
     p match {
       case pPtVar: PPtVar => {
         pPtVar.varpattern_ match {
-          case wild: VarPtWild => true
-          case _               => false
+          case _: VarPtWild => true
+          case _            => false
         }
       }
       case _ => false
@@ -519,7 +515,7 @@ trait RholangASTToTerm extends AllVisitor[VisitorTypes.R, VisitorTypes.A] {
   def hasVariable(p: PPattern): Boolean =
     // TODO: Fill in rest of cases
     p match {
-      case pPtVar: PPtVar => true
+      case _: PPtVar      => true
       case pPtVal: PPtVal => hasVariable(pPtVal.valpattern_)
     }
 

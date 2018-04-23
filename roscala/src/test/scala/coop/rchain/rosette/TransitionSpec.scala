@@ -2,9 +2,11 @@ package coop.rchain.rosette
 
 import cats.data.State
 import coop.rchain.rosette.CtxtRegName._
+import coop.rchain.rosette.Location._
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.expr._
-import coop.rchain.rosette.Location._
+import coop.rchain.rosette.prim.{fixnum, rblfloat}
+import coop.rchain.rosette.utils.Instances.{mkMetaFieldLens, mkParentFieldLens}
 import org.scalatest._
 
 /**
@@ -42,11 +44,10 @@ class TransitionSpec extends FlatSpec with Matchers {
     sleeperPool = Seq()
   )
 
-  val stdOprnPlus = StdOprn(null)
+  val fxPlus = fixnum.fxPlus
+  val flPlus = rblfloat.flPlus
 
-  val stdMeta = StdMeta()
-
-  val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, stdOprnPlus)
+  val globalEnv = Seq.fill(669)(Ob.NIV).updated(668, fxPlus).updated(667, flPlus)
 
   "Executing bytecode from expression \"(if #t 1 2)\"" should "result in state.ctxt.rslt == Fixnum(1)" in {
 
@@ -381,7 +382,7 @@ class TransitionSpec extends FlatSpec with Matchers {
       OpAlloc(2),
       OpIndLitToArg(arg = 0, lit = 1),
       OpIndLitToArg(arg = 1, lit = 2),
-      OpXferGlobalToReg(reg = trgt, global = 668),
+      OpXferGlobalToReg(reg = trgt, global = 667),
       OpXmit(unwind = false, next = true, nargs = 2)
     )
 
@@ -1303,5 +1304,123 @@ class TransitionSpec extends FlatSpec with Matchers {
     end.ctxt.rslt shouldBe Fixnum(100)
     end.ctxt.id shouldBe 1
     end.strandPool.length shouldBe 0
+  }
+
+  "Executing bytecode from expression (let [[x #t]] (let [[y #t]] (if x (if y 1 2) 3)))" should "result in Fixnum(1)" in {
+
+    /**
+      * litvec:
+      *   0:   {LetExpr}
+      *   1:   {Template}
+      *   2:   {Template}
+      * codevec:
+      *   0:   alloc 1
+      *   1:   lit #t,arg[0]
+      *   2:   nargs 1
+      *   3:   extend 1
+      *   4:   alloc 1
+      *   5:   lit #t,arg[0]
+      *   6:   nargs 1
+      *   7:   extend 2
+      *   8:   xfer lex[1,0],rslt
+      *   9:   jf 16
+      *   10:   xfer lex[0,0],rslt
+      *   11:   jf 14
+      *   12:   lit 1,rslt
+      *   13:   rtn/nxt
+      *   14:   lit 2,rslt
+      *   15:   rtn/nxt
+      *   16:   lit 3,rslt
+      *   17:   rtn/nxt
+      */
+    val templateX = Template(
+      meta = null,
+      parent = null,
+      Tuple(Seq(Symbol("x"))),
+      StdMeta(),
+      IdVecPattern(TupleExpr(Seq(Symbol("x"))))
+    )
+
+    val templateY = Template(
+      meta = null,
+      parent = null,
+      Tuple(Seq(Symbol("y"))),
+      StdMeta(),
+      IdVecPattern(TupleExpr(Seq(Symbol("y"))))
+    )
+
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 8, arg = 0),
+      OpNargs(1),
+      OpExtend(1),
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 8, arg = 0),
+      OpNargs(1),
+      OpExtend(2),
+      OpXferLexToReg(indirect = false, level = 1, offset = 0, rslt),
+      OpJmpFalse(16),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, rslt),
+      OpJmpFalse(14),
+      OpImmediateLitToReg(lit = 1, reg = rslt),
+      OpRtn(next = true),
+      OpImmediateLitToReg(lit = 2, reg = rslt),
+      OpRtn(next = true),
+      OpImmediateLitToReg(lit = 3, reg = rslt),
+      OpRtn(next = true)
+    )
+
+    val start =
+      testState
+        .set(_ >> 'code)(Code(Tuple(Seq(LetExpr(), templateX, templateY)), codevec))
+        .set(_ >> 'ctxt >> 'ctxt)(haltCtxt)
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+    end.ctxt.rslt shouldBe Fixnum(1)
+  }
+
+  "Executing bytecode from expression (cat 1)" should "return #absent" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      *   1:   'cat
+      * codevec:
+      *   0:   alloc 1
+      *   1:   lit 1,arg[0]
+      *   2:   lookup 1,trgt
+      *   3:   xmit/nxt 1
+      */
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(value = 1, arg = 0),
+      OpLookupToReg(trgt, 1),
+      OpXmit(unwind = false, next = true, nargs = 1)
+    )
+
+    val ob: Ob = new Ob {
+      override val meta: Ob   = null
+      override val parent: Ob = null
+    }
+
+    val rblTable = RblTable(Map())
+    val stdMeta  = StdMeta(StdExtension(null, null, Seq(rblTable)))
+
+    val start =
+      testState
+        .set(_ >> 'code)(Code(Tuple(Seq(Ob.NIV, Symbol("cat"))), codevec))
+        .set(_ >> 'globalEnv)(TblObject(globalEnv))
+        .set(_ >> 'ctxt >> 'ctxt)(testState.ctxt)
+        .set(_ >> 'ctxt >> 'selfEnv)(ob)
+        .set(_ >> 'ctxt >> 'selfEnv >> 'meta)(stdMeta)
+        .set(_ >> 'ctxt >> 'selfEnv >> 'parent)(RblTopEnv)
+
+    val end = VirtualMachine.executeSeq(codevec, start)
+
+    /**
+      * Here we test that [[VirtualMachine.handleMissingBinding]] is executed,
+      * so the actual Ctxt is a [[VirtualMachine.missingBindingCtxt]]
+      */
+    end.ctxt should be theSameInstanceAs VirtualMachine.missingBindingCtxt
   }
 }

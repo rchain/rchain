@@ -26,7 +26,7 @@ object Runtime {
   private def introduceSystemProcesses(
       store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
       processes: immutable.Seq[(Name, Arity, Ref)])
-    : Seq[Option[(TaggedContinuation, List[Seq[Channel]])]] =
+    : Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
     processes.map {
       case (name, arity, ref) =>
         install(store,
@@ -56,7 +56,7 @@ object Runtime {
       ("stderrAck", 2, 3L)
     )
 
-    val res: Seq[Option[(TaggedContinuation, List[Seq[Channel]])]] =
+    val res: Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
       introduceSystemProcesses(store, procDefs)
 
     assert(res.forall(_.isEmpty))

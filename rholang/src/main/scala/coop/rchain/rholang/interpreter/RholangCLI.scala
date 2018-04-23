@@ -7,6 +7,7 @@ import java.util.concurrent.TimeoutException
 import cats.syntax.either._
 import coop.rchain.models.{Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.implicits.VectorPar
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
@@ -119,8 +120,9 @@ object RholangCLI {
 
   def buildNormalizedTerm(source: Reader): Either[Throwable, Par] =
     try {
-      val term           = buildAST(source)
-      val inputs         = ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+      val term = buildAST(source)
+      val inputs =
+        ProcVisitInputs(VectorPar(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
       val normalizedTerm = normalizeTerm(term, inputs).leftMap(s => new Exception(s))
       normalizedTerm.flatMap { (nt: ProcVisitOutputs) =>
         ParSortMatcher

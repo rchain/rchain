@@ -85,6 +85,8 @@ object Ctxt {
     id = ctxt.id + 1000
   )
 
+  def apply(trgt: Ob, argvec: Tuple): Ctxt = empty.copy(trgt = trgt, argvec = argvec)
+
   /** Save result to a location in the continuation of a given `ctxt`
     *
     * The location is defined by `tag`.
@@ -147,9 +149,9 @@ object Ctxt {
 
   val transformCtxtToCtxtTrans: State[Ctxt, StoreResult] => CtxtTransition[StoreResult] = trans =>
     liftRWS[Eval, Unit, List[Continuation], (GlobalEnv, Ctxt), StoreResult](
-      trans.transformS[(GlobalEnv, Ctxt)]({ case (globalEnv, ctxt) => ctxt },
+      trans.transformS[(GlobalEnv, Ctxt)]({ case (_, ctxt) => ctxt },
                                           (oldGlobalEnvAndCtxt, newCtxt) => {
-                                            val (oldGlobalEnv, oldCtxt) = oldGlobalEnvAndCtxt
+                                            val (oldGlobalEnv, _) = oldGlobalEnvAndCtxt
                                             (oldGlobalEnv, newCtxt)
                                           }))
 
