@@ -868,6 +868,18 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   }
 }
 
+class DebugStoreStorageActionsTests extends StorageActionsTests {
+  override def withTestStore(f: T => Unit): Unit = {
+    val testStore = DebugStore.create[String, Pattern, String, StringsCaptor]
+    testStore.clear()
+    try {
+      f(testStore)
+    } finally {
+      testStore.close()
+    }
+  }
+}
+
 class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOperationsTests {
 
   override def withTestStore(f: T => Unit): Unit = {

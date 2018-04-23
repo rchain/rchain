@@ -15,12 +15,12 @@ import scala.collection.AbstractIterator
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-case class LMDBStore[C, P, A, K](env: Env[ByteBuffer])(implicit
-                                                       sc: Serialize[C],
-                                                       sp: Serialize[P],
-                                                       sa: Serialize[A],
-                                                       sk: Serialize[K],
-                                                       allocator: IBufferAllocator)
+class LMDBStore[C, P, A, K](env: Env[ByteBuffer])(implicit
+                                                  sc: Serialize[C],
+                                                  sp: Serialize[P],
+                                                  sa: Serialize[A],
+                                                  sk: Serialize[K],
+                                                  allocator: IBufferAllocator)
     extends Store[C, P, A, K]
     with KeyValueAmbry {
 

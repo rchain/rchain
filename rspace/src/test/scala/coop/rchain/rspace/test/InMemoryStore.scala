@@ -1,6 +1,4 @@
 package coop.rchain.rspace.test
-
-import coop.rchain.rspace.examples._
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.StampedLock
 
@@ -9,12 +7,12 @@ import scodec.bits.BitVector
 
 import scala.collection.mutable
 
-case class InMemoryStore[C, P, A, K]()(implicit
-                                       sc: Serialize[C],
-                                       sp: Serialize[P],
-                                       sa: Serialize[A],
-                                       sk: Serialize[K],
-                                       allocator: IBufferAllocator)
+class InMemoryStore[C, P, A, K]()(implicit
+                                  sc: Serialize[C],
+                                  sp: Serialize[P],
+                                  sa: Serialize[A],
+                                  sk: Serialize[K],
+                                  allocator: IBufferAllocator)
     extends Store[C, P, A, K]
     with KeyValueAmbry {
 
@@ -64,12 +62,6 @@ object InMemoryStore {
   object fastBufferAllocator extends IBufferAllocator {
     def toByteBuffer(bytes: Array[Byte]): ByteBuffer   = ByteBuffer.wrap(bytes)
     def toByteBuffer(bitVector: BitVector): ByteBuffer = bitVector.toByteBuffer
-  }
-
-  /* UGLY HACK FOR TESTING */
-  def roundTrip[A <: Serializable](a: A): A = {
-    val ser = makeSerializeFromSerializable[A]
-    ser.decode(ser.encode(a)).fold(throw _, identity)
   }
 
   def create[C, P, A, K]()(implicit sc: Serialize[C],
