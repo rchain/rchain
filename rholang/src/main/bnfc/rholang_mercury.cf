@@ -45,6 +45,7 @@ PContr.       Proc2 ::= "contract" Name "(" [Name] ")" "=" "{" Proc "}" ;
 PInput.       Proc2 ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.      Proc2 ::= "select" "{" [Branch] "}" ;
 PMatch.       Proc2 ::= "match" Proc4 "{" [Case] "}" ;
+PBundle.      Proc2 ::= "bundle" "{" Proc "}" ;
 PIf.          Proc1 ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
