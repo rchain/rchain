@@ -2,11 +2,11 @@ package coop.rchain
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.catscontrib._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.{removeFirst, sequence}
 
-import scala.collection.immutable.Seq
 import scala.annotation.tailrec
+import scala.collection.immutable.Seq
 import scala.util.Random
 
 package object rspace {
@@ -93,7 +93,7 @@ package object rspace {
       c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
     }.toMap
 
-    sequence(extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil))
+    extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil).sequence
   }
 
   /** Finds matching data candidates in the store.
@@ -121,7 +121,7 @@ package object rspace {
       c -> { if (c == batChannel) (data, -1) +: as else as }
     }.toMap
 
-    sequence(extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil))
+    extractDataCandidatesLoop(channels.zip(patterns), channelToIndexedData, Nil).sequence
   }
 
   /** Searches the store for data matching all the given patterns at the given channels.
