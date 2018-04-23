@@ -37,7 +37,7 @@ package object util {
       case None => Map.empty[ByteString, Int]
     }
 
-  def weightMap(state: RChainState): Map[ByteString, Int] =
+  private def weightMap(state: RChainState): Map[ByteString, Int] =
     state.bonds.map {
       case Bond(validator, stake) => validator -> stake
     }.toMap

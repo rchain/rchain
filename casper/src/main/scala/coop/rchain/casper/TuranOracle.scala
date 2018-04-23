@@ -67,7 +67,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
   }
 
   // TODO: Add free messages
-  def agreementGraphEdgeCount(estimate: BlockMessage, candidates: Map[ByteString, Int]): Int = {
+  private def agreementGraphEdgeCount(estimate: BlockMessage, candidates: Map[ByteString, Int]): Int = {
     def seesAgreement(first: ByteString, second: ByteString): Boolean =
       (for {
         firstLatest <- latestBlocks.get(first).toList
