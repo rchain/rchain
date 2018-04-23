@@ -16,15 +16,13 @@ Visit the [RChain Docker storefront](https://store.docker.com/profiles/rchain) f
 
 ### Building and running from source
 #### Prerequisites
-* Java Development Kit (JDK), version 8
-    - We recommend using the OpenJDK 
-    - Alternatively, the [Oracle JDK](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html) is an option
+* Java Development Kit (JDK), version 8. We recommend using the OpenJDK
 * [sbt](https://www.scala-sbt.org/download.html)
 * For crypto, the [Sodium crypto library](https://github.com/jedisct1/libsodium)
 * For Rholang
     - [CUP](http://www2.cs.tum.edu/projects/cup/install.php) 0.11b-2014-06-11 or later. See [Rholang README](https://github.com/rchain/rchain/blob/master/rholang/README.md) for notes on installation requirements.
      - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859)
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Use the installation command `cabal install bnfc --global`.
      
 #### Building and running
 Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
