@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import coop.rchain.shared.StringOps._
 import cats._, cats.data._, cats.implicits._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
@@ -14,7 +15,7 @@ object Main {
     val conf    = Conf(args)
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
-    console.setPrompt("rholang $")
+    console.setPrompt("rholang $ ".green)
     console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
 
     import monix.execution.Scheduler.Implicits.global
@@ -23,7 +24,7 @@ object Main {
     implicit val replService: ReplService[Task] =
       new GrpcReplService(conf.grpcHost(), conf.grpcPort())
 
-    (conf.eval.toOption, conf.repl()) match {
+    val exec: Task[Unit] = (conf.eval.toOption, conf.repl()) match {
       case (Some(fileName), _) => new ReplRuntime(conf).evalProgram[Task](fileName)
       case (None, true)        => new ReplRuntime(conf).replProgram[Task]
       case (None, false) =>
@@ -33,6 +34,8 @@ object Main {
             throw new Exception(commError.toString) // TODO use Show instance instead
         }
     }
+
+    exec.unsafeRunSync
   }
 
 }
