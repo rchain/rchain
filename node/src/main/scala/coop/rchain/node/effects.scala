@@ -181,9 +181,9 @@ object effects {
         Capture[F].capture {
           net.findMorePeers(limit)
         }
-      def countPeers: F[Int] =
+      def peers: F[Seq[PeerNode]] =
         Capture[F].capture {
-          net.table.peers.size
+          net.table.peers
         }
     }
 

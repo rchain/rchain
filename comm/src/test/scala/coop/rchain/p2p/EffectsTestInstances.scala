@@ -58,7 +58,7 @@ object EffectsTestInstances {
     }
     def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
     def findMorePeers(limit: Int): F[Seq[PeerNode]]            = ???
-    def countPeers: F[Int]                                     = ???
+    def peers: F[Seq[PeerNode]]                                = ???
     def receiver: F[Unit]                                      = ???
   }
 

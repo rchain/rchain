@@ -70,7 +70,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
         _              <- IOUtil.sleep[F](5000L)
         peers          <- Communication[F].findMorePeers(10)
         peersSuccedded <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
-        thisCount      <- Communication[F].countPeers
+        thisCount      <- Communication[F].peers.map(_.size)
         _              <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
       } yield thisCount)
 
