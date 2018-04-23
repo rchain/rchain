@@ -64,19 +64,12 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val latestBlocks: collection.Map[ByteString, BlockMessage] =
       HashMap[ByteString, BlockMessage](v1 -> b8, v2 -> b6)
-    val genesisSafety = new TuranOracle(chain.hashToBlocks, genesis, latestBlocks, 1)
-    genesisSafety.isSafe should be(true)
-
-    val b2Safety = new TuranOracle(chain.hashToBlocks, b2, latestBlocks, 1)
-    b2Safety.isSafe should be(true)
-
-    val b3Safety = new TuranOracle(chain.hashToBlocks, b3, latestBlocks, 1)
-    b3Safety.isSafe should be(false)
-
-    val b4SafetyConservative = new TuranOracle(chain.hashToBlocks, b4, latestBlocks, 1)
-    b4SafetyConservative.isSafe should be(false)
-
-    val b4SafetyTrusting = new TuranOracle(chain.hashToBlocks, b4, latestBlocks, 0.2f)
-    b4SafetyTrusting.isSafe should be(false) // Clique oracle would return true
+    val conservativeOracle = new TuranOracle(chain.hashToBlocks, latestBlocks, 1)
+    val trustingOracle = new TuranOracle(chain.hashToBlocks, latestBlocks, 0.2f)
+    conservativeOracle.isSafe(genesis) should be(true)
+    conservativeOracle.isSafe(b2) should be(true)
+    conservativeOracle.isSafe(b3) should be(false)
+    conservativeOracle.isSafe(b4) should be(false)
+    trustingOracle.isSafe(b4) should be(false) // Clique oracle would return true
   }
 }

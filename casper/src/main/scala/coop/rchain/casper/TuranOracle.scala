@@ -25,60 +25,58 @@ import scala.collection
  *
  * In the extreme case when your fault tolerance threshold is 1,
  * all validators must be part of the clique that supports the estimate in order to state that it is finalized.
- * If all validators are indeed part of the clique, min_max_clique_weight will hopefully be equal to total_weight
+ * If all validators are indeed part of the clique, minMaxCliqueWeight will hopefully be equal to total_weight
  * and is_safe will reduce to total_weight >= total_weight and evaluate to true.
  */
 class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
-                  estimate: BlockMessage,
                   latestBlocks: collection.Map[ByteString, BlockMessage],
-                  fault_tolerance_threshold: Float) {
-  def totalWeight(): Int = weightMapTotal(estimate)
-  def isSafe: Boolean = {
-    val fault_tolerance = 2 * min_max_clique_weight() - totalWeight()
-    fault_tolerance >= fault_tolerance_threshold * totalWeight()
+                  faultToleranceThreshold: Float) {
+  def isSafe(estimate: BlockMessage): Boolean = {
+    val faultTolerance = 2 * minMaxCliqueWeight(estimate) - totalWeight(estimate)
+    faultTolerance >= faultToleranceThreshold * totalWeight(estimate)
   }
 
-  private def min_max_clique_weight(): Int =
-    // To have a maximum clique of half the total weight, you need at least twice the weight of the candidates to be greater than the total weight
-    if (2 * candidates().values.sum < totalWeight()) {
+  private def minMaxCliqueWeight(estimate: BlockMessage): Int =
+    // To have a maximum clique of half the total weight,
+    // you need at least twice the weight of the candidateWeights to be greater than the total weight
+    if (2 * candidateWeights(estimate).values.sum < totalWeight(estimate)) {
       0
     } else {
-      val vertexCount = candidates().keys.size
-      val edgeCount   = agreementGraphEdgeCount(blocks, estimate, latestBlocks, candidates())
+      val vertexCount = candidateWeights(estimate).keys.size
+      val edgeCount   = agreementGraphEdgeCount(estimate, candidateWeights(estimate))
       minTotalValidatorWeight(estimate, maxCliqueMinSize(vertexCount, edgeCount))
     }
 
-  private def candidates(): Map[ByteString, Int] = {
-    val estimateMainParent = mainParent(blocks, estimate)
-    val weights = estimateMainParent match {
-      case Some(parent) => weightMap(parent)
-      case None         => weightMap(estimate) // Genesis
-    }
+  private def totalWeight(estimate: BlockMessage): Int =
+    weightMapTotal(mainParentWeightMap(estimate))
+
+  private def candidateWeights(estimate: BlockMessage): Map[ByteString, Int] = {
+    val weights: Map[ByteString, Int] = mainParentWeightMap(estimate)
     for {
       (validator, stake) <- weights
       latestBlock        <- latestBlocks.get(validator) if compatible(estimate, latestBlock)
     } yield (validator, stake)
   }
 
+  private def mainParentWeightMap(estimate: BlockMessage) = {
+    val estimateMainParent = mainParent(blocks, estimate)
+    estimateMainParent match {
+      case Some(parent) => weightMap(parent)
+      case None         => weightMap(estimate) // Genesis
+    }
+  }
+
   // TODO: Add free messages
-  def agreementGraphEdgeCount(blocks: collection.Map[ByteString, BlockMessage],
-                              estimate: BlockMessage,
-                              latestBlocks: collection.Map[ByteString, BlockMessage],
-                              candidates: Map[ByteString, Int]): Int = {
-    def seesAgreement(that: ByteString, other: ByteString): Boolean =
+  def agreementGraphEdgeCount(estimate: BlockMessage, candidates: Map[ByteString, Int]): Int = {
+    def seesAgreement(first: ByteString, second: ByteString): Boolean =
       (for {
-        selfLatest <- latestBlocks.get(that).toList
-        justification <- selfLatest.justifications
-                          .map {
-                            case Justification(creator: ByteString, latestBlock: ByteString) =>
-                              creator -> latestBlock
-                          }
-                          .toMap
-                          .values
-                          .toList
+        firstLatest <- latestBlocks.get(first).toList
+        justification <- firstLatest.justifications.map {
+                          case Justification(_, latestBlock: ByteString) => latestBlock
+                        }
         justificationBlock <- blocks.get(justification)
-        if justificationBlock.sig == other && compatible(estimate, justificationBlock)
-      } yield justificationBlock).size == 1
+        if justificationBlock.sig == second && compatible(estimate, justificationBlock)
+      } yield justificationBlock).nonEmpty
 
     val edges = (for {
       x <- candidates.keys

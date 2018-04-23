@@ -42,8 +42,8 @@ package object util {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
-  def weightMapTotal(blockMessage: BlockMessage): Int =
-    weightMap(blockMessage).values.sum
+  def weightMapTotal(weights: Map[ByteString, Int]): Int =
+    weights.values.sum
 
   def minTotalValidatorWeight(blockMessage: BlockMessage, maxCliqueMinSize: Int): Int = {
     val sortedWeights = weightMap(blockMessage).values.toList.sorted
