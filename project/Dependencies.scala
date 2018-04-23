@@ -42,6 +42,7 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
+  val scalaz              = "org.scalaz" %% "scalaz-core" % "7.3.0-M21"
   // format: on
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
@@ -67,4 +68,6 @@ object Dependencies {
 
   val commonDependencies: Seq[ModuleID] =
     logging ++ testing :+ kindProjector
+
+  val scalazDependencies: Seq[ModuleID] = Seq( scalaz )
 }
