@@ -4,7 +4,16 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.internals._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}
-import scalaz.State
+import coop.rchain.catscontrib._
+import Catscontrib._
+import cats._
+import cats.data._
+import cats.implicits._
+import cats.mtl.implicits._
+
+import coop.rchain.catscontrib.TaskContrib._
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 
@@ -53,7 +62,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val initState =
       Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
-    val (chain: Chain, lastBlock: BlockMessage) = createChain.run(initState)
+    val chain: Chain = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
@@ -64,12 +73,23 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val latestBlocks: collection.Map[ByteString, BlockMessage] =
       HashMap[ByteString, BlockMessage](v1 -> b8, v2 -> b6)
-    val conservativeOracle = new TuranOracle(chain.hashToBlocks, latestBlocks, 1)
-    val trustingOracle = new TuranOracle(chain.hashToBlocks, latestBlocks, 0.2f)
-    conservativeOracle.isSafe(genesis) should be(true)
-    conservativeOracle.isSafe(b2) should be(true)
-    conservativeOracle.isSafe(b3) should be(false)
-    conservativeOracle.isSafe(b4) should be(false)
-    trustingOracle.isSafe(b4) should be(false) // Clique oracle would return true
+
+    implicit def turanOracleEffect: TuranOracle[Task] =
+      new TuranOracleImpl(chain.hashToBlocks, latestBlocks)
+
+    def runSafetyOracle[F[_]: Monad: TuranOracle]: F[Unit] =
+      for {
+        isGenesisSafe              <- TuranOracle[F].isSafe(genesis, 1)
+        _                          = assert(isGenesisSafe)
+        isB2Safe                   <- TuranOracle[F].isSafe(b2, 1)
+        _                          = assert(isB2Safe)
+        isB3Safe                   <- TuranOracle[F].isSafe(b3, 1)
+        _                          = assert(!isB3Safe)
+        isB4SafeConservatively     <- TuranOracle[F].isSafe(b4, 1)
+        _                          = assert(!isB4SafeConservatively)
+        isB4SafeLessConservatively <- TuranOracle[F].isSafe(b4, 0.2f) // Clique oracle would be safe
+        _                          = assert(!isB4SafeLessConservatively)
+      } yield ()
+    runSafetyOracle[Task].unsafeRunSync
   }
 }
