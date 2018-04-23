@@ -54,7 +54,7 @@ message Var {
 }
 
 message Bundle {
-    repeated Par body = 1;
+    Par body = 1;
 }
 
 // Upon send, all free variables in data are substituted with their values.
