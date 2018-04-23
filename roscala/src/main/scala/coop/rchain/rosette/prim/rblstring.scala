@@ -61,7 +61,6 @@ object rblstring {
     @checkArgumentMismatch
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
       val elem = ctxt.argvec.elem
-      val n    = ctxt.nargs
       val init = ""
 
       Right(
@@ -170,8 +169,7 @@ object rblstring {
 
     @checkArgumentMismatch
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
-      val elem  = ctxt.argvec.elem
-      val nargs = ctxt.nargs
+      val elem = ctxt.argvec.elem
 
       for {
         n <- checkType[Fixnum](0, elem)
@@ -330,7 +328,7 @@ object rblstring {
       Left(IndexOutOfBounds(n, elem.size))
     } else {
       elem(n) match {
-        case e: T => Right(elem(n).asInstanceOf[T])
+        case _: T => Right(elem(n).asInstanceOf[T])
         case _    => Left(TypeMismatch(n, ct.runtimeClass.getName))
       }
     }
