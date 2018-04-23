@@ -12,6 +12,8 @@ import reflect.runtime.currentMirror
 import scala.annotation.tailrec
 import scala.Function.uncurried
 import scala.reflect.ClassTag
+import scala.reflect.runtime.currentMirror
+import scala.reflect.runtime.universe._
 
 package object rosette {
   sealed trait RblError
@@ -23,10 +25,11 @@ package object rosette {
   case object PrimNotFound                      extends RblError
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
+  case class Suicide(msg: String)               extends RblError
 
   type GlobalEnv = TblObject
 
-  type Result = Either[RblError, Ob]
+  type Result[A] = Either[RblError, A]
 
   type VMTransition[A] = State[VMState, A]
 
@@ -123,10 +126,7 @@ package object rosette {
       def show: String = Show[A].show(a)
     }
 
-    implicit val parseErrorShow: Show[ParseError] =
-      _ match {
-        case e => e.toString
-      }
+    implicit val parseErrorShow: Show[ParseError] = _.toString
 
     implicit val opsShow: Show[Seq[Op]] = { ops =>
       ops

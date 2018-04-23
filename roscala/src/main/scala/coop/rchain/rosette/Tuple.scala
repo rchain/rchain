@@ -28,8 +28,8 @@ case class Tuple(meta: Ob, parent: Ob, elem: Seq[Ob]) extends Ob {
     this.elem.lastOption match {
       case Some(t: Tuple) if t != Tuple.NIL =>
         Right(Tuple(this.makeSlice(0, this.elem.size - 1), t))
-      case Some(ob) => Left(InvalidRest)
-      case None     => Left(AbsentRest)
+      case Some(_) => Left(InvalidRest)
+      case None    => Left(AbsentRest)
     }
 
   def makeSlice(offset: Int, n: Int): Tuple =
