@@ -263,6 +263,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
+  .dependsOn(shared)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)
