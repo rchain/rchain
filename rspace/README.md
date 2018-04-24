@@ -24,7 +24,7 @@ Here are some key differences:
 
   * *produce*, which, given a piece data at a given channel, searches the store for matching continuation, using existing data in the store to help satisfy the match.
 
-For more information and detailed instructions on using `rspace`, see the tutorial [here](docs/Tutorial.md).
+For more information and detailed instructions on using `rspace`, see the tutorial [here](../../docs/rspace/Tutorial.md).
 
 ### Prerequisites
 
