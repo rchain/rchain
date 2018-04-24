@@ -2,13 +2,12 @@ package coop.rchain.p2p
 
 import coop.rchain.p2p.effects._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
-import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header
 import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import scala.util.control.NonFatal
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 /*
@@ -37,7 +36,7 @@ case object NetworkAddress {
 
       addy match {
         case Some(NetworkAddress(_, key, host, port)) =>
-          Right(new PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
+          Right(PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
         case _ => Left(ParseError(s"bad address: $str"))
       }
     } catch {
@@ -67,11 +66,11 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
     : Int => F[Int] =
     (lastCount: Int) =>
       for {
-        _              <- IOUtil.sleep[F](5000L)
-        peers          <- NodeDiscovery[F].findMorePeers(10)
-        peersSuccedded <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
-        thisCount      <- NodeDiscovery[F].peers.map(_.size)
-        _              <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
+        _         <- IOUtil.sleep[F](5000L)
+        peers     <- NodeDiscovery[F].findMorePeers(10)
+        _         <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
+        thisCount <- NodeDiscovery[F].peers.map(_.size)
+        _         <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
       } yield thisCount
 
   def connectToBootstrap[
@@ -174,8 +173,19 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
           }
     } yield ()
 
+  def handlePacket[F[_]: FlatMap: ErrorHandler: Log: PacketHandler](
+      maybePacket: Option[Packet]): F[String] = {
+    val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
+    val handleNone: F[String] = for {
+      _ <- Log[F].error(errorMsg)
+      _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
+    } yield errorMsg
+
+    maybePacket.fold(handleNone)(p => PacketHandler[F].handlePacket(p))
+  }
+
   def handleFrame[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: PacketHandler](
       remote: PeerNode,
       msg: FrameMessage)(implicit
                          err: ApplicativeError_[F, CommError],
@@ -194,6 +204,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       unframed       = Frameable.parseFrom(decryptedBytes).message
       res <- if (unframed.isProtocolHandshake) {
               handleProtocolHandshake[F](remote, msg.header, unframed.protocolHandshake)
+            } else if (unframed.isPacket) {
+              handlePacket[F](unframed.packet)
             } else
               err.fromEither(
                 Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
@@ -206,16 +218,16 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                                           keysStore: KeysStore[F],
                                           err: ApplicativeError_[F, CommError]): F[String] =
     for {
-      local  <- TransportLayer[F].local
-      ph     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
-      h      <- getOrError[F, Header](maybeHeader, headerNotAvailable)
-      fm     <- frameResponseMessage[F](remote, h, nonce => protocolHandshakeResponse(local, nonce))
-      result <- TransportLayer[F].commSend(fm, remote)
-      _      <- NodeDiscovery[F].addNode(remote)
+      local <- TransportLayer[F].local
+      _     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
+      h     <- getOrError[F, Header](maybeHeader, headerNotAvailable)
+      fm    <- frameResponseMessage[F](remote, h, nonce => protocolHandshakeResponse(local, nonce))
+      _     <- TransportLayer[F].commSend(fm, remote)
+      _     <- NodeDiscovery[F].addNode(remote)
     } yield s"Responded to protocol handshake request from $remote"
 
   override def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler: PacketHandler](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
@@ -240,8 +252,9 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                 val err     = ApplicativeError_[F, CommError]
                 val handled = handleFrame[F](sender, FrameMessage(proto, System.currentTimeMillis))
                 err.attempt(handled) >>= {
-                  case Right(res) => Log[F].info(res)
-                  case Left(err)  => Log[F].error(s"error while handling frame message: $err")
+                  case Right(res) =>
+                    Log[F].info(res) // TODO this should not do anytihin g (retuyrn F[Unit]), log in handlers
+                  case Left(e) => Log[F].error(s"error while handling frame message: $e")
                 }
               case _ => Log[F].warn(s"Unexpected message type ${msg.typeUrl}")
             }

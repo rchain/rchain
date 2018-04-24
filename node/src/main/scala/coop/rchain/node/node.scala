@@ -63,6 +63,10 @@ class NodeRuntime(conf: Conf) {
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
+  implicit val packetHandlerEffect: PacketHandler[Task] = effects.packetHandler[Task]({
+    // build your final PartialFunction with Chain of responsobility design pattern >> pf orElse pf2 orElse pf3 ...
+    case _ => "test".pure[Task]
+  })
 
   def addShutdownHook(): Task[Unit] = Task.delay {
     sys.addShutdownHook {

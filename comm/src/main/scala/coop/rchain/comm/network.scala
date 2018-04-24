@@ -48,7 +48,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
         ?[_],
         PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]]: F[Unit] =
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler]: F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
       _ <- result match {
@@ -117,8 +117,9 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
         ?[_],
         PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
-                                                          msg: ProtocolMessage): F[Unit] = {
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      sock: SocketAddress,
+      msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
@@ -161,9 +162,10 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
         ?[_],
         PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
-                                                          sender: PeerNode,
-                                                          msg: ProtocolResponse): F[Unit] = {
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      sock: SocketAddress,
+      sender: PeerNode,
+      msg: ProtocolResponse): F[Unit] = {
     val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
       for {
         result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))

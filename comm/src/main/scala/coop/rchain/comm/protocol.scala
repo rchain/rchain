@@ -1,16 +1,21 @@
 package coop.rchain.comm
 
-import coop.rchain.kademlia
-import coop.rchain.comm.protocol.routing._
-import scala.util.{Failure, Success, Try}
-import scala.util.control.NonFatal
 import scala.concurrent.duration.{Duration, MILLISECONDS}
-import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm._, CommError._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._
+import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
+
+import cats._
+
+import coop.rchain.catscontrib._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm.protocol.routing._
+import coop.rchain.kademlia
 import coop.rchain.p2p.effects._
+
+import com.google.protobuf.ByteString
+import com.google.protobuf.any.{Any => AnyProto}
 import kamon._
+import kamon.metric.CounterMetric
 
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
@@ -27,7 +32,9 @@ trait ProtocolDispatcher[A] {
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
         ?[_],
         PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]](extra: A, msg: ProtocolMessage): F[Unit]
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      extra: A,
+      msg: ProtocolMessage): F[Unit]
 }
 
 /**
@@ -88,8 +95,8 @@ class ProtocolNode private (id: NodeIdentifier,
     _seq
   }
 
-  val pingSendCount   = Kamon.counter("protocol-ping-sends")
-  val lookupSendCount = Kamon.counter("protocol-lookup-send")
+  val pingSendCount: CounterMetric   = Kamon.counter("protocol-ping-sends")
+  val lookupSendCount: CounterMetric = Kamon.counter("protocol-lookup-send")
 
   override def ping: Try[Duration] = {
     pingSendCount.increment()
@@ -115,7 +122,7 @@ class ProtocolNode private (id: NodeIdentifier,
     roundTrip(req, this) match {
       case Right(LookupResponseMessage(proto, _)) =>
         proto.message.lookupResponse match {
-          case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))
+          case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode))
           case _          => Success(Seq())
         }
       case Right(_) => Failure(new Exception("unexpected response"))
@@ -143,8 +150,8 @@ trait ProtocolMessage {
       h <- header
       s <- h.sender
     } yield
-      new PeerNode(NodeIdentifier(s.id.toByteArray),
-                   Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
+      PeerNode(NodeIdentifier(s.id.toByteArray),
+               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   def toByteSeq: Seq[Byte] =
     proto.toByteArray
@@ -205,11 +212,11 @@ final case class UpstreamResponse(proto: Protocol, timestamp: Long) extends Prot
   */
 object ProtocolMessage {
 
-  implicit def toProtocolBytes(x: String) =
+  implicit def toProtocolBytes(x: String): ByteString =
     com.google.protobuf.ByteString.copyFromUtf8(x)
-  implicit def toProtocolBytes(x: Array[Byte]) =
+  implicit def toProtocolBytes(x: Array[Byte]): ByteString =
     com.google.protobuf.ByteString.copyFrom(x)
-  implicit def toProtocolBytes(x: Seq[Byte]) =
+  implicit def toProtocolBytes(x: Seq[Byte]): ByteString =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
   def header(src: ProtocolNode): Header =
@@ -226,8 +233,7 @@ object ProtocolMessage {
       .withTcpPort(n.endpoint.tcpPort)
 
   def toPeerNode(n: Node): PeerNode =
-    new PeerNode(NodeIdentifier(n.id.toByteArray),
-                 Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
+    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
   def returnHeader(h: Header): ReturnHeader =
     ReturnHeader()
@@ -256,7 +262,7 @@ object ProtocolMessage {
       .withHeader(header(src))
       .withReturnHeader(returnHeader(h))
       .withLookupResponse(LookupResponse()
-        .withNodes(nodes.map(node(_))))
+        .withNodes(nodes.map(node)))
 
   def disconnect(src: ProtocolNode): Protocol =
     Protocol()

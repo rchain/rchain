@@ -29,6 +29,7 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
   implicit val transportLayerEff = new TransportLayerStub[Effect](src)
   implicit val encryptionEff     = new EncryptionStub[Effect](srcKeys, nonce)
   implicit val keysStoreEff      = new Kvs.InMemoryKvs[Effect, PeerNode, Key]
+  implicit val packetHandler     = new PacketHandler.NOPPacketHandler[Effect]
 
   override def beforeEach(): Unit = {
     nodeDiscoveryEff.reset()

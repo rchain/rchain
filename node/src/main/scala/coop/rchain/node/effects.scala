@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import coop.rchain.comm.protocol.rchain.Packet
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 
 import scala.collection.concurrent.TrieMap
@@ -204,5 +205,12 @@ object effects {
         Capture[F].capture {
           net.broadcast(msg)
         }
+    }
+
+  def packetHandler[F[_]: Applicative: Log](
+      pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
+    (packet: Packet) => {
+      val errorMsg = s"Unable to handle packet $packet"
+      if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
     }
 }
