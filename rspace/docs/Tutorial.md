@@ -196,7 +196,7 @@ roundTrippedAlice: Either[Throwable,coop.rchain.rspace.examples.AddressBookExamp
 
 ### Creating a `Match` instance
 
-In addition to providing instances of the `Serialize` type classe for our chosen data types, we also must provide an instance of the `Match` type class.  This instance is used to match values of our `Pattern` type with values of our `Entry` type.
+In addition to providing instances of the `Serialize` type class for our chosen data types, we also must provide an instance of the `Match` type class.  This instance is used to match values of our `Pattern` type with values of our `Entry` type.
 
 Here is the definition of the `Match` type class.
 ```scala
@@ -290,7 +290,7 @@ scala> println(store.toMap)
 Map()
 ```
 
-Let's reinstall the the same continuation.
+Let's reinstall the same continuation.
 ```scala
 scala> val cres2 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 cres2: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, List[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
@@ -316,7 +316,7 @@ scala> println(store.toMap)
 Map()
 ```
 
-Now let's reinstall the the continuation and introduce another piece of data to the store.
+Now let's reinstall the continuation and introduce another piece of data to the store.
 ```scala
 scala> val cres3 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 cres3: Option[(coop.rchain.rspace.examples.AddressBookExample.Printer, List[coop.rchain.rspace.examples.AddressBookExample.Entry])] = None
