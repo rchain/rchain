@@ -5,6 +5,10 @@
 
 The open-source RChain project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
+[RChain Developer](https://developer.rchain.coop/) has a [Rholang tutorial](https://developer.rchain.coop/tutorial)
+and other information for building on top of the platform, including a roadmap of planned features and releases.
+This repository is the evolving platform itself.
+
 ### Communication
 
 The `comm` subproject contains code for network related operations for RChain.
@@ -55,7 +59,7 @@ You will need a virtual machine running the appropriate version of Linux.
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
 2. Install the Linux distribution you need (e.g. [Ubuntu](http://releases.ubuntu.com/16.04/ubuntu-16.04.3-server-amd64.iso))
 3. Start VirtualBox and create a new virtual machine in the manager
-4. Boot your virtual machine using hte Linux distribution ISO installed in step 2.
+4. Boot your virtual machine using the Linux distribution ISO installed in step 2.
 5. Configure your Linux VM as desired. You may need to install additional tools sucah as g++, g++-multilib, make, git, etc.
 
 For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).

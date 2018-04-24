@@ -1,14 +1,14 @@
 ## RChain Node with Metric Collection and Display 
 RChain Docker Compose multi-container application for RChain peer-to-peer node using [Prometheus Server](https://github.com/prometheus/prometheus) and [Pushgateway](https://github.com/prometheus/pushgateway) for data collection and [Grafana](https://github.com/grafana/grafana) for visualization 
 
-### Working Docker Enviroments 
-Every Docker enviroment can have its own unique settings. This has been tested on Docker running on Linux. You will always need the appropriate permissions for whatever you are doing in Docker.
+### Working Docker Environments
+Every Docker environment can have its own unique settings. This has been tested on Docker running on Linux. You will always need the appropriate permissions for whatever you are doing in Docker.
 If you are running Docker CE on Windows you will need to "share your drive" on your host through **Docker->Settings->Shared Drives** and then make sure the drive that your container information resides on is checked. We will have more support and detailed documentation for all major platforms in the future. Right now, for ease of use and support we recommend using Docker on Linux when possible.
 
 ### Prerequisites
 You need `docker-compose` version that supports Docker Compose file format version 3.1 or greater - Easily install single file with latest version from [install docker-compose](https://docs.docker.com/compose/install/)
 
-You will also need a `docker` version that supports the needed functionality of this application - checkout [Docker Community Edition](https://www.docker.com/community-edition) - The lastest stable version of CE will always work.
+You will also need a `docker` version that supports the needed functionality of this application - checkout [Docker Community Edition](https://www.docker.com/community-edition) - The latest stable version of CE will always work.
 
 
 ### Quick Start 

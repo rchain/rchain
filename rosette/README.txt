@@ -62,7 +62,7 @@ Dependencies
 Notes on development.
 
     1. CMakeLists.txt enables all warnings, but Rosette is old, and some
-    warnings have to be suppressed. Do not supress any new compiler warnings.
+    warnings have to be suppressed. Do not suppress any new compiler warnings.
 
 
 Style
