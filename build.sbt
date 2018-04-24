@@ -215,7 +215,7 @@ lazy val rspace = (project in file("rspace"))
       scodecBits
     ),
     /* Tutorial */
-    tutTargetDirectory := baseDirectory.in(rchain).in(Compile).value / "docs" / "rspace",
+    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
     /* Publishing Settings */
     scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
     git.remoteRepo := scmInfo.value.get.connection,
