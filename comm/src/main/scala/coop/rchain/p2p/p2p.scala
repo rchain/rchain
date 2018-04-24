@@ -41,7 +41,7 @@ case object NetworkAddress {
         case _ => Left(ParseError(s"bad address: $str"))
       }
     } catch {
-      case NonFatal(e) => Left(ParseError(s"bad address: $str"))
+      case NonFatal(_) => Left(ParseError(s"bad address: $str"))
     }
 }
 
@@ -55,27 +55,27 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
   val defaultTimeout: Duration = Duration(500, MILLISECONDS)
 
-  def unsafeRoundTrip[F[_]: Capture: Communication]
+  def unsafeRoundTrip[F[_]: Capture: TransportLayer]
     : (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
     (pm: ProtocolMessage, pn: ProtocolNode) => {
-      val result = Communication[F].roundTrip(pm, pn, defaultTimeout)
+      val result = TransportLayer[F].roundTrip(pm, pn, defaultTimeout)
       Capture[F].unsafeUncapture(result)
     }
 
   def findAndConnect[
-      F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption: KeysStore: ErrorHandler]
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler]
     : Int => F[Int] =
     (lastCount: Int) =>
-      (for {
+      for {
         _              <- IOUtil.sleep[F](5000L)
-        peers          <- Communication[F].findMorePeers(10)
+        peers          <- NodeDiscovery[F].findMorePeers(10)
         peersSuccedded <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
-        thisCount      <- Communication[F].peers.map(_.size)
+        thisCount      <- NodeDiscovery[F].peers.map(_.size)
         _              <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
-      } yield thisCount)
+      } yield thisCount
 
   def connectToBootstrap[
-      F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption: KeysStore: ErrorHandler](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler](
       bootstrapAddrStr: String,
       maxNumOfAttempts: Int = 5): F[Unit] = {
 
@@ -88,7 +88,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
         for {
           res <- connect[F](bootstrapAddr, timeout).attempt
           _ <- res match {
-                case Left(err) =>
+                case Left(_) =>
                   val msg = s"Failed to connect to bootstrap (attempt $attempt / $maxNumOfAttempts)"
                   Log[F].warn(msg) *> connectAttempt(attempt + 1,
                                                      timeout + defaultTimeout,
@@ -106,7 +106,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
   }
 
   def connect[
-      F[_]: Capture: Monad: Log: Time: Metrics: Communication: Encryption: KeysStore: ErrorHandler](
+      F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler](
       peer: PeerNode,
       timeout: Duration): F[Unit] = {
 
@@ -115,10 +115,10 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
         _            <- Log[F].info(s"Initialize first phase handshake (encryption handshake) to $peer")
         keys         <- Encryption[F].fetchKeys
         ts1          <- Time[F].currentMillis
-        local        <- Communication[F].local
+        local        <- TransportLayer[F].local
         ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
         remote       = ProtocolNode(peer, local, unsafeRoundTrip[F])
-        ehsrespmsg   <- Communication[F].roundTrip(ehs, remote, timeout) >>= (errorHandler[F].fromEither _)
+        ehsrespmsg   <- TransportLayer[F].roundTrip(ehs, remote, timeout) >>= (errorHandler[F].fromEither _)
         ehsresp      <- errorHandler[F].fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
         remotePubKey = ehsresp.publicKey.toByteArray
         _            <- keysStore[F].put(peer, remotePubKey)
@@ -128,12 +128,12 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
     def secondPhase: F[Unit] =
       for {
         _       <- Log[F].info(s"Initialize second phase handshake (protocol handshake) to $peer")
-        local   <- Communication[F].local
+        local   <- TransportLayer[F].local
         remote  = ProtocolNode(peer, local, unsafeRoundTrip[F])
         fm      <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
-        phsresp <- Communication[F].roundTrip(fm, remote, timeout) >>= errorHandler[F].fromEither
+        phsresp <- TransportLayer[F].roundTrip(fm, remote, timeout) >>= errorHandler[F].fromEither
         _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-        _       <- Communication[F].addNode(remote)
+        _       <- NodeDiscovery[F].addNode(remote)
       } yield ()
 
     def fullHandshake: F[Unit] = firstPhase *> secondPhase
@@ -156,25 +156,26 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
   }
 
   def handleEncryptionHandshake[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: KeysStore](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Encryption: KeysStore](
       sender: PeerNode,
       msg: EncryptionHandshakeMessage): F[Unit] =
     for {
       _            <- Metrics[F].incrementCounter("p2p-encryption-handshake-recv-count")
-      local        <- Communication[F].local
+      local        <- TransportLayer[F].local
       keys         <- Encryption[F].fetchKeys
       handshakeErr <- NetworkProtocol.toEncryptionHandshake(msg.proto).pure[F]
       _ <- handshakeErr.fold(kp(Log[F].error("could not fetch proto message")),
                              hs => keysStore[F].put(sender, hs.publicKey.toByteArray))
       responseErr <- msg.response[F](local, keys)
-      result      <- responseErr.traverse(resp => Communication[F].commSend(resp, sender))
+      result      <- responseErr.traverse(resp => TransportLayer[F].commSend(resp, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
             case Left(ex) => Log[F].error(s"handleEncryptionHandshake(): $ex")
           }
     } yield ()
 
-  def handleFrame[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
+  def handleFrame[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption](
       remote: PeerNode,
       msg: FrameMessage)(implicit
                          err: ApplicativeError_[F, CommError],
@@ -198,23 +199,23 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                 Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
     } yield res
 
-  private def handleProtocolHandshake[F[_]: Monad: Time: Communication: Encryption](
+  private def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption](
       remote: PeerNode,
       maybeHeader: Option[Header],
       maybePh: Option[ProtocolHandshake])(implicit
                                           keysStore: KeysStore[F],
                                           err: ApplicativeError_[F, CommError]): F[String] =
     for {
-      local  <- Communication[F].local
+      local  <- TransportLayer[F].local
       ph     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
       h      <- getOrError[F, Header](maybeHeader, headerNotAvailable)
       fm     <- frameResponseMessage[F](remote, h, nonce => protocolHandshakeResponse(local, nonce))
-      result <- Communication[F].commSend(fm, remote)
-      _      <- Communication[F].addNode(remote)
+      result <- TransportLayer[F].commSend(fm, remote)
+      _      <- NodeDiscovery[F].addNode(remote)
     } yield s"Responded to protocol handshake request from $remote"
 
   override def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: KeysStore: ErrorHandler](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
@@ -226,7 +227,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
         }
 
       msg match {
-        case upstream @ UpstreamMessage(proto, _) =>
+        case UpstreamMessage(proto, _) =>
           proto.message.upstream.traverse { msg =>
             msg.typeUrl match {
               // TODO interpolate this string to check if class exists
@@ -250,9 +251,9 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
          * of the blue; rather, they'll all be done through
          * synchronous, request-response messaging.
          */
-        case upstream @ UpstreamResponse(proto, _) =>
+        case upstream @ UpstreamResponse(_, _) =>
           Log[F].debug(s"Out-of-sequence message: $upstream")
-        case _ => Log[F].error(s"Unrecognized msg ${msg}")
+        case _ => Log[F].error(s"Unrecognized msg $msg")
       }
     }
 
@@ -264,27 +265,27 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       err: ApplicativeError_[F, CommError]): F[A] =
     oa.fold[F[A]](err.raiseError[A](error))(_.pure[F])
 
-  private def frameMessage[F[_]: Monad: Time: Communication: Encryption](
+  private def frameMessage[F[_]: Monad: Time: TransportLayer: Encryption](
       remote: PeerNode,
       frameable: Nonce => Frameable)(implicit keysStore: KeysStore[F],
                                      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     frameIt[F](remote, frameable, (local, nonce, f) => frame(local, nonce, f))
 
-  private def frameResponseMessage[F[_]: Monad: Time: Communication: Encryption](
+  private def frameResponseMessage[F[_]: Monad: Time: TransportLayer: Encryption](
       remote: PeerNode,
       header: Header,
       frameable: Nonce => Frameable)(implicit keysStore: KeysStore[F],
                                      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     frameIt[F](remote, frameable, (local, nonce, f) => frameResponse(local, header, nonce, f))
 
-  private def frameIt[F[_]: Monad: Time: Communication: Encryption](
+  private def frameIt[F[_]: Monad: Time: TransportLayer: Encryption](
       remote: PeerNode,
       frameable: Nonce => Frameable,
       proto: (ProtocolNode, Nonce, Array[Byte]) => routing.Protocol)(
       implicit keysStore: KeysStore[F],
       err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     for {
-      local        <- Communication[F].local
+      local        <- TransportLayer[F].local
       nonce        <- Encryption[F].generateNonce
       keys         <- Encryption[F].fetchKeys
       remotePubKey <- fetchRemotePublicKey[F](remote)

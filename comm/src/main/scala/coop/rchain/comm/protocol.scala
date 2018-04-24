@@ -23,11 +23,11 @@ trait ProtocolDispatcher[A] {
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
-                 ?[_],
-                 PeerNode,
-                 Array[Byte]]: ApplicativeError_[?[_], CommError]](extra: A,
-                                                                   msg: ProtocolMessage): F[Unit]
+  def dispatch[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]](extra: A, msg: ProtocolMessage): F[Unit]
 }
 
 /**
@@ -118,7 +118,7 @@ class ProtocolNode private (id: NodeIdentifier,
           case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))
           case _          => Success(Seq())
         }
-      case Right(other) => Failure(new Exception("unexpected response"))
+      case Right(_) => Failure(new Exception("unexpected response"))
       case Left(ex) =>
         ex match {
           case ProtocolException(exc) => Failure(exc)

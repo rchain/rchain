@@ -1,29 +1,37 @@
 package coop.rchain.node
 
-import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
-import coop.rchain.p2p.effects._
-import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 
-import cats._, cats.data._, cats.implicits._
+import scala.collection.concurrent.TrieMap
+
+import cats._
+import cats.implicits._
+
 import coop.rchain.catscontrib._
-import Catscontrib._, ski._, TaskContrib._
+import coop.rchain.comm.CommError._
+import coop.rchain.comm._
+import coop.rchain.p2p.NetworkAddress
+import coop.rchain.p2p.effects._
+
+import kamon.metric.Metric
 import monix.eval.Task
 
 object effects {
   def encryption(nodeName: String): Encryption[Task] = new Encryption[Task] {
     import Encryption._
     import coop.rchain.crypto.encryption.Curve25519
+
     import com.google.common.io.BaseEncoding
 
-    val encoder = BaseEncoding.base16().lowerCase()
+    val encoder: BaseEncoding = BaseEncoding.base16().lowerCase()
 
     private def generateFresh: Task[PublicPrivateKeys] = Task.delay {
       val (pub, sec) = Curve25519.newKeyPair
       PublicPrivateKeys(pub, sec)
     }
 
-    val storePath = System.getProperty("user.home") + File.separator + s".${nodeName}-rnode.keys"
+    val storePath: String = System
+      .getProperty("user.home") + File.separator + s".$nodeName-rnode.keys"
 
     private def storeToFS: PublicPrivateKeys => Task[Unit] =
       keys =>
@@ -32,7 +40,7 @@ object effects {
             val pw = new PrintWriter(new File(storePath))
             pw.println(encoder.encode(keys.pub))
             pw.println(encoder.encode(keys.priv))
-            pw.close
+            pw.close()
           }
           .attempt
           .void
@@ -40,9 +48,9 @@ object effects {
     private def fetchFromFS: Task[Option[PublicPrivateKeys]] =
       Task
         .delay {
-          val lines  = scala.io.Source.fromFile(storePath).getLines.toList
-          val pubKey = encoder.decode(lines(0))
-          val secKey = encoder.decode(lines(1))
+          val (pubKeyStr :: secKeyStr :: _) = scala.io.Source.fromFile(storePath).getLines.toList
+          val pubKey                        = encoder.decode(pubKeyStr)
+          val secKey                        = encoder.decode(secKeyStr)
           PublicPrivateKeys(pubKey, secKey)
         }
         .attempt
@@ -50,7 +58,7 @@ object effects {
 
     def fetchKeys: Task[PublicPrivateKeys] =
       (fetchFromFS >>= {
-        case None     => generateFresh >>= (keys => (storeToFS(keys) *> keys.pure[Task]))
+        case None     => generateFresh >>= (keys => storeToFS(keys) *> keys.pure[Task])
         case Some(ks) => ks.pure[Task]
       }).memoize
 
@@ -86,7 +94,8 @@ object effects {
   def metrics: Metrics[Task] = new Metrics[Task] {
     import kamon._
 
-    val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
+    val m: TrieMap[String, Metric[_]] =
+      scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
     def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
@@ -157,34 +166,43 @@ object effects {
         }).writeTo(new FileOutputStream(new File(path)))
     }
 
-  def communication[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): Communication[F] =
-    new Communication[F] {
-      import scala.concurrent.duration._
+  def nodeDiscovery[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): NodeDiscovery[F] =
+    new NodeDiscovery[F] {
 
-      def roundTrip(msg: ProtocolMessage,
-                    remote: ProtocolNode,
-                    timeout: Duration): F[CommErr[ProtocolMessage]] =
-        net.roundTrip[F](msg, remote, timeout)
-      def local: F[ProtocolNode] = net.local.pure[F]
-      def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
-        Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
       def addNode(node: PeerNode): F[Unit] =
         for {
           _ <- Capture[F].capture(net.add(node))
           _ <- Metrics[F].incrementCounter("peers")
         } yield ()
-      def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
-        Capture[F].capture {
-          net.broadcast(msg)
-        }
+
       def findMorePeers(limit: Int): F[Seq[PeerNode]] =
         Capture[F].capture {
           net.findMorePeers(limit)
         }
+
       def peers: F[Seq[PeerNode]] =
         Capture[F].capture {
           net.table.peers
         }
     }
 
+  def transportLayer[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): TransportLayer[F] =
+    new TransportLayer[F] {
+      import scala.concurrent.duration._
+
+      def roundTrip(msg: ProtocolMessage,
+                    remote: ProtocolNode,
+                    timeout: Duration): F[CommErr[ProtocolMessage]] =
+        net.roundTrip[F](msg, remote, timeout)
+
+      def local: F[ProtocolNode] = net.local.pure[F]
+
+      def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+        Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
+
+      def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
+        Capture[F].capture {
+          net.broadcast(msg)
+        }
+    }
 }
