@@ -236,6 +236,7 @@ object implicits {
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
+        that.bundles ++ p.bundles,
         that.ids ++ p.ids,
         that.freeCount + p.freeCount,
         that.locallyFree | p.locallyFree,

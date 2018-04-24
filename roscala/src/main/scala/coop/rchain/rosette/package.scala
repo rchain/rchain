@@ -1,21 +1,18 @@
 package coop.rchain
 
-import cats.{Functor, Monoid}
 import cats.data.{ReaderWriterState, ReaderWriterStateT, State, StateT}
 import cats.implicits._
+import cats.{Functor, Monoid}
 import coop.rchain.rosette.Ctxt.Continuation
 import coop.rchain.rosette.parser.bytecode.ParseError
 import coop.rchain.rosette.prim.PrimError
 
-import reflect.runtime.universe._
-import reflect.runtime.currentMirror
-import scala.annotation.tailrec
 import scala.Function.uncurried
 import scala.reflect.ClassTag
 import scala.reflect.runtime.currentMirror
 import scala.reflect.runtime.universe._
 
-package object rosette {
+package rosette {
   sealed trait RblError
   case object DeadThread                        extends RblError
   case object Invalid                           extends RblError
@@ -27,6 +24,12 @@ package object rosette {
   case class RuntimeError(msg: String)          extends RblError
   case class Suicide(msg: String)               extends RblError
 
+  trait Show[A] {
+    def show(a: A): String
+  }
+}
+
+package object rosette {
   type GlobalEnv = TblObject
 
   type Result[A] = Either[RblError, A]
@@ -36,16 +39,16 @@ package object rosette {
   type CtxtTransition[A] = ReaderWriterState[Unit, List[Continuation], (GlobalEnv, Ctxt), A]
 
   def getCtxt = ReaderWriterState.get[Unit, List[Continuation], (GlobalEnv, Ctxt)].map {
-    case (globalEnv, ctxt) => ctxt
+    case (_, ctxt) => ctxt
   }
 
   def getGlobalEnv = ReaderWriterState.get[Unit, List[Continuation], (GlobalEnv, Ctxt)].map {
-    case (globalEnv, ctxt) => globalEnv
+    case (globalEnv, _) => globalEnv
   }
 
   def inspectCtxt[A](f: Ctxt => A) =
     ReaderWriterState.inspect[Unit, List[Continuation], (GlobalEnv, Ctxt), A] {
-      case (globalEnv, ctxt) => f(ctxt)
+      case (_, ctxt) => f(ctxt)
     }
 
   def modifyCtxt(f: Ctxt => Ctxt) =
@@ -111,10 +114,6 @@ package object rosette {
   def suicide(msg: String): Unit = {
     System.err.println(s"*** fatal error: $msg")
     System.exit(1)
-  }
-
-  trait Show[A] {
-    def show(a: A): String
   }
 
   object Show {

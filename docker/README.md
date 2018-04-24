@@ -2,7 +2,7 @@
 
 The facilities in this directory merely bundle various RChain subprojects into docker images so that they may be run in containers. One advantage of this is that run-time dependencies do not have to be installed on every machine running this software. Another is that it makes perfectly clear what the runtime dependencies are.
 
-## Premliminaries
+## Preliminaries
 
 The first step is to ensure that the RChain subprojects at `rchain/rholang` and `rchain/rosette` build independent of the docker process. Each subproject includes build instructions, and that's a great place to start.
 

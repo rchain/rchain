@@ -15,6 +15,7 @@ message Par {
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
+    repeated Bundle bundles = 11;
     repeated GPrivate ids = 7;
     int32 freeCount = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
@@ -51,6 +52,10 @@ message Var {
         sint32 free_var = 2;
         WildcardMsg wildcard = 3;
     }
+}
+
+message Bundle {
+    Par body = 1;
 }
 
 // Upon send, all free variables in data are substituted with their values.

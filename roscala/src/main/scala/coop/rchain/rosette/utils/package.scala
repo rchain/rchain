@@ -4,11 +4,7 @@ import java.io.{File, PrintWriter}
 
 import shapeless.Lens
 
-package object utils {
-  def printToFile(f: File)(op: PrintWriter => Unit) {
-    val p = new PrintWriter(f)
-    try { op(p) } finally { p.close() }
-  }
+package utils {
 
   //this function exist only to use `asInstanceOf`-like casts at lens level
   //so normally when we use code like:
@@ -19,11 +15,18 @@ package object utils {
   class unsafeCastLens[B] {
     def apply[T, A](lens: Lens[T, A]): Lens[T, B] =
       new Lens[T, B] {
-        override def get(s: T): B       = lens.get(s).asInstanceOf[B]
+        override def get(s: T): B = lens.get(s).asInstanceOf[B]
+
         override def set(s: T)(b: B): T = lens.set(s)(b.asInstanceOf[A])
       }
   }
+}
 
+package object utils {
+  def printToFile(f: File)(op: PrintWriter => Unit): Unit = {
+    val p = new PrintWriter(f)
+    try { op(p) } finally { p.close() }
+  }
   object unsafeCastLens {
     def apply[B] = new unsafeCastLens[B]
   }

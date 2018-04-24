@@ -37,12 +37,16 @@ lazy val shared = (project in file("shared"))
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
-    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      catsCore,
+      catsMtl,
+      monix
+    ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto) // TODO: Add models, rspace, comm
+  .dependsOn(shared, crypto) // TODO: Add models, rspace, comm
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -215,7 +219,7 @@ lazy val rspace = (project in file("rspace"))
       scodecBits
     ),
     /* Tutorial */
-    tutTargetDirectory := (baseDirectory in Compile).value / "docs",
+    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
     /* Publishing Settings */
     scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
     git.remoteRepo := scmInfo.value.get.connection,

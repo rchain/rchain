@@ -70,7 +70,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
         _              <- IOUtil.sleep[F](5000L)
         peers          <- Communication[F].findMorePeers(10)
         peersSuccedded <- peers.toList.traverse(connect[F](_, defaultTimeout).attempt)
-        thisCount      <- Communication[F].countPeers
+        thisCount      <- Communication[F].peers.map(_.size)
         _              <- (thisCount != lastCount).fold(Log[F].info(s"Peers: $thisCount."), ().pure[F])
       } yield thisCount)
 
@@ -174,7 +174,19 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
           }
     } yield ()
 
-  def handleFrame[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption](
+  def handlePacket[F[_]: FlatMap: ErrorHandler: Log: PacketHandler](
+      maybePacket: Option[Packet]): F[String] = {
+    val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
+    val handleNone: F[String] = for {
+      _ <- Log[F].error(errorMsg)
+      _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
+    } yield errorMsg
+
+    maybePacket.fold(handleNone)(p => PacketHandler[F].handlePacket(p))
+  }
+
+  def handleFrame[
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: PacketHandler](
       remote: PeerNode,
       msg: FrameMessage)(implicit
                          err: ApplicativeError_[F, CommError],
@@ -193,6 +205,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       unframed       = Frameable.parseFrom(decryptedBytes).message
       res <- if (unframed.isProtocolHandshake) {
               handleProtocolHandshake[F](remote, msg.header, unframed.protocolHandshake)
+            } else if (unframed.isPacket) {
+              handlePacket[F](unframed.packet)
             } else
               err.fromEither(
                 Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
@@ -214,7 +228,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
     } yield s"Responded to protocol handshake request from $remote"
 
   override def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: KeysStore: ErrorHandler](
+      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: KeysStore: ErrorHandler: PacketHandler](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
@@ -239,8 +253,9 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                 val err     = ApplicativeError_[F, CommError]
                 val handled = handleFrame[F](sender, FrameMessage(proto, System.currentTimeMillis))
                 err.attempt(handled) >>= {
-                  case Right(res) => Log[F].info(res)
-                  case Left(err)  => Log[F].error(s"error while handling frame message: $err")
+                  case Right(res) =>
+                    Log[F].info(res) // TODO this should not do anytihin g (retuyrn F[Unit]), log in handlers
+                  case Left(err) => Log[F].error(s"error while handling frame message: $err")
                 }
               case _ => Log[F].warn(s"Unexpected message type ${msg.typeUrl}")
             }
