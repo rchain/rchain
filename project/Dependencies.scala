@@ -10,6 +10,7 @@ object Dependencies {
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.58"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -42,7 +43,6 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
-  val scalaz              = "org.scalaz" %% "scalaz-core" % "7.3.0-M21"
   // format: on
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
@@ -68,6 +68,4 @@ object Dependencies {
 
   val commonDependencies: Seq[ModuleID] =
     logging ++ testing :+ kindProjector
-
-  val scalazDependencies: Seq[ModuleID] = Seq( scalaz )
 }

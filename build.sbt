@@ -37,12 +37,16 @@ lazy val shared = (project in file("shared"))
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ scalazDependencies,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      catsCore,
+      catsMtl,
+      monix
+    ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto) // TODO: Add models, rspace, comm
+  .dependsOn(shared, crypto) // TODO: Add models, rspace, comm
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
