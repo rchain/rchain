@@ -241,6 +241,11 @@ object implicits {
 
   implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
 
+  implicit val ParLocallyFree: HasLocallyFree[Par] = new HasLocallyFree[Par] {
+    def wildcard(p: Par)    = p.wildcard
+    def freeCount(p: Par)   = p.freeCount
+    def locallyFree(p: Par) = p.locallyFree
+  }
   implicit val SendLocallyFree: HasLocallyFree[Send] = new HasLocallyFree[Send] {
     def wildcard(s: Send)    = s.wildcard
     def freeCount(s: Send)   = s.freeCount
@@ -400,5 +405,12 @@ object implicits {
         ChannelLocallyFree.freeCount(rb.source.get)
       def locallyFree(rb: ReceiveBind) =
         ChannelLocallyFree.locallyFree(rb.source.get)
+    }
+
+  implicit val MatchCaseLocallyFree: HasLocallyFree[MatchCase] =
+    new HasLocallyFree[MatchCase] {
+      def wildcard(mc: MatchCase)    = mc.source.get.wildcard
+      def freeCount(mc: MatchCase)   = mc.source.get.freeCount
+      def locallyFree(mc: MatchCase) = mc.source.get.locallyFree
     }
 }
