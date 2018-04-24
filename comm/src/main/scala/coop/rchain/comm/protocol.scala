@@ -26,8 +26,9 @@ trait ProtocolDispatcher[A] {
   def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
                  ?[_],
                  PeerNode,
-                 Array[Byte]]: ApplicativeError_[?[_], CommError]](extra: A,
-                                                                   msg: ProtocolMessage): F[Unit]
+                 Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      extra: A,
+      msg: ProtocolMessage): F[Unit]
 }
 
 /**
