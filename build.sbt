@@ -46,7 +46,7 @@ lazy val casper = (project in file("casper"))
       scalapb.gen() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, crypto) // TODO: Add models, rspace, comm
+  .dependsOn(comm, shared, crypto) // TODO: Add models, rspace
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
