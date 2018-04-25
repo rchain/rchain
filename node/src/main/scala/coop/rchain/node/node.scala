@@ -38,7 +38,7 @@ class NodeRuntime(conf: Conf) {
   val http = HttpServer(conf.httpPort())
   http.start
 
-  val runtime: Runtime = Runtime.create(conf.data_dir(), conf.map_size())
+  val runtime: Runtime = Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size())
 
   val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort(), runtime)
   grpc.start()
