@@ -3,7 +3,7 @@ package coop.rchain.node
 import io.grpc.{Server, ServerBuilder}
 import scala.concurrent.{ExecutionContext, Future}
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.node.repl._
+import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.execution.Scheduler
