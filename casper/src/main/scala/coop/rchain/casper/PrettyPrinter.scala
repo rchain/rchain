@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Resource.ResourceClass.{
   ConsumeResource,
   ProduceResource,
@@ -7,8 +8,18 @@ import coop.rchain.casper.protocol.Resource.ResourceClass.{
 }
 import coop.rchain.casper.protocol.{BlockMessage, Resource, Stopped}
 import scalapb.GeneratedMessage
+import coop.rchain.crypto.codec._
 
 class PrettyPrinter {
+  def buildString(b: ByteString): String = {
+    val MAX_LENGTH = 10
+    val str        = Base16.encode(b.toByteArray)
+    if (str.length > MAX_LENGTH) {
+      str.substring(0, MAX_LENGTH) + "..."
+    } else {
+      str
+    }
+  }
   def buildString(t: GeneratedMessage): String =
     t match {
       case b: BlockMessage =>
@@ -18,10 +29,10 @@ class PrettyPrinter {
           body       <- b.body
           postState  <- body.postState
         } yield
-          s"Block #${postState.blockNumber} (${b.blockHash.toString}) " +
-            s"-- creator ${b.sig} " +
-            s"-- m parent ${mainParent.toString} " +
-            s"-- contents ${postState.resources.toList
+          s"Block #${postState.blockNumber} (${buildString(b.blockHash)}) " +
+            s"-- Creator ID ${buildString(b.sig)} " +
+            s"-- M Parent Hash ${buildString(mainParent)} " +
+            s"-- Contents ${postState.resources.toList
               .map {
                 case Resource(resourceClass) =>
                   resourceClass match {
