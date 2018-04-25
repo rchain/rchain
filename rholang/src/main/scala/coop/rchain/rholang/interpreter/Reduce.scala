@@ -180,7 +180,7 @@ object Reduce {
       * 4. Call produce
       * 5. If produce returned a continuation, evaluate it.
       * @param send An output process
-      * @param env0 An execution context
+      * @param env An execution context
       * @return
       */
     def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
@@ -392,6 +392,8 @@ object Reduce {
       }
     }
 
+    def eval(bundle: Bundle)(implicit env: Env[Par]): Task[Unit] = eval(bundle.body.get)
+
     def eval(mat: Match)(implicit env: Env[Par]): Task[Unit] = {
       def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
         Range(0, freeCount).foldLeft(env)(
@@ -456,6 +458,9 @@ object Reduce {
           },
           Task.wanderUnordered(par.matches) { mat =>
             eval(mat)(env)
+          },
+          Task.wanderUnordered(par.bundles) { bundle =>
+            eval(bundle)
           },
           Task.wanderUnordered(
             par.exprs
