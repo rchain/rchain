@@ -25,10 +25,9 @@ object TransportLayer extends TransportLayerInstances {
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: TransportLayer[F]): TransportLayer[T[F, ?]] =
     new TransportLayer[T[F, ?]] {
-      def roundTrip(
-          msg: ProtocolMessage,
-          remote: ProtocolNode,
-          timeout: Duration = Duration(500, MILLISECONDS)): T[F, CommErr[ProtocolMessage]] =
+      def roundTrip(msg: ProtocolMessage,
+                    remote: ProtocolNode,
+                    timeout: Duration): T[F, CommErr[ProtocolMessage]] =
         C.roundTrip(msg, remote, timeout).liftM[T]
       def local: T[F, ProtocolNode] = C.local.liftM[T]
       def commSend(msg: ProtocolMessage, p: PeerNode): T[F, CommErr[Unit]] =
