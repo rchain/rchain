@@ -232,6 +232,46 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(sortedParExpr)
   }
 
+  "Par" should "sort methods after other expressions" in {
+    val parExpr =
+      p.copy(
+        exprs = List(
+          EOr(EVar(BoundVar(0)), EVar(BoundVar(1))),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+          EOr(EVar(BoundVar(3)), EVar(BoundVar(4)))
+        ))
+    val sortedParExpr: Option[Par] =
+      p.copy(
+        exprs = List(
+          EOr(EVar(BoundVar(0)), EVar(BoundVar(1))),
+          EOr(EVar(BoundVar(3)), EVar(BoundVar(4))),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
+        ))
+    val result = ParSortMatcher.sortMatch(parExpr)
+    result.term should be(sortedParExpr)
+  }
+
+  "Par" should "sort methods based on methodName, target, and arguments" in {
+    val parExpr =
+      p.copy(
+        exprs = List(
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+          EMethod("mth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2))
+        ))
+    val sortedParExpr: Option[Par] =
+      p.copy(
+        exprs = List(
+          EMethod("mth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(2)), locallyFree = BitSet(2)),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(2), GInt(3)), locallyFree = BitSet(2)),
+        ))
+    val result = ParSortMatcher.sortMatch(parExpr)
+    result.term should be(sortedParExpr)
+  }
+
   "Par" should "Sort Sends based on their persistence, channel, data" in {
     val parExpr =
       p.copy(

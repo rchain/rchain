@@ -10,9 +10,9 @@ At the moment, you can execute node in three separate modes:
 
 In REPL mode users have the ability to execute Rho-lang commands in a REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible.
 
-EVAL mode allows users run Rholang that is stored in a plain text file (filename.rho). In this mode the node wil lmake a directory on the local system available to the interpreter as a location where Rholang contracts can be executed.
+EVAL mode allows users run Rholang that is stored in a plain text file (filename.rho). In this mode the node will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed.
 
-In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node).
+In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node).
 
 ## 2. Building
 
@@ -151,7 +151,7 @@ This command will run the node in interpreter mode and will make a directory on 
 
 ### 3.3 P2P mode
 
-In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node). Note that this release prints a great deal of diagnostic information. 
+In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node). Note that this release prints a great deal of diagnostic information.
 
 An RChain node is addressed by an "rnode address", which has the following form
 

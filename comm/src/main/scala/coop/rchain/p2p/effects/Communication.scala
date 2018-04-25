@@ -14,7 +14,7 @@ trait Communication[F[_]] {
   def addNode(node: PeerNode): F[Unit]
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
   def findMorePeers(limit: Int): F[Seq[PeerNode]]
-  def countPeers: F[Int]
+  def peers: F[Seq[PeerNode]]
 }
 
 object Communication extends CommunicationInstances {
@@ -34,7 +34,7 @@ object Communication extends CommunicationInstances {
       def addNode(node: PeerNode): T[F, Unit]                       = C.addNode(node).liftM[T]
       def broadcast(msg: ProtocolMessage): T[F, Seq[CommErr[Unit]]] = C.broadcast(msg).liftM[T]
       def findMorePeers(limit: Int): T[F, Seq[PeerNode]]            = C.findMorePeers(limit).liftM[T]
-      def countPeers: T[F, Int]                                     = C.countPeers.liftM[T]
+      def peers: T[F, Seq[PeerNode]]                                = C.peers.liftM[T]
     }
 }
 

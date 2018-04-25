@@ -85,6 +85,8 @@ object Ctxt {
     id = ctxt.id + 1000
   )
 
+  def apply(trgt: Ob, argvec: Tuple): Ctxt = empty.copy(trgt = trgt, argvec = argvec)
+
   /** Save result to a location in the continuation of a given `ctxt`
     *
     * The location is defined by `tag`.

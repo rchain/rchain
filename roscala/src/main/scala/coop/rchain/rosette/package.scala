@@ -1,19 +1,18 @@
 package coop.rchain
 
-import cats.{Functor, Monoid}
 import cats.data.{ReaderWriterState, ReaderWriterStateT, State, StateT}
 import cats.implicits._
+import cats.{Functor, Monoid}
 import coop.rchain.rosette.Ctxt.Continuation
 import coop.rchain.rosette.parser.bytecode.ParseError
 import coop.rchain.rosette.prim.PrimError
 
-import reflect.runtime.universe._
-import reflect.runtime.currentMirror
-import scala.annotation.tailrec
 import scala.Function.uncurried
 import scala.reflect.ClassTag
+import scala.reflect.runtime.currentMirror
+import scala.reflect.runtime.universe._
 
-package object rosette {
+package rosette {
   sealed trait RblError
   case object DeadThread                        extends RblError
   case object Invalid                           extends RblError
@@ -23,26 +22,33 @@ package object rosette {
   case object PrimNotFound                      extends RblError
   case class PrimErrorWrapper(value: PrimError) extends RblError
   case class RuntimeError(msg: String)          extends RblError
+  case class Suicide(msg: String)               extends RblError
 
+  trait Show[A] {
+    def show(a: A): String
+  }
+}
+
+package object rosette {
   type GlobalEnv = TblObject
 
-  type Result = Either[RblError, Ob]
+  type Result[A] = Either[RblError, A]
 
   type VMTransition[A] = State[VMState, A]
 
   type CtxtTransition[A] = ReaderWriterState[Unit, List[Continuation], (GlobalEnv, Ctxt), A]
 
   def getCtxt = ReaderWriterState.get[Unit, List[Continuation], (GlobalEnv, Ctxt)].map {
-    case (globalEnv, ctxt) => ctxt
+    case (_, ctxt) => ctxt
   }
 
   def getGlobalEnv = ReaderWriterState.get[Unit, List[Continuation], (GlobalEnv, Ctxt)].map {
-    case (globalEnv, ctxt) => globalEnv
+    case (globalEnv, _) => globalEnv
   }
 
   def inspectCtxt[A](f: Ctxt => A) =
     ReaderWriterState.inspect[Unit, List[Continuation], (GlobalEnv, Ctxt), A] {
-      case (globalEnv, ctxt) => f(ctxt)
+      case (_, ctxt) => f(ctxt)
     }
 
   def modifyCtxt(f: Ctxt => Ctxt) =
@@ -110,10 +116,6 @@ package object rosette {
     System.exit(1)
   }
 
-  trait Show[A] {
-    def show(a: A): String
-  }
-
   object Show {
     def apply[A](implicit sh: Show[A]): Show[A] = sh
 
@@ -123,10 +125,7 @@ package object rosette {
       def show: String = Show[A].show(a)
     }
 
-    implicit val parseErrorShow: Show[ParseError] =
-      _ match {
-        case e => e.toString
-      }
+    implicit val parseErrorShow: Show[ParseError] = _.toString
 
     implicit val opsShow: Show[Seq[Op]] = { ops =>
       ops

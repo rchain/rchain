@@ -2,17 +2,18 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import cats.data.State
-import cats.data.State._
-import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
+import cats.data.{State, _}
+import cats.implicits._
+import cats.{Applicative, MonadError}
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import coop.rchain.rosette.utils.Instances._
+import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
 import shapeless.OpticDefns.RootLens
-import coop.rchain.rosette.Ctxt.Continuation
 import shapeless._
-import cats.implicits._
+
+import scala.language.higherKinds
 
 trait Base
 
@@ -26,8 +27,8 @@ trait Ob extends Base with Cloneable {
   val meta: Ob
   val parent: Ob
 
-  def dispatch: CtxtTransition[Result] =
-    pureCtxt[Result](Right(Ob.NIV))
+  def dispatch: CtxtTransition[Result[Ob]] =
+    pureCtxt[Result[Ob]](Right(Ob.NIV))
 
   def extendWith(keyMeta: Ob): Ob = null
 
@@ -47,26 +48,33 @@ trait Ob extends Base with Cloneable {
 
   def is(value: Ob.ObTag): Boolean = false
 
-  def lookup(key: Ob, ctxt: Ctxt): Result =
+  def lookup[F[_]: Applicative](key: Ob)(implicit
+                                         E: MonadError[F, RblError]): ReaderT[F, GlobalEnv, Ob] = {
+    val result = meta
+      .asInstanceOf[StdMeta]
+      .get[F](self, key)
+
+    result recoverWith {
+      case Absent => parent.lookup[F](key)
+    }
+  }
+
+  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result[Ob] =
     Right(null)
 
-  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
-    Right(null)
-
-  def lookupAndInvoke: CtxtTransition[Result] =
+  def lookupAndInvoke: CtxtTransition[Result[Ob]] =
     for {
       ctxt      <- getCtxt
       globalEnv <- getGlobalEnv
       target    = ctxt.trgt
 
-      fn <- meta
-             .asInstanceOf[StdMeta]
-             .lookupOBOStdMeta(self, target)
+      fn = meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
 
-      result <- fn match {
-                 case Right(prim: Prim) => prim.invoke
+      result <- fn.run(globalEnv) match {
+                 case Right(prim: Prim) =>
+                   prim.invoke //(globalEnv)
                  case _ =>
-                   pureCtxt[Result](Left(Absent))
+                   pureCtxt[Result[Ob]](Left(Absent))
                }
     } yield result
 
@@ -75,7 +83,8 @@ trait Ob extends Base with Cloneable {
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] = ???
+  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] =
+    ???
 
   def setField(indirect: Boolean, level: Int, offset: Int, spanSize: Int, value: Int): Ob =
     ??? //TODO
@@ -169,8 +178,8 @@ object Ob {
   case object SyscodeDeadThread extends SysCode
 
   trait SingletonOb extends Ob {
-    override val meta   = null
-    override val parent = null
+    override val meta: Ob   = null
+    override val parent: Ob = null
   }
   object ABSENT   extends SingletonOb
   object INVALID  extends SingletonOb

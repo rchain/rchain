@@ -60,6 +60,10 @@ class NodeRuntime(conf: Conf) {
   implicit val metricsEffect: Metrics[Task]              = effects.metrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]   = effects.remoteKeysKvs(remoteKeysPath)
   implicit val communicatonEffect: Communication[Effect] = effects.communication[Effect](net)
+  implicit val packetHandlerEffect: PacketHandler[Task] = effects.packetHandler[Task]({
+    // build your final PartialFunction with Chain of responsobility design pattern >> pf orElse pf2 orElse pf3 ...
+    case p => "test".pure[Task]
+  })
 
   def addShutdownHook: Task[Unit] = Task.delay {
     sys.addShutdownHook {

@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
@@ -181,10 +182,18 @@ object effects {
         Capture[F].capture {
           net.findMorePeers(limit)
         }
-      def countPeers: F[Int] =
+      def peers: F[Seq[PeerNode]] =
         Capture[F].capture {
-          net.table.peers.size
+          net.table.peers
         }
     }
 
+  def packetHandler[F[_]: Applicative: Log](
+      pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
+    new PacketHandler[F] {
+      def handlePacket(packet: Packet): F[String] = {
+        val errorMsg = s"Unable to handle packet $packet"
+        if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+      }
+    }
 }
