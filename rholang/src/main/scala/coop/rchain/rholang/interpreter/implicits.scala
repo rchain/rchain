@@ -256,6 +256,12 @@ object implicits {
 
   implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
 
+  implicit val BundleLocallyFree: HasLocallyFree[Bundle] = new HasLocallyFree[Bundle] {
+    override def wildcard(source: Bundle): Boolean   = false
+    override def freeCount(source: Bundle): Int      = 0
+    override def locallyFree(source: Bundle): BitSet = source.body.get.locallyFree
+  }
+
   implicit val SendLocallyFree: HasLocallyFree[Send] = new HasLocallyFree[Send] {
     def wildcard(s: Send)    = s.wildcard
     def freeCount(s: Send)   = s.freeCount
