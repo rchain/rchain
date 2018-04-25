@@ -114,7 +114,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val listBindings = new ListName()
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new RemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val cont         = new PEval(new NameVar("z"))
@@ -135,7 +136,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("y"))
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new RemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
@@ -157,8 +159,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new RemainderEmpty(), new NameVar("x")))
-    listLinearBinds.add(new LinearBindImpl(listBindings1, new RemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("x")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
@@ -182,8 +186,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameVar("a"))
     listBindings1.add(new NameVar("b"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new RemainderEmpty(), new NameVar("x")))
-    listLinearBinds.add(new LinearBindImpl(listBindings1, new RemainderEmpty(), new NameVar("y")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("y")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val cont = new PPar(new PPar(new PEval(new NameVar("z")), new PEval(new NameVar("v"))),
@@ -209,8 +215,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameVar("a"))
     listBindings1.add(new NameVar("b"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new RemainderEmpty(), new NameVar("x")))
-    listLinearBinds.add(new LinearBindImpl(listBindings1, new RemainderEmpty(), new NameVar("y")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("y")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val sentData     = new ListProc()
@@ -236,7 +244,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val listBindings = new ListName()
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new RemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val cont         = new PEval(new NameVar("z"))
@@ -334,7 +343,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new RemainderEmpty(), new NameQuote(new PNil())))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val body = new PPar(new PVar(new ProcVarVar("y")),
@@ -345,7 +354,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameQuote(basicInput))
     val listLinearBinds1 = new ListLinearBind()
     listLinearBinds1.add(
-      new LinearBindImpl(listBindings1, new RemainderEmpty(), new NameQuote(new PNil())))
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple1 = new LinearSimple(listLinearBinds1)
     val receipt1      = new ReceiptLinear(linearSimple1)
     val listSend1     = new ListProc()
@@ -368,8 +377,10 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings2.add(new NameVar("x2"))
     listBindings2.add(new NameQuote(new PVar(new ProcVarVar("y2"))))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings1, new RemainderEmpty(), new NameVar("x")))
-    listLinearBinds.add(new LinearBindImpl(listBindings2, new RemainderEmpty(), new NameVar("v")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("x")))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings2, new NameRemainderEmpty(), new NameVar("v")))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val listSend1    = new ListProc()
@@ -379,7 +390,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val listBindings3 = new ListName()
     listBindings3.add(new NameVar("z"))
     val listLinearBinds2 = new ListLinearBind()
-    listLinearBinds2.add(new LinearBindImpl(listBindings3, new RemainderEmpty(), new NameVar("x1")))
+    listLinearBinds2.add(
+      new LinearBindImpl(listBindings3, new NameRemainderEmpty(), new NameVar("x1")))
     val receipt2 = new ReceiptLinear(new LinearSimple(listLinearBinds2))
     val body = new PPar(new PSend(new NameVar("x1"), new SendSingle(), listSend1),
                         new PSend(new NameVar("x2"), new SendSingle(), listSend2))
@@ -435,7 +447,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameQuote(new PVar(new ProcVarVar("x"))))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new RemainderEmpty(), new NameQuote(new PNil())))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val listCases    = new ListCase()
@@ -499,7 +511,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameQuote(pMatch))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new RemainderEmpty(), new NameQuote(new PNil())))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val input        = new PInput(receipt, new PNil())
