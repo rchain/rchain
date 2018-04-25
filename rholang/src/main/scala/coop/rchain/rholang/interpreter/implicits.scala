@@ -140,6 +140,14 @@ object implicits {
   def apply(g: GPrivate): Par =
     new Par(ids = List(g), freeCount = 0, locallyFree = BitSet(), wildcard = false)
 
+  def apply(b: Bundle): Par =
+    new Par(
+      bundles = Seq(b),
+      freeCount = 0,
+      locallyFree = b.body.get.locallyFree,
+      wildcard = false
+    )
+
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
   implicit def fromEval[T](e: T)(implicit toEval: T => Eval): Par = apply(e)
@@ -147,6 +155,7 @@ object implicits {
   implicit def fromExpr[T](e: T)(implicit toExpr: T => Expr): Par = apply(e)
   implicit def fromMatch(m: Match): Par                           = apply(m)
   implicit def fromGPrivate(g: GPrivate): Par                     = apply(g)
+  implicit def fromBundle(b: Bundle): Par                         = apply(b)
 
   object VectorPar {
     def apply(): Par = new Par(
@@ -198,6 +207,11 @@ object implicits {
         locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e),
         wildcard = p.wildcard || ExprLocallyFree.wildcard(e)
       )
+    def prepend(b: Bundle): Par =
+      p.copy(
+        bundles = Seq(b) ++ p.bundles,
+        locallyFree = b.body.get.locallyFree | p.locallyFree
+      )
     def prepend(m: Match): Par =
       p.copy(matches = Seq(m) ++ p.matches,
              freeCount = p.freeCount + m.freeCount,
@@ -205,7 +219,7 @@ object implicits {
              wildcard = p.wildcard || m.wildcard)
 
     def singleEval(): Option[Eval] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
         p.evals match {
           case List(single) => Some(single)
           case _            => None
@@ -215,7 +229,7 @@ object implicits {
       }
 
     def singleNew(): Option[New] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
         p.news match {
           case List(single) => Some(single)
           case _            => None

@@ -12,9 +12,11 @@ import scala.collection.immutable.BitSet
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
+import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.NormalizerExceptions._
 import implicits._
+import org.scalactic.TripleEqualsSupport
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
   "BoolTrue" should "Compile as GBool(true)" in {
@@ -713,6 +715,34 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
+  }
+
+  "PBundle" should "normalize terms inside a bundle" in {
+    val pbundle     = new PBundle(new PVar(new ProcVarVar("x")))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pbundle, boundInputs)
+
+    val expectedResult =
+      inputs.par
+        .withBundles(List(Bundle(EVar(BoundVar(0)))))
+        .withLocallyFree(BitSet(0))
+
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  /** Example:
+    * bundle { _ | x }
+    */
+  it should "not count free variable and the wildcard from the body" in {
+    val pbundle =
+      new PBundle(new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
+
+    an[UnexpectedBundleContent] should be thrownBy (
+      ProcNormalizeMatcher.normalizeMatch(pbundle,
+                                          inputs)
+    )
   }
 }
 
