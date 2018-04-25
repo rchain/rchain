@@ -2,6 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.{Applicative, Monad}, cats.implicits._
 
+import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
 
 import coop.rchain.comm.ProtocolMessage
@@ -27,17 +28,27 @@ object CommUtil {
     } yield ()
   }
 
-  def casperPacketHandler[F[_]: Applicative]: PartialFunction[Packet, F[String]] =
+  def casperPacketHandler[F[_]: Monad: MultiParentCasper: Communication: Log]
+    : PartialFunction[Packet, F[String]] =
     Function.unlift(packetToBlockMessage).andThen {
       case b: BlockMessage =>
-        /*
-         * TODO:
-         *  -add new block to internal Casper protocol state
-         *  -run fork-choice
-         *  -if this is a block that has not been recieved before then send to known peers
-         */
-        "I got a block :)".pure[F]
+        for {
+          isNewBlock <- MultiParentCasper[F].contains(b)
+          logMessage <- if (isNewBlock) {
+                         handleNewBlock[F](b)
+                       } else {
+                         s"Received block ${hashString(b)} again.".pure[F]
+                       }
+        } yield logMessage
     }
+
+  private def handleNewBlock[F[_]: Monad: MultiParentCasper: Communication: Log](
+      b: BlockMessage): F[String] =
+    for {
+      _          <- MultiParentCasper[F].addBlock(b)
+      forkchoice <- MultiParentCasper[F].estimator.map(_.head)
+      _          <- sendBlock[F](b)
+    } yield s"Received block ${hashString(b)}; new fork-choice is ${hashString(forkchoice)}."
 
   private def hashString(b: BlockMessage): String =
     Base16.encode(b.blockHash.toByteArray)

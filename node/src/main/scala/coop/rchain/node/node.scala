@@ -8,6 +8,8 @@ import cats.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
+import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
@@ -60,10 +62,10 @@ class NodeRuntime(conf: Conf) {
   implicit val metricsEffect: Metrics[Task]              = effects.metrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]   = effects.remoteKeysKvs(remoteKeysPath)
   implicit val communicatonEffect: Communication[Effect] = effects.communication[Effect](net)
-  implicit val packetHandlerEffect: PacketHandler[Task] = effects.packetHandler[Task]({
-    // build your final PartialFunction with Chain of responsobility design pattern >> pf orElse pf2 orElse pf3 ...
-    case p => "test".pure[Task]
-  })
+  implicit val casperEffect: MultiParentCasper[Effect]   = MultiParentCasper.noCasper[Effect]
+  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+    casperPacketHandler[Effect]
+  )
 
   def addShutdownHook: Task[Unit] = Task.delay {
     sys.addShutdownHook {

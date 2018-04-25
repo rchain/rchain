@@ -151,7 +151,7 @@ lazy val node = (project in file("node"))
     rpmLicense := Some("Apache 2.0"),
     rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
   )
-  .dependsOn(comm, crypto, rholang)
+  .dependsOn(casper, comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
