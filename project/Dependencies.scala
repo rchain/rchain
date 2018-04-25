@@ -28,7 +28,7 @@ object Dependencies {
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.0"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
-  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-M3"
+  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC1"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "0.5.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
