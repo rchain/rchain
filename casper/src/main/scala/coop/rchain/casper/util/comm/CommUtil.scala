@@ -28,7 +28,7 @@ object CommUtil {
   }
 
   def casperPacketHandler[F[_]: Applicative]: PartialFunction[Packet, F[String]] =
-    Function.unlift(packetToblockMessage).andThen {
+    Function.unlift(packetToBlockMessage).andThen {
       case b: BlockMessage =>
         /*
          * TODO:
@@ -45,7 +45,7 @@ object CommUtil {
   private def blockMessageToPacket(msg: BlockMessage): Packet =
     Packet().withContent(msg.toByteString)
 
-  private def packetToblockMessage(msg: Packet): Option[BlockMessage] =
+  private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
     Try(BlockMessage.parseFrom(msg.content.toByteArray)).toOption
 
   //TODO: Ask Pawel to provide a method somewhere in Comm that does the framing
