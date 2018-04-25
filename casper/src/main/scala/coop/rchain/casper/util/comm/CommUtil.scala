@@ -4,7 +4,6 @@ import cats.Monad, cats.implicits._
 
 import coop.rchain.casper.protocol.BlockMessage
 
-import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.ProtocolMessage
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p.effects.{Communication, Log}
