@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
-import util._
+import coop.rchain.casper.util.ProtoUtil._
 import monix.eval.Task
 
 import scala.collection

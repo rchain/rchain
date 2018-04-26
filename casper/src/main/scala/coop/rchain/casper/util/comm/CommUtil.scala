@@ -51,6 +51,7 @@ object CommUtil {
   private def hashString(b: BlockMessage): String =
     Base16.encode(b.blockHash.toByteArray)
 
+  //TODO: Figure out what do with blocks that parse correctly, but are invalid
   private def blockMessageToPacket(msg: BlockMessage): Packet =
     Packet().withContent(msg.toByteString)
 
