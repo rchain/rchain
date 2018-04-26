@@ -109,7 +109,12 @@ object RholangCLI {
             val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
             waitThenPrintStorageContents(evaluatorFuture, runtime.store)
           case Left(error) =>
-            error.printStackTrace(Console.err)
+            // we don't want to print stack trace for syntax errors
+            if (error.getMessage.toLowerCase.contains("syntax")) {
+              Console.err.print(error.getMessage)
+            } else {
+              error.printStackTrace(Console.err)
+            }
         }
       case None =>
         Console.println("\nExiting...")
