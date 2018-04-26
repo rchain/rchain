@@ -15,13 +15,8 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
     echo "Travis branch ${TRAVIS_BRANCH} matched and from repo rchain/rchain. Pushing rnode to Docker repo."
 
 	# Prep ssh private key for use
-    #mkdir ~/.travis
-    echo "List .travis folder"
-    ls -lhat ~/.travis/*
-    echo "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.travis/id_rsa
 	eval "$(ssh-agent -s)" # Start ssh-agent cache
-	chmod 600 ~/.travis/id_rsa # Allow read access to the private key
-	ssh-add ~/.travis/id_rsa # Add the private key to SSH
+    ssh-add - <<< $(echo ${SSH_PRIVATE_KEY} | base64 --decode --ignore-garbage)
 
     # Generate RChain "RNode" network node debian and rpm packages 
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin 
