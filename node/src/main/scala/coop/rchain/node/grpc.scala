@@ -1,8 +1,10 @@
 package coop.rchain.node
 
+import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 import scala.concurrent.{ExecutionContext, Future}
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
@@ -10,28 +12,23 @@ import monix.execution.Scheduler
 
 import java.io.{Reader, StringReader}
 
-class GrpcServer(executionContext: ExecutionContext, port: Int, runtime: Runtime) { self =>
+object GrpcServer {
 
-  var server: Option[Server] = None
-
-  def start(): Unit = {
-    server = ServerBuilder
-      .forPort(port)
-      .addService(ReplGrpc.bindService(new ReplImpl(runtime), executionContext))
-      .build
-      .start
-      .some
-
-    println("Server started, listening on " + port)
-    sys.addShutdownHook {
-      System.err.println("*** shutting down gRPC server since JVM is shutting down")
-      self.stop()
-      System.err.println("*** server shut down")
+  def acquireServer[F[_]: Capture](executionContext: ExecutionContext,
+                                   port: Int,
+                                   runtime: Runtime): F[Server] =
+    Capture[F].capture {
+      ServerBuilder
+        .forPort(port)
+        .addService(ReplGrpc.bindService(new ReplImpl(runtime), executionContext))
+        .build
     }
-  }
 
-  def stop(): Unit =
-    server.foreach(_.shutdown())
+  def start[F[_]: FlatMap: Capture: Log](server: Server): F[Unit] =
+    for {
+      _ <- Capture[F].capture(server.start)
+      _ <- Log[F].info("gRPC server started, listening on ")
+    } yield ()
 
   class ReplImpl(runtime: Runtime) extends ReplGrpc.Repl {
     import RholangCLI._

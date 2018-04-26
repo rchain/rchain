@@ -53,13 +53,14 @@ sealed abstract class MultiParentCasperInstances {
         currentTime <- Time[F].currentMillis
         postState = RChainState().withResources(
           Seq(Resource(ProduceResource(Produce(currentTime.toInt)))))
-        postStateHash  = Sha256.hash(postState.toByteArray)
+        postStateHash = Sha256.hash(postState.toByteArray)
         header = Header()
           .withPostStateHash(ByteString.copyFrom(postStateHash))
         blockHash = Sha256.hash(header.toByteArray)
-        block = BlockMessage().withBlockHash(ByteString.copyFrom(blockHash))
+        block = BlockMessage()
+          .withBlockHash(ByteString.copyFrom(blockHash))
           .withBody(Body().withPostState(postState))
-        _     <- CommUtil.sendBlock[F](block)
+        _ <- CommUtil.sendBlock[F](block)
       } yield ()
   }
 }
