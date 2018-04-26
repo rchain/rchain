@@ -75,7 +75,6 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
     }
   }
 
-  // TODO: Add free messages
   private def agreementGraphEdgeCount(estimate: BlockMessage,
                                       candidates: Map[ByteString, Int]): Int = {
     def seesAgreement(first: ByteString, second: ByteString): Boolean =
@@ -88,13 +87,39 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
         if justificationBlock.sig == second && compatible(estimate, justificationBlock)
       } yield justificationBlock).nonEmpty
 
+    // TODO: Potentially replace with isInBlockDAG
+    def filterChildren(candidate: BlockMessage,
+                       blocks: collection.Map[ByteString, BlockMessage]): List[BlockMessage] =
+      blocks.values.filter { potentialChild =>
+        isInMainChain(blocks, candidate, potentialChild)
+      }.toList
+
+    def neverEventuallySeeDisagreement(first: ByteString, second: ByteString): Boolean = {
+      val potentialDisagreements: List[BlockMessage] =
+        for {
+          firstLatest <- latestBlocks.get(first).toList
+          justification <- firstLatest.justifications.map {
+                            case Justification(_, latestBlock: ByteString) => latestBlock
+                          }
+          justificationBlock <- blocks.get(justification).toList
+          child              <- filterChildren(justificationBlock, blocks)
+          if child.sig == second
+        } yield child
+      potentialDisagreements.forall { potentialDisagreement =>
+        compatible(estimate, potentialDisagreement)
+      }
+    }
+
     val edges = (for {
       x <- candidates.keys
       y <- candidates.keys
       if x.toString > y.toString // TODO: Order ByteString
     } yield (x, y)) filter {
       case (validatorOne: ByteString, validatorTwo: ByteString) =>
-        seesAgreement(validatorOne, validatorTwo) && seesAgreement(validatorTwo, validatorOne)
+        seesAgreement(validatorOne, validatorTwo) && seesAgreement(validatorTwo, validatorOne) &&
+          neverEventuallySeeDisagreement(validatorOne, validatorTwo) && neverEventuallySeeDisagreement(
+          validatorTwo,
+          validatorOne)
     }
     edges.size
   }

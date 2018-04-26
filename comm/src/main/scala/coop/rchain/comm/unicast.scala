@@ -31,7 +31,7 @@ class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
   socket.setSoTimeout(500) // 500 ms
 
   val recv_buffer = new Array[Byte](65508)
-  val recv_dgram  = new DatagramPacket(recv_buffer, recv_buffer.size)
+  val recv_dgram  = new DatagramPacket(recv_buffer, recv_buffer.length)
 
   val sendCount = Kamon.counter("unicast-sends")
   val recvCount = Kamon.counter("unicast-recvs")
@@ -53,22 +53,21 @@ class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
       val payload = new Array[Byte](2 + sz)
       payload(0) = (sz >> 8).toByte
       payload(1) = sz.toByte
-      Array.copy(data.toArray, 0, payload.toArray, 2, sz)
-      sendBytes.increment(sz + 2)
+      Array.copy(data.toArray, 0, payload, 2, sz)
+      sendBytes.increment(sz.toLong + 2)
       Right(payload)
     }
   }
 
   private def decode(data: Array[Byte]): Either[CommError, Seq[Byte]] =
-    if (data.size < 2) {
-      Left(DatagramSizeError(data.size))
+    if (data.length < 2) {
+      Left(DatagramSizeError(data.length))
     } else {
-      (((data(0) << 8) & 0xff00) | (data(1) & 0xff)) match {
-        case sz if (sz < 0 || 65506 < sz) => Left(DatagramSizeError(sz))
-        case sz => {
-          recvBytes.increment(sz + 2)
+      ((data(0) << 8) & 0xff00) | (data(1) & 0xff) match {
+        case sz if sz < 0 || 65506 < sz => Left(DatagramSizeError(sz))
+        case sz =>
+          recvBytes.increment(sz.toLong + 2)
           Right(data.slice(2, sz + 2))
-        }
       }
     }
 
@@ -98,7 +97,7 @@ class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
     */
   override def send(data: Seq[Byte], peer: PeerNode): Either[CommError, Unit] =
     encode(data).flatMap { payload =>
-      val dgram = new DatagramPacket(payload, 0, payload.size, peer.endpoint.udpSocketAddress)
+      val dgram = new DatagramPacket(payload, 0, payload.length, peer.endpoint.udpSocketAddress)
       try {
         socket.send(dgram)
         sendCount.increment()
