@@ -37,7 +37,7 @@ object effects {
             val pw = new PrintWriter(keysPath.toFile)
             pw.println(encoder.encode(keys.pub))
             pw.println(encoder.encode(keys.priv))
-            pw.close
+            pw.close()
           }
           .attempt
           .void
@@ -55,7 +55,7 @@ object effects {
 
     def fetchKeys: Task[PublicPrivateKeys] =
       (fetchFromFS >>= {
-        case None     => generateFresh >>= (keys => (storeToFS(keys) *> keys.pure[Task]))
+        case None     => generateFresh >>= (keys => storeToFS(keys) *> keys.pure[Task])
         case Some(ks) => ks.pure[Task]
       }).memoize
 
@@ -163,33 +163,43 @@ object effects {
         }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
     }
 
-  def communication[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): Communication[F] =
-    new Communication[F] {
+  def nodeDiscovery[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): NodeDiscovery[F] =
+    new NodeDiscovery[F] {
+
+      def addNode(node: PeerNode): F[Unit] =
+        for {
+          _ <- Capture[F].capture(net.add(node))
+          _ <- Metrics[F].incrementCounter("peers")
+        } yield ()
+
+      def findMorePeers(limit: Int): F[Seq[PeerNode]] =
+        Capture[F].capture {
+          net.findMorePeers(limit)
+        }
+
+      def peers: F[Seq[PeerNode]] =
+        Capture[F].capture {
+          net.table.peers
+        }
+    }
+
+  def transportLayer[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): TransportLayer[F] =
+    new TransportLayer[F] {
       import scala.concurrent.duration._
 
       def roundTrip(msg: ProtocolMessage,
                     remote: ProtocolNode,
                     timeout: Duration): F[CommErr[ProtocolMessage]] =
         net.roundTrip[F](msg, remote, timeout)
+
       def local: F[ProtocolNode] = net.local.pure[F]
+
       def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
         Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
-      def addNode(node: PeerNode): F[Unit] =
-        for {
-          _ <- Capture[F].capture(net.add(node))
-          _ <- Metrics[F].incrementCounter("peers")
-        } yield ()
+
       def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
         Capture[F].capture {
           net.broadcast(msg)
-        }
-      def findMorePeers(limit: Int): F[Seq[PeerNode]] =
-        Capture[F].capture {
-          net.findMorePeers(limit)
-        }
-      def peers: F[Seq[PeerNode]] =
-        Capture[F].capture {
-          net.table.peers
         }
     }
 
