@@ -409,4 +409,71 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
   }
+
+  "eval of nth method" should "pick out the nth item from a list" in {
+    val nthCall: Expr =
+      EMethod("nth", EList(List(GInt(7), GInt(8), GInt(9), GInt(10))), List[Par](GInt(2)))
+    val directResult: Par = withTestStore { store =>
+      val reducer =
+        RholangOnlyDispatcher.create(store).reducer.asInstanceOf[Reduce.DebruijnInterpreter]
+      Await.result(reducer.evalExprToPar(nthCall)(Env()).runAsync, 3.seconds)
+    }
+    val expectedResult: Par = GInt(9)
+    directResult should be(expectedResult)
+
+    val nthCallEvalToSend: Expr =
+      EMethod("nth",
+              EList(
+                List(GInt(7),
+                     Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+                     GInt(9),
+                     GInt(10))),
+              List[Par](GInt(1)))
+    val indirectResult = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val nthTask = reducer.eval(nthCallEvalToSend)(Env())
+      val inspectTask = for {
+        _ <- nthTask
+      } yield store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    indirectResult should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+      )
+    )
+  }
+
+  "eval of nth method in send position" should "change what is sent" in {
+    val nthCallEvalToSend: Expr =
+      EMethod("nth",
+              EList(
+                List(GInt(7),
+                     Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+                     GInt(9),
+                     GInt(10))),
+              List[Par](GInt(1)))
+    val send: Par =
+      Send(Quote(GString("result")), List[Par](nthCallEvalToSend), false, 0, BitSet())
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val nthTask = reducer.eval(send)(Env())
+      val inspectTask = for {
+        _ <- nthTask
+      } yield store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(
+                Datum[List[Channel]](
+                  List[Channel](Quote(
+                    Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()))),
+                  false)),
+              List())
+      )
+    )
+  }
 }

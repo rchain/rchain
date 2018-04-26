@@ -278,6 +278,37 @@ object ProcNormalizeMatcher {
         ProcVisitOutputs(input.par ++ collapseEvalQuote(nameMatchResult.chan),
                          nameMatchResult.knownFree)
 
+      case p: PMethod => {
+        import scala.collection.JavaConverters._
+        val targetResult = normalizeMatch(p.proc_, input.copy(par = Par()))
+        val target       = targetResult.par
+        val method       = p.var_
+        val initAcc =
+          (List[Par](), ProcVisitInputs(Par(), input.env, targetResult.knownFree), BitSet(), false)
+        val argResults = (initAcc /: p.listproc_.asScala.toList.reverse)(
+          (acc, e) => {
+            val procMatchResult = normalizeMatch(e, acc._2)
+            (procMatchResult.par :: acc._1,
+             ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
+             acc._3 | procMatchResult.par.locallyFree,
+             acc._4 || procMatchResult.par.wildcard)
+          }
+        )
+        val freeCount = argResults._2.knownFree.countNoWildcards - input.knownFree.countNoWildcards
+        ProcVisitOutputs(
+          input.par.prepend(
+            EMethod(
+              method,
+              targetResult.par,
+              argResults._1,
+              freeCount,
+              target.locallyFree | argResults._3,
+              target.wildcard || argResults._4
+            )),
+          argResults._2.knownFree
+        )
+      }
+
       case p: PNot => unaryExp(p.proc_, input, ENot.apply)
       case p: PNeg => unaryExp(p.proc_, input, ENeg.apply)
 

@@ -105,6 +105,10 @@ object implicits {
     new Expr(exprInstance = EOrBody(e))
   implicit def fromEOr(e: EOr): Expr = apply(e)
 
+  def apply(e: EMethod): Expr =
+    new Expr(exprInstance = EMethodBody(e))
+  implicit def fromEMethod(e: EMethod): Expr = apply(e)
+
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
@@ -232,6 +236,7 @@ object implicits {
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
+        that.bundles ++ p.bundles,
         that.ids ++ p.ids,
         that.freeCount + p.freeCount,
         that.locallyFree | p.locallyFree,
@@ -272,6 +277,7 @@ object implicits {
         case ENeqBody(ENeq(p1, p2))     => p1.get.wildcard || p2.get.wildcard
         case EAndBody(EAnd(p1, p2))     => p1.get.wildcard || p2.get.wildcard
         case EOrBody(EOr(p1, p2))       => p1.get.wildcard || p2.get.wildcard
+        case EMethodBody(e)             => e.wildcard
       }
 
     def freeCount(e: Expr) =
@@ -299,6 +305,7 @@ object implicits {
         case ENeqBody(ENeq(p1, p2))     => p1.get.freeCount + p2.get.freeCount
         case EAndBody(EAnd(p1, p2))     => p1.get.freeCount + p2.get.freeCount
         case EOrBody(EOr(p1, p2))       => p1.get.freeCount + p2.get.freeCount
+        case EMethodBody(e)             => e.freeCount
       }
 
     def locallyFree(e: Expr) =
@@ -328,6 +335,7 @@ object implicits {
         case ENeqBody(ENeq(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
         case EAndBody(EAnd(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
         case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
+        case EMethodBody(e)             => e.locallyFree
       }
   }
 

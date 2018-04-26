@@ -25,7 +25,7 @@ Currently we have a working interpreter for the language. It should be considere
 			exec /usr/bin/java java_cup.Main "$@"
 			```
     * JFlex - install using apt 
-    * BNFC - must be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later
+    * BNFC - MUST be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later. If you use `cabal install` you will need to add your BNFC binary to the PATH.
     * Scala
 4. Run `sbt rholang/bnfc:generate` to generate the lexer/parser. Re-run whenever you modify the grammar
 5. Run `sbt rholang/compile` to compile classes

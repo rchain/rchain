@@ -4,7 +4,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Bond, RChainState}
 
 import scala.annotation.tailrec
-import scala.collection
 
 package object util {
   /*
@@ -18,14 +17,44 @@ package object util {
     if (candidate == target) {
       true
     } else {
-      val mainParent = for {
+      (for {
         hdr        <- target.header
         parentHash <- hdr.parentsHashList.headOption
         mainParent <- blocks.get(parentHash)
-      } yield mainParent
-      mainParent match {
+      } yield mainParent) match {
         case Some(parent) => isInMainChain(blocks, candidate, parent)
         case None         => false
       }
     }
+
+  def weightMap(blockMessage: BlockMessage): Map[ByteString, Int] =
+    blockMessage.body match {
+      case Some(block) =>
+        block.postState match {
+          case Some(state) => weightMap(state)
+          case None        => Map.empty[ByteString, Int]
+        }
+      case None => Map.empty[ByteString, Int]
+    }
+
+  private def weightMap(state: RChainState): Map[ByteString, Int] =
+    state.bonds.map {
+      case Bond(validator, stake) => validator -> stake
+    }.toMap
+
+  def weightMapTotal(weights: Map[ByteString, Int]): Int =
+    weights.values.sum
+
+  def minTotalValidatorWeight(blockMessage: BlockMessage, maxCliqueMinSize: Int): Int = {
+    val sortedWeights = weightMap(blockMessage).values.toList.sorted
+    sortedWeights.take(maxCliqueMinSize).sum
+  }
+
+  def mainParent(blocks: collection.Map[ByteString, BlockMessage],
+                 blockMessage: BlockMessage): Option[BlockMessage] =
+    for {
+      hdr        <- blockMessage.header
+      parentHash <- hdr.parentsHashList.headOption
+      mainParent <- blocks.get(parentHash)
+    } yield mainParent
 }

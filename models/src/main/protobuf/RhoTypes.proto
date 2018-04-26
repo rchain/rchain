@@ -15,6 +15,7 @@ message Par {
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
+    repeated Bundle bundles = 11;
     repeated GPrivate ids = 7;
     int32 freeCount = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
@@ -51,6 +52,10 @@ message Var {
         sint32 free_var = 2;
         WildcardMsg wildcard = 3;
     }
+}
+
+message Bundle {
+    Par body = 1;
 }
 
 // Upon send, all free variables in data are substituted with their values.
@@ -138,6 +143,7 @@ message Expr {
         ETuple e_tuple_body = 21;
         ESet e_set_body = 22;
         EMap e_map_body = 23;
+        EMethod e_method_body = 24;
     }
 }
 
@@ -167,6 +173,15 @@ message EMap {
     int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool wildcard = 4;
+}
+
+message EMethod {
+    string methodName = 1;
+    Par target = 2;
+    repeated Par arguments = 3;
+    int32 freeCount = 4;
+    bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool wildcard = 6;
 }
 
 message KeyValuePair {

@@ -109,21 +109,22 @@ object Score {
   final val WILDCARD  = 52
 
   // Expr
-  final val EVAR   = 100
-  final val ENEG   = 101
-  final val EMULT  = 102
-  final val EDIV   = 103
-  final val EPLUS  = 104
-  final val EMINUS = 105
-  final val ELT    = 106
-  final val ELTE   = 107
-  final val EGT    = 108
-  final val EGTE   = 109
-  final val EEQ    = 110
-  final val ENEQ   = 111
-  final val ENOT   = 112
-  final val EAND   = 113
-  final val EOR    = 114
+  final val EVAR    = 100
+  final val ENEG    = 101
+  final val EMULT   = 102
+  final val EDIV    = 103
+  final val EPLUS   = 104
+  final val EMINUS  = 105
+  final val ELT     = 106
+  final val ELTE    = 107
+  final val EGT     = 108
+  final val EGTE    = 109
+  final val EEQ     = 110
+  final val ENEQ    = 111
+  final val ENOT    = 112
+  final val EAND    = 113
+  final val EOR     = 114
+  final val EMETHOD = 115
 
   // Other
   final val QUOTE    = 203
@@ -273,6 +274,14 @@ object ExprSortMatcher {
         val (sortedPar1, sortedPar2) = sortBinaryOperation(eo.p1, eo.p2)
         constructExpr(EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
                       Node(Score.EOR, sortedPar1.score, sortedPar2.score))
+      case EMethodBody(em) =>
+        val args         = em.arguments.map(par => ParSortMatcher.sortMatch(par))
+        val sortedTarget = ParSortMatcher.sortMatch(em.target.get)
+        constructExpr(
+          EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
+          Node(
+            Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score))
+        )
       case eg =>
         val sortedGround = GroundSortMatcher.sortMatch(eg)
         constructExpr(sortedGround.term, sortedGround.score)

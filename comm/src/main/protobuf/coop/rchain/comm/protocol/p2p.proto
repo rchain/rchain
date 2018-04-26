@@ -36,10 +36,15 @@ message ProtocolHandshakeResponse {
   bytes nonce       = 1;
 }
 
+message Packet {
+  bytes content     = 1;
+}
+
 message Frameable {
   oneof message {
     ProtocolHandshake           protocol_handshake            = 1;
     ProtocolHandshakeResponse   protocol_handshake_response   = 2;
+    Packet                      packet                        = 3;
   }
 }
 

@@ -19,6 +19,7 @@
 
 #include "Vm.h"
 #include "Code.h"
+#include "Compile.h"
 #include "CommandLine.h"
 #include "Ctxt.h"
 #include "Expr.h"
@@ -730,7 +731,6 @@ nextop:
     if (debugging_level)
         traceOpcode();
 
-    Instr previous = instr;
     instr = FETCH;
     bytecodes[OP_f0_opcode(instr)]++;
 
@@ -1126,19 +1126,24 @@ nextop:
     case opLookupToArg | 0xe:
     case opLookupToArg | 0xf: {
         const int argno = OP_f2_op0(instr);
-        pOb key = code->lit(OP_f2_op1(instr));
+        int index = OP_f2_op1(instr);
+
+        // Extract the deferred lookup bit from the offset index
+        bool deferredLookup = ((index & CompilationUnit::LookupDeferMask) != 0);
+        index &= ~CompilationUnit::LookupDeferMask;
+
+        pOb key = code->lit(index);
         pOb val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
         } else if (val == ABSENT) {
-            // If the preceding instruction was a NOP, this is a deferred
+            // If the deferred lookup bit was set, this is a deferred
             // lookup that was emitted on purpose by the compiler. In this
             // case we need to also check the global environment for the symbol.
-            if (OP_f0_opcode(previous) == opDeferLookup) {
+            if (deferredLookup) {
                 if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
-                // Perhaps it's in the GlobalEnv
                 int idx = idxGlobalEnv(key);
                 if (idx >= 0) {
                     val = GlobalEnv->entry(idx);
@@ -1175,19 +1180,24 @@ nextop:
     case opLookupToReg | 0xe:
     case opLookupToReg | 0xf: {
         const int regno = OP_f2_op0(instr);
-        pOb key = code->lit(OP_f2_op1(instr));
+        int index = OP_f2_op1(instr);
+
+        // Extract the deferred lookup bit from the offset index
+        bool deferredLookup = ((index & CompilationUnit::LookupDeferMask) != 0);
+        index &= ~CompilationUnit::LookupDeferMask;
+
+        pOb key = code->lit(index);
         pOb val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
         } else if (val == ABSENT) {
-            // If the preceding instruction was a NOP, this is a deferred
+            // If the deferred lookup bit was set, this is a deferred
             // lookup that was emitted on purpose by the compiler. In this
             // case we need to also check the global environment for the symbol.
-            if (OP_f0_opcode(previous) == opDeferLookup) {
+            if (deferredLookup) {
                 if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
-                // Perhaps it's in the GlobalEnv
                 int idx = idxGlobalEnv(key);
                 if (idx >= 0) {
                     val = GlobalEnv->entry(idx);
@@ -1377,9 +1387,6 @@ nextop:
     case opImmediateLitToReg | 0xa:
     case opImmediateLitToReg | 0xb:
         ctxt->reg(OP_f2_op1(instr)) = vmLiterals[OP_f2_op0(instr)];
-        goto nextop;
-
-    case opDeferLookup:
         goto nextop;
 
     default:

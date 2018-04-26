@@ -1,9 +1,11 @@
 package coop.rchain.node
 
+import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
+import java.nio.file.{Files, Path}
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._
@@ -11,7 +13,11 @@ import Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 
 object effects {
-  def encryption(nodeName: String): Encryption[Task] = new Encryption[Task] {
+
+  private def createDirectoryIfNotExists(path: Path): Path =
+    if (Files.notExists(path)) Files.createDirectory(path) else path
+
+  def encryption(keysPath: Path): Encryption[Task] = new Encryption[Task] {
     import Encryption._
     import coop.rchain.crypto.encryption.Curve25519
     import com.google.common.io.BaseEncoding
@@ -23,13 +29,12 @@ object effects {
       PublicPrivateKeys(pub, sec)
     }
 
-    val storePath = System.getProperty("user.home") + File.separator + s".${nodeName}-rnode.keys"
-
     private def storeToFS: PublicPrivateKeys => Task[Unit] =
       keys =>
         Task
           .delay {
-            val pw = new PrintWriter(new File(storePath))
+            createDirectoryIfNotExists(keysPath.getParent)
+            val pw = new PrintWriter(keysPath.toFile)
             pw.println(encoder.encode(keys.pub))
             pw.println(encoder.encode(keys.priv))
             pw.close
@@ -40,7 +45,7 @@ object effects {
     private def fetchFromFS: Task[Option[PublicPrivateKeys]] =
       Task
         .delay {
-          val lines  = scala.io.Source.fromFile(storePath).getLines.toList
+          val lines  = scala.io.Source.fromFile(keysPath.toFile).getLines.toList
           val pubKey = encoder.decode(lines(0))
           val secKey = encoder.decode(lines(1))
           PublicPrivateKeys(pubKey, secKey)
@@ -119,7 +124,7 @@ object effects {
     }
   }
 
-  def remoteKeysKvs(path: String): Kvs[Task, PeerNode, Array[Byte]] =
+  def remoteKeysKvs(remoteKeysPath: Path): Kvs[Task, PeerNode, Array[Byte]] =
     new Kvs[Task, PeerNode, Array[Byte]] {
       import com.google.protobuf.ByteString
       var m: Map[PeerNode, Array[Byte]] = fetch()
@@ -137,7 +142,8 @@ object effects {
       }
 
       private def fetch(): Map[PeerNode, Array[Byte]] = {
-        val file = new File(path)
+        createDirectoryIfNotExists(remoteKeysPath.getParent)
+        val file = remoteKeysPath.toFile
         file.createNewFile()
         KeysStore
           .parseFrom(new FileInputStream(file))
@@ -154,7 +160,7 @@ object effects {
       private def store(): Unit =
         KeysStore(m.map {
           case (k, v) => (k.toAddress, ByteString.copyFrom(v))
-        }).writeTo(new FileOutputStream(new File(path)))
+        }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
     }
 
   def communication[F[_]: Monad: Capture: Metrics](net: UnicastNetwork): Communication[F] =
@@ -181,10 +187,18 @@ object effects {
         Capture[F].capture {
           net.findMorePeers(limit)
         }
-      def countPeers: F[Int] =
+      def peers: F[Seq[PeerNode]] =
         Capture[F].capture {
-          net.table.peers.size
+          net.table.peers
         }
     }
 
+  def packetHandler[F[_]: Applicative: Log](
+      pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
+    new PacketHandler[F] {
+      def handlePacket(packet: Packet): F[String] = {
+        val errorMsg = s"Unable to handle packet $packet"
+        if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+      }
+    }
 }
