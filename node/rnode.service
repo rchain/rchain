@@ -1,12 +1,10 @@
-diff --git a/node/rnode.service b/node/rnode.service
-index ce4682fc..3b298021 100644
---- a/node/rnode.service
-+++ b/node/rnode.service
-@@ -4,6 +4,7 @@ After=network.target
+[Unit]
+Description=RChain Node
+After=network.target
 
 [Service]
 ExecStart=/usr/bin/rnode
-+User=rnode
+User=rnode
 
 [Install]
 WantedBy=multi-user.target
