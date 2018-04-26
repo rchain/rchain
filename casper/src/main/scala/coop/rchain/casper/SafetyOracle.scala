@@ -3,6 +3,7 @@ package coop.rchain.casper
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
 import util._
+import monix.eval.Task
 
 import scala.collection
 
@@ -28,10 +29,18 @@ import scala.collection
  * If all validators are indeed part of the clique, minMaxCliqueWeight will hopefully be equal to total_weight
  * and is_safe will reduce to total_weight >= total_weight and evaluate to true.
  */
+trait SafetyOracle[F[_]] {
+  def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): F[Boolean]
+}
+
+object SafetyOracle {
+  def apply[F[_]](implicit ev: SafetyOracle[F]): SafetyOracle[F] = ev
+}
+
 class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
-                  latestBlocks: collection.Map[ByteString, BlockMessage],
-                  faultToleranceThreshold: Float) {
-  def isSafe(estimate: BlockMessage): Boolean = {
+                  latestBlocks: collection.Map[ByteString, BlockMessage])
+    extends SafetyOracle[Task] {
+  def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): Task[Boolean] = Task.delay {
     val faultTolerance = 2 * minMaxCliqueWeight(estimate) - totalWeight(estimate)
     faultTolerance >= faultToleranceThreshold * totalWeight(estimate)
   }
@@ -66,8 +75,8 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
     }
   }
 
-  // TODO: Add free messages
-  private def agreementGraphEdgeCount(estimate: BlockMessage, candidates: Map[ByteString, Int]): Int = {
+  private def agreementGraphEdgeCount(estimate: BlockMessage,
+                                      candidates: Map[ByteString, Int]): Int = {
     def seesAgreement(first: ByteString, second: ByteString): Boolean =
       (for {
         firstLatest <- latestBlocks.get(first).toList
@@ -78,13 +87,39 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
         if justificationBlock.sig == second && compatible(estimate, justificationBlock)
       } yield justificationBlock).nonEmpty
 
+    // TODO: Potentially replace with isInBlockDAG
+    def filterChildren(candidate: BlockMessage,
+                       blocks: collection.Map[ByteString, BlockMessage]): List[BlockMessage] =
+      blocks.values.filter { potentialChild =>
+        isInMainChain(blocks, candidate, potentialChild)
+      }.toList
+
+    def neverEventuallySeeDisagreement(first: ByteString, second: ByteString): Boolean = {
+      val potentialDisagreements: List[BlockMessage] =
+        for {
+          firstLatest <- latestBlocks.get(first).toList
+          justification <- firstLatest.justifications.map {
+                            case Justification(_, latestBlock: ByteString) => latestBlock
+                          }
+          justificationBlock <- blocks.get(justification).toList
+          child              <- filterChildren(justificationBlock, blocks)
+          if child.sig == second
+        } yield child
+      potentialDisagreements.forall { potentialDisagreement =>
+        compatible(estimate, potentialDisagreement)
+      }
+    }
+
     val edges = (for {
       x <- candidates.keys
       y <- candidates.keys
       if x.toString > y.toString // TODO: Order ByteString
     } yield (x, y)) filter {
       case (validatorOne: ByteString, validatorTwo: ByteString) =>
-        seesAgreement(validatorOne, validatorTwo) && seesAgreement(validatorTwo, validatorOne)
+        seesAgreement(validatorOne, validatorTwo) && seesAgreement(validatorTwo, validatorOne) &&
+          neverEventuallySeeDisagreement(validatorOne, validatorTwo) && neverEventuallySeeDisagreement(
+          validatorTwo,
+          validatorOne)
     }
     edges.size
   }

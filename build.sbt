@@ -37,12 +37,16 @@ lazy val shared = (project in file("shared"))
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ scalazDependencies,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      catsCore,
+      catsMtl,
+      monix
+    ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto) // TODO: Add models, rspace, comm
+  .dependsOn(comm, shared, crypto) // TODO: Add models, rspace
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -147,7 +151,7 @@ lazy val node = (project in file("node"))
     rpmLicense := Some("Apache 2.0"),
     rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
   )
-  .dependsOn(comm, crypto, rholang)
+  .dependsOn(casper, comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
@@ -259,6 +263,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
+  .dependsOn(shared)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)

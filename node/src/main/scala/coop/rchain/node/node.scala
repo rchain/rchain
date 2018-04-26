@@ -8,6 +8,8 @@ import cats.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
+import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
@@ -26,7 +28,8 @@ class NodeRuntime(conf: Conf) {
   private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = System.getProperty("user.home") + File.separator + s".$name-rnode-remote.keys"
+  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"${name}-rnode-remote.keys")
+  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"${name}-rnode.keys")
 
   /** Run services */
   /** TODO all services should be defined in terms of `nodeProgram` */
@@ -35,7 +38,7 @@ class NodeRuntime(conf: Conf) {
   val http = HttpServer(conf.httpPort())
   http.start()
 
-  val runtime: Runtime = Runtime.create(conf.data_dir(), conf.map_size())
+  val runtime: Runtime = Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size())
 
   val grpc = new GrpcServer(ExecutionContext.global, conf.grpcPort(), runtime)
   grpc.start()
@@ -54,17 +57,17 @@ class NodeRuntime(conf: Conf) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(name)
+  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                         = effects.log
   implicit val timeEffect: Time[Task]                       = effects.time
   implicit val metricsEffect: Metrics[Task]                 = effects.metrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
-  implicit val packetHandlerEffect: PacketHandler[Task] = effects.packetHandler[Task]({
-    // build your final PartialFunction with Chain of responsobility design pattern >> pf orElse pf2 orElse pf3 ...
-    case _ => "test".pure[Task]
-  })
+  implicit val casperEffect: MultiParentCasper[Effect]      = MultiParentCasper.noCasper[Effect]
+  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+    casperPacketHandler[Effect]
+  )
 
   def addShutdownHook(): Task[Unit] = Task.delay {
     sys.addShutdownHook {
@@ -79,7 +82,7 @@ class NodeRuntime(conf: Conf) {
   }
 
   val nodeProgram: Effect[Unit] = for {
-    _ <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
+    _ <- MonadOps.forever(net.receiver[Effect].value.void).executeAsync.start.toEffect
     _ <- addShutdownHook().toEffect
     _ <- Log[Effect].info(s"Listening for traffic on $address.")
     _ <- if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
