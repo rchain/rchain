@@ -190,7 +190,7 @@ class EvalSubSpec extends FlatSpec with Matchers {
 }
 
 class BundleSubSpec extends FlatSpec with Matchers {
-  "Bundle" should "only substitute body of expression" in {
+  "Bundle" should "substitute within the body of the bundle." in {
     val source: Par = GPrivate()
     val env         = Env.makeEnv(source)
     val target      = Bundle(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))
@@ -200,7 +200,7 @@ class BundleSubSpec extends FlatSpec with Matchers {
     )
   }
 
-  it should "only substitute all Channels in body of express" in {
+  it should "only substitute all Channels inside body" in {
     val source0: Par  = GPrivate()
     val source1: Par  = GPrivate()
     val env: Env[Par] = Env.makeEnv(source0, source1)

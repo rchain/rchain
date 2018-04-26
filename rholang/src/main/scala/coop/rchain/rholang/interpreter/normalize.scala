@@ -533,8 +533,20 @@ object ProcNormalizeMatcher {
       case b: PBundle =>
         val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
         if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
+          val errMsg = {
+            def at(variable: String, l: Int, col: Int): String =
+              s"line: $l, column: $col"
+            val wildcardsPositions = targetResult.knownFree.wildcards.map {
+              case (l, col) => at("", l, col)
+            }
+            val freeVarsPositions = targetResult.knownFree.env.map {
+              case (n, (_, _, line, col)) => at(s"`$n`", line, col)
+            }
+            wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
+              freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")
+          }
           throw UnexpectedBundleContent(
-            s"Bundle's content shouldn't have free variables or wildcards.")
+            s"Bundle's content shouldn't have free variables or wildcards.$errMsg")
         } else {
           ProcVisitOutputs(input.par.prepend(Bundle(targetResult.par)), input.knownFree)
         }

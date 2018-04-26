@@ -749,7 +749,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   /** Example:
     * bundle { _ | x }
     */
-  it should "not count free variable and the wildcard from the body" in {
+  it should "throw an error when wildcard of free variable is found inside body of bundle" in {
     val pbundle =
       new PBundle(new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
 
