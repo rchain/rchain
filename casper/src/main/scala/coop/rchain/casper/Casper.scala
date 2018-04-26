@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.catscontrib.{Capture, Queue}
+import coop.rchain.catscontrib.Capture
 
 import scala.annotation.tailrec
 import scala.collection.mutable

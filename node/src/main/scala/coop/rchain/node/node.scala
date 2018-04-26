@@ -64,7 +64,10 @@ class NodeRuntime(conf: Conf) {
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
-  implicit val casperEffect: MultiParentCasper[Effect]      = MultiParentCasper.noCasper[Effect]
+  implicit val casperEffect: MultiParentCasper[Effect]      = MultiParentCasper.hashSetCasper[Effect](
+    //TODO: figure out actual validator identities...
+    com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte))
+  )
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
   )
