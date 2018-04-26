@@ -139,23 +139,20 @@ lazy val node = (project in file("node"))
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
     packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
-     linuxPackageMappings += {
+    linuxPackageMappings += {
       val file = baseDirectory.value / "rnode.service"
       packageMapping( (file -> "/lib/systemd/system/rnode.service") )
     },
     /* Debian */
-    packageSummary in Debian := "RChain Node",
-    packageDescription in Debian := "RChain Node - the RChain blockchain node server software.",
     debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5)"),
-    linuxPackageMappings in Debian := linuxPackageMappings.value,
-   /* Redhat */
-    packageSummary in Rpm := "RChain Node",
-    packageDescription in Rpm := "RChain Node - the RChain blockchain node server software.",
+    /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
     packageArchitecture in Rpm := "noarch",
-    linuxPackageMappings in Rpm := linuxPackageMappings.value,
+    maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
+      RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
+    ),    
     rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
   )
   .dependsOn(comm, crypto, rholang)
