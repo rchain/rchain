@@ -15,7 +15,9 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
     echo "Travis branch ${TRAVIS_BRANCH} matched and from repo rchain/rchain. Pushing rnode to Docker repo."
 
 	# Prep ssh private key for use
-    mkdir ~/.travis
+    #mkdir ~/.travis
+    echo "List .travis folder"
+    ls -lhat ~/.travis/*
     echo "${SSH_PRIVATE_KEY}" | tr -d '\r' > ~/.travis/id_rsa
 	eval "$(ssh-agent -s)" # Start ssh-agent cache
 	chmod 600 ~/.travis/id_rsa # Allow read access to the private key
@@ -23,8 +25,8 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
 
     # Generate RChain "RNode" network node debian and rpm packages 
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin 
-    scp -P 10003 rnode/target/rnode_0.2.1_all.deb ${SSH_USER}@repo.rchain.space/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
-    scp -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USER}@repo.rchain.space/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
+    scp -P 10003 rnode/target/rnode_0.2.1_all.deb ${SSH_USERNAME}@repo.rchain.space/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
+    scp -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USERNAME}@repo.rchain.space/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
 
     ssh -p 40004 << EOM
 wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb
