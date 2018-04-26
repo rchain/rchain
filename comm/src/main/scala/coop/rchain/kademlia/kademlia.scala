@@ -1,12 +1,10 @@
 package coop.rchain.kademlia
 
-import java.util.concurrent.Executors
-
-import scala.annotation.tailrec
 import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success, Try}
+import java.util.concurrent.Executors
+import scala.annotation.tailrec
 
 trait Keyed {
   def key: Seq[Byte]
@@ -27,17 +25,17 @@ trait Reputable {
 }
 
 object LatencyOrder extends Ordering[Latent] {
-  def compare(a: Latent, b: Latent): Int = a.latency compare b.latency
+  def compare(a: Latent, b: Latent) = a.latency compare b.latency
 }
 
 object ReputationOrder extends Ordering[Reputable] {
-  def compare(a: Reputable, b: Reputable): Int = a.reputation compare b.reputation
+  def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
 final case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
-  var pinging                 = false
-  override def key: Seq[Byte] = entry.key
-  override def toString       = s"#{PeerTableEntry $entry}"
+  var pinging           = false
+  override def key      = entry.key
+  override def toString = s"#{PeerTableEntry $entry}"
 }
 
 object PeerTable {
@@ -75,13 +73,13 @@ object PeerTable {
   *
   */
 final case class PeerTable[A <: Peer](home: A,
-                                      k: Int = PeerTable.Redundancy,
-                                      alpha: Int = PeerTable.Alpha) {
+                                      val k: Int = PeerTable.Redundancy,
+                                      val alpha: Int = PeerTable.Alpha) {
 
   type Entry = PeerTableEntry[A]
 
-  val width: Int = home.key.size // in bytes
-  val table: Array[ListBuffer[Entry]] = Array.fill(8 * width) {
+  val width = home.key.size // in bytes
+  val table = Array.fill(8 * width) {
     new mutable.ListBuffer[Entry]
   }
 
@@ -113,18 +111,20 @@ final case class PeerTable[A <: Peer](home: A,
 
   private val pool = Executors.newFixedThreadPool(alpha)
   private def ping(ps: mutable.ListBuffer[Entry], older: Entry, newer: A): Unit =
-    pool.execute { () =>
-      val winner =
-        older.entry.ping match {
-          case Success(_) => older
-          case Failure(_) => new Entry(newer)
+    pool.execute(new Runnable {
+      def run = {
+        val winner =
+          older.entry.ping match {
+            case Success(_) => older
+            case Failure(_) => new Entry(newer)
+          }
+        ps synchronized {
+          ps -= older
+          ps += winner
+          winner.pinging = false
         }
-      ps synchronized {
-        ps -= older
-        ps += winner
-        winner.pinging = false
       }
-    }
+    })
 
   /** Update the last-seen time of `peer`, possibly adding it to the
     * routing table.
@@ -145,10 +145,10 @@ final case class PeerTable[A <: Peer](home: A,
           val ps = table(index)
           ps synchronized {
             ps.find(_.key == peer.key) match {
-              case Some(entry) =>
+              case Some(entry) => {
                 ps -= entry
                 ps += entry
-
+              }
               case None if add =>
                 if (ps.size < k) {
                   ps += new Entry(peer)
@@ -157,10 +157,11 @@ final case class PeerTable[A <: Peer](home: A,
                   // pinged. If it responds, move it to back (newest
                   // position); if it doesn't respond, remove it and place
                   // a in back instead
-                  ps.find(!_.pinging) foreach { candidate =>
-                    candidate.pinging = true
-                    ping(ps, candidate, peer)
-
+                  ps.find(!_.pinging) foreach {
+                    case candidate => {
+                      candidate.pinging = true
+                      ping(ps, candidate, peer)
+                    }
                   }
                 }
               case None => ()
@@ -181,10 +182,10 @@ final case class PeerTable[A <: Peer](home: A,
           val ps = table(index)
           ps synchronized {
             ps.find(_.key == key) match {
-              case Some(entry) =>
+              case Some(entry) => {
                 ps -= entry
                 ()
-
+              }
               case _ => ()
             }
           }
@@ -205,10 +206,10 @@ final case class PeerTable[A <: Peer](home: A,
       }
 
     distance(home.key, key) match {
-      case Some(index) =>
+      case Some(index) => {
         val entries = new mutable.ListBuffer[Entry]
 
-        for (i <- index until 8 * width; if entries.size < k) {
+        for (i <- index to 8 * width - 1; if entries.size < k) {
           table(i) synchronized {
             entries ++= table(i).filter(_.entry.key != key)
           }
@@ -221,7 +222,7 @@ final case class PeerTable[A <: Peer](home: A,
         }
 
         entries.map(_.entry).sortWith(sorter).take(k).toVector
-
+      }
       case None => Vector.empty
     }
   }

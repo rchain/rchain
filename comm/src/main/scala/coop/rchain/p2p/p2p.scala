@@ -2,12 +2,13 @@ package coop.rchain.p2p
 
 import coop.rchain.p2p.effects._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
+import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header
 import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import scala.util.control.NonFatal
-import cats._, cats.implicits._
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 /*

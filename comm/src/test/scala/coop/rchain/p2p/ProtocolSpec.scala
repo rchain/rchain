@@ -5,20 +5,20 @@ import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
 import coop.rchain.comm._, CommError._, NetworkProtocol._, Network.defaultTimeout
 import coop.rchain.p2p.effects._
-import cats._
-import coop.rchain.catscontrib._, ski._, Encryption._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
 
 import EffectsTestInstances._
 
 class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
-  val encoder: BaseEncoding = BaseEncoding.base16().lowerCase()
+  val encoder = BaseEncoding.base16().lowerCase()
 
-  val src: ProtocolNode  = protocolNode("src", 30300)
-  val remote: PeerNode   = peerNode("remote", 30301)
-  val srcKeys            = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
-  val remoteKeys         = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
-  val nonce: Array[Byte] = encoder.decode("00112233")
+  val src: ProtocolNode = protocolNode("src", 30300)
+  val remote: PeerNode  = peerNode("remote", 30301)
+  val srcKeys           = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
+  val remoteKeys        = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
+  val nonce             = encoder.decode("00112233")
 
   type Effect[A] = CommErrT[Id, A]
 

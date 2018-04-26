@@ -1,38 +1,30 @@
 package coop.rchain.node
 
 import coop.rchain.comm.protocol.rchain.Packet
+import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
+import coop.rchain.p2p.effects._
+import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 
-import scala.collection.concurrent.TrieMap
-
-import cats._
-import cats.implicits._
-
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._
-import coop.rchain.comm.CommError._
-import coop.rchain.comm._
-import coop.rchain.p2p.NetworkAddress
-import coop.rchain.p2p.effects._
-
-import kamon.metric.Metric
+import Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 
 object effects {
   def encryption(nodeName: String): Encryption[Task] = new Encryption[Task] {
     import Encryption._
     import coop.rchain.crypto.encryption.Curve25519
-
     import com.google.common.io.BaseEncoding
 
-    val encoder: BaseEncoding = BaseEncoding.base16().lowerCase()
+    val encoder = BaseEncoding.base16().lowerCase()
 
     private def generateFresh: Task[PublicPrivateKeys] = Task.delay {
       val (pub, sec) = Curve25519.newKeyPair
       PublicPrivateKeys(pub, sec)
     }
 
-    val storePath: String = System
-      .getProperty("user.home") + File.separator + s".$nodeName-rnode.keys"
+    val storePath = System.getProperty("user.home") + File.separator + s".$nodeName-rnode.keys"
 
     private def storeToFS: PublicPrivateKeys => Task[Unit] =
       keys =>
@@ -49,9 +41,9 @@ object effects {
     private def fetchFromFS: Task[Option[PublicPrivateKeys]] =
       Task
         .delay {
-          val (pubKeyStr :: secKeyStr :: _) = scala.io.Source.fromFile(storePath).getLines.toList
-          val pubKey                        = encoder.decode(pubKeyStr)
-          val secKey                        = encoder.decode(secKeyStr)
+          val lines  = scala.io.Source.fromFile(storePath).getLines.toList
+          val pubKey = encoder.decode(lines(0))
+          val secKey = encoder.decode(lines(1))
           PublicPrivateKeys(pubKey, secKey)
         }
         .attempt
@@ -95,8 +87,7 @@ object effects {
   def metrics: Metrics[Task] = new Metrics[Task] {
     import kamon._
 
-    val m: TrieMap[String, Metric[_]] =
-      scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
+    val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
 
     def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
@@ -209,8 +200,10 @@ object effects {
 
   def packetHandler[F[_]: Applicative: Log](
       pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
-    (packet: Packet) => {
-      val errorMsg = s"Unable to handle packet $packet"
-      if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+    new PacketHandler[F] {
+      def handlePacket(packet: Packet): F[String] = {
+        val errorMsg = s"Unable to handle packet $packet"
+        if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+      }
     }
 }

@@ -1,21 +1,16 @@
 package coop.rchain.comm
 
-import scala.concurrent.duration.{Duration, MILLISECONDS}
-import scala.util.control.NonFatal
-import scala.util.{Failure, Success, Try}
-
-import cats._
-
-import coop.rchain.catscontrib._
-import coop.rchain.comm.CommError._
-import coop.rchain.comm.protocol.routing._
 import coop.rchain.kademlia
-import coop.rchain.p2p.effects._
-
-import com.google.protobuf.ByteString
+import coop.rchain.comm.protocol.routing._
+import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
+import coop.rchain.comm._, CommError._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.p2p.effects._
 import kamon._
-import kamon.metric.CounterMetric
 
 // TODO: In message construction, the system clock is used for nonce
 // generation. For reproducibility, this should be a passed-in value.
@@ -95,8 +90,8 @@ class ProtocolNode private (id: NodeIdentifier,
     _seq
   }
 
-  val pingSendCount: CounterMetric   = Kamon.counter("protocol-ping-sends")
-  val lookupSendCount: CounterMetric = Kamon.counter("protocol-lookup-send")
+  val pingSendCount   = Kamon.counter("protocol-ping-sends")
+  val lookupSendCount = Kamon.counter("protocol-lookup-send")
 
   override def ping: Try[Duration] = {
     pingSendCount.increment()
@@ -212,11 +207,11 @@ final case class UpstreamResponse(proto: Protocol, timestamp: Long) extends Prot
   */
 object ProtocolMessage {
 
-  implicit def toProtocolBytes(x: String): ByteString =
+  implicit def toProtocolBytes(x: String) =
     com.google.protobuf.ByteString.copyFromUtf8(x)
-  implicit def toProtocolBytes(x: Array[Byte]): ByteString =
+  implicit def toProtocolBytes(x: Array[Byte]) =
     com.google.protobuf.ByteString.copyFrom(x)
-  implicit def toProtocolBytes(x: Seq[Byte]): ByteString =
+  implicit def toProtocolBytes(x: Seq[Byte]) =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
   def header(src: ProtocolNode): Header =
@@ -233,7 +228,8 @@ object ProtocolMessage {
       .withTcpPort(n.endpoint.tcpPort)
 
   def toPeerNode(n: Node): PeerNode =
-    PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
+    new PeerNode(NodeIdentifier(n.id.toByteArray),
+                 Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
   def returnHeader(h: Header): ReturnHeader =
     ReturnHeader()

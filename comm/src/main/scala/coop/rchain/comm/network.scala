@@ -1,23 +1,20 @@
 package coop.rchain.comm
 
 import java.net.{SocketAddress, SocketTimeoutException}
-
-import scala.collection.{concurrent, mutable}
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
-import scala.util.{Success, Try}
-
-import cats._
-import cats.data._
-import cats.implicits._
-
-import coop.rchain.catscontrib._
-import coop.rchain.comm.CommError._
-import coop.rchain.comm.protocol.routing.Header
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.kademlia.PeerTable
-import coop.rchain.p2p.effects._
-
+import coop.rchain.comm.protocol.routing.Header
 import com.typesafe.scalalogging.Logger
+import scala.collection.mutable
+import scala.util.{Failure, Success}
+import CommError._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.p2p.effects._
+import coop.rchain.catscontrib._, Catscontrib._
+import cats._, cats.data._, cats.implicits._
+import scala.util.Try
 
 /**
   * Implements the lower levels of the network protocol.

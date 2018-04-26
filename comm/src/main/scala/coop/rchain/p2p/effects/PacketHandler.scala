@@ -13,7 +13,9 @@ object PacketHandler extends PacketHandlerInstances {
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
       implicit C: PacketHandler[F]): PacketHandler[T[F, ?]] =
-    (packet: Packet) => C.handlePacket(packet).liftM[T]
+    new PacketHandler[T[F, ?]] {
+      def handlePacket(packet: Packet): T[F, String] = C.handlePacket(packet).liftM[T]
+    }
 
   class NOPPacketHandler[F[_]: Applicative] extends PacketHandler[F] {
     def handlePacket(packet: Packet): F[String] = "".pure[F]

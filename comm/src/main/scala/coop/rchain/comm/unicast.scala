@@ -1,11 +1,9 @@
 package coop.rchain.comm
 
 import java.net.{DatagramPacket, DatagramSocket, SocketAddress}
-
 import scala.util.control.NonFatal
 
 import kamon._
-import kamon.metric.CounterMetric
 
 /**
   * Implement the Comm protocol for unicast (point-to-point) datagram
@@ -35,10 +33,10 @@ class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
   val recv_buffer = new Array[Byte](65508)
   val recv_dgram  = new DatagramPacket(recv_buffer, recv_buffer.length)
 
-  val sendCount: CounterMetric = Kamon.counter("unicast-sends")
-  val recvCount: CounterMetric = Kamon.counter("unicast-recvs")
-  val sendBytes: CounterMetric = Kamon.counter("unicast-send-bytes")
-  val recvBytes: CounterMetric = Kamon.counter("unicast-recv-bytes")
+  val sendCount = Kamon.counter("unicast-sends")
+  val recvCount = Kamon.counter("unicast-recvs")
+  val sendBytes = Kamon.counter("unicast-send-bytes")
+  val recvBytes = Kamon.counter("unicast-recv-bytes")
 
   /*
    * encode() and decode() make a naive framing protocol for dgrams,

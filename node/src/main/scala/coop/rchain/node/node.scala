@@ -3,11 +3,8 @@ package coop.rchain.node
 import java.io.File
 import java.util.UUID
 
-import scala.concurrent.ExecutionContext
-
 import cats.data._
 import cats.implicits._
-
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
@@ -16,8 +13,9 @@ import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-
 import monix.eval.Task
+
+import scala.concurrent.ExecutionContext
 
 class NodeRuntime(conf: Conf) {
 

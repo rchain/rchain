@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import cats.data._
+import cats._, cats.data._, cats.implicits._
 
 // TODO we need lower level errors and general error, for now all in one place
 sealed trait CommError
