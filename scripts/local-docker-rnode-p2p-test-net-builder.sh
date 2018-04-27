@@ -70,13 +70,14 @@ for i in {0..2}; do
     " 
 done
 
-echo "############################COMPLETED###########################"
+echo "#########################DOCKER NOTES##########################"
 echo "==============================================================="
 echo "To display standalone bootstrap server rnode log:"
-echo "sudo docker exec  node0.1.rnode.test.net bash -c \"tail -f /var/log/rnode.log\""
+echo "sudo docker exec node0.${network_name} bash -c \"tail -f /var/log/rnode.log\""
 echo "==============================================================="
 echo "To display node1 rnode log:"
 echo "sudo docker exec  node1.1.rnode.test.net bash -c \"tail -f /var/log/rnode.log\""
 echo "==============================================================="
 echo "To go into your standalone docker container:"
-echo "sudo docker exec -it node0.1.rnode.test.net /bin/bash"
+echo "sudo docker exec -it node0.${network_name} /bin/bash"
+echo "==============================================================="
