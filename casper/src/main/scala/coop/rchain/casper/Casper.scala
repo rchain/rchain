@@ -90,7 +90,6 @@ sealed abstract class MultiParentCasperInstances {
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           success <- attemptAdd(b)
-          _       <- Log[F].info(s"TESTTEST: $success")
           _ <- if (success)
                 Log[F].info(s"CASPER: added block ${hashString(b)}") *> reAttemptBuffer
               else Capture[F].capture { blockBuffer += b }
@@ -124,15 +123,6 @@ sealed abstract class MultiParentCasperInstances {
               })
               .distinct
               .sortBy(scores)(decreasingOrder)
-
-            println("******************************************")
-            println(_childMap)
-            println("******************************************")
-            println("------------------------------------------")
-            newBlks.iterator
-              .map(hash => coop.rchain.crypto.codec.Base16.encode(hash.toByteArray))
-              .foreach(println)
-            println("------------------------------------------")
 
             if (newBlks == blks) {
               blks
