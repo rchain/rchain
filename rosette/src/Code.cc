@@ -18,6 +18,7 @@
  */
 
 #include "Code.h"
+#include "Compile.h"
 
 #include "Ctxt.h"
 #include "Location.h"
@@ -234,6 +235,8 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     static const char* const immediateLitStrings[] = {
         "0", "1", "2", "3", "4", "5", "6", "7", "#t", "#f", "nil", "#niv"};
 
+    int index;
+    bool defer;
     Location dest;
     Instr insn = *pc++;
 
@@ -500,7 +503,10 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opLookupToArg | 0xd:
     case opLookupToArg | 0xe:
     case opLookupToArg | 0xf:
-        sprintf(buf, "lookup %d,arg[%d]", (int)OP_f2_op1(insn),
+        index = OP_f2_op1(insn);
+        defer = ((index & CompilationUnit::LookupDeferMask) != 0);
+        index &= ~CompilationUnit::LookupDeferMask; 
+        sprintf(buf, "lookup%s %d,arg[%d]", defer ? "(defer)" : "", index,
                 (int)OP_f2_op0(insn));
         goto noDest;
 
@@ -520,7 +526,10 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
     case opLookupToReg | 0xd:
     case opLookupToReg | 0xe:
     case opLookupToReg | 0xf:
-        sprintf(buf, "lookup %d,", (int)OP_f2_op1(insn));
+        index = OP_f2_op1(insn);
+        defer = ((index & CompilationUnit::LookupDeferMask) != 0);
+        index &= ~CompilationUnit::LookupDeferMask; 
+        sprintf(buf, "lookup%s %d,", defer ? "(defer)" : "", (int)OP_f2_op1(insn));
         dest = CtxtReg((CtxtRegName)OP_f2_op0(insn));
         goto formatDest;
 
@@ -663,10 +672,6 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
         sprintf(buf, "lit %s,", immediateLitStrings[OP_f2_op0(insn)]);
         dest = CtxtReg((CtxtRegName)OP_f2_op1(insn));
         goto formatDest;
-
-    case opDeferLookup:
-        sprintf(buf, "opDeferLookup");
-        goto noDest;
 
     default:
         sprintf(buf, "illegal 0x%.4x", (int)insn.word);
@@ -984,7 +989,6 @@ MODULE_INIT(Code) {
         opcodeStrings[opImmediateLitToReg | 0xa] = "lit nil/reg";
         opcodeStrings[opImmediateLitToReg | 0xb] = "lit #niv/reg";
 
-        opcodeStrings[opDeferLookup] = "opDeferLookup";
     }
 }
 

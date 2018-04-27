@@ -415,6 +415,12 @@ void AttrNode::emitLookup(pOb symbol) {
     PROTECT_THIS(AttrNode);
 
     unsigned litOffset = SELF->cu->extendLitvec(symbol);
+    assert(litOffset <= CompilationUnit::MaximumLitVecSize);
+
+    // If doing deferred symbol lookup add the defer bit.
+    if (deferredLookup) {
+        litOffset |= CompilationUnit::LookupDeferMask;
+    }
 
     switch (locType) {
     case LT_CtxtRegister:
@@ -749,11 +755,6 @@ void SymbolNode::emitDispatchCode(bool ctxtAvailable, bool, RtnCode rtn,
     }
 
     if (SELF->loc == LocLimbo) {
-        // If this is a deferred lookup, emit an indication of that.
-        if (deferredLookup) {
-            SELF->emitF0(opDeferLookup);
-            deferredLookup = false;
-        }
         SELF->emitLookup(SELF->sym);
     } else {
         SELF->emitXfer(SELF->loc);
@@ -2399,8 +2400,7 @@ unsigned CompilationUnit::extendLitvec(pOb val) {
     for (int i = litOffset; i--;)
         if (val == litvec->elem(i))
             return i;
-
-    if (litOffset > 255)
+    if (litOffset > MaximumLitVecSize)
         abort("too many literals for one code object");
 
     PROTECT_THIS(CompilationUnit);
