@@ -90,6 +90,7 @@ sealed abstract class MultiParentCasperInstances {
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           success <- attemptAdd(b)
+          _       <- Log[F].info(s"TESTTEST: $success")
           _ <- if (success)
                 Log[F].info(s"CASPER: added block ${hashString(b)}") *> reAttemptBuffer
               else Capture[F].capture { blockBuffer += b }
@@ -105,33 +106,43 @@ sealed abstract class MultiParentCasperInstances {
           deployHist += d
         } *> Log[F].info(s"CASPER: Received deploy $d")
 
-      def estimator: F[IndexedSeq[BlockMessage]] = {
-        val fScores = Capture[F].capture { scoresMap }
+      def estimator: F[IndexedSeq[BlockMessage]] =
+        scoresMap.map(scores => {
 
-        @tailrec
-        def sortChildren[A <: (BlockHash) => Int](blks: IndexedSeq[BlockHash],
-                                                  scores: A): IndexedSeq[BlockHash] = {
-          val newBlks = blks
-            .flatMap(b => {
-              val empty                         = new mutable.HashSet[BlockHash]()
-              val c: mutable.HashSet[BlockHash] = _childMap.getOrElse(b, empty)
-              if (c.nonEmpty) {
-                c.toIndexedSeq
-              } else {
-                IndexedSeq(b)
-              }
-            })
-            .distinct
-            .sortBy(scores)(decreasingOrder)
-          if (newBlks == blks) {
-            blks
-          } else {
-            sortChildren(newBlks, scores)
+          @tailrec
+          def sortChildren[A <: (BlockHash) => Int](blks: IndexedSeq[BlockHash],
+                                                    scores: A): IndexedSeq[BlockHash] = {
+            val newBlks = blks
+              .flatMap(b => {
+                val empty                         = new mutable.HashSet[BlockHash]()
+                val c: mutable.HashSet[BlockHash] = _childMap.getOrElse(b, empty)
+                if (c.nonEmpty) {
+                  c.toIndexedSeq
+                } else {
+                  IndexedSeq(b)
+                }
+              })
+              .distinct
+              .sortBy(scores)(decreasingOrder)
+
+            println("******************************************")
+            println(_childMap)
+            println("******************************************")
+            println("------------------------------------------")
+            newBlks.iterator
+              .map(hash => coop.rchain.crypto.codec.Base16.encode(hash.toByteArray))
+              .foreach(println)
+            println("------------------------------------------")
+
+            if (newBlks == blks) {
+              blks
+            } else {
+              sortChildren(newBlks, scores)
+            }
           }
-        }
 
-        fScores.map(sortChildren(IndexedSeq(genesis.blockHash), _).map(blockLookup))
-      }
+          sortChildren(IndexedSeq(genesis.blockHash), scores).map(blockLookup)
+        })
 
       def proposeBlock: F[Option[BlockMessage]] = {
         /*
@@ -219,35 +230,38 @@ sealed abstract class MultiParentCasperInstances {
             }
           })
 
-      private def attemptAdd(b: BlockMessage): F[Boolean] = {
-        val hash     = b.blockHash
-        val bParents = parents(b)
+      private def attemptAdd(block: BlockMessage): F[Boolean] =
+        Monad[F]
+          .pure[BlockMessage](block)
+          .map(b => {
+            val hash     = b.blockHash
+            val bParents = parents(b)
 
-        if (bParents.exists(p => !blockLookup.contains(p))) {
-          //cannot add a block if not all parents are known
-          false.pure[F]
-        } else if (b.justifications.exists(j => !blockLookup.contains(j.latestBlockHash))) {
-          //cannot add a block if not all justifications are known
-          false.pure[F]
-        } else {
-          //TODO: check if block is an equivocation and update observed faults
+            if (bParents.exists(p => !blockLookup.contains(p))) {
+              //cannot add a block if not all parents are known
+              false
+            } else if (b.justifications.exists(j => !blockLookup.contains(j.latestBlockHash))) {
+              //cannot add a block if not all justifications are known
+              false
+            } else {
+              //TODO: check if block is an equivocation and update observed faults
 
-          Capture[F].capture {
-            blockLookup += (hash -> b) //add new block to total set
+              blockLookup += (hash -> b) //add new block to total set
 
-            //Assume that a non-equivocating validator must include
-            //its own latest message in the justification. Therefore,
-            //for a given validator the blocks are guaranteed to arrive in causal order.
-            _latestMessages.update(b.sender, hash)
+              //Assume that a non-equivocating validator must include
+              //its own latest message in the justification. Therefore,
+              //for a given validator the blocks are guaranteed to arrive in causal order.
+              _latestMessages.update(b.sender, hash)
 
-            //add current block as new child to each of its parents
-            bParents.foreach(p => {
-              val currChildren = _childMap.getOrElse(p, new mutable.HashSet[BlockHash]())
-              currChildren += hash
-            })
-          } *> true.pure[F]
-        }
-      }
+              //add current block as new child to each of its parents
+              bParents.foreach(p => {
+                val currChildren = _childMap.getOrElseUpdate(p, new mutable.HashSet[BlockHash]())
+                currChildren += hash
+              })
+
+              true
+            }
+          })
 
       private def reAttemptBuffer: F[Unit] = {
         val attempts   = blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
@@ -266,43 +280,45 @@ sealed abstract class MultiParentCasperInstances {
         parents(b).iterator
       }
 
-      private def scoresMap: mutable.HashMap[BlockHash, Int] = {
-        val result = new mutable.HashMap[BlockHash, Int]() {
-          final override def default(hash: BlockHash): Int = 0
-        }
+      private def scoresMap: F[mutable.HashMap[BlockHash, Int]] =
+        ().pure[F]
+          .map(_ => {
+            val result = new mutable.HashMap[BlockHash, Int]() {
+              final override def default(hash: BlockHash): Int = 0
+            }
 
-        _latestMessages.foreach {
-          case (validator, lhash) =>
-            //propagate scores for each validator along the dag they support
-            bfTraverse[BlockHash](Some(lhash))(hashParents).foreach(hash => {
-              val b         = blockLookup(hash)
-              val currScore = result.getOrElse(hash, 0)
+            _latestMessages.foreach {
+              case (validator, lhash) =>
+                //propagate scores for each validator along the dag they support
+                bfTraverse[BlockHash](Some(lhash))(hashParents).foreach(hash => {
+                  val b         = blockLookup(hash)
+                  val currScore = result.getOrElse(hash, 0)
 
-              val validatorWeight = mainParent(blockLookup, b)
-                .map(weightMap(_).getOrElse(validator, 0))
-                .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+                  val validatorWeight = mainParent(blockLookup, b)
+                    .map(weightMap(_).getOrElse(validator, 0))
+                    .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
 
-              result.update(hash, currScore + validatorWeight)
-            })
-
-            //add scores to the blocks implicitly supported through
-            //including a latest block as a "step parent"
-            _childMap
-              .get(lhash)
-              .foreach(children => {
-                children.foreach(cHash => {
-                  val c = blockLookup(cHash)
-                  if (parents(c).size > 1 && c.sender != validator) {
-                    val currScore       = result(cHash)
-                    val validatorWeight = weightMap(c).getOrElse(validator, 0)
-                    result.update(cHash, currScore + validatorWeight)
-                  }
+                  result.update(hash, currScore + validatorWeight)
                 })
-              })
-        }
 
-        result
-      }
+                //add scores to the blocks implicitly supported through
+                //including a latest block as a "step parent"
+                _childMap
+                  .get(lhash)
+                  .foreach(children => {
+                    children.foreach(cHash => {
+                      val c = blockLookup(cHash)
+                      if (parents(c).size > 1 && c.sender != validator) {
+                        val currScore       = result(cHash)
+                        val validatorWeight = weightMap(c).getOrElse(validator, 0)
+                        result.update(cHash, currScore + validatorWeight)
+                      }
+                    })
+                  })
+            }
+
+            result
+          })
     }
 
   private def bfTraverse[A](start: Iterable[A])(neighbours: (A) => Iterator[A]): Iterator[A] =

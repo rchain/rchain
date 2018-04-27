@@ -23,7 +23,7 @@ object CommUtil {
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
-      _     <- Log[F].info(s"Beginning send to peers of block $b...")
+      _     <- Log[F].info(s"Beginning send to peers of block ${ProtoUtil.hashString(b)}...")
       peers <- NodeDiscovery[F].peers
       sends <- peers.toList.traverse { peer =>
                 frameMessage[F](peer, nonce => NetworkProtocol.framePacket(peer, serializedBlock))
