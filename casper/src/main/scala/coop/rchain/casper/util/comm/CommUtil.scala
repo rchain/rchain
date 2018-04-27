@@ -53,7 +53,7 @@ object CommUtil {
       _          <- MultiParentCasper[F].addBlock(b)
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
       _          <- sendBlock[F](b)
-    } yield s"Received block ${hashString(b)}; new fork-choice is ${hashString(forkchoice)}."
+    } yield s"Received block ${hashString(b)}. New fork-choice is TODO. ${hashString(forkchoice)}"
 
   private def hashString(b: BlockMessage): String =
     Base16.encode(b.blockHash.toByteArray)
