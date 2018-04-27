@@ -1,15 +1,24 @@
 package coop.rchain.p2p
 
 import coop.rchain.p2p.effects._
+
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing, routing.Header
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm.protocol.routing
+import routing.Header
+import coop.rchain.comm._
+import CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
+
 import scala.util.control.NonFatal
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import com.google.protobuf.ByteString
+import ski._
 
 /*
  * Inspiration from ethereum:
@@ -279,10 +288,10 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       err: ApplicativeError_[F, CommError]): F[A] =
     oa.fold[F[A]](err.raiseError[A](error))(_.pure[F])
 
-  private def frameMessage[F[_]: Monad: Time: TransportLayer: Encryption](
-      remote: PeerNode,
-      frameable: Nonce => Frameable)(implicit keysStore: KeysStore[F],
-                                     err: ApplicativeError_[F, CommError]): F[FrameMessage] =
+  def frameMessage[F[_]: Monad: Time: TransportLayer: Encryption](remote: PeerNode,
+                                                                  frameable: Nonce => Frameable)(
+      implicit keysStore: KeysStore[F],
+      err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     frameIt[F](remote, frameable, (local, nonce, f) => frame(local, nonce, f))
 
   private def frameResponseMessage[F[_]: Monad: Time: TransportLayer: Encryption](
