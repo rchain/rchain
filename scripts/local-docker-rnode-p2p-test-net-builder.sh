@@ -26,7 +26,7 @@ git checkout ${branch_name}
 sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/debian:packageBin
 
 # Create docker network if it doesn't exist
-if [[ "$(sudo docker network list | grep ${network_name})" == "" ]]; then
+if [[ "$(sudo docker network list --format {{.Name}} | grep ^${network_name}$)" == "${network_name}" ]]; then
     sudo docker network create \
       --driver=bridge \
       --subnet=10.1.1.0/24 \
