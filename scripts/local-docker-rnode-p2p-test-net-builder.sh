@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # With Docker CE installed, this will build a simple private RChain P2P test network.
-# The test network contains a bootstrap server and two peers connecting to P2P network via bootstrap.
+# The test network contains a bootstrap server and two more peers connecting to P2P network via bootstrap.
 set -eo pipefail
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
@@ -64,7 +64,7 @@ for i in {0..2}; do
   
   sudo docker exec ${container_name} bash -c "
     apt -y update;
-    apt -y iputils-ping vim nano iproute2;
+    apt -y iputils-ping vim nano curl iproute2;
     apt -y install ./rnode_${branch_name}_all.deb;
     ${rnode_cmd}
     " 
@@ -76,8 +76,12 @@ echo "To display standalone bootstrap server rnode log:"
 echo "sudo docker exec node0.${network_name} bash -c \"tail -f /var/log/rnode.log\""
 echo "==============================================================="
 echo "To display node1 rnode log:"
-echo "sudo docker exec  node1.1.rnode.test.net bash -c \"tail -f /var/log/rnode.log\""
+echo "sudo docker exec node1.${network_name} bash -c \"tail -f /var/log/rnode.log\""
 echo "==============================================================="
-echo "To go into your standalone docker container:"
+echo "To view rnode metrics of bootstrap container:"
+echo "sudo docker exec node0.${network_name} bash -c \"curl 127.0.0.1:9095\""
+echo "==============================================================="
+echo "To go into your bootstrap/standalone docker container:"
 echo "sudo docker exec -it node0.${network_name} /bin/bash"
 echo "==============================================================="
+
