@@ -2,7 +2,8 @@ package coop.rchain.casper
 
 import cats.{Applicative, Monad}
 import cats.implicits._
-import coop.rchain.casper.protocol.{BlockMessage, Resource}
+import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.{Capture, IOUtil}
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
@@ -46,8 +47,12 @@ sealed abstract class MultiParentCasperInstances {
     def proposeBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
     def shouldSendBlock: F[Unit] =
       for {
-        _ <- IOUtil.sleep[F](5000L)
-        _ <- CommUtil.sendBlock[F](BlockMessage.defaultInstance)
+        _           <- IOUtil.sleep[F](5000L)
+        currentTime <- Time[F].currentMillis
+        postState = RChainState().withResources(
+          Seq(Resource(ProduceResource(Produce(currentTime.toInt)))))
+        block = BlockMessage().withBody(Body().withPostState(postState))
+        _     <- CommUtil.sendBlock[F](block)
       } yield ()
   }
 }
