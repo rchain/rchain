@@ -2,10 +2,12 @@ package coop.rchain.casper
 
 import cats.{Applicative, Monad}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.{Capture, IOUtil}
+import coop.rchain.crypto.hash.Sha256
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
 
@@ -51,7 +53,12 @@ sealed abstract class MultiParentCasperInstances {
         currentTime <- Time[F].currentMillis
         postState = RChainState().withResources(
           Seq(Resource(ProduceResource(Produce(currentTime.toInt)))))
-        block = BlockMessage().withBody(Body().withPostState(postState))
+        postStateHash  = Sha256.hash(postState.toByteArray)
+        header = Header()
+          .withPostStateHash(ByteString.copyFrom(postStateHash))
+        blockHash = Sha256.hash(header.toByteArray)
+        block = BlockMessage().withBlockHash(ByteString.copyFrom(blockHash))
+          .withBody(Body().withPostState(postState))
         _     <- CommUtil.sendBlock[F](block)
       } yield ()
   }
