@@ -12,7 +12,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.comm.ProtocolMessage
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p.effects._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.{frameMessage, ErrorHandler, KeysStore}
 import coop.rchain.p2p.NetworkProtocol
 
@@ -32,7 +31,7 @@ object CommUtil {
               }
       _ <- sends.traverse {
             case (Left(err), _)   => Log[F].error(s"$err")
-            case (Right(_), peer) => Log[F].info(s"Sent block ${hashString(b)} to $peer")
+            case (Right(_), peer) => Log[F].info(s"Sent block ${ProtoUtil.hashString(b)} to $peer")
           }
     } yield ()
   }
@@ -45,7 +44,7 @@ object CommUtil {
         for {
           isOldBlock <- MultiParentCasper[F].contains(b)
           logMessage <- if (isOldBlock) {
-                         s"Received block ${hashString(b)} again.".pure[F]
+                         s"Received block ${ProtoUtil.hashString(b)} again.".pure[F]
                        } else {
                          handleNewBlock[F](b)
                        }
@@ -71,10 +70,8 @@ object CommUtil {
       _          <- MultiParentCasper[F].addBlock(b)
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
       _          <- sendBlock[F](b)
-    } yield s"Received block ${hashString(b)}. New fork-choice is TODO. ${hashString(forkchoice)}"
-
-  private def hashString(b: BlockMessage): String =
-    Base16.encode(b.blockHash.toByteArray)
+    } yield
+      s"Received block ${ProtoUtil.hashString(b)}. New fork-choice is ${ProtoUtil.hashString(forkchoice)}"
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =

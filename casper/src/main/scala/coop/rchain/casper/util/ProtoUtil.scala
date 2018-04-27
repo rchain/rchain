@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Sha256
 
 import scala.annotation.tailrec
@@ -117,6 +118,8 @@ object ProtoUtil {
 
     blockProto(body, header, List.empty[Justification], ByteString.copyFrom(Array.empty[Byte]))
   }
+
+  def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def basicDeploy(id: Int): Deploy = {
     val nonce = scala.util.Random.nextInt(10000)

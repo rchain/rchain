@@ -90,7 +90,8 @@ sealed abstract class MultiParentCasperInstances {
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           success <- attemptAdd(b)
-          _ <- if (success) Log[F].info(s"CASPER: added block $b") *> reAttemptBuffer
+          _ <- if (success)
+                Log[F].info(s"CASPER: added block ${hashString(b)}") *> reAttemptBuffer
               else Capture[F].capture { blockBuffer += b }
         } yield ()
 
@@ -192,9 +193,12 @@ sealed abstract class MultiParentCasperInstances {
 
         proposal.flatMap {
           case mb @ Some(block) =>
-            Log[F].info(s"CASPER: Proposed block $block") *>
+            Log[F].info(s"CASPER: Proposed block ${hashString(block)}") *>
               addBlock(block) *>
               CommUtil.sendBlock[F](block) *>
+              estimator
+                .map(_.head)
+                .flatMap(forkchoice => Log[F].info(s"New fork-choice is ${hashString(forkchoice)}")) *>
               Monad[F].pure[Option[BlockMessage]](mb)
           case _ => Monad[F].pure[Option[BlockMessage]](None)
         }
