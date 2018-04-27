@@ -15,7 +15,7 @@ fi
 
 network_name="${NETWORK_UID}.rnode.test.net"
 
-sudo echo "" # Ask for sudo auth early
+sudo echo "" # Ask for sudo early
 
 # Create debian package from git repo via sbt
 git_dir=$(mktemp -d /tmp/rchain-git.XXXXXXXX)
@@ -28,11 +28,11 @@ sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/debian:packageBin
 # Create docker network if it doesn't exist
 if [[ "$(sudo docker network list --format {{.Name}} | grep ^${network_name}$)" == "${network_name}" ]]; then
     sudo docker network create \
-      --driver=bridge \
-      --subnet=10.1.1.0/24 \
-      --ip-range=10.1.1.0/24 \
-      --gateway=10.1.1.1 \
-      ${network_name}
+    --driver=bridge \
+    --subnet=10.1.1.0/24 \
+    --ip-range=10.1.1.0/24 \
+    --gateway=10.1.1.1 \
+    ${network_name}
 else
     echo "The network ${network_name} already exists."
 fi
@@ -59,7 +59,7 @@ for i in {0..2}; do
     fi
 
     branch_name="0.2.1"
-	sudo docker exec ${container_name} bash -c "apt -y update; apt -y iputils-ping bridge-utils iproute2; apt -y install ./rnode_${branch_name}_all.deb; mkdir /var/lib/rnode; ${rnode_cmd}" 
+    sudo docker exec ${container_name} bash -c "apt -y update; apt -y iputils-ping bridge-utils iproute2; apt -y install ./rnode_${branch_name}_all.deb; ${rnode_cmd}" 
 done
 
 echo "############################COMPLETE###########################"
