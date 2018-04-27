@@ -15,7 +15,7 @@ import java.io.{Reader, StringReader}
 
 object GrpcServer {
 
-  def acquireServer[F[_]: Capture: Functor: Communication: Futurable](
+  def acquireServer[F[_]: Capture: Functor: NodeDiscovery: Futurable](
       executionContext: ExecutionContext,
       port: Int,
       runtime: Runtime): F[Server] =
@@ -33,10 +33,10 @@ object GrpcServer {
       _ <- Log[F].info("gRPC server started, listening on ")
     } yield ()
 
-  class DiagnosticsImpl[F[_]: Functor: Communication: Futurable]
+  class DiagnosticsImpl[F[_]: Functor: NodeDiscovery: Futurable]
       extends DiagnosticsGrpc.Diagnostics {
     def listPeers(request: ListPeersRequest): Future[Peers] =
-      Communication[F].peers.map { ps =>
+      NodeDiscovery[F].peers.map { ps =>
         Peers(ps.map(p =>
           Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
       }.toFuture
