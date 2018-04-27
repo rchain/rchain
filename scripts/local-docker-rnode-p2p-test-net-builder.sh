@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# With Docker CE installed, this will build a simple private RChain P2P test network.
+# The test network contains a bootstrap server and two peers connecting to P2P network via bootstrap.
 set -eo pipefail
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
@@ -62,13 +64,13 @@ for i in {0..2}; do
     sudo docker exec ${container_name} bash -c "apt -y update; apt -y iputils-ping bridge-utils iproute2; apt -y install ./rnode_${branch_name}_all.deb; ${rnode_cmd}" 
 done
 
-echo "############################COMPLETE###########################"
+echo "############################COMPLETED###########################"
 echo "==============================================================="
-echo "Run below to display standalone bootstrap server rnode log:"
+echo "To display standalone bootstrap server rnode log:"
 echo "sudo docker exec  node0.1.rnode.test.net bash -c \"tail -f /var/log/rnode.log\""
 echo "==============================================================="
-echo "Run below to display node1 rnode log:"
+echo "To display node1 rnode log:"
 echo "sudo docker exec  node1.1.rnode.test.net bash -c \"tail -f /var/log/rnode.log\""
 echo "==============================================================="
-echo "Run below to go into standaloner server and do things:"
+echo "To go into your standalone docker container:"
 echo "sudo docker exec -it node0.1.rnode.test.net /bin/bash"
