@@ -41,15 +41,15 @@ for i in {0..2}; do
     container_name="node${i}.${network_name}"
     echo $container_name
 
-	# If container exists force remove it.
-	if [[ $(sudo docker ps -aq -f name=${container_name}) ]]; then
-		sudo docker rm -f ${container_name}
-	fi
+    # If container exists force remove it.
+    if [[ $(sudo docker ps -aq -f name=${container_name}) ]]; then
+        sudo docker rm -f ${container_name}
+    fi
 
-        sudo docker run -dit --name ${container_name} \
-        -v $git_dir/rchain/node/target/rnode_0.2.1_all.deb:/rnode_0.2.1_all.deb \
-        --network=${network_name} \
-        openjdk
+    sudo docker run -dit --name ${container_name} \
+    -v $git_dir/rchain/node/target/rnode_0.2.1_all.deb:/rnode_0.2.1_all.deb \
+    --network=${network_name} \
+    openjdk
 
     # Ret rnode run command depending on node nubmer
     if [[ $i == 0 ]]; then
