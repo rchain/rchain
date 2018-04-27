@@ -5,11 +5,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.{Capture, IOUtil}
-import coop.rchain.crypto.hash.Sha256
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
+
+import scala.annotation.tailrec
+import scala.collection.mutable
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[Unit]
@@ -17,7 +20,7 @@ trait Casper[F[_], A] {
   def deploy(d: Deploy): F[Unit]
   def estimator: F[A]
   def proposeBlock: F[Option[BlockMessage]]
-  def shouldSendBlock: F[Unit]
+  def sendBlockWhenReady: F[Unit]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]]
@@ -31,15 +34,15 @@ sealed abstract class MultiParentCasperInstances {
     new MultiParentCasper[F] {
       def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
       def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-      def deploy(r: Resource): F[Unit]          = ().pure[F]
+      def deploy(r: Deploy): F[Unit]            = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
       def proposeBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-      def shouldSendBlock: F[Unit]              = ().pure[F]
+      def sendBlockWhenReady: F[Unit]           = ().pure[F]
     }
 
   def simpleCasper[
-      F[_]: Monad: Capture: Applicative: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler]
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler]
     : MultiParentCasper[F] = new MultiParentCasper[F] {
     def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
     def contains(b: BlockMessage): F[Boolean] = false.pure[F]
@@ -47,24 +50,22 @@ sealed abstract class MultiParentCasperInstances {
     def estimator: F[IndexedSeq[BlockMessage]] =
       Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
     def proposeBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-    def shouldSendBlock: F[Unit] =
+    def sendBlockWhenReady: F[Unit] =
       for {
         _           <- IOUtil.sleep[F](5000L)
         currentTime <- Time[F].currentMillis
         postState = RChainState().withResources(
           Seq(Resource(ProduceResource(Produce(currentTime.toInt)))))
-        postStateHash  = Sha256.hash(postState.toByteArray)
-        header = Header()
-          .withPostStateHash(ByteString.copyFrom(postStateHash))
-        blockHash = Sha256.hash(header.toByteArray)
-        block = BlockMessage().withBlockHash(ByteString.copyFrom(blockHash))
-          .withBody(Body().withPostState(postState))
-        _     <- CommUtil.sendBlock[F](block)
+        body   = Body().withPostState(postState)
+        header = blockHeader(body, List.empty[ByteString])
+        block  = blockProto(body, header, List.empty[Justification], ByteString.EMPTY)
+        _      <- CommUtil.sendBlock[F](block)
       } yield ()
   }
 
   //TODO: figure out Casper key management for validators
-  def hashSetCasper[F[_]: Monad: Capture](
+  def hashSetCasper[
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       id: ByteString,
       genesis: BlockMessage = genesisBlock): MultiParentCasper[F] =
     //TODO: Get rid of all the mutable data structures and write proper FP code
@@ -81,6 +82,7 @@ sealed abstract class MultiParentCasperInstances {
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
+      private val deployBuff: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
       private val decreasingOrder                     = Ordering[Int].reverse
 
       blockLookup += (genesis.blockHash -> genesis)
@@ -96,6 +98,7 @@ sealed abstract class MultiParentCasperInstances {
       }
 
       def deploy(d: Deploy): F[Unit] = Capture[F].capture {
+        deployBuff += d
         deployHist += d
       }
 
@@ -185,6 +188,16 @@ sealed abstract class MultiParentCasperInstances {
           })
         })
       }
+
+      def sendBlockWhenReady: F[Unit] =
+        if (deployBuff.size < 10) {
+          IOUtil.sleep[F](60000L) //wait some time before checking again
+        } else {
+          val fSend     = proposeBlock.map(_.map(CommUtil.sendBlock[F]))
+          val clearBuff = Capture[F].capture { deployBuff.clear() }
+
+          fSend *> clearBuff
+        }
 
       private def attemptAdd(b: BlockMessage): F[Boolean] = {
         val hash     = b.blockHash

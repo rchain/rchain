@@ -99,7 +99,7 @@ class NodeRuntime(conf: Conf) {
             .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
             .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr))
     _ <- MonadOps
-          .forever(MultiParentCasper[Effect].shouldSendBlock.value.void)
+          .forever(MultiParentCasper[Effect].sendBlockWhenReady.value.void)
           .executeAsync
           .start
           .toEffect

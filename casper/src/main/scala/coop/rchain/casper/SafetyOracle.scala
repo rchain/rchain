@@ -131,6 +131,6 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
   // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)
   private def maxCliqueMinSize(vertices: Int, edges: Int) = {
     val verticesSquared = vertices * vertices
-    math.ceil(verticesSquared.toFloat / (verticesSquared - 2 * edges).toFloat).toInt
+    math.ceil(verticesSquared.toDouble / (verticesSquared - 2 * edges).toDouble).toInt
   }
 }
