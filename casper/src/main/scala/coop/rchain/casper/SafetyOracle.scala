@@ -84,7 +84,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                           case Justification(_, latestBlock: ByteString) => latestBlock
                         }
         justificationBlock <- blocks.get(justification)
-        if justificationBlock.sig == second && compatible(estimate, justificationBlock)
+        if justificationBlock.sender == second && compatible(estimate, justificationBlock)
       } yield justificationBlock).nonEmpty
 
     // TODO: Potentially replace with isInBlockDAG
@@ -103,7 +103,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                           }
           justificationBlock <- blocks.get(justification).toList
           child              <- filterChildren(justificationBlock, blocks)
-          if child.sig == second
+          if child.sender == second
         } yield child
       potentialDisagreements.forall { potentialDisagreement =>
         compatible(estimate, potentialDisagreement)
