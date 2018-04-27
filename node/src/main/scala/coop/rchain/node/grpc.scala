@@ -9,18 +9,21 @@ import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.execution.Scheduler
+import com.google.protobuf.ByteString
 
 import java.io.{Reader, StringReader}
 
 object GrpcServer {
 
-  def acquireServer[F[_]: Capture](executionContext: ExecutionContext,
-                                   port: Int,
-                                   runtime: Runtime): F[Server] =
+  def acquireServer[F[_]: Capture: Functor: Communication: Futurable](
+      executionContext: ExecutionContext,
+      port: Int,
+      runtime: Runtime): F[Server] =
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
         .addService(ReplGrpc.bindService(new ReplImpl(runtime), executionContext))
+        .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], executionContext))
         .build
     }
 
@@ -29,6 +32,15 @@ object GrpcServer {
       _ <- Capture[F].capture(server.start)
       _ <- Log[F].info("gRPC server started, listening on ")
     } yield ()
+
+  class DiagnosticsImpl[F[_]: Functor: Communication: Futurable]
+      extends DiagnosticsGrpc.Diagnostics {
+    def listPeers(request: ListPeersRequest): Future[Peers] =
+      Communication[F].peers.map { ps =>
+        Peers(ps.map(p =>
+          Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
+      }.toFuture
+  }
 
   class ReplImpl(runtime: Runtime) extends ReplGrpc.Repl {
     import RholangCLI._

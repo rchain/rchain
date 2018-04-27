@@ -18,6 +18,7 @@ import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
+import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext
 
@@ -43,6 +44,8 @@ class NodeRuntime(conf: Conf) {
   val runtime: Runtime = Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size())
 
   val net = new UnicastNetwork(src, Some(p2p.Network))
+
+  type Eff[A] = EitherT[Task, CommError, A]
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -89,9 +92,9 @@ class NodeRuntime(conf: Conf) {
 
   case class Resources(grpcServer: Server)
 
-  def aquireResources: Task[Resources] =
+  def aquireResources(implicit scheduler: Scheduler): Effect[Resources] =
     GrpcServer
-      .acquireServer[Task](ExecutionContext.global, conf.grpcPort(), runtime)
+      .acquireServer[Effect](ExecutionContext.global, conf.grpcPort(), runtime)
       .map(Resources(_))
 
   def addShutdownHook(resources: Resources): Task[Unit] =
@@ -114,9 +117,9 @@ class NodeRuntime(conf: Conf) {
         }
       }
 
-  def nodeProgram: Effect[Unit] =
+  def nodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
     for {
-      resources <- aquireResources.toEffect
+      resources <- aquireResources
       _         <- GrpcServer.start[Effect](resources.grpcServer)
       _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
       _         <- addShutdownHook(resources).toEffect
