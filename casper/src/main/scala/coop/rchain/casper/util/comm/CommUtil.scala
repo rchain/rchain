@@ -37,11 +37,11 @@ object CommUtil {
     Function.unlift(packetToBlockMessage).andThen {
       case b: BlockMessage =>
         for {
-          isNewBlock <- MultiParentCasper[F].contains(b)
-          logMessage <- if (isNewBlock) {
-                         handleNewBlock[F](b)
-                       } else {
+          isOldBlock <- MultiParentCasper[F].contains(b)
+          logMessage <- if (isOldBlock) {
                          s"Received block ${hashString(b)} again.".pure[F]
+                       } else {
+                         handleNewBlock[F](b)
                        }
         } yield logMessage
     }
