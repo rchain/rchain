@@ -4,6 +4,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
+  Bundle => ABundle,
   _
 }
 import org.scalatest._
@@ -732,7 +733,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PBundle" should "normalize terms inside a bundle" in {
-    val pbundle     = new PBundle(new PVar(new ProcVarVar("x")))
+    val pbundle     = new PBundle(new BundleReadWrite(), new PVar(new ProcVarVar("x")))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pbundle, boundInputs)
@@ -751,7 +752,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     */
   it should "throw an error when wildcard of free variable is found inside body of bundle" in {
     val pbundle =
-      new PBundle(new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
+      new PBundle(new BundleReadWrite(),
+                  new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
 
     an[UnexpectedBundleContent] should be thrownBy (
       ProcNormalizeMatcher.normalizeMatch(pbundle,
