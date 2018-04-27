@@ -175,7 +175,7 @@ object SpatialMatcher {
       }
     }
 
-  /** TODO: Consider moving this inside [[listMatchItem]]
+  /** TODO(mateusz.gorski): Consider moving this inside [[listMatchItem]]
     */
   private[this] def singleOut[A](vals: Seq[A]): Seq[(Seq[A], A, Seq[A])] =
     vals.tails

@@ -535,7 +535,7 @@ object ProcNormalizeMatcher {
         if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
           val errMsg = {
             def at(variable: String, l: Int, col: Int): String =
-              s"line: $l, column: $col"
+              s"$variable line: $l, column: $col"
             val wildcardsPositions = targetResult.knownFree.wildcards.map {
               case (l, col) => at("", l, col)
             }
