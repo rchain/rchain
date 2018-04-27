@@ -64,7 +64,7 @@ for i in {0..2}; do
   
   sudo docker exec ${container_name} bash -c "
     apt -y update;
-    apt -y iputils-ping bridge-utils iproute2;
+    apt -y iputils-ping vim nano iproute2;
     apt -y install ./rnode_${branch_name}_all.deb;
     ${rnode_cmd}
     " 
