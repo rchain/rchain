@@ -177,7 +177,7 @@ sealed abstract class MultiParentCasperInstances {
               val newPostState = parentPoststate
                 .withBlockNumber(parentPoststate.blockNumber + 1)
               //TODO: only pick non-conflicting deploys
-              val deploys = requests.toSeq
+              val deploys = requests.take(10).toSeq
               //TODO: include reductions
               val body = Body()
                 .withPostState(newPostState)
@@ -192,7 +192,10 @@ sealed abstract class MultiParentCasperInstances {
 
         proposal.flatMap {
           case mb @ Some(block) =>
-            Log[F].info(s"CASPER: Proposed block $block") *> Monad[F].pure[Option[BlockMessage]](mb)
+            Log[F].info(s"CASPER: Proposed block $block") *>
+              addBlock(block) *>
+              CommUtil.sendBlock[F](block) *>
+              Monad[F].pure[Option[BlockMessage]](mb)
           case _ => Monad[F].pure[Option[BlockMessage]](None)
         }
       }
@@ -206,10 +209,9 @@ sealed abstract class MultiParentCasperInstances {
                 s"CASPER: Not ready yet, only ${deployBuff.size} deploys accumulated, waiting...") *>
                 IOUtil.sleep[F](60000L) //wait some time before checking again
             } else {
-              val fSend     = proposeBlock.map(_.map(CommUtil.sendBlock[F]))
               val clearBuff = Capture[F].capture { deployBuff.clear() }
 
-              fSend *> clearBuff
+              proposeBlock *> clearBuff
             }
           })
 
