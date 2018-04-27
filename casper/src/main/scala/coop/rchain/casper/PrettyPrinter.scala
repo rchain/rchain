@@ -48,7 +48,7 @@ object PrettyPrinter {
           resourceClass match {
             case ProduceResource(produce) => s"Produce ${produce.id}"
             case ConsumeResource(consume) => s"Consume ${consume.id}"
-            case StoppedResource(_)       => ""
+            case _                        => ""
           }
       }
       .mkString("[", ",", "]")

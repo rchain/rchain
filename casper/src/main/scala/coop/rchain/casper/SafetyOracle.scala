@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
-import util._
+import coop.rchain.casper.util.ProtoUtil._
 import monix.eval.Task
 
 import scala.collection
@@ -84,7 +84,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                           case Justification(_, latestBlock: ByteString) => latestBlock
                         }
         justificationBlock <- blocks.get(justification)
-        if justificationBlock.sig == second && compatible(estimate, justificationBlock)
+        if justificationBlock.sender == second && compatible(estimate, justificationBlock)
       } yield justificationBlock).nonEmpty
 
     // TODO: Potentially replace with isInBlockDAG
@@ -103,7 +103,7 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
                           }
           justificationBlock <- blocks.get(justification).toList
           child              <- filterChildren(justificationBlock, blocks)
-          if child.sig == second
+          if child.sender == second
         } yield child
       potentialDisagreements.forall { potentialDisagreement =>
         compatible(estimate, potentialDisagreement)
@@ -131,6 +131,6 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
   // See Turan's theorem (https://en.wikipedia.org/wiki/Tur%C3%A1n%27s_theorem)
   private def maxCliqueMinSize(vertices: Int, edges: Int) = {
     val verticesSquared = vertices * vertices
-    math.ceil(verticesSquared.toFloat / (verticesSquared - 2 * edges).toFloat).toInt
+    math.ceil(verticesSquared.toDouble / (verticesSquared - 2 * edges).toDouble).toInt
   }
 }
