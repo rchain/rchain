@@ -46,11 +46,11 @@ for i in {0..2}; do
 		sudo docker rm -f ${container_name}
 	fi
 
-	sudo docker run -dit --name ${container_name} \
+        sudo docker run -dit --name ${container_name} \
         -v $git_dir/rchain/node/target/rnode_0.2.1_all.deb:/rnode_0.2.1_all.deb \
         --network=${network_name} \
         openjdk
-    
+
     # Ret rnode run command depending on node nubmer
     if [[ $i == 0 ]]; then
         rnode_cmd="rnode --port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352 > /var/log/rnode.log 2>&1 &"
