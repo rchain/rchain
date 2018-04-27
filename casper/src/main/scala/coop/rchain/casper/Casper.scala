@@ -90,17 +90,19 @@ sealed abstract class MultiParentCasperInstances {
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           success <- attemptAdd(b)
-          _       <- if (success) reAttemptBuffer else Capture[F].capture { blockBuffer += b }
+          _ <- if (success) Log[F].info(s"CASPER: added block $b") *> reAttemptBuffer
+              else Capture[F].capture { blockBuffer += b }
         } yield ()
 
       def contains(b: BlockMessage): F[Boolean] = Capture[F].capture {
         blockLookup.contains(b.blockHash)
       }
 
-      def deploy(d: Deploy): F[Unit] = Capture[F].capture {
-        deployBuff += d
-        deployHist += d
-      }
+      def deploy(d: Deploy): F[Unit] =
+        Capture[F].capture {
+          deployBuff += d
+          deployHist += d
+        } *> Log[F].info(s"CASPER: Received deploy $d")
 
       def estimator: F[IndexedSeq[BlockMessage]] = {
         val fScores = Capture[F].capture { scoresMap }
@@ -154,7 +156,7 @@ sealed abstract class MultiParentCasperInstances {
           remDeploys
         })
 
-        p.flatMap(parents => {
+        val proposal = p.flatMap(parents => {
           //TODO: Compute this properly
           val parentPoststate = parents.head.body.get.postState.get
           val justifications  = justificationProto(_latestMessages)
@@ -187,17 +189,29 @@ sealed abstract class MultiParentCasperInstances {
             }
           })
         })
+
+        proposal.flatMap {
+          case mb @ Some(block) =>
+            Log[F].info(s"CASPER: Proposed block $block") *> Monad[F].pure[Option[BlockMessage]](mb)
+          case _ => Monad[F].pure[Option[BlockMessage]](None)
+        }
       }
 
       def sendBlockWhenReady: F[Unit] =
-        if (deployBuff.size < 10) {
-          IOUtil.sleep[F](60000L) //wait some time before checking again
-        } else {
-          val fSend     = proposeBlock.map(_.map(CommUtil.sendBlock[F]))
-          val clearBuff = Capture[F].capture { deployBuff.clear() }
+        Log[F]
+          .info("CASPER: Checking if ready to propose a new block...")
+          .flatMap(_ => {
+            if (deployBuff.size < 10) {
+              Log[F].info(
+                s"CASPER: Not ready yet, only ${deployBuff.size} deploys accumulated, waiting...") *>
+                IOUtil.sleep[F](60000L) //wait some time before checking again
+            } else {
+              val fSend     = proposeBlock.map(_.map(CommUtil.sendBlock[F]))
+              val clearBuff = Capture[F].capture { deployBuff.clear() }
 
-          fSend *> clearBuff
-        }
+              fSend *> clearBuff
+            }
+          })
 
       private def attemptAdd(b: BlockMessage): F[Boolean] = {
         val hash     = b.blockHash

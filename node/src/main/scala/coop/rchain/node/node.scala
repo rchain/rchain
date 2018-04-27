@@ -10,7 +10,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
+import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, deployService}
 import coop.rchain.comm._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
@@ -66,12 +66,10 @@ class NodeRuntime(conf: Conf) {
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
 
-  //implicit val casperEffect: MultiParentCasper[Effect]      = MultiParentCasper.hashSetCasper[Effect](
-  //  //TODO: figure out actual validator identities...
-  //  com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte))
-  //)
-
-  implicit val casperEffect: MultiParentCasper[Effect]      = MultiParentCasper.simpleCasper[Effect]
+  implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
+    //TODO: figure out actual validator identities...
+    com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte))
+  )
 
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
@@ -100,6 +98,11 @@ class NodeRuntime(conf: Conf) {
             .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr))
     _ <- MonadOps
           .forever(MultiParentCasper[Effect].sendBlockWhenReady.value.void)
+          .executeAsync
+          .start
+          .toEffect
+    _ <- MonadOps
+          .forever(deployService[Effect].value.void)
           .executeAsync
           .start
           .toEffect

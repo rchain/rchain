@@ -3,6 +3,7 @@ package coop.rchain.casper.util
 import com.google.protobuf.ByteString
 
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.crypto.hash.Sha256
 
 import scala.annotation.tailrec
@@ -115,5 +116,15 @@ object ProtoUtil {
     val header = blockHeader(body, List.empty[ByteString])
 
     blockProto(body, header, List.empty[Justification], ByteString.copyFrom(Array.empty[Byte]))
+  }
+
+  def basicDeploy(id: Int): Deploy = {
+    val nonce = scala.util.Random.nextInt(10000)
+    val r     = Resource(ProduceResource(Produce(id)))
+
+    Deploy()
+      .withUser(ByteString.EMPTY)
+      .withNonce(nonce)
+      .withResource(r)
   }
 }

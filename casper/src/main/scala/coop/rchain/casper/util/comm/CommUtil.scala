@@ -2,8 +2,13 @@ package coop.rchain.casper.util.comm
 
 import cats.{Applicative, Monad}
 import cats.implicits._
+
+import com.google.protobuf.ByteString
+
+import coop.rchain.catscontrib.{Capture, IOUtil}
 import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.protocol._
 import coop.rchain.comm.ProtocolMessage
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p.effects._
@@ -45,6 +50,18 @@ object CommUtil {
                        }
         } yield logMessage
     }
+
+  //Simulates user requests by randomly deploying things to Casper.
+  //TODO: replace with proper service to handle deploy requests
+  def deployService[F[_]: Monad: MultiParentCasper: Capture]: F[Unit] = {
+    val wait = IOUtil.sleep[F](4000L)
+    val genDeploy = Capture[F].capture {
+      val id = scala.util.Random.nextInt(100)
+      ProtoUtil.basicDeploy(id)
+    }
+
+    wait *> genDeploy.flatMap(d => MultiParentCasper[F].deploy(d))
+  }
 
   private def handleNewBlock[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
