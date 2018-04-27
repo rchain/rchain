@@ -67,7 +67,7 @@ for i in {0..2}; do
     apt -y iputils-ping bridge-utils iproute2;
     apt -y install ./rnode_${branch_name}_all.deb;
     ${rnode_cmd}
-  " 
+    " 
 done
 
 echo "############################COMPLETED###########################"
