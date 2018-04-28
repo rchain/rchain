@@ -10,7 +10,7 @@ if [[ $1 && $2 ]]; then
   branch_name=$2
   echo "Creating docker rnode test-net for ${git_repo} ${branch_name}"
 else
-  echo "Usage: $0 <repo url>> <branch name>"
+  echo "Usage: $0 <repo url> <branch name>"
   echo "Usage: $0 https://github.com/rchain/rchain dev"
   exit
 fi
