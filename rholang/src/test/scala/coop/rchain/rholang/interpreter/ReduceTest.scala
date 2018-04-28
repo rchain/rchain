@@ -85,6 +85,30 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result.exprs should be(expected)
   }
 
+  "eval of Bundle" should "evaluate contents of bundle" in {
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val bundleSend =
+        Bundle(Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet()))
+      val interpreter = reducer
+      val resultTask  = interpreter.eval(bundleSend)(Env())
+      val inspectTask = for {
+        _ <- resultTask
+      } yield store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("channel")))) ->
+          Row(
+            List(Datum[List[Channel]](List[Channel](Quote(GInt(7)), Quote(GInt(8)), Quote(GInt(9))),
+                                      false)),
+            List()
+          )
+      ))
+  }
+
   "eval of Send" should "place something in the tuplespace." in {
     val result = withTestStore { store =>
       val reducer = RholangOnlyDispatcher.create(store).reducer
