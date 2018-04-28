@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # With Docker CE installed, this will build a simple private RChain P2P test network.
 # The test network contains a bootstrap server and two more peers connecting to P2P network via bootstrap.
+
 set -eo pipefail
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
@@ -27,17 +28,26 @@ cd rchain
 git checkout ${branch_name}
 sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/debian:packageBin
 
-# Create docker network if it doesn't exist
-if [[ "$(sudo docker network list --format {{.Name}} | grep ^${network_name}$)" == "" ]]; then
-  sudo docker network create \
-    --driver=bridge \
-    --subnet=10.1.1.0/24 \
-    --ip-range=10.1.1.0/24 \
-    --gateway=10.1.1.1 \
-    ${network_name}
-else
-  echo "The network ${network_name} already exists."
+echo "done"
+exit
+
+# Remove docker containers related to a network 
+for i in $(docker container ps --format {{.Names}} | grep \.${network_name}$); do
+    echo "Force removing docker container $i"
+    sudo docker rm -f $i
+done
+
+if [[ "$(sudo docker network list --format {{.Name}} | grep ^${network_name}$)" != "" ]]; then
+  echo "Removing docker network ${network_name}"
+  sudo docker network rm ${network_name}
 fi
+
+sudo docker network create \
+  --driver=bridge \
+  --subnet=169.254.1.0/24 \
+  --ip-range=169.254.1.0/24 \
+  --gateway=169.254.1.1 \
+  ${network_name}
 
 for i in {0..2}; do
   container_name="node${i}.${network_name}"
@@ -51,20 +61,22 @@ for i in {0..2}; do
   sudo docker run -dit --name ${container_name} \
     -v $git_dir/rchain/node/target/rnode_0.2.1_all.deb:/rnode_0.2.1_all.deb \
     --network=${network_name} \
-    openjdk
+    ubuntu:16.04 
+  # phusion/baseimage-docker - alternate image
 
   # Ret rnode run command depending on node nubmer
   if [[ $i == 0 ]]; then
     rnode_cmd="rnode --port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352 > /var/log/rnode.log 2>&1 &"
   else
-    rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@10.1.1.2:30304 > /var/log/rnode.log 2>&1 &"
+    rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@169.254.1.2:30304 > /var/log/rnode.log 2>&1 &"
   fi
 
   branch_name="0.2.1"
   
   sudo docker exec ${container_name} bash -c "
     apt -y update;
-    apt -y iputils-ping vim nano curl iproute2;
+    mkdir -p /var/lib/rnode;
+    apt -y openjdk-8-jdk vim nano curl iproute2;
     apt -y install ./rnode_${branch_name}_all.deb;
     ${rnode_cmd}
     " 
@@ -84,4 +96,3 @@ echo "==============================================================="
 echo "To go into your bootstrap/standalone docker container:"
 echo "sudo docker exec -it node0.${network_name} /bin/bash"
 echo "==============================================================="
-
