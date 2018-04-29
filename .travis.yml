@@ -3,7 +3,8 @@ dist: trusty
 
 before_install:
   - eval "$(ssh-agent -s)" #start the ssh agent
-  - openssl aes-256-cbc -K $encrypted_e29707d24bca_key -iv $encrypted_e29707d24bca_iv -in .travis/id_rsa.enc -out /tmp/id_rsa -d
+  - openssl aes-256-cbc -K $encrypted_e29707d24bca_key -iv $encrypted_e29707d24bca_iv \
+    -in .travis/id_rsa.enc -out /tmp/id_rsa -d
   - ssh-add <(cat /tmp/id_rsa)
 
 matrix:
@@ -114,4 +115,4 @@ notifications:
   email:
     recipients: rchain-makers@pyrofex.net
     on_success: never
-    on_failure: never 
+    on_failure: always 
