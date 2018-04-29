@@ -16,8 +16,8 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
 
     # Generate rnode debian and rpm packages - push to repo and then to p2p test net
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin 
-    scp -P 10003 node/target/rnode_0.2.1_all.deb ${SSH_USERNAME}@repo.rchain.space/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
-    scp -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USERNAME}@repo.rchain.space/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
+    scp -P 10003 node/target/rnode_0.2.1_all.deb ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
+    scp -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
 
     # Update rnode test network containers with branch
     for i in {1..4}; do
