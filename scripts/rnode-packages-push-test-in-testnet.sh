@@ -33,16 +33,16 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
             rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@10.1.1.2:30304 > /var/log/rnode.log 2>&1 &"
         fi
 
-        ssh -p 4000{$} ${SSH_USERNAME}@repo.rchain.space <<-EOM
-            rm rnode_${TRAVIS_BRANCH}_all.deb
-            wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb
-            pkill rnode
-            pkill java
-            apt -y --purge rnode
-            apt -y install ./rnode_${TRAVIS_BRANCH}_all.deb
-            ${rnode_cmd} 
+        ssh -p 4000{$i} ${SSH_USERNAME}@repo.rchain.space " 
+            rm rnode_${TRAVIS_BRANCH}_all.deb;
+            wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
+            pkill rnode;
+            pkill java;
+            apt -y --purge rnode;
+            apt -y install ./rnode_${TRAVIS_BRANCH}_all.deb;
+            ${rnode_cmd};
             exit
-        EOM
+            " 
     done
 
 else
