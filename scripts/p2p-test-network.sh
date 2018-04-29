@@ -2,11 +2,14 @@
 ## Update P2P test network if correct repo and branch.
 set -eo pipefail
 
+SSH_USERNAME="root"
+
 # Tag and push rnode docker container when it meets criteria.
 if [[ "${TRAVIS_BRANCH}" = "master" || \
       "${TRAVIS_BRANCH}" = "dev" || \
       "${TRAVIS_BRANCH}" = "ops-test" ]] \
-    && [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
+    && [[ "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
+    #&& [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
 
     echo "Travis branch ${TRAVIS_BRANCH} matched and from repo rchain/rchain. Pushing rnode to Docker repo."
 
@@ -57,5 +60,5 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
 	done
 
 else
-    echo "Ignored. Build and tests not ran as not correct branch and from rchain/rchain repo."
+    echo "Ignored. P2P test net update skipped as it is not correct branch and from rchain/rchain repo."
 fi
