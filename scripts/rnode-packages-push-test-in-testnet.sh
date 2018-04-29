@@ -42,6 +42,20 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
                 " 
     done
 
+    # Check that metrics api is functioning with correct peers_total
+	for i in {1..4}; do
+		sleep 60 # Be sure rnode has completely started up before checking metrics 
+		ssh_tcp_port=$((40000+$i))
+		res=$(ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+			-p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space "
+			curl -s 127.0.0.1:9095 | grep "^peers_total";
+			")
+		if [[ ! "$res" ==  "peers_total 3.0" ]]; then
+			echo "E: Peers total isn't correct. Metrics or P2P comms issues"
+			exit
+		fi
+	done
+
 else
     echo "Ignored. Build and tests not ran as not correct branch and from rchain/rchain repo."
 fi
