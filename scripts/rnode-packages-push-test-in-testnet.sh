@@ -2,22 +2,22 @@
 ## Tag and push newly built image if correct repo and branch.
 set -exo pipefail
 
-echo "TRAVIS_BRANCH = ${TRAVIS_BRANCH}"
-echo "TRAVIS_PULL_REQUEST = ${TRAVIS_PULL_REQUEST}"
-echo "TRAVIS_REPO_SLUG = ${TRAVIS_REPO_SLUG}"
-
 # Tag and push rnode docker container when it meets criteria.
 if [[ "${TRAVIS_BRANCH}" = "master" || \
       "${TRAVIS_BRANCH}" = "dev" || \
       "${TRAVIS_BRANCH}" = "ops-test" ]] \
-&& [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then # alternate if
+    && [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then # alternate if
 
     echo "Travis branch ${TRAVIS_BRANCH} matched and from repo rchain/rchain. Pushing rnode to Docker repo."
 
     # Generate rnode debian and rpm packages - push to repo and then to p2p test net
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin 
-    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 10003 node/target/rnode_0.2.1_all.deb ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
-    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 10003 \
+        node/target/rnode_0.2.1_all.deb \
+        ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm \
+        ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
 
     # Update rnode test network containers with branch
     for i in {1..4}; do
@@ -33,9 +33,9 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
         ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space " 
             rm rnode_${TRAVIS_BRANCH}_all.deb;
             wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
-            pkill rnode;
-            pkill java;
-            apt -y --purge rnode;
+            pkill -9 rnode;
+            pkill -9 java;
+            apt -y remove --purge rnode;
             apt -y install ./rnode_${TRAVIS_BRANCH}_all.deb;
             ${rnode_cmd}
             " 
