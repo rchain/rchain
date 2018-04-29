@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-## Tag and push newly built image if correct repo and branch.
+## Update P2P test network if correct repo and branch.
 set -eo pipefail
 
 # Tag and push rnode docker container when it meets criteria.
