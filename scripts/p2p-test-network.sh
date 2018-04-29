@@ -37,7 +37,6 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
             -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space " 
                 rm rnode_${TRAVIS_BRANCH}_all.deb;
                 wget --quiet https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
-                pkill -9 rnode;
                 pkill -9 java;
                 apt -y remove --purge rnode;
                 apt -y install ./rnode_${TRAVIS_BRANCH}_all.deb;
