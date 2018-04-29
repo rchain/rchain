@@ -37,8 +37,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
             pkill java;
             apt -y --purge rnode;
             apt -y install ./rnode_${TRAVIS_BRANCH}_all.deb;
-            ${rnode_cmd};
-            exit
+            ${rnode_cmd}
             " 
     done
 
