@@ -29,7 +29,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
             rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@10.1.1.2:30304 > /var/log/rnode.log 2>&1 &"
         fi
         
-        ssh_tcp_port=$((4000+$i))
+        ssh_tcp_port=$((40000+$i))
         ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space " 
             rm rnode_${TRAVIS_BRANCH}_all.deb;
             wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
