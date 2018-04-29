@@ -36,7 +36,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
         ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space " 
                 rm rnode_${TRAVIS_BRANCH}_all.deb;
-                wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
+                wget --quiet https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
                 pkill -9 rnode;
                 pkill -9 java;
                 apt -y remove --purge rnode;
@@ -54,7 +54,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
 			curl -s 127.0.0.1:9095 | grep "^peers_total";
 			")
 		if [[ ! "$res" ==  "peers_total 3.0" ]]; then
-			echo "E: Peers total isn't correct. Metrics or P2P comms issues"
+			echo "E: Peers total isn't correct for node $i. Metrics or P2P comms issue"
 			exit
 		fi
 	done
