@@ -66,14 +66,14 @@ matrix:
           - rpm
           - fakeroot
   - language: scala
-    env: SUBPROJECT=rnode-packages-push-test-in-testnet
+    env: SUBPROJECT=p2p-test-network
     scala: 2.12.4
     sbt_args: -no-colors
     install:
       - ./scripts/install_secp.sh
       - ./scripts/install_sodium.sh
       - ./scripts/install_bnfc.sh
-      - ./scripts/rnode-packages-push-test-in-testnet.sh
+      - ./scripts/p2p-test-network.sh
     addons:
       apt:
         sources:
