@@ -95,15 +95,19 @@ sealed abstract class MultiParentCasperInstances {
               else Capture[F].capture { blockBuffer += b }
         } yield ()
 
-      def contains(b: BlockMessage): F[Boolean] = Capture[F].capture {
-        blockLookup.contains(b.blockHash)
-      }
+      def contains(b: BlockMessage): F[Boolean] =
+        Capture[F].capture {
+          blockLookup.contains(b.blockHash)
+        }
 
       def deploy(d: Deploy): F[Unit] =
-        Capture[F].capture {
-          deployBuff += d
-          deployHist += d
-        } *> Log[F].info(s"CASPER: Received deploy $d")
+        for {
+          _ <- Capture[F].capture {
+                deployBuff += d
+                deployHist += d
+              }
+          _ <- Log[F].info(s"CASPER: Received deploy $d")
+        } yield ()
 
       def estimator: F[IndexedSeq[BlockMessage]] =
         scoresMap.map(scores => {
@@ -206,19 +210,17 @@ sealed abstract class MultiParentCasperInstances {
       }
 
       def sendBlockWhenReady: F[Unit] =
-        Log[F]
-          .info("CASPER: Checking if ready to propose a new block...")
-          .flatMap(_ => {
-            if (deployBuff.size < 10) {
-              Log[F].info(
-                s"CASPER: Not ready yet, only ${deployBuff.size} deploys accumulated, waiting...") *>
-                IOUtil.sleep[F](60000L) //wait some time before checking again
-            } else {
-              val clearBuff = Capture[F].capture { deployBuff.clear() }
-
-              proposeBlock *> clearBuff
-            }
-          })
+        for {
+          _ <- Log[F].info("CASPER: Checking if ready to propose a new block...")
+          _ <- if (deployBuff.size < 10) {
+                Log[F].info(
+                  s"CASPER: Not ready yet, only ${deployBuff.size} deploys accumulated, waiting...") *>
+                  IOUtil.sleep[F](60000L) //wait some time before checking again
+              } else {
+                val clearBuff = Capture[F].capture { deployBuff.clear() }
+                proposeBlock *> clearBuff
+              }
+        } yield ()
 
       private def attemptAdd(block: BlockMessage): F[Boolean] =
         Monad[F]
