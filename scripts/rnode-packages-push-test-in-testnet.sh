@@ -16,8 +16,8 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
 
     # Generate rnode debian and rpm packages - push to repo and then to p2p test net
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin 
-    scp -P 10003 node/target/rnode_0.2.1_all.deb ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
-    scp -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 10003 node/target/rnode_0.2.1_all.deb ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode_${TRAVIS_BRANCH}_all.deb
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 10003 node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/rnode-${TRAVIS_BRANCH}.noarch.rpm
 
     # Update rnode test network containers with branch
     for i in {1..4}; do
@@ -29,7 +29,7 @@ if [[ "${TRAVIS_BRANCH}" = "master" || \
             rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@10.1.1.2:30304 > /var/log/rnode.log 2>&1 &"
         fi
 
-        ssh -p 4000{$i} ${SSH_USERNAME}@repo.rchain.space " 
+        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 4000{$i} ${SSH_USERNAME}@repo.rchain.space " 
             rm rnode_${TRAVIS_BRANCH}_all.deb;
             wget https://repo.rchain.space/rnode_${TRAVIS_BRANCH}_all.deb;
             pkill rnode;
