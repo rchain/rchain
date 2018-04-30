@@ -21,7 +21,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
   type StateWithChain[A] = State[Chain, A]
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "Estimator" should "return the appropriate score map and forkchoice" in {
+  "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in {
     val v1     = ByteString.copyFromUtf8("Validator One")
     val v2     = ByteString.copyFromUtf8("Validator Two")
     val v1Bond = Bond(v1, 2)
@@ -68,11 +68,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
     val chain: Chain = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
-    val b2      = chain.idToBlocks(2)
-    val b3      = chain.idToBlocks(3)
-    val b4      = chain.idToBlocks(4)
     val b6      = chain.idToBlocks(6)
-    val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
 
     val latestBlocks = HashMap[ByteString, BlockHash](v1 -> b8.blockHash, v2 -> b6.blockHash)
@@ -80,5 +76,74 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
     val forkchoice = Estimator.tips(chain.childMap, chain.blockLookup, latestBlocks, genesis)
     forkchoice.head should be(b6)
     forkchoice(1) should be(b8)
+  }
+
+  // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
+  "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in {
+    val v1     = ByteString.copyFromUtf8("Validator One")
+    val v2     = ByteString.copyFromUtf8("Validator Two")
+    val v3     = ByteString.copyFromUtf8("Validator Three")
+    val v1Bond = Bond(v1, 25)
+    val v2Bond = Bond(v2, 20)
+    val v3Bond = Bond(v3, 15)
+    val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+    val createChain =
+      for {
+        genesis <- createBlock[StateWithChain](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createBlock[StateWithChain](
+               Seq(genesis.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+        b3 <- createBlock[StateWithChain](
+               Seq(genesis.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash))
+        b4 <- createBlock[StateWithChain](
+               Seq(b2.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash))
+        b5 <- createBlock[StateWithChain](
+               Seq(b3.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash))
+        b6 <- createBlock[StateWithChain](
+               Seq(b4.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash))
+        b7 <- createBlock[StateWithChain](
+               Seq(b5.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
+        b8 <- createBlock[StateWithChain](
+               Seq(b6.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
+      } yield b8
+
+    val initState =
+      Chain(HashMap.empty[Int, BlockMessage],
+            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, HashSet[BlockHash]],
+            0)
+    val chain: Chain = createChain.runS(initState).value
+
+    val genesis = chain.idToBlocks(1)
+    val b6      = chain.idToBlocks(6)
+    val b7      = chain.idToBlocks(7)
+    val b8      = chain.idToBlocks(8)
+
+    val latestBlocks =
+      HashMap[ByteString, BlockHash](v1 -> b6.blockHash, v2 -> b8.blockHash, v3 -> b7.blockHash)
+
+    val forkchoice = Estimator.tips(chain.childMap, chain.blockLookup, latestBlocks, genesis)
+    forkchoice.head should be(b8)
+    forkchoice(1) should be(b7)
   }
 }
