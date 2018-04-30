@@ -32,7 +32,7 @@ if [[ $1 && $2 ]]; then
   git_repo=$1
   branch_name=$2
   echo "Creating docker rnode test-net for ${git_repo} ${branch_name}"
-elif [[ "${TRAVIS}" = "true" ]]; then
+elif [[ "${TRAVIS}" == "true" ]]; then
   git_repo="local"
   branch_name="repo"
 else
@@ -55,7 +55,9 @@ fi
 delete_test_network_resources "${network_name}"
 
 echo "Creating RChain rnode docker image from git repo via sbt"
-if [[ "${git_repo}" == "local" && "${branch_name}" == "repo" ]]; then
+if [[ "${TRAVIS}" == "true" ]]; then
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+elif [[ "${git_repo}" == "local" && "${branch_name}" == "repo" ]]; then
   cd ..
   git_dir=$(dirname $(pwd))
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
