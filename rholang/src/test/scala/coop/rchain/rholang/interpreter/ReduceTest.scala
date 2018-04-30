@@ -23,11 +23,11 @@ import scala.concurrent.duration._
 
 trait PersistentStoreTester {
   def withTestStore[R](
-      f: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] => R): R = {
+      f: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    val store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] =
-      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
-                                                                                1024 * 1024 * 1024)
+    val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] =
+      LMDBStore.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dbDir,
+                                                                               1024 * 1024 * 1024)
     try {
       f(store)
     } finally {
@@ -132,16 +132,18 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result should be(
       HashMap(
         List(Channel(Quote(GString("channel")))) ->
-
           Row(
             List(),
             List(
-              WaitingContinuation[List[Channel], TaggedContinuation](
-                List(List(Channel(ChanVar(FreeVar(0))),
-                          Channel(ChanVar(FreeVar(1))),
-                          Channel(ChanVar(FreeVar(2))))),
+              WaitingContinuation[BindPattern, TaggedContinuation](
+                List(
+                  BindPattern(List(Channel(ChanVar(FreeVar(0))),
+                                   Channel(ChanVar(FreeVar(1))),
+                                   Channel(ChanVar(FreeVar(2)))),
+                              None)),
                 TaggedContinuation(ParBody(Par())),
-                false)
+                false
+              )
             )
           )
       ))
@@ -270,10 +272,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List(Channel(Quote(GInt(2)))) ->
           Row(List(),
               List(
-                WaitingContinuation[List[Channel], TaggedContinuation](
+                WaitingContinuation[BindPattern, TaggedContinuation](
                   List(
-                    List(Quote(GInt(2)))
-                  ),
+                    BindPattern(
+                      List(Quote(GInt(2)))
+                    )),
                   TaggedContinuation(ParBody(Par())),
                   false)
               ))
@@ -293,10 +296,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List(Channel(Quote(GInt(2)))) ->
           Row(List(),
               List(
-                WaitingContinuation[List[Channel], TaggedContinuation](
+                WaitingContinuation[BindPattern, TaggedContinuation](
                   List(
-                    List(Quote(GInt(2)))
-                  ),
+                    BindPattern(
+                      List(Quote(GInt(2)))
+                    )),
                   TaggedContinuation(ParBody(Par())),
                   false)
               ))

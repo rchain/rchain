@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.models.Expr.ExprInstance.EListBody
+import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
@@ -23,18 +25,21 @@ object implicits {
 
   private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
 
-  implicit val matchListQuote: StorageMatch[Seq[Channel], Seq[Channel]] =
-    new StorageMatch[Seq[Channel], Seq[Channel]] {
+  implicit val matchListQuote: StorageMatch[BindPattern, Seq[Channel]] =
+    new StorageMatch[BindPattern, Seq[Channel]] {
 
-      def get(patterns: Seq[Channel], data: Seq[Channel]): Option[Seq[Channel]] =
-        foldMatch(data, patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
+      def get(pattern: BindPattern, data: Seq[Channel]): Option[Seq[Channel]] =
+        foldMatch(data, pattern.patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
           .runS(emptyMap)
           .map { (freeMap: FreeMap) =>
-            toChannels(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)
+            toChannels(freeMap, pattern.patterns.map((c: Channel) => freeCount(c)).sum)
           }
     }
 
   /* Serialize instances */
+
+  implicit val serializeBindPattern: Serialize[BindPattern] =
+    mkProtobufInstance(BindPattern)
 
   implicit val serializeChannel: Serialize[Channel] =
     mkProtobufInstance(Channel)

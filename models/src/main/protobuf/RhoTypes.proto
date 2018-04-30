@@ -70,6 +70,15 @@ message ReceiveBind {
     Var remainder = 3;
 }
 
+message BindPattern {
+    repeated Channel patterns = 1;
+    Var remainder = 2;
+}
+
+message ListBindPatterns {
+    repeated BindPattern patterns = 1;
+}
+
 // [Par] is an n-arity Pattern.
 // It's an error for free Variable to occur more than once in a pattern.
 // Don't currently support conditional receive
