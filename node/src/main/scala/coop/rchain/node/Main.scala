@@ -8,6 +8,10 @@ import scala.collection.JavaConverters._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
 import monix.eval.Task
+import monix.execution.Scheduler
+import monix.execution.schedulers.SchedulerService
+import scala.concurrent._
+import scala.concurrent.duration._
 
 object Main {
 
