@@ -5,18 +5,18 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import scala.collection.immutable.Seq
 
 /** The interface for the underlying store
-	*
-	* @tparam F a type constructor representing an effect (for example ReaderT[F, LMDBContext, ?])
-	* @tparam C a type representing a channel
-	* @tparam P a type representing a pattern
-	* @tparam A a type representing an arbitrary piece of data
-	* @tparam K a type representing a continuation
-	*/
+  *
+  * @tparam F a type constructor representing an effect (for example `ReaderT[F, LMDBContext, ?]`)
+  * @tparam C a type representing a channel
+  * @tparam P a type representing a pattern
+  * @tparam A a type representing an arbitrary piece of data
+  * @tparam K a type representing a continuation
+  */
 trait Store[F[_], C, P, A, K] {
 
   /**
-		* The type of transactions
-		*/
+    * The type of transactions
+    */
   type T
 
   def createTxnRead(): F[T]
@@ -26,13 +26,14 @@ trait Store[F[_], C, P, A, K] {
   def withTxn[R](txn: T)(f: T => R): R
 
   /**
-		* The type of hashes
-		*/
+    * The type of hashes
+    */
   type H
 
   def hashChannels(channels: Seq[C]): F[H]
 
   def getChannels(txn: T, channelsHash: H): F[Seq[C]]
+
   /* Data */
 
   def removeDatum(txn: T, channels: Seq[C], index: Int): F[Unit]
