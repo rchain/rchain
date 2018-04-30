@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
-import coop.rchain.models.{Channel, Par, TaggedContinuation}
+import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
 
@@ -39,7 +39,7 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
 
 object RholangOnlyDispatcher {
 
-  def create(tuplespace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation])
+  def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])
     : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
@@ -73,7 +73,7 @@ class RholangAndScalaDispatcher private (
 
 object RholangAndScalaDispatcher {
 
-  def create(tuplespace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
+  def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
              dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])
     : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
