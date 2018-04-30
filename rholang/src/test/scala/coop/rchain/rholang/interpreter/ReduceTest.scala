@@ -413,4 +413,29 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       )
     )
   }
+
+  "eval of Send with remainder receive" should "capture the remainder." in {
+    val send =
+      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+    val receive = Receive(Seq(ReceiveBind(Seq(), Quote(GString("channel")), Some(FreeVar(0)))),
+                          Send(Quote(GString("result")), Seq(EVar(BoundVar(0)))))
+
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val task = for {
+        _ <- reducer.eval(receive)(Env())
+        _ <- reducer.eval(send)(Env())
+      } yield store.toMap
+      Await.result(task.runAsync, 3.seconds)
+    }
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(
+                Datum[List[Channel]](List[Channel](Quote(EList(List(GInt(7), GInt(8), GInt(9))))),
+                                     false)),
+              List())
+      )
+    )
+  }
 }

@@ -7,7 +7,6 @@ import cats.implicits._
 import coop.rchain.models._
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance._
 
 import scala.annotation.tailrec
@@ -76,18 +75,18 @@ object SpatialMatcher {
       .reverse
 
   // This helper function is useful in several productions
-  def foldMatch[T](tlist: Seq[T],
-                   plist: Seq[T],
-                   f: (T, T) => OptionalFreeMap[Unit],
-                   remainder: Option[VarInstance] = None)(
-      implicit lf: HasLocallyFree[T]): OptionalFreeMap[Seq[T]] =
+  def foldMatch[T](
+      tlist: Seq[T],
+      plist: Seq[T],
+      f: (T, T) => OptionalFreeMap[Unit],
+      remainder: Option[Var] = None)(implicit lf: HasLocallyFree[T]): OptionalFreeMap[Seq[T]] =
     (tlist, plist) match {
       case (Nil, Nil) => StateT.pure(Nil)
       case (Nil, _)   => StateT.liftF[Option, FreeMap, Seq[T]](None)
       case (trem, Nil) =>
         remainder match {
           case None => StateT.liftF[Option, FreeMap, Seq[T]](None)
-          case Some(FreeVar(level)) => {
+          case Some(Var(FreeVar(level))) => {
             def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): OptionalFreeMap[Seq[T]] =
               trem match {
                 case Nil => StateT.pure(acc)
@@ -99,7 +98,8 @@ object SpatialMatcher {
               }
             freeCheck(trem, level, Vector.empty[T])
           }
-          case Some(Wildcard(_)) => StateT.pure(Nil)
+          case Some(Var(Wildcard(_))) => StateT.pure(Nil)
+          case _                      => StateT.liftF[Option, FreeMap, Seq[T]](None)
         }
       case (t +: trem, p +: prem) =>
         f(t, p).flatMap(_ => foldMatch(trem, prem, f, remainder))
@@ -324,10 +324,7 @@ object SpatialMatcher {
     (target.exprInstance, pattern.exprInstance) match {
       case (EListBody(EList(tlist, _, _, _, _)), EListBody(EList(plist, _, _, _, rem))) => {
         for {
-          matchedRem <- foldMatch(tlist,
-                                  plist,
-                                  (t: Par, p: Par) => spatialMatch(t, p),
-                                  rem.map(x => x.varInstance))
+          matchedRem <- foldMatch(tlist, plist, (t: Par, p: Par) => spatialMatch(t, p), rem)
           _ <- rem match {
                 case Some(Var(FreeVar(level))) =>
                   StateT.modify[Option, FreeMap](m => m + (level -> EList(matchedRem)))

@@ -29,10 +29,31 @@ object implicits {
     new StorageMatch[BindPattern, Seq[Channel]] {
 
       def get(pattern: BindPattern, data: Seq[Channel]): Option[Seq[Channel]] =
-        foldMatch(data, pattern.patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
-          .runS(emptyMap)
-          .map { (freeMap: FreeMap) =>
-            toChannels(freeMap, pattern.patterns.map((c: Channel) => freeCount(c)).sum)
+        foldMatch(data,
+                  pattern.patterns,
+                  (t: Channel, p: Channel) => spatialMatch(t, p),
+                  pattern.remainder)
+          .run(emptyMap)
+          .map {
+            case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
+              println("caughtRem: " + caughtRem)
+              val (remainderMap, countBump) = pattern.remainder match {
+                case Some(Var(FreeVar(level))) =>
+                  val flatRem: Seq[Par] = caughtRem.flatMap(
+                    chan =>
+                      chan match {
+                        case Channel(Quote(p)) => Some(p)
+                        case _                 => None
+                    }
+                  )
+                  (freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector))), 1)
+                case _ => (freeMap, 0)
+              }
+              println("remainderMap: " + remainderMap)
+              toChannels(
+                remainderMap,
+                pattern.patterns.map((c: Channel) => freeCount(c)).sum + countBump
+              )
           }
     }
 
