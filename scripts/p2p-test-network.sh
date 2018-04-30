@@ -4,7 +4,7 @@
 # "local repo" as params builds from current repo you are in
 # "delete testnet" removes all testnet resources 
 
-#set -eo pipefail
+set -eo pipefail
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
 network_name="testnet${NETWORK_UID}.rchain"
@@ -105,6 +105,7 @@ run_tests_on_network() {
     exit
   fi
 
+  set +eo pipefail # turn of exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
 
     echo "============================================="
@@ -144,6 +145,7 @@ run_tests_on_network() {
     fi
 
   done
+  set -eo pipefail # turn back on exit immediately now that individual tests are done 
   
   # Check for failures
   echo "============================================="
