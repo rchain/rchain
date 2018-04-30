@@ -39,39 +39,65 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
   val emptyMap = DebruijnLevelMap[VarSort]()
   val p        = Par()
   "Binds" should "Presort based on their channel and then pattern" in {
-    val binds: List[Tuple3[List[Channel], Channel, DebruijnLevelMap[VarSort]]] =
+    val binds: List[Tuple4[List[Channel], Channel, Option[Var], DebruijnLevelMap[VarSort]]] =
       List(
         (
           List(Quote(GInt(2))),
           Quote(GInt(3)),
+          None,
           emptyMap
         ),
         (
           List(Quote(GInt(3))),
           Quote(GInt(2)),
+          None,
+          emptyMap
+        ),
+        (
+          List(Quote(GInt(3))),
+          Quote(GInt(2)),
+          Some(FreeVar(0)),
           emptyMap
         ),
         (
           List(Quote(GInt(1))),
           Quote(GInt(3)),
+          None,
           emptyMap
         )
       )
-    val sortedBinds: List[Tuple3[List[Channel], Channel, DebruijnLevelMap[VarSort]]] =
+    val sortedBinds: List[Tuple2[ReceiveBind, DebruijnLevelMap[VarSort]]] =
       List(
         (
-          List(Quote(GInt(3))),
-          Quote(GInt(2)),
+          ReceiveBind(
+            List(Quote(GInt(3))),
+            Quote(GInt(2)),
+            None,
+          ),
           emptyMap
         ),
         (
-          List(Quote(GInt(1))),
-          Quote(GInt(3)),
+          ReceiveBind(
+            List(Quote(GInt(3))),
+            Quote(GInt(2)),
+            Some(FreeVar(0)),
+          ),
           emptyMap
         ),
         (
-          List(Quote(GInt(2))),
-          Quote(GInt(3)),
+          ReceiveBind(
+            List(Quote(GInt(1))),
+            Quote(GInt(3)),
+            None,
+          ),
+          emptyMap
+        ),
+        (
+          ReceiveBind(
+            List(Quote(GInt(2))),
+            Quote(GInt(3)),
+            None,
+          ),
           emptyMap
         )
       )
