@@ -11,7 +11,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, deployService}
+import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
@@ -136,11 +136,6 @@ class NodeRuntime(conf: Conf) {
               .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr))
       _ <- MonadOps
             .forever(MultiParentCasper[Effect].sendBlockWhenReady.value.void)
-            .executeAsync
-            .start
-            .toEffect
-      _ <- MonadOps
-            .forever(deployService[Effect].value.void)
             .executeAsync
             .start
             .toEffect

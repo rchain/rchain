@@ -46,6 +46,13 @@ message Deploy {
   bytes    sig      = 4; //sigature of (hash(resource) + nonce) using private key
 }
 
+service DeployService {
+  rpc DoDeploy(Deploy) returns (DeployServiceResponse) {}
+}
+message DeployServiceResponse {
+  bool success = 1;
+}
+
 message Justification {
   bytes validator       = 1;
   bytes latestBlockHash = 2;

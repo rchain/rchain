@@ -51,18 +51,6 @@ object CommUtil {
         } yield logMessage
     }
 
-  //Simulates user requests by randomly deploying things to Casper.
-  //TODO: replace with proper service to handle deploy requests
-  def deployService[F[_]: Monad: MultiParentCasper: Capture]: F[Unit] = {
-    val wait = IOUtil.sleep[F](4000L)
-    val genDeploy = Capture[F].capture {
-      val id = scala.util.Random.nextInt(100)
-      ProtoUtil.basicDeploy(id)
-    }
-
-    wait *> genDeploy.flatMap(d => MultiParentCasper[F].deploy(d))
-  }
-
   private def handleNewBlock[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       b: BlockMessage): F[String] =
