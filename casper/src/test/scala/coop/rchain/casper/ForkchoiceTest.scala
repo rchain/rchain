@@ -17,11 +17,11 @@ import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
+class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
   type StateWithChain[A] = State[Chain, A]
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
-  "Turan Oracle" should "detect finality as appropriate" in {
+  "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in {
     val v1     = ByteString.copyFromUtf8("Validator One")
     val v2     = ByteString.copyFromUtf8("Validator Two")
     val v1Bond = Bond(v1, 2)
@@ -68,36 +68,18 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val chain: Chain = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
-    val b2      = chain.idToBlocks(2)
-    val b3      = chain.idToBlocks(3)
-    val b4      = chain.idToBlocks(4)
     val b6      = chain.idToBlocks(6)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b8, v2 -> b6)
+    val latestBlocks = HashMap[Validator, BlockHash](v1 -> b8.blockHash, v2 -> b6.blockHash)
 
-    implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.blockLookup, latestBlocks)
-
-    def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
-      for {
-        isGenesisSafe          <- SafetyOracle[F].isSafe(genesis, 1)
-        _                      = assert(isGenesisSafe)
-        isB2Safe               <- SafetyOracle[F].isSafe(b2, 1)
-        _                      = assert(isB2Safe)
-        isB3Safe               <- SafetyOracle[F].isSafe(b3, 1)
-        _                      = assert(!isB3Safe)
-        isB4SafeConservatively <- SafetyOracle[F].isSafe(b4, 1)
-        _                      = assert(!isB4SafeConservatively)
-        isB4SafeLessConservatively <- SafetyOracle[F]
-                                       .isSafe(b4, 0.2f) // Clique oracle would be safe
-        _ = assert(!isB4SafeLessConservatively)
-      } yield ()
-    runSafetyOracle[Task].unsafeRunSync
+    val forkchoice = Estimator.tips(chain.childMap, chain.blockLookup, latestBlocks, genesis)
+    forkchoice.head should be(b6)
+    forkchoice(1) should be(b8)
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
-  "Turan Oracle" should "detect possible disagreements appropriately" in {
+  "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in {
     val v1     = ByteString.copyFromUtf8("Validator One")
     val v2     = ByteString.copyFromUtf8("Validator Two")
     val v3     = ByteString.copyFromUtf8("Validator Three")
@@ -153,29 +135,14 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val chain: Chain = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
-    val b2      = chain.idToBlocks(2)
-    val b3      = chain.idToBlocks(3)
-    val b4      = chain.idToBlocks(4)
     val b6      = chain.idToBlocks(6)
     val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
+    val latestBlocks = HashMap[Validator, BlockHash](v1 -> b6.blockHash, v2 -> b8.blockHash, v3 -> b7.blockHash)
 
-    implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.blockLookup, latestBlocks)
-
-    def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
-      for {
-        isGenesisSafe <- SafetyOracle[F].isSafe(genesis, 0)
-        _             = assert(isGenesisSafe)
-        isB2Safe      <- SafetyOracle[F].isSafe(b2, 0)
-        _             = assert(!isB2Safe)
-        isB3Safe      <- SafetyOracle[F].isSafe(b3, 0)
-        _             = assert(!isB3Safe)
-        isB4Safe      <- SafetyOracle[F].isSafe(b4, 0)
-        _             = assert(!isB4Safe)
-      } yield ()
-    runSafetyOracle[Task].unsafeRunSync
+    val forkchoice = Estimator.tips(chain.childMap, chain.blockLookup, latestBlocks, genesis)
+    forkchoice.head should be(b8)
+    forkchoice(1) should be(b7)
   }
 }
