@@ -28,18 +28,21 @@ delete_test_network_resources() {
   fi
 }
 
-if [[ $1 && $2 ]]; then
+if [[ "${TRAVIS}" == "true" ]]; then
+  echo "Running in TRAVIS CI"
+  git_repo="local"
+  branch_name="${TRAVIS_BRANCH}"
+elif [[ $1 == "local" ]]; then
+  git_repo="local"
+elif [[ $1 && $2 ]]; then
   git_repo=$1
   branch_name=$2
   echo "Creating docker rnode test-net for ${git_repo} ${branch_name}"
-elif [[ "${TRAVIS}" == "true" ]]; then
-  echo "Running in TRAVIS CI"
-  branch_name="${TRAVIS_BRANCH}"
 else
   echo "Usage: $0 <repo url> <branch name>"
   echo "Usage: $0 https://github.com/rchain/rchain dev"
   echo "Special Usage Commands:"
-  echo "Usage: $0 local repo"
+  echo "Usage: $0 local"
   echo "Usage: $0 delete testnet"
   exit
 fi
@@ -47,19 +50,16 @@ fi
 network_name="testnet${NETWORK_UID}.rchain"
 sudo echo "" # Ask for sudo early
 
-if [[ "${git_repo}" == "delete" && "${branch_name}" == "testnet" ]]; then
+if [[ "$1" == "delete" && "$2" == "testnet" ]]; then
   delete_test_network_resources "${network_name}"
   exit
 fi
 
+# Remove test network resources before creating new network
 delete_test_network_resources "${network_name}"
 
 echo "Creating RChain rnode docker image coop.rchain/rnode from git src via sbt"
-if [[ "${TRAVIS}" == "true" ]]; then
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
-elif [[ "${git_repo}" == "local" && "${branch_name}" == "repo" ]]; then
-  cd ..
-  git_dir=$(dirname $(pwd))
+if [[ "${git_repo}" == "local" ]]; then
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
 else
   git_dir=$(mktemp -d /tmp/rchain-git.XXXXXXXX)
@@ -110,7 +110,7 @@ echo "==============================================================="
 echo "To enter your bootstrap/standalone docker container:"
 echo "sudo docker exec -it node0.${network_name} /bin/sh"
 echo "==============================================================="
-echo "Other Commands:"
+echo "Other Useful Commands:"
 echo "sudo docker ps"
 echo "sudo docker network ls"
 echo "sudo docker container ls"
