@@ -7,6 +7,9 @@ import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
+import scala.tools.jline.console._, completer.StringsCompleter
+import scala.collection.JavaConverters._
+
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._, ski._, TaskContrib._
@@ -203,6 +206,19 @@ object effects {
         }
     }
 
+  class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
+    def readLine: Task[String] = Task.delay {
+      console.readLine
+    }
+    def println(str: String): Task[Unit] = Task.delay {
+      console.println(str)
+    }
+    def updateCompletion(history: Set[String]): Task[Unit] = Task.delay {
+      console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
+      console.addCompleter(new StringsCompleter(history.asJava))
+    }
+  }
+
   def packetHandler[F[_]: Applicative: Log](
       pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
     new PacketHandler[F] {
@@ -211,4 +227,5 @@ object effects {
         if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
       }
     }
+
 }
