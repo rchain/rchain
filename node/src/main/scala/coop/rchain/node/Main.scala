@@ -27,11 +27,14 @@ object Main {
     implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(console)
     implicit val replService: ReplService[Task] =
       new GrpcReplService(conf.grpcHost(), conf.grpcPort())
+    implicit val diagnosticsService: DiagnosticsService[Task] =
+      new GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
 
-    val exec: Task[Unit] = (conf.eval.toOption, conf.repl()) match {
-      case (Some(fileName), _) => new ReplRuntime(conf).evalProgram[Task](fileName)
-      case (None, true)        => new ReplRuntime(conf).replProgram[Task]
-      case (None, false) =>
+    val exec: Task[Unit] = conf.eval.toOption match {
+      case Some(fileName)               => new ReplRuntime(conf).evalProgram[Task](fileName)
+      case None if (conf.repl())        => new ReplRuntime(conf).replProgram[Task]
+      case None if (conf.diagnostics()) => DiagnosticsRuntime.diagnosticsProgram[Task]
+      case None =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
           case Left(commError) =>
