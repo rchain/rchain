@@ -1,6 +1,11 @@
 sudo: required
 dist: trusty
 
+before_install:
+  - eval "$(ssh-agent -s)" #start the ssh agent
+  - openssl aes-256-cbc -K $encrypted_e29707d24bca_key -iv $encrypted_e29707d24bca_iv -in .travis/id_rsa.enc -out /tmp/id_rsa -d
+  - ssh-add <(cat /tmp/id_rsa)
+
 matrix:
   include:
   - language: nix
@@ -50,6 +55,25 @@ matrix:
       - ./scripts/install_sodium.sh
       - ./scripts/install_bnfc.sh
       - ./scripts/rnode-dockerhub-push.sh
+    addons:
+      apt:
+        sources:
+          - sourceline: 'deb https://dl.bintray.com/sbt/debian /'
+        packages:
+          - sbt
+          - jflex
+          - haskell-platform
+          - rpm
+          - fakeroot
+  - language: scala
+    env: SUBPROJECT=p2p-test-network
+    scala: 2.12.4
+    sbt_args: -no-colors
+    install:
+      - ./scripts/install_secp.sh
+      - ./scripts/install_sodium.sh
+      - ./scripts/install_bnfc.sh
+      - ./scripts/p2p-test-network.sh
     addons:
       apt:
         sources:
