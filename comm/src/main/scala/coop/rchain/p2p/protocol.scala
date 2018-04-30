@@ -69,6 +69,11 @@ object NetworkProtocol {
     Frameable(
       Frameable.Message.ProtocolHandshakeResponse(
         ProtocolHandshakeResponse(ByteString.copyFrom(nonce))))
+
+  def framePacket(src: PeerNode, content: ByteString): Frameable =
+    Frameable(
+      Frameable.Message.Packet(Packet(content))
+    )
 }
 
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
