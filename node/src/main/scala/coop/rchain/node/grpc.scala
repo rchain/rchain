@@ -5,6 +5,7 @@ import io.grpc.{Server, ServerBuilder}
 import scala.concurrent.{ExecutionContext, Future}
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
@@ -44,16 +45,17 @@ object GrpcServer {
       }.toFuture
   }
 
-  class DeployImpl[F[_]: MultiParentCasper: Futurable] extends DeployServiceGrpc.DeployService {
-    def doDeploy(d: Deploy): Future[Boolean] = {
-     val f = for {
+  class DeployImpl[F[_]: Functor: MultiParentCasper: Futurable]
+      extends DeployServiceGrpc.DeployService {
+    def doDeploy(d: Deploy): Future[DeployServiceResponse] = {
+      val f = for {
         _ <- MultiParentCasper[F].deploy(d)
-      } yield true
-      
+      } yield DeployServiceResponse(true)
+
       f.toFuture
     }
   }
-  
+
   class ReplImpl(runtime: Runtime) extends ReplGrpc.Repl {
     import RholangCLI._
     // TODO we need to handle this better
