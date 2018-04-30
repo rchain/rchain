@@ -33,8 +33,8 @@ if [[ $1 && $2 ]]; then
   branch_name=$2
   echo "Creating docker rnode test-net for ${git_repo} ${branch_name}"
 elif [[ "${TRAVIS}" == "true" ]]; then
-  git_repo="local"
-  branch_name="repo"
+  echo "Running in TRAVIS CI"
+  branch_name="${TRAVIS_BRANCH}"
 else
   echo "Usage: $0 <repo url> <branch name>"
   echo "Usage: $0 https://github.com/rchain/rchain dev"
@@ -54,7 +54,7 @@ fi
 
 delete_test_network_resources "${network_name}"
 
-echo "Creating RChain rnode docker image from git repo via sbt"
+echo "Creating RChain rnode docker image coop.rchain/rnode from git src via sbt"
 if [[ "${TRAVIS}" == "true" ]]; then
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
 elif [[ "${git_repo}" == "local" && "${branch_name}" == "repo" ]]; then
