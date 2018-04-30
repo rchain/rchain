@@ -219,7 +219,7 @@ object effects {
     }
   }
 
-    def packetHandler[F[_]: Applicative: Log](
+  def packetHandler[F[_]: Applicative: Log](
       pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
     new PacketHandler[F] {
       def handlePacket(packet: Packet): F[String] = {
