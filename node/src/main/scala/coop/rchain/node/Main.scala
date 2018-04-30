@@ -4,6 +4,10 @@ import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
 import monix.eval.Task
+import monix.execution.Scheduler
+import monix.execution.schedulers.SchedulerService
+import scala.concurrent._
+import scala.concurrent.duration._
 
 object Main {
 
@@ -17,15 +21,14 @@ object Main {
   }
 
   private def executeEvaluate(fileName: String, conf: Conf): Unit = {
-    import monix.execution.Scheduler.Implicits.global
-    val repl = new Repl(conf.grpcHost(), conf.grpcPort())
+    implicit val io: SchedulerService = Scheduler.io("my-io")
+    val repl                          = new Repl(conf.grpcHost(), conf.grpcPort())
     println(repl.eval(fileName).unsafeRunSync)
   }
 
   private def executeRepl(conf: Conf): Unit = {
-    import monix.execution.Scheduler.Implicits.global
-
-    val repl = new Repl(conf.grpcHost(), conf.grpcPort())
+    implicit val io: SchedulerService = Scheduler.io("my-io")
+    val repl                          = new Repl(conf.grpcHost(), conf.grpcPort())
     val recipe: Task[Unit] = for {
       _    <- Task.delay(print("rholang> "))
       line <- Task.delay(scala.io.StdIn.readLine())
@@ -40,7 +43,8 @@ object Main {
   }
 
   private def executeNode(conf: Conf): Unit = {
-    import monix.execution.Scheduler.Implicits.global
+    implicit val io: SchedulerService = Scheduler.io("my-io")
+
     new NodeRuntime(conf).nodeProgram.value.unsafeRunSync match {
       case Right(_) => ()
       case Left(commError) =>

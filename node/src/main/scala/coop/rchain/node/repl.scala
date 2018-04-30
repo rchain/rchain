@@ -2,7 +2,7 @@ package coop.rchain.node
 
 import java.util.concurrent.TimeUnit
 import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
-import coop.rchain.node.repl._
+import coop.rchain.node.rnode._
 
 import monix.eval.Task
 
