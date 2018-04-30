@@ -32,6 +32,9 @@ if [[ $1 && $2 ]]; then
   git_repo=$1
   branch_name=$2
   echo "Creating docker rnode test-net for ${git_repo} ${branch_name}"
+elif [[ "${TRAVIS}" = "true" ]]; then
+  git_repo="local"
+  branch_name="repo"
 else
   echo "Usage: $0 <repo url> <branch name>"
   echo "Usage: $0 https://github.com/rchain/rchain dev"
@@ -51,7 +54,7 @@ fi
 
 delete_test_network_resources "${network_name}"
 
-# Create debian package from git repo via sbt
+echo "Creating RChain rnode docker image from git repo via sbt"
 if [[ "${git_repo}" == "local" && "${branch_name}" == "repo" ]]; then
   cd ..
   git_dir=$(dirname $(pwd))
@@ -65,6 +68,7 @@ else
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
 fi
 
+echo "Creating docker test network"
 sudo docker network create \
   --driver=bridge \
   --subnet=169.254.1.0/24 \
@@ -72,6 +76,7 @@ sudo docker network create \
   --gateway=169.254.1.1 \
   ${network_name}
 
+echo "Creating docker test containers"
 for i in {0..2}; do
   container_name="node${i}.${network_name}"
   echo $container_name
@@ -87,6 +92,7 @@ for i in {0..2}; do
 
   sudo docker exec ${container_name} sh -c "apk add curl"
 done
+echo "Script has completed but it might take a minute for start-up of network and metrics to be available.\n\n"
 
 echo "#########################DOCKER NOTES##########################"
 echo "==============================================================="
