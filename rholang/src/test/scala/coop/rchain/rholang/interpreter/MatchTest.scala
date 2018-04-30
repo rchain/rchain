@@ -12,6 +12,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   Send => AbsynSend,
+  Bundle => AbsynBundle,
   _
 }
 

@@ -740,7 +740,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val expectedResult =
       inputs.par
-        .withBundles(List(Bundle(EVar(BoundVar(0)))))
+        .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = true, readFlag = true)))
         .withLocallyFree(BitSet(0))
 
     result.par should be(expectedResult)
@@ -759,6 +759,36 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       ProcNormalizeMatcher.normalizeMatch(pbundle,
                                           inputs)
     )
+  }
+
+  it should "work with bundle polarization" in {
+    def newBundle(proc: Proc)(readOnly: Boolean = false, writeOnly: Boolean = false): PBundle =
+      (readOnly, writeOnly) match {
+        case (true, true)   => new PBundle(new BundleReadWrite(), proc)
+        case (true, false)  => new PBundle(new BundleRead(), proc)
+        case (false, true)  => new PBundle(new BundleWrite(), proc)
+        case (false, false) => new PBundle(new BundleEquiv(), proc)
+      }
+
+    val proc        = new PVar(new ProcVarVar("x"))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    def expectedResults(writeFlag: Boolean, readFlag: Boolean) = inputs.par
+      .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = true, readFlag = true)))
+      .withLocallyFree(BitSet(0))
+
+    def test(readOnly: Boolean, writeOnly: Boolean) =
+      withClue(s"for bundle with flags readOnly=$readOnly writeOnly=$writeOnly") {
+        val result = ProcNormalizeMatcher.normalizeMatch(p = newBundle(proc)(readOnly, writeOnly),
+                                                         input = boundInputs)
+
+        assert(result.par === expectedResults(writeOnly, readOnly))
+        assert(result.knownFree === inputs.knownFree)
+      }
+
+    test(readOnly = true, writeOnly = true)
+    test(readOnly = true, writeOnly = false)
+    test(readOnly = false, writeOnly = true)
+    test(readOnly = false, writeOnly = false)
   }
 }
 

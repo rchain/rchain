@@ -10,6 +10,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
+  Bundle => AbsynBundle,
   _
 }
 import implicits._
@@ -531,8 +532,7 @@ object ProcNormalizeMatcher {
       }
 
       case b: PBundle =>
-        val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
-        if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
+        def error(targetResult: ProcVisitOutputs): ProcVisitOutputs = {
           val errMsg = {
             def at(variable: String, l: Int, col: Int): String =
               s"$variable line: $l, column: $col"
@@ -547,8 +547,32 @@ object ProcNormalizeMatcher {
           }
           throw UnexpectedBundleContent(
             s"Bundle's content shouldn't have free variables or wildcards.$errMsg")
+        }
+
+        val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
+
+        //TODO(mateusz.gorski): implement actual collapsing/flattening of the bundles.
+        //Applicable for the case where bundle contains ONLY another bundle
+        def flatten(b: Bundle): Bundle = b
+
+        if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
+          error(targetResult)
         } else {
-          ProcVisitOutputs(input.par.prepend(Bundle(targetResult.par)), input.knownFree)
+          val newBundle: Bundle = targetResult.par.singleBundle().map(flatten) match {
+            case Some(value) =>
+              b.bundle_ match {
+                case _: BundleWrite     => value.copy(writeFlag = true, readFlag = false)
+                case _: BundleRead      => value.copy(writeFlag = false, readFlag = true)
+                case _: BundleEquiv     => value.copy(writeFlag = false, readFlag = false)
+                case _: BundleReadWrite => value.copy(writeFlag = true, readFlag = true)
+              }
+            case None =>
+              // when there are multiple processes running in parallel
+              // we treat them as a one process with read/write permissions
+              Bundle(targetResult.par, writeFlag = true, readFlag = true)
+
+          }
+          ProcVisitOutputs(input.par.prepend(newBundle), input.knownFree)
         }
 
       case p: PMatch => {
