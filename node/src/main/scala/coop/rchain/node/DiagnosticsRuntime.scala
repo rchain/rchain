@@ -11,6 +11,6 @@ object DiagnosticsRuntime {
     for {
       _  <- ConsoleIO[F].println("List of peers:")
       ps <- DiagnosticsService[F].listPeers
-      _  <- ps.toList.traverse(p => ConsoleIO[F].println(p.toString))
+      _  <- ps.toList.traverse(p => ConsoleIO[F].println(p.toAddress))
     } yield ()
 }
