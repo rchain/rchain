@@ -550,27 +550,30 @@ object ProcNormalizeMatcher {
         }
 
         val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
+        val outermostBundle = b.bundle_ match {
+          case _: BundleReadWrite => Bundle(targetResult.par, writeFlag = true, readFlag = true)
+          case _: BundleRead      => Bundle(targetResult.par, writeFlag = false, readFlag = true)
+          case _: BundleWrite     => Bundle(targetResult.par, writeFlag = true, readFlag = false)
+          case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
+        }
 
-        //TODO(mateusz.gorski): implement actual collapsing/flattening of the bundles.
-        //Applicable for the case where bundle contains ONLY another bundle
-        def flatten(b: Bundle): Bundle = b
+        import BundleOps._
+
+        def flatten(b: Bundle): Bundle = {
+          import BundleOps._
+          b.body.get.singleBundle() match {
+            case Some(single) =>
+              b.merge(flatten(single)) // we need to collapse all the nested bundles
+            case None => b // term that is not a `Bundle`
+          }
+        }
 
         if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
           error(targetResult)
         } else {
-          val newBundle: Bundle = targetResult.par.singleBundle().map(flatten) match {
-            case Some(value) =>
-              b.bundle_ match {
-                case _: BundleWrite     => value.copy(writeFlag = true, readFlag = false)
-                case _: BundleRead      => value.copy(writeFlag = false, readFlag = true)
-                case _: BundleEquiv     => value.copy(writeFlag = false, readFlag = false)
-                case _: BundleReadWrite => value.copy(writeFlag = true, readFlag = true)
-              }
-            case None =>
-              // when there are multiple processes running in parallel
-              // we treat them as a one process with read/write permissions
-              Bundle(targetResult.par, writeFlag = true, readFlag = true)
-
+          val newBundle: Bundle = targetResult.par.singleBundle() match {
+            case Some(single) => outermostBundle.merge(flatten(single))
+            case None         => outermostBundle
           }
           ProcVisitOutputs(input.par.prepend(newBundle), input.knownFree)
         }

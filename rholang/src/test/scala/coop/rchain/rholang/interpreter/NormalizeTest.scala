@@ -761,7 +761,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
   }
 
-  it should "work with bundle polarization" in {
+  it should "interpret bundle polarization" in {
     def newBundle(proc: Proc)(readOnly: Boolean = false, writeOnly: Boolean = false): PBundle =
       (readOnly, writeOnly) match {
         case (true, true)   => new PBundle(new BundleReadWrite(), proc)
@@ -772,9 +772,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val proc        = new PVar(new ProcVarVar("x"))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
-    def expectedResults(writeFlag: Boolean, readFlag: Boolean) = inputs.par
-      .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = true, readFlag = true)))
-      .withLocallyFree(BitSet(0))
+    def expectedResults(writeFlag: Boolean, readFlag: Boolean) =
+      inputs.par
+        .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = writeFlag, readFlag = readFlag)))
+        .withLocallyFree(BitSet(0))
 
     def test(readOnly: Boolean, writeOnly: Boolean) =
       withClue(s"for bundle with flags readOnly=$readOnly writeOnly=$writeOnly") {
@@ -789,6 +790,22 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     test(readOnly = true, writeOnly = false)
     test(readOnly = false, writeOnly = true)
     test(readOnly = false, writeOnly = false)
+  }
+
+  it should "collapse nested bundles merging their polarizations" in {
+    val proc         = new PVar(new ProcVarVar("x"))
+    val nestedBundle = new PBundle(new BundleReadWrite(), new PBundle(new BundleRead(), proc))
+    val boundInputs  = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+
+    val expectedResults = inputs.par
+      .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = false, readFlag = true)))
+      .withLocallyFree(BitSet(0))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(nestedBundle, input = boundInputs)
+
+    assert(result.par === expectedResults)
+    assert(result.knownFree === boundInputs.knownFree)
+
   }
 }
 
