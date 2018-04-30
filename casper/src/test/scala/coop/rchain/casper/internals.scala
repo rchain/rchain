@@ -13,8 +13,8 @@ object internals {
   def chainState[F[_]: Monad: ChainState]: ChainState[F] = MonadState[F, Chain]
 
   // TODO: Move to src/ and merge with existing mutable data structures in Casper.scala
-  final case class Chain(idToBlocks: collection.Map[Int, BlockMessage],
-                         blockLookup: collection.Map[ByteString, BlockMessage],
-                         childMap: collection.Map[BlockHash, HashSet[BlockHash]],
+  final case class Chain(idToBlocks: HashMap[Int, BlockMessage],
+                         blockLookup: HashMap[ByteString, BlockMessage],
+                         childMap: HashMap[BlockHash, HashSet[BlockHash]],
                          currentId: Int)
 }

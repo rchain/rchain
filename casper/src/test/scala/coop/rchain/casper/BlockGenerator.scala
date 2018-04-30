@@ -53,13 +53,14 @@ trait BlockGenerator {
                            creator)
       idToBlocks  = chain.idToBlocks + (nextId               -> block)
       blockLookup = chain.blockLookup + (serializedBlockHash -> block)
-      updatedChildren = parentsHashList.map { parentHash: BlockHash =>
-        val currentChildrenHashes = chain.childMap.getOrElse(parentHash, HashSet.empty[BlockHash])
-        val updatedChildrenHashes = currentChildrenHashes + serializedBlockHash
-        parentHash -> updatedChildrenHashes
-      }
-      childMap        = chain.childMap ++ updatedChildren
-      newChain: Chain = Chain(idToBlocks, blockLookup, childMap, nextId)
-      _               <- chainState[F].set(newChain)
+      updatedChildren = HashMap[BlockHash, HashSet[BlockHash]](parentsHashList.map {
+        parentHash: BlockHash =>
+          val currentChildrenHashes = chain.childMap.getOrElse(parentHash, HashSet.empty[BlockHash])
+          val updatedChildrenHashes = currentChildrenHashes + serializedBlockHash
+          parentHash -> updatedChildrenHashes
+      }: _*)
+      childMap: HashMap[BlockHash, HashSet[BlockHash]] = chain.childMap ++ updatedChildren
+      newChain: Chain                                  = Chain(idToBlocks, blockLookup, childMap, nextId)
+      _                                                <- chainState[F].set(newChain)
     } yield block
 }
