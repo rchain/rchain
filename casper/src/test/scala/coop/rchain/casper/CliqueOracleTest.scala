@@ -10,12 +10,12 @@ import cats._
 import cats.data._
 import cats.implicits._
 import cats.mtl.implicits._
-
+import coop.rchain.casper.Estimator.BlockHash
 import coop.rchain.catscontrib.TaskContrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
   type StateWithChain[A] = State[Chain, A]
@@ -61,7 +61,10 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b8
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+      Chain(HashMap.empty[Int, BlockMessage],
+            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, HashSet[BlockHash]],
+            0)
     val chain: Chain = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
@@ -75,7 +78,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
       HashMap[ByteString, BlockMessage](v1 -> b8, v2 -> b6)
 
     implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.hashToBlocks, latestBlocks)
+      new TuranOracle(chain.blockLookup, latestBlocks)
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
@@ -144,7 +147,10 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b8
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+      Chain(HashMap.empty[Int, BlockMessage],
+            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, HashSet[BlockHash]],
+            0)
     val chain: Chain = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
@@ -159,7 +165,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
       HashMap[ByteString, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
 
     implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.hashToBlocks, latestBlocks)
+      new TuranOracle(chain.blockLookup, latestBlocks)
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {

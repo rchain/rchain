@@ -6,11 +6,15 @@ import coop.rchain.casper.BlockGenerator
 import coop.rchain.casper.internals._
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.catscontrib._
+import Catscontrib._
+import cats._
+import cats.data._
+import cats.implicits._
+import cats.mtl.implicits._
+import coop.rchain.casper.Estimator.BlockHash
 
-import coop.rchain.catscontrib._, Catscontrib._
-import cats._, cats.data._, cats.implicits._, cats.mtl.implicits._
-
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
@@ -25,16 +29,19 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b3
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+      Chain(HashMap.empty[Int, BlockMessage],
+            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, HashSet[BlockHash]],
+            0)
     val chain = createChain[StateWithChain].runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
-    isInMainChain(chain.hashToBlocks, genesis, b3) should be(true)
-    isInMainChain(chain.hashToBlocks, b2, b3) should be(true)
-    isInMainChain(chain.hashToBlocks, b3, b2) should be(false)
-    isInMainChain(chain.hashToBlocks, b3, genesis) should be(false)
+    isInMainChain(chain.blockLookup, genesis, b3) should be(true)
+    isInMainChain(chain.blockLookup, b2, b3) should be(true)
+    isInMainChain(chain.blockLookup, b3, b2) should be(false)
+    isInMainChain(chain.blockLookup, b3, genesis) should be(false)
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in {
@@ -47,18 +54,21 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b4
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+      Chain(HashMap.empty[Int, BlockMessage],
+            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, HashSet[BlockHash]],
+            0)
     val chain = createChain[StateWithChain].runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    isInMainChain(chain.hashToBlocks, genesis, b2) should be(true)
-    isInMainChain(chain.hashToBlocks, genesis, b3) should be(true)
-    isInMainChain(chain.hashToBlocks, genesis, b4) should be(true)
-    isInMainChain(chain.hashToBlocks, b2, b4) should be(true)
-    isInMainChain(chain.hashToBlocks, b3, b4) should be(false)
+    isInMainChain(chain.blockLookup, genesis, b2) should be(true)
+    isInMainChain(chain.blockLookup, genesis, b3) should be(true)
+    isInMainChain(chain.blockLookup, genesis, b4) should be(true)
+    isInMainChain(chain.blockLookup, b2, b4) should be(true)
+    isInMainChain(chain.blockLookup, b3, b4) should be(false)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
@@ -78,7 +88,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b8
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
+      Chain(HashMap.empty[Int, BlockMessage],
+            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, HashSet[BlockHash]],
+            0)
     val chain = createChain[StateWithChain].runS(initState).value
 
     val genesis = chain.idToBlocks(1)
@@ -89,15 +102,15 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val b6      = chain.idToBlocks(6)
     val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
-    isInMainChain(chain.hashToBlocks, genesis, b2) should be(true)
-    isInMainChain(chain.hashToBlocks, b2, b3) should be(false)
-    isInMainChain(chain.hashToBlocks, b3, b4) should be(false)
-    isInMainChain(chain.hashToBlocks, b4, b5) should be(false)
-    isInMainChain(chain.hashToBlocks, b5, b6) should be(false)
-    isInMainChain(chain.hashToBlocks, b6, b7) should be(false)
-    isInMainChain(chain.hashToBlocks, b7, b8) should be(true)
-    isInMainChain(chain.hashToBlocks, b2, b6) should be(true)
-    isInMainChain(chain.hashToBlocks, b2, b8) should be(true)
-    isInMainChain(chain.hashToBlocks, b4, b2) should be(false)
+    isInMainChain(chain.blockLookup, genesis, b2) should be(true)
+    isInMainChain(chain.blockLookup, b2, b3) should be(false)
+    isInMainChain(chain.blockLookup, b3, b4) should be(false)
+    isInMainChain(chain.blockLookup, b4, b5) should be(false)
+    isInMainChain(chain.blockLookup, b5, b6) should be(false)
+    isInMainChain(chain.blockLookup, b6, b7) should be(false)
+    isInMainChain(chain.blockLookup, b7, b8) should be(true)
+    isInMainChain(chain.blockLookup, b2, b6) should be(true)
+    isInMainChain(chain.blockLookup, b2, b8) should be(true)
+    isInMainChain(chain.blockLookup, b4, b2) should be(false)
   }
 }
