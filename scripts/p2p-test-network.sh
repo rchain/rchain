@@ -73,9 +73,8 @@ delete_test_network_resources() {
   fi
   # Remove docker containers related to a network 
   network_name=$1
-  echo "Removing all resources for test network $network_name"
   for i in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
-    echo "Force removing docker container $i"
+    echo "Removing docker container $i"
     sudo docker container rm -f $i
   done
   
