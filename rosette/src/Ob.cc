@@ -876,6 +876,10 @@ Code* Ob::compileWrt(pOb env, pOb info) {
     Code * cp = cu->compileExpr(env, TopEnv);
     if (VerboseFlag) cp->dumpOn(stderr);
 
+    if ('\0' != *ExportFile) {
+        cp->ExportCode();
+    }
+
     return cp;
 }
 

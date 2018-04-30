@@ -1,0 +1,135 @@
+// This describes the Interface for Export / Import of Rosette object code. This is used
+// between Rosette and Roscala for interchanging compiled object code.
+
+
+syntax = "proto3";
+
+package ObjectCodePB;
+
+// Rather than implement all 100+ object types existing in Rosette, We will only implement those
+// used in loading boot.rbl, plus any deemed necessary by the Roscala compiler guys.
+
+// TODO: These messages need to be filled out with the required fields. Also if there are objects that
+// contain other objects, they will need to be added to this list.
+
+message Actor {}
+message BlockExpr {}
+message Char {}
+message Code {}
+message ExpandedLocation {}
+message Fixnum {
+    int32 value = 1;
+}
+message Float {
+    double value = 1;
+}
+message FreeExpr {}
+message GotoExpr {}
+message IfExpr {}
+message LabelExpr {}
+message LetExpr {}
+message LetrecExpr {}
+message MethodExpr {}
+message Proc {}
+message ProcExpr {}
+message QuoteExpr {}
+message RBLstring {}
+message ReflectiveMethodExpr {}
+message RequestExpr {}
+message SendExpr {}
+message SeqExpr {}
+message SetExpr {}
+message StdMthd {}
+message Symbol {
+    string name = 1;
+}
+message TblObject {}
+message Template {}
+message Tuple {}
+message TupleExpr {}
+
+enum ObType {
+    OT_Actor = 0;
+    OT_BlockExpr = 1;
+    OT_Char = 2;
+    OT_Code = 3;
+    OT_ExpandedLocation = 4;
+    OT_Fixnum = 5;
+    OT_Float = 6;
+    OT_FreeExpr = 7;
+    OT_GotoExpr = 8;
+    OT_IfExpr = 9;
+    OT_LabelExpr = 10;
+    OT_LetExpr = 11;
+    OT_LetrecExpr = 12;
+    OT_MethodExpr = 13;
+    OT_Proc = 14;
+    OT_ProcExpr = 15;
+    OT_QuoteExpr = 16;
+    OT_RBLstring = 17;
+    OT_ReflectiveMethodExpr = 18;
+    OT_RequestExpr = 19;
+    OT_SendExpr = 20;
+    OT_SeqExpr = 21;
+    OT_SetExpr = 22;
+    OT_StdMthd = 23;
+    OT_Symbol = 24;
+    OT_TblObject = 25;
+    OT_Template = 26;
+    OT_Tuple = 27;
+    OT_TupleExpr = 28;
+}
+
+message Object {
+    ObType type = 1;
+
+    // One and only one of these should be populated
+    oneof object {
+        Actor actor = 2;
+        BlockExpr blockexpr = 3;
+        Char char = 4;
+        Code code = 5;
+        ExpandedLocation expandedlocation = 6;
+        Fixnum fixnum = 7;
+        Float float = 8;
+        FreeExpr freeexpr = 9;
+        GotoExpr gotoexpr = 10;
+        IfExpr ifexpr = 11;
+        LabelExpr labelexpr = 12;
+        LetExpr letexpr = 13;
+        LetrecExpr letrecexpr = 14;
+        MethodExpr methodexpr = 15;
+        Proc proc = 16;
+        ProcExpr procexpr = 17;
+        QuoteExpr quoteexpr = 18;
+        RBLstring rblstring = 19;
+        ReflectiveMethodExpr reflectivemethodexpr = 20;
+        RequestExpr requestexpr = 21;
+        SendExpr sendexpr = 22;
+        SeqExpr seqexpr = 23;
+        SetExpr setexpr = 24;
+        StdMthd stdmthd = 25;
+        Symbol symbol = 26;
+        TblObject tblobject = 27;
+        Template template = 28;
+        Tuple tuple = 29;
+        TupleExpr tupleexpr = 30;
+    }
+        
+}
+
+message CodeVec {
+    // Opcodes are serialized in binary
+    bytes opcodes = 1;
+}
+
+message LitVec {
+    // Items within a Litvec are accessed by index and must be stored in the same order as
+    // they originally existed at compile time.
+    repeated Object object = 1;
+}
+
+message CodeExport {
+    LitVec lit = 1;
+    CodeVec code = 2;
+}

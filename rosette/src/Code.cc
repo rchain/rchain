@@ -24,12 +24,19 @@
 #include "Location.h"
 #include "Prim.h"
 #include "RBLstring.h"
+#include "Ob.h"
+#include "Number.h"
 
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
 
+#include "CommandLine.h"
+
 #include <memory.h>
 
+#include <google/protobuf/text_format.h>
+#include <Ob.pb.h>
+#include <fstream>
 
 BUILTIN_CLASS(CodeBuf) {
     OB_FIELD("codevec", CodeBuf, codevec);
@@ -529,7 +536,7 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
         index = OP_f2_op1(insn);
         defer = ((index & CompilationUnit::LookupDeferMask) != 0);
         index &= ~CompilationUnit::LookupDeferMask; 
-        sprintf(buf, "lookup%s %d,", defer ? "(defer)" : "", (int)OP_f2_op1(insn));
+        sprintf(buf, "lookup%s %d,", defer ? "(defer)" : "", index);
         dest = CtxtReg((CtxtRegName)OP_f2_op0(insn));
         goto formatDest;
 
@@ -761,9 +768,58 @@ Ob* Code::associatedSource() {
     return lit(0);
 }
 
+void Code::ExportCode() {
+    if ('\0' == *ExportFile)
+        return;
+
+    if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
+
+    // Build the object code protobuf to export
+    ObjectCodePB::CodeExport codeexport;
+
+    const char * code_binary = (char *)codevec->absolutize(0);
+    size_t code_size = codevec->numberOfWords() * sizeof(uint32_t);
+
+    ObjectCodePB::CodeVec * cv = codeexport.mutable_code();
+    cv->set_opcodes( std::string(code_binary, code_size) );
+
+    ObjectCodePB::LitVec * lv = codeexport.mutable_lit();
+    for (int i = 0; i < litvec->numberOfElements(); i++) {
+        pOb ob = litvec->elem(i);
+        std::string type = BASE(litvec->elem(i))->typestring();
+        ObjectCodePB::Object *newOb = lv->add_object();
+
+        if (type == "Fixnum") {
+            ObjectCodePB::Fixnum *fn = newOb->mutable_fixnum();
+            newOb->set_type(ObjectCodePB::OT_Fixnum);
+            fn->set_value(FIXVAL(ob));
+        } else if (type == "Float") {
+            ObjectCodePB::Float *fl = newOb->mutable_float_();
+            newOb->set_type(ObjectCodePB::OT_Float);
+            fl->set_value(((Float*)(ob))->val);
+        } else if (type == "Symbol") {
+            ObjectCodePB::Symbol *sym = newOb->mutable_symbol();
+            newOb->set_type(ObjectCodePB::OT_Symbol);
+            sym->set_name(BASE(ob)->asPathname());
+        } else {
+            warning("Exporting object %s not yet implemented!", type.c_str());
+        }
+    }
+
+    if (VerboseFlag) {
+        std::string s;
+        google::protobuf::TextFormat::PrintToString(codeexport, &s);
+        fprintf(stderr, "Export = \n%s\n", s.c_str());
+    }
+
+    // Write the object code to disk.
+    std::fstream output(ExportFile, std::ios::out | std::ios::app | std::ios::binary);
+    if (!codeexport.SerializeToOstream(&output)) {
+      warning("Failed to write object code to %s.", ExportFile);
+    }
+}
 
 char* opcodeStrings[MaxOpcodes];
-
 
 MODULE_INIT(Code) {
     extern int RestoringImage;
