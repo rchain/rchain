@@ -42,6 +42,9 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val repl = opt[Boolean](default = Some(false),
                           short = 'r',
                           descr = "Start node with REPL (but without P2P network)")
+
+  val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
+
   val eval = opt[String](default = None,
                          descr = "Start node to evaluate rholang in file (but without P2P network)")
 

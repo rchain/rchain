@@ -212,6 +212,7 @@ object effects {
     }
     def println(str: String): Task[Unit] = Task.delay {
       console.println(str)
+      console.flush()
     }
     def updateCompletion(history: Set[String]): Task[Unit] = Task.delay {
       console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
