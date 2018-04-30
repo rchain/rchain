@@ -29,6 +29,11 @@ case "$SUBPROJECT" in "rosette")
     ./scripts/rnode-dockerhub-push.sh
     ;;
 
+"p2p-test-network")
+
+    ./scripts/p2p-test-network.sh
+    ;;
+
 "rholang_more_tests")
 
     # Prep nix 

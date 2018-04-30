@@ -1,5 +1,6 @@
 package coop.rchain.casper.util
 
+import ProtoUtil._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockGenerator
 import coop.rchain.casper.internals._

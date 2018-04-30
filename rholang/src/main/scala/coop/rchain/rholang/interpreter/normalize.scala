@@ -61,6 +61,10 @@ object NormalizerExceptions {
   ) extends Exception(
         s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context.")
       with NormalizerException
+
+  final case class UnexpectedBundleContent(msg: String)
+      extends Exception(msg)
+      with NormalizerException
 }
 
 object BoolNormalizeMatcher {
@@ -526,6 +530,27 @@ object ProcNormalizeMatcher {
         ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
       }
 
+      case b: PBundle =>
+        val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
+        if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
+          val errMsg = {
+            def at(variable: String, l: Int, col: Int): String =
+              s"$variable line: $l, column: $col"
+            val wildcardsPositions = targetResult.knownFree.wildcards.map {
+              case (l, col) => at("", l, col)
+            }
+            val freeVarsPositions = targetResult.knownFree.env.map {
+              case (n, (_, _, line, col)) => at(s"`$n`", line, col)
+            }
+            wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
+              freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")
+          }
+          throw UnexpectedBundleContent(
+            s"Bundle's content shouldn't have free variables or wildcards.$errMsg")
+        } else {
+          ProcVisitOutputs(input.par.prepend(Bundle(targetResult.par)), input.knownFree)
+        }
+
       case p: PMatch => {
         import scala.collection.JavaConverters._
 
@@ -578,6 +603,12 @@ object ProcNormalizeMatcher {
 
 }
 
+/** Input data to the normalizer
+  *
+  * @param par collection of things that might be run in parallel
+  * @param env
+  * @param knownFree
+  */
 case class ProcVisitInputs(par: Par,
                            env: DebruijnIndexMap[VarSort],
                            knownFree: DebruijnLevelMap[VarSort])
