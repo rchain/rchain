@@ -186,9 +186,9 @@ if [[ "${TRAVIS}" == "true" ]]; then
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
   create_test_network_resources "${network_name}"
-  echo "Running tests on network in 90 seconds after bootup and convergence"
+  echo "Running tests on network in 120 seconds after bootup and convergence"
   echo "Please be patient"
-  sleep 90 # allow plenty of time for network to boot and converge
+  sleep 120 # allow plenty of time for network to boot and converge
   run_tests_on_network "${network_name}"
 elif [[ $1 == "local" ]]; then
   sudo echo "" # Ask for sudo early
