@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.{Capture, IOUtil}
@@ -83,7 +84,6 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
       private val deployBuff: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
-      private val decreasingOrder                     = Ordering[Int].reverse
 
       blockLookup += (genesis.blockHash -> genesis)
 
@@ -110,33 +110,9 @@ sealed abstract class MultiParentCasperInstances {
         } yield ()
 
       def estimator: F[IndexedSeq[BlockMessage]] =
-        scoresMap.map(scores => {
-
-          @tailrec
-          def sortChildren[A <: (BlockHash) => Int](blks: IndexedSeq[BlockHash],
-                                                    scores: A): IndexedSeq[BlockHash] = {
-            val newBlks = blks
-              .flatMap(b => {
-                val empty                         = new mutable.HashSet[BlockHash]()
-                val c: mutable.HashSet[BlockHash] = _childMap.getOrElse(b, empty)
-                if (c.nonEmpty) {
-                  c.toIndexedSeq
-                } else {
-                  IndexedSeq(b)
-                }
-              })
-              .distinct
-              .sortBy(scores)(decreasingOrder)
-
-            if (newBlks == blks) {
-              blks
-            } else {
-              sortChildren(newBlks, scores)
-            }
-          }
-
-          sortChildren(IndexedSeq(genesis.blockHash), scores).map(blockLookup)
-        })
+        Capture[F].capture {
+          Estimator.tips(_childMap, blockLookup, _latestMessages, genesis)
+        }
 
       def proposeBlock: F[Option[BlockMessage]] = {
         /*
@@ -156,9 +132,11 @@ sealed abstract class MultiParentCasperInstances {
         val p = orderedHeads.map(_.take(1)) //for now, just take top choice
         val r = p.map(blocks => {
           val remDeploys = deployHist.clone()
-          bfTraverse(blocks)(parents(_).iterator.map(blockLookup)).foreach(b => {
-            b.body.foreach(_.newCode.foreach(remDeploys -= _))
-          })
+          DagOperations
+            .bfTraverse(blocks)(parents(_).iterator.map(blockLookup))
+            .foreach(b => {
+              b.body.foreach(_.newCode.foreach(remDeploys -= _))
+            })
           remDeploys
         })
 
@@ -266,83 +244,5 @@ sealed abstract class MultiParentCasperInstances {
           case None => ().pure[F]
         }
       }
-
-      private def hashParents(hash: BlockHash): Iterator[BlockHash] = {
-        val b = blockLookup(hash)
-        parents(b).iterator
-      }
-
-      private def scoresMap: F[mutable.HashMap[BlockHash, Int]] =
-        ().pure[F]
-          .map(_ => {
-            val result = new mutable.HashMap[BlockHash, Int]() {
-              final override def default(hash: BlockHash): Int = 0
-            }
-
-            _latestMessages.foreach {
-              case (validator, lhash) =>
-                //propagate scores for each validator along the dag they support
-                bfTraverse[BlockHash](Some(lhash))(hashParents).foreach(hash => {
-                  val b         = blockLookup(hash)
-                  val currScore = result.getOrElse(hash, 0)
-
-                  val validatorWeight = mainParent(blockLookup, b)
-                    .map(weightMap(_).getOrElse(validator, 0))
-                    .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
-
-                  result.update(hash, currScore + validatorWeight)
-                })
-
-                //add scores to the blocks implicitly supported through
-                //including a latest block as a "step parent"
-                _childMap
-                  .get(lhash)
-                  .foreach(children => {
-                    children.foreach(cHash => {
-                      val c = blockLookup(cHash)
-                      if (parents(c).size > 1 && c.sender != validator) {
-                        val currScore       = result(cHash)
-                        val validatorWeight = weightMap(c).getOrElse(validator, 0)
-                        result.update(cHash, currScore + validatorWeight)
-                      }
-                    })
-                  })
-            }
-
-            result
-          })
-    }
-
-  private def bfTraverse[A](start: Iterable[A])(neighbours: (A) => Iterator[A]): Iterator[A] =
-    new Iterator[A] {
-      private val visited    = new mutable.HashSet[A]()
-      private val underlying = new mutable.Queue[A]()
-      start.foreach(underlying.enqueue(_))
-
-      @tailrec
-      final override def hasNext: Boolean = underlying.headOption match {
-        case None => false
-        case Some(nxt) =>
-          if (visited(nxt)) {
-            underlying.dequeue() //remove already visited block
-            hasNext              //try again to find existence of next block
-          } else {
-            true
-          }
-      }
-
-      override def next(): A =
-        if (hasNext) {
-          val nxt = underlying.dequeue()
-          visited.add(nxt)
-
-          neighbours(nxt)
-            .filterNot(a => visited(a)) //only add parents that have not already been visited
-            .foreach(underlying.enqueue(_))
-
-          nxt
-        } else {
-          Iterator.empty.next()
-        }
     }
 }
