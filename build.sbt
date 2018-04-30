@@ -1,5 +1,6 @@
 import Dependencies._
 import BNFC._
+import NativePackagerHelper._
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
@@ -37,12 +38,16 @@ lazy val shared = (project in file("shared"))
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
-    libraryDependencies ++= commonDependencies ++ protobufDependencies,
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      catsCore,
+      catsMtl,
+      monix
+    ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto) // TODO: Add models, rspace, comm
+  .dependsOn(comm % "compile->compile;test->test", shared, crypto) // TODO: Add models, rspace
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -100,11 +105,12 @@ lazy val node = (project in file("node"))
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
-        scalapbRuntimegGrpc,
-        grpcNetty,
         catsCore,
+        grpcNetty,
+        jline, 
         scallop,
-        scalaUri
+        scalaUri,
+        scalapbRuntimegGrpc
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
@@ -125,13 +131,16 @@ lazy val node = (project in file("node"))
       val artifactTargetPath = s"/${artifact.name}"
       val entry: File        = baseDirectory(_ / "main.sh").value
       val entryTargetPath    = "/bin"
+      val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
         from("openjdk:8u151-jre-alpine")
         add(artifact, artifactTargetPath)
+        copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
         run("apk", "update")
         run("apk", "add", "libsodium")
+        run("mkdir", "/var/lib/rnode")
         entryPoint("/bin/main.sh")
       }
     },
@@ -139,15 +148,25 @@ lazy val node = (project in file("node"))
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
     packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
+    linuxPackageMappings ++= {
+      val file = baseDirectory.value / "rnode.service"
+      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
+        .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
+      Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
+    },
     /* Debian */
     debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
     rpmLicense := Some("Apache 2.0"),
+    packageArchitecture in Rpm := "noarch",
+    maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
+      RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
+    ),    
     rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
   )
-  .dependsOn(comm, crypto, rholang)
+  .dependsOn(casper, comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
@@ -215,7 +234,7 @@ lazy val rspace = (project in file("rspace"))
       scodecBits
     ),
     /* Tutorial */
-    tutTargetDirectory := (baseDirectory in Compile).value / "docs",
+    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
     /* Publishing Settings */
     scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
     git.remoteRepo := scmInfo.value.get.connection,
@@ -259,6 +278,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
+  .dependsOn(shared)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)

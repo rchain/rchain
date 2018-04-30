@@ -63,6 +63,9 @@ class CompilationUnit : public BinaryOb {
     Tuple* litvec;
     LabelTable* labels;
 
+    static const int MaximumLitVecSize = 0x7f;
+    static const int LookupDeferMask = 0x80;
+
     static CompilationUnit* create(Ob*, Ob*, Ob*);
 
     int traversePtrs(PSOb__PSOb);

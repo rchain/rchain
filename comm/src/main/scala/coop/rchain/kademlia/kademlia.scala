@@ -115,8 +115,8 @@ final case class PeerTable[A <: Peer](home: A,
       def run = {
         val winner =
           older.entry.ping match {
-            case Success(duration) => older
-            case Failure(e)        => new Entry(newer)
+            case Success(_) => older
+            case Failure(_) => new Entry(newer)
           }
         ps synchronized {
           ps -= older

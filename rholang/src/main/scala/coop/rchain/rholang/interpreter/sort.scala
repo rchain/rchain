@@ -112,21 +112,22 @@ object Score {
   final val WILDCARD  = 52
 
   // Expr
-  final val EVAR   = 100
-  final val ENEG   = 101
-  final val EMULT  = 102
-  final val EDIV   = 103
-  final val EPLUS  = 104
-  final val EMINUS = 105
-  final val ELT    = 106
-  final val ELTE   = 107
-  final val EGT    = 108
-  final val EGTE   = 109
-  final val EEQ    = 110
-  final val ENEQ   = 111
-  final val ENOT   = 112
-  final val EAND   = 113
-  final val EOR    = 114
+  final val EVAR    = 100
+  final val ENEG    = 101
+  final val EMULT   = 102
+  final val EDIV    = 103
+  final val EPLUS   = 104
+  final val EMINUS  = 105
+  final val ELT     = 106
+  final val ELTE    = 107
+  final val EGT     = 108
+  final val EGTE    = 109
+  final val EEQ     = 110
+  final val ENEQ    = 111
+  final val ENOT    = 112
+  final val EAND    = 113
+  final val EOR     = 114
+  final val EMETHOD = 115
 
   // Other
   final val QUOTE    = 203
@@ -137,6 +138,7 @@ object Score {
   final val EVAL    = 302
   final val NEW     = 303
   final val MATCH   = 304
+  final val BUNDLE  = 305
 
   final val PAR = 999
 }
@@ -276,6 +278,14 @@ object ExprSortMatcher {
         val (sortedPar1, sortedPar2) = sortBinaryOperation(eo.p1, eo.p2)
         constructExpr(EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
                       Node(Score.EOR, sortedPar1.score, sortedPar2.score))
+      case EMethodBody(em) =>
+        val args         = em.arguments.map(par => ParSortMatcher.sortMatch(par))
+        val sortedTarget = ParSortMatcher.sortMatch(em.target.get)
+        constructExpr(
+          EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
+          Node(
+            Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score))
+        )
       case eg =>
         val sortedGround = GroundSortMatcher.sortMatch(eg)
         constructExpr(sortedGround.term, sortedGround.score)
@@ -420,6 +430,13 @@ object MatchSortMatcher {
   }
 }
 
+object BundleSortMatcher {
+  def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
+    val sortedPar = ParSortMatcher.sortMatch(b.body)
+    ScoredTerm(Bundle(sortedPar.term), Node(Score.BUNDLE, sortedPar.score))
+  }
+}
+
 object ParSortMatcher {
   def sortMatch(parOption: Option[Par]): ScoredTerm[Option[Par]] =
     parOption match {
@@ -430,6 +447,7 @@ object ParSortMatcher {
         val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
         val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
         val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+        val bundles  = p.bundles.map(b => BundleSortMatcher.sortMatch(b)).sorted
         val ids      = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
         val sortedPar = Par(
           sends = sends.map(_.term),
@@ -438,15 +456,18 @@ object ParSortMatcher {
           evals = evals.map(_.term),
           news = news.map(_.term),
           matches = matches.map(_.term),
+          bundles = bundles.map(_.term),
           ids = ids.map(_.term),
           freeCount = p.freeCount,
           locallyFree = p.locallyFree,
           wildcard = p.wildcard
         )
-        val parScore = Node(Score.PAR,
-                            sends.map(_.score) ++
-                              receives.map(_.score) ++ exprs.map(_.score) ++
-                              evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*)
+        val parScore = Node(
+          Score.PAR,
+          sends.map(_.score) ++ bundles.map(_.score) ++
+            receives.map(_.score) ++ exprs.map(_.score) ++
+            evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*
+        )
         ScoredTerm(sortedPar, parScore)
       case None => throw new Error("ParSortMatcher was passed None")
     }

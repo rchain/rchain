@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -41,6 +41,9 @@ object Runtime {
     }
 
   def create(dataDir: Path, mapSize: Long): Runtime = {
+
+    if (Files.notExists(dataDir)) Files.createDirectory(dataDir)
+
     val store =
       LMDBStore
         .create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dataDir, mapSize)

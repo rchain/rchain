@@ -8,6 +8,7 @@ import cats._, cats.data._, cats.implicits._
 
 object TaskContrib {
   implicit class TaskOps[A](task: Task[A])(implicit scheduler: Scheduler) {
-    def unsafeRunSync: A = Await.result(task.runAsync, Duration.Inf)
+    def unsafeRunSync: A =
+      Await.result(task.runAsync, Duration.Inf)
   }
 }

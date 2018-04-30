@@ -2,33 +2,49 @@ package coop.rchain.node
 
 import java.util.concurrent.TimeUnit
 import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
-import coop.rchain.node.repl._
+import coop.rchain.shared.StringOps._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski.kp
 
-import monix.eval.Task
+class ReplRuntime(conf: Conf) {
 
-class Repl(host: String, port: Int) {
+  private val logo: String =
+    """
+  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
+  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
+  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
+    """.red
 
-  private val channel: ManagedChannel =
-    ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
-  private val blockingStub = ReplGrpc.blockingStub(channel)
+  def replProgram[F[_]: Monad: ConsoleIO: ReplService]: F[Unit] = {
+    val rep: F[Unit] = for {
+      line <- ConsoleIO[F].readLine
+      _ <- line.trim match {
+            case ""   => ConsoleIO[F].println("")
+            case line => ReplService[F].run(line) >>= (s => ConsoleIO[F].println(s.blue))
+          }
+    } yield ()
 
-  def run(line: String): Task[String] = Task.delay {
-    blockingStub.run(CmdRequest(line)).output
+    val repl: F[Unit] = rep.forever
+
+    ConsoleIO[F].println(logo) >>= kp(repl)
   }
 
-  def eval(fileName: String): Task[String] = Task.delay {
-    blockingStub.eval(EvalRequest(fileName)).output
-  }
+  def evalProgram[F[_]: Monad: ReplService: ConsoleIO](fileName: String): F[Unit] =
+    for {
+      _   <- ConsoleIO[F].println(s"Evaluating from $fileName")
+      res <- ReplService[F].eval(fileName)
+      _   <- ConsoleIO[F].println(res)
+    } yield ()
 
-  def shutdown(): Unit =
-    channel.shutdown.awaitTermination(5, TimeUnit.SECONDS)
+}
 
-  def logo: String =
-    """
-
-      ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
-      ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
-      ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
-
-    """
+object ReplRuntime {
+  def keywords: List[String] = List(
+    "stdOut",
+    "stdOutAck",
+    "stdErr",
+    "stdErrAck",
+    "for",
+    "!!"
+  )
 }

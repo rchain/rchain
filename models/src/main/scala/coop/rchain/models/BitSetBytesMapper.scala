@@ -1,11 +1,10 @@
 package coop.rchain.models
 
-import com.trueaccord.scalapb.TypeMapper
-
 import scala.collection.immutable.BitSet
 import java.nio.{ByteBuffer, ByteOrder}
 
 import com.google.protobuf.ByteString
+import scalapb.TypeMapper
 
 object BitSetBytesMapper {
   val BYTES_PER_LONG = 8

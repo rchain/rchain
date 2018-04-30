@@ -6,8 +6,8 @@ import java.util.concurrent.TimeoutException
 
 import cats.syntax.either._
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation, Var}
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.implicits.VectorPar
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
@@ -19,7 +19,6 @@ import org.rogach.scallop.ScallopConf
 import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import scala.io.Source
 import scala.util.{Failure, Success}
 
 object RholangCLI {
@@ -108,6 +107,9 @@ object RholangCLI {
           case Right(par) =>
             val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
             waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+          case Left(SyntaxError(msg)) =>
+            // we don't want to print stack trace for syntax errors
+            Console.err.print(msg)
           case Left(error) =>
             error.printStackTrace(Console.err)
         }
@@ -120,26 +122,30 @@ object RholangCLI {
 
   def buildNormalizedTerm(source: Reader): Either[Throwable, Par] =
     try {
-      val term = buildAST(source)
-      val inputs =
-        ProcVisitInputs(VectorPar(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
-      val normalizedTerm = normalizeTerm(term, inputs).leftMap(s => new Exception(s))
-      normalizedTerm.flatMap { (nt: ProcVisitOutputs) =>
-        ParSortMatcher
-          .sortMatch(Some(nt.par))
-          .term
-          .fold[Either[Throwable, Par]](
-            Left[Throwable, Par](new Exception("ParSortMatcher failed")))(p => Right(p))
-      }
+      for {
+        term <- buildAST(source)
+        inputs = ProcVisitInputs(VectorPar(),
+                                 DebruijnIndexMap[VarSort](),
+                                 DebruijnLevelMap[VarSort]())
+        outputs <- normalizeTerm(term, inputs).leftMap(s => new Exception(s))
+        par <- Either.fromOption(ParSortMatcher.sortMatch(Some(outputs.par)).term,
+                                 new Exception("ParSortMatcher failed"))
+      } yield par
     } catch {
-      case ex: Throwable => Left(ex)
+      case th: Throwable => Left(th)
     }
 
-  private def buildAST(source: Reader): Proc = {
-    val lxr = lexer(source)
-    val ast = parser(lxr)
-    ast.pProc()
-  }
+  private def buildAST(source: Reader): Either[Throwable, Proc] =
+    Either
+      .catchNonFatal {
+        val lxr = lexer(source)
+        val ast = parser(lxr)
+        ast.pProc()
+      }
+      .leftMap {
+        case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
+          SyntaxError(ex.getMessage)
+      }
 
   @tailrec
   def waitThenPrintStorageContents(
@@ -195,4 +201,6 @@ object RholangCLI {
       }
     } else Right(normalizedTerm)
   }
+
+  final case class SyntaxError(msg: String) extends Exception(msg)
 }

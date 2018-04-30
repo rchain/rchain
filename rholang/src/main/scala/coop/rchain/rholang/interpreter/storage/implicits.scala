@@ -29,10 +29,7 @@ object implicits {
     new StorageMatch[BindPattern, Seq[Channel]] {
 
       def get(pattern: BindPattern, data: Seq[Channel]): Option[Seq[Channel]] =
-        foldMatch(data,
-                  pattern.patterns,
-                  (t: Channel, p: Channel) => spatialMatch(t, p),
-                  pattern.remainder)
+        foldMatch(data, pattern.patterns, pattern.remainder)
           .run(emptyMap)
           .map {
             case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>

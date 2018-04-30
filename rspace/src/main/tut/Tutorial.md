@@ -257,7 +257,7 @@ When we inspect the contents of the store, we notice that the store is empty.  T
 println(store.toMap)
 ```
 
-Let's reinstall the the same continuation.
+Let's reinstall the same continuation.
 ```tut
 val cres2 = consume(store, List(Channel("friends")), List(CityMatch(city = "Crystal Lake")), new Printer, persist = false)
 ```

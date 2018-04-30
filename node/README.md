@@ -10,15 +10,26 @@ At the moment, you can execute node in three separate modes:
 
 In REPL mode users have the ability to execute Rho-lang commands in a REPL environment, which will be evaluated by the Rho-lang interpreter. Note that at the moment - in REPL mode - no node-to-node communication is possible.
 
-EVAL mode allows users run Rholang that is stored in a plain text file (filename.rho). In this mode the node wil lmake a directory on the local system available to the interpreter as a location where Rholang contracts can be executed.
+EVAL mode allows users run Rholang that is stored in a plain text file (filename.rho). In this mode the node will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed.
 
-In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node).
+In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node).
 
 ## 2. Building
 
 ### Building from source
 
-Node depends on the following subprojects: 
+#### Prerequisites
+* Java Development Kit (JDK), version 8
+    - We recommend using the OpenJDK 
+    - Alternatively, the [Oracle JDK](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html) is an option
+* [sbt](https://www.scala-sbt.org/download.html)
+* For crypto, the [Sodium crypto library](https://github.com/jedisct1/libsodium)
+* For Rholang
+    - [CUP](http://www2.cs.tum.edu/projects/cup/install.php) 0.11b-2014-06-11 or later. See [Rholang README](https://github.com/rchain/rchain/blob/master/rholang/README.md) for notes on installation requirements.
+     - [jflex](http://jflex.de/)
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859)
+      
+#### Node depends on the following subprojects: 
 
 1. comm
 2. crypto
@@ -140,7 +151,7 @@ This command will run the node in interpreter mode and will make a directory on 
 
 ### 3.3 P2P mode
 
-In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentailly acting as bootstrap node). Note that this release prints a great deal of diagnostic information. 
+In P2P mode, node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node). Note that this release prints a great deal of diagnostic information.
 
 An RChain node is addressed by an "rnode address", which has the following form
 

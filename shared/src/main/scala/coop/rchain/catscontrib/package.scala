@@ -5,3 +5,5 @@ package object catscontrib
     with EitherTInstances
     with WriterTInstances
     with ApplicativeError_Instances
+    with SeqInstances
+    with FuturableInstances

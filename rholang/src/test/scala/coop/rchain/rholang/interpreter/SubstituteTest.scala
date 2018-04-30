@@ -188,3 +188,38 @@ class EvalSubSpec extends FlatSpec with Matchers {
     result should be(expected)
   }
 }
+
+class BundleSubSpec extends FlatSpec with Matchers {
+  "Bundle" should "substitute within the body of the bundle." in {
+    val source: Par = GPrivate()
+    val env         = Env.makeEnv(source)
+    val target      = Bundle(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0)))
+    val result      = substitute(target)(env)
+    result should be(
+      Bundle(Send(Quote(source), List(Par()), false, 0, BitSet()))
+    )
+  }
+
+  it should "only substitute all Channels inside body" in {
+    val source0: Par  = GPrivate()
+    val source1: Par  = GPrivate()
+    val env: Env[Par] = Env.makeEnv(source0, source1)
+    val target = Bundle(
+      Send(ChanVar(BoundVar(1)),
+           List(Send(ChanVar(BoundVar(0)), List(Par()), false, 0, BitSet(0))),
+           false,
+           0,
+           BitSet(0, 1))
+    )
+    val result = substitute(target)(env)
+    result should be(
+      Bundle(
+        Send(Quote(source0),
+             List(Send(Quote(source1), List(Par()), false, 0, BitSet())),
+             false,
+             0,
+             BitSet())
+      )
+    )
+  }
+}

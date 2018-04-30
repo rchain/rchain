@@ -61,6 +61,10 @@ object NormalizerExceptions {
   ) extends Exception(
         s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context.")
       with NormalizerException
+
+  final case class UnexpectedBundleContent(msg: String)
+      extends Exception(msg)
+      with NormalizerException
 }
 
 object BoolNormalizeMatcher {
@@ -323,6 +327,37 @@ object ProcNormalizeMatcher {
         ProcVisitOutputs(input.par ++ collapseEvalQuote(nameMatchResult.chan),
                          nameMatchResult.knownFree)
 
+      case p: PMethod => {
+        import scala.collection.JavaConverters._
+        val targetResult = normalizeMatch(p.proc_, input.copy(par = Par()))
+        val target       = targetResult.par
+        val method       = p.var_
+        val initAcc =
+          (List[Par](), ProcVisitInputs(Par(), input.env, targetResult.knownFree), BitSet(), false)
+        val argResults = (initAcc /: p.listproc_.asScala.toList.reverse)(
+          (acc, e) => {
+            val procMatchResult = normalizeMatch(e, acc._2)
+            (procMatchResult.par :: acc._1,
+             ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
+             acc._3 | procMatchResult.par.locallyFree,
+             acc._4 || procMatchResult.par.wildcard)
+          }
+        )
+        val freeCount = argResults._2.knownFree.countNoWildcards - input.knownFree.countNoWildcards
+        ProcVisitOutputs(
+          input.par.prepend(
+            EMethod(
+              method,
+              targetResult.par,
+              argResults._1,
+              freeCount,
+              target.locallyFree | argResults._3,
+              target.wildcard || argResults._4
+            )),
+          argResults._2.knownFree
+        )
+      }
+
       case p: PNot => unaryExp(p.proc_, input, ENot.apply)
       case p: PNeg => unaryExp(p.proc_, input, ENeg.apply)
 
@@ -552,6 +587,27 @@ object ProcNormalizeMatcher {
         ProcVisitOutputs(input.par.prepend(foldedNew), bodyResult.knownFree)
       }
 
+      case b: PBundle =>
+        val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
+        if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
+          val errMsg = {
+            def at(variable: String, l: Int, col: Int): String =
+              s"$variable line: $l, column: $col"
+            val wildcardsPositions = targetResult.knownFree.wildcards.map {
+              case (l, col) => at("", l, col)
+            }
+            val freeVarsPositions = targetResult.knownFree.env.map {
+              case (n, (_, _, line, col)) => at(s"`$n`", line, col)
+            }
+            wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
+              freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")
+          }
+          throw UnexpectedBundleContent(
+            s"Bundle's content shouldn't have free variables or wildcards.$errMsg")
+        } else {
+          ProcVisitOutputs(input.par.prepend(Bundle(targetResult.par)), input.knownFree)
+        }
+
       case p: PMatch => {
         import scala.collection.JavaConverters._
 
@@ -604,6 +660,12 @@ object ProcNormalizeMatcher {
 
 }
 
+/** Input data to the normalizer
+  *
+  * @param par collection of things that might be run in parallel
+  * @param env
+  * @param knownFree
+  */
 case class ProcVisitInputs(par: Par,
                            env: DebruijnIndexMap[VarSort],
                            knownFree: DebruijnLevelMap[VarSort])

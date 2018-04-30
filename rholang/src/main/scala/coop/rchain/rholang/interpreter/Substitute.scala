@@ -38,6 +38,9 @@ object Substitute {
   def substitute(term: Quote)(implicit env: Env[Par]): Quote =
     Quote(substitute(term.value))
 
+  def substitute(term: Bundle)(implicit env: Env[Par]): Bundle =
+    Bundle(substitute(term.body.get))
+
   def substitute(term: Channel)(implicit env: Env[Par]): Channel =
     ChannelSortMatcher
       .sortMatch(
@@ -82,6 +85,7 @@ object Substitute {
             evals = Nil,
             exprs = Nil,
             sends = term.sends.map(substitute),
+            bundles = term.bundles.map(substitute),
             receives = term.receives.map(substitute),
             news = term.news.map(substitute),
             matches = term.matches.map(substitute),
