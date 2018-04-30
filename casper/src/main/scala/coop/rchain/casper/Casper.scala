@@ -14,6 +14,7 @@ import coop.rchain.p2p.effects._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.immutable
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[Unit]
@@ -111,7 +112,16 @@ sealed abstract class MultiParentCasperInstances {
 
       def estimator: F[IndexedSeq[BlockMessage]] =
         Capture[F].capture {
-          Estimator.tips(_childMap, blockLookup, _latestMessages, genesis)
+          // TODO: Push up immutable boundary
+          val immutableChildMap =
+            immutable.HashMap[BlockHash, immutable.HashSet[BlockHash]](_childMap.toSeq.map {
+              case (parent, children) => (parent, immutable.HashSet(children.toSeq: _*))
+            }: _*)
+          val immutableBlockLookup =
+            immutable.HashMap[BlockHash, BlockMessage](blockLookup.toSeq: _*)
+          val immutableLatestMessages =
+            immutable.HashMap[Validator, BlockHash](_latestMessages.toSeq: _*)
+          Estimator.tips(immutableChildMap, immutableBlockLookup, immutableLatestMessages, genesis)
         }
 
       def proposeBlock: F[Option[BlockMessage]] = {

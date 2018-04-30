@@ -1,13 +1,13 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.Estimator.buildScoresMap
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil.{mainParent, parents, weightMap}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.immutable.{HashMap, HashSet}
 
 object Estimator {
   type BlockHash = ByteString
@@ -15,9 +15,9 @@ object Estimator {
 
   private val decreasingOrder = Ordering[Int].reverse
 
-  def tips(childMap: mutable.HashMap[BlockHash, mutable.HashSet[BlockHash]],
-           blockLookup: mutable.HashMap[BlockHash, BlockMessage],
-           latestMessages: mutable.HashMap[Validator, BlockHash],
+  def tips(childMap: HashMap[BlockHash, HashSet[BlockHash]],
+           blockLookup: HashMap[BlockHash, BlockMessage],
+           latestMessages: HashMap[Validator, BlockHash],
            genesis: BlockMessage): IndexedSeq[BlockMessage] = {
     @tailrec
     def sortChildren[A <: (BlockHash) => Int](blocks: IndexedSeq[BlockHash],
@@ -31,8 +31,8 @@ object Estimator {
       }
     }
     def replaceBlockHashWithChildren(b: BlockHash) = {
-      val empty                         = new mutable.HashSet[BlockHash]()
-      val c: mutable.HashSet[BlockHash] = childMap.getOrElse(b, empty)
+      val empty                 = new HashSet[BlockHash]()
+      val c: HashSet[BlockHash] = childMap.getOrElse(b, empty)
       if (c.nonEmpty) {
         c.toIndexedSeq
       } else {
@@ -46,11 +46,12 @@ object Estimator {
     sortChildren(IndexedSeq(genesis.blockHash), scoresMap).map(blockLookup)
   }
 
+  // TODO: Remove mutable data structure `result'
   def buildScoresMap(
-      childMap: mutable.HashMap[BlockHash, mutable.HashSet[BlockHash]],
-      blockLookup: mutable.HashMap[BlockHash, BlockMessage],
-      latestMessages: mutable.HashMap[Validator, BlockHash]): mutable.HashMap[BlockHash, Int] = {
-    def hashParents(blockLookup: mutable.HashMap[BlockHash, BlockMessage],
+      childMap: HashMap[BlockHash, HashSet[BlockHash]],
+      blockLookup: HashMap[BlockHash, BlockMessage],
+      latestMessages: HashMap[Validator, BlockHash]): mutable.HashMap[BlockHash, Int] = {
+    def hashParents(blockLookup: HashMap[BlockHash, BlockMessage],
                     hash: BlockHash): Iterator[BlockHash] = {
       val b = blockLookup(hash)
       parents(b).iterator
