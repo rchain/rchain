@@ -10,7 +10,7 @@ class URIParseSpec extends FlatSpec with Matchers {
   "A well formed rnode URI" should "parse into a PeerNode" in {
     val uri = "rnode://abcde@localhost:12345"
     NetworkAddress.parse(uri) should be(
-      Right(new PeerNode(NodeIdentifier("abcde".getBytes), Endpoint("localhost", 12345, 12345))))
+      Right(PeerNode(NodeIdentifier("abcde".getBytes), Endpoint("localhost", 12345, 12345))))
   }
 
   "A non-rnode URI" should "parse as an error" in {

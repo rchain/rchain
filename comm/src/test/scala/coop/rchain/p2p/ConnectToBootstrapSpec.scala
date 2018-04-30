@@ -1,12 +1,11 @@
 package coop.rchain.p2p
 
 import org.scalatest._
-import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, NetworkProtocol._, Network.defaultTimeout
+import coop.rchain.comm._, CommError._, NetworkProtocol._
 import coop.rchain.p2p.effects._
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
+import cats._
+import coop.rchain.catscontrib._, ski._, Encryption._
 
 import EffectsTestInstances._
 
@@ -26,16 +25,18 @@ class ConnectToBootstrapSpec
 
   type Effect[A] = CommErrT[Id, A]
 
-  implicit val logEff           = new LogStub[Effect]
-  implicit val timeEff          = new LogicalTime[Effect]
-  implicit val metricEff        = new Metrics.MetricsNOP[Effect]
-  implicit val communicationEff = new CommunicationStub[Effect](src)
-  implicit val encryptionEff    = new EncryptionStub[Effect](srcKeys, nonce)
-  implicit val keysStoreEff     = new Kvs.InMemoryKvs[Effect, PeerNode, Key]
+  implicit val logEff            = new LogStub[Effect]
+  implicit val timeEff           = new LogicalTime[Effect]
+  implicit val metricEff         = new Metrics.MetricsNOP[Effect]
+  implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
+  implicit val transportLayerEff = new TransportLayerStub[Effect](src)
+  implicit val encryptionEff     = new EncryptionStub[Effect](srcKeys, nonce)
+  implicit val keysStoreEff      = new Kvs.InMemoryKvs[Effect, PeerNode, Key]
 
   override def beforeEach(): Unit = {
     logEff.reset()
-    communicationEff.reset()
+    nodeDiscoveryEff.reset()
+    transportLayerEff.reset()
     encryptionEff.reset()
     keysStoreEff.keys.map(_.map(k => keysStoreEff.delete(k)))
   }
@@ -43,9 +44,9 @@ class ConnectToBootstrapSpec
   describe("Node when connecting to bootstrap") {
     it("should run attempts before it exits") {
       // given
-      communicationEff.setResponses(kp(failEverything))
+      transportLayerEff.setResponses(kp(failEverything))
       // when
-      val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val _ = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
       logEff.warns should equal(
         List(
@@ -59,7 +60,7 @@ class ConnectToBootstrapSpec
 
     it("should log on ERROR and return error when failed connecting") {
       // given
-      communicationEff.setResponses(kp(failEverything))
+      transportLayerEff.setResponses(kp(failEverything))
       // when
       val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
@@ -69,7 +70,7 @@ class ConnectToBootstrapSpec
 
     it("should connect smoothly if there are no issues.") {
       // given
-      communicationEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
+      transportLayerEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
       // when
       val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
@@ -79,7 +80,8 @@ class ConnectToBootstrapSpec
     }
   }
 
-  private def value[A](ea: Effect[A]): A = ea.value.right.get
+  private val roundTripNOP =
+    kp2[ProtocolMessage, ProtocolNode, CommErr[ProtocolMessage]](Left(unknownProtocol("unknown")))
 
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ EncryptionHandshakeMessage(_, _) =>
@@ -98,22 +100,16 @@ class ConnectToBootstrapSpec
                      1))
   }
 
-  private val sndPhaseFailure: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
-    case hs @ FrameMessage(_, _) => Left(unknownProtocol("unknown"))
-  }
-
   private def generateResponses(
       fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]],
       sndPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]])
     : ProtocolMessage => CommErr[ProtocolMessage] =
     fstPhase orElse sndPhase
 
-  private val roundTripNOP =
-    kp2[ProtocolMessage, ProtocolNode, CommErr[ProtocolMessage]](Left(unknownProtocol("unknown")))
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   private def peerNode(name: String, port: Int): PeerNode =
-    new PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def protocolNode(name: String, port: Int): ProtocolNode =
     ProtocolNode(peerNode(name, port), roundTripNOP)

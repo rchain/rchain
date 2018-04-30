@@ -27,7 +27,7 @@ object implicits {
     new StorageMatch[Seq[Channel], Seq[Channel]] {
 
       def get(patterns: Seq[Channel], data: Seq[Channel]): Option[Seq[Channel]] =
-        foldMatch(data, patterns, (t: Channel, p: Channel) => spatialMatch(t, p))
+        foldMatch(data, patterns)
           .runS(emptyMap)
           .map { (freeMap: FreeMap) =>
             toChannels(freeMap, patterns.map((c: Channel) => freeCount(c)).sum)

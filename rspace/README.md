@@ -24,12 +24,12 @@ Here are some key differences:
 
   * *produce*, which, given a piece data at a given channel, searches the store for matching continuation, using existing data in the store to help satisfy the match.
 
-For more information and detailed instructions on using `rspace`, see the tutorial [here](docs/Tutorial.md).
+For more information and detailed instructions on using `rspace`, see the tutorial [here](../../docs/rspace/Tutorial.md).
 
 ### Prerequisites
 
 * Java Development Kit (JDK), version 8
-  * We recommmend using the OpenJDK which can be installed using most common package managers.
+  * We recommend using the OpenJDK which can be installed using most common package managers.
   * Alternatively, the Oracle JDK is available [here](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html).
 * sbt
   * Available [here](http://www.scala-sbt.org/download.html).

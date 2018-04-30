@@ -135,6 +135,7 @@ object Score {
   final val EVAL    = 302
   final val NEW     = 303
   final val MATCH   = 304
+  final val BUNDLE  = 305
 
   final val PAR = 999
 }
@@ -416,6 +417,13 @@ object MatchSortMatcher {
   }
 }
 
+object BundleSortMatcher {
+  def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
+    val sortedPar = ParSortMatcher.sortMatch(b.body)
+    ScoredTerm(Bundle(sortedPar.term), Node(Score.BUNDLE, sortedPar.score))
+  }
+}
+
 object ParSortMatcher {
   def sortMatch(parOption: Option[Par]): ScoredTerm[Option[Par]] =
     parOption match {
@@ -426,6 +434,7 @@ object ParSortMatcher {
         val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
         val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
         val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+        val bundles  = p.bundles.map(b => BundleSortMatcher.sortMatch(b)).sorted
         val ids      = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
         val sortedPar = Par(
           sends = sends.map(_.term),
@@ -434,15 +443,18 @@ object ParSortMatcher {
           evals = evals.map(_.term),
           news = news.map(_.term),
           matches = matches.map(_.term),
+          bundles = bundles.map(_.term),
           ids = ids.map(_.term),
           freeCount = p.freeCount,
           locallyFree = p.locallyFree,
           wildcard = p.wildcard
         )
-        val parScore = Node(Score.PAR,
-                            sends.map(_.score) ++
-                              receives.map(_.score) ++ exprs.map(_.score) ++
-                              evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*)
+        val parScore = Node(
+          Score.PAR,
+          sends.map(_.score) ++ bundles.map(_.score) ++
+            receives.map(_.score) ++ exprs.map(_.score) ++
+            evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*
+        )
         ScoredTerm(sortedPar, parScore)
       case None => throw new Error("ParSortMatcher was passed None")
     }

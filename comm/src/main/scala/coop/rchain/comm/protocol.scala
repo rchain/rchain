@@ -23,11 +23,13 @@ trait ProtocolDispatcher[A] {
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
-                 ?[_],
-                 PeerNode,
-                 Array[Byte]]: ApplicativeError_[?[_], CommError]](extra: A,
-                                                                   msg: ProtocolMessage): F[Unit]
+  def dispatch[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      extra: A,
+      msg: ProtocolMessage): F[Unit]
 }
 
 /**
@@ -115,10 +117,10 @@ class ProtocolNode private (id: NodeIdentifier,
     roundTrip(req, this) match {
       case Right(LookupResponseMessage(proto, _)) =>
         proto.message.lookupResponse match {
-          case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode(_)))
+          case Some(resp) => Success(resp.nodes.map(ProtocolMessage.toPeerNode))
           case _          => Success(Seq())
         }
-      case Right(other) => Failure(new Exception("unexpected response"))
+      case Right(_) => Failure(new Exception("unexpected response"))
       case Left(ex) =>
         ex match {
           case ProtocolException(exc) => Failure(exc)
@@ -143,8 +145,8 @@ trait ProtocolMessage {
       h <- header
       s <- h.sender
     } yield
-      new PeerNode(NodeIdentifier(s.id.toByteArray),
-                   Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
+      PeerNode(NodeIdentifier(s.id.toByteArray),
+               Endpoint(s.host.toStringUtf8, s.tcpPort, s.udpPort))
 
   def toByteSeq: Seq[Byte] =
     proto.toByteArray
@@ -256,7 +258,7 @@ object ProtocolMessage {
       .withHeader(header(src))
       .withReturnHeader(returnHeader(h))
       .withLookupResponse(LookupResponse()
-        .withNodes(nodes.map(node(_))))
+        .withNodes(nodes.map(node)))
 
   def disconnect(src: ProtocolNode): Protocol =
     Protocol()
