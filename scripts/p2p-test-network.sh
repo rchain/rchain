@@ -4,7 +4,7 @@
 # "local repo" as params builds from current repo you are in
 # "delete testnet" removes all testnet resources 
 
-set -eo pipefail
+set -xeo pipefail
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
 network_name="testnet${NETWORK_UID}.rchain"
@@ -105,7 +105,7 @@ run_tests_on_network() {
     exit
   fi
 
-  set +eo pipefail # turn of exit immediately for tests
+  #set +eo pipefail # turn of exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
 
     echo "============================================="
@@ -145,7 +145,12 @@ run_tests_on_network() {
     fi
 
   done
-  set -eo pipefail # turn back on exit immediately now that individual tests are done 
+  #set -eo pipefail # turn back on exit immediately now that individual tests are done 
+
+  sudo docker exec node0.${network_name} sh -c "curl 127.0.0.1:9095"
+  sudo docker exec node1.${network_name} sh -c "curl 127.0.0.1:9095"
+  sudo docker exec node2.${network_name} sh -c "curl 127.0.0.1:9095"
+  sudo docker exec node3.${network_name} sh -c "curl 127.0.0.1:9095"
   
   # Check for failures
   echo "============================================="
@@ -186,9 +191,9 @@ if [[ "${TRAVIS}" == "true" ]]; then
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
   create_test_network_resources "${network_name}"
-  echo "Running tests on network in 120 seconds after bootup and convergence"
+  echo "Running tests on network in 240 seconds after bootup and convergence"
   echo "Please be patient"
-  sleep 120 # allow plenty of time for network to boot and converge
+  sleep 240 # allow plenty of time for network to boot and converge
   run_tests_on_network "${network_name}"
 elif [[ $1 == "local" ]]; then
   sudo echo "" # Ask for sudo early
