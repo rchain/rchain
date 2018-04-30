@@ -16,6 +16,7 @@ object DeployRuntime {
     for {
       id <- Capture[F].capture { scala.util.Random.nextInt(100) }
       d  = ProtoUtil.basicDeploy(id)
+      _  <- Capture[F].capture { println(s"Sending the following deploy to Casper: $d") }
       _  <- DeployService[F].deploy(d)
       _  <- IOUtil.sleep[F](4000L)
     } yield ()

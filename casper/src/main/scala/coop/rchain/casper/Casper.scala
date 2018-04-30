@@ -43,28 +43,6 @@ sealed abstract class MultiParentCasperInstances {
       def sendBlockWhenReady: F[Unit]           = ().pure[F]
     }
 
-  def simpleCasper[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler]
-    : MultiParentCasper[F] = new MultiParentCasper[F] {
-    def addBlock(b: BlockMessage): F[Unit]    = ().pure[F]
-    def contains(b: BlockMessage): F[Boolean] = false.pure[F]
-    def deploy(d: Deploy): F[Unit]            = ().pure[F]
-    def estimator: F[IndexedSeq[BlockMessage]] =
-      Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-    def proposeBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-    def sendBlockWhenReady: F[Unit] =
-      for {
-        _           <- IOUtil.sleep[F](5000L)
-        currentTime <- Time[F].currentMillis
-        postState = RChainState().withResources(
-          Seq(Resource(ProduceResource(Produce(currentTime.toInt)))))
-        body   = Body().withPostState(postState)
-        header = blockHeader(body, List.empty[ByteString])
-        block  = blockProto(body, header, List.empty[Justification], ByteString.EMPTY)
-        _      <- CommUtil.sendBlock[F](block)
-      } yield ()
-  }
-
   //TODO: figure out Casper key management for validators
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
@@ -108,6 +86,7 @@ sealed abstract class MultiParentCasperInstances {
                 deployHist += d
               }
           _ <- Log[F].info(s"CASPER: Received deploy $d")
+          _ <- sendBlockWhenReady
         } yield ()
 
       def estimator: F[IndexedSeq[BlockMessage]] =
@@ -191,7 +170,8 @@ sealed abstract class MultiParentCasperInstances {
               CommUtil.sendBlock[F](block) *>
               estimator
                 .map(_.head)
-                .flatMap(forkchoice => Log[F].info(s"New fork-choice is ${hashString(forkchoice)}")) *>
+                .flatMap(forkchoice =>
+                  Log[F].info(s"CAPSER: New fork-choice is ${hashString(forkchoice)}")) *>
               Monad[F].pure[Option[BlockMessage]](mb)
           case _ => Monad[F].pure[Option[BlockMessage]](None)
         }
@@ -199,11 +179,8 @@ sealed abstract class MultiParentCasperInstances {
 
       def sendBlockWhenReady: F[Unit] =
         for {
-          _ <- Log[F].info("CASPER: Checking if ready to propose a new block...")
           _ <- if (deployBuff.size < 10) {
-                Log[F].info(
-                  s"CASPER: Not ready yet, only ${deployBuff.size} deploys accumulated, waiting...") *>
-                  IOUtil.sleep[F](60000L) //wait some time before checking again
+                Monad[F].pure(()) //nothing to do yet
               } else {
                 val clearBuff = Capture[F].capture { deployBuff.clear() }
                 proposeBlock *> clearBuff

@@ -23,15 +23,16 @@ object CommUtil {
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
-      _     <- Log[F].info(s"Beginning send to peers of block ${ProtoUtil.hashString(b)}...")
+      _     <- Log[F].info(s"CASPER: Beginning send to peers of block ${ProtoUtil.hashString(b)}...")
       peers <- NodeDiscovery[F].peers
       sends <- peers.toList.traverse { peer =>
                 frameMessage[F](peer, nonce => NetworkProtocol.framePacket(peer, serializedBlock))
                   .flatMap(msg => TransportLayer[F].commSend(msg, peer).map(_ -> peer))
               }
       _ <- sends.traverse {
-            case (Left(err), _)   => Log[F].error(s"$err")
-            case (Right(_), peer) => Log[F].info(s"Sent block ${ProtoUtil.hashString(b)} to $peer")
+            case (Left(err), _) => Log[F].error(s"$err")
+            case (Right(_), peer) =>
+              Log[F].info(s"CASPER: Sent block ${ProtoUtil.hashString(b)} to $peer")
           }
     } yield ()
   }
@@ -44,7 +45,7 @@ object CommUtil {
         for {
           isOldBlock <- MultiParentCasper[F].contains(b)
           logMessage <- if (isOldBlock) {
-                         s"Received block ${ProtoUtil.hashString(b)} again.".pure[F]
+                         s"CASPER: Received block ${ProtoUtil.hashString(b)} again.".pure[F]
                        } else {
                          handleNewBlock[F](b)
                        }
@@ -59,7 +60,7 @@ object CommUtil {
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
       _          <- sendBlock[F](b)
     } yield
-      s"Received block ${ProtoUtil.hashString(b)}. New fork-choice is ${ProtoUtil.hashString(forkchoice)}"
+      s"CASPER: Received block ${ProtoUtil.hashString(b)}. New fork-choice is ${ProtoUtil.hashString(forkchoice)}"
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
