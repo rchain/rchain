@@ -13,23 +13,23 @@ import Catscontrib._
 import cats._
 import cats.data._
 import cats.implicits._
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[ByteString]): F[BlockMessage] =
+  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[BlockHash]): F[BlockMessage] =
     createBlock[F](parentsHashList, ByteString.EMPTY)
-  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[ByteString],
-                                           creator: ByteString): F[BlockMessage] =
+  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[BlockHash],
+                                           creator: Validator): F[BlockMessage] =
     createBlock[F](parentsHashList, creator, Seq.empty[Bond])
-  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[ByteString],
-                                           creator: ByteString,
+  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[BlockHash],
+                                           creator: Validator,
                                            bonds: Seq[Bond]): F[BlockMessage] =
-    createBlock[F](parentsHashList, creator, bonds, HashMap.empty[ByteString, ByteString])
+    createBlock[F](parentsHashList, creator, bonds, HashMap.empty[Validator, BlockHash])
   def createBlock[F[_]: Monad: ChainState](
-      parentsHashList: Seq[ByteString],
-      creator: ByteString,
+      parentsHashList: Seq[BlockHash],
+      creator: Validator,
       bonds: Seq[Bond],
-      justifications: collection.Map[ByteString, ByteString]): F[BlockMessage] =
+      justifications: collection.Map[Validator, BlockHash]): F[BlockMessage] =
     for {
       chain          <- chainState[F].get
       nextId         = chain.currentId + 1
@@ -42,7 +42,7 @@ trait BlockGenerator {
       blockHash = Sha256.hash(header.toByteArray)
       body      = Body().withPostState(postState)
       serializedJustifications = justifications.toList.map {
-        case (creator: ByteString, latestBlockHash: ByteString) =>
+        case (creator: Validator, latestBlockHash: BlockHash) =>
           Justification(creator, latestBlockHash)
       }
       serializedBlockHash = ByteString.copyFrom(blockHash)

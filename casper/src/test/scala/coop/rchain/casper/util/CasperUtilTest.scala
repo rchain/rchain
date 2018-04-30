@@ -30,7 +30,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     val initState =
       Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
     val chain = createChain[StateWithChain].runS(initState).value
@@ -55,7 +55,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     val initState =
       Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
     val chain = createChain[StateWithChain].runS(initState).value
@@ -89,7 +89,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
     val initState =
       Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
     val chain = createChain[StateWithChain].runS(initState).value

@@ -10,7 +10,7 @@ import cats._
 import cats.data._
 import cats.implicits._
 import cats.mtl.implicits._
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.catscontrib.TaskContrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -62,7 +62,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val initState =
       Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
     val chain: Chain = createChain.runS(initState).value
@@ -74,8 +74,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b6      = chain.idToBlocks(6)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks: collection.Map[ByteString, BlockMessage] =
-      HashMap[ByteString, BlockMessage](v1 -> b8, v2 -> b6)
+    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b8, v2 -> b6)
 
     implicit def turanOracleEffect: SafetyOracle[Task] =
       new TuranOracle(chain.blockLookup, latestBlocks)
@@ -148,7 +147,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val initState =
       Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[ByteString, BlockMessage],
+            HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
     val chain: Chain = createChain.runS(initState).value
@@ -161,8 +160,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks: collection.Map[ByteString, BlockMessage] =
-      HashMap[ByteString, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
+    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
 
     implicit def turanOracleEffect: SafetyOracle[Task] =
       new TuranOracle(chain.blockLookup, latestBlocks)
