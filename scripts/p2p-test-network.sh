@@ -152,6 +152,11 @@ run_tests_on_network() {
   sudo docker exec node1.${network_name} sh -c "curl 127.0.0.1:9095"
   sudo docker exec node2.${network_name} sh -c "curl 127.0.0.1:9095"
   sudo docker exec node3.${network_name} sh -c "curl 127.0.0.1:9095"
+
+  sudo docker logs node0.${network_name}
+  sudo docker logs node1.${network_name}
+  sudo docker logs node2.${network_name}
+  sudo docker logs node3.${network_name}
   
   # Check for failures
   echo "============================================="
