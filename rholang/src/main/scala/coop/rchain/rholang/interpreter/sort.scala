@@ -420,7 +420,7 @@ object MatchSortMatcher {
 object BundleSortMatcher {
   def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
     val sortedPar = ParSortMatcher.sortMatch(b.body)
-    ScoredTerm(Bundle(sortedPar.term), Node(Score.BUNDLE, sortedPar.score))
+    ScoredTerm(b.copy(body = sortedPar.term), Node(Score.BUNDLE, sortedPar.score))
   }
 }
 
