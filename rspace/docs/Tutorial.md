@@ -275,7 +275,7 @@ Let's run the continuation using a function from the `extended` package.
 scala> import coop.rchain.rspace.extended._
 import coop.rchain.rspace.extended._
 
-scala> runK(pres1)
+scala> runK(cres1)
 
 === ENTRY ===
 name:    Lincoln, Alice
