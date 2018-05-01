@@ -4,6 +4,7 @@ set -e
 
 USERNAME="rnode"
 DIRECTORY="/var/lib/${USERNAME}"
+SYSTEMD_SERVICE_FILE="/lib/systemd/system/${USERNAME}.service"
 
 if id -u ${USERNAME} >/dev/null 2>&1; then
     echo "User ${USERNAME} already exists."
@@ -17,5 +18,6 @@ else
     mkdir -p ${DIRECTORY}
     chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
 fi
+    chmod 0644 ${SYSTEMD_SERVICE_FILE} 
 
 systemctl enable rnode.service
