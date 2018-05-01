@@ -4,8 +4,11 @@
 # "local repo" as params builds from current repo you are in
 # "delete testnet" removes all testnet resources 
 
-#set -xeo pipefail
-set -x
+if [[ "${TRAVIS}" == "true" ]]; then
+  set -xeo pipefail # enable verbosity on CI environment for debugging
+else
+  set -eo pipefail
+fi
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
 network_name="testnet${NETWORK_UID}.rchain"
@@ -100,6 +103,10 @@ delete_test_network_resources() {
 }
 
 run_tests_on_network() {
+if [[ "${TRAVIS}" == "true" ]]; then
+set +xeo pipefail # turn off exit immediately for tests
+set -x
+fi
   all_pass=true
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
@@ -145,29 +152,44 @@ run_tests_on_network() {
       all_pass=false
     fi
 
+  if [[ ! "${TRAVIS}" == "true" ]]; then
+  set -xeo pipefail # turn off exit immediately for tests
+  set +x
+  else
+    echo ""
+    #set -eo pipefail
+  fi
   done
   #set -eo pipefail # turn back on exit immediately now that individual tests are done 
 
-  sudo docker exec node0.${network_name} sh -c "curl 127.0.0.1:9095"
-  sudo docker exec node1.${network_name} sh -c "curl 127.0.0.1:9095"
-  sudo docker exec node2.${network_name} sh -c "curl 127.0.0.1:9095"
-  sudo docker exec node3.${network_name} sh -c "curl 127.0.0.1:9095"
-
-  sudo docker logs node0.${network_name}
-  sudo docker logs node1.${network_name}
-  sudo docker logs node2.${network_name}
-  sudo docker logs node3.${network_name}
   
   # Check for failures
   echo "============================================="
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
+
+    sudo docker exec node0.${network_name} sh -c "curl 127.0.0.1:9095"
+    echo "===================================================================="
+    sudo docker exec node1.${network_name} sh -c "curl 127.0.0.1:9095"
+    echo "===================================================================="
+    sudo docker exec node2.${network_name} sh -c "curl 127.0.0.1:9095"
+    echo "===================================================================="
+    echo "===================================================================="
+    sudo docker logs node0.${network_name}
+    echo "===================================================================="
+    sudo docker logs node1.${network_name}
+    echo "===================================================================="
+    sudo docker logs node2.${network_name}
     exit 1
   elif [[ $all_pass == true ]]; then
     echo "SUCCESS: All checks passed"
   else
     echo "Unsupported"
   fi
+if [[ "${TRAVIS}" == "true" ]]; then
+set +x
+set -xeo pipefail # turn off exit immediately for tests
+fi
 }
 
 create_docker_rnode_image() {
@@ -198,9 +220,9 @@ if [[ "${TRAVIS}" == "true" ]]; then
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
-  echo "Running tests on network in 240 seconds after bootup and convergence"
+  echo "Running tests on network in 500 seconds after bootup and convergence"
   echo "Please be patient"
-  sleep 240 # allow plenty of time for network to boot and converge
+  sleep 500 # allow plenty of time for network to boot and converge
   run_tests_on_network "${network_name}"
 elif [[ $1 == "local" ]]; then
   sudo echo "" # Ask for sudo early
