@@ -13,8 +13,13 @@ object ctxt {
 
     override def fn: CtxtTransition[PrimResult] =
       for {
-        ctxt    <- getCtxt
-        optArg0 = ctxt.arg(0).map(_.asInstanceOf[Ctxt])
+        ctxt <- getCtxt
+        optArg0 = ctxt
+          .arg(0)
+          .flatMap(_ match {
+            case c: Ctxt => Some(c.asInstanceOf[Ctxt])
+            case _       => None
+          })
         optArg1 = ctxt.arg(1)
 
         result <- (optArg0, optArg1)
