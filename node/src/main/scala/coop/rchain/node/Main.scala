@@ -5,6 +5,7 @@ import cats._, cats.data._, cats.implicits._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
+import coop.rchain.comm._
 import coop.rchain.casper.util.comm.{DeployRuntime, DeployService, GrpcDeployService}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
@@ -41,11 +42,11 @@ object Main {
       case None =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
-          case Left(commError) =>
-            throw new Exception(commError.toString) // TODO use Show instance instead
+          case Left(CouldNotConnectToBootstrap) =>
+            Task.delay(println("Node could not connect to bootstrap node."))
+          case Left(error) => Task.delay(println(s"Failed! Reason: '$error"))
         }
     }
-
     exec.unsafeRunSync
   }
 
