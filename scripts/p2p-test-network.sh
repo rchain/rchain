@@ -125,7 +125,10 @@ fi
       echo "FAIL: Could not connect to metrics api" 
       all_pass=false
     fi
-   
+
+    echo "Checking node connectivity for ips"
+    docker exec node0.testnet1.rchain sh -c "for i in 2 3 4; do ping -c 4 169.254.1.${i}; done"
+
     # Disabled for inconsistent value bug. Using log peers total until fixed
     # metric_expected_peers_total="2.0"
     # if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total ${metric_expected_peers_total}'") ]]; then
