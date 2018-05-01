@@ -110,6 +110,18 @@ Using flags you can specify which bootstrapping node should be used or if the no
 
 Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [node/src/main/protobuf/rnode.proto](rnode.proto)
 
+#### 2.1.2 Data directory
+
+Node needs to have read and write access to a folder called data directory. By default that folder is `/var/lib/rnode/`. User can control that value by providing `--data_dir` flag. 
+Regardless of which path on the file system you choose for the data directory, please remember that node needs to have read and write access to that folder.
+
+Below example of creating folder for default location and giving it ownership to current user.
+
+```
+sudo mkdir -p /var/lib/rnode
+sudo chown $USER /var/lib/rnode
+```
+
 #### 2.1.2 Running the Node
 
 ##### 2.1.2.1 via Docker
