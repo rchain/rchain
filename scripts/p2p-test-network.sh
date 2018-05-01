@@ -103,15 +103,23 @@ delete_test_network_resources() {
 }
 
 run_tests_on_network() {
-if [[ "${TRAVIS}" == "true" ]]; then
-set +xeo pipefail # turn off exit immediately for tests
-set -x
-fi
   all_pass=true
+  if [[ "${TRAVIS}" == "true" ]]; then
+    set +xeo pipefail # turn off exit immediately for tests
+    set -x
+  fi
+
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
     exit
   fi
+
+    echo "Checking node connectivity for ips"
+    docker exec node0.testnet1.rchain sh -c "
+                                            ping -c 4 169.254.1.2;
+                                            ping -c 4 169.254.1.3;
+                                            ping -c 4 169.254.1.4;
+                                            "
 
   #set +eo pipefail # turn of exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
@@ -126,8 +134,6 @@ fi
       all_pass=false
     fi
 
-    echo "Checking node connectivity for ips"
-    docker exec node0.testnet1.rchain sh -c "for i in 2 3 4; do ping -c 4 169.254.1.${i}; done"
 
     # Disabled for inconsistent value bug. Using log peers total until fixed
     # metric_expected_peers_total="2.0"
