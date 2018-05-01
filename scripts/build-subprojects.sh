@@ -34,6 +34,11 @@ case "$SUBPROJECT" in "rosette")
     ./scripts/p2p-test-network.sh
     ;;
 
+"cloud-p2p-test-network")
+
+    ./scripts/cloud-p2p-test-network.sh
+    ;;
+
 "rholang_more_tests")
 
     # Prep nix 
