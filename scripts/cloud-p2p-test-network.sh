@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 ## Update P2P test network if correct repo and branch.
-set -eo pipefail
+#set -eo pipefail
+set -x pipefail
 
 SSH_USERNAME="root"
 
@@ -39,7 +40,8 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
     else
       rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@10.1.1.2:30304 > /var/log/rnode.log 2>&1 &"
     fi
-      
+
+    echo "Updating host package and running rnode"
     ssh_tcp_port=$((40000+$i))
     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
       -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space " 
@@ -52,6 +54,7 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
         " 
   done
 
+  echo "Running tests on nodes"
   # Check that metrics api is functioning with correct peers_total
   for i in {1..4}; do
     sleep 60 # Be sure rnode has completely started up before checking metrics 
@@ -62,7 +65,7 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
       ")
     if [[ ! "$res" ==  "peers_total 3.0" ]]; then
       echo "E: Peers total isn't correct for node $i. Metrics or P2P comms issue"
-      exit
+      # exit
     fi
   done
 
