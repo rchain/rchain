@@ -1,6 +1,6 @@
 # RChain Node
 
-Rchain Node is module that gathers all other subprojects into final executable.
+Rchain Node is a module that gathers all other subprojects into final executable.
 
 ## 1. Building from source
 
@@ -8,15 +8,7 @@ Rchain Node is module that gathers all other subprojects into final executable.
 
 #### 1.1.1 Prerequisites
 
-* Java Development Kit (JDK), version 8
-    - We recommend using the OpenJDK 
-    - Alternatively, the [Oracle JDK](http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html) is an option
-* [sbt](https://www.scala-sbt.org/download.html)
-* For crypto, the [Sodium crypto library](https://github.com/jedisct1/libsodium)
-* For Rholang
-    - [CUP](http://www2.cs.tum.edu/projects/cup/install.php) 0.11b-2014-06-11 or later. See [Rholang README](https://github.com/rchain/rchain/blob/master/rholang/README.md) for notes on installation requirements.
-     - [jflex](http://jflex.de/)
-     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859)
+In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). __Note__ Failure to attend to all prerequisites will result in errors.
       
 #### 1.1.2. Node depends on the following subprojects: 
 
@@ -51,7 +43,7 @@ Run:
 sbt docker
 ```
 
-To test if image is available to use, simply run `docker images`, `coop.rchain/rnode` should be on the list of available images.
+To test if the image is available to use, simply run `docker images`, `coop.rchain/rnode` should be on the list of available images.
 
 ```
 hideout:rchain rabbit$ docker images | grep rchain
@@ -61,8 +53,8 @@ coop.rchain/rnode                               latest              b1af7024d9bf
 
 ## 2. Modes
 
-Node module comes with single executable (jar, docker image, debian or fedora package), that can run in few modes. Which mode is running depends on the flag you use. 
-You can run node with following flags:
+The node module comes with single executable (jar, docker image, debian or fedora package), that can run in a few modes. Which mode is running depends on the flag you use. 
+You can run node with the following flags:
 
 ```
   -b, --bootstrap  <arg>   Bootstrap rnode address for initial seed.
@@ -90,7 +82,8 @@ You can run node with following flags:
 
 ### 2.1 The Node
 By default when you execute the program, it will fire up a running node instance. That instance will become either a bootstrap node (see `--standalone` flag) or will try to connect to existing bootstrap.
-Node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node). Note that this release prints a great deal of diagnostic information.
+
+Node will instantiate a peer-to-peer network. It will either connect to some already existing node in the network (called bootstrap node) or will create a new network (essentially acting as bootstrap node). __Note__ This release prints a great deal of diagnostic information.
 
 An RChain node is addressed by an "rnode address", which has the following form
 
@@ -115,7 +108,7 @@ Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see
 Node needs to have read and write access to a folder called data directory. By default that folder is `/var/lib/rnode/`. User can control that value by providing `--data_dir` flag. 
 Regardless of which path on the file system you choose for the data directory, please remember that node needs to have read and write access to that folder.
 
-Below example of creating folder for default location and giving it ownership to current user.
+Below is an example of creating folder for default location and giving it ownership to the current user.
 
 ```
 sudo mkdir -p /var/lib/rnode
@@ -126,11 +119,10 @@ sudo chown $USER /var/lib/rnode
 
 ##### 2.1.2.1 via Docker
 
-By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build docker image yourself](#building-via-docker) and then run it.
+By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build a docker image yourself](#building-via-docker) and then run it.
 
-Note that the port used has to be mapped to the proper host port for the node to be able to advertise itself to the network
-properly. This may happen automatically, and it may not; it completely depends on how your computer and network are configured. Some
-monkeying with `docker run` options may be required, and the `--host` and `--port` options to this system may also help.
+__Note__ The port used has to be mapped to the proper host port for the node to be able to advertise itself to the network
+properly. This may happen automatically, and it may not; it completely depends on how your computer and network are configured. Some monkeying with `docker run` options may be required, and the `--host` and `--port` options to this system may also help.
 
 
 ```
@@ -173,7 +165,7 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar
 
 ### 2.2 REPL
 When running the program with `--repl`, it will fire up a thin REPL client. This client will connect to running node instance via gRPC to provide simple REPL functionality. You can control to which node you will connect by providing `--grpc-host` and `--grpc-port`.
-In REPL mode users have the ability to execute Rho-lang commands in REPL environment, which will be evaluated by the Rho-lang interpreter
+In REPL mode users have the ability to execute Rholang commands in REPL environment, which will be evaluated by the Rholang interpreter
 
 
 #### 2.2.1 Running via Docker
@@ -191,7 +183,7 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar --repl
 ```
 
 ### 2.3 Eval
-When running the program with `--eval`, it will fire up a thin program that will connect to running node instance via gRPC to evaluate Rholang code  that is stored in a plain text file on the node itself.
+When running the program with `--eval`, it will fire up a thin program that will connect to running node instance via gRPC to evaluate Rholang code that is stored in a plain text file on the node itself.
 
 ### 2.3.1 Running via Docker
 By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build docker image yourself](#building-via-docker) and then run it.
@@ -202,23 +194,21 @@ To run Rholang that is stored in a plain text file (filename.rho), use
 docker run -it --mount type=bind,source="$(pwd)"/file_directory,target=/tmp rchain/rnode --eval /tmp/filename.rho
 '''
 
-This command will run the node in interpreter mode and will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed. When running your docker container, be aware of your current path - the 'pwd' command sticks you current path in the bind command.
+This command will run the node in interpreter mode and will make a directory on the local system available to the interpreter as a location where Rholang contracts can be executed. When running your docker container, be aware of your current path - the 'pwd' command sticks your current path in the bind command.
 
  
 ## 3. Miscellaneous
 
 ### 3.1. Host and Port
 
-The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good
-IP address and a reasonable UDP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
+The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good IP address and a reasonable UDP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
 
 ```
 --host 1.2.3.4 --port 30304
 ```
 
 By default it uses UDP port 30304. This is also how more than one node may be run on a single machine: just pick different
-ports. Remember that if using Docker, ports may have to be properly mapped and forwarded. For example, if we want to connect on the
-test net on UDP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like so:
+ports. Remember that if using Docker, ports may have to be properly mapped and forwarded. For example, if we want to connect on the test net on UDP port 12345 and our machine's public IP address is 1.2.3.4, we could do it like so:
 
 ```
 $ docker run -ti -p 12345:12345/udp rchain/rchain-comm:latest -p 12345 --host 1.2.3.4
@@ -233,13 +223,11 @@ $ docker run -ti --network=host rchain/rchain-comm:latest -p 12345
 This may take some experimentation to find combinations of arguments that work for any given setup.
 
 Read more than you want to know about Docker networking starting about
-[here](https://docs.docker.com/engine/userguide/networking/work-with-networks/), but honestly, it's featureful and powerful enough
-that you need a [cheatsheet](https://github.com/wsargent/docker-cheat-sheet#exposing-ports).
+[here](https://docs.docker.com/engine/userguide/networking/work-with-networks/), but honestly, it's featureful and powerful enough that you need a [cheatsheet](https://github.com/wsargent/docker-cheat-sheet#exposing-ports).
 
 ### 3.2 Bootstrapping a Private Network
 
-It is possible to set up a private RChain network by running a standalone node and using it for bootstrapping other nodes. Here we
-run one on port 4000:
+It is possible to set up a private RChain network by running a standalone node and using it for bootstrapping other nodes. Here we run one on port 4000:
 
 ```
 $ java -Djava.net.preferIPv4Stack=true -jar /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar -s -p 4000
@@ -297,10 +285,6 @@ The current version of the node produces metrics on some communications-related 
 
 ### 3.4 Caveats
 
-This is very much a work in progress. The networking overlay is only known to work when it can avail itself of visible IP addresses,
-either public or all contained within the same network. It does not yet include any special code for getting around a home firewall
-or a closed router, though it does contain some uPNP handling. Any port used must be open or mapped through the router. Depending on
-your setup, it might be necessary to configure port-forwarding on your router. In some cases, it might even be necessary to specify
-your router's public IP address as the node address if your router's port-forwarding requires it.
+This is very much a work in progress. The networking overlay is only known to work when it can avail itself of visible IP addresses, either public or all contained within the same network. It does not yet include any special code for getting around a home firewall or a closed router, though it does contain some uPNP handling. Any port used must be open or mapped through the router. Depending on your setup, it might be necessary to configure port-forwarding on your router. In some cases, it might even be necessary to specify your router's public IP address as the node address if your router's port-forwarding requires it.
 
 
