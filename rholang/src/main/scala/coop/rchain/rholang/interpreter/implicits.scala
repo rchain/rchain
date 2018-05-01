@@ -260,6 +260,12 @@ object implicits {
 
   implicit def fromPar[T](p: T)(implicit toPar: T => Par): Option[Par] = Some(p)
 
+  implicit val ParLocallyFree: HasLocallyFree[Par] = new HasLocallyFree[Par] {
+    def wildcard(p: Par)    = p.wildcard
+    def freeCount(p: Par)   = p.freeCount
+    def locallyFree(p: Par) = p.locallyFree
+  }
+
   implicit val BundleLocallyFree: HasLocallyFree[Bundle] = new HasLocallyFree[Bundle] {
     override def wildcard(source: Bundle): Boolean   = false
     override def freeCount(source: Bundle): Int      = 0
@@ -397,27 +403,34 @@ object implicits {
     def locallyFree(e: Eval) = ChannelLocallyFree.locallyFree(e.channel.get)
   }
 
+  implicit val VarInstanceLocallyFree: HasLocallyFree[VarInstance] =
+    new HasLocallyFree[VarInstance] {
+      def wildcard(v: VarInstance) =
+        v match {
+          case BoundVar(_) => false
+          case FreeVar(_)  => false
+          case Wildcard(_) => true
+        }
+
+      def freeCount(v: VarInstance) =
+        v match {
+          case BoundVar(_) => 0
+          case FreeVar(_)  => 1
+          case Wildcard(_) => 0
+        }
+
+      def locallyFree(v: VarInstance) =
+        v match {
+          case BoundVar(level) => BitSet(level)
+          case FreeVar(_)      => BitSet()
+          case Wildcard(_)     => BitSet()
+        }
+    }
+
   implicit val VarLocallyFree: HasLocallyFree[Var] = new HasLocallyFree[Var] {
-    def wildcard(v: Var) =
-      v.varInstance match {
-        case BoundVar(_) => false
-        case FreeVar(_)  => false
-        case Wildcard(_) => true
-      }
-
-    def freeCount(v: Var) =
-      v.varInstance match {
-        case BoundVar(_) => 0
-        case FreeVar(_)  => 1
-        case Wildcard(_) => 0
-      }
-
-    def locallyFree(v: Var) =
-      v.varInstance match {
-        case BoundVar(level) => BitSet(level)
-        case FreeVar(_)      => BitSet()
-        case Wildcard(_)     => BitSet()
-      }
+    def wildcard(v: Var)    = VarInstanceLocallyFree.wildcard(v.varInstance)
+    def freeCount(v: Var)   = VarInstanceLocallyFree.freeCount(v.varInstance)
+    def locallyFree(v: Var) = VarInstanceLocallyFree.locallyFree(v.varInstance)
   }
 
   implicit val ReceiveBindLocallyFree: HasLocallyFree[ReceiveBind] =
@@ -428,5 +441,12 @@ object implicits {
         ChannelLocallyFree.freeCount(rb.source.get)
       def locallyFree(rb: ReceiveBind) =
         ChannelLocallyFree.locallyFree(rb.source.get)
+    }
+
+  implicit val MatchCaseLocallyFree: HasLocallyFree[MatchCase] =
+    new HasLocallyFree[MatchCase] {
+      def wildcard(mc: MatchCase)    = mc.source.get.wildcard
+      def freeCount(mc: MatchCase)   = mc.source.get.freeCount
+      def locallyFree(mc: MatchCase) = mc.source.get.locallyFree
     }
 }
