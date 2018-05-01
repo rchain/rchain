@@ -58,7 +58,10 @@ You can run node with the following flags:
 
 ```
   -b, --bootstrap  <arg>   Bootstrap rnode address for initial seed.
-  -d, --data_dir  <arg>    Path to data directory. Defaults to /var/lib/rnode
+      --data_dir  <arg>    Path to data directory. Defaults to /var/lib/rnode
+      --deploy-demo        Demo sending some placeholder Deploy operations to
+                           Casper at regular intervals
+  -d, --diagnostics        Node diagnostics
   -e, --eval  <arg>        Starts a thin client that will evaluate rholang in
                            file on a existing running node. See grpcHost and
                            grpcPort.
@@ -77,7 +80,7 @@ You can run node with the following flags:
                            node. See grpcHost and grpcPort.
   -s, --standalone         Start a stand-alone node (no bootstrapping).
       --help               Show help message
-      --version            Show version of this program
+      --version            Show version of this program	  
 ```
 
 ### 2.1 The Node

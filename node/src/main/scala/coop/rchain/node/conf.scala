@@ -12,6 +12,8 @@ import scala.collection.JavaConverters._
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
 
+  val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
+
   val name =
     opt[String](default = None,
                 short = 'n',
@@ -62,6 +64,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val map_size = opt[Long](required = false,
                            descr = "Map size (in bytes)",
                            default = Some(1024L * 1024L * 1024L))
+
+  val deployDemo = opt[Boolean](
+    default = Some(false),
+    descr = "Demo sending some placeholder Deploy operations to Casper at regular intervals")
 
   def fetchHost(): String =
     host.toOption match {
