@@ -18,7 +18,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.{HashMap, HashSet}
 
 class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
-  type StateWithChain[A] = State[Chain, A]
+  type StateWithChain[A] = State[BlockDag, A]
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in {
@@ -61,11 +61,11 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b8
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
+      BlockDag(HashMap.empty[Int, BlockMessage],
             HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
-    val chain: Chain = createChain.runS(initState).value
+    val chain: BlockDag = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b6      = chain.idToBlocks(6)
@@ -128,11 +128,11 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b8
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
+      BlockDag(HashMap.empty[Int, BlockMessage],
             HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
-    val chain: Chain = createChain.runS(initState).value
+    val chain: BlockDag = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b6      = chain.idToBlocks(6)

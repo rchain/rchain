@@ -60,7 +60,7 @@ trait BlockGenerator {
           parentHash -> updatedChildrenHashes
       }: _*)
       childMap: HashMap[BlockHash, HashSet[BlockHash]] = chain.childMap ++ updatedChildren
-      newChain: Chain                                  = Chain(idToBlocks, blockLookup, childMap, nextId)
+      newChain: BlockDag                                  = BlockDag(idToBlocks, blockLookup, childMap, nextId)
       _                                                <- chainState[F].set(newChain)
     } yield block
 }

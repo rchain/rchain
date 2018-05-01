@@ -18,7 +18,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
-  type StateWithChain[A] = State[Chain, A]
+  type StateWithChain[A] = State[BlockDag, A]
 
   "isInMainChain" should "classify appropriately" in {
     def createChain[F[_]: Monad: ChainState]: F[BlockMessage] =
@@ -29,7 +29,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b3
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
+      BlockDag(HashMap.empty[Int, BlockMessage],
             HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
@@ -54,7 +54,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b4
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
+      BlockDag(HashMap.empty[Int, BlockMessage],
             HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
@@ -88,7 +88,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
       } yield b8
 
     val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
+      BlockDag(HashMap.empty[Int, BlockMessage],
             HashMap.empty[BlockHash, BlockMessage],
             HashMap.empty[BlockHash, HashSet[BlockHash]],
             0)
