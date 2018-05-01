@@ -187,11 +187,11 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   "Matching inside bundles" should "not be possible" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), false)))
+        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
+        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
     val pattern: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false, freeCount = 1))
+        .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false, freeCount = 1))
         .prepend(EVar(Wildcard(WildcardMsg()))))
 
     val result = spatialMatch(target, pattern).runS(emptyMap)
@@ -209,8 +209,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   it should "be possible to match on entire bundle" in {
     val target: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
-        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), false)))
+        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), persistent = false))
+        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
 
     val pattern: Par = EVar(FreeVar(0))
 

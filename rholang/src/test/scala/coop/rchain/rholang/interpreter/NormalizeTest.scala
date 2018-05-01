@@ -509,6 +509,11 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listData2.add(new PGround(new GroundInt(8)))
     val listData3 = new ListProc()
     listData3.add(new PGround(new GroundInt(9)))
+
+    /** new x,y,z in {
+      *   (x![7] | y![8]) | z![9]
+      * }
+      */
     val pNew = new PNew(
       listNameDecl,
       new PPar(
@@ -630,8 +635,18 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )))
     result.knownFree should be(inputs.knownFree)
   }
+
+  /** if (47 == 47) {
+    *   new x in {
+    *     x!(47)
+    *   }
+    * } else {
+    *   new y in {
+    *     y!(47)
+    *   }
+    * }
+    */
   "PIfElse" should "Handle a more complicated if statement with an else clause" in {
-    // if (47 == 47) { new x in { x!(47) } } else { new y in { y!(47) } }
     val condition = new PEq(new PGround(new GroundInt(47)), new PGround(new GroundInt(47)))
     val xNameDecl = new ListNameDecl()
     xNameDecl.add(new NameDeclSimpl("x"))
@@ -750,7 +765,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   /** Example:
     * bundle { _ | x }
     */
-  it should "throw an error when wildcard of free variable is found inside body of bundle" in {
+  it should "throw an error when wildcard or free variable is found inside body of bundle" in {
     val pbundle =
       new PBundle(new BundleReadWrite(),
                   new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
