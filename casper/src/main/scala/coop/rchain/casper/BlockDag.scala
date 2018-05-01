@@ -17,7 +17,15 @@ object BlockDag {
             blockLookup: HashMap[BlockHash, BlockMessage],
             childMap: HashMap[BlockHash, HashSet[BlockHash]],
             latestMessages: HashMap[Validator, BlockHash],
-            currentId: Int): BlockDag = new BlockDag(idToBlocks, blockLookup, childMap, latestMessages, currentId)
+            currentId: Int): BlockDag =
+    new BlockDag(idToBlocks, blockLookup, childMap, latestMessages, currentId)
 
-  def apply(): BlockDag = new BlockDag(HashMap.empty[Int, BlockMessage], HashMap.empty[BlockHash, BlockMessage], HashMap.empty[BlockHash, HashSet[BlockHash]], HashMap.empty[Validator, BlockHash], 0)
+  def apply(): BlockDag =
+    new BlockDag(
+      HashMap.empty[Int, BlockMessage],
+      HashMap.empty[BlockHash, BlockMessage],
+      HashMap.empty[BlockHash, HashSet[BlockHash]],
+      HashMap.empty[Validator, BlockHash],
+      0
+    )
 }

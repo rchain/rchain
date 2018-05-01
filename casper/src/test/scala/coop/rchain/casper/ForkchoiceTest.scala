@@ -76,7 +76,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
 
     val latestBlocks = HashMap[Validator, BlockHash](v1 -> b8.blockHash, v2 -> b6.blockHash)
 
-    val forkchoice = Estimator.tips(chain.childMap, chain.blockLookup, latestBlocks, genesis)
+    val forkchoice = Estimator.tips(chain.copy(latestMessages = latestBlocks), genesis)
     forkchoice.head should be(b6)
     forkchoice(1) should be(b8)
   }
@@ -140,7 +140,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
     val latestBlocks =
       HashMap[Validator, BlockHash](v1 -> b6.blockHash, v2 -> b8.blockHash, v3 -> b7.blockHash)
 
-    val forkchoice = Estimator.tips(chain.childMap, chain.blockLookup, latestBlocks, genesis)
+    val forkchoice = Estimator.tips(chain.copy(latestMessages = latestBlocks), genesis)
     forkchoice.head should be(b8)
     forkchoice(1) should be(b7)
   }

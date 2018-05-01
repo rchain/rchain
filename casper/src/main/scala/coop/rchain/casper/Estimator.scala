@@ -17,24 +17,25 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Int].reverse
 
-  def tips(childMap: HashMap[BlockHash, HashSet[BlockHash]],
-           blockLookup: HashMap[BlockHash, BlockMessage],
-           latestMessages: HashMap[Validator, BlockHash],
-           genesis: BlockMessage): IndexedSeq[BlockMessage] = {
+  def tips(blockDag: BlockDag, genesis: BlockMessage): IndexedSeq[BlockMessage] = {
     @tailrec
     def sortChildren(blocks: IndexedSeq[BlockHash],
+                     childMap: HashMap[BlockHash, HashSet[BlockHash]],
                      scores: collection.Map[BlockHash, Int]): IndexedSeq[BlockHash] = {
       // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
       val newBlocks =
         ListContrib
-          .sortBy[BlockHash, Int](blocks.flatMap(replaceBlockHashWithChildren).distinct, scores)
+          .sortBy[BlockHash, Int](
+            blocks.flatMap(replaceBlockHashWithChildren(childMap, _)).distinct,
+            scores)
       if (stillSame(blocks, newBlocks)) {
         blocks
       } else {
-        sortChildren(newBlocks, scores)
+        sortChildren(newBlocks, childMap, scores)
       }
     }
-    def replaceBlockHashWithChildren(b: BlockHash) = {
+    def replaceBlockHashWithChildren(childMap: HashMap[BlockHash, HashSet[BlockHash]],
+                                     b: BlockHash) = {
       val empty                 = new HashSet[BlockHash]()
       val c: HashSet[BlockHash] = childMap.getOrElse(b, empty)
       if (c.nonEmpty) {
@@ -46,13 +47,12 @@ object Estimator {
     def stillSame(blocks: IndexedSeq[BlockHash], newBlocks: IndexedSeq[BlockHash]) =
       newBlocks == blocks
 
-    val scoresMap = buildScoresMap(childMap, blockLookup, latestMessages)
-    sortChildren(IndexedSeq(genesis.blockHash), scoresMap).map(blockLookup)
+    val scoresMap = buildScoresMap(blockDag)
+    sortChildren(IndexedSeq(genesis.blockHash), blockDag.childMap, scoresMap)
+      .map(blockDag.blockLookup)
   }
 
-  def buildScoresMap(childMap: HashMap[BlockHash, HashSet[BlockHash]],
-                     blockLookup: HashMap[BlockHash, BlockMessage],
-                     latestMessages: HashMap[Validator, BlockHash]): HashMap[BlockHash, Int] = {
+  def buildScoresMap(blockDag: BlockDag): HashMap[BlockHash, Int] = {
     def hashParents(blockLookup: HashMap[BlockHash, BlockMessage],
                     hash: BlockHash): Iterator[BlockHash] = {
       val b = blockLookup(hash)
@@ -60,6 +60,7 @@ object Estimator {
     }
 
     def addValidatorWeightDownSupportingChain(scoreMap: HashMap[BlockHash, Int],
+                                              blockLookup: HashMap[BlockHash, BlockMessage],
                                               validator: Validator,
                                               latestBlockHash: BlockHash) =
       DagOperations
@@ -79,6 +80,8 @@ object Estimator {
     //add scores to the blocks implicitly supported through
     //including a latest block as a "step parent"
     def addValidatorWeightToImplicitlySupported(scoreMap: HashMap[BlockHash, Int],
+                                                blockLookup: HashMap[BlockHash, BlockMessage],
+                                                childMap: HashMap[BlockHash, HashSet[BlockHash]],
                                                 validator: Validator,
                                                 latestBlockHash: BlockHash) =
       childMap
@@ -99,15 +102,26 @@ object Estimator {
         }
 
     def addValidatorWeightToBlockScore(acc: HashMap[BlockHash, Int],
+                                       blockLookup: HashMap[BlockHash, BlockMessage],
+                                       childMap: HashMap[BlockHash, HashSet[BlockHash]],
                                        validator: Validator,
                                        latestBlockHash: BlockHash) = {
-      val scoreMap = addValidatorWeightDownSupportingChain(acc, validator, latestBlockHash)
-      addValidatorWeightToImplicitlySupported(scoreMap, validator, latestBlockHash)
+      val scoreMap =
+        addValidatorWeightDownSupportingChain(acc, blockLookup, validator, latestBlockHash)
+      addValidatorWeightToImplicitlySupported(scoreMap,
+                                              blockLookup,
+                                              childMap,
+                                              validator,
+                                              latestBlockHash)
     }
 
-    latestMessages.foldLeft(HashMap.empty[BlockHash, Int]) {
+    blockDag.latestMessages.foldLeft(HashMap.empty[BlockHash, Int]) {
       case (acc, (validator: Validator, latestBlockHash: BlockHash)) =>
-        addValidatorWeightToBlockScore(acc, validator, latestBlockHash)
+        addValidatorWeightToBlockScore(acc,
+                                       blockDag.blockLookup,
+                                       blockDag.childMap,
+                                       validator,
+                                       latestBlockHash)
     }
   }
 }
