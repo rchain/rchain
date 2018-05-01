@@ -70,7 +70,7 @@ sealed abstract class MultiParentCasperInstances {
         for {
           success <- attemptAdd(b)
           _ <- if (success)
-                Log[F].info(s"CASPER: added block ${hashString(b)}") *> reAttemptBuffer
+                Log[F].info(s"CASPER: Added ${PrettyPrinter.buildString(b)}") *> reAttemptBuffer
               else Capture[F].capture { blockBuffer += b }
         } yield ()
 
@@ -85,7 +85,7 @@ sealed abstract class MultiParentCasperInstances {
                 deployBuff += d
                 deployHist += d
               }
-          _ <- Log[F].info(s"CASPER: Received deploy $d")
+          _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(d)}")
           _ <- sendBlockWhenReady
         } yield ()
 
@@ -131,13 +131,13 @@ sealed abstract class MultiParentCasperInstances {
 
         val proposal = p.flatMap(parents => {
           //TODO: Compute this properly
-          val parentPoststate = parents.head.body.get.postState.get
+          val parentPostState = parents.head.body.get.postState.get
           val justifications  = justificationProto(_latestMessages)
           r.map(requests => {
             if (requests.isEmpty) {
               if (parents.length > 1) {
                 val body = Body()
-                  .withPostState(parentPoststate)
+                  .withPostState(parentPostState)
                 val header = blockHeader(body, parents.map(_.blockHash))
                 val block  = blockProto(body, header, justifications, id)
 
@@ -146,11 +146,12 @@ sealed abstract class MultiParentCasperInstances {
                 None
               }
             } else {
-              //TODO: compute postState properly
-              val newPostState = parentPoststate
-                .withBlockNumber(parentPoststate.blockNumber + 1)
               //TODO: only pick non-conflicting deploys
               val deploys = requests.take(10).toSeq
+              //TODO: compute postState properly
+              val newPostState = parentPostState
+                .withBlockNumber(parentPostState.blockNumber + 1)
+                .withResources(deploys.map(_.resource.get))
               //TODO: include reductions
               val body = Body()
                 .withPostState(newPostState)
@@ -165,13 +166,14 @@ sealed abstract class MultiParentCasperInstances {
 
         proposal.flatMap {
           case mb @ Some(block) =>
-            Log[F].info(s"CASPER: Proposed block ${hashString(block)}") *>
+            Log[F].info(s"CASPER: Proposed ${PrettyPrinter.buildString(block)}") *>
               addBlock(block) *>
               CommUtil.sendBlock[F](block) *>
               estimator
                 .map(_.head)
                 .flatMap(forkchoice =>
-                  Log[F].info(s"CAPSER: New fork-choice is ${hashString(forkchoice)}")) *>
+                  Log[F].info(
+                    s"CASPER: New fork-choice is ${PrettyPrinter.buildString(forkchoice)}")) *>
               Monad[F].pure[Option[BlockMessage]](mb)
           case _ => Monad[F].pure[Option[BlockMessage]](None)
         }

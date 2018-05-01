@@ -1,15 +1,9 @@
 package coop.rchain.casper.util.comm
 
-import cats.{Applicative, Monad}
+import cats.Monad
 import cats.implicits._
-
-import com.google.protobuf.ByteString
-
-import coop.rchain.catscontrib.{Capture, IOUtil}
-import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.ProtocolMessage
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p.effects._
 import coop.rchain.p2p.Network.{frameMessage, ErrorHandler, KeysStore}
@@ -23,7 +17,7 @@ object CommUtil {
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     for {
-      _     <- Log[F].info(s"CASPER: Beginning send to peers of block ${ProtoUtil.hashString(b)}...")
+      _     <- Log[F].info(s"CASPER: Beginning send of ${PrettyPrinter.buildString(b)} to peers...")
       peers <- NodeDiscovery[F].peers
       sends <- peers.toList.traverse { peer =>
                 frameMessage[F](peer, nonce => NetworkProtocol.framePacket(peer, serializedBlock))
@@ -32,7 +26,7 @@ object CommUtil {
       _ <- sends.traverse {
             case (Left(err), _) => Log[F].error(s"$err")
             case (Right(_), peer) =>
-              Log[F].info(s"CASPER: Sent block ${ProtoUtil.hashString(b)} to $peer")
+              Log[F].info(s"CASPER: Sent ${PrettyPrinter.buildString(b)} to $peer")
           }
     } yield ()
   }
@@ -45,7 +39,7 @@ object CommUtil {
         for {
           isOldBlock <- MultiParentCasper[F].contains(b)
           logMessage <- if (isOldBlock) {
-                         s"CASPER: Received block ${ProtoUtil.hashString(b)} again.".pure[F]
+                         s"CASPER: Received ${PrettyPrinter.buildString(b)} again.".pure[F]
                        } else {
                          handleNewBlock[F](b)
                        }
@@ -60,7 +54,7 @@ object CommUtil {
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
       _          <- sendBlock[F](b)
     } yield
-      s"CASPER: Received block ${ProtoUtil.hashString(b)}. New fork-choice is ${ProtoUtil.hashString(forkchoice)}"
+      s"CASPER: Received ${PrettyPrinter.buildString(b)}. New fork-choice is ${PrettyPrinter.buildString(forkchoice)}"
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =
