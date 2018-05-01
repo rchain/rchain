@@ -211,7 +211,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].incrementCounter("peers", -1L)
+      _ <- Metrics[F].decrementGauge("peers")
     } yield ()
 
   /**
