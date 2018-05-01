@@ -10,6 +10,7 @@ The open-source RChain project is building a decentralized, economic, censorship
 ## Building and running
 
 Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q4 of 2018.
+__Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Running from Docker
 Visit the [RChain Docker storefront](https://store.docker.com/profiles/rchain) for the most recent pre-release versions of the RChain software.
@@ -28,6 +29,21 @@ Visit the [RChain Docker storefront](https://store.docker.com/profiles/rchain) f
 Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
 
 Once you can build each subproject individually, run `sbt node/assembly` to build an executable. The assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
+
+Example
+```scala
+sbt:rchain> node/assembly
+[info] Including: JLex.jar
+[info] Including: log4s_2.12-1.4.0.jar
+[info] Including: java-cup-11b-runtime.jar
+
+(...)
+
+[info] SHA-1: bd4471642bb340c8b1fc0571fc614902c5bafbb2
+[info] Packaging /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar ...
+[info] Done packaging.
+[success] Total time: 25 s, completed Mar 26, 2018 3:36:09 PM
+```
 
 ## Information for developers
 Assure prerequisites shown above are met.
