@@ -132,7 +132,8 @@ case class PrettyPrinter(freeShift: Int,
 
       case e: Eval => "*" + buildString(e.channel.get)
 
-      case b: Bundle => "bundle {" + buildString(b.body.get) + "}"
+      case b: Bundle =>
+        BundleOps.showInstance.show(b) + "{ " + buildString(b.body.get) + " }"
 
       case n: New =>
         "new " + buildVariables(n.bindCount) + " in { " + this
