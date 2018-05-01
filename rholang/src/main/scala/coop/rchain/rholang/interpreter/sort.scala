@@ -92,6 +92,9 @@ case class ScoredTerm[T](term: T, score: Tree[ScoreAtom]) extends Ordered[Scored
   * The general order is ground, vars, arithmetic, comparisons, logical, and then others
   */
 object Score {
+  // For things that are truly optional
+  final val ABSENT = 0
+
   // Ground types
   final val BOOL    = 1
   final val INT     = 2
@@ -301,7 +304,6 @@ object VarSortMatcher {
         }
       case None => throw new Error("VarSortMatcher was passed None")
     }
-
 }
 
 object ChannelSortMatcher {
@@ -346,19 +348,30 @@ object ReceiveSortMatcher {
     val source         = bind.source
     val sortedPatterns = patterns.map(channel => ChannelSortMatcher.sortMatch(channel))
     val sortedChannel  = ChannelSortMatcher.sortMatch(source)
-    ScoredTerm(ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term),
-               Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score)))
+    val sortedRemainder = bind.remainder match {
+      case s @ Some(_) => {
+        val scoredVar = VarSortMatcher.sortMatch(s)
+        ScoredTerm(Some(scoredVar.term), scoredVar.score)
+      }
+      case None => ScoredTerm(None, Leaf(Score.ABSENT))
+    }
+
+    ScoredTerm(
+      ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder),
+      Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
+    )
   }
 
   // Used during normalize to presort the binds.
-  def preSortBinds[T](binds: Seq[Tuple3[Seq[Channel], Channel, DebruijnLevelMap[T]]])
-    : Seq[Tuple3[Seq[Channel], Channel, DebruijnLevelMap[T]]] = {
+  def preSortBinds[T](binds: Seq[Tuple4[Seq[Channel], Channel, Option[Var], DebruijnLevelMap[T]]])
+    : Seq[Tuple2[ReceiveBind, DebruijnLevelMap[T]]] = {
     val sortedBind = binds.map {
-      case (patterns: Seq[Channel], channel: Channel, knownFree: DebruijnLevelMap[T]) =>
-        val sortedBind     = sortBind(ReceiveBind(patterns, channel))
-        val sortedPatterns = sortedBind.term.patterns
-        val sortedChannel  = sortedBind.term.source.get
-        ScoredTerm((sortedPatterns, sortedChannel, knownFree), sortedBind.score)
+      case (patterns: Seq[Channel],
+            channel: Channel,
+            remainder: Option[Var],
+            knownFree: DebruijnLevelMap[T]) =>
+        val sortedBind = sortBind(ReceiveBind(patterns, channel, remainder))
+        ScoredTerm((sortedBind.term, knownFree), sortedBind.score)
     }.sorted
     sortedBind.map(_.term)
   }
