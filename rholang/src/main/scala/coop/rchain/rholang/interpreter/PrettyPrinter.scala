@@ -54,7 +54,7 @@ case class PrettyPrinter(freeShift: Int,
         buildString(p1.get) + " < " + buildString(p2.get)
       case ELteBody(ELte(p1, p2)) =>
         buildString(p1.get) + " <= " + buildString(p2.get)
-      case EListBody(EList(s, _, _, _)) =>
+      case EListBody(EList(s, _, _, _, _)) =>
         "[" + buildSeq(s) + "]"
       case ETupleBody(ETuple(s, _, _, _)) =>
         "[" + buildSeq(s) + "]"
@@ -132,6 +132,8 @@ case class PrettyPrinter(freeShift: Int,
 
       case e: Eval => "*" + buildString(e.channel.get)
 
+      case b: Bundle => "bundle {" + buildString(b.body.get) + "}"
+
       case n: New =>
         "new " + buildVariables(n.bindCount) + " in { " + this
           .copy(boundShift = boundShift + n.bindCount)
@@ -156,7 +158,14 @@ case class PrettyPrinter(freeShift: Int,
         if (isEmpty(par)) "Nil"
         else {
           val list =
-            List(par.sends, par.receives, par.evals, par.news, par.exprs, par.matches, par.ids)
+            List(par.bundles,
+                 par.sends,
+                 par.receives,
+                 par.evals,
+                 par.news,
+                 par.exprs,
+                 par.matches,
+                 par.ids)
           ((false, "") /: list) {
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
@@ -231,5 +240,6 @@ case class PrettyPrinter(freeShift: Int,
       p.news.isEmpty &
       p.exprs.isEmpty &
       p.matches.isEmpty &
-      p.ids.isEmpty
+      p.ids.isEmpty &
+      p.bundles.isEmpty
 }

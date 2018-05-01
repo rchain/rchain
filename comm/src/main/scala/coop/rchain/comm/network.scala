@@ -41,10 +41,11 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  def receiver[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
-    ?[_],
-    PeerNode,
-    Array[Byte]]: ApplicativeError_[?[_], CommError]]: F[Unit] =
+  def receiver[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler]: F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
       _ <- result match {
@@ -55,7 +56,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
             // TODO flatten that pattern match
             case Left(err: CommError) =>
               err match {
-                case DatagramException(ex: SocketTimeoutException) => ().pure[F]
+                case DatagramException(_: SocketTimeoutException) => ().pure[F]
                 // TODO These next ones may ding a node's reputation; just
                 // printing for now.
                 case DatagramSizeError(sz) => Log[F].warn(s"bad datagram size $sz")
@@ -82,10 +83,10 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
   def findMorePeers(limit: Int): Seq[PeerNode] = {
     var currentSet = table.peers.toSet
     val potentials = mutable.Set[PeerNode]()
-    if (currentSet.size > 0) {
+    if (currentSet.nonEmpty) {
       val dists = table.sparseness()
       var i     = 0
-      while (currentSet.size > 0 && potentials.size < limit && i < dists.size) {
+      while (currentSet.nonEmpty && potentials.size < limit && i < dists.size) {
         val dist = dists(i)
         /*
          * The general idea is to ask a peer for its peers around a certain
@@ -99,7 +100,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
         currentSet.head.lookup(target) match {
           case Success(results) =>
             potentials ++= results.filter(r =>
-              !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key) == None)
+              !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key).isEmpty)
           case _ => ()
         }
         currentSet -= currentSet.head
@@ -109,11 +110,13 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
     potentials.toSeq
   }
 
-  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
-    ?[_],
-    PeerNode,
-    Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
-                                                      msg: ProtocolMessage): F[Unit] = {
+  def dispatch[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      sock: SocketAddress,
+      msg: ProtocolMessage): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
@@ -127,7 +130,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
       for {
         ti <- Time[F].nanoTime
         _ <- Capture[F].capture(
-              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next == None))
+              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next.isEmpty))
         tf <- Time[F].nanoTime
         // Capture µs timing for roundtrips
         _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
@@ -146,19 +149,20 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
   }
 
   def add(peer: PeerNode): Unit =
-    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), true)
+    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), add = true)
 
   /*
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
   private def handleResponse[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
         ?[_],
         PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]](sock: SocketAddress,
-                                                          sender: PeerNode,
-                                                          msg: ProtocolResponse): F[Unit] = {
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
+      sock: SocketAddress,
+      sender: PeerNode,
+      msg: ProtocolResponse): F[Unit] = {
     val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
       for {
         result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
@@ -207,7 +211,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].incrementCounter("peers", -1L)
+      _ <- Metrics[F].decrementGauge("peers")
     } yield ()
 
   /**

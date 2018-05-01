@@ -38,6 +38,9 @@ object Substitute {
   def substitute(term: Quote)(implicit env: Env[Par]): Quote =
     Quote(substitute(term.value))
 
+  def substitute(term: Bundle)(implicit env: Env[Par]): Bundle =
+    Bundle(substitute(term.body.get))
+
   def substitute(term: Channel)(implicit env: Env[Par]): Channel =
     ChannelSortMatcher
       .sortMatch(
@@ -82,6 +85,7 @@ object Substitute {
             evals = Nil,
             exprs = Nil,
             sends = term.sends.map(substitute),
+            bundles = term.bundles.map(substitute),
             receives = term.receives.map(substitute),
             news = term.news.map(substitute),
             matches = term.matches.map(substitute),
@@ -115,7 +119,7 @@ object Substitute {
         Receive(
           binds = term.binds
             .map({
-              case ReceiveBind(xs, Some(chan)) => ReceiveBind(xs, substitute(chan))
+              case ReceiveBind(xs, Some(chan), _) => ReceiveBind(xs, substitute(chan))
             }),
           body = substitute(term.body.get)(env.shift(term.bindCount)),
           persistent = term.persistent,
@@ -168,7 +172,7 @@ object Substitute {
           case ENeqBody(ENeq(par1, par2))     => ENeq(substitute(par1.get), substitute(par2.get))
           case EAndBody(EAnd(par1, par2))     => EAnd(substitute(par1.get), substitute(par2.get))
           case EOrBody(EOr(par1, par2))       => EOr(substitute(par1.get), substitute(par2.get))
-          case EListBody(EList(ps, freeCount, locallyFree, wildcard)) =>
+          case EListBody(EList(ps, freeCount, locallyFree, wildcard, _)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }

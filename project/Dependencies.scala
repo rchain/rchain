@@ -10,6 +10,7 @@ object Dependencies {
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
   val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.58"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -22,12 +23,13 @@ object Dependencies {
   val http4sCirce         = "org.http4s"                 %% "http4s-circe"              % http4sVersion
   val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
   val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.1"
+  val jline               = ("org.scala-lang"             % "jline"                      % "2.10.7").exclude("org.fusesource.jansi", "jansi")
   val kalium              = "org.abstractj.kalium"        % "kalium"                    % "0.7.0"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % kamonVersion
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.0"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
-  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-M3"
+  val monix               = "io.monix"                   %% "monix"                     % "3.0.0-RC1"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "0.5.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
@@ -42,6 +44,7 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
+
   // format: on
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")

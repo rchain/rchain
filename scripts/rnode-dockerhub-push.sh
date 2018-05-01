@@ -18,7 +18,7 @@ echo "TRAVIS_REPO_SLUG = ${TRAVIS_REPO_SLUG}"
 if [[ "${TRAVIS_BRANCH}" = "master" || \
       "${TRAVIS_BRANCH}" = "dev" || \
       "${TRAVIS_BRANCH}" = "ops-test" ]] \
-&& [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then # alternate if
+&& [[ "${TRAVIS_PULL_REQUEST}" = "false" && "${TRAVIS_REPO_SLUG}" = "rchain/rchain" ]] ; then
 
     # Generate RChain "RNode" network node docker container
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker

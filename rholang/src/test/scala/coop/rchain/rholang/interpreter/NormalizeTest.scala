@@ -12,9 +12,11 @@ import scala.collection.immutable.BitSet
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
+import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.NormalizerExceptions._
 import implicits._
+import org.scalactic.TripleEqualsSupport
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
   "BoolTrue" should "Compile as GBool(true)" in {
@@ -58,7 +60,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     listData.add(new PVar(new ProcVarVar("P")))
     listData.add(new PEval(new NameVar("x")))
     listData.add(new PGround(new GroundInt(7)))
-    val list = new PCollect(new CollectList(listData))
+    val list = new PCollect(new CollectList(listData, new RemainderEmpty()))
 
     val result = ProcNormalizeMatcher.normalizeMatch(list, inputs)
     result.par should be(
@@ -341,6 +343,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listSend.add(new PAdd(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y"))))
     val pBasicContr = new PContr(new NameVar("add"),
                                  listBindings,
+                                 new NameRemainderEmpty(),
                                  new PSend(new NameVar("ret"), new SendSingle(), listSend))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("add", NameSort, 0, 0)))
 
@@ -380,6 +383,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listSend.add(new PGround(new GroundInt(5)))
     val pBasicContr = new PContr(new NameVar("ret5"),
                                  listBindings,
+                                 new NameRemainderEmpty(),
                                  new PSend(new NameVar("ret"), new SendSingle(), listSend))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("ret5", NameSort, 0, 0)))
 
@@ -403,7 +407,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("x"))
     listBindings.add(new NameVar("y"))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
 
@@ -435,9 +440,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listBindings2.add(new NameVar("x2"))
     listBindings2.add(new NameQuote(new PVar(new ProcVarVar("y2"))))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings1, new NameQuote(new PNil())))
     listLinearBinds.add(
-      new LinearBindImpl(listBindings2, new NameQuote(new PGround(new GroundInt(1)))))
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings2,
+                         new NameRemainderEmpty(),
+                         new NameQuote(new PGround(new GroundInt(1)))))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
 
@@ -481,9 +489,12 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listBindings2.add(new NameVar("x2"))
     listBindings2.add(new NameQuote(new PVar(new ProcVarVar("y1"))))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings1, new NameQuote(new PNil())))
     listLinearBinds.add(
-      new LinearBindImpl(listBindings2, new NameQuote(new PGround(new GroundInt(1)))))
+      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings2,
+                         new NameRemainderEmpty(),
+                         new NameQuote(new PGround(new GroundInt(1)))))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
 
@@ -532,7 +543,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val listBindings = new ListName()
     listBindings.add(new NameQuote(new PVar(new ProcVarVar("x"))))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
 
@@ -578,7 +590,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val listProc  = new ListProc()
     listProc.add(new PVar(new ProcVarVar("y")))
     listProc.add(new PVar(new ProcVarWildcard()))
-    listCases.add(new CaseImpl(new PCollect(new CollectList(listProc)), new PNil()))
+    listCases.add(
+      new CaseImpl(new PCollect(new CollectList(listProc, new RemainderEmpty())), new PNil()))
     listCases.add(new CaseImpl(new PVar(new ProcVarWildcard()), new PNil()))
     val pMatch = new PMatch(new PVar(new ProcVarVar("x")), listCases)
 
@@ -689,7 +702,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val listBindings = new ListName()
     listBindings.add(new NameQuote(pMatch))
     val listLinearBinds = new ListLinearBind()
-    listLinearBinds.add(new LinearBindImpl(listBindings, new NameQuote(new PNil())))
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
     val input        = new PInput(receipt, new PNil())
@@ -713,6 +727,48 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
+  }
+
+  "PMethod" should "Produce a method call" in {
+    val listProc = new ListProc()
+    listProc.add(new PGround(new GroundInt(0)))
+    val methodName  = "nth"
+    val target      = new PVar(new ProcVarVar("x"))
+    val pMethod     = new PMethod(target, methodName, listProc)
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val result      = ProcNormalizeMatcher.normalizeMatch(pMethod, boundInputs)
+    val expectedResult =
+      inputs.par.prepend(EMethod("nth", EVar(BoundVar(0)), List(GInt(0)), 0, BitSet(0), false))
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PBundle" should "normalize terms inside a bundle" in {
+    val pbundle     = new PBundle(new PVar(new ProcVarVar("x")))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(pbundle, boundInputs)
+
+    val expectedResult =
+      inputs.par
+        .withBundles(List(Bundle(EVar(BoundVar(0)))))
+        .withLocallyFree(BitSet(0))
+
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  /** Example:
+    * bundle { _ | x }
+    */
+  it should "throw an error when wildcard of free variable is found inside body of bundle" in {
+    val pbundle =
+      new PBundle(new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
+
+    an[UnexpectedBundleContent] should be thrownBy (
+      ProcNormalizeMatcher.normalizeMatch(pbundle,
+                                          inputs)
+    )
   }
 }
 

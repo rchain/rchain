@@ -49,11 +49,12 @@ class ObSpec extends WordSpec with Matchers {
       val ob     = createOb(m = meta, p = parent, Seq(meta, parent))
       val offset = 1
 
-      val (newOb, r) =
+      val (newOb, res) =
         setLex(indirect = true, level = 1, offset = offset, value = value).run(ob).value
 
       val actorParent = newOb.parent.asInstanceOf[Actor]
 
+      res shouldEqual Success
       actorParent.extension.slot(offset) shouldEqual value
     }
   }

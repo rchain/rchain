@@ -92,6 +92,9 @@ case class ScoredTerm[T](term: T, score: Tree[ScoreAtom]) extends Ordered[Scored
   * The general order is ground, vars, arithmetic, comparisons, logical, and then others
   */
 object Score {
+  // For things that are truly optional
+  final val ABSENT = 0
+
   // Ground types
   final val BOOL    = 1
   final val INT     = 2
@@ -109,21 +112,22 @@ object Score {
   final val WILDCARD  = 52
 
   // Expr
-  final val EVAR   = 100
-  final val ENEG   = 101
-  final val EMULT  = 102
-  final val EDIV   = 103
-  final val EPLUS  = 104
-  final val EMINUS = 105
-  final val ELT    = 106
-  final val ELTE   = 107
-  final val EGT    = 108
-  final val EGTE   = 109
-  final val EEQ    = 110
-  final val ENEQ   = 111
-  final val ENOT   = 112
-  final val EAND   = 113
-  final val EOR    = 114
+  final val EVAR    = 100
+  final val ENEG    = 101
+  final val EMULT   = 102
+  final val EDIV    = 103
+  final val EPLUS   = 104
+  final val EMINUS  = 105
+  final val ELT     = 106
+  final val ELTE    = 107
+  final val EGT     = 108
+  final val EGTE    = 109
+  final val EEQ     = 110
+  final val ENEQ    = 111
+  final val ENOT    = 112
+  final val EAND    = 113
+  final val EOR     = 114
+  final val EMETHOD = 115
 
   // Other
   final val QUOTE    = 203
@@ -134,6 +138,7 @@ object Score {
   final val EVAL    = 302
   final val NEW     = 303
   final val MATCH   = 304
+  final val BUNDLE  = 305
 
   final val PAR = 999
 }
@@ -273,6 +278,14 @@ object ExprSortMatcher {
         val (sortedPar1, sortedPar2) = sortBinaryOperation(eo.p1, eo.p2)
         constructExpr(EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
                       Node(Score.EOR, sortedPar1.score, sortedPar2.score))
+      case EMethodBody(em) =>
+        val args         = em.arguments.map(par => ParSortMatcher.sortMatch(par))
+        val sortedTarget = ParSortMatcher.sortMatch(em.target.get)
+        constructExpr(
+          EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
+          Node(
+            Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score))
+        )
       case eg =>
         val sortedGround = GroundSortMatcher.sortMatch(eg)
         constructExpr(sortedGround.term, sortedGround.score)
@@ -291,7 +304,6 @@ object VarSortMatcher {
         }
       case None => throw new Error("VarSortMatcher was passed None")
     }
-
 }
 
 object ChannelSortMatcher {
@@ -336,19 +348,30 @@ object ReceiveSortMatcher {
     val source         = bind.source
     val sortedPatterns = patterns.map(channel => ChannelSortMatcher.sortMatch(channel))
     val sortedChannel  = ChannelSortMatcher.sortMatch(source)
-    ScoredTerm(ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term),
-               Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score)))
+    val sortedRemainder = bind.remainder match {
+      case s @ Some(_) => {
+        val scoredVar = VarSortMatcher.sortMatch(s)
+        ScoredTerm(Some(scoredVar.term), scoredVar.score)
+      }
+      case None => ScoredTerm(None, Leaf(Score.ABSENT))
+    }
+
+    ScoredTerm(
+      ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder),
+      Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
+    )
   }
 
   // Used during normalize to presort the binds.
-  def preSortBinds[T](binds: Seq[Tuple3[Seq[Channel], Channel, DebruijnLevelMap[T]]])
-    : Seq[Tuple3[Seq[Channel], Channel, DebruijnLevelMap[T]]] = {
+  def preSortBinds[T](binds: Seq[Tuple4[Seq[Channel], Channel, Option[Var], DebruijnLevelMap[T]]])
+    : Seq[Tuple2[ReceiveBind, DebruijnLevelMap[T]]] = {
     val sortedBind = binds.map {
-      case (patterns: Seq[Channel], channel: Channel, knownFree: DebruijnLevelMap[T]) =>
-        val sortedBind     = sortBind(ReceiveBind(patterns, channel))
-        val sortedPatterns = sortedBind.term.patterns
-        val sortedChannel  = sortedBind.term.source.get
-        ScoredTerm((sortedPatterns, sortedChannel, knownFree), sortedBind.score)
+      case (patterns: Seq[Channel],
+            channel: Channel,
+            remainder: Option[Var],
+            knownFree: DebruijnLevelMap[T]) =>
+        val sortedBind = sortBind(ReceiveBind(patterns, channel, remainder))
+        ScoredTerm((sortedBind.term, knownFree), sortedBind.score)
     }.sorted
     sortedBind.map(_.term)
   }
@@ -407,6 +430,13 @@ object MatchSortMatcher {
   }
 }
 
+object BundleSortMatcher {
+  def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
+    val sortedPar = ParSortMatcher.sortMatch(b.body)
+    ScoredTerm(Bundle(sortedPar.term), Node(Score.BUNDLE, sortedPar.score))
+  }
+}
+
 object ParSortMatcher {
   def sortMatch(parOption: Option[Par]): ScoredTerm[Option[Par]] =
     parOption match {
@@ -417,6 +447,7 @@ object ParSortMatcher {
         val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
         val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
         val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+        val bundles  = p.bundles.map(b => BundleSortMatcher.sortMatch(b)).sorted
         val ids      = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
         val sortedPar = Par(
           sends = sends.map(_.term),
@@ -425,15 +456,18 @@ object ParSortMatcher {
           evals = evals.map(_.term),
           news = news.map(_.term),
           matches = matches.map(_.term),
+          bundles = bundles.map(_.term),
           ids = ids.map(_.term),
           freeCount = p.freeCount,
           locallyFree = p.locallyFree,
           wildcard = p.wildcard
         )
-        val parScore = Node(Score.PAR,
-                            sends.map(_.score) ++
-                              receives.map(_.score) ++ exprs.map(_.score) ++
-                              evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*)
+        val parScore = Node(
+          Score.PAR,
+          sends.map(_.score) ++ bundles.map(_.score) ++
+            receives.map(_.score) ++ exprs.map(_.score) ++
+            evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*
+        )
         ScoredTerm(sortedPar, parScore)
       case None => throw new Error("ParSortMatcher was passed None")
     }

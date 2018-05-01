@@ -182,4 +182,45 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
     result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(4), GInt(20))), 1 -> Par())))
   }
+
+  "Matching a list with a remainder" should "capture the remainder." in {
+    val target: Expr  = EList(Seq(GInt(1), GInt(2)))
+    val pattern: Expr = EList(Seq(GInt(1)), remainder = Some(FreeVar(0)))
+    val result        = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(2))))))
+  }
+
+  "Matching inside bundles" should "not be possible" in {
+    val target: Bundle = Bundle(
+      Par()
+        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
+        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), false)))
+    val pattern: Bundle = Bundle(
+      Par()
+        .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false, freeCount = 1))
+        .prepend(EVar(Wildcard(WildcardMsg()))))
+
+    val result = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(None)
+  }
+
+  /** Example:
+    *
+    * bundle { @7!(42) | @"0"!(43) } match {
+    *   w => …
+    * }
+    *
+    * here we match on the entire bundle, not its components.
+    */
+  it should "be possible to match on entire bundle" in {
+    val target: Bundle = Bundle(
+      Par()
+        .prepend(Send(Quote(GInt(7)), Seq(GInt(42)), false))
+        .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), false)))
+
+    val pattern: Par = EVar(FreeVar(0))
+
+    val result = spatialMatch(Par(bundles = Seq(target)), pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> target)))
+  }
 }

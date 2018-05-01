@@ -7,6 +7,23 @@ service Repl {
   rpc Eval (EvalRequest) returns (ReplResponse) {}
 }
 
+service Diagnostics {
+  rpc ListPeers (ListPeersRequest) returns (Peers) {}
+}
+
+message ListPeersRequest {
+}
+
+message Peers {
+  repeated Peer peers = 1;
+}
+
+message Peer {
+  string host = 1;
+  int32  port = 2;
+  bytes  key  = 3;
+}
+
 message CmdRequest {
   string line = 1;
 }

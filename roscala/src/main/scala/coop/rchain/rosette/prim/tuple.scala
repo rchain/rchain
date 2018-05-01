@@ -77,7 +77,6 @@ object tuple {
     @checkArgumentMismatch
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
-      val n    = ctxt.nargs
       val init = Tuple(Seq.empty)
 
       Right(
@@ -275,8 +274,7 @@ object tuple {
 
     @checkArgumentMismatch
     override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
-      val elem  = ctxt.argvec.elem
-      val nargs = ctxt.nargs
+      val elem = ctxt.argvec.elem
 
       checkFixnum(1, elem).flatMap { n => // Ensure arg1 is a Fixnum
         if (n.value <= 0)
@@ -294,8 +292,7 @@ object tuple {
 
     @checkArgumentMismatch
     override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
-      val elem  = ctxt.argvec.elem
-      val nargs = ctxt.nargs
+      val elem = ctxt.argvec.elem
 
       checkTuple(0, elem).map { t =>
         RblBool(t.elem.exists(el => (el == elem(1))))
