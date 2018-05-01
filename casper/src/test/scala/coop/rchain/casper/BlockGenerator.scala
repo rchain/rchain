@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.internals._
+import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol.{Resource => ResourceProto, _}
 import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.crypto.hash.Sha256
@@ -16,22 +16,22 @@ import cats.implicits._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[BlockHash]): F[BlockMessage] =
+  def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash]): F[BlockMessage] =
     createBlock[F](parentsHashList, ByteString.EMPTY)
-  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[BlockHash],
-                                           creator: Validator): F[BlockMessage] =
+  def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash],
+                                              creator: Validator): F[BlockMessage] =
     createBlock[F](parentsHashList, creator, Seq.empty[Bond])
-  def createBlock[F[_]: Monad: ChainState](parentsHashList: Seq[BlockHash],
-                                           creator: Validator,
-                                           bonds: Seq[Bond]): F[BlockMessage] =
+  def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash],
+                                              creator: Validator,
+                                              bonds: Seq[Bond]): F[BlockMessage] =
     createBlock[F](parentsHashList, creator, bonds, HashMap.empty[Validator, BlockHash])
-  def createBlock[F[_]: Monad: ChainState](
+  def createBlock[F[_]: Monad: BlockDagState](
       parentsHashList: Seq[BlockHash],
       creator: Validator,
       bonds: Seq[Bond],
       justifications: collection.Map[Validator, BlockHash]): F[BlockMessage] =
     for {
-      chain          <- chainState[F].get
+      chain          <- blockDagState[F].get
       nextId         = chain.currentId + 1
       uniqueResource = ResourceProto(ProduceResource(Produce(nextId)))
       postState      = RChainState().withResources(Seq(uniqueResource)).withBonds(bonds)
@@ -60,7 +60,7 @@ trait BlockGenerator {
           parentHash -> updatedChildrenHashes
       }: _*)
       childMap: HashMap[BlockHash, HashSet[BlockHash]] = chain.childMap ++ updatedChildren
-      newChain: BlockDag                                  = BlockDag(idToBlocks, blockLookup, childMap, nextId)
-      _                                                <- chainState[F].set(newChain)
+      newChain: BlockDag                               = BlockDag(idToBlocks, blockLookup, childMap, chain.latestMessages, nextId)
+      _                                                <- blockDagState[F].set(newChain)
     } yield block
 }
