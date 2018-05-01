@@ -4,7 +4,8 @@
 # "local repo" as params builds from current repo you are in
 # "delete testnet" removes all testnet resources 
 
-set -xeo pipefail
+#set -xeo pipefail
+set -x
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
 network_name="testnet${NETWORK_UID}.rchain"
@@ -190,6 +191,7 @@ create_docker_rnode_image() {
 if [[ "${TRAVIS}" == "true" ]]; then
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+  delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
   echo "Running tests on network in 240 seconds after bootup and convergence"
   echo "Please be patient"
