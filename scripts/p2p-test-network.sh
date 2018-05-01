@@ -129,13 +129,6 @@ run_tests_on_network() {
     exit
   fi
 
-    echo "Checking node connectivity for ips"
-    docker exec node0.testnet1.rchain sh -c "
-                                            ping -c 4 169.254.1.2;
-                                            ping -c 4 169.254.1.3;
-                                            ping -c 4 169.254.1.4;
-                                            "
-
   #set +eo pipefail # turn of exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
 
@@ -145,36 +138,46 @@ run_tests_on_network() {
     if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095") ]]; then
       echo "PASS: Could connect to metrics api" 
     else
-      echo "FAIL: Could not connect to metrics api" 
       all_pass=false
+      echo "FAIL: Could not connect to metrics api" 
     fi
 
-    # Disabled for inconsistent value bug. Using log peers total until fixed
-    # metric_expected_peers_total="2.0"
-    # if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total ${metric_expected_peers_total}'") ]]; then
-    #   echo "PASS: Correct metric api total peers count" 
-    # else
-    #   echo "FAIL: Incorrect metric api total peers count" 
-    #   sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total*'"
-    #   exit
-    # fi
+    # Currently has inconsistent metric value bug. 3.0 and sometimes 2.0. Kamon issue? Timing?
+    metric_expected_peers_total="2.0"
+    if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total ${metric_expected_peers_total}'") ]]; then
+      echo "PASS: Correct metric api total peers count" 
+    else
+      all_pass=false
+      echo "FAIL: Incorrect metric api total peers count. Should be ${metric_expected_peers_total}" 
+      sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total*'"
+    fi
     
     if [[ $(sudo docker logs ${container_name} | grep 'Peers: 2.') ]]; then
       echo "PASS: Correct log peers count" 
     else
+      all_pass=false
       echo "FAIL: Incorrect log peers count" 
       sudo docker logs ${container_name} | grep 'Peers:'
-      all_pass=false
     fi
 
     if [[ ! $(sudo docker logs ${container_name} | grep ERR) ]]; then
       echo "PASS: No error messages contained in logs" 
     else
+      all_pass=false
       echo "FAIL: ERROR messages contained in logs" 
       sudo docker logs ${container_name} | grep ERR
-      all_pass=false
     fi
+  done
 
+  echo "=========PAUSE for 3=============="
+  sleep 3
+  # Ping all nodes from boot-server
+  echo "Checking node connectivity for ips"
+  docker exec node0.testnet1.rchain sh -c "
+                                          ping -c 2 169.254.1.2;
+                                          ping -c 2 169.254.1.3;
+                                          ping -c 2 169.254.1.4;
+                                          "
   if [[ ! "${TRAVIS}" == "true" ]]; then
   set -xeo pipefail # turn off exit immediately for tests
   set +x
@@ -182,8 +185,6 @@ run_tests_on_network() {
     echo ""
     #set -eo pipefail
   fi
-  done
-  #set -eo pipefail # turn back on exit immediately now that individual tests are done 
   
   # Check for test failures
   echo "============================================="
