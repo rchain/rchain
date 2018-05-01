@@ -387,7 +387,8 @@ object Reduce {
           for {
             evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr)(env))
             updatedPs = evaledPs.map(updateLocallyFree)
-          } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
+          } yield
+            updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.connectiveUsed))
         }
         case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
           val methodLookup = methodTable.get(method)

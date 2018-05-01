@@ -183,7 +183,7 @@ object SpatialMatcher {
         }
       // Try to find a match for a single pattern.
       case (targets, pattern +: prem) => {
-        if (lf.freeCount(pattern) === 0 && !lf.wildcard(pattern)) {
+        if (lf.freeCount(pattern) === 0 && !lf.connectiveUsed(pattern)) {
           possiblyRemove(pattern, targets) match {
             case None => StateT.liftF(Stream.Empty)
             case Some(filtered) =>
@@ -229,7 +229,7 @@ object SpatialMatcher {
 
   implicit val parSpatialMatcherInstance: SpatialMatcher[Par] = fromFunction[Par] {
     (target, pattern) =>
-      if (pattern.freeCount === 0 && !pattern.wildcard) {
+      if (pattern.freeCount === 0 && !pattern.connectiveUsed) {
         if (pattern == target)
           StateT.pure(Unit)
         else {

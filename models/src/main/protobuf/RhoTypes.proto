@@ -19,9 +19,8 @@ message Par {
     repeated GPrivate ids = 7;
     int32 freeCount = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 10;
+    bool connective_used = 10;
 }
-
 
 message TaggedContinuation {
     oneof tagged_cont {
@@ -66,7 +65,7 @@ message Send {
     bool persistent = 3;
     int32 freeCount = 4;
     bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 6;
+    bool connective_used = 6;
 }
 
 message ReceiveBind {
@@ -94,7 +93,7 @@ message Receive {
     int32 bindCount = 4;
     int32 freeCount = 5;
     bytes locallyFree = 6 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 7;
+    bool connective_used = 7;
 }
 
 message Eval {
@@ -121,7 +120,7 @@ message Match {
     repeated MatchCase cases = 2;
     int32 freeCount = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 5;
+    bool connective_used = 5;
 }
 
 // Any process may be an operand to an expression.
@@ -161,7 +160,7 @@ message EList {
     repeated Par ps = 1;
     int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 4;
+    bool connective_used = 4;
     Var remainder = 5;
 }
 
@@ -169,21 +168,21 @@ message ETuple {
     repeated Par ps = 1;
     int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 4;
+    bool connective_used = 4;
 }
 
 message ESet {
     repeated Par ps = 1;
     int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 4;
+    bool connective_used = 4;
 }
 
 message EMap {
     repeated KeyValuePair kvs = 1;
     int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 4;
+    bool connective_used = 4;
 }
 
 message EMethod {
@@ -192,7 +191,7 @@ message EMethod {
     repeated Par arguments = 3;
     int32 freeCount = 4;
     bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
-    bool wildcard = 6;
+    bool connective_used = 6;
 }
 
 message KeyValuePair {

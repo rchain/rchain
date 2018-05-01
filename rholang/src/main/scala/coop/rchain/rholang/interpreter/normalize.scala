@@ -136,7 +136,7 @@ object CollectionNormalizeMatcher {
           (result.par +: acc._1,
            result.knownFree,
            acc._3 | result.par.locallyFree,
-           acc._4 || result.par.wildcard)
+           acc._4 || result.par.connectiveUsed)
         }
       )
       val resultKnownFree = folded._2
@@ -159,7 +159,7 @@ object CollectionNormalizeMatcher {
               (Seq(KeyValuePair(keyResult.par, valResult.par)) ++ acc._1,
                valResult.knownFree,
                acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
-               acc._4 || keyResult.par.wildcard || valResult.par.wildcard)
+               acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed)
             }
           }
         }
@@ -340,7 +340,7 @@ object ProcNormalizeMatcher {
             (procMatchResult.par :: acc._1,
              ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
              acc._3 | procMatchResult.par.locallyFree,
-             acc._4 || procMatchResult.par.wildcard)
+             acc._4 || procMatchResult.par.connectiveUsed)
           }
         )
         val freeCount = argResults._2.knownFree.countNoWildcards - input.knownFree.countNoWildcards
@@ -352,7 +352,7 @@ object ProcNormalizeMatcher {
               argResults._1,
               freeCount,
               target.locallyFree | argResults._3,
-              target.wildcard || argResults._4
+              target.connectiveUsed || argResults._4
             )),
           argResults._2.knownFree
         )
@@ -392,7 +392,7 @@ object ProcNormalizeMatcher {
             (procMatchResult.par +: acc._1,
              ProcVisitInputs(VectorPar(), input.env, procMatchResult.knownFree),
              acc._3 | procMatchResult.par.locallyFree,
-             acc._4 || procMatchResult.par.wildcard)
+             acc._4 || procMatchResult.par.connectiveUsed)
           }
         )
         val persistent = p.send_ match {
@@ -408,7 +408,7 @@ object ProcNormalizeMatcher {
               persistent,
               freeCount,
               ChannelLocallyFree.locallyFree(nameMatchResult.chan) | dataResults._3,
-              ChannelLocallyFree.wildcard(nameMatchResult.chan) || dataResults._4
+              ChannelLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
             )),
           dataResults._2.knownFree
         )
@@ -453,8 +453,8 @@ object ProcNormalizeMatcher {
                 .locallyFree(nameMatchResult.chan) | (bodyResult.par.locallyFree
                 .from(boundCount)
                 .map(x => x - boundCount)),
-              wildcard = ChannelLocallyFree
-                .wildcard(nameMatchResult.chan) || bodyResult.par.wildcard
+              connectiveUsed = ChannelLocallyFree
+                .connectiveUsed(nameMatchResult.chan) || bodyResult.par.connectiveUsed
             )),
           bodyResult.knownFree
         )
@@ -480,7 +480,7 @@ object ProcNormalizeMatcher {
             ((e._1, sourceResult.chan, e._3) +: acc._1,
              sourceResult.knownFree,
              acc._3 | ChannelLocallyFree.locallyFree(sourceResult.chan),
-             acc._4 || ChannelLocallyFree.wildcard(sourceResult.chan))
+             acc._4 || ChannelLocallyFree.connectiveUsed(sourceResult.chan))
           })
           (foldResult._1.reverse, foldResult._2, foldResult._3, foldResult._4)
         }
@@ -544,7 +544,7 @@ object ProcNormalizeMatcher {
         val bodyResult =
           normalizeMatch(p.proc_, ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree))
         val freeCount = bodyResult.knownFree.countNoWildcards - input.knownFree.countNoWildcards
-        val wildcard  = sourcesWildcards || bodyResult.par.wildcard
+        val wildcard  = sourcesWildcards || bodyResult.par.connectiveUsed
         ProcVisitOutputs(
           input.par.prepend(
             Receive(binds,
@@ -589,7 +589,7 @@ object ProcNormalizeMatcher {
 
       case b: PBundle =>
         val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
-        if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
+        if (targetResult.par.connectiveUsed || targetResult.par.freeCount > 0) {
           val errMsg = {
             def at(variable: String, l: Int, col: Int): String =
               s"$variable line: $l, column: $col"
@@ -633,7 +633,7 @@ object ProcNormalizeMatcher {
               (MatchCase(patternResult.par, caseBodyResult.par) +: acc._1,
                caseBodyResult.knownFree,
                acc._3 | caseBodyResult.par.locallyFree.from(boundCount).map(x => x - boundCount),
-               acc._4 || caseBodyResult.par.wildcard)
+               acc._4 || caseBodyResult.par.connectiveUsed)
             }
           }
         }
@@ -645,7 +645,7 @@ object ProcNormalizeMatcher {
               casesResult._1.reverse,
               freeCount,
               casesResult._3 | targetResult.par.locallyFree,
-              casesResult._4 || targetResult.par.wildcard
+              casesResult._4 || targetResult.par.connectiveUsed
             )),
           casesResult._2
         )

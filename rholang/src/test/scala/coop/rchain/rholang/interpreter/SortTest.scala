@@ -119,7 +119,7 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
                    EVar(FreeVar(1))),
       freeCount = 4,
       locallyFree = BitSet(0, 1, 2),
-      wildcard = true
+      connectiveUsed = true
     )
     val sortedParVars: Option[Par] = p.copy(
       exprs = List(EVar(BoundVar(0)),
@@ -131,7 +131,7 @@ class VarSortMatcherSpec extends FlatSpec with Matchers {
                    EVar(Wildcard(Var.WildcardMsg()))),
       freeCount = 4,
       locallyFree = BitSet(0, 1, 2),
-      wildcard = true
+      connectiveUsed = true
     )
     val result = ParSortMatcher.sortMatch(parVars)
     result.term should be(sortedParVars)
