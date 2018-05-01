@@ -5,56 +5,50 @@
 
 The open-source RChain project is building a decentralized, economic, censorship-resistant, public compute infrastructure and blockchain. It will host and execute programs popularly referred to as “smart contracts”. It will be trustworthy, scalable, concurrent, with proof-of-stake consensus and content delivery.
 
-[RChain Developer](https://developer.rchain.coop/) has a [Rholang tutorial](https://developer.rchain.coop/tutorial)
-and other information for building on top of the platform, including a roadmap of planned features and releases.
-This repository is the evolving platform itself.
+[RChain Developer](https://developer.rchain.coop/) features project-related tutorials and documentation, project planning information, events calendar, and information for how to engage with this project.
 
-### Communication
+## Building and running
 
-The `comm` subproject contains code for network related operations for RChain.
+Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q4 of 2018.
+__Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
-The network layer is the lowest level component in the architecture and it
-is featured in our **Node.Hello (v0.1) release**. The simplest way to get
-started is with [docker][]: `docker run -ti rchain/rchain-comm`. For other options,
-see [comm/README.md][cr].
+### Running from Docker
+Visit the [RChain Docker storefront](https://store.docker.com/profiles/rchain) for the most recent pre-release versions of the RChain software.
 
-[docker]: https://store.docker.com/community/images/rchain/rchain-comm
-[cr]: https://github.com/rchain/rchain/tree/master/comm
+### Building and running from source
+#### Prerequisites
+* Java Development Kit (JDK), version 8. We recommend using the OpenJDK
+* [sbt](https://www.scala-sbt.org/download.html)
+* For crypto, the [Sodium crypto library](https://github.com/jedisct1/libsodium)
+* For Rholang
+    - [CUP](http://www2.cs.tum.edu/projects/cup/install.php) 0.11b-2014-06-11 or later. See [Rholang README](https://github.com/rchain/rchain/blob/master/rholang/README.md) for notes on installation requirements.
+     - [jflex](http://jflex.de/)
+     - Build [BNFC](http://bnfc.digitalgrammars.com/) from the following commit or later: [BNFC/bnfc@7c9e859](https://github.com/BNFC/bnfc/commit/7c9e859). Use the installation command `cabal install bnfc --global`.
+     
+#### Building and running
+Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
 
-### Rholang
+Once you can build each subproject individually, run `sbt node/assembly` to build an executable. The assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
 
-The `rholang` subproject contains compiler related code for the Rholang language.
+Example
+```scala
+sbt:rchain> node/assembly
+[info] Including: JLex.jar
+[info] Including: log4s_2.12-1.4.0.jar
+[info] Including: java-cup-11b-runtime.jar
 
-### Roscala
+(...)
 
-The `roscala` subproject contains a Scala translation of the Rosette VM.
+[info] SHA-1: bd4471642bb340c8b1fc0571fc614902c5bafbb2
+[info] Packaging /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar ...
+[info] Done packaging.
+[success] Total time: 25 s, completed Mar 26, 2018 3:36:09 PM
+```
 
-### Rosette
+## Information for developers
+Assure prerequisites shown above are met.
 
-The `rosette` subproject contains code for a low level virtual machine for RChain.
-
-### Rspace
-
-The `rspace` subproject contains code related to the key-value storage of the RChain blockchain.
-
-### Filing Issues
-
-File issues in our Public Jira Instance: [File a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
-
-## Building and Running
-
-This document is for do-it-yourselfers, who want to try out pre-release versions of the RChain software. For those lacking in masochistic tendencies, periodic releases are available via Docker at [our Docker storefront](https://store.docker.com/profiles/rchain).
-
-### Setting up your development environment
-
-#### Basic requirements
-* Java 8 or higher
-* [`sbt`](https://www.scala-sbt.org/0.13/docs/Installing-sbt-on-Linux.html) 
-* BNFC - must be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later
-
-The project is built using Scala 2.12.4 and sbt 1.0.3. Subprojects may have other requirements and dependencies. See the `build.sbt` files for more information.
-
-#### If cross-developing for Linux (e.g. Ubuntu) on a Mac
+### If cross-developing for Linux (e.g. Ubuntu) on a Mac
 You will need a virtual machine running the appropriate version of Linux.
 1. Install [VirtualBox]( https://www.virtualbox.org/wiki/Downloads)
 2. Install the Linux distribution you need (e.g. [Ubuntu](http://releases.ubuntu.com/16.04/ubuntu-16.04.3-server-amd64.iso))
@@ -209,3 +203,39 @@ compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_
 ")) [Rholang5401f0efc120]))) [Rholanga4716fe347be])))))) (let [[world (generateFresh "world")] [world2 (generateFresh "world2")]] (block (block (block (produce t helloworld world) (produce t world "Hello World")) (produce t helloworld world2)) (produce t world2 "Hello World again")))))
 <computer:~/src/rchain (dev)> 
 ```
+
+
+## Description of subprojects
+
+### Communication
+
+The `comm` subproject contains code for network related operations for RChain.
+
+The network layer is the lowest level component in the architecture and it
+is featured in our **Node.Hello (v0.1) release**. The simplest way to get
+started is with [docker][]: `docker run -ti rchain/rchain-comm`. For other options,
+see [comm/README.md][cr].
+
+[docker]: https://store.docker.com/community/images/rchain/rchain-comm
+[cr]: https://github.com/rchain/rchain/tree/master/comm
+
+### Rholang
+
+The `rholang` subproject contains compiler related code for the Rholang language.
+
+### Roscala
+
+The `roscala` subproject contains a Scala translation of the Rosette VM.
+
+### Rosette
+
+The `rosette` subproject contains code for a low level virtual machine for RChain.
+
+### Rspace
+
+The `rspace` subproject contains code related to the key-value storage of the RChain blockchain.
+
+### Filing Issues
+
+File issues in our Public Jira Instance: [File a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
+
