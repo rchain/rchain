@@ -1,14 +1,40 @@
-new north, south, knife, spoon in {
-    north(knife) |
-    south(spoon) |
-    for (knf <- north; spn <- south) {
-        "Philosopher 1 Utensils: ".display(knf, ", ", spn, "\n") |
-        north(knf) |
-        south(spn)
-    } |
-    for (spn <- south; knf <- north) {
-        "Philosopher 2 Utensils: ".display(knf, ", ", spn, "\n") |
-        north(knf) |
-        south(spn)
+@"north"!("knife") |
+@"south"!("spoon") |
+for (@knf <- @"north"; @spn <- @"south") {
+  new ack in {
+    @"stdoutack"!("Philosopher 1 Utensils: ", *ack) |
+    for (_ <- ack) {
+      @"stdoutack"!(knf, *ack) |
+      for (_ <- ack) {
+        @"stdoutack"!(", ", *ack) |
+        for (_ <- ack) {
+          @"stdoutack"!(spn, *ack) |
+          for (_ <- ack) {
+            @"stdout"!("\n")
+          }
+        }
+      }
     }
+  } |
+  @"north"!(knf) |
+  @"south"!(spn)
+} |
+for (@spn <- @"south"; @knf <- @"north") {
+  new ack in {
+    @"stdoutack"!("Philosopher 2 Utensils: ", *ack) |
+    for (_ <- ack) {
+      @"stdoutack"!(knf, *ack) |
+      for (_ <- ack) {
+        @"stdoutack"!(", ", *ack) |
+        for (_ <- ack) {
+          @"stdoutack"!(spn, *ack) |
+          for (_ <- ack) {
+            @"stdout"!("\n")
+          }
+        }
+      }
+    }
+  } |
+  @"north"!(knf) |
+  @"south"!(spn)
 }
