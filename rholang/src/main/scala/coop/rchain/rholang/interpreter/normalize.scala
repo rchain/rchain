@@ -559,20 +559,11 @@ object ProcNormalizeMatcher {
 
         import BundleOps._
 
-        def flatten(b: Bundle): Bundle = {
-          import BundleOps._
-          b.body.get.singleBundle() match {
-            case Some(single) =>
-              b.merge(flatten(single)) // we need to collapse all the nested bundles
-            case None => b // term that is not a `Bundle`
-          }
-        }
-
         if (targetResult.par.wildcard || targetResult.par.freeCount > 0) {
           error(targetResult)
         } else {
           val newBundle: Bundle = targetResult.par.singleBundle() match {
-            case Some(single) => outermostBundle.merge(flatten(single))
+            case Some(single) => outermostBundle.merge(single)
             case None         => outermostBundle
           }
           ProcVisitOutputs(input.par.prepend(newBundle), input.knownFree)

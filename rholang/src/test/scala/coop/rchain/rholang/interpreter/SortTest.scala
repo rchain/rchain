@@ -485,7 +485,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         ))
 
     val nestedBundle = Bundle(Bundle(Bundle(parExpr)))
-    val result = BundleSortMatcher.sortMatch(nestedBundle)
+    val result       = BundleSortMatcher.sortMatch(nestedBundle)
     result.term should be(Bundle(Bundle(Bundle(sortedParExpr))))
   }
 }
