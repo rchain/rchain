@@ -41,7 +41,8 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
+      monix,
+      scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
