@@ -13,7 +13,6 @@ fi
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
 network_name="testnet${NETWORK_UID}.rchain"
 
-
 create_test_network_resources() {
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
@@ -102,6 +101,22 @@ delete_test_network_resources() {
   fi
 }
 
+create_artifacts() {
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
+  #cp node/target/rnode_0.2.1_all.deb /tmp/rnode_dev.deb
+  #cp node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm /tmp/rnode_dev.rpm
+  artifacts_dir=$(mktemp -d /tmp/artifacts.XXXXXXXX)
+  cp node/target/*.deb ${artifacts_dir}/rnode.deb
+  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
+  cp node/target/*.deb ${artifacts_dir}/rnode_dev_all.deb
+  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-dev.noarch.rpm
+  scp -CP 10003 ${artifacts_dir}/* root@repo.rchain.space:/usr/share/nginx/html/
+  #eval `ssh-agent -s`
+  #ssh-add <(cat ~/.ssh/travis_id_rsa)
+  rm -rf ${artifacts_dir}
+}
+
+
 run_tests_on_network() {
   all_pass=true
   if [[ "${TRAVIS}" == "true" ]]; then
@@ -133,7 +148,6 @@ run_tests_on_network() {
       echo "FAIL: Could not connect to metrics api" 
       all_pass=false
     fi
-
 
     # Disabled for inconsistent value bug. Using log peers total until fixed
     # metric_expected_peers_total="2.0"
@@ -170,35 +184,33 @@ run_tests_on_network() {
   fi
   done
   #set -eo pipefail # turn back on exit immediately now that individual tests are done 
-
   
-  # Check for failures
+  # Check for test failures
   echo "============================================="
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
-
-    sudo docker exec node0.${network_name} sh -c "curl 127.0.0.1:9095"
-    echo "===================================================================="
-    sudo docker exec node1.${network_name} sh -c "curl 127.0.0.1:9095"
-    echo "===================================================================="
-    sudo docker exec node2.${network_name} sh -c "curl 127.0.0.1:9095"
-    echo "===================================================================="
-    echo "===================================================================="
-    sudo docker logs node0.${network_name}
-    echo "===================================================================="
-    sudo docker logs node1.${network_name}
-    echo "===================================================================="
-    sudo docker logs node2.${network_name}
+    echo "Dumping metrics and logs"
+    for i in {0..2}; do
+      echo "===================================================================="
+      sudo docker exec node${i}.${network_name} sh -c "curl 127.0.0.1:9095"
+      echo "===================================================================="
+    done
+    for i in {0..2}; do
+      echo "===================================================================="
+      sudo docker logs node${i}.${network_name}
+      echo "===================================================================="
+    done
     # exit 1 # disabled for passive failure on tests until figure
   elif [[ $all_pass == true ]]; then
     echo "SUCCESS: All checks passed"
   else
     echo "Unsupported"
   fi
-if [[ "${TRAVIS}" == "true" ]]; then
-set +x
-set -xeo pipefail # turn off exit immediately for tests
-fi
+
+  if [[ "${TRAVIS}" == "true" ]]; then
+  set +x
+  set -xeo pipefail # turn back on exit immediately for tests
+  fi
 }
 
 create_docker_rnode_image() {
@@ -223,7 +235,7 @@ create_docker_rnode_image() {
 
 # ======================================================
 
-# Process params
+# MAIN Process params
 if [[ "${TRAVIS}" == "true" ]]; then
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
@@ -241,19 +253,17 @@ elif [[ $1 == "local" ]]; then
 elif [[ $1 == "run-tests" ]]; then
   sudo echo "" # Ask for sudo early
   run_tests_on_network "${network_name}"
-  exit
 elif [[ $1 == "start" ]]; then
   sudo echo "" # Ask for sudo early
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
-  exit
 elif [[ $1 == "stop" ]]; then
   sudo echo "" # Ask for sudo early
   delete_test_network_resources "${network_name}"
-  exit
+elif [[ $1 == "create-artifacts" ]]; then
+  create_artifacts
 elif [[ $1 == "docker-help" ]]; then
   docker_help_info "${network_name}"
-  exit
 elif [[ $1 && $2 ]]; then
   sudo echo "" # Ask for sudo early
   git_repo=$1
