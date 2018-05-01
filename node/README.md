@@ -106,7 +106,13 @@ By default - when run without any flag - the communication system attempts to co
 
 Using flags you can specify which bootstrapping node should be used or if the node should create its own network (become a bootstrap node).
 
-#### 2.1.1 Running via Docker
+#### 2.1.1 gRPC API
+
+Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [node/src/main/protobuf/rnode.proto](rnode.proto)
+
+#### 2.1.2 Running the Node
+
+##### 2.1.2.1 via Docker
 
 By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build docker image yourself](#building-via-docker) and then run it.
 
@@ -132,7 +138,7 @@ $ docker run -ti coop.rchain/rnode
 (...)
 ```
 
-#### 2.1.2.Running via Java
+##### 2.1.2. via Java
 
 This will run Node from JAR file that was built in [Building from source](#building-from-source)
 

@@ -12,7 +12,6 @@ service Diagnostics {
 }
 
 message ListPeersRequest {
-
 }
 
 message Peers {
