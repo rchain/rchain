@@ -21,7 +21,7 @@ object Estimator {
     @tailrec
     def sortChildren(blocks: IndexedSeq[BlockHash],
                      childMap: HashMap[BlockHash, HashSet[BlockHash]],
-                     scores: collection.Map[BlockHash, Int]): IndexedSeq[BlockHash] = {
+                     scores: Map[BlockHash, Int]): IndexedSeq[BlockHash] = {
       // TODO: This ListContrib.sortBy will be improved on Thursday with Pawels help
       val newBlocks =
         ListContrib
@@ -36,7 +36,7 @@ object Estimator {
     }
     def replaceBlockHashWithChildren(childMap: HashMap[BlockHash, HashSet[BlockHash]],
                                      b: BlockHash) = {
-      val empty                 = new HashSet[BlockHash]()
+      val empty                 = HashSet.empty[BlockHash]
       val c: HashSet[BlockHash] = childMap.getOrElse(b, empty)
       if (c.nonEmpty) {
         c.toIndexedSeq
