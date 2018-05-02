@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
+import HasLocallyFreeInstances._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Var.VarInstance._

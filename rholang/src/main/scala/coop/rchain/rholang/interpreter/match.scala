@@ -11,15 +11,8 @@ import coop.rchain.rholang.interpreter.SpatialMatcher.{spatialMatch, OptionalFre
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Stream
-import implicits.{
-  BundleLocallyFree,
-  ExprLocallyFree,
-  GPrivateLocallyFree,
-  ParExtension,
-  ReceiveBindLocallyFree,
-  SendLocallyFree,
-  VectorPar
-}
+import implicits.{ParExtension, VectorPar}
+import HasLocallyFreeInstances._
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from

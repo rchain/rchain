@@ -1,4 +1,4 @@
-package coop.rchain.models
+package coop.rchain.rholang.interpreter
 
 import scala.collection.immutable.BitSet
 
