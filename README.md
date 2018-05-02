@@ -10,6 +10,7 @@ The open-source RChain project is building a decentralized, economic, censorship
 ## Building and running
 
 Pre-release versions of the RChain software are now available. We plan to launch the full platform in Q4 of 2018.
+
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Running from Docker
@@ -211,14 +212,6 @@ compiled rholang/examples/hello_world_again.rho to rholang/examples/hello_world_
 
 The `comm` subproject contains code for network related operations for RChain.
 
-The network layer is the lowest level component in the architecture and it
-is featured in our **Node.Hello (v0.1) release**. The simplest way to get
-started is with [docker][]: `docker run -ti rchain/rchain-comm`. For other options,
-see [comm/README.md][cr].
-
-[docker]: https://store.docker.com/community/images/rchain/rchain-comm
-[cr]: https://github.com/rchain/rchain/tree/master/comm
-
 ### Rholang
 
 The `rholang` subproject contains compiler related code for the Rholang language.
@@ -234,6 +227,12 @@ The `rosette` subproject contains code for a low level virtual machine for RChai
 ### Rspace
 
 The `rspace` subproject contains code related to the key-value storage of the RChain blockchain.
+
+
+## Caveats and filing issues
+
+### Caveats
+During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/issues/?filter=10128&atlOrigin=eyJpIjoiNjUyMzI3ZWEzYzFmNDc5Mzk2YWY5MjM1NTIyYWVkZmIiLCJwIjoiaiJ9) and [bugs](https://rchain.atlassian.net/issues/?filter=10129&jql=issuetype%20%3D%20Bug%20AND%20status%20in%20(%22In%20Progress%22%2C%20%22In%20Review%22%2C%20%22To%20Do%22)%20ORDER%20BY%20created%20DESC&atlOrigin=eyJpIjoiNjIzZWYyZjk3MzdlNGU5ZjliZjUwZDllZjdlN2Y0ZTUiLCJwIjoiaiJ9). 
 
 ### Filing Issues
 
