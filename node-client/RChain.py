@@ -1,8 +1,8 @@
 '''RChain node client
 
 Usage:
-  python core410.py contract1.rho
-  python core410.py -c 'new x in { x!(1 + 1) }'
+  python RChain.py contract1.rho
+  python RChain.py -c 'new x in { x!(1 + 1) }'
 
 We assume the RChain node is running and that it is listening on port
 5000. Double-check that you see this message in the logs:

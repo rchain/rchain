@@ -2,11 +2,11 @@
 
 To run a contract (assuming the RChain node is running):
 
-    python core410.py contract1.rho
+    python RChain.py contract1.rho
 
 To execute a rholang process:
 
-    python core410.py -c 'new x in { x!(1 + 1) }'
+    python RChain.py -c 'new x in { x!(1 + 1) }'
 
 See RChain.py for more details.
 
