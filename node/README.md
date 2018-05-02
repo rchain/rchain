@@ -8,7 +8,9 @@ Rchain Node is a module that gathers all other subprojects into final executable
 
 #### 1.1.1 Prerequisites
 
-In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). __Note__ Failure to attend to all prerequisites will result in errors.
+In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). 
+
+__Note__ Failure to attend to all prerequisites will result in errors.
       
 #### 1.1.2. Node depends on the following subprojects: 
 
@@ -145,7 +147,17 @@ $ docker run -ti coop.rchain/rnode
 (...)
 ```
 
-##### 2.1.2. via Java
+To use both the peer-to-peer and REPL capabilities of RNode, two containers running RNode need to be connected to one user-defined network bridge:
+
+```bash
+> docker network create rnode-net
+
+> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+
+> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+```
+
+##### 2.1.2.2 via Java
 
 This will run Node from JAR file that was built in [Building from source](#building-from-source)
 

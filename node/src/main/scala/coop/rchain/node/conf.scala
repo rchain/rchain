@@ -27,11 +27,13 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val httpPort =
     opt[Int](default = Some(8080),
-             short = 'x',
              descr = "HTTP port (deprecated - all API features will be ported to gRPC API).")
 
   val grpcPort =
     opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
+
+  val metricsPort =
+    opt[Int](default = Some(9095), descr = "Port used by metrics API.")
 
   val grpcHost =
     opt[String](default = Some("localhost"),

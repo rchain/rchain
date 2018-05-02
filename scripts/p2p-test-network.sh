@@ -5,13 +5,27 @@
 # "delete testnet" removes all testnet resources 
 
 if [[ "${TRAVIS}" == "true" ]]; then
-  set -xeo pipefail # enable verbosity on CI environment for debugging
+  set -eo pipefail # x enables verbosity on CI environment for debugging
 else
   set -eo pipefail
 fi
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
 network_name="testnet${NETWORK_UID}.rchain"
+
+line_bar() {
+  text=$1
+  length=60
+  middle=$((${length}/2))
+  for ((x = 0; x < ${length}; x++)); do
+    if [[ "${x}" == "${middle}" ]]; then
+      printf %s ${text}
+    fi
+    printf %s = 
+  done
+echo
+}
+
 
 create_test_network_resources() {
   if [[ ! $1 ]]; then
@@ -44,9 +58,9 @@ create_test_network_resources() {
     sleep 3 # slow down 
   done
   
-  echo "======================================================"
+  line_bar
   echo "P2P test network build complete. Converging network."
-  echo "======================================================"
+  line_bar
   echo ""
   echo "Test network build has completed but it might take a minute for start-up of network and metrics to be available."
   echo ""
@@ -59,27 +73,27 @@ docker_help_info() {
     echo "E: Requires network name as argument"
     exit
   fi
-  echo "#########################DOCKER NOTES##########################"
-  echo "==============================================================="
+  line_bar "DOCKER NOTES"
+  line_bar
   echo "To display standalone bootstrap server rnode log:"
   echo "sudo docker logs --follow node0.${network_name}"
-  echo "==============================================================="
+  line_bar
   echo "To display node1 rnode log:"
   echo "sudo docker logs --follow node1.${network_name}"
-  echo "==============================================================="
+  line_bar
   echo "To view rnode metrics of bootstrap container:"
   echo "sudo docker exec node0.${network_name} sh -c \"curl 127.0.0.1:9095\""
   echo "==============================================================="
   echo "To enter your bootstrap/standalone docker container:"
   echo "sudo docker exec -it node0.${network_name} /bin/sh"
-  echo "==============================================================="
+  line_bar
   echo "Other Useful Commands:"
   echo "sudo docker ps"
   echo "sudo docker network ls"
   echo "sudo docker container ls"
   echo "sudo docker image ls"
   echo "sudo docker stop node2.${network_name}"
-  echo "==============================================================="
+  line_bar
 }
 
 
@@ -119,10 +133,7 @@ create_artifacts() {
 
 run_tests_on_network() {
   all_pass=true
-  if [[ "${TRAVIS}" == "true" ]]; then
-    set +xeo pipefail # turn off exit immediately for tests
-    set -x
-  fi
+    set +eo pipefail # turn off exit immediately for tests
 
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
@@ -132,8 +143,9 @@ run_tests_on_network() {
   #set +eo pipefail # turn of exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
 
-    echo "============================================="
-    echo "Running tests on ${container_name}"
+    line_bar
+    echo "Running tests on node: ${container_name}"
+    line_bar
 
     if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095") ]]; then
       echo "PASS: Could connect to metrics api" 
@@ -142,16 +154,15 @@ run_tests_on_network() {
       echo "FAIL: Could not connect to metrics api" 
     fi
 
-    # Currently has inconsistent metric value bug. 3.0 and sometimes 2.0. Kamon issue? Timing?
-    metric_expected_peers_total="2.0"
-    if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total ${metric_expected_peers_total}'") ]]; then
-      echo "PASS: Correct metric api total peers count" 
+    expected_peers=2.0
+    res=$(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers '")
+    if [[ "$res" ==  "peers ${expected_peers}" ]]; then
+      echo "PASS: Metric \"${res}\" is correct for node $container_name. Expected \"${expected_peers}\""
     else
       all_pass=false
-      echo "FAIL: Incorrect metric api total peers count. Should be ${metric_expected_peers_total}" 
-      sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total*'"
+      echo "FAIL: Metric \"${res}\" is incorrect for node $container_name. Expected \"${expected_peers}\""
     fi
-    
+
     if [[ $(sudo docker logs ${container_name} | grep 'Peers: 2.') ]]; then
       echo "PASS: Correct log peers count" 
     else
@@ -167,50 +178,43 @@ run_tests_on_network() {
       echo "FAIL: ERROR messages contained in logs" 
       sudo docker logs ${container_name} | grep ERR
     fi
+
   done
 
-  echo "=========PAUSE for 3=============="
-  sleep 3
-  # Ping all nodes from boot-server
-  echo "Checking node connectivity for ips"
-  docker exec node0.testnet1.rchain sh -c "
-                                          ping -c 2 169.254.1.2;
-                                          ping -c 2 169.254.1.3;
-                                          ping -c 2 169.254.1.4;
-                                          "
-  if [[ ! "${TRAVIS}" == "true" ]]; then
-  set -xeo pipefail # turn off exit immediately for tests
-  set +x
-  else
+  echo "Pause for 5 seconds then dumping info"
+  sleep 5
+
+  line_bar "INFO DUMP"
+  for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
+    line_bar
+    echo node: $container_name
+    line_bar
+    echo "ICMP:" 
+    echo "pinging bootstrap node"
+    ping -c 2 169.254.1.2
+    line_bar
+    echo "LOGS:" 
+    logs=$(sudo docker logs ${container_name})
+    echo "${logs}"
+    line_bar
+    echo "METRICS:"
+    metrics=$(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095")
+    echo -n "${metrics}"
     echo ""
-    #set -eo pipefail
-  fi
+  done
+
   
   # Check for test failures
-  echo "============================================="
+  set -eo pipefail # turn back on exit immediately all pass check 
+  line_bar
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
     echo "Dumping metrics and logs"
-    for i in {0..2}; do
-      echo "===================================================================="
-      sudo docker exec node${i}.${network_name} sh -c "curl 127.0.0.1:9095"
-      echo "===================================================================="
-    done
-    for i in {0..2}; do
-      echo "===================================================================="
-      sudo docker logs node${i}.${network_name}
-      echo "===================================================================="
-    done
-    # exit 1 # disabled for passive failure on tests until figure
+    exit 1 # comment out this line to enable failures
   elif [[ $all_pass == true ]]; then
     echo "SUCCESS: All checks passed"
   else
     echo "Unsupported"
-  fi
-
-  if [[ "${TRAVIS}" == "true" ]]; then
-  set +x
-  set -xeo pipefail # turn back on exit immediately for tests
   fi
 }
 
@@ -236,7 +240,7 @@ create_docker_rnode_image() {
 
 # ======================================================
 
-# MAIN Process params
+# MAIN
 if [[ "${TRAVIS}" == "true" ]]; then
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
