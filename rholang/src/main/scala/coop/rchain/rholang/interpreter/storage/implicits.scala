@@ -4,9 +4,9 @@ import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models._
 import coop.rchain.models.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.HasLocallyFree
+import coop.rchain.rholang.interpreter.HasLocallyFree._
 import coop.rchain.rholang.interpreter.SpatialMatcher._
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.rholang.interpreter.HasLocallyFreeInstances._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM
@@ -21,8 +21,6 @@ object implicits {
         case None      => Channel(Quote(Par.defaultInstance))
       }
     }
-
-  private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
 
   implicit val matchListQuote: StorageMatch[Seq[Channel], Seq[Channel]] =
     new StorageMatch[Seq[Channel], Seq[Channel]] {

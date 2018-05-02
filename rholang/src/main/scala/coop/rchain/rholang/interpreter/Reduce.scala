@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
+import HasLocallyFreeInstances._
 import cats.{Eval => _}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._

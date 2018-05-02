@@ -8,7 +8,8 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.implicits.ChannelLocallyFree._
+import HasLocallyFreeInstances._
+import HasLocallyFree._
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
