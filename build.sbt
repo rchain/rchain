@@ -141,7 +141,6 @@ lazy val node = (project in file("node"))
         add(entry, entryTargetPath)
         run("apk", "update")
         run("apk", "add", "libsodium")
-        run("mkdir", "/var/lib/rnode")
         entryPoint("/bin/main.sh")
       }
     },
