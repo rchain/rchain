@@ -145,7 +145,17 @@ $ docker run -ti coop.rchain/rnode
 (...)
 ```
 
-##### 2.1.2. via Java
+In order to run more than one Docker rnode on the same host, the containers need to be connected to one user-defined network bridge:
+
+```bash
+> docker network create rnode-net
+
+> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+
+> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+```
+
+##### 2.1.2.2 via Java
 
 This will run Node from JAR file that was built in [Building from source](#building-from-source)
 

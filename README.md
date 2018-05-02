@@ -190,6 +190,16 @@ Invoking the above Docker image is simple enough:
 15:49:26.974 [main] DEBUG p2p - connect(): Connecting to #{PeerNode c12882b563fa47c9af297ce952ef7d94}
 [...]
 ```
+In order to run more than one Docker rnode on the same host, the containers need to be connected to one user-defined network bridge:
+
+```bash
+> docker network create rnode-net
+
+> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+
+> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+```
+
 Each scoped build is as similar to the original, per-project build process as possible, so assemblies should be produced in the same way as before:
 ```
 <computer:~/src/rchain (dev)> sbt "project rholang" assembly
