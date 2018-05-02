@@ -13,13 +13,6 @@ final case class BlockDag(idToBlocks: HashMap[Int, BlockMessage],
                           currentId: Int)
 
 object BlockDag {
-  def apply(idToBlocks: HashMap[Int, BlockMessage],
-            blockLookup: HashMap[BlockHash, BlockMessage],
-            childMap: HashMap[BlockHash, HashSet[BlockHash]],
-            latestMessages: HashMap[Validator, BlockHash],
-            currentId: Int): BlockDag =
-    new BlockDag(idToBlocks, blockLookup, childMap, latestMessages, currentId)
-
   def apply(): BlockDag =
     new BlockDag(
       HashMap.empty[Int, BlockMessage],
