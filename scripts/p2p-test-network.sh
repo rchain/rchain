@@ -44,13 +44,16 @@ create_test_network_resources() {
   for i in {0..2}; do
     container_name="node${i}.${network_name}"
     echo $container_name
-  
+
+    var_lib_rnode_dir=$(mktemp -d /tmp/var_lib_rnode.XXXXXXXX)
+
     if [[ $i == 0 ]]; then
       rnode_cmd="--port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352"
     else
       rnode_cmd="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@169.254.1.2:30304"
     fi
     sudo docker run -dit --name ${container_name} \
+      -v ${var_lib_rnode_dir}:/var/lib/rnode \
       --network=${network_name} \
       coop.rchain/rnode ${rnode_cmd}
   
