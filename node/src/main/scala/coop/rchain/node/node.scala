@@ -24,7 +24,7 @@ class NodeRuntime(conf: Conf) {
 
   import ApplicativeError_._
 
-  /** Configuration x*/
+  /** Configuration */
   private val host           = conf.fetchHost()
   private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
   private val address        = s"rnode://$name@$host:${conf.port()}"
