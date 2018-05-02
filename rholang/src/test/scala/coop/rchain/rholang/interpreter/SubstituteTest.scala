@@ -1,12 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import org.scalatest.{FlatSpec, Matchers}
-import Substitute._
-import Env._
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
-import implicits._
+import coop.rchain.rholang.interpreter.Substitute._
+import coop.rchain.rholang.interpreter.implicits._
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
@@ -221,5 +221,15 @@ class BundleSubSpec extends FlatSpec with Matchers {
              BitSet())
       )
     )
+  }
+
+  it should "preserve bundles' polarities during substitution" in {
+    val r: Par              = Bundle(body = Expr(GString("stdout")), writeFlag = true, readFlag = false) // bundle+ { "stdout" }
+    val env                 = Env.makeEnv(r)
+    val bundle: Par         = Bundle(Expr(EVarBody(EVar(BoundVar(0)))), writeFlag = false, readFlag = true)
+    val result: Par         = substitute(bundle)(env)
+    val expectedResult: Par = Bundle(Expr(GString("stdout")), writeFlag = false, readFlag = false)
+
+    result should be(expectedResult)
   }
 }
