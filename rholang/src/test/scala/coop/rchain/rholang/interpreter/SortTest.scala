@@ -464,7 +464,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     result.term should be(Bundle(sortedParExpr))
   }
 
-  it should "sort expressions in nested bundles" in {
+  it should "sort expressions in nested bundles preserving polarities" in {
     val parExpr =
       p.copy(
         exprs = List(
@@ -484,8 +484,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EOr(GBool(false), GBool(true))
         ))
 
-    val nestedBundle = Bundle(Bundle(Bundle(parExpr)))
+    val nestedBundle = Bundle(Bundle(Bundle(parExpr, writeFlag = true, readFlag = false), writeFlag = false, readFlag = true))
     val result       = BundleSortMatcher.sortMatch(nestedBundle)
-    result.term should be(Bundle(Bundle(Bundle(sortedParExpr))))
+    result.term should be(Bundle(Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false), writeFlag = false, readFlag = true)))
   }
 }
