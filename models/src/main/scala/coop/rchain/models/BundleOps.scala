@@ -11,10 +11,10 @@ object BundleOps {
 
   implicit val showInstance: Show[Bundle] = Show.show[Bundle] { bundle =>
     val sign =
-      if(bundle.readFlag && bundle.writeFlag) ""
-      else if(bundle.readFlag && !bundle.writeFlag) "-"
-      else if(!bundle.readFlag && bundle.writeFlag) "+"
-      else if(!bundle.readFlag && !bundle.writeFlag) "0"
+      if (bundle.readFlag && bundle.writeFlag) ""
+      else if (bundle.readFlag && !bundle.writeFlag) "-"
+      else if (!bundle.readFlag && bundle.writeFlag) "+"
+      else if (!bundle.readFlag && !bundle.writeFlag) "0"
     "%-8s".format(s"bundle$sign")
   }
 }
