@@ -13,7 +13,8 @@ Pre-release versions of the RChain software are now available. We plan to launch
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Running from Docker
-Visit the [RChain Docker storefront](https://store.docker.com/profiles/rchain) for the most recent pre-release versions of the RChain software.
+Assuming you have Docker running on your system, use the following pull command to run the latest version of RNode in Docker
+'docker pull rchain/rnode:latest`
 
 ### Building and running from source
 #### Prerequisites
@@ -190,7 +191,7 @@ Invoking the above Docker image is simple enough:
 15:49:26.974 [main] DEBUG p2p - connect(): Connecting to #{PeerNode c12882b563fa47c9af297ce952ef7d94}
 [...]
 ```
-In order to run more than one Docker rnode on the same host, the containers need to be connected to one user-defined network bridge:
+In order to use both the peer-to-peer network and REPL cabailities of the node, you must run more than one Docker Rnode on the same host, the containers need to be connected to one user-defined network bridge:
 
 ```bash
 > docker network create rnode-net
