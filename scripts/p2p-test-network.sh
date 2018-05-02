@@ -143,15 +143,15 @@ run_tests_on_network() {
     fi
 
     # Currently has inconsistent metric value bug. 3.0 and sometimes 2.0. Kamon issue? Timing?
-    metric_expected_peers_total="2.0"
-    if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total ${metric_expected_peers_total}'") ]]; then
-      echo "PASS: Correct metric api total peers count" 
+    expected_peers=2.0
+    res=$(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers '")
+    if [[ "$res" ==  "peers ${expected_peers}" ]]; then
+      echo "PASS: Metric \"${res}\" is correct for node $container_name. Expected \"${expected_peers}\""
     else
       all_pass=false
-      echo "FAIL: Incorrect metric api total peers count. Should be ${metric_expected_peers_total}" 
-      sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep 'peers_total*'"
+      echo "FAIL: Metric \"${res}\" is incorrect for node $container_name. Expected \"${expected_peers}\""
     fi
-    
+
     if [[ $(sudo docker logs ${container_name} | grep 'Peers: 2.') ]]; then
       echo "PASS: Correct log peers count" 
     else
@@ -236,7 +236,7 @@ create_docker_rnode_image() {
 
 # ======================================================
 
-# MAIN Process params
+# MAIN
 if [[ "${TRAVIS}" == "true" ]]; then
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
