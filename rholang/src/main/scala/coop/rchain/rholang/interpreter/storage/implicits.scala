@@ -23,8 +23,6 @@ object implicits {
       }
     }
 
-  private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
-
   implicit val matchListQuote: StorageMatch[BindPattern, Seq[Channel]] =
     new StorageMatch[BindPattern, Seq[Channel]] {
 
@@ -33,8 +31,7 @@ object implicits {
           .run(emptyMap)
           .map {
             case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
-              println("caughtRem: " + caughtRem)
-              val (remainderMap, countBump) = pattern.remainder match {
+              val remainderMap = pattern.remainder match {
                 case Some(Var(FreeVar(level))) =>
                   val flatRem: Seq[Par] = caughtRem.flatMap(
                     chan =>
@@ -43,14 +40,10 @@ object implicits {
                         case _                 => None
                     }
                   )
-                  (freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector))), 1)
-                case _ => (freeMap, 0)
+                  freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
+                case _ => freeMap
               }
-              println("remainderMap: " + remainderMap)
-              toChannels(
-                remainderMap,
-                pattern.patterns.map((c: Channel) => freeCount(c)).sum + countBump
-              )
+              toChannels(remainderMap, pattern.freeCount)
           }
     }
 

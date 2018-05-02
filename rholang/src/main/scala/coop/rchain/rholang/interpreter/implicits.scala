@@ -112,42 +112,29 @@ object implicits {
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
-    new Par(sends = List(s),
-            freeCount = s.freeCount,
-            locallyFree = s.locallyFree,
-            connectiveUsed = s.connectiveUsed)
+    new Par(sends = List(s), locallyFree = s.locallyFree, connectiveUsed = s.connectiveUsed)
   def apply(r: Receive): Par =
-    new Par(receives = List(r),
-            freeCount = r.freeCount,
-            locallyFree = r.locallyFree,
-            connectiveUsed = r.connectiveUsed)
+    new Par(receives = List(r), locallyFree = r.locallyFree, connectiveUsed = r.connectiveUsed)
   def apply(e: Eval): Par =
     new Par(evals = List(e),
-            freeCount = EvalLocallyFree.freeCount(e),
             locallyFree = EvalLocallyFree.locallyFree(e),
             connectiveUsed = EvalLocallyFree.connectiveUsed(e))
   def apply(n: New): Par =
     new Par(news = List(n),
-            freeCount = NewLocallyFree.freeCount(n),
             locallyFree = NewLocallyFree.locallyFree(n),
             connectiveUsed = NewLocallyFree.connectiveUsed(n))
   def apply(e: Expr): Par =
     new Par(exprs = List(e),
-            freeCount = ExprLocallyFree.freeCount(e),
             locallyFree = ExprLocallyFree.locallyFree(e),
             connectiveUsed = ExprLocallyFree.connectiveUsed(e))
   def apply(m: Match): Par =
-    new Par(matches = List(m),
-            freeCount = m.freeCount,
-            locallyFree = m.locallyFree,
-            connectiveUsed = m.connectiveUsed)
+    new Par(matches = List(m), locallyFree = m.locallyFree, connectiveUsed = m.connectiveUsed)
   def apply(g: GPrivate): Par =
-    new Par(ids = List(g), freeCount = 0, locallyFree = BitSet(), connectiveUsed = false)
+    new Par(ids = List(g), locallyFree = BitSet(), connectiveUsed = false)
 
   def apply(b: Bundle): Par =
     new Par(
       bundles = Seq(b),
-      freeCount = 0,
       locallyFree = b.body.get.locallyFree,
       connectiveUsed = false
     )
@@ -182,34 +169,29 @@ object implicits {
     // Convenience prepend methods
     def prepend(s: Send): Par =
       p.copy(sends = Seq(s) ++ p.sends,
-             freeCount = p.freeCount + s.freeCount,
              locallyFree = p.locallyFree | s.locallyFree,
              connectiveUsed = p.connectiveUsed || s.connectiveUsed)
     def prepend(r: Receive): Par =
       p.copy(
         receives = Seq(r) ++ p.receives,
-        freeCount = p.freeCount + r.freeCount,
         locallyFree = p.locallyFree | r.locallyFree,
         connectiveUsed = p.connectiveUsed || r.connectiveUsed
       )
     def prepend(e: Eval): Par =
       p.copy(
         evals = Seq(e) ++ p.evals,
-        freeCount = p.freeCount + EvalLocallyFree.freeCount(e),
         locallyFree = p.locallyFree | EvalLocallyFree.locallyFree(e),
         connectiveUsed = p.connectiveUsed || EvalLocallyFree.connectiveUsed(e)
       )
     def prepend(n: New): Par =
       p.copy(
         news = Seq(n) ++ p.news,
-        freeCount = p.freeCount + NewLocallyFree.freeCount(n),
         locallyFree = p.locallyFree | NewLocallyFree.locallyFree(n),
         connectiveUsed = p.connectiveUsed || NewLocallyFree.connectiveUsed(n)
       )
     def prepend(e: Expr): Par =
       p.copy(
         exprs = Seq(e) ++ p.exprs,
-        freeCount = p.freeCount + ExprLocallyFree.freeCount(e),
         locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e),
         connectiveUsed = p.connectiveUsed || ExprLocallyFree.connectiveUsed(e)
       )
@@ -220,7 +202,6 @@ object implicits {
       )
     def prepend(m: Match): Par =
       p.copy(matches = Seq(m) ++ p.matches,
-             freeCount = p.freeCount + m.freeCount,
              locallyFree = p.locallyFree | m.locallyFree,
              connectiveUsed = p.connectiveUsed || m.connectiveUsed)
 
@@ -254,7 +235,6 @@ object implicits {
         that.matches ++ p.matches,
         that.bundles ++ p.bundles,
         that.ids ++ p.ids,
-        that.freeCount + p.freeCount,
         that.locallyFree | p.locallyFree,
         that.connectiveUsed || p.connectiveUsed
       )
@@ -264,19 +244,16 @@ object implicits {
 
   implicit val ParLocallyFree: HasLocallyFree[Par] = new HasLocallyFree[Par] {
     def connectiveUsed(p: Par) = p.connectiveUsed
-    def freeCount(p: Par)      = p.freeCount
     def locallyFree(p: Par)    = p.locallyFree
   }
 
   implicit val BundleLocallyFree: HasLocallyFree[Bundle] = new HasLocallyFree[Bundle] {
     override def connectiveUsed(source: Bundle): Boolean = false
-    override def freeCount(source: Bundle): Int          = 0
     override def locallyFree(source: Bundle): BitSet     = source.body.get.locallyFree
   }
 
   implicit val SendLocallyFree: HasLocallyFree[Send] = new HasLocallyFree[Send] {
     def connectiveUsed(s: Send) = s.connectiveUsed
-    def freeCount(s: Send)      = s.freeCount
     def locallyFree(s: Send)    = s.locallyFree
   }
   implicit val ExprLocallyFree: HasLocallyFree[Expr] = new HasLocallyFree[Expr] {
@@ -306,34 +283,6 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EMethodBody(e)             => e.connectiveUsed
-      }
-
-    def freeCount(e: Expr) =
-      e.exprInstance match {
-        case GBool(_)                   => 0
-        case GInt(_)                    => 0
-        case GString(_)                 => 0
-        case GUri(_)                    => 0
-        case EListBody(e)               => e.freeCount
-        case ETupleBody(e)              => e.freeCount
-        case ESetBody(e)                => e.freeCount
-        case EMapBody(e)                => e.freeCount
-        case EVarBody(EVar(v))          => VarLocallyFree.freeCount(v.get)
-        case ENotBody(ENot(p))          => p.get.freeCount
-        case ENegBody(ENeg(p))          => p.get.freeCount
-        case EMultBody(EMult(p1, p2))   => p1.get.freeCount + p2.get.freeCount
-        case EDivBody(EDiv(p1, p2))     => p1.get.freeCount + p2.get.freeCount
-        case EPlusBody(EPlus(p1, p2))   => p1.get.freeCount + p2.get.freeCount
-        case EMinusBody(EMinus(p1, p2)) => p1.get.freeCount + p2.get.freeCount
-        case ELtBody(ELt(p1, p2))       => p1.get.freeCount + p2.get.freeCount
-        case ELteBody(ELte(p1, p2))     => p1.get.freeCount + p2.get.freeCount
-        case EGtBody(EGt(p1, p2))       => p1.get.freeCount + p2.get.freeCount
-        case EGteBody(EGte(p1, p2))     => p1.get.freeCount + p2.get.freeCount
-        case EEqBody(EEq(p1, p2))       => p1.get.freeCount + p2.get.freeCount
-        case ENeqBody(ENeq(p1, p2))     => p1.get.freeCount + p2.get.freeCount
-        case EAndBody(EAnd(p1, p2))     => p1.get.freeCount + p2.get.freeCount
-        case EOrBody(EOr(p1, p2))       => p1.get.freeCount + p2.get.freeCount
-        case EMethodBody(e)             => e.freeCount
       }
 
     def locallyFree(e: Expr) =
@@ -369,7 +318,6 @@ object implicits {
 
   implicit val GPrivateLocallyFree: HasLocallyFree[GPrivate] = new HasLocallyFree[GPrivate] {
     def connectiveUsed(g: GPrivate) = false
-    def freeCount(g: GPrivate)      = 0
     def locallyFree(g: GPrivate)    = BitSet()
   }
 
@@ -378,12 +326,6 @@ object implicits {
       c.channelInstance match {
         case Quote(p)   => p.connectiveUsed
         case ChanVar(v) => VarLocallyFree.connectiveUsed(v)
-      }
-
-    def freeCount(c: Channel) =
-      c.channelInstance match {
-        case Quote(p)   => p.freeCount
-        case ChanVar(v) => VarLocallyFree.freeCount(v)
       }
 
     def locallyFree(c: Channel) =
@@ -395,13 +337,11 @@ object implicits {
 
   implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {
     def connectiveUsed(n: New) = n.p.get.connectiveUsed
-    def freeCount(n: New)      = n.p.get.freeCount
     def locallyFree(n: New)    = n.locallyFree
   }
 
   implicit val EvalLocallyFree: HasLocallyFree[Eval] = new HasLocallyFree[Eval] {
     def connectiveUsed(e: Eval) = ChannelLocallyFree.connectiveUsed(e.channel.get)
-    def freeCount(e: Eval)      = ChannelLocallyFree.freeCount(e.channel.get)
     def locallyFree(e: Eval)    = ChannelLocallyFree.locallyFree(e.channel.get)
   }
 
@@ -410,15 +350,8 @@ object implicits {
       def connectiveUsed(v: VarInstance) =
         v match {
           case BoundVar(_) => false
-          case FreeVar(_)  => false
+          case FreeVar(_)  => true
           case Wildcard(_) => true
-        }
-
-      def freeCount(v: VarInstance) =
-        v match {
-          case BoundVar(_) => 0
-          case FreeVar(_)  => 1
-          case Wildcard(_) => 0
         }
 
       def locallyFree(v: VarInstance) =
@@ -431,7 +364,6 @@ object implicits {
 
   implicit val VarLocallyFree: HasLocallyFree[Var] = new HasLocallyFree[Var] {
     def connectiveUsed(v: Var) = VarInstanceLocallyFree.connectiveUsed(v.varInstance)
-    def freeCount(v: Var)      = VarInstanceLocallyFree.freeCount(v.varInstance)
     def locallyFree(v: Var)    = VarInstanceLocallyFree.locallyFree(v.varInstance)
   }
 
@@ -439,8 +371,6 @@ object implicits {
     new HasLocallyFree[ReceiveBind] {
       def connectiveUsed(rb: ReceiveBind) =
         ChannelLocallyFree.connectiveUsed(rb.source.get)
-      def freeCount(rb: ReceiveBind) =
-        ChannelLocallyFree.freeCount(rb.source.get)
       def locallyFree(rb: ReceiveBind) =
         ChannelLocallyFree.locallyFree(rb.source.get)
     }
@@ -448,7 +378,6 @@ object implicits {
   implicit val MatchCaseLocallyFree: HasLocallyFree[MatchCase] =
     new HasLocallyFree[MatchCase] {
       def connectiveUsed(mc: MatchCase) = mc.source.get.connectiveUsed
-      def freeCount(mc: MatchCase)      = mc.source.get.freeCount
       def locallyFree(mc: MatchCase)    = mc.source.get.locallyFree
     }
 }

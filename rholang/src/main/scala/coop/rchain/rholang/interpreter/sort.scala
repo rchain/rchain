@@ -332,7 +332,6 @@ object SendSortMatcher {
         chan = sortedChan.term,
         data = sortedData.map(_.term.get),
         persistent = s.persistent,
-        freeCount = s.freeCount,
         locallyFree = s.locallyFree,
         connectiveUsed = s.connectiveUsed
       )
@@ -359,7 +358,7 @@ object ReceiveSortMatcher {
     }
 
     ScoredTerm(
-      ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder),
+      ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder, bind.freeCount),
       Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
     )
   }
@@ -372,7 +371,9 @@ object ReceiveSortMatcher {
             channel: Channel,
             remainder: Option[Var],
             knownFree: DebruijnLevelMap[T]) =>
-        val sortedBind = sortBind(ReceiveBind(patterns, channel, remainder))
+        val sortedBind =
+          sortBind(
+            ReceiveBind(patterns, channel, remainder, freeCount = knownFree.countNoWildcards))
         ScoredTerm((sortedBind.term, knownFree), sortedBind.score)
     }.sorted
     sortedBind.map(_.term)
@@ -389,7 +390,6 @@ object ReceiveSortMatcher {
               sortedBody.term,
               r.persistent,
               r.bindCount,
-              r.freeCount,
               r.locallyFree,
               r.connectiveUsed),
       Node(Score.RECEIVE,
@@ -426,11 +426,7 @@ object MatchSortMatcher {
     val sortedValue = ParSortMatcher.sortMatch(m.target)
     val scoredCases = m.cases.map(c => sortCase(c))
     ScoredTerm(
-      Match(sortedValue.term,
-            scoredCases.map(_.term),
-            m.freeCount,
-            m.locallyFree,
-            m.connectiveUsed),
+      Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
       Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*)
     )
   }
@@ -464,7 +460,6 @@ object ParSortMatcher {
           matches = matches.map(_.term),
           bundles = bundles.map(_.term),
           ids = ids.map(_.term),
-          freeCount = p.freeCount,
           locallyFree = p.locallyFree,
           connectiveUsed = p.connectiveUsed
         )
