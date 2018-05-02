@@ -8,7 +8,9 @@ Rchain Node is a module that gathers all other subprojects into final executable
 
 #### 1.1.1 Prerequisites
 
-In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). __Note__ Failure to attend to all prerequisites will result in errors.
+In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). 
+
+__Note__ Failure to attend to all prerequisites will result in errors.
       
 #### 1.1.2. Node depends on the following subprojects: 
 
@@ -145,7 +147,7 @@ $ docker run -ti coop.rchain/rnode
 (...)
 ```
 
-In order to run more than one Docker rnode on the same host, the containers need to be connected to one user-defined network bridge:
+To use both the peer-to-peer and REPL capabilities of RNode, two containers running RNode need to be connected to one user-defined network bridge:
 
 ```bash
 > docker network create rnode-net
