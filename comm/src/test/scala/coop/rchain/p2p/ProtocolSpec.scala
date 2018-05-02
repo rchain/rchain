@@ -7,6 +7,7 @@ import coop.rchain.comm._, CommError._, NetworkProtocol._, Network.defaultTimeou
 import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
+import coop.rchain.metrics.Metrics
 
 import EffectsTestInstances._
 
