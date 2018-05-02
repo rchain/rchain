@@ -777,7 +777,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   it should "interpret bundle polarization" in {
-    def newBundle(proc: Proc)(readOnly: Boolean = false, writeOnly: Boolean = false): PBundle =
+    def newBundle(proc: Proc)(readOnly: Boolean, writeOnly: Boolean): PBundle =
       (readOnly, writeOnly) match {
         case (true, true)   => new PBundle(new BundleReadWrite(), proc)
         case (true, false)  => new PBundle(new BundleRead(), proc)
