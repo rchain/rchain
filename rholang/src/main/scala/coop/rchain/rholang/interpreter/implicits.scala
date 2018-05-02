@@ -243,7 +243,7 @@ object implicits {
 
     def singleBundle(): Option[Bundle] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
-        p.bundles match {
+        p.bundles.toList match {
           case List(single) => Some(single)
           case _            => None
         }
