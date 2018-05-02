@@ -7,6 +7,7 @@ trait ConsoleIO[F[_]] {
   def readLine: F[String]
   def println(str: String): F[Unit]
   def updateCompletion(history: Set[String]): F[Unit]
+  def close: F[Unit]
 }
 
 object ConsoleIO extends ConsoleIO0 {
@@ -23,6 +24,7 @@ class NOPConsoleIO[F[_]: Applicative] extends ConsoleIO[F] {
   def readLine: F[String]                             = "".pure[F]
   def println(str: String): F[Unit]                   = ().pure[F]
   def updateCompletion(history: Set[String]): F[Unit] = ().pure[F]
+  def close: F[Unit]                                  = ().pure[F]
 }
 
 object ForTrans {
@@ -32,5 +34,6 @@ object ForTrans {
       def println(str: String): T[F, Unit] = MonadTrans[T].liftM(ConsoleIO[F].println(str))
       def updateCompletion(history: Set[String]): T[F, Unit] =
         MonadTrans[T].liftM(ConsoleIO[F].updateCompletion(history))
+      def close: T[F, Unit] = MonadTrans[T].liftM(ConsoleIO[F].close)
     }
 }

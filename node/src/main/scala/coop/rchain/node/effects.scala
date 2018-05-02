@@ -230,6 +230,11 @@ object effects {
       console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
       console.addCompleter(new StringsCompleter(history.asJava))
     }
+
+    def close: Task[Unit] = Task.delay {
+      () // TODO implement this... somehow...
+    }
+
   }
 
   def packetHandler[F[_]: Applicative: Log](
