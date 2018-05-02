@@ -38,8 +38,14 @@ object Substitute {
   def substitute(term: Quote)(implicit env: Env[Par]): Quote =
     Quote(substitute(term.value))
 
-  def substitute(term: Bundle)(implicit env: Env[Par]): Bundle =
-    Bundle(substitute(term.body.get))
+  def substitute(term: Bundle)(implicit env: Env[Par]): Bundle = {
+    import BundleOps._
+    val subBundle = substitute(term.body.get)
+    subBundle.singleBundle() match {
+      case Some(value) => term.merge(value)
+      case None        => term.copy(body = subBundle)
+    }
+  }
 
   def substitute(term: Channel)(implicit env: Env[Par]): Channel =
     ChannelSortMatcher
