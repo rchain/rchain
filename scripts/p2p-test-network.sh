@@ -58,7 +58,7 @@ create_test_network_resources() {
     sleep 3 # slow down 
   done
   
-  linebar
+  line_bar
   echo "P2P test network build complete. Converging network."
   line_bar
   echo ""
