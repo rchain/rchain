@@ -3,6 +3,7 @@ version: '3.1'
 volumes:
     prometheus_data_storage: {}
     grafana_data_storage: {}
+    rnode_data_storage: {}
 
 networks:
   rchain:
@@ -13,6 +14,8 @@ networks:
 services:
   rchain-node:
     image: rchain/rnode:latest
+    volumes: 
+      - rnode_data_storage:/var/lib/rnode
     ports:
       - 9095:9095
       - 30304:30304
