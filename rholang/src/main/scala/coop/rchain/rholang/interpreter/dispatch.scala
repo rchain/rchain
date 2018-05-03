@@ -5,6 +5,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
+import monix.eval.Task.catsAsync
 
 trait Dispatch[M[_], A, K] {
 
@@ -28,8 +29,8 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
   def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
-        val env = Dispatch.buildEnv(dataList)
-        reducer.eval(par)(env)
+        implicit val env = Dispatch.buildEnv(dataList)
+        reducer.eval(par)
       case ScalaBodyRef(_) =>
         Task.unit
       case Empty =>
@@ -59,8 +60,8 @@ class RholangAndScalaDispatcher private (
   def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
-        val env = Dispatch.buildEnv(dataList)
-        reducer.eval(par)(env)
+        implicit val env = Dispatch.buildEnv(dataList)
+        reducer.eval(par)
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) => f(dataList)
