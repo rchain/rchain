@@ -8,7 +8,7 @@ Rchain Node is a module that gathers all other subprojects into final executable
 
 #### 1.1.1 Prerequisites
 
-In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). 
+In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](https://github.com/rchain/rchain/blob/master/README.md). 
 
 __Note__ Failure to attend to all prerequisites will result in errors.
       
@@ -106,7 +106,7 @@ Using flags you can specify which bootstrapping node should be used or if the no
 
 #### 2.1.1 gRPC API
 
-Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [node/src/main/protobuf/rnode.proto](rnode.proto)
+Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [node/src/main/protobuf/rnode.proto](https://github.com/rchain/rchain/blob/master/node/src/main/protobuf/rnode.proto)
 
 #### 2.1.2 Data directory
 
