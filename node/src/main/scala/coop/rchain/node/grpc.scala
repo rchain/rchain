@@ -18,15 +18,14 @@ import java.io.{Reader, StringReader}
 object GrpcServer {
 
   def acquireServer[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable](
-      executionContext: ExecutionContext,
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
-        .addService(ReplGrpc.bindService(new ReplImpl(runtime), executionContext))
-        .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], executionContext))
-        .addService(DeployServiceGrpc.bindService(new DeployImpl[F], executionContext))
+        .addService(ReplGrpc.bindService(new ReplImpl(runtime), scheduler))
+        .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], scheduler))
+        .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
         .build
     }
 
