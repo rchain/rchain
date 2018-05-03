@@ -314,9 +314,9 @@ object SpatialMatcher {
         StateT.liftF(None)
       else
         for {
-          _           <- spatialMatch(target.chan.get, pattern.chan.get)
-          forcedYield <- foldMatch(target.data, pattern.data)
-        } yield forcedYield
+          _ <- spatialMatch(target.chan.get, pattern.chan.get)
+          _ <- foldMatch(target.data, pattern.data)
+        } yield Unit
   }
 
   implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive] = fromFunction[Receive] {
