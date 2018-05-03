@@ -59,7 +59,10 @@ object GrpcServer {
   class ReplImpl(runtime: Runtime) extends ReplGrpc.Repl {
     import RholangCLI._
     // TODO we need to handle this better
-    import monix.execution.Scheduler.Implicits.global
+    import monix.execution.Scheduler
+    import monix.execution.schedulers.SchedulerService
+
+    implicit val io: SchedulerService = Scheduler.io("repl-io")
 
     def exec(reader: Reader): Future[ReplResponse] = buildNormalizedTerm(reader) match {
       case Left(er) =>
