@@ -7,13 +7,17 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
 import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import monix.eval.Task
 import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 
 import java.io.{Reader, StringReader}
+
+import scala.util.Success
 
 object GrpcServer {
 
@@ -62,11 +66,18 @@ object GrpcServer {
       case Left(er) =>
         Future.successful(ReplResponse(s"Error: $er"))
       case Right(term) =>
-        evaluate(runtime.reducer, term).attempt
-          .map {
-            case Left(ex) => s"Caught boxed exception: $ex"
-            case Right(_) => s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
-          }
+        val evalAttempt: Either[Throwable, Unit] =
+          evaluate(runtime.reducer, term).attempt.unsafeRunSync
+
+        Task
+          .pure(
+            evalAttempt match {
+              case Left(ex) => s"Caught boxed exception: $ex"
+              case Right(_) =>
+                s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
+              case _ => "Something went horribly wrong."
+            }
+          )
           .map(ReplResponse(_))
           .runAsync
     }
