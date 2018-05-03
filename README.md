@@ -243,7 +243,7 @@ The `rspace` subproject contains code related to the key-value storage of the RC
 ## Caveats and filing issues
 
 ### Caveats
-During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/issues/?filter=10128&atlOrigin=eyJpIjoiNjUyMzI3ZWEzYzFmNDc5Mzk2YWY5MjM1NTIyYWVkZmIiLCJwIjoiaiJ9) and [bugs](https://rchain.atlassian.net/issues/?filter=10129&jql=issuetype%20%3D%20Bug%20AND%20status%20in%20(%22In%20Progress%22%2C%20%22In%20Review%22%2C%20%22To%20Do%22)%20ORDER%20BY%20created%20DESC&atlOrigin=eyJpIjoiNjIzZWYyZjk3MzdlNGU5ZjliZjUwZDllZjdlN2Y0ZTUiLCJwIjoiaiJ9). 
+During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376244/RChain+software+unresolved+bugs+and+known+issues). 
 
 ### Filing Issues
 
