@@ -1,0 +1,32 @@
+{
+  "name": "react-static-example-basic",
+  "version": "1.0.1",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "react-static start",
+    "stage": "react-static build --staging",
+    "build": "react-static build",
+    "serve": "serve dist -p 3000"
+  },
+  "dependencies": {
+    "axios": "^0.16.2",
+    "codemirror": "^5.37.0",
+    "codemirror-rholang": "^1.0.1",
+    "material-icons-react": "^1.0.0",
+    "prop-types": "^15.6.1",
+    "react": "^16.0.0",
+    "react-codemirror2": "^5.0.1",
+    "react-dom": "^16.0.0",
+    "react-hot-loader": "^4.0.0-beta.21",
+    "react-html-parser": "^2.0.2",
+    "react-router": "^4.2.0",
+    "react-smackdown": "^0.8.8",
+    "react-static": "^5.8.8"
+  },
+  "devDependencies": {
+    "eslint-config-react": "^1.1.7",
+    "eslint-config-standard-react": "^6.0.0",
+    "serve": "^6.1.0"
+  }
+}
