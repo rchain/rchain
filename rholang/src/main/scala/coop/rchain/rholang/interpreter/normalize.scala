@@ -2,14 +2,15 @@ package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
-import NormalizerExceptions._
+import coop.rchain.rholang.interpreter.NormalizerExceptions._
+import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
+  Bundle => AbsynBundle,
   _
 }
 import implicits._
@@ -581,8 +582,7 @@ object ProcNormalizeMatcher {
       }
 
       case b: PBundle =>
-        val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
-        if (targetResult.par.connectiveUsed) {
+        def error(targetResult: ProcVisitOutputs): ProcVisitOutputs = {
           val errMsg = {
             def at(variable: String, l: Int, col: Int): String =
               s"$variable line: $l, column: $col"
@@ -597,8 +597,26 @@ object ProcNormalizeMatcher {
           }
           throw UnexpectedBundleContent(
             s"Bundle's content shouldn't have free variables or wildcards.$errMsg")
+        }
+
+        val targetResult = normalizeMatch(b.proc_, input.copy(par = VectorPar()))
+        val outermostBundle = b.bundle_ match {
+          case _: BundleReadWrite => Bundle(targetResult.par, writeFlag = true, readFlag = true)
+          case _: BundleRead      => Bundle(targetResult.par, writeFlag = false, readFlag = true)
+          case _: BundleWrite     => Bundle(targetResult.par, writeFlag = true, readFlag = false)
+          case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
+        }
+
+        import BundleOps._
+
+        if (targetResult.par.connectiveUsed) {
+          error(targetResult)
         } else {
-          ProcVisitOutputs(input.par.prepend(Bundle(targetResult.par)), input.knownFree)
+          val newBundle: Bundle = targetResult.par.singleBundle() match {
+            case Some(single) => outermostBundle.merge(single)
+            case None         => outermostBundle
+          }
+          ProcVisitOutputs(input.par.prepend(newBundle), input.knownFree)
         }
 
       case p: PMatch => {

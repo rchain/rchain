@@ -2,8 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import cats.syntax.either._
-import coop.rchain.models
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -18,7 +16,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionException}
 import scala.concurrent.duration._
 
 trait PersistentStoreTester {
@@ -109,6 +107,47 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ))
   }
 
+  it should "throw an error if names are used against their polarity" in {
+    /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
+     */
+    val y = GString("y")
+    val receive = Receive(
+      Seq(ReceiveBind(Seq(Quote(Par())), Quote(Bundle(y, readFlag = false, writeFlag = true)))),
+      Par())
+
+    an[Error] should be thrownBy {
+      withTestStore { store =>
+        val reducer = RholangOnlyDispatcher.create(store).reducer
+        val task    = reducer.eval(receive)(Env()).map(_ => store.toMap)
+        try { // Await.result wraps any Exception with ExecutionException so we need to catch it, unwrap and rethrow
+          Await.result(task.runAsync, 3.seconds)
+        } catch {
+          case boxedError: ExecutionException =>
+            throw boxedError.getCause
+        }
+      }
+    }
+
+    /* @bundle- { x } !(7) -> x!(7)
+     */
+    val x = GString("channel")
+    val send =
+      Send(Channel(Quote(Bundle(x, writeFlag = false, readFlag = true))), Seq(Expr(GInt(7))))
+
+    an[Error] should be thrownBy {
+      withTestStore { store =>
+        val reducer = RholangOnlyDispatcher.create(store).reducer
+        val task    = reducer.eval(send)(Env()).map(_ => store.toMap)
+        try {
+          Await.result(task.runAsync, 3.seconds)
+        } catch {
+          case boxedError: ExecutionException =>
+            throw boxedError.getCause
+        }
+      }
+    }
+  }
+
   "eval of Send" should "place something in the tuplespace." in {
     val result = withTestStore { store =>
       val reducer = RholangOnlyDispatcher.create(store).reducer
@@ -131,6 +170,24 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List()
           )
       ))
+  }
+
+  it should "verify that Bundle is writeable before sending on Bundle " in {
+    /* @bundle+ { x } !(7) -> x!(7)
+     */
+    val x = GString("channel")
+    val send =
+      Send(Channel(Quote(Bundle(x, writeFlag = true, readFlag = false))), Seq(Expr(GInt(7))))
+
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val task    = reducer.eval(send)(Env()).map(_ => store.toMap)
+      Await.result(task.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(List(Channel(Quote(x))) ->
+        Row(List(Datum[List[Channel]](List[Channel](Quote(GInt(7))), false)), List())))
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
@@ -168,6 +225,38 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 false
               )
             )
+          )
+      ))
+  }
+
+  it should "verify that bundle is readable if receiving on Bundle" in {
+    /* for (@Nil <- @bundle- { y } ) { }  -> for (n <- y) { }
+     */
+
+    val y = GString("y")
+    val receive = Receive(binds = Seq(
+                            ReceiveBind(
+                              patterns = Seq(Quote(Par())),
+                              source = Quote(Bundle(y, readFlag = true, writeFlag = false))
+                            )),
+                          body = Par())
+
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val task    = reducer.eval(receive)(Env()).map(_ => store.toMap)
+      Await.result(task.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(
+        List(Channel(Quote(y))) ->
+          Row(
+            List(),
+            List(
+              WaitingContinuation[BindPattern, TaggedContinuation](
+                List(BindPattern(List(Channel(Quote(Par()))), None)),
+                TaggedContinuation(ParBody(Par())),
+                false))
           )
       ))
   }

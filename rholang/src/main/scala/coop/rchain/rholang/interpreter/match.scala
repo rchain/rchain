@@ -1,29 +1,28 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
-import coop.rchain.models._
+import cats.{Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
-import coop.rchain.rholang.interpreter.SpatialMatcher.{spatialMatch, OptionalFreeMap}
-
-import scala.annotation.tailrec
-import scala.collection.immutable.Stream
-import implicits.{
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.SpatialMatcher.OptionalFreeMap
+import coop.rchain.rholang.interpreter.implicits.{
   fromEList,
   fromExpr,
   BundleLocallyFree,
   ExprLocallyFree,
   GPrivateLocallyFree,
   MatchCaseLocallyFree,
-  ParExtension,
   ParLocallyFree,
   ReceiveBindLocallyFree,
   SendLocallyFree,
   VectorPar
 }
+
+import scala.annotation.tailrec
+import scala.collection.immutable.Stream
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from

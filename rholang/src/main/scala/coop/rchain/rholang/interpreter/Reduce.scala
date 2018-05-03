@@ -186,18 +186,45 @@ object Reduce {
       */
     def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
       for {
-        quote          <- eval(send.chan.get)
-        data           <- send.data.toList.traverse(x => evalExpr(x)(env))
+        quote <- eval(send.chan.get)
+        data  <- send.data.toList.traverse(x => evalExpr(x)(env))
+
         subChan: Quote = substitute(quote)
-        _              <- produce(subChan, data, send.persistent)
+        unbundled <- subChan.value.singleBundle() match {
+                      case Some(value) =>
+                        if (!value.writeFlag) {
+                          Task.raiseError(new Error("Trying to send on non-writeable channel."))
+                        } else {
+                          Task.now(Quote(value.body.get))
+                        }
+                      case None => Task.now(subChan)
+                    }
+        _ <- produce(unbundled, data, send.persistent)
       } yield ()
+
+    private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): Task[Quote] =
+      for {
+        quote <- eval(rb.source.get)
+        subst = substitute(quote)
+        unbndl <- subst.quote.get.singleBundle() match {
+                   case Some(value) =>
+                     if (!value.readFlag) {
+                       Task.raiseError(new Error("Trying to read from non-readable channel."))
+                     } else {
+                       Task.now(Quote(value.body.get))
+                     }
+                   case None =>
+                     println(s"Not a single bundle: ${subst.quote.get}")
+                     Task.now(subst)
+                 }
+      } yield unbndl
 
     def eval(receive: Receive)(implicit env: Env[Par]): Task[Unit] =
       for {
         binds <- receive.binds.toList
-                  .traverse((rb: ReceiveBind) =>
-                    eval(rb.source.get).map(quote =>
-                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), substitute(quote))))
+                  .traverse(rb =>
+                    unbundleReceive(rb).map(q =>
+                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
         substBody = substitute(receive.body.get)(env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)

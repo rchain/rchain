@@ -54,6 +54,9 @@ message Var {
 
 message Bundle {
     Par body = 1;
+    bool writeFlag = 2; // flag indicating whether bundle is writeable
+    bool readFlag = 3; // flag indicating whether bundle is readable
+//     if both flags are set to false bundle allows only for equivalance check
 }
 
 // Upon send, all free variables in data are substituted with their values.

@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.EListBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.implicits.mkProtobufInstance

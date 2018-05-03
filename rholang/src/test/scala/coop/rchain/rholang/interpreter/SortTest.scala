@@ -458,4 +458,36 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val result = BundleSortMatcher.sortMatch(bundle)
     result.term should be(Bundle(sortedParExpr))
   }
+
+  it should "sort expressions in nested bundles preserving polarities" in {
+    val parExpr =
+      p.copy(
+        exprs = List(
+          EEq(GInt(4), GInt(3)),
+          EDiv(GInt(1), GInt(5)),
+          EVar(BoundVar(1)),
+          EOr(GBool(false), GBool(true)),
+          GInt(1)
+        ))
+    val sortedParExpr: Option[Par] =
+      p.copy(
+        exprs = List(
+          GInt(1),
+          EVar(BoundVar(1)),
+          EDiv(GInt(1), GInt(5)),
+          EEq(GInt(4), GInt(3)),
+          EOr(GBool(false), GBool(true))
+        ))
+
+    val nestedBundle = Bundle(
+      Bundle(Bundle(parExpr, writeFlag = true, readFlag = false),
+             writeFlag = false,
+             readFlag = true))
+    val result = BundleSortMatcher.sortMatch(nestedBundle)
+    result.term should be(
+      Bundle(
+        Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false),
+               writeFlag = false,
+               readFlag = true)))
+  }
 }

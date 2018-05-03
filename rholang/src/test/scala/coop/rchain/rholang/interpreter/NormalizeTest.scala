@@ -4,6 +4,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
+  Bundle => AbsynBundle,
   _
 }
 import org.scalatest._
@@ -512,6 +513,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     listData2.add(new PGround(new GroundInt(8)))
     val listData3 = new ListProc()
     listData3.add(new PGround(new GroundInt(9)))
+
     val pNew = new PNew(
       listNameDecl,
       new PPar(
@@ -629,6 +631,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       )))
     result.knownFree should be(inputs.knownFree)
   }
+
   "PIfElse" should "Handle a more complicated if statement with an else clause" in {
     // if (47 == 47) { new x in { x!(47) } } else { new y in { y!(47) } }
     val condition = new PEq(new PGround(new GroundInt(47)), new PGround(new GroundInt(47)))
@@ -733,14 +736,14 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   }
 
   "PBundle" should "normalize terms inside a bundle" in {
-    val pbundle     = new PBundle(new PVar(new ProcVarVar("x")))
+    val pbundle     = new PBundle(new BundleReadWrite(), new PVar(new ProcVarVar("x")))
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch(pbundle, boundInputs)
 
     val expectedResult =
       inputs.par
-        .withBundles(List(Bundle(EVar(BoundVar(0)))))
+        .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = true, readFlag = true)))
         .withLocallyFree(BitSet(0))
 
     result.par should be(expectedResult)
@@ -750,14 +753,62 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
   /** Example:
     * bundle { _ | x }
     */
-  it should "throw an error when wildcard of free variable is found inside body of bundle" in {
+  it should "throw an error when wildcard or free variable is found inside body of bundle" in {
     val pbundle =
-      new PBundle(new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
+      new PBundle(new BundleReadWrite(),
+                  new PPar(new PVar(new ProcVarWildcard()), new PVar(new ProcVarVar("x"))))
 
     an[UnexpectedBundleContent] should be thrownBy (
       ProcNormalizeMatcher.normalizeMatch(pbundle,
                                           inputs)
     )
+  }
+
+  it should "interpret bundle polarization" in {
+    def newBundle(proc: Proc)(readOnly: Boolean, writeOnly: Boolean): PBundle =
+      (readOnly, writeOnly) match {
+        case (true, true)   => new PBundle(new BundleReadWrite(), proc)
+        case (true, false)  => new PBundle(new BundleRead(), proc)
+        case (false, true)  => new PBundle(new BundleWrite(), proc)
+        case (false, false) => new PBundle(new BundleEquiv(), proc)
+      }
+
+    val proc        = new PVar(new ProcVarVar("x"))
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    def expectedResults(writeFlag: Boolean, readFlag: Boolean) =
+      inputs.par
+        .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = writeFlag, readFlag = readFlag)))
+        .withLocallyFree(BitSet(0))
+
+    def test(readOnly: Boolean, writeOnly: Boolean) =
+      withClue(s"for bundle with flags readOnly=$readOnly writeOnly=$writeOnly") {
+        val result = ProcNormalizeMatcher.normalizeMatch(p = newBundle(proc)(readOnly, writeOnly),
+                                                         input = boundInputs)
+
+        assert(result.par === expectedResults(writeOnly, readOnly))
+        assert(result.knownFree === inputs.knownFree)
+      }
+
+    test(readOnly = true, writeOnly = true)
+    test(readOnly = true, writeOnly = false)
+    test(readOnly = false, writeOnly = true)
+    test(readOnly = false, writeOnly = false)
+  }
+
+  it should "collapse nested bundles merging their polarizations" in {
+    val proc         = new PVar(new ProcVarVar("x"))
+    val nestedBundle = new PBundle(new BundleReadWrite(), new PBundle(new BundleRead(), proc))
+    val boundInputs  = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+
+    val expectedResults = inputs.par
+      .withBundles(List(Bundle(EVar(BoundVar(0)), writeFlag = false, readFlag = true)))
+      .withLocallyFree(BitSet(0))
+
+    val result = ProcNormalizeMatcher.normalizeMatch(nestedBundle, input = boundInputs)
+
+    assert(result.par === expectedResults)
+    assert(result.knownFree === boundInputs.knownFree)
+
   }
 }
 
