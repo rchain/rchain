@@ -2,7 +2,7 @@ package coop.rchain.node
 
 import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
