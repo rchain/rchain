@@ -214,7 +214,6 @@ object Reduce {
                        Task.now(Quote(value.body.get))
                      }
                    case None =>
-                     println(s"Not a single bundle: ${subst.quote.get}")
                      Task.now(subst)
                  }
       } yield unbndl
