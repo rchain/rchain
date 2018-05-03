@@ -138,13 +138,11 @@ run_tests_on_network() {
   set +eo pipefail # turn off exit immediately for tests
   all_pass=true
 
-
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
     exit
   fi
 
-  #set +eo pipefail # turn off exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
 
     loop_count=1 # only run once
