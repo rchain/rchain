@@ -1,10 +1,10 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
+  Bundle => AbsynBundle,
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
-  Bundle => AbsynBundle,
   _
 }
 import org.scalatest._

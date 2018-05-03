@@ -7,10 +7,10 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.NormalizerExceptions._
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
+  Bundle => AbsynBundle,
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
-  Bundle => AbsynBundle,
   _
 }
 import implicits._
@@ -145,7 +145,7 @@ object CollectionNormalizeMatcher {
     }
 
     def foldMatchMap(listproc: List[AbsynKeyValuePair]): CollectVisitOutputs = {
-      val folded = ((Seq[KeyValuePair](), input.knownFree, BitSet(), false) /: listproc)(
+      val folded = ((Vector[KeyValuePair](), input.knownFree, BitSet(), false) /: listproc)(
         (acc, e) => {
           e match {
             case e: KeyValuePairImpl => {
@@ -155,7 +155,7 @@ object CollectionNormalizeMatcher {
               val valResult = ProcNormalizeMatcher
                 .normalizeMatch(e.proc_2,
                                 ProcVisitInputs(VectorPar(), input.env, keyResult.knownFree))
-              (Seq(KeyValuePair(keyResult.par, valResult.par)) ++ acc._1,
+              (KeyValuePair(keyResult.par, valResult.par) +: acc._1,
                valResult.knownFree,
                acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
                acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed)

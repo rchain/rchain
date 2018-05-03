@@ -10,9 +10,9 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
+  Bundle => AbsynBundle,
   Ground => AbsynGround,
   Send => AbsynSend,
-  Bundle => AbsynBundle,
   _
 }
 
