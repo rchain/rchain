@@ -13,7 +13,6 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
 import monix.execution.CancelableFuture
-import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
 
 import scala.annotation.tailrec
