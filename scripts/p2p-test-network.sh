@@ -250,12 +250,11 @@ create_docker_rnode_image() {
 check_network_convergence() {
   container_name=$1
   count=0
-  expected_peers=2.0
   metric_string="peers 2.0"
   while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^${metric_string}'") ]]; do
     echo "Checking ${container_name} metric ${metric_string}. ${count} seconds of max 300."
     if [[ $count -gt 300 ]]; then
-      echo "Max wait time of 300 reached. Network Exiting wait loop."
+      echo "Max wait time of 300 reached. Exiting network convergence check & wait loop."
       return
     fi
     sleep 10
