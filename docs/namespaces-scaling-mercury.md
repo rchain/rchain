@@ -6,8 +6,7 @@
 
 Broadly speaking, the Mercury RChain network is a directed acyclic graph ("dag") labeled by complete lattices.  The **organizational dag** is a rooted dag formed by superimposing a collection of trees.  Each **organizational tree** in the collection has a collection of vertices, called **locales**; locales may be shared between different organizational trees.  Each locale has a collection of **regions** that form the basis of a complete lattice of **regional namespaces**.  Each regional namespace has a countably infinite collection of **names** formed by quoting Rholang processes.
 
-[[ graphics here ]]
-![](https://cdn.monetizejs.com/resources/button-32.png)
+![](https://i.imgur.com/DniUajo.png)
 
 ### Locales
 
@@ -47,12 +46,15 @@ The organizational dag grows as organizations mount new locales as children of e
 By becoming validators in the parent locale, validators can propose blocks that deploy new code for interacting with contracts in the parent locale.  In the RChain organizational tree, there will be default contracts for publishing a genesis block and bonding, for Rev tracking in subtrees, and for routing data to other locales.
 
 ## Locales
+
 ### Regions
 #### Bonding Validators
 ##### Bond amount
 ##### Fees
 ##### Ejection criteria
 ##### Payouts while bonded
+##### IP addresses
+The validators should run a contract that maps each validator to an IP address and allows the validator to send a signed message to update their IP address.  Nodes can then query the contract to get the information.
 #### Unbonding Validators
 ##### Waiting period
 #### Bonding Watchers
