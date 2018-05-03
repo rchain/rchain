@@ -5,7 +5,7 @@
 # "delete testnet" removes all testnet resources 
 
 if [[ "${TRAVIS}" == "true" ]]; then
-  set -eo pipefail # x enables verbosity on CI environment for debugging
+  set -eox pipefail # x enables verbosity on CI environment for debugging
 else
   set -eo pipefail
 fi
@@ -135,8 +135,9 @@ create_artifacts() {
 
 
 run_tests_on_network() {
+  set +eo pipefail # turn off exit immediately for tests
   all_pass=true
-    set +eo pipefail # turn off exit immediately for tests
+
 
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
@@ -145,6 +146,8 @@ run_tests_on_network() {
 
   #set +eo pipefail # turn of exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
+    
+    check_services_up ${container_name} # dynamic check before actually running all tests
 
     line_bar
     echo "Running tests on node: ${container_name}"
@@ -213,7 +216,7 @@ run_tests_on_network() {
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
     echo "Dumping metrics and logs"
-    exit 1 # comment out this line to enable failures
+    # exit 1 # comment out this line to enable failures
   elif [[ $all_pass == true ]]; then
     echo "SUCCESS: All checks passed"
   else
@@ -241,6 +244,21 @@ create_docker_rnode_image() {
   fi
 }
 
+check_services_up() {
+  container_name=$1
+  count=0
+  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers '") ]]; do
+    echo "Not up yet. Sleeping for 10. Count ${count} of 400."
+    if [[ $count > 400 ]]; then
+      echo "max wait time reached. Exiting loop."
+      return
+    fi
+    sleep 10
+    count=$((count+10))
+  done
+}
+
+
 # ======================================================
 
 # MAIN
@@ -249,10 +267,18 @@ if [[ "${TRAVIS}" == "true" ]]; then
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
-  echo "Running tests on network in 120 seconds after bootup and convergence"
+
+  echo "Running tests on network in 240 seconds after bootup and convergence"
   echo "Please be patient"
-  sleep 120 # allow plenty of time for network to boot and converge
+  echo "====list docker resources before===="
+  sudo docker ps
+  sudo docker network ls 
+  #sleep 240 # allow plenty of time for network to boot and converge
+  echo "====list docker resources after===="
+  sudo docker ps
+  sudo docker network ls 
   run_tests_on_network "${network_name}"
+
 elif [[ $1 == "local" ]]; then
   sudo echo "" # Ask for sudo early
   create_docker_rnode_image "local"
