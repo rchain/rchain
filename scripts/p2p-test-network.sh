@@ -144,10 +144,15 @@ run_tests_on_network() {
     exit
   fi
 
-  #set +eo pipefail # turn of exit immediately for tests
+  #set +eo pipefail # turn off exit immediately for tests
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
+
+    loop_count=1 # only run once
+    if [[ ${loop_count} -lt 2 ]]; then
+      check_network_convergence ${container_name} # Check that network has converged and api up before running tests 
+      loop=$(($loop+1))
+    fi
     
-    check_services_up ${container_name} # dynamic check before actually running all tests
 
     line_bar
     echo "Running tests on node: ${container_name}"
@@ -244,20 +249,20 @@ create_docker_rnode_image() {
   fi
 }
 
-check_services_up() {
+check_network_convergence() {
   container_name=$1
   count=0
   expected_peers=2.0
-  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers ${expected_peers}'") ]]; do
-    echo "Checking ${container_name} metric ${expected_peers}. Sleeping for 10. Count ${count} of 400."
-    if [[ $count > 400 ]]; then
-      echo "max wait time reached. Exiting loop."
+  metric_string="peers 2.0"
+  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^${metric_string}'") ]]; do
+    echo "Checking ${container_name} metric ${metric_string}. ${count} seconds of max 300."
+    if [[ $count -gt 300 ]]; then
+      echo "Max wait time of 300 reached. Network Exiting wait loop."
       return
     fi
     sleep 10
     count=$((count+10))
   done
-  sleep 20 # sleep before running all tests
 }
 
 
