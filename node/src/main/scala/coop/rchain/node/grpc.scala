@@ -20,7 +20,7 @@ object GrpcServer {
   def acquireServer[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable](
       executionContext: ExecutionContext,
       port: Int,
-      runtime: Runtime): F[Server] =
+      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       ServerBuilder
         .forPort(port)

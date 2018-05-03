@@ -20,7 +20,7 @@ object Main {
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
 
-    import monix.execution.Scheduler.Implicits.global
+    implicit val io: SchedulerService = Scheduler.io("repl-io")
 
     implicit val replService: ReplService[Task] =
       new GrpcReplService(conf.grpcHost(), conf.grpcPort())
