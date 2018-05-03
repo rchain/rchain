@@ -108,7 +108,7 @@ Note the deep layers of callback. Rholang was designed to make concurrent comput
 
 ## Iteration and matching
 
-In the code below, we show an example of iterating through a linked list implemented as nested [head, tail] pairs.
+In the code below, we show an example of iterating through a list.
 
      1	new iterate in {
      2	  contract iterate(@list, process, done) = {
