@@ -90,8 +90,8 @@ object Substitute {
             news = term.news.map(substitute),
             matches = term.matches.map(substitute),
             ids = term.ids,
-            freeCount = term.freeCount,
-            locallyFree = term.locallyFree.until(env.shift)
+            locallyFree = term.locallyFree.until(env.shift),
+            connectiveUsed = term.connectiveUsed
           )
       )
       .term
@@ -107,8 +107,8 @@ object Substitute {
             substitute(par)
           },
           term.persistent,
-          term.freeCount,
-          term.locallyFree.until(env.shift)
+          term.locallyFree.until(env.shift),
+          term.connectiveUsed
         )
       )
       .term
@@ -119,13 +119,14 @@ object Substitute {
         Receive(
           binds = term.binds
             .map({
-              case ReceiveBind(xs, Some(chan), _) => ReceiveBind(xs, substitute(chan))
+              case ReceiveBind(xs, Some(chan), rem, freeCount) =>
+                ReceiveBind(xs, substitute(chan), rem, freeCount)
             }),
           body = substitute(term.body.get)(env.shift(term.bindCount)),
           persistent = term.persistent,
           bindCount = term.bindCount,
-          freeCount = term.freeCount,
-          locallyFree = term.locallyFree.until(env.shift)
+          locallyFree = term.locallyFree.until(env.shift),
+          connectiveUsed = term.connectiveUsed
         )
       )
       .term
@@ -145,11 +146,11 @@ object Substitute {
         Match(
           target = substitute(term.target.get),
           term.cases.map({
-            case MatchCase(_case, Some(par)) =>
-              MatchCase(_case, substitute(par)(env.shift(_case.get.freeCount)))
+            case MatchCase(_case, Some(par), freeCount) =>
+              MatchCase(_case, substitute(par)(env.shift(freeCount)))
           }),
-          term.freeCount,
-          term.locallyFree.until(env.shift)
+          term.locallyFree.until(env.shift),
+          term.connectiveUsed
         )
       )
       .term
@@ -172,30 +173,30 @@ object Substitute {
           case ENeqBody(ENeq(par1, par2))     => ENeq(substitute(par1.get), substitute(par2.get))
           case EAndBody(EAnd(par1, par2))     => EAnd(substitute(par1.get), substitute(par2.get))
           case EOrBody(EOr(par1, par2))       => EOr(substitute(par1.get), substitute(par2.get))
-          case EListBody(EList(ps, freeCount, locallyFree, wildcard, _)) =>
+          case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = EListBody(EList(_ps, freeCount, newLocallyFree, wildcard)))
-          case ETupleBody(ETuple(ps, freeCount, locallyFree, wildcard)) =>
+            Expr(exprInstance = EListBody(EList(_ps, newLocallyFree, connectiveUsed, rem)))
+          case ETupleBody(ETuple(ps, locallyFree, connectiveUsed)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = ETupleBody(ETuple(_ps, freeCount, newLocallyFree, wildcard)))
-          case ESetBody(ESet(ps, freeCount, locallyFree, wildcard)) =>
+            Expr(exprInstance = ETupleBody(ETuple(_ps, newLocallyFree, connectiveUsed)))
+          case ESetBody(ESet(ps, locallyFree, connectiveUsed)) =>
             val _ps = for { par <- ps } yield {
               substitute(par.get)
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = ESetBody(ESet(_ps, freeCount, newLocallyFree, wildcard)))
-          case EMapBody(EMap(kvs, freeCount, locallyFree, wildcard)) =>
+            Expr(exprInstance = ESetBody(ESet(_ps, newLocallyFree, connectiveUsed)))
+          case EMapBody(EMap(kvs, locallyFree, connectiveUsed)) =>
             val _ps = for { KeyValuePair(p1, p2) <- kvs } yield {
               KeyValuePair(substitute(p1.get), substitute(p2.get))
             }
             val newLocallyFree = locallyFree.until(env.shift)
-            Expr(exprInstance = EMapBody(EMap(_ps, freeCount, newLocallyFree, wildcard)))
+            Expr(exprInstance = EMapBody(EMap(_ps, newLocallyFree, connectiveUsed)))
           case g @ _ => exp
         }
       )
