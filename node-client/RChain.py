@@ -31,7 +31,7 @@ import repl_pb2_grpc
 
 def main(argv, stdout, insecure_channel,
          host='127.0.0.1',
-         port=5000):
+         port=50000):
     channel = insecure_channel('%s:%s' % (host, port))
     replCh = repl_pb2_grpc.ReplStub(channel)
 
