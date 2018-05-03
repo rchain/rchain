@@ -156,9 +156,9 @@ To use both the peer-to-peer and REPL capabilities of RNode, two containers runn
 ```bash
 > docker network create rnode-net
 
-> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+> docker run -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
 
-> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+> docker run -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
 ```
 
 ##### 2.1.2.2 via Java
