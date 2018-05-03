@@ -21,11 +21,11 @@ import scala.concurrent.duration._
 
 trait PersistentStoreTester {
   def withTestStore[R](
-      f: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] => R): R = {
+      f: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] => R): R = {
     val dbDir = Files.createTempDirectory("rchain-storage-test-")
-    val store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation] =
-      LMDBStore.create[Channel, Seq[Channel], Seq[Channel], TaggedContinuation](dbDir,
-                                                                                1024 * 1024 * 1024)
+    val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation] =
+      LMDBStore.create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dbDir,
+                                                                               1024 * 1024 * 1024)
     try {
       f(store)
     } finally {
@@ -213,16 +213,18 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result should be(
       HashMap(
         List(Channel(Quote(GString("channel")))) ->
-
           Row(
             List(),
             List(
-              WaitingContinuation[List[Channel], TaggedContinuation](
-                List(List(Channel(ChanVar(FreeVar(0))),
-                          Channel(ChanVar(FreeVar(1))),
-                          Channel(ChanVar(FreeVar(2))))),
+              WaitingContinuation[BindPattern, TaggedContinuation](
+                List(
+                  BindPattern(List(Channel(ChanVar(FreeVar(0))),
+                                   Channel(ChanVar(FreeVar(1))),
+                                   Channel(ChanVar(FreeVar(2)))),
+                              None)),
                 TaggedContinuation(ParBody(Par())),
-                false)
+                false
+              )
             )
           )
       ))
@@ -252,8 +254,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(
             List(),
             List(
-              WaitingContinuation[List[Channel], TaggedContinuation](
-                List(List(Channel(Quote(Par())))), // why double list?
+              WaitingContinuation[BindPattern, TaggedContinuation](
+                List(BindPattern(List(Channel(Quote(Par()))), None)),
                 TaggedContinuation(ParBody(Par())),
                 false))
           )
@@ -383,10 +385,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List(Channel(Quote(GInt(2)))) ->
           Row(List(),
               List(
-                WaitingContinuation[List[Channel], TaggedContinuation](
+                WaitingContinuation[BindPattern, TaggedContinuation](
                   List(
-                    List(Quote(GInt(2)))
-                  ),
+                    BindPattern(
+                      List(Quote(GInt(2)))
+                    )),
                   TaggedContinuation(ParBody(Par())),
                   false)
               ))
@@ -406,10 +409,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         List(Channel(Quote(GInt(2)))) ->
           Row(List(),
               List(
-                WaitingContinuation[List[Channel], TaggedContinuation](
+                WaitingContinuation[BindPattern, TaggedContinuation](
                   List(
-                    List(Quote(GInt(2)))
-                  ),
+                    BindPattern(
+                      List(Quote(GInt(2)))
+                    )),
                   TaggedContinuation(ParBody(Par())),
                   false)
               ))
@@ -519,6 +523,31 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       HashMap(
         List(Channel(Quote(GString("result")))) ->
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
+      )
+    )
+  }
+
+  "eval of Send with remainder receive" should "capture the remainder." in {
+    val send =
+      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+    val receive = Receive(Seq(ReceiveBind(Seq(), Quote(GString("channel")), Some(FreeVar(0)))),
+                          Send(Quote(GString("result")), Seq(EVar(BoundVar(0)))))
+
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val task = for {
+        _ <- reducer.eval(receive)(Env())
+        _ <- reducer.eval(send)(Env())
+      } yield store.toMap
+      Await.result(task.runAsync, 3.seconds)
+    }
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(
+                Datum[List[Channel]](List[Channel](Quote(EList(List(GInt(7), GInt(8), GInt(9))))),
+                                     false)),
+              List())
       )
     )
   }

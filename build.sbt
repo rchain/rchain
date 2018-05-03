@@ -1,5 +1,6 @@
 import Dependencies._
 import BNFC._
+import NativePackagerHelper._
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
@@ -40,7 +41,8 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
+      monix,
+      scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
@@ -100,7 +102,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.2.1",
+    version := "0.3.1",
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
@@ -130,14 +132,15 @@ lazy val node = (project in file("node"))
       val artifactTargetPath = s"/${artifact.name}"
       val entry: File        = baseDirectory(_ / "main.sh").value
       val entryTargetPath    = "/bin"
+      val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
         from("openjdk:8u151-jre-alpine")
         add(artifact, artifactTargetPath)
+        copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
         run("apk", "update")
         run("apk", "add", "libsodium")
-        run("mkdir", "/var/lib/rnode")
         entryPoint("/bin/main.sh")
       }
     },
@@ -145,9 +148,11 @@ lazy val node = (project in file("node"))
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
     packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
-    linuxPackageMappings += {
+    linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
-      packageMapping( (file -> "/lib/systemd/system/rnode.service") )
+      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
+        .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
+      Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
     },
     /* Debian */
     debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5)"),

@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.internals._
+import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
@@ -10,15 +10,23 @@ import cats._
 import cats.data._
 import cats.implicits._
 import cats.mtl.implicits._
-
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.catscontrib.TaskContrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
-  type StateWithChain[A] = State[Chain, A]
+  type StateWithChain[A] = State[BlockDag, A]
+  val initState =
+    BlockDag(
+      HashMap.empty[Int, BlockMessage],
+      HashMap.empty[BlockHash, BlockMessage],
+      HashMap.empty[BlockHash, HashSet[BlockHash]],
+      HashMap.empty[Validator, BlockHash],
+      0
+    )
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in {
@@ -60,9 +68,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
                                           HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
       } yield b8
 
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
-    val chain: Chain = createChain.runS(initState).value
+    val chain: BlockDag = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
@@ -71,11 +77,10 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b6      = chain.idToBlocks(6)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks: collection.Map[ByteString, BlockMessage] =
-      HashMap[ByteString, BlockMessage](v1 -> b8, v2 -> b6)
+    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b8, v2 -> b6)
 
     implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.hashToBlocks, latestBlocks)
+      new TuranOracle(chain.blockLookup, latestBlocks)
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
@@ -143,9 +148,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
       } yield b8
 
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage], HashMap.empty[ByteString, BlockMessage], 0)
-    val chain: Chain = createChain.runS(initState).value
+    val chain: BlockDag = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
@@ -155,11 +158,10 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks: collection.Map[ByteString, BlockMessage] =
-      HashMap[ByteString, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
+    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
 
     implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.hashToBlocks, latestBlocks)
+      new TuranOracle(chain.blockLookup, latestBlocks)
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {

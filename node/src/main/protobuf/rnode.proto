@@ -12,11 +12,10 @@ service Diagnostics {
 }
 
 message ListPeersRequest {
-
 }
 
 message Peers {
-  repeated Peer peer = 1;
+  repeated Peer peers = 1;
 }
 
 message Peer {

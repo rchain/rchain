@@ -7,6 +7,7 @@ import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
+import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
@@ -98,31 +99,43 @@ object effects {
 
     def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
-        case (c: metric.Counter) => c.increment(delta)
+        case c: metric.Counter => c.increment(delta)
       }
     }
 
     def incrementSampler(name: String, delta: Long): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case (c: metric.RangeSampler) => c.increment(delta)
+        case c: metric.RangeSampler => c.increment(delta)
       }
     }
 
     def sample(name: String): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case (c: metric.RangeSampler) => c.sample
+        case c: metric.RangeSampler => c.sample
       }
     }
 
     def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case (c: metric.Gauge) => c.set(value)
+        case c: metric.Gauge => c.set(value)
+      }
+    }
+
+    def incrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
+      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
+        case c: metric.Gauge => c.increment(delta)
+      }
+    }
+
+    def decrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
+      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
+        case c: metric.Gauge => c.decrement(delta)
       }
     }
 
     def record(name: String, value: Long, count: Long = 1): Task[Unit] = Task.delay {
       m.getOrElseUpdate(name, { Kamon.histogram(name) }) match {
-        case (c: metric.Histogram) => c.record(value, count)
+        case c: metric.Histogram => c.record(value, count)
       }
     }
   }
@@ -172,7 +185,7 @@ object effects {
       def addNode(node: PeerNode): F[Unit] =
         for {
           _ <- Capture[F].capture(net.add(node))
-          _ <- Metrics[F].incrementCounter("peers")
+          _ <- Metrics[F].incrementGauge("peers")
         } yield ()
 
       def findMorePeers(limit: Int): F[Seq[PeerNode]] =
@@ -212,11 +225,17 @@ object effects {
     }
     def println(str: String): Task[Unit] = Task.delay {
       console.println(str)
+      console.flush()
     }
     def updateCompletion(history: Set[String]): Task[Unit] = Task.delay {
       console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
       console.addCompleter(new StringsCompleter(history.asJava))
     }
+
+    def close: Task[Unit] = Task.delay {
+      TerminalFactory.get().restore()
+    }
+
   }
 
   def packetHandler[F[_]: Applicative: Log](

@@ -4,6 +4,8 @@ import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 import scala.concurrent.{ExecutionContext, Future}
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
@@ -15,7 +17,7 @@ import java.io.{Reader, StringReader}
 
 object GrpcServer {
 
-  def acquireServer[F[_]: Capture: Functor: NodeDiscovery: Futurable](
+  def acquireServer[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable](
       executionContext: ExecutionContext,
       port: Int,
       runtime: Runtime): F[Server] =
@@ -24,6 +26,7 @@ object GrpcServer {
         .forPort(port)
         .addService(ReplGrpc.bindService(new ReplImpl(runtime), executionContext))
         .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], executionContext))
+        .addService(DeployServiceGrpc.bindService(new DeployImpl[F], executionContext))
         .build
     }
 
@@ -40,6 +43,17 @@ object GrpcServer {
         Peers(ps.map(p =>
           Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
       }.toFuture
+  }
+
+  class DeployImpl[F[_]: Functor: MultiParentCasper: Futurable]
+      extends DeployServiceGrpc.DeployService {
+    def doDeploy(d: Deploy): Future[DeployServiceResponse] = {
+      val f = for {
+        _ <- MultiParentCasper[F].deploy(d)
+      } yield DeployServiceResponse(true)
+
+      f.toFuture
+    }
   }
 
   class ReplImpl(runtime: Runtime) extends ReplGrpc.Repl {

@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import scalapb.GeneratedMessage
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
@@ -8,8 +7,9 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
-import HasLocallyFreeInstances._
-import HasLocallyFree._
+import implicits._
+import coop.rchain.rholang.interpreter.HasLocallyFree._
+import scalapb.GeneratedMessage
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
@@ -55,7 +55,7 @@ case class PrettyPrinter(freeShift: Int,
         buildString(p1.get) + " < " + buildString(p2.get)
       case ELteBody(ELte(p1, p2)) =>
         buildString(p1.get) + " <= " + buildString(p2.get)
-      case EListBody(EList(s, _, _, _)) =>
+      case EListBody(EList(s, _, _, _, _)) =>
         "[" + buildSeq(s) + "]"
       case ETupleBody(ETuple(s, _, _, _)) =>
         "[" + buildSeq(s) + "]"

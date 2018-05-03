@@ -14,6 +14,10 @@ trait Metrics[F[_]] {
   // Gauge
   def setGauge(name: String, value: Long): F[Unit]
 
+  def incrementGauge(name: String, delta: Long = 1): F[Unit]
+
+  def decrementGauge(name: String, delta: Long = 1): F[Unit]
+
   // Histogram
   def record(name: String, value: Long, count: Long = 1): F[Unit]
 }
@@ -27,6 +31,8 @@ object Metrics extends MetricsInstances {
       def incrementSampler(name: String, delta: Long)    = M.incrementSampler(name, delta).liftM[T]
       def sample(name: String)                           = M.sample(name).liftM[T]
       def setGauge(name: String, value: Long)            = M.setGauge(name, value).liftM[T]
+      def incrementGauge(name: String, delta: Long)      = M.incrementGauge(name, delta).liftM[T]
+      def decrementGauge(name: String, delta: Long)      = M.decrementGauge(name, delta).liftM[T]
       def record(name: String, value: Long, count: Long) = M.record(name, value, count).liftM[T]
     }
 
@@ -35,6 +41,8 @@ object Metrics extends MetricsInstances {
     def incrementSampler(name: String, delta: Long = 1): F[Unit]    = ().pure[F]
     def sample(name: String): F[Unit]                               = ().pure[F]
     def setGauge(name: String, value: Long): F[Unit]                = ().pure[F]
+    def incrementGauge(name: String, delta: Long): F[Unit]          = ().pure[F]
+    def decrementGauge(name: String, delta: Long): F[Unit]          = ().pure[F]
     def record(name: String, value: Long, count: Long = 1): F[Unit] = ().pure[F]
   }
 

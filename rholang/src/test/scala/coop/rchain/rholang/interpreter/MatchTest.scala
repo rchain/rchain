@@ -184,6 +184,13 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(4), GInt(20))), 1 -> Par())))
   }
 
+  "Matching a list with a remainder" should "capture the remainder." in {
+    val target: Expr  = EList(Seq(GInt(1), GInt(2)))
+    val pattern: Expr = EList(Seq(GInt(1)), remainder = Some(FreeVar(0)))
+    val result        = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(2))))))
+  }
+
   "Matching inside bundles" should "not be possible" in {
     val target: Bundle = Bundle(
       Par()

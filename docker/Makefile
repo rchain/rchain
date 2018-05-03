@@ -16,9 +16,6 @@ rosette: $(ROSETTE_BIN)
 $(ROSETTE_BIN):
 	@cd ../rosette && ./build.sh
 
-rholang-web: rholang rosette
-	@docker build -f $@/Dockerfile .. -t $@
-
 rholang-cli: rholang rosette
 	@docker build -f $@/Dockerfile .. -t $@
 

@@ -9,3 +9,9 @@ The only up-front build-time requirements are the Java Development Toolkit (we'v
 according to your platform.
 
 Simply run `sbt comm/compile` to compile the project, `sbt comm/test` to run all the tests suite.
+
+## Exposed programming API for other modules
+
+`TransportLayer` - responsible for node2node communicaton
+`NodeDiscovery`  - responsible for node discovery within p2p network
+`Metrcis`        - responsible for storing metrics witin the running node
