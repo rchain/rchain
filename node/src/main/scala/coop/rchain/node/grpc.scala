@@ -20,7 +20,7 @@ object GrpcServer {
   def acquireServer[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable](
       executionContext: ExecutionContext,
       port: Int,
-      runtime: Runtime): F[Server] =
+      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
@@ -56,13 +56,8 @@ object GrpcServer {
     }
   }
 
-  class ReplImpl(runtime: Runtime) extends ReplGrpc.Repl {
-    import RholangCLI._
-    // TODO we need to handle this better
-    import monix.execution.Scheduler
-    import monix.execution.schedulers.SchedulerService
-
-    implicit val io: SchedulerService = Scheduler.io("repl-io")
+  class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {
+    import RholangCLI.{buildNormalizedTerm, evaluate}
 
     def exec(reader: Reader): Future[ReplResponse] = buildNormalizedTerm(reader) match {
       case Left(er) =>
