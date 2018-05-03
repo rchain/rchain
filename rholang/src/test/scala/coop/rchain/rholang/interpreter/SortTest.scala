@@ -484,8 +484,15 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           EOr(GBool(false), GBool(true))
         ))
 
-    val nestedBundle = Bundle(Bundle(Bundle(parExpr, writeFlag = true, readFlag = false), writeFlag = false, readFlag = true))
-    val result       = BundleSortMatcher.sortMatch(nestedBundle)
-    result.term should be(Bundle(Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false), writeFlag = false, readFlag = true)))
+    val nestedBundle = Bundle(
+      Bundle(Bundle(parExpr, writeFlag = true, readFlag = false),
+             writeFlag = false,
+             readFlag = true))
+    val result = BundleSortMatcher.sortMatch(nestedBundle)
+    result.term should be(
+      Bundle(
+        Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false),
+               writeFlag = false,
+               readFlag = true)))
   }
 }
