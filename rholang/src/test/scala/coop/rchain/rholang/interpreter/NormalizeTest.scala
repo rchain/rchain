@@ -4,7 +4,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
-  Bundle => ABundle,
+  Bundle => AbsynBundle,
   _
 }
 import org.scalatest._
