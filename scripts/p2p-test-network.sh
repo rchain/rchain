@@ -5,7 +5,7 @@
 # "delete testnet" removes all testnet resources 
 
 if [[ "${TRAVIS}" == "true" ]]; then
-  set -eox pipefail # x enables verbosity on CI environment for debugging
+  set -eo pipefail # x enables verbosity on CI environment for debugging
 else
   set -eo pipefail
 fi
@@ -247,8 +247,9 @@ create_docker_rnode_image() {
 check_services_up() {
   container_name=$1
   count=0
-  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers '") ]]; do
-    echo "Not up yet. Sleeping for 10. Count ${count} of 400."
+  expected_peers=2.0
+  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers ${expected_peers}'") ]]; do
+    echo "Checking ${container_name} metric ${expected_peers}. Sleeping for 10. Count ${count} of 400."
     if [[ $count > 400 ]]; then
       echo "max wait time reached. Exiting loop."
       return
@@ -256,6 +257,7 @@ check_services_up() {
     sleep 10
     count=$((count+10))
   done
+  sleep 20 # sleep before running all tests
 }
 
 
@@ -268,15 +270,8 @@ if [[ "${TRAVIS}" == "true" ]]; then
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
 
-  echo "Running tests on network in 240 seconds after bootup and convergence"
-  echo "Please be patient"
-  echo "====list docker resources before===="
-  sudo docker ps
-  sudo docker network ls 
-  #sleep 240 # allow plenty of time for network to boot and converge
-  echo "====list docker resources after===="
-  sudo docker ps
-  sudo docker network ls 
+  echo "Running tests on network after it has converged"
+  echo "Please be patient. This could take a while."
   run_tests_on_network "${network_name}"
 
 elif [[ $1 == "local" ]]; then
