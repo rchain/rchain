@@ -223,7 +223,8 @@ object Reduce {
       for {
         binds <- receive.binds.toList
                   .traverse(rb =>
-                    unbundleReceive(rb).map(q => (BindPattern(rb.patterns, rb.remainder), q)))
+                    unbundleReceive(rb).map(q =>
+                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
         substBody = substitute(receive.body.get)(env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)
@@ -413,9 +414,9 @@ object Reduce {
           for {
             evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr)(env))
             updatedPs = evaledPs.map(updateLocallyFree)
-          } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
+          } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
         }
-        case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+        case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
           for {
             evaledTarget <- evalExpr(target.get)
@@ -440,7 +441,7 @@ object Reduce {
             p       <- eval(v.get)
             evaledP <- evalExpr(p)
           } yield evaledP
-        case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+        case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
           for {
             evaledTarget <- evalExpr(target.get)
@@ -476,7 +477,7 @@ object Reduce {
             matchResult match {
               case None => firstMatch(target, caseRem)
               case Some(freeMap) => {
-                val newEnv = addToEnv(env, freeMap, singleCase.pattern.get.freeCount)
+                val newEnv = addToEnv(env, freeMap, singleCase.freeCount)
                 eval(singleCase.source.get)(newEnv)
               }
             }
@@ -606,8 +607,8 @@ object Reduce {
               nth <- evalToInt(args(0))(env)
               v   <- evalSingleExpr(p)(env)
               result <- v.exprInstance match {
-                         case EListBody(EList(ps, _, _, _, _)) => localNth(ps, nth)
-                         case ETupleBody(ETuple(ps, _, _, _))  => localNth(ps, nth)
+                         case EListBody(EList(ps, _, _, _)) => localNth(ps, nth)
+                         case ETupleBody(ETuple(ps, _, _))  => localNth(ps, nth)
                          case _ =>
                            Task raiseError new Error(
                              "Error: nth applied to something that wasn't a list or tuple.")

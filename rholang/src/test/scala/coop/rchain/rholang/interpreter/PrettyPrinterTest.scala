@@ -102,7 +102,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "Send" should "Print" in {
     val source: Par =
-      p.copy(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, 0, BitSet())))
+      p.copy(sends = Seq(Send(Quote(Par()), List(Par(), Par()), true, BitSet())))
     val result = PrettyPrinter().buildString(source)
     val target = "@{Nil}!!(Nil, Nil)"
     result shouldBe target

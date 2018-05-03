@@ -2,11 +2,9 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.EListBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter.HasLocallyFree
 import coop.rchain.rholang.interpreter.SpatialMatcher._
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
@@ -24,8 +22,6 @@ object implicits {
       }
     }
 
-  private def freeCount(c: Channel): Int = implicitly[HasLocallyFree[Channel]].freeCount(c)
-
   implicit val matchListQuote: StorageMatch[BindPattern, Seq[Channel]] =
     new StorageMatch[BindPattern, Seq[Channel]] {
 
@@ -34,8 +30,7 @@ object implicits {
           .run(emptyMap)
           .map {
             case (freeMap: FreeMap, caughtRem: Seq[Channel]) =>
-              println("caughtRem: " + caughtRem)
-              val (remainderMap, countBump) = pattern.remainder match {
+              val remainderMap = pattern.remainder match {
                 case Some(Var(FreeVar(level))) =>
                   val flatRem: Seq[Par] = caughtRem.flatMap(
                     chan =>
@@ -44,14 +39,10 @@ object implicits {
                         case _                 => None
                     }
                   )
-                  (freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector))), 1)
-                case _ => (freeMap, 0)
+                  freeMap + (level -> VectorPar().addExprs(EList(flatRem.toVector)))
+                case _ => freeMap
               }
-              println("remainderMap: " + remainderMap)
-              toChannels(
-                remainderMap,
-                pattern.patterns.map((c: Channel) => freeCount(c)).sum + countBump
-              )
+              toChannels(remainderMap, pattern.freeCount)
           }
     }
 

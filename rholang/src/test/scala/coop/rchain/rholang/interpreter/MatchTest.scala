@@ -37,9 +37,10 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     result should be(None)
   }
   "Matching lists of grounds with lists of vars" should "work" in {
-    val target: Par = EList(List[Par](GString("add"), GInt(7), GInt(8)), 0, BitSet())
+    val target: Par = EList(List[Par](GString("add"), GInt(7), GInt(8)), BitSet())
     val pattern: Par =
-      EList(List[Par](GString("add"), EVar(FreeVar(0)), EVar(FreeVar(1))), 2, BitSet())
+      EList(List[Par](GString("add"), EVar(FreeVar(0)), EVar(FreeVar(1))), BitSet())
+        .withConnectiveUsed(true)
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(8))))
   }
@@ -47,35 +48,37 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   "Matching 2 lists in parallel" should "work" in {
     // The second pattern will be checked first because of prepend.
     // It matches both targets, but the first pattern only matches one of the lists.
-    val target: Par = EList(List(GInt(7), GInt(8)), 0, BitSet())
-      .prepend(EList(List(GInt(7), GInt(9)), 0, BitSet()))
-    val pattern: Par = EList(List(EVar(FreeVar(0)), GInt(8)), 1, BitSet())
-      .prepend(EList(List(GInt(7), EVar(FreeVar(1))), 1, BitSet()))
+    val target: Par = EList(List(GInt(7), GInt(8)), BitSet())
+      .prepend(EList(List(GInt(7), GInt(9)), BitSet()))
+    val pattern: Par = EList(List(EVar(FreeVar(0)).withConnectiveUsed(true), GInt(8)), BitSet())
+      .withConnectiveUsed(true)
+      .prepend(EList(List(GInt(7), EVar(FreeVar(1)).withConnectiveUsed(true)), BitSet())
+        .withConnectiveUsed(true))
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GInt(7), 1 -> GInt(9))))
   }
 
   "Matching a send's channel" should "work" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, 0, BitSet())
+      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send =
-      Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, 1, BitSet())
+      Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet())
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GPrivate("unforgeable"))))
   }
 
   "Matching a send's body" should "work" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, 0, BitSet())
-    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, 1, BitSet())
+      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
+    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet())
     val result =
       spatialMatch(target, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GInt(7))))
   }
   "Matching a send" should "require arity matching in" in {
     val target: Send =
-      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
-    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, 1, BitSet())
+      Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet())
     val result        = spatialMatch(target, pattern).runS(emptyMap)
     result should be(None)
   }
@@ -100,9 +103,10 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
   "Matching send with free variable in channel and variable position" should "capture both values" in {
     val sendTarget: Par =
-      Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, 0, BitSet())
+      Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, BitSet())
     val pattern: Par =
-      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
+      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet())
+        .withConnectiveUsed(true)
     val result = spatialMatch(sendTarget, pattern).runS(emptyMap)
     result should be(Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one"))))
   }
@@ -113,10 +117,9 @@ class VarMatcherSpec extends FlatSpec with Matchers {
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(7))),
         ReceiveBind(List(Quote(EVar(FreeVar(0))), Quote(EVar(FreeVar(1)))), Quote(GInt(8)))
       ),
-      Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, 0, BitSet()),
+      Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()),
       false,
-      4,
-      2
+      4
     )
     val pattern: Receive = Receive(
       List(
@@ -125,15 +128,14 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       ),
       EVar(FreeVar(1)),
       false,
-      4,
-      2
+      4
     )
     val result = spatialMatch(target, pattern).runS(emptyMap)
     result should be(
       Some(
         Map[Int, Par](
           0 -> GInt(8),
-          1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, 0, BitSet()))))
+          1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()))))
   }
 
   "Matching an eval with no free variables" should "Succeed, but not capture anything." in {
@@ -152,7 +154,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val pattern: New =
       New(2,
           Par()
-            .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false, freeCount = 1))
+            .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false).withConnectiveUsed(true))
             .prepend(EVar(Wildcard(WildcardMsg()))))
     val result = spatialMatch(target, pattern).runS(emptyMap)
 
@@ -198,7 +200,7 @@ class VarMatcherSpec extends FlatSpec with Matchers {
         .prepend(Send(Quote(GPrivate("0")), Seq(GInt(43)), persistent = false)))
     val pattern: Bundle = Bundle(
       Par()
-        .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false, freeCount = 1))
+        .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false))
         .prepend(EVar(Wildcard(WildcardMsg()))))
 
     val result = spatialMatch(target, pattern).runS(emptyMap)

@@ -182,7 +182,7 @@ object SpatialMatcher {
         }
       // Try to find a match for a single pattern.
       case (targets, pattern +: prem) => {
-        if (lf.freeCount(pattern) === 0 && !lf.wildcard(pattern)) {
+        if (!lf.connectiveUsed(pattern)) {
           possiblyRemove(pattern, targets) match {
             case None => StateT.liftF(Stream.Empty)
             case Some(filtered) =>
@@ -228,7 +228,7 @@ object SpatialMatcher {
 
   implicit val parSpatialMatcherInstance: SpatialMatcher[Par] = fromFunction[Par] {
     (target, pattern) =>
-      if (pattern.freeCount === 0 && !pattern.wildcard) {
+      if (!pattern.connectiveUsed) {
         if (pattern == target)
           StateT.pure(Unit)
         else {
@@ -346,7 +346,7 @@ object SpatialMatcher {
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr] = fromFunction[Expr] {
     (target, pattern) =>
       (target.exprInstance, pattern.exprInstance) match {
-        case (EListBody(EList(tlist, _, _, _, _)), EListBody(EList(plist, _, _, _, rem))) => {
+        case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, rem))) => {
           for {
             matchedRem <- foldMatch(tlist, plist, rem)
             _ <- rem match {
@@ -356,7 +356,7 @@ object SpatialMatcher {
                 }
           } yield Unit
         }
-        case (ETupleBody(ETuple(tlist, _, _, _)), ETupleBody(ETuple(plist, _, _, _))) => {
+        case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
           foldMatch(tlist, plist).map(_ => Unit)
         }
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>

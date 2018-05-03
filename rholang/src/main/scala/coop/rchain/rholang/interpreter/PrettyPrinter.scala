@@ -8,7 +8,6 @@ import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import implicits._
-import coop.rchain.rholang.interpreter.HasLocallyFree._
 import scalapb.GeneratedMessage
 
 object PrettyPrinter {
@@ -55,13 +54,13 @@ case class PrettyPrinter(freeShift: Int,
         buildString(p1.get) + " < " + buildString(p2.get)
       case ELteBody(ELte(p1, p2)) =>
         buildString(p1.get) + " <= " + buildString(p2.get)
-      case EListBody(EList(s, _, _, _, _)) =>
+      case EListBody(EList(s, _, _, _)) =>
         "[" + buildSeq(s) + "]"
-      case ETupleBody(ETuple(s, _, _, _)) =>
+      case ETupleBody(ETuple(s, _, _)) =>
         "[" + buildSeq(s) + "]"
-      case ESetBody(ESet(s, _, _, _)) =>
+      case ESetBody(ESet(s, _, _)) =>
         "(" + buildSeq(s) + ")"
-      case EMapBody(EMap(kvs, _, _, _)) =>
+      case EMapBody(EMap(kvs, _, _)) =>
         "{" + ("" /: kvs.zipWithIndex) {
           case (string, (kv, i)) =>
             string + buildString(kv.key.get) + " : " + buildString(kv.value.get) + {
@@ -109,17 +108,17 @@ case class PrettyPrinter(freeShift: Int,
 
       case r: Receive =>
         val (totalFree, bindsString) = ((0, "") /: r.binds.zipWithIndex) {
-          case ((free, string), (bind, i)) =>
-            val (patternFree, bindString) =
+          case ((previousFree, string), (bind, i)) =>
+            val bindString =
               this
                 .copy(
-                  freeShift = boundShift + free,
+                  freeShift = boundShift + previousFree,
                   boundShift = 0,
                   freeId = boundId,
                   baseId = setBaseId()
                 )
                 .buildPattern(bind.patterns)
-            (free + patternFree, string + bindString + {
+            (bind.freeCount + previousFree, string + bindString + {
               if (r.persistent) " <= " else " <- "
             } + buildString(bind.source.get) + {
               if (i != r.binds.length - 1) " ; "
@@ -211,17 +210,17 @@ case class PrettyPrinter(freeShift: Int,
         }
     }
 
-  private def buildPattern(patterns: Seq[Channel]): (Int, String) =
-    ((0, "") /: patterns.zipWithIndex) {
-      case ((patternsFree, string), (pattern, i)) =>
-        (patternsFree + freeCount(pattern), string + buildString(pattern) + {
+  private def buildPattern(patterns: Seq[Channel]): String =
+    ("" /: patterns.zipWithIndex) {
+      case (string, (pattern, i)) =>
+        string + buildString(pattern) + {
           if (i != patterns.length - 1) ", "
           else ""
-        })
+        }
     }
 
   private def buildMatchCase(matchCase: MatchCase): String = {
-    val patternFree: Int = matchCase.pattern.get.freeCount
+    val patternFree: Int = matchCase.freeCount
     this
       .copy(
         freeShift = boundShift,
