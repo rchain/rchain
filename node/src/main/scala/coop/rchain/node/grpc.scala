@@ -17,8 +17,6 @@ import com.google.protobuf.ByteString
 
 import java.io.{Reader, StringReader}
 
-import scala.util.Success
-
 object GrpcServer {
 
   def acquireServer[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable](
