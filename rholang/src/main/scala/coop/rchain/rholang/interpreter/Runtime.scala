@@ -35,7 +35,8 @@ object Runtime {
           List(Channel(Quote(GString(name)))),
           List(
             BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
-                        remainder)),
+                        remainder,
+                        freeCount = arity)),
           TaggedContinuation(ScalaBodyRef(ref))
         )
     }

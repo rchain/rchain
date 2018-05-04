@@ -4,7 +4,7 @@ new helloAgain in {
       chan!("Hello again, world!") |
       for (@text <- chan) {
         new ack in {
-          @"stdoutack"!(text, *ack) |
+          @"stdoutAck"!(text, *ack) |
           for (_ <- ack) {
             @"stdout"!("\n")
           }
