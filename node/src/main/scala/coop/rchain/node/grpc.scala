@@ -41,7 +41,7 @@ case class GrpcServerBuilder private (
   def build[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable]: F[Server] =
     Capture[F].capture {
       ServerBuilder
-        .forPort(port).executor()
+        .forPort(port)
         .addService(ReplGrpc.bindService(new ReplImpl(runtime, replScheduler), mainScheduler))
         .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], mainScheduler))
         .addService(DeployServiceGrpc.bindService(new DeployImpl[F], mainScheduler))
