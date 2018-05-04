@@ -1,7 +1,10 @@
 import axios from 'axios'
 
-const sourceUrl = 'https://raw.githubusercontent.com/rchain/rchain/master/docs/rholang/rholangtut-0.2.md'
-const editUrl = 'https://github.com/rchain/rchain/blob/master/docs/rholang/rholangtut-0.2.md'
+const branch = 'dev'
+const path = 'docs/rholang/rholangtut-0.3.md'
+
+const sourceUrl = 'https://raw.githubusercontent.com/rchain/rchain/' + branch + '/' + path
+const editUrl = 'https://github.com/rchain/rchain/blob/' + branch + '/' + path
 
 // noinspection JSUnusedGlobalSymbols
 export default {
