@@ -5,15 +5,14 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
 import cats.syntax.either._
-import coop.rchain.models.{Channel, Par, TaggedContinuation}
+import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation, Var}
 import coop.rchain.rholang.interpreter.implicits.VectorPar
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
-import monix.execution.CancelableFuture
-import monix.execution.Scheduler.Implicits.global
+import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.ScallopConf
 
 import scala.annotation.tailrec
@@ -44,6 +43,7 @@ object RholangCLI {
   }
 
   def main(args: Array[String]): Unit = {
+    import monix.execution.Scheduler.Implicits.global
 
     val conf = new Conf(args)
 
@@ -87,7 +87,7 @@ object RholangCLI {
   }
 
   private def printStorageContents(
-      store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit = {
+      store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): Unit = {
     Console.println("\nStorage Contents:")
     Console.println(StoragePrinter.prettyPrint(store))
   }
@@ -99,7 +99,7 @@ object RholangCLI {
     } yield ()
 
   @tailrec
-  def repl(runtime: Runtime): Unit = {
+  def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
@@ -150,7 +150,7 @@ object RholangCLI {
   @tailrec
   def waitThenPrintStorageContents(
       evaluatorFuture: CancelableFuture[Unit],
-      store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation]): Unit =
+      store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
         case Some(Success(_)) => printStorageContents(store)

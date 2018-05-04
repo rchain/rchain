@@ -1,25 +1,28 @@
 package coop.rchain.rholang.interpreter
 
-import cats.{Eval => _, _}
 import cats.data._
 import cats.implicits._
-import coop.rchain.models._
+import cats.{Eval => _}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
-import coop.rchain.rholang.interpreter.SpatialMatcher.{spatialMatch, OptionalFreeMap}
-
-import scala.annotation.tailrec
-import scala.collection.immutable.Stream
-import implicits.{
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.SpatialMatcher.OptionalFreeMap
+import coop.rchain.rholang.interpreter.implicits.{
+  fromEList,
+  fromExpr,
   BundleLocallyFree,
   ExprLocallyFree,
   GPrivateLocallyFree,
-  ParExtension,
+  MatchCaseLocallyFree,
+  ParLocallyFree,
   ReceiveBindLocallyFree,
   SendLocallyFree,
   VectorPar
 }
+
+import scala.annotation.tailrec
+import scala.collection.immutable.Stream
 
 // The spatial matcher takes targets and patterns. It uses StateT[Option,
 // FreeMap, Unit] to represent the computation. The state is the mapping from
@@ -63,12 +66,31 @@ object SpatialMatcher {
   def emptyMap: FreeMap = Map.empty[Int, Par]
 
   // This helper function is useful in several productions
-  def foldMatch[T: SpatialMatcher](tlist: Seq[T], plist: Seq[T]): OptionalFreeMap[Unit] =
+  def foldMatch[T: SpatialMatcher](tlist: Seq[T], plist: Seq[T], remainder: Option[Var] = None)(
+      implicit lf: HasLocallyFree[T]): OptionalFreeMap[Seq[T]] =
     (tlist, plist) match {
-      case (Nil, Nil)             => StateT.pure(Unit)
-      case (Nil, _)               => StateT.liftF[Option, FreeMap, Unit](None)
-      case (_, Nil)               => StateT.liftF[Option, FreeMap, Unit](None)
-      case (t +: trem, p +: prem) => spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem))
+      case (Nil, Nil) => StateT.pure(Nil)
+      case (Nil, _)   => StateT.liftF[Option, FreeMap, Seq[T]](None)
+      case (trem, Nil) =>
+        remainder match {
+          case None => StateT.liftF[Option, FreeMap, Seq[T]](None)
+          case Some(Var(FreeVar(level))) => {
+            def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): OptionalFreeMap[Seq[T]] =
+              trem match {
+                case Nil => StateT.pure(acc)
+                case item +: rem =>
+                  if (lf.locallyFree(item).isEmpty)
+                    freeCheck(rem, level, acc :+ item)
+                  else
+                    StateT.liftF(None)
+              }
+            freeCheck(trem, level, Vector.empty[T])
+          }
+          case Some(Var(Wildcard(_))) => StateT.pure(Nil)
+          case _                      => StateT.liftF[Option, FreeMap, Seq[T]](None)
+        }
+      case (t +: trem, p +: prem) =>
+        spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
   // This function finds a single matching from a list of patterns and a list of
@@ -160,7 +182,7 @@ object SpatialMatcher {
         }
       // Try to find a match for a single pattern.
       case (targets, pattern +: prem) => {
-        if (lf.freeCount(pattern) === 0 && !lf.wildcard(pattern)) {
+        if (!lf.connectiveUsed(pattern)) {
           possiblyRemove(pattern, targets) match {
             case None => StateT.liftF(Stream.Empty)
             case Some(filtered) =>
@@ -206,7 +228,7 @@ object SpatialMatcher {
 
   implicit val parSpatialMatcherInstance: SpatialMatcher[Par] = fromFunction[Par] {
     (target, pattern) =>
-      if (pattern.freeCount === 0 && !pattern.wildcard) {
+      if (!pattern.connectiveUsed) {
         if (pattern == target)
           StateT.pure(Unit)
         else {
@@ -324,11 +346,18 @@ object SpatialMatcher {
   implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr] = fromFunction[Expr] {
     (target, pattern) =>
       (target.exprInstance, pattern.exprInstance) match {
-        case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, _))) => {
-          foldMatch(tlist, plist)
+        case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, rem))) => {
+          for {
+            matchedRem <- foldMatch(tlist, plist, rem)
+            _ <- rem match {
+                  case Some(Var(FreeVar(level))) =>
+                    StateT.modify[Option, FreeMap](m => m + (level -> EList(matchedRem)))
+                  case _ => StateT.pure[Option, FreeMap, Unit](Unit)
+                }
+          } yield Unit
         }
-        case (ETupleBody(ETuple(tlist, _, _, _)), ETupleBody(ETuple(plist, _, _, _))) => {
-          foldMatch(tlist, plist)
+        case (ETupleBody(ETuple(tlist, _, _)), ETupleBody(ETuple(plist, _, _))) => {
+          foldMatch(tlist, plist).map(_ => Unit)
         }
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           if (vp == vt) StateT.pure(Unit) else StateT.liftF(None)

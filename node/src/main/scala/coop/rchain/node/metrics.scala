@@ -1,25 +1,24 @@
 package coop.rchain.node
 
+import cats._, cats.data._, cats.implicits._
 import kamon.prometheus._
 import kamon._
-import scala.util.control.NonFatal
+import monix.eval.Task
+import com.typesafe.config.ConfigValueFactory
 
-final case class MetricsServer() {
-  val reporter = new PrometheusReporter()
+object MetricsServer {
+  def create[F[_]: Applicative](port: Int): F[MetricsServer] = new MetricsServer(port).pure[F]
+}
 
-  Kamon.addReporter(reporter)
+class MetricsServer(port: Int) {
 
-  /*
-   * Small interface to demonstrate the External Node API.
-   */
+  def start: Task[Unit] = Task.delay {
+    val kamonConfig = Kamon
+      .config()
+      .withValue("kamon.prometheus.embedded-server.port", ConfigValueFactory.fromAnyRef(port))
+    Kamon.reconfigure(kamonConfig)
+    Kamon.addReporter(new PrometheusReporter())
+  }
 
-  def start(): Unit =
-    try {
-      reporter.start
-    } catch {
-      case NonFatal(_) => ()
-    }
-
-  def stop(): Unit =
-    reporter.stop
+  def stop(): Unit = Kamon.stopAllReporters()
 }

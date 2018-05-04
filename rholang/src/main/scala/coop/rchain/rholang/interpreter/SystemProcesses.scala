@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.{Channel, Par, TaggedContinuation}
+import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{produce, IStore}
 import monix.eval.Task
@@ -15,7 +15,7 @@ object SystemProcesses {
       Task(Console.println(prettyPrinter.buildString(arg)))
   }
 
-  def stdoutAck(store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
+  def stdoutAck(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(arg, ack)) =>
@@ -32,7 +32,7 @@ object SystemProcesses {
       Task(Console.err.println(prettyPrinter.buildString(arg)))
   }
 
-  def stderrAck(store: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
+  def stderrAck(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                 dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(arg, ack)) =>

@@ -2,8 +2,8 @@ package coop.rchain.casper.util
 
 import ProtoUtil._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.BlockGenerator
-import coop.rchain.casper.internals._
+import coop.rchain.casper.{BlockDag, BlockGenerator}
+import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol._
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
@@ -12,27 +12,30 @@ import cats._
 import cats.data._
 import cats.implicits._
 import cats.mtl.implicits._
-import coop.rchain.casper.Estimator.BlockHash
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
-  type StateWithChain[A] = State[Chain, A]
+  type StateWithChain[A] = State[BlockDag, A]
+
+  val initState =
+    BlockDag(
+      HashMap.empty[Int, BlockMessage],
+      HashMap.empty[BlockHash, BlockMessage],
+      HashMap.empty[BlockHash, HashSet[BlockHash]],
+      HashMap.empty[Validator, BlockHash],
+      0
+    )
 
   "isInMainChain" should "classify appropriately" in {
-    def createChain[F[_]: Monad: ChainState]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash))
         b3      <- createBlock[F](Seq(b2.blockHash))
       } yield b3
-
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[BlockHash, BlockMessage],
-            HashMap.empty[BlockHash, HashSet[BlockHash]],
-            0)
     val chain = createChain[StateWithChain].runS(initState).value
 
     val genesis = chain.idToBlocks(1)
@@ -45,7 +48,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
   }
 
   "isInMainChain" should "classify diamond DAGs appropriately" in {
-    def createChain[F[_]: Monad: ChainState]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq())
         b2      <- createBlock[F](Seq(genesis.blockHash))
@@ -53,11 +56,6 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
         b4      <- createBlock[F](Seq(b2.blockHash, b3.blockHash))
       } yield b4
 
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[BlockHash, BlockMessage],
-            HashMap.empty[BlockHash, HashSet[BlockHash]],
-            0)
     val chain = createChain[StateWithChain].runS(initState).value
 
     val genesis = chain.idToBlocks(1)
@@ -75,7 +73,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
   "isInMainChain" should "classify complicated chains appropriately" in {
     val v1 = ByteString.copyFromUtf8("Validator One")
     val v2 = ByteString.copyFromUtf8("Validator Two")
-    def createChain[F[_]: Monad: ChainState]: F[BlockMessage] =
+    def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =
       for {
         genesis <- createBlock[F](Seq(), ByteString.EMPTY)
         b2      <- createBlock[F](Seq(genesis.blockHash), v2)
@@ -87,11 +85,6 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
         b8      <- createBlock[F](Seq(b7.blockHash), v1)
       } yield b8
 
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[BlockHash, BlockMessage],
-            HashMap.empty[BlockHash, HashSet[BlockHash]],
-            0)
     val chain = createChain[StateWithChain].runS(initState).value
 
     val genesis = chain.idToBlocks(1)

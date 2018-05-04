@@ -26,7 +26,7 @@ trait Reduce[M[_]] {
 
   def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(implicit env: Env[Par]): M[Unit]
 
-  def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
+  def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
       implicit env: Env[Par]): M[Unit]
 
   def eval(par: Par)(implicit env: Env[Par]): M[Unit]
@@ -39,7 +39,7 @@ trait Reduce[M[_]] {
 object Reduce {
 
   class DebruijnInterpreter(
-      tupleSpace: IStore[Channel, Seq[Channel], Seq[Channel], TaggedContinuation],
+      tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[Task, Seq[Channel], TaggedContinuation])
       extends Reduce[Task] {
 
@@ -89,12 +89,13 @@ object Reduce {
       * @return  An optional continuation resulting from a match. The body of the continuation
       *          will be @param body if the continuation is not None.
       */
-    def consume(binds: Seq[(Seq[Channel], Quote)], body: Par, persistent: Boolean)(
+    def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par]): Task[Unit] =
       binds match {
         case Nil => Task raiseError new Error("Error: empty binds")
         case _ =>
-          val (patterns: Seq[Seq[Channel]], sources: Seq[Quote]) = binds.unzip
+          val (patterns: Seq[BindPattern], sources: Seq[Quote]) =
+            binds.unzip
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)).toList,
                           patterns.toList,
@@ -185,17 +186,44 @@ object Reduce {
       */
     def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
       for {
-        quote          <- eval(send.chan.get)
-        data           <- send.data.toList.traverse(x => evalExpr(x)(env))
+        quote <- eval(send.chan.get)
+        data  <- send.data.toList.traverse(x => evalExpr(x)(env))
+
         subChan: Quote = substitute(quote)
-        _              <- produce(subChan, data, send.persistent)
+        unbundled <- subChan.value.singleBundle() match {
+                      case Some(value) =>
+                        if (!value.writeFlag) {
+                          Task.raiseError(new Error("Trying to send on non-writeable channel."))
+                        } else {
+                          Task.now(Quote(value.body.get))
+                        }
+                      case None => Task.now(subChan)
+                    }
+        _ <- produce(unbundled, data, send.persistent)
       } yield ()
+
+    private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): Task[Quote] =
+      for {
+        quote <- eval(rb.source.get)
+        subst = substitute(quote)
+        unbndl <- subst.quote.get.singleBundle() match {
+                   case Some(value) =>
+                     if (!value.readFlag) {
+                       Task.raiseError(new Error("Trying to read from non-readable channel."))
+                     } else {
+                       Task.now(Quote(value.body.get))
+                     }
+                   case None =>
+                     Task.now(subst)
+                 }
+      } yield unbndl
 
     def eval(receive: Receive)(implicit env: Env[Par]): Task[Unit] =
       for {
         binds <- receive.binds.toList
-                  .traverse((rb: ReceiveBind) =>
-                    eval(rb.source.get).map(quote => (rb.patterns, substitute(quote))))
+                  .traverse(rb =>
+                    unbundleReceive(rb).map(q =>
+                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
         substBody = substitute(receive.body.get)(env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)
@@ -385,9 +413,9 @@ object Reduce {
           for {
             evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr)(env))
             updatedPs = evaledPs.map(updateLocallyFree)
-          } yield updateLocallyFree(EList(updatedPs, el.freeCount, el.locallyFree, el.wildcard))
+          } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
         }
-        case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+        case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
           for {
             evaledTarget <- evalExpr(target.get)
@@ -412,7 +440,7 @@ object Reduce {
             p       <- eval(v.get)
             evaledP <- evalExpr(p)
           } yield evaledP
-        case EMethodBody(EMethod(method, target, arguments, _, _, _)) => {
+        case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable.get(method)
           for {
             evaledTarget <- evalExpr(target.get)
@@ -448,7 +476,7 @@ object Reduce {
             matchResult match {
               case None => firstMatch(target, caseRem)
               case Some(freeMap) => {
-                val newEnv = addToEnv(env, freeMap, singleCase.pattern.get.freeCount)
+                val newEnv = addToEnv(env, freeMap, singleCase.freeCount)
                 eval(singleCase.source.get)(newEnv)
               }
             }
@@ -578,8 +606,8 @@ object Reduce {
               nth <- evalToInt(args(0))(env)
               v   <- evalSingleExpr(p)(env)
               result <- v.exprInstance match {
-                         case EListBody(EList(ps, _, _, _))   => localNth(ps, nth)
-                         case ETupleBody(ETuple(ps, _, _, _)) => localNth(ps, nth)
+                         case EListBody(EList(ps, _, _, _)) => localNth(ps, nth)
+                         case ETupleBody(ETuple(ps, _, _))  => localNth(ps, nth)
                          case _ =>
                            Task raiseError new Error(
                              "Error: nth applied to something that wasn't a list or tuple.")
