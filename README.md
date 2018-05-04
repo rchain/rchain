@@ -14,7 +14,8 @@ Pre-release versions of the RChain software are now available. We plan to launch
 __Note__ Successfully building from source requires attending to all of the prerequisites shown below. When users experience errors, it is typically related to failure to assure all prerequisites are met. Work is in progress to improve this experience.
 
 ### Running from Docker
-Visit the [RChain Docker storefront](https://store.docker.com/profiles/rchain) for the most recent pre-release versions of the RChain software.
+Assuming you have Docker running on your system, use the following pull command to run the latest version of RNode in Docker
+'docker pull rchain/rnode:latest`
 
 ### Building and running from source
 #### Prerequisites
@@ -191,6 +192,16 @@ Invoking the above Docker image is simple enough:
 15:49:26.974 [main] DEBUG p2p - connect(): Connecting to #{PeerNode c12882b563fa47c9af297ce952ef7d94}
 [...]
 ```
+In order to use both the peer-to-peer network and REPL cabailities of the node, you must run more than one Docker Rnode on the same host, the containers need to be connected to one user-defined network bridge:
+
+```bash
+> docker network create rnode-net
+
+> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+
+> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+```
+
 Each scoped build is as similar to the original, per-project build process as possible, so assemblies should be produced in the same way as before:
 ```
 <computer:~/src/rchain (dev)> sbt "project rholang" assembly
@@ -232,7 +243,7 @@ The `rspace` subproject contains code related to the key-value storage of the RC
 ## Caveats and filing issues
 
 ### Caveats
-During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/issues/?filter=10128&atlOrigin=eyJpIjoiNjUyMzI3ZWEzYzFmNDc5Mzk2YWY5MjM1NTIyYWVkZmIiLCJwIjoiaiJ9) and [bugs](https://rchain.atlassian.net/issues/?filter=10129&jql=issuetype%20%3D%20Bug%20AND%20status%20in%20(%22In%20Progress%22%2C%20%22In%20Review%22%2C%20%22To%20Do%22)%20ORDER%20BY%20created%20DESC&atlOrigin=eyJpIjoiNjIzZWYyZjk3MzdlNGU5ZjliZjUwZDllZjdlN2Y0ZTUiLCJwIjoiaiJ9). 
+During this pre-release phase of the RChain software, there are some [known issues](https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376244/RChain+software+unresolved+bugs+and+known+issues). 
 
 ### Filing Issues
 

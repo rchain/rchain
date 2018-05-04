@@ -7,6 +7,7 @@ import coop.rchain.comm._, CommError._
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
+import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
@@ -230,6 +231,11 @@ object effects {
       console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
       console.addCompleter(new StringsCompleter(history.asJava))
     }
+
+    def close: Task[Unit] = Task.delay {
+      TerminalFactory.get().restore()
+    }
+
   }
 
   def packetHandler[F[_]: Applicative: Log](

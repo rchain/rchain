@@ -18,15 +18,10 @@ import scala.concurrent.duration._
 object Main {
 
   def main(args: Array[String]): Unit = {
-    val conf    = Conf(args)
-    val console = new ConsoleReader()
-    console.setHistoryEnabled(true)
-    console.setPrompt("rholang $ ".green)
-    console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
+    val conf = Conf(args)
 
-    import monix.execution.Scheduler.Implicits.global
+    implicit val io: SchedulerService = Scheduler.io("repl-io")
 
-    implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(console)
     implicit val replService: ReplService[Task] =
       new GrpcReplService(conf.grpcHost(), conf.grpcPort())
     implicit val diagnosticsService: DiagnosticsService[Task] =
@@ -35,10 +30,19 @@ object Main {
       new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
 
     val exec: Task[Unit] = conf.eval.toOption match {
-      case Some(fileName)               => new ReplRuntime(conf).evalProgram[Task](fileName)
-      case None if (conf.repl())        => new ReplRuntime(conf).replProgram[Task]
-      case None if (conf.diagnostics()) => DiagnosticsRuntime.diagnosticsProgram[Task]
-      case None if (conf.deployDemo())  => DeployRuntime.deployProgram[Task]
+      case Some(fileName) => {
+        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        new ReplRuntime(conf).evalProgram[Task](fileName)
+      }
+      case None if (conf.repl()) => {
+        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        new ReplRuntime(conf).replProgram[Task].as(())
+      }
+      case None if (conf.diagnostics()) => {
+        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        DiagnosticsRuntime.diagnosticsProgram[Task]
+      }
+      case None if (conf.deployDemo()) => DeployRuntime.deployProgram[Task]
       case None =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
@@ -48,6 +52,14 @@ object Main {
         }
     }
     exec.unsafeRunSync
+  }
+
+  private def createConsole: ConsoleReader = {
+    val console = new ConsoleReader()
+    console.setHistoryEnabled(true)
+    console.setPrompt("rholang $ ".green)
+    console.addCompleter(new StringsCompleter(ReplRuntime.keywords.asJava))
+    console
   }
 
 }

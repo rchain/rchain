@@ -17,8 +17,7 @@ if [ -d ${DIRECTORY} ] ; then
 else
     mkdir -p ${DIRECTORY}
     chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
+    chmod 0644 ${SYSTEMD_SERVICE_FILE}
 fi
-
-chmod 0644 ${SYSTEMD_SERVICE_FILE} # Meets file permission criteria in Debian
 
 systemctl enable rnode.service

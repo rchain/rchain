@@ -15,6 +15,7 @@ import coop.rchain.p2p.effects._
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable
+import scala.collection.immutable.{HashMap, HashSet}
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[Unit]
@@ -53,18 +54,12 @@ sealed abstract class MultiParentCasperInstances {
       type BlockHash = ByteString
       type Validator = ByteString
 
-      private val _childMap: mutable.HashMap[BlockHash, mutable.HashSet[BlockHash]] =
-        new mutable.HashMap[BlockHash, mutable.HashSet[BlockHash]]()
-      private val _latestMessages: mutable.HashMap[Validator, BlockHash] =
-        new mutable.HashMap[Validator, BlockHash]()
-      private val blockLookup: mutable.HashMap[BlockHash, BlockMessage] =
-        new mutable.HashMap[BlockHash, BlockMessage]()
+      var blockDag: BlockDag = BlockDag().copy(
+        blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
       private val deployBuff: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
-
-      blockLookup += (genesis.blockHash -> genesis)
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -76,7 +71,7 @@ sealed abstract class MultiParentCasperInstances {
 
       def contains(b: BlockMessage): F[Boolean] =
         Capture[F].capture {
-          blockLookup.contains(b.blockHash)
+          blockDag.blockLookup.contains(b.blockHash)
         }
 
       def deploy(d: Deploy): F[Unit] =
@@ -91,16 +86,7 @@ sealed abstract class MultiParentCasperInstances {
 
       def estimator: F[IndexedSeq[BlockMessage]] =
         Capture[F].capture {
-          // TODO: Push up immutable boundary
-          val immutableChildMap =
-            immutable.HashMap[BlockHash, immutable.HashSet[BlockHash]](_childMap.toSeq.map {
-              case (parent, children) => (parent, immutable.HashSet(children.toSeq: _*))
-            }: _*)
-          val immutableBlockLookup =
-            immutable.HashMap[BlockHash, BlockMessage](blockLookup.toSeq: _*)
-          val immutableLatestMessages =
-            immutable.HashMap[Validator, BlockHash](_latestMessages.toSeq: _*)
-          Estimator.tips(immutableChildMap, immutableBlockLookup, immutableLatestMessages, genesis)
+          Estimator.tips(blockDag, genesis)
         }
 
       def proposeBlock: F[Option[BlockMessage]] = {
@@ -122,7 +108,7 @@ sealed abstract class MultiParentCasperInstances {
         val r = p.map(blocks => {
           val remDeploys = deployHist.clone()
           DagOperations
-            .bfTraverse(blocks)(parents(_).iterator.map(blockLookup))
+            .bfTraverse(blocks)(parents(_).iterator.map(blockDag.blockLookup))
             .foreach(b => {
               b.body.foreach(_.newCode.foreach(remDeploys -= _))
             })
@@ -132,7 +118,7 @@ sealed abstract class MultiParentCasperInstances {
         val proposal = p.flatMap(parents => {
           //TODO: Compute this properly
           val parentPostState = parents.head.body.get.postState.get
-          val justifications  = justificationProto(_latestMessages)
+          val justifications  = justificationProto(blockDag.latestMessages)
           r.map(requests => {
             if (requests.isEmpty) {
               if (parents.length > 1) {
@@ -196,28 +182,31 @@ sealed abstract class MultiParentCasperInstances {
             val hash     = b.blockHash
             val bParents = parents(b)
 
-            if (bParents.exists(p => !blockLookup.contains(p))) {
+            if (bParents.exists(p => !blockDag.blockLookup.contains(p))) {
               //cannot add a block if not all parents are known
               false
-            } else if (b.justifications.exists(j => !blockLookup.contains(j.latestBlockHash))) {
+            } else if (b.justifications.exists(j =>
+                         !blockDag.blockLookup.contains(j.latestBlockHash))) {
               //cannot add a block if not all justifications are known
               false
             } else {
               //TODO: check if block is an equivocation and update observed faults
 
-              blockLookup += (hash -> b) //add new block to total set
+              blockDag = blockDag.copy(blockLookup = blockDag.blockLookup + (hash -> b))
 
               //Assume that a non-equivocating validator must include
               //its own latest message in the justification. Therefore,
               //for a given validator the blocks are guaranteed to arrive in causal order.
-              _latestMessages.update(b.sender, hash)
+              blockDag =
+                blockDag.copy(latestMessages = blockDag.latestMessages.updated(b.sender, hash))
 
               //add current block as new child to each of its parents
-              bParents.foreach(p => {
-                val currChildren = _childMap.getOrElseUpdate(p, new mutable.HashSet[BlockHash]())
-                currChildren += hash
-              })
-
+              val newChildMap = bParents.foldLeft(blockDag.childMap) {
+                case (acc, p) =>
+                  val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
+                  acc.updated(p, currChildren + hash)
+              }
+              blockDag = blockDag.copy(childMap = newChildMap)
               true
             }
           })

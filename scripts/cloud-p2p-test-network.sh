@@ -54,20 +54,26 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
         " 
   done
 
-  echo "Running tests on nodes"
+  echo "Running tests on node network"
   # Check that metrics api is functioning with correct peers_total
+  sleep 60 # Be sure rnode network has converged before checking metrics 
+  all_pass=true
   for i in {1..4}; do
-    sleep 60 # Be sure rnode has completely started up before checking metrics 
     ssh_tcp_port=$((40000+$i))
     res=$(ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
       -p ${ssh_tcp_port} ${SSH_USERNAME}@repo.rchain.space "
-      curl -s 127.0.0.1:9095 | grep "^peers_total";
+      curl -s 127.0.0.1:9095 | grep "^peers ";
       ")
-    if [[ ! "$res" ==  "peers_total 3.0" ]]; then
-      echo "E: Peers total isn't correct for node $i. Metrics or P2P comms issue"
-      # exit
+    if [[ "$res" ==  "peers 3.0" ]]; then
+      echo "PASS: Metric \"${res}\" is correct for node $i."
+    else
+      all_pass=false
+      echo "FAIL: Metric \"${res}\" is incorrect for node $i. Metrics or api issue."
     fi
   done
+  if [[ $all_pass != true ]]; then
+    echo "ERROR: Not all network checks passed."
+  fi
 
 else
   echo "Ignored. P2P test net update skipped as it is not correct branch and from rchain/rchain repo."
