@@ -4,6 +4,13 @@ Rholang is a new programming language designed for use in distributed systems.  
 
 Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues but behave like sets rather than queues.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver. Note that throughout this document the words "name" and "channel" are used interchangeably. This is because in the rho-calculus (on which Rholang is based) the term name is used, however because you can send and receive information on names, semantically they are like channels.
 
+## Getting started
+
+There is not an IDE for Rholang. Get started with Rholang by selecting one of the options below.
+* __Run Rholang on RNode__ - Write Rholang contracts in an editor of your choice and run them on RNode using either the REPL or EVAL modes. [Get started](https://github.com/rchain/rchain/releases) with the latest version of RNode.
+* __Run Rholang on a web interface__ - This [web interface](http://rchain.cloud) was created by a RChain community member.
+* __Write Rholang using an IntelliJ plugin__ - This [Rholang IntelliJ plugin](https://github.com/tgrospic/rholang-idea) was created by a RChain community member.
+
 ## Contracts and sending data
 
     1 new HelloWorld in {
