@@ -309,7 +309,12 @@ object LMDBStore {
                                                     sk: Serialize[K]): LMDBStore[C, P, A, K] = {
 
     val env: Env[ByteBuffer] =
-      Env.create().setMapSize(mapSize).setMaxDbs(8).open(path.toFile)
+      Env
+        .create()
+        .setMapSize(mapSize)
+        .setMaxDbs(8)
+        .setMaxReaders(126)
+        .open(path.toFile)
 
     val dbKeys: Dbi[ByteBuffer] = env.openDbi(keysTableName, MDB_CREATE)
     val dbWaitingContinuations: Dbi[ByteBuffer] =
