@@ -133,16 +133,15 @@ object Score {
   final val QUOTE    = 203
   final val CHAN_VAR = 204
 
-  final val SEND    = 300
-  final val RECEIVE = 301
-  final val EVAL    = 302
-  final val NEW     = 303
-  final val MATCH   = 304
-  final val BUNDLE_EQUIV  = 305
-  final val BUNDLE_READ  = 306
-  final val BUNDLE_WRITE= 307
-  final val BUNDLE_READ_WRITE  = 308
-
+  final val SEND              = 300
+  final val RECEIVE           = 301
+  final val EVAL              = 302
+  final val NEW               = 303
+  final val MATCH             = 304
+  final val BUNDLE_EQUIV      = 305
+  final val BUNDLE_READ       = 306
+  final val BUNDLE_WRITE      = 307
+  final val BUNDLE_READ_WRITE = 308
 
   final val PAR = 999
 }
@@ -439,11 +438,11 @@ object MatchSortMatcher {
 object BundleSortMatcher {
   def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
     val sortedPar = ParSortMatcher.sortMatch(b.body)
-    val score: Int = if(b.writeFlag && b.readFlag) {
+    val score: Int = if (b.writeFlag && b.readFlag) {
       Score.BUNDLE_READ_WRITE
-    } else if(b.writeFlag && !b.readFlag) {
+    } else if (b.writeFlag && !b.readFlag) {
       Score.BUNDLE_WRITE
-    } else if(!b.writeFlag && b.readFlag) {
+    } else if (!b.writeFlag && b.readFlag) {
       Score.BUNDLE_READ
     } else {
       Score.BUNDLE_EQUIV
