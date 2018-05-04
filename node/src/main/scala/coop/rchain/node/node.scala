@@ -69,9 +69,8 @@ class NodeRuntime(conf: Conf) {
 
   def aquireResources(implicit scheduler: Scheduler): Effect[Resources] =
     for {
-      runtime <- Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size()).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      runtime       <- Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size()).pure[Effect]
+      grpcServer    <- GrpcServer.acquireServer(conf.grpcPort(), runtime).build[Effect]
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
