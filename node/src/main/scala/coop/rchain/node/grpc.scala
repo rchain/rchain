@@ -20,7 +20,7 @@ import java.io.{Reader, StringReader}
 object GrpcServer {
 
   def acquireServer(port: Int, runtime: Runtime)(implicit scheduler: Scheduler): GrpcServerBuilder =
-    GrpcServerBuilder(scheduler, Repl.scheduler, port, runtime)
+    GrpcServerBuilder(scheduler, Repl.DefaultScheduler, port, runtime)
 
   def start[F[_]: FlatMap: Capture: Log](server: Server): F[Unit] =
     for {
@@ -41,7 +41,7 @@ case class GrpcServerBuilder private (
   def build[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable]: F[Server] =
     Capture[F].capture {
       ServerBuilder
-        .forPort(port)
+        .forPort(port).executor()
         .addService(ReplGrpc.bindService(new ReplImpl(runtime, replScheduler), mainScheduler))
         .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], mainScheduler))
         .addService(DeployServiceGrpc.bindService(new DeployImpl[F], mainScheduler))
@@ -70,7 +70,8 @@ private class DeployImpl[F[_]: Functor: MultiParentCasper: Futurable]
 }
 
 object Repl {
-  val scheduler: Scheduler = Scheduler.fixedPool("rholang-cli", poolSize = 1)
+  // This Scheduler is intended for internal use of ReplImpl. Don't use it anywhere else!
+  private[node] val DefaultScheduler: Scheduler = Scheduler.fixedPool("rholang-cli", poolSize = 1)
 }
 
 private class ReplImpl(runtime: Runtime, scheduler: Scheduler) extends ReplGrpc.Repl {
