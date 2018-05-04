@@ -153,7 +153,7 @@ object Substitute {
           target = substitute(term.target.get),
           term.cases.map({
             case MatchCase(_case, Some(par), freeCount) =>
-              MatchCase(_case, substitute(par)(env.shift(freeCount)))
+              MatchCase(_case, substitute(par)(env.shift(freeCount)), freeCount)
           }),
           term.locallyFree.until(env.shift),
           term.connectiveUsed
