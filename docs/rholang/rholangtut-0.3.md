@@ -4,6 +4,13 @@ Rholang is a new programming language designed for use in distributed systems.  
 
 Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues but behave like sets rather than queues.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver. Note that throughout this document the words "name" and "channel" are used interchangeably. This is because in the rho-calculus (on which Rholang is based) the term name is used, however because you can send and receive information on names, semantically they are like channels.
 
+## Getting started
+
+There is not an IDE for Rholang. Get started with Rholang by selecting one of the options below.
+* __Run Rholang on RNode__ - Write Rholang contracts in an editor of your choice and run them on RNode using either the REPL or EVAL modes. [Get started](https://github.com/rchain/rchain/releases) with the latest version of RNode.
+* __Run Rholang on a web interface__ - This [web interface](http://rchain.cloud) was created by a RChain community member.
+* __Write Rholang using an IntelliJ plugin__ - This [Rholang IntelliJ plugin](https://github.com/tgrospic/rholang-idea) was created by a RChain community member.
+
 ## Contracts and sending data
 
     1 new HelloWorld in {
@@ -108,44 +115,50 @@ Note the deep layers of callback. Rholang was designed to make concurrent comput
 
 ## Iteration and matching
 
-In the code below, we show an example of iterating through a linked list implemented as nested [head, tail] pairs.
+In the code below, we show an example of iterating through a list.
 
-     1 new chan, loop, iCh in {
-     2   contract loop(@list, @acc, return) = {
-     3     match list { 
-     4       [hd, tl] => {
-     5         for(@i <- iCh) {
-     6           iCh!(i + 1) |
-     7           match [hd == i, acc] {
-     8             [true, true] => { loop!(tl, true, *return) }
-     9             _ => { loop!(tl, false, *return) }
-    10           }
-    11         }
-    12       }
-    13       _ => { return!(acc) }
-    14     }
-    15   } |
-    16   iCh!(1) |
-    17   loop!([1, [2, [3, [4, []]]]], true, *chan)
-    18 }
+     1	new iterate in {
+     2	  contract iterate(@list, process, done) = {
+     3	    match list {
+     4	      [hd, ...tl] => {
+     5	        new ack in {
+     6	          process!(hd, *ack) |
+     7	          for (_ <- ack) { iterate!(tl, *process, *done) }
+     8	        }
+     9	      }
+    10	      _ => done!(Nil)
+    11	    }
+    12	  } |
+    13	  new process, done in {
+    14	    iterate!([4,5,6], *process, *done) |
+    15	    contract process(@item, ack) = {
+    16	      /* handle processing of item */
+    17	      ack!(Nil)
+    18	    } |
+    19	    for (_ <- done) {
+    20	      /* done! */
+    21	      Nil
+    22	    }
+    23	  }
+    24	}
 
 3) The `match` construction allows destructuring a variable through pattern matching.
 
-4) If `list` matches the pattern of a head/tail pair then we execute the main body of the loop.
+4) List patterns support matching the remainder of a list.  If `list` matches the pattern of a head/tail pair then we execute the main body of the loop.
 
-5) We read the current index from the channel.
+5) We create a channel for the item handler to notify us that it's done with the current item.
 
-6) We increment the index and store it back.
+6) We invoke the processor on the item and the acknowledgement channel.
 
-7) The `match` keyword also allows matching more complex expressions against patterns.
+7) When we receive acknowledgement, we reinvoke the iterator on the tail.
 
-8) Here we confirm that the head of the list is equal to the current index and that the accumulator it still equal to `true` and recursively invoke the loop again.
+10) If the list is empty, we signal that the processing is complete.
 
-13) If `list` did not match the head/tail pair pattern then the loop is over and we return the accumulated value.
+14) We invoke the iterator.
 
-16) Initialize the index channel.
+15-18) This `contract` gets invoked for each item in the list.  On line 17, we tell the iterator that we're done with this item.
 
-17) Call the loop with our initial list.
+19) This `for` contains the code that should be executed when the interation is complete.
 
 ## Maps
 
