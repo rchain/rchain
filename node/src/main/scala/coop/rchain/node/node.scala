@@ -16,6 +16,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
+import scala.concurrent.Await
 
 class NodeRuntime(conf: Conf) {
 
@@ -52,6 +53,7 @@ class NodeRuntime(conf: Conf) {
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
+  implicit val cpuUtilizationEffect: CpuUtilization[Effect] = effects.cpuUtilization[Effect]
 
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
 //  TODO: figure out actual validator identities...
@@ -83,6 +85,16 @@ class NodeRuntime(conf: Conf) {
       _ <- GrpcServer.start[Effect](resources.grpcServer)
     } yield ()
 
+  def startReportProcessCpuLoad: Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      val scheduler = monix.execution.Scheduler.global
+      scheduler.scheduleAtFixedRate(3.seconds, 1.second) {
+        Await.ready(CpuUtilization.reportProcessCpuLoad[Effect].value.runAsync(scheduler),
+                    Duration.Inf)
+      }
+    }
+
   def clearResources(resources: Resources): Unit = {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
@@ -107,6 +119,7 @@ class NodeRuntime(conf: Conf) {
       resources <- aquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
+      _         <- startReportProcessCpuLoad.toEffect
       _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
