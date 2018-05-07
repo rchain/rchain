@@ -422,7 +422,7 @@ object MatchSortMatcher {
     def sortCase(matchCase: MatchCase): ScoredTerm[MatchCase] = {
       val sortedPattern = ParSortMatcher.sortMatch(matchCase.pattern)
       val sortedBody    = ParSortMatcher.sortMatch(matchCase.source)
-      ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term),
+      ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
                  Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
     }
 

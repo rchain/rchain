@@ -189,7 +189,7 @@ object Substitute {
         casesSub <- Kleisli.lift(term.cases.toList.traverse {
                      case MatchCase(_case, Some(_par), freeCount) =>
                        substitutePar[M].substitute(_par)(env.shift(freeCount)).map { par =>
-                         MatchCase(_case, par)
+                         MatchCase(_case, par, freeCount)
                        }
                    })
       } yield
