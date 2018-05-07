@@ -107,7 +107,7 @@ trait Reduce[M[_]] {
       quote <- eval(send.chan.get)
       data  <- send.data.toList.traverse(x => evalExpr(x))
 
-      subChan: Quote = substitute(quote)
+      subChan <- substituteQuote[M].substitute(quote).run(env)
       unbundled <- subChan.value.singleBundle() match {
                     case Some(value) =>
                       if (!value.writeFlag) {
@@ -152,7 +152,8 @@ trait Reduce[M[_]] {
       evaledTarget <- evalExpr(mat.target.get)
       // TODO(kyle): Make the matcher accept an environment, instead of
       // substituting it.
-      _ <- firstMatch(substitute(evaledTarget), mat.cases)
+      substTarget <- substitutePar[M].substitute(evaledTarget).run(env)
+      _           <- firstMatch(substTarget, mat.cases)
     } yield ()
   }
 
@@ -182,7 +183,7 @@ trait Reduce[M[_]] {
                                                      me: MonadError[M, Throwable]): M[Quote] =
     for {
       quote <- eval(rb.source.get)
-      subst = substitute(quote)
+      subst <- substituteQuote[M].substitute(quote).run(env)
       // Check if we try to read from bundled channel
       unbndl <- subst.quote.get.singleBundle() match {
                  case Some(value) =>
@@ -214,7 +215,7 @@ trait Reduce[M[_]] {
                   unbundleReceive(rb).map(q =>
                     (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
       // TODO: Allow for the environment to be stored with the body in the Tuplespace
-      substBody = substitute(receive.body.get)(env.shift(receive.bindCount))
+      substBody <- substitutePar[M].substitute(receive.body.get).run(env.shift(receive.bindCount))
       _         <- consume(binds, substBody, receive.persistent)
     } yield ()
 
@@ -249,6 +250,7 @@ trait Reduce[M[_]] {
     }
 
   def evalExprToExpr(expr: Expr)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Expr] = {
+    implicit val parSubstitute = Substitute.substitutePar[M]
     def relop(p1: Par,
               p2: Par,
               relopb: (Boolean, Boolean) => Boolean,
@@ -307,15 +309,15 @@ trait Reduce[M[_]] {
           v1 <- evalExpr(p1.get)
           v2 <- evalExpr(p2.get)
           // TODO: build an equality operator that takes in an environment.
-          sv1 = substitute(v1)
-          sv2 = substitute(v2)
+          sv1 <- substitute(v1).run(env)
+          sv2 <- substitute(v2).run(env)
         } yield GBool(sv1 == sv2)
       case ENeqBody(ENeq(p1, p2)) =>
         for {
           v1  <- evalExpr(p1.get)
           v2  <- evalExpr(p2.get)
-          sv1 = substitute(v1)
-          sv2 = substitute(v2)
+          sv1 <- substitute(v1).run(env)
+          sv2 <- substitute(v2).run(env)
         } yield GBool(sv1 != sv2)
       case EAndBody(EAnd(p1, p2)) =>
         for {
@@ -498,24 +500,27 @@ object Reduce {
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
     def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
-        implicit env: Env[Par]): Task[Unit] = {
+        implicit env: Env[Par]): Task[Unit] =
       // TODO: Handle the environment in the store
-      val substData: Seq[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
-      internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
-        case Some((continuation, dataList)) =>
-          if (persistent) {
-            Task
-              .gather {
-                Seq(dispatcher.dispatch(continuation, dataList),
-                    produce(chan, data, persistent)(env))
+      for {
+        substData <- data.toList
+                      .traverse(substitutePar[Task].substitute(_).map(p => Channel(Quote(p))))
+                      .run(env)
+        res <- internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
+                case Some((continuation, dataList)) =>
+                  if (persistent) {
+                    Task
+                      .gather {
+                        Seq(dispatcher.dispatch(continuation, dataList),
+                            produce(chan, data, persistent)(env))
+                      }
+                      .map(_ => ())
+                  } else {
+                    dispatcher.dispatch(continuation, dataList)
+                  }
+                case None => Task.unit
               }
-              .map(_ => ())
-          } else {
-            dispatcher.dispatch(continuation, dataList)
-          }
-        case None => Task.unit
-      }
-    }
+      } yield res
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
