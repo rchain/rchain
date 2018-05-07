@@ -158,6 +158,7 @@ object implicits {
       matches = Vector.empty[Match],
       ids = Vector.empty[GPrivate],
       bundles = Vector.empty[Bundle],
+      connectives = Vector.empty[Connective],
     )
   }
 
@@ -196,18 +197,23 @@ object implicits {
         locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e),
         connectiveUsed = p.connectiveUsed || ExprLocallyFree.connectiveUsed(e)
       )
+    def prepend(m: Match): Par =
+      p.copy(matches = m +: p.matches,
+             locallyFree = p.locallyFree | m.locallyFree,
+             connectiveUsed = p.connectiveUsed || m.connectiveUsed)
     def prepend(b: Bundle): Par =
       p.copy(
         bundles = b +: p.bundles,
         locallyFree = b.body.get.locallyFree | p.locallyFree
       )
-    def prepend(m: Match): Par =
-      p.copy(matches = m +: p.matches,
-             locallyFree = p.locallyFree | m.locallyFree,
-             connectiveUsed = p.connectiveUsed || m.connectiveUsed)
+    def prepend(c: Connective): Par =
+      p.copy(
+        connectives = c +: p.connectives,
+        connectiveUsed = true
+      )
 
     def singleEval(): Option[Eval] =
-      if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
         p.evals match {
           case Seq(single) => Some(single)
           case _           => None
@@ -217,7 +223,7 @@ object implicits {
       }
 
     def singleNew(): Option[New] =
-      if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
         p.news match {
           case Seq(single) => Some(single)
           case _           => None
@@ -227,10 +233,10 @@ object implicits {
       }
 
     def singleBundle(): Option[Bundle] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.connectives.isEmpty) {
         p.bundles.toList match {
-          case List(single) => Some(single)
-          case _            => None
+          case Seq(single) => Some(single)
+          case _           => None
         }
       } else {
         None
@@ -244,8 +250,9 @@ object implicits {
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
-        that.bundles ++ p.bundles,
         that.ids ++ p.ids,
+        that.bundles ++ p.bundles,
+        that.connectives ++ p.connectives,
         that.locallyFree | p.locallyFree,
         that.connectiveUsed || p.connectiveUsed
       )

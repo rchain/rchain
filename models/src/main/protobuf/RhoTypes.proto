@@ -15,8 +15,9 @@ message Par {
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
-    repeated Bundle bundles = 11;
     repeated GPrivate ids = 7;
+    repeated Bundle bundles = 11;
+    repeated Connective connectives = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 10;
 }
@@ -270,6 +271,18 @@ message EAnd {
 message EOr {
     Par p1 = 1;
     Par p2 = 2;
+}
+
+message Connective {
+  oneof connective_instance {
+    ConnectiveBody conn_and_body = 1;
+    ConnectiveBody conn_or_body = 2;
+    Par conn_not = 3;
+  }
+}
+
+message ConnectiveBody {
+    repeated Par ps = 1;
 }
 
 // These should only occur as the program is being evaluated. There is no way in

@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.NormalizerExceptions._
 import coop.rchain.rholang.interpreter.implicits._
@@ -271,6 +272,50 @@ object ProcNormalizeMatcher {
     }
 
     p match {
+      case p: PNegation =>
+        val bodyResult = normalizeMatch(
+          p.proc_,
+          ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
+        ProcVisitOutputs(input.par.prepend(Connective(ConnNot(bodyResult.par))), input.knownFree)
+
+      case p: PConjunction =>
+        val leftResult: ProcVisitOutputs =
+          normalizeMatch(p.proc_1, ProcVisitInputs(VectorPar(), input.env, input.knownFree))
+        val rightResult: ProcVisitOutputs =
+          normalizeMatch(p.proc_2, ProcVisitInputs(VectorPar(), input.env, leftResult.knownFree))
+        val lp = leftResult.par
+        val resultConnective =
+          if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+            lp.connectives match {
+              case List(Connective(ConnAndBody(ConnectiveBody(ps)))) =>
+                Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
+              case _ => Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
+            }
+          } else {
+            Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
+          }
+        ProcVisitOutputs(input.par.prepend(resultConnective), rightResult.knownFree)
+
+      case p: PDisjunction =>
+        val leftResult: ProcVisitOutputs =
+          normalizeMatch(p.proc_1,
+                         ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
+        val rightResult: ProcVisitOutputs =
+          normalizeMatch(p.proc_2,
+                         ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
+        val lp = leftResult.par
+        val resultConnective =
+          if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+            lp.connectives match {
+              case List(Connective(ConnOrBody(ConnectiveBody(ps)))) =>
+                Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
+              case _ => Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
+            }
+          } else {
+            Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
+          }
+        ProcVisitOutputs(input.par.prepend(resultConnective), input.knownFree)
+
       case p: PGround =>
         ProcVisitOutputs(input.par.prepend(GroundNormalizeMatcher.normalizeMatch(p.ground_)),
                          input.knownFree)
