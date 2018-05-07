@@ -16,11 +16,11 @@ in pkgs.stdenv.mkDerivation {
     [ cmake
       doxygen
       pkgconfig
-      protobuf
     ];
 
   buildInputs = with pkgs;
     [ # deps go here
+      protobuf
     ];
 
   doCheck = true;
