@@ -11,10 +11,17 @@ import cats.data.Kleisli._
 import cats.implicits._
 
 trait Substitute[M[_], A] {
-  def substitute(term: A): ReaderT[M, Env[Par], A]
+  def substitute(term: A): Kleisli[M, Env[Par], A]
 }
 
 object Substitute {
+  def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(f: (A, B) => C)(
+      implicit evA: Substitute[M, A],
+      evB: Substitute[M, B]): Kleisli[M, Env[Par], C] =
+    for {
+      aSub <- evA.substitute(termA)
+      bSub <- evB.substitute(termB)
+    } yield f(aSub, bSub)
 
   def substitute[M[_], A](term: A)(implicit ev: Substitute[M, A]): Kleisli[M, Env[Par], A] =
     ev.substitute(term)
@@ -205,65 +212,29 @@ object Substitute {
         case ENotBody(ENot(par)) => substitutePar[M].substitute(par.get).map(ENot(_))
         case ENegBody(ENeg(par)) => substitutePar[M].substitute(par.get).map(ENeg(_))
         case EMultBody(EMult(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EMult(p1, p2)
+          substitute2(par1.get, par2.get)(EMult(_, _))
         case EDivBody(EDiv(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EDiv(p1, p2)
+          substitute2(par1.get, par2.get)(EDiv(_, _))
         case EPlusBody(EPlus(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EPlus(p1, p2)
+          substitute2(par1.get, par2.get)(EPlus(_, _))
         case EMinusBody(EMinus(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EMinus(p1, p2)
+          substitute2(par1.get, par2.get)(EMinus(_, _))
         case ELtBody(ELt(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield ELt(p1, p2)
+          substitute2(par1.get, par2.get)(ELt(_, _))
         case ELteBody(ELte(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield ELte(p1, p2)
+          substitute2(par1.get, par2.get)(ELte(_, _))
         case EGtBody(EGt(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EGt(p1, p2)
+          substitute2(par1.get, par2.get)(EGt(_, _))
         case EGteBody(EGte(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EGte(p1, p2)
+          substitute2(par1.get, par2.get)(EGte(_, _))
         case EEqBody(EEq(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EEq(p1, p2)
+          substitute2(par1.get, par2.get)(EEq(_, _))
         case ENeqBody(ENeq(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield ENeq(p1, p2)
+          substitute2(par1.get, par2.get)(ENeq(_, _))
         case EAndBody(EAnd(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EAnd(p1, p2)
+          substitute2(par1.get, par2.get)(EAnd(_, _))
         case EOrBody(EOr(par1, par2)) =>
-          for {
-            p1 <- substitutePar[M].substitute(par1.get)
-            p2 <- substitutePar[M].substitute(par2.get)
-          } yield EOr(p1, p2)
+          substitute2(par1.get, par2.get)(EOr(_, _))
         case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
           for {
             env <- Kleisli.ask[M, Env[Par]]
