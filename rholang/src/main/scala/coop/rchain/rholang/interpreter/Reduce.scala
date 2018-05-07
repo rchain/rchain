@@ -569,7 +569,7 @@ object Reduce {
       * @return
       */
     def eval(par: Par)(implicit env: Env[Par], me: MonadError[Task, Throwable]): Task[Unit] =
-      Task.wanderUnordered(
+      Task.gatherUnordered(
         Seq(
           Task.wanderUnordered(par.sends) { send =>
             eval(send)
@@ -611,9 +611,7 @@ object Reduce {
             }
           }
         )
-      ) { xs =>
-        xs
-      } map { xxs =>
+      ) map { xxs =>
         ()
       }
 
