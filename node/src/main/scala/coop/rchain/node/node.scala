@@ -53,6 +53,7 @@ class NodeRuntime(conf: Conf) {
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
+  implicit val cpuUtilizationEffect: CpuUtilization[Effect] = effects.cpuUtilization[Effect]
 
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
 //  TODO: figure out actual validator identities...
@@ -89,7 +90,8 @@ class NodeRuntime(conf: Conf) {
       import scala.concurrent.duration._
       val scheduler = monix.execution.Scheduler.global
       scheduler.scheduleAtFixedRate(3.seconds, 1.second) {
-        Await.ready(CpuUtilization.reportProcessCpuLoad[Task].runAsync(scheduler), Duration.Inf)
+        Await.ready(CpuUtilization.reportProcessCpuLoad[Effect].value.runAsync(scheduler),
+                    Duration.Inf)
       }
     }
 

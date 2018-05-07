@@ -247,4 +247,33 @@ object effects {
       }
     }
 
+  def cpuUtilization[F[_]: Applicative]: CpuUtilization[F] =
+    new CpuUtilization[F] {
+      import java.lang.management.ManagementFactory
+      import javax.management.{Attribute, ObjectName}
+
+      private val mbs  = ManagementFactory.getPlatformMBeanServer
+      private val name = ObjectName.getInstance("java.lang:type=OperatingSystem")
+
+      def currentCpuLoad: F[Double] = {
+
+        val list = mbs.getAttributes(name, Array[String]("ProcessCpuLoad"))
+
+        if (list.isEmpty) {
+          Applicative[F].pure(Double.NaN)
+        } else {
+          val att   = list.get(0).asInstanceOf[Attribute]
+          val value = att.getValue.asInstanceOf[Double]
+
+          // usually takes a couple of seconds before we get real values
+          if (value == -1.0) {
+            Applicative[F].pure(Double.NaN)
+          } else {
+            // returns a percentage value with 1 decimal point precision
+            Applicative[F].pure((value * 1000).toInt / 10.0)
+          }
+        }
+      }
+    }
+
 }
