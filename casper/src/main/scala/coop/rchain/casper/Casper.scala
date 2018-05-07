@@ -210,6 +210,14 @@ sealed abstract class MultiParentCasperInstances {
               true
             }
           })
+          .flatMap {
+            case true =>
+              //Add successful! Send block to peers
+              CommUtil.sendBlock[F](block) *> true.pure[F]
+
+            //TODO: Ask peers for missing parents/justifications of blocks
+            case false => false.pure[F]
+          }
 
       private def reAttemptBuffer: F[Unit] = {
         val attempts   = blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
