@@ -19,87 +19,94 @@ import scala.collection.mutable
 class InMemoryStoreInstance {
   import InMemoryStoreInstance._
 
-  implicit def storeInMemory[F[_]: Monad, C, P, A, K <: Serializable](
+  class InMemoryContext[C, P, A, K] {
+    private[rspace] val lock = new StampedLock()
+
+    private[rspace] val _keys = mutable.HashMap.empty[String, Seq[C]]
+    private[rspace] val _waitingContinuations =
+      mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]]
+    private[rspace] val _data = mutable.HashMap.empty[String, Seq[Datum[A]]]
+    private[rspace] val _joinMap = new mutable.HashMap[C, mutable.Set[String]]
+    with mutable.MultiMap[C, String]
+  }
+
+  def storeInMemory[F[_]: Monad, C, P, A, K <: Serializable](
       implicit
       serializeC: Serialize[C],
       captureF: Capture[F]
-  ): Store[ReaderT[F, LMDBContext, ?], C, P, A, K] =
-    new Store[ReaderT[F, LMDBContext, ?], C, P, A, K] {
+  ): Store[ReaderT[F, InMemoryContext[C, P, A, K], ?], C, P, A, K] = {
+    type InMemoryCtx = InMemoryContext[C, P, A, K]
+
+    new Store[ReaderT[F, InMemoryCtx, ?], C, P, A, K] {
       private[this] def capture[X](x: X): F[X] = captureF.capture(x)
-
-      private[this] val lock = new StampedLock()
-
-      private[this] val _keys = mutable.HashMap.empty[String, Seq[C]]
-      private[this] val _waitingContinuations =
-        mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]]
-      private[this] val _data = mutable.HashMap.empty[String, Seq[Datum[A]]]
-      private[this] val _joinMap = new mutable.HashMap[C, mutable.Set[String]]
-      with mutable.MultiMap[C, String]
 
       override type H = String
 
-      override type T = Long
+      override type T = (InMemoryCtx, Long)
 
-      override def createTxnRead(): ReaderT[F, LMDBContext, T] =
-        ReaderT(_ => capture(lock.readLock()))
+      override def createTxnRead(): ReaderT[F, InMemoryCtx, T] =
+        ReaderT(ctx => capture((ctx, ctx.lock.readLock())))
 
-      override def createTxnWrite(): ReaderT[F, LMDBContext, T] =
-        ReaderT(_ => capture(lock.writeLock()))
+      override def createTxnWrite(): ReaderT[F, InMemoryCtx, T] =
+        ReaderT(ctx => capture((ctx, ctx.lock.writeLock())))
 
       override def withTxn[R](txn: T)(f: T => R): R =
         try {
           f(txn)
         } finally {
-          lock.unlock(txn)
+          val (ctx, value) = txn
+          ctx.lock.unlock(value)
         }
 
       private[this] def hashChannelsInner(channels: Seq[C]): H =
         printHexBinary(hashBytes(channels.flatMap(serializeC.encode).toArray))
 
-      override def hashChannels(channels: Seq[C]): ReaderT[F, LMDBContext, H] =
+      override def hashChannels(channels: Seq[C]): ReaderT[F, InMemoryCtx, H] =
         ReaderT.pure(hashChannelsInner(channels))
 
-      override def getChannels(txn: T, channelsHash: H): ReaderT[F, LMDBContext, Seq[C]] =
-        ReaderT(_ => capture(_keys.getOrElse(channelsHash, Seq.empty[C])))
+      override def getChannels(txn: T, channelsHash: H): ReaderT[F, InMemoryCtx, Seq[C]] =
+        ReaderT(ctx => capture(ctx._keys.getOrElse(channelsHash, Seq.empty[C])))
 
-      private[rspace] def putChannels(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ => capture(_keys.update(hashChannelsInner(channels), channels)))
+      private[rspace] def putChannels(txn: T, channels: Seq[C]): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx => capture(ctx._keys.update(hashChannelsInner(channels), channels)))
 
-      override def getData(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Seq[Datum[A]]] =
-        ReaderT(_ => capture(_data.getOrElse(hashChannelsInner(channels), Seq.empty[Datum[A]])))
+      override def getData(txn: T, channels: Seq[C]): ReaderT[F, InMemoryCtx, Seq[Datum[A]]] =
+        ReaderT(
+          ctx => capture(ctx._data.getOrElse(hashChannelsInner(channels), Seq.empty[Datum[A]])))
 
       override def putDatum(txn: T,
                             channels: Seq[C],
-                            datum: Datum[A]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+                            datum: Datum[A]): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
             val channelsHash = hashChannelsInner(channels)
-            putChannels(txn, channels)
-            val datums = _data.getOrElseUpdate(channelsHash, Seq.empty[Datum[A]])
-            _data.update(channelsHash, datum +: datums)
+            putChannels(txn, channels).map(_ => {
+              val datums = ctx._data.getOrElseUpdate(channelsHash, Seq.empty[Datum[A]])
+              ctx._data.update(channelsHash, datum +: datums)
+            })
         })
 
-      override def removeDatum(txn: T, channel: C, index: Int): ReaderT[F, LMDBContext, Unit] =
+      override def removeDatum(txn: T, channel: C, index: Int): ReaderT[F, InMemoryCtx, Unit] =
         removeDatum(txn, Seq(channel), index)
 
       override def removeDatum(txn: T,
                                channels: Seq[C],
-                               index: Int): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+                               index: Int): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
             val channelsHash = hashChannelsInner(channels)
-            for (data <- _data.get(channelsHash)) {
-              _data.update(channelsHash, dropIndex(data, index))
+            for (data <- ctx._data.get(channelsHash)) {
+              ctx._data.update(channelsHash, dropIndex(data, index))
             }
-            collectGarbage(channelsHash)
+            collectGarbage(ctx, channelsHash)
         })
 
       override def getWaitingContinuation(
           txn: T,
-          channels: Seq[C]): ReaderT[F, LMDBContext, Seq[WaitingContinuation[P, K]]] =
-        ReaderT(_ =>
+          channels: Seq[C]): ReaderT[F, InMemoryCtx, Seq[WaitingContinuation[P, K]]] =
+        ReaderT(ctx =>
           capture {
-            _waitingContinuations
+            ctx._waitingContinuations
               .getOrElse(hashChannelsInner(channels), Seq.empty[WaitingContinuation[P, K]])
               .map { (wk: WaitingContinuation[P, K]) =>
                 wk.copy(continuation = InMemoryStoreInstance.roundTrip(wk.continuation))
@@ -108,118 +115,121 @@ class InMemoryStoreInstance {
 
       override def removeWaitingContinuation(txn: T,
                                              channels: Seq[C],
-                                             index: Int): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+                                             index: Int): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
             val channelsHash = hashChannelsInner(channels)
-            for (waitingContinuation <- _waitingContinuations.get(channelsHash)) {
-              _waitingContinuations.update(channelsHash, dropIndex(waitingContinuation, index))
+            for (waitingContinuation <- ctx._waitingContinuations.get(channelsHash)) {
+              ctx._waitingContinuations.update(channelsHash, dropIndex(waitingContinuation, index))
             }
-            collectGarbage(channelsHash)
+            collectGarbage(ctx, channelsHash)
         })
 
       override def putWaitingContinuation(
           txn: T,
           channels: Seq[C],
-          continuation: WaitingContinuation[P, K]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+          continuation: WaitingContinuation[P, K]): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
             val channelsHash = hashChannelsInner(channels)
-            putChannels(txn, channels)
-            val waitingContinuations =
-              _waitingContinuations.getOrElseUpdate(channelsHash,
-                                                    Seq.empty[WaitingContinuation[P, K]])
-            _waitingContinuations.update(channelsHash, waitingContinuations :+ continuation)
+            putChannels(txn, channels).map(_ => {
+              val waitingContinuations =
+                ctx._waitingContinuations.getOrElseUpdate(channelsHash,
+                                                          Seq.empty[WaitingContinuation[P, K]])
+              ctx._waitingContinuations.update(channelsHash, waitingContinuations :+ continuation)
+            })
         })
 
-      override def removeJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+      override def removeJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
             val joinKey      = hashChannelsInner(Seq(channel))
             val channelsHash = hashChannelsInner(channels)
-            if (_waitingContinuations.get(channelsHash).forall(_.isEmpty)) {
-              _joinMap.removeBinding(channel, channelsHash)
+            if (ctx._waitingContinuations.get(channelsHash).forall(_.isEmpty)) {
+              ctx._joinMap.removeBinding(channel, channelsHash)
             }
-            collectGarbage(joinKey)
+            collectGarbage(ctx, joinKey)
         })
 
-      override def removeAllJoins(txn: T, channel: C): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+      override def removeAllJoins(txn: T, channel: C): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
-            _joinMap.remove(channel)
-            collectGarbage(hashChannelsInner(Seq(channel)))
+            ctx._joinMap.remove(channel)
+            collectGarbage(ctx, hashChannelsInner(Seq(channel)))
         })
 
-      override def putJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ => capture(_joinMap.addBinding(channel, hashChannelsInner(channels))))
+      override def putJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx => capture(ctx._joinMap.addBinding(channel, hashChannelsInner(channels))))
 
-      override def getJoin(txn: T, channel: C): ReaderT[F, LMDBContext, Seq[Seq[C]]] =
+      override def getJoin(txn: T, channel: C): ReaderT[F, InMemoryCtx, Seq[Seq[C]]] =
         ReaderT(
-          _ =>
+          ctx =>
             capture(
-              _joinMap
+              ctx._joinMap
                 .getOrElse(channel, Set.empty[String])
                 .toList
-                .map(_keys.getOrElse(_, Seq.empty[C]))))
+                .map(ctx._keys.getOrElse(_, Seq.empty[C]))))
 
-      override def removeAll(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(_ =>
+      override def removeAll(txn: T, channels: Seq[C]): ReaderT[F, InMemoryCtx, Unit] =
+        ReaderT(ctx =>
           capture {
             val channelsHash = hashChannelsInner(channels)
-            _data.put(channelsHash, Seq.empty)
-            _waitingContinuations.put(channelsHash, Seq.empty)
-            for (c <- channels) removeJoin(txn, c, channels)
+            ctx._data.put(channelsHash, Seq.empty)
+            ctx._waitingContinuations.put(channelsHash, Seq.empty)
+            for (c <- channels)
+              removeJoin(txn, c, channels).run(ctx)
         })
 
-      override def toMap: ReaderT[F, LMDBContext, Map[Seq[C], Row[P, A, K]]] =
-        ReaderT(_ =>
+      override def toMap: ReaderT[F, InMemoryCtx, Map[Seq[C], Row[P, A, K]]] =
+        ReaderT(ctx =>
           capture {
-            _keys.map {
+            ctx._keys.map {
               case (channelsHash, channels) =>
-                val data = _data.getOrElse(channelsHash, Seq.empty[Datum[A]])
+                val data = ctx._data.getOrElse(channelsHash, Seq.empty[Datum[A]])
                 val waitingContinuations =
-                  _waitingContinuations.getOrElse(channelsHash,
-                                                  Seq.empty[WaitingContinuation[P, K]])
+                  ctx._waitingContinuations.getOrElse(channelsHash,
+                                                      Seq.empty[WaitingContinuation[P, K]])
                 (channels, Row(data, waitingContinuations))
             }.toMap
         })
 
-      override def close(): ReaderT[F, LMDBContext, Unit] = ReaderT.pure(())
+      override def close(): ReaderT[F, InMemoryCtx, Unit] = ReaderT.pure(())
 
-      private[rspace] def clear(): ReaderT[F, LMDBContext, Unit] =
+      private[rspace] def clear(): ReaderT[F, InMemoryCtx, Unit] =
         createTxnWrite().flatMap(txn =>
           withTxn(txn) { _ =>
-            ReaderT(_ =>
+            ReaderT(ctx =>
               capture {
-                _keys.clear()
-                _waitingContinuations.clear()
-                _data.clear()
-                _joinMap.clear()
+                ctx._keys.clear()
+                ctx._waitingContinuations.clear()
+                ctx._data.clear()
+                ctx._joinMap.clear()
                 ()
             })
         })
 
-      def collectGarbage(channelsHash: H): Unit = {
-        val data = _data.get(channelsHash).exists(_.nonEmpty)
+      def collectGarbage(ctx: InMemoryCtx, channelsHash: H): Unit = {
+        val data = ctx._data.get(channelsHash).exists(_.nonEmpty)
         if (!data) {
           //we still may have empty list, remove it as well
-          _data.remove(channelsHash)
+          ctx._data.remove(channelsHash)
         }
 
-        val waitingContinuation = _waitingContinuations.get(channelsHash).exists(_.nonEmpty)
+        val waitingContinuation = ctx._waitingContinuations.get(channelsHash).exists(_.nonEmpty)
         if (!waitingContinuation) {
           //we still may have empty list, remove it as well
-          _waitingContinuations.remove(channelsHash)
+          ctx._waitingContinuations.remove(channelsHash)
         }
 
-        val channels = _keys.getOrElse(channelsHash, Seq.empty[C])
-        val joins    = channels.size == 1 && _joinMap.contains(channels.head)
+        val channels = ctx._keys.getOrElse(channelsHash, Seq.empty[C])
+        val joins    = channels.size == 1 && ctx._joinMap.contains(channels.head)
 
         if (!data && !waitingContinuation && !joins) {
-          _keys.remove(channelsHash)
+          ctx._keys.remove(channelsHash)
         }
       }
     }
+  }
 }
 
 object InMemoryStoreInstance {
