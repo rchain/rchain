@@ -154,7 +154,6 @@ sealed abstract class MultiParentCasperInstances {
           case mb @ Some(block) =>
             Log[F].info(s"CASPER: Proposed ${PrettyPrinter.buildString(block)}") *>
               addBlock(block) *>
-              CommUtil.sendBlock[F](block) *>
               estimator
                 .map(_.head)
                 .flatMap(forkchoice =>
