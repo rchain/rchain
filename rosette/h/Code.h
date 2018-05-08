@@ -99,6 +99,7 @@ class Code : public Ob {
 
     Instr* dumpInstr(Instr*, char*);
     void dumpOn(FILE*);
+    void ExportCode();
 
     int relativize(Instr* pc) { return codevec->relativize(pc); }
     Instr* absolutize(int pc) { return codevec->absolutize(pc); }
