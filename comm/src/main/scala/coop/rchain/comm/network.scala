@@ -11,6 +11,7 @@ import scala.collection.mutable
 import scala.util.{Failure, Success}
 import CommError._
 import cats._, cats.data._, cats.implicits._
+import coop.rchain.p2p.effects._
 import coop.rchain.catscontrib._, Catscontrib._
 import cats._, cats.data._, cats.implicits._
 import scala.util.Try
@@ -18,8 +19,7 @@ import scala.util.Try
 /**
   * Implements the lower levels of the network protocol.
   */
-final case class UnicastNetwork(peer: PeerNode,
-                                next: Option[ProtocolDispatcher[SocketAddress]] = None)
+class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]] = None)
     extends ProtocolHandler
     with ProtocolDispatcher[SocketAddress] {
 
@@ -42,10 +42,10 @@ final case class UnicastNetwork(peer: PeerNode,
   val table = PeerTable(local)
 
   def receiver[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]]
-    : F[Unit] =
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler]: F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
       _ <- result match {
@@ -56,7 +56,7 @@ final case class UnicastNetwork(peer: PeerNode,
             // TODO flatten that pattern match
             case Left(err: CommError) =>
               err match {
-                case DatagramException(ex: SocketTimeoutException) => ().pure[F]
+                case DatagramException(_: SocketTimeoutException) => ().pure[F]
                 // TODO These next ones may ding a node's reputation; just
                 // printing for now.
                 case DatagramSizeError(sz) => Log[F].warn(s"bad datagram size $sz")
@@ -83,10 +83,10 @@ final case class UnicastNetwork(peer: PeerNode,
   def findMorePeers(limit: Int): Seq[PeerNode] = {
     var currentSet = table.peers.toSet
     val potentials = mutable.Set[PeerNode]()
-    if (currentSet.size > 0) {
+    if (currentSet.nonEmpty) {
       val dists = table.sparseness()
       var i     = 0
-      while (currentSet.size > 0 && potentials.size < limit && i < dists.size) {
+      while (currentSet.nonEmpty && potentials.size < limit && i < dists.size) {
         val dist = dists(i)
         /*
          * The general idea is to ask a peer for its peers around a certain
@@ -100,7 +100,7 @@ final case class UnicastNetwork(peer: PeerNode,
         currentSet.head.lookup(target) match {
           case Success(results) =>
             potentials ++= results.filter(r =>
-              !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key) == None)
+              !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key).isEmpty)
           case _ => ()
         }
         currentSet -= currentSet.head
@@ -111,9 +111,10 @@ final case class UnicastNetwork(peer: PeerNode,
   }
 
   def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
       sock: SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
@@ -129,7 +130,7 @@ final case class UnicastNetwork(peer: PeerNode,
       for {
         ti <- Time[F].nanoTime
         _ <- Capture[F].capture(
-              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next == None))
+              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next.isEmpty))
         tf <- Time[F].nanoTime
         // Capture µs timing for roundtrips
         _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
@@ -148,16 +149,17 @@ final case class UnicastNetwork(peer: PeerNode,
   }
 
   def add(peer: PeerNode): Unit =
-    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), true)
+    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), add = true)
 
   /*
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
   private def handleResponse[
-      F[_]: Monad: Capture: Log: Time: Metrics: Communication: Encryption: Kvs[?[_],
-                                                                               PeerNode,
-                                                                               Array[Byte]]](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
+        ?[_],
+        PeerNode,
+        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
       sock: SocketAddress,
       sender: PeerNode,
       msg: ProtocolResponse): F[Unit] = {
@@ -209,7 +211,7 @@ final case class UnicastNetwork(peer: PeerNode,
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].incrementCounter("peers", -1L)
+      _ <- Metrics[F].decrementGauge("peers")
     } yield ()
 
   /**

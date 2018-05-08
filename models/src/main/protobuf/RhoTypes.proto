@@ -15,9 +15,17 @@ message Par {
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
+    repeated Bundle bundles = 11;
     repeated GPrivate ids = 7;
-    int32 freeCount = 8;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 10;
+}
+
+message TaggedContinuation {
+    oneof tagged_cont {
+        Par par_body = 1;
+        int64 scala_body_ref = 2;
+    }
 }
 
 message Channel {
@@ -25,6 +33,10 @@ message Channel {
         Par quote = 1;
         Var chanVar = 2;
     }
+}
+
+message ListChannel {
+    repeated Channel channels = 1;
 }
 
 // While we use vars in both positions, when producing the normalized
@@ -40,19 +52,38 @@ message Var {
     }
 }
 
+message Bundle {
+    Par body = 1;
+    bool writeFlag = 2; // flag indicating whether bundle is writeable
+    bool readFlag = 3; // flag indicating whether bundle is readable
+//     if both flags are set to false bundle allows only for equivalance check
+}
+
 // Upon send, all free variables in data are substituted with their values.
 // also if a process is sent, it is auto-quoted.
 message Send {
     Channel chan = 1;
     repeated Par data = 2;
     bool persistent = 3;
-    int32 freeCount = 4;
     bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 6;
 }
 
 message ReceiveBind {
     repeated Channel patterns = 1;
     Channel source = 2;
+    Var remainder = 3;
+    int32 freeCount = 4;
+}
+
+message BindPattern {
+    repeated Channel patterns = 1;
+    Var remainder = 2;
+    int32 freeCount = 3;
+}
+
+message ListBindPatterns {
+    repeated BindPattern patterns = 1;
 }
 
 // [Par] is an n-arity Pattern.
@@ -63,8 +94,8 @@ message Receive {
     Par body = 2;
     bool persistent = 3;
     int32 bindCount = 4;
-    int32 freeCount = 5;
     bytes locallyFree = 6 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 7;
 }
 
 message Eval {
@@ -84,13 +115,14 @@ message New {
 message MatchCase {
     Par pattern = 1;
     Par source = 2;
+    int32 freeCount = 3;
 }
 
 message Match {
     Par target = 1;
     repeated MatchCase cases = 2;
-    int32 freeCount = 3;
     bytes locallyFree = 4 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 5;
 }
 
 // Any process may be an operand to an expression.
@@ -122,31 +154,41 @@ message Expr {
         ETuple e_tuple_body = 21;
         ESet e_set_body = 22;
         EMap e_map_body = 23;
+        EMethod e_method_body = 24;
     }
 }
 
 message EList {
     repeated Par ps = 1;
-    int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 4;
+    Var remainder = 5;
 }
 
 message ETuple {
     repeated Par ps = 1;
-    int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 4;
 }
 
 message ESet {
     repeated Par ps = 1;
-    int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 4;
 }
 
 message EMap {
     repeated KeyValuePair kvs = 1;
-    int32 freeCount = 2;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 4;
+}
+
+message EMethod {
+    string methodName = 1;
+    Par target = 2;
+    repeated Par arguments = 3;
+    bytes locallyFree = 5 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
+    bool connective_used = 6;
 }
 
 message KeyValuePair {

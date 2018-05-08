@@ -306,7 +306,7 @@ object Parser {
 
               Right(OpImmediateLitToReg(v, r))
 
-            case byte => Right(OpUnknown())
+            case _ => Right(OpUnknown())
         })
 
         ops.sequence[Either[ParseError, ?], Op]

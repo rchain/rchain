@@ -17,11 +17,12 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(RblFloat(0.0)) {
-        case (accum, float: RblFloat) => accum + float
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[RblFloat]].foldLeft(RblFloat(0.0)) {
+        (accum, float: RblFloat) =>
+          accum + float
       })
     }
   }
@@ -33,7 +34,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] =
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] =
       ctxt.nargs match {
         case 1 =>
           val n = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
@@ -53,11 +54,12 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(RblFloat(1)) {
-        case (accum, float: RblFloat) => accum * float
+      Right(ctxt.argvec.elem.take(n).asInstanceOf[Seq[RblFloat]].foldLeft(RblFloat(1)) {
+        (accum, float: RblFloat) =>
+          accum * float
       })
     }
   }
@@ -69,7 +71,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -89,7 +91,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -104,7 +106,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -119,7 +121,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -134,7 +136,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -149,7 +151,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -164,7 +166,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -179,13 +181,14 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(RblFloat(Double.MaxValue)) {
-        case (minVal, float: RblFloat) =>
-          if (minVal.value < float.value) minVal else float
-      })
+      Right(
+        ctxt.argvec.elem.take(n).asInstanceOf[Seq[RblFloat]].foldLeft(RblFloat(Double.MaxValue)) {
+          (minVal, float: RblFloat) =>
+            if (minVal.value < float.value) minVal else float
+        })
     }
   }
 
@@ -196,13 +199,14 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val n = ctxt.nargs
 
-      Right(ctxt.argvec.elem.take(n).foldLeft(RblFloat(Double.MinValue)) {
-        case (maxVal, float: RblFloat) =>
-          if (maxVal.value > float.value) maxVal else float
-      })
+      Right(
+        ctxt.argvec.elem.take(n).asInstanceOf[Seq[RblFloat]].foldLeft(RblFloat(Double.MinValue)) {
+          (maxVal, float: RblFloat) =>
+            if (maxVal.value > float.value) maxVal else float
+        })
     }
   }
 
@@ -213,7 +217,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.abs(m.value)))
@@ -227,7 +231,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.exp(m.value)))
@@ -241,7 +245,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
       val n = ctxt.argvec.elem(1).asInstanceOf[RblFloat]
 
@@ -256,7 +260,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.log(m.value)))
@@ -270,7 +274,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.log10(m.value)))
@@ -284,7 +288,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.floor(m.value)))
@@ -298,7 +302,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.ceil(m.value)))
@@ -312,7 +316,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.atan(m.value)))
@@ -326,7 +330,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.cos(m.value)))
@@ -340,7 +344,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblFloat] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblFloat] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(RblFloat(Math.sin(m.value)))
@@ -354,7 +358,7 @@ object rblfloat {
 
     @checkTypeMismatch[RblFloat]
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val m = ctxt.argvec.elem.head.asInstanceOf[RblFloat]
 
       Right(Fixnum(math.floor(m.value).toInt))

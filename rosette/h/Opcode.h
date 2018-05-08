@@ -78,10 +78,10 @@ jump/cut		     10nn nnnn nnnn m:8 x:8	pc <- n; cut m levels
 off env
 
 
-lookup to arg		0111 aaaa vvvv vvvv		arg[a] <-
-lookup(litvec[v])
-lookup to reg		1000 rrrr vvvv vvvv		reg[r] <-
-lookup(litvec[v])
+lookup to arg		0111 aaaa dvvv vvvv		arg[a] <-
+lookup(litvec[v]) with optional (d)efer
+lookup to reg		1000 rrrr dvvv vvvv		reg[r] <-
+lookup(litvec[v]) with optional (d)efer
 
 
 xfer lex to arg		1001 illl oooo aaaa		arg[a] <- lex[i,l,o]
@@ -192,6 +192,7 @@ enum Opcode {
     opImmediateLitToArg = 0xc0,
 
     opImmediateLitToReg = 0xd0,
+
 
     MaxOpcodes = 256
 };

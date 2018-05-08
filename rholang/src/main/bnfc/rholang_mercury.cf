@@ -13,15 +13,21 @@ _. Proc9 ::= Proc10 ;
 _. Proc10 ::= Proc11 ;
 _. Proc11 ::= Proc12 ;
 _. Proc12 ::= Proc13 ;
-_. Proc13 ::= "{" Proc "}" ;
+_. Proc13 ::= Proc14 ;
+_. Proc14 ::= Proc15 ;
+_. Proc15 ::= Proc16 ;
+_. Proc16 ::= "{" Proc "}" ;
 
 -- Processes
 -- In general the expression style processes are higher precedence.
 -- Expression style is anything that necessary resolves to a single ground value
 -- or a collection.
+PNegation.    Proc16 ::= "~" Proc16 ;
+PConjunction. Proc15 ::= Proc15 "/\\" Proc16 ;
+PDisjunction. Proc14 ::= Proc14 "\\/" Proc15 ;
 PGround.      Proc13 ::= Ground ;
 PCollect.     Proc13 ::= Collection ;
-PVar.         Proc13 ::= Var ;
+PVar.         Proc13 ::= ProcVar ;
 PNil.         Proc13 ::= "Nil" ;
 PEval.        Proc12 ::= "*" Name ;
 PMethod.      Proc11 ::= Proc11 "." Var "(" [Proc] ")" ;
@@ -41,10 +47,11 @@ PNeq.         Proc6  ::= Proc6 "!=" Proc7 ;
 PAnd.         Proc5  ::= Proc5 "and" Proc6 ;
 POr.          Proc4  ::= Proc4 "or" Proc5 ;
 PSend.        Proc3  ::= Name Send "(" [Proc] ")" ;
-PContr.       Proc2 ::= "contract" Name "(" [Name] ")" "=" "{" Proc "}" ;
+PContr.       Proc2 ::= "contract" Name "(" [Name] NameRemainder")" "=" "{" Proc "}" ;
 PInput.       Proc2 ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.      Proc2 ::= "select" "{" [Branch] "}" ;
 PMatch.       Proc2 ::= "match" Proc4 "{" [Case] "}" ;
+PBundle.      Proc2 ::= Bundle "{" Proc "}" ;
 PIf.          Proc1 ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
@@ -53,11 +60,21 @@ PPar.         Proc  ::= Proc "|" Proc1 ;
 
 separator Proc "," ;
 
+-- Process variables
+ProcVarWildcard. ProcVar ::= "_" ;
+ProcVarVar.      ProcVar ::= Var ;
+
 -- Names
 NameWildcard. Name ::= "_" ;
 NameVar.      Name ::= Var ;
 NameQuote.    Name ::= "@" Proc12 ;
 separator Name "," ;
+
+-- Bundle
+BundleWrite.    Bundle ::= "bundle+" ;
+BundleRead.     Bundle ::= "bundle-" ;
+BundleEquiv.    Bundle ::= "bundle0" ;
+BundleReadWrite. Bundle ::= "bundle"  ;
 
 -- Receipt
 ReceiptLinear.    Receipt ::= ReceiptLinearImpl ;
@@ -70,13 +87,13 @@ LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
 -- LinearCond.   Linear ::= [LinearBind] "if" Proc ;
 
 -- Single Linear Bind
-LinearBindImpl. LinearBind ::= [Name] "<-" Name ;
+LinearBindImpl. LinearBind ::= [Name] NameRemainder "<-" Name ;
 separator nonempty LinearBind ";" ;
 
 -- Repeated Receipts
 RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
 -- Single Repeated Bind
-RepeatedBindImpl. RepeatedBind ::= [Name] "<=" Name ;
+RepeatedBindImpl. RepeatedBind ::= [Name] NameRemainder "<=" Name ;
 separator nonempty RepeatedBind ";" ;
 
 -- Types of Send:
@@ -106,14 +123,21 @@ GroundString.  Ground ::= String ;
 GroundUri.     Ground ::= Uri ;
 token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 -- Collections:
-CollectList.   Collection ::= "[" [Proc] "]" ;
+CollectList.   Collection ::= "[" [Proc] Remainder "]" ;
 CollectTuple.  Collection ::= "(" [Proc] ")" ;
 CollectSet.    Collection ::= "Set" "(" [Proc] ")" ;
 CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
 
-token Var ((letter | '_' | '\'') (letter | digit | '_' | '\'')*) ;
+-- Remainders:
+RemainderVar.   Remainder ::= "..." ProcVar ;
+RemainderEmpty. Remainder ::= "" ;
+NameRemainderVar.   NameRemainder ::= "..." "@" ProcVar ;
+NameRemainderEmpty. NameRemainder ::= "" ;
+
+
+token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 
 -- Comments:
 comment "//" ;

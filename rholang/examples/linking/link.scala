@@ -33,8 +33,8 @@ import scala.util.Try
  *      new Y in { contract Y(return) = { X(5, return) } }
  *    }
  *
- * USAGE: scala link.scala <rholangSource> <libraryDirectory>
- * Where <rholangSource> is the file to be linked with packages (i.e. imports resolved)
+ * USAGE: scala link.scala <libraryDirectory> <rholangSource> [<rholangSource> ...]
+ * Where <rholangSource> is a file to be linked with packages (i.e. imports resolved)
  * and <libraryDirectory> is a directory with all the Rholang sources with
  * `export` declarations.
  */
@@ -230,7 +230,7 @@ object RholangLinker {
   }
  
   def printUsage(): Unit = {
-    val usage = "USAGE: scala link.scala <libraryDirectory> <rholangSource> [<rholangSource>, ...]"
+    val usage = "USAGE: scala link.scala <libraryDirectory> <rholangSource> [<rholangSource> ...]"
     println(usage)
   }
  

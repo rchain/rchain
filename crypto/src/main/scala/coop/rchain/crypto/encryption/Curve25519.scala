@@ -3,6 +3,7 @@ package coop.rchain.crypto.encryption
 import org.abstractj.kalium.crypto._
 import org.abstractj.kalium.keys._
 import org.abstractj.kalium.NaCl.Sodium.{CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES}
+
 /**
 Curve25519 elliptic curve cryptography
   * {{{
@@ -23,22 +24,22 @@ Curve25519 elliptic curve cryptography
   *
   * >>> Curve25519.toPublic(aliceSec).deep == alicePub.deep
   * true
-  * 
+  *
   * }}}
-  * 
+  *
 **/
 object Curve25519 {
 
   def newKeyPair: (Array[Byte], Array[Byte]) = {
     val keyPair = new KeyPair()
-    val pub = keyPair.getPublicKey().toBytes()
-    val sec = keyPair.getPrivateKey().toBytes()
-    (pub,sec)
+    val pub     = keyPair.getPublicKey().toBytes()
+    val sec     = keyPair.getPrivateKey().toBytes()
+    (pub, sec)
   }
 
   def newNonce: Array[Byte] = {
     import org.abstractj.kalium.NaCl.Sodium._
-    var nonce = new Array[Byte](CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES)
+    val nonce = new Array[Byte](CRYPTO_BOX_CURVE25519XSALSA20POLY1305_NONCEBYTES)
     scala.util.Random.nextBytes(nonce)
     nonce
   }
@@ -49,15 +50,19 @@ object Curve25519 {
   }
 
   def encrypt(
-    pub: Array[Byte], sec: Array[Byte],
-    nonce: Array[Byte], message: Array[Byte]
-    ): Array[Byte] =
-    new Box(pub,sec).encrypt(nonce, message)
+      pub: Array[Byte],
+      sec: Array[Byte],
+      nonce: Array[Byte],
+      message: Array[Byte]
+  ): Array[Byte] =
+    new Box(pub, sec).encrypt(nonce, message)
 
   def decrypt(
-    pub: Array[Byte], sec: Array[Byte],
-    nonce: Array[Byte], cipher: Array[Byte]
-    ): Array[Byte] =
-    new Box(pub,sec).decrypt(nonce, cipher)
+      pub: Array[Byte],
+      sec: Array[Byte],
+      nonce: Array[Byte],
+      cipher: Array[Byte]
+  ): Array[Byte] =
+    new Box(pub, sec).decrypt(nonce, cipher)
 
 }

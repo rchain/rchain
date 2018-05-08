@@ -18,7 +18,7 @@ object rblstring {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem = ctxt.argvec.elem
 
       checkType[RblString](0, elem).flatMap { s1 =>
@@ -59,9 +59,8 @@ object rblstring {
 
     @checkTypeMismatch[RblString] // All args must be strings
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
       val elem = ctxt.argvec.elem
-      val n    = ctxt.nargs
       val init = ""
 
       Right(
@@ -89,7 +88,7 @@ object rblstring {
     override val maxArgs: Int = 3
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
       val elem = ctxt.argvec.elem
 
       for {
@@ -122,7 +121,7 @@ object rblstring {
     override val maxArgs: Int = 3
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
       val elem = ctxt.argvec.elem
 
       for {
@@ -147,7 +146,7 @@ object rblstring {
 
     @checkTypeMismatch[RblString] // All args must be strings
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Fixnum] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Fixnum] = {
       val elem = ctxt.argvec.elem
 
       Right(Fixnum(elem(0).asInstanceOf[RblString].value.length))
@@ -169,9 +168,8 @@ object rblstring {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
-      val elem  = ctxt.argvec.elem
-      val nargs = ctxt.nargs
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
+      val elem = ctxt.argvec.elem
 
       for {
         n <- checkType[Fixnum](0, elem)
@@ -197,7 +195,7 @@ object rblstring {
     override val maxArgs: Int = 2
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblBool] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem = ctxt.argvec.elem
 
       for {
@@ -227,7 +225,7 @@ object rblstring {
     override val maxArgs: Int = 3
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, RblString] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblString] = {
       val elem = ctxt.argvec.elem
 
       for {
@@ -272,7 +270,7 @@ object rblstring {
     override val maxArgs: Int = 3
 
     @checkArgumentMismatch
-    override def fn(ctxt: Ctxt): Either[PrimError, Tuple] = {
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, Tuple] = {
       val elem = ctxt.argvec.elem
 
       for {
@@ -330,7 +328,7 @@ object rblstring {
       Left(IndexOutOfBounds(n, elem.size))
     } else {
       elem(n) match {
-        case e: T => Right(elem(n).asInstanceOf[T])
+        case _: T => Right(elem(n).asInstanceOf[T])
         case _    => Left(TypeMismatch(n, ct.runtimeClass.getName))
       }
     }

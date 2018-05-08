@@ -5,6 +5,14 @@ import org.scalatest._
 import org.scalatest.prop.PropertyChecks
 
 class LocationSpec extends WordSpec with PropertyChecks with Matchers {
+  val fixnum8 = new Fixnum(value = 8, parent = Fixnum(0)) {
+    override val slot = Seq.fill(2)(null)
+  }
+
+  val fixnum7 = new Fixnum(7, meta = StdMeta(), parent = fixnum8) {
+    override val slot = Seq.fill(2)(null)
+  }
+
   val testCtxt = Ctxt(
     tag = CtxtRegister(0),
     nargs = 1,
@@ -13,7 +21,7 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
     rslt = Fixnum(1),
     trgt = Fixnum(2),
     argvec = Tuple(Seq(Fixnum(3), Fixnum(4), Fixnum(5), Fixnum(6))),
-    env = Fixnum(7, slot = Seq(StdMeta(), Fixnum(8))),
+    env = fixnum7,
     code = null,
     ctxt = null,
     self2 = null,
@@ -21,6 +29,10 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
     rcvr = null,
     monitor = null
   )
+
+  val globalEnv = TblObject(Seq())
+
+  val initial = (globalEnv, testCtxt)
 
   "Location.store" should {
 
@@ -140,15 +152,15 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
       regs.map(
         reg =>
           Location
-            .fetch(CtxtRegister(reg), null)
-            .runA(testCtxt)
+            .fetch(CtxtRegister(reg))
+            .runA((), initial)
             .value shouldBe testCtxt.getReg(reg))
     }
 
     "return None for invalid register" in {
       Location
-        .fetch(CtxtRegister(100), null)
-        .runA(testCtxt)
+        .fetch(CtxtRegister(100))
+        .runA((), initial)
         .value shouldBe None
     }
 
@@ -158,16 +170,16 @@ class LocationSpec extends WordSpec with PropertyChecks with Matchers {
       argRegs.map(
         argReg =>
           Location
-            .fetch(ArgRegister(argReg), null)
-            .runA(testCtxt)
+            .fetch(ArgRegister(argReg))
+            .runA((), initial)
             .value shouldBe testCtxt.argvec.elem.lift(argReg)
       )
     }
 
     "return None for invalid argvec position" in {
       Location
-        .fetch(ArgRegister(100), null)
-        .runA(testCtxt)
+        .fetch(ArgRegister(100))
+        .runA((), initial)
         .value shouldBe None
     }
 

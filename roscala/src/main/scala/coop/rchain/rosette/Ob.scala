@@ -2,18 +2,18 @@ package coop.rchain.rosette
 
 import java.io.File
 
-import cats.data.State
-import cats.data.State._
-import coop.rchain.rosette
-import coop.rchain.rosette.utils.{lensTrans, printToFile, unsafeCastLens}
+import cats.data.{State, _}
+import cats.implicits._
+import cats.{Applicative, MonadError}
 import coop.rchain.rosette.Meta.StdMeta
 import coop.rchain.rosette.Ob.{ObTag, SysCode}
 import coop.rchain.rosette.prim.Prim
 import coop.rchain.rosette.utils.Instances._
+import coop.rchain.rosette.utils.{printToFile, unsafeCastLens}
 import shapeless.OpticDefns.RootLens
 import shapeless._
-import cats.implicits._
-import coop.rchain.rosette.Ctxt.{Continuation, CtxtTransition}
+
+import scala.language.higherKinds
 
 trait Base
 
@@ -24,11 +24,13 @@ trait Ob extends Base with Cloneable {
   val sysval: SysCode = null
   val constantP       = true
 
-  def meta: Ob   = slot.head
-  def parent: Ob = slot(1)
+  val meta: Ob
+  val parent: Ob
 
-  def dispatch: CtxtTransition[(Result, Option[Continuation])] = pure((Right(Ob.NIV), None))
-  def extendWith(keyMeta: Ob): Ob                              = null
+  def dispatch: CtxtTransition[Result[Ob]] =
+    pureCtxt[Result[Ob]](Right(Ob.NIV))
+
+  def extendWith(keyMeta: Ob): Ob = null
 
   def getAddr(indirect: Boolean, level: Int, offset: Int): Ob =
     getLex(indirect, level, offset)
@@ -46,28 +48,43 @@ trait Ob extends Base with Cloneable {
 
   def is(value: Ob.ObTag): Boolean = false
 
-  def lookup(key: Ob, ctxt: Ctxt): Result =
+  def lookup[F[_]: Applicative](key: Ob)(implicit
+                                         E: MonadError[F, RblError]): ReaderT[F, GlobalEnv, Ob] = {
+    val result = meta
+      .asInstanceOf[StdMeta]
+      .get[F](self, key)
+
+    result recoverWith {
+      case Absent => parent.lookup[F](key)
+    }
+  }
+
+  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result[Ob] =
     Right(null)
 
-  def lookupOBO(meta: Ob, ob: Ob, key: Ob): Result =
-    Right(null)
-
-  def lookupAndInvoke: CtxtTransition[(Result, Option[Continuation])] =
+  def lookupAndInvoke: CtxtTransition[Result[Ob]] =
     for {
-      target <- State.inspect[Ctxt, Ob](_.trgt)
-      fn     <- meta.asInstanceOf[StdMeta].lookupOBOStdMeta(self, target)
-      result <- fn match {
-                 case Right(prim: Prim) => prim.invoke
-                 case _                 => pure[Ctxt, (Result, Option[Continuation])]((Left(Absent), None))
+      ctxt      <- getCtxt
+      globalEnv <- getGlobalEnv
+      target    = ctxt.trgt
+
+      fn = meta.asInstanceOf[StdMeta].lookupOBOStdMeta[Result](self, target)
+
+      result <- fn.run(globalEnv) match {
+                 case Right(prim: Prim) =>
+                   prim.invoke //(globalEnv)
+                 case _ =>
+                   pureCtxt[Result[Ob]](Left(Absent))
                }
     } yield result
 
   def matches(ctxt: Ctxt): Boolean = false
-  def numberOfSlots(): Int         = slot.size
+  def numberOfSlots: Int           = slot.size
   def runtimeError(msg: String, state: VMState): (RblError, VMState) =
     (DeadThread, state)
 
-  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] = ???
+  def setAddr(indirect: Boolean, level: Int, offset: Int, value: Ob): State[Ob, StoreResult] =
+    ???
 
   def setField(indirect: Boolean, level: Int, offset: Int, spanSize: Int, value: Int): Ob =
     ??? //TODO
@@ -160,12 +177,16 @@ object Ob {
   case object SyscodeSleep      extends SysCode
   case object SyscodeDeadThread extends SysCode
 
-  object ABSENT   extends Ob
-  object INVALID  extends Ob
-  object NIV      extends Ob
-  object RBLTRUE  extends Ob
-  object RBLFALSE extends Ob
-  object NilMeta  extends Ob
+  trait SingletonOb extends Ob {
+    override val meta: Ob   = null
+    override val parent: Ob = null
+  }
+  object ABSENT   extends SingletonOb
+  object INVALID  extends SingletonOb
+  object NIV      extends SingletonOb
+  object RBLTRUE  extends SingletonOb
+  object RBLFALSE extends SingletonOb
+  object NilMeta  extends SingletonOb
 
   object Lenses {
     def setA[T, A](a: A)(f: RootLens[A] ⇒ Lens[A, T])(value: T): A =
@@ -197,7 +218,7 @@ object Ob {
       def inSlotNum(lens: Lens[Ob, Ob]): Option[Lens[Ob, Ob]] =
         if (!indirect) Some(lens)
         else {
-          val numberOfSlots = lens.get(ob).numberOfSlots()
+          val numberOfSlots = lens.get(ob).numberOfSlots
           if (ob.slotNum() >= numberOfSlots) None
           else {
             val resLens = unsafeCastLens[Actor](lens) >> 'extension
@@ -206,10 +227,10 @@ object Ob {
         }
 
       def updateSlot(lens: Lens[Ob, Ob]): Option[Ob] =
-        if (offset >= ob.numberOfSlots) None
+        if (offset >= lens.get(ob).numberOfSlots) None
         else {
           val slotLens = lens >> 'slot
-          val res      = lensTrans(slotLens, ob)(_.updated(offset, value))
+          val res      = slotLens.modify(ob)(_.updated(offset, value))
           Some(res)
         }
 
@@ -220,7 +241,10 @@ object Ob {
         }
       } catch {
         // TODO: Add logging
-        case _: IndexOutOfBoundsException => (ob, Failure)
+        /** When parameter of an lens is null
+          * @see [[coop.rchain.rosette.utils.Instances.mkParentFieldLens]]
+          */
+        case InvalidLensParam => (ob, Failure)
       }
     }
 

@@ -1,186 +1,187 @@
 import Dependencies._
 import BNFC._
+import NativePackagerHelper._
 
-def commonSettings: Seq[Setting[_]] =
-  Seq[SettingsDefinition](
+lazy val projectSettings = Seq(
+  organization := "coop.rchain",
+  scalaVersion := "2.12.4",
+  version := "0.1.0-SNAPSHOT",
+  resolvers += Resolver.sonatypeRepo("releases"),
+  scalafmtOnCompile := true
+)
 
-    organization := "coop.rchain",
-    scalaVersion := "2.12.4",
+lazy val coverageSettings = Seq(
+  coverageMinimum := 90,
+  coverageFailOnMinimum := false,
+  coverageExcludedFiles := Seq(
+    (javaSource in Compile).value,
+    (sourceManaged in Compile).value.getPath ++ "/.*"
+  ).mkString(";")
+)
 
-    version := "0.1.0-SNAPSHOT",
+lazy val compilerSettings = CompilerSettings.options ++ Seq(
+  crossScalaVersions := Seq("2.11.12", scalaVersion.value)
+)
 
-    resolvers += Resolver.sonatypeRepo("releases"),
+lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings
 
-    CompilerSettings.options,
-    logBuffered in Test := false,
-    crossScalaVersions := Seq("2.10.6", scalaVersion.value),
-
-    coverageMinimum := 90,
-    coverageFailOnMinimum := false,
-    coverageExcludedFiles := Seq(
-      (sourceManaged in Compile).value.getPath ++ "/.*"
-    ).mkString(";"),
-
-    scalafmtOnCompile := true,
-
-    /*
-     * By default, tag docker images with organization and the
-     * version.
-     */
-    imageNames in docker := Seq(
-      ImageName(s"${organization.value}/${organization.value}-${name.value}:latest"),
-      ImageName(s"${organization.value}/${organization.value}-${name.value}:v${version.value}")
-    ),
-
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
-
-  ).flatMap(_.settings)
-
-lazy val crypto = project
+lazy val shared = (project in file("shared"))
+  .settings(commonSettings: _*)
   .settings(
-    name := "Crypto",
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      monix
+    )
+  )
+
+lazy val casper = (project in file("casper"))
+  .settings(commonSettings: _*)
+  .settings(
+    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
+      catsCore,
+      catsMtl,
+      monix,
+      scalapbRuntimegGrpc
+    ),
+    PB.targets in Compile := Seq(
+      scalapb.gen() -> (sourceManaged in Compile).value
+    )
+  )
+  .dependsOn(comm % "compile->compile;test->test", shared, crypto) // TODO: Add models, rspace
+
+lazy val comm = (project in file("comm"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      scalaUri,
+      weupnp,
+      hasher,
+      catsCore,
+      monix,
+      guava
+    ),
+    PB.targets in Compile := Seq(
+      PB.gens.java                        -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
+    )
+  ).dependsOn(shared)
+
+lazy val crypto = (project in file("crypto"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "crypto",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       guava,
       bouncyCastle,
       kalium,
-      jaxb),
+      jaxb
+    ),
     fork := true,
     unmanagedSourceDirectories in Compile += baseDirectory.value / "secp256k1/src/java",
     javaOptions += "-Djava.library.path=secp256k1/.libs",
     doctestTestFramework := DoctestTestFramework.ScalaTest
   )
 
-lazy val comm = project
+lazy val models = (project in file("models"))
+  .settings(commonSettings: _*)
   .settings(
-    commonSettings,
-    version := "0.1",
-    libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
-      uriParsing,
-      uPnP,
-      hasher,
-      cats,
-      monix,
-      guava
-    ),
-    PB.targets in Compile := Seq(
-      PB.gens.java -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
-    ),
-    coverageExcludedFiles := Seq(
-      (javaSource in Compile).value,
-      (sourceManaged in Compile).value
-    ).map(_.getPath ++ "/.*").mkString(";")
-  )
-
-lazy val models = project
-  .settings(
-    commonSettings,
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      cats,
-      scalaCheck,
-      scalaCheckShapeless
+      catsCore,
+      scalacheck,
+      scalacheckShapeless
     ),
-    connectInput in run := true,
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
-    ),
-    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
-    exportJars := true
+    )
   )
+  .dependsOn(rspace)
 
-lazy val regex = project
-  .settings(
-    commonSettings,
-    libraryDependencies ++= commonDependencies ++ Seq(
-      scalaCheck
-    ),
-    connectInput in run := true,
-    PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
-    ),
-    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
-    exportJars := true
-  )
-
-lazy val storage = project
-  .settings(
-    commonSettings,
-    libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
-      lmdb,
-      cats
-    ),
-    connectInput in run := true,
-    PB.targets in Compile := Seq(
-      scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
-    ),
-    crossScalaVersions := Seq("2.11.12", scalaVersion.value),
-    exportJars := true
-  ).dependsOn(models)
-
-lazy val node = project
+lazy val node = (project in file("node"))
+  .settings(commonSettings: _*)
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    commonSettings,
-    version := "0.1.3",
+    version := "0.3.1",
     name := "rnode",
-    libraryDependencies ++= commonDependencies ++ protobufDependencies,
-    libraryDependencies ++= Seq(
-      argParsing,
-      uriParsing
+    libraryDependencies ++=
+      apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+        catsCore,
+        grpcNetty,
+        jline, 
+        scallop,
+        scalaUri,
+        scalapbRuntimegGrpc
+      ),
+    PB.targets in Compile := Seq(
+      PB.gens.java                        -> (sourceManaged in Compile).value / "protobuf",
+      scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value / "protobuf"
     ),
-    libraryDependencies ++= apiServerDependencies ++ kamonDependencies ++ Seq(cats),
-
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "coop.rchain.node",
-
     mainClass in assembly := Some("coop.rchain.node.Main"),
-
-    /*
-     * Dockerization via sbt-docker
-     */
-
+    assemblyMergeStrategy in assembly := {
+      case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+    /* Dockerization */
     dockerfile in docker := {
-      val artifact: File = assembly.value
+      val artifact: File     = assembly.value
       val artifactTargetPath = s"/${artifact.name}"
-      val entry: File = baseDirectory(_ / "main.sh").value
-      val entryTargetPath = "/bin"
+      val entry: File        = baseDirectory(_ / "main.sh").value
+      val entryTargetPath    = "/bin"
+      val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
         from("openjdk:8u151-jre-alpine")
         add(artifact, artifactTargetPath)
+        copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
+        run("apk", "update")
+        run("apk", "add", "libsodium")
         entryPoint("/bin/main.sh")
       }
     },
-
+    /* Packaging */
     maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
     packageSummary in Linux := "RChain Node",
     packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
-
-    /*
-     * Debian.
-     */
-    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)"),
-
-    /*
-     * Redhat
-     */
+    linuxPackageMappings ++= {
+      val file = baseDirectory.value / "rnode.service"
+      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
+        .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
+      Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
+    },
+    /* Debian */
+    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5)"),
+    /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
-    rpmLicense := Some("Apache 2.0")
+    rpmLicense := Some("Apache 2.0"),
+    packageArchitecture in Rpm := "noarch",
+    maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
+      RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
+    ),    
+    rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
   )
-  .dependsOn(comm, crypto)
+  .dependsOn(casper, comm, crypto, rholang)
 
-lazy val rholang = project
+lazy val regex = (project in file("regex"))
+  .settings(commonSettings: _*)
+  .settings(libraryDependencies ++= commonDependencies)
+
+lazy val rholang = (project in file("rholang"))
+  .settings(commonSettings: _*)
+  .settings(bnfcSettings: _*)
   .settings(
-    commonSettings,
     scalacOptions ++= Seq(
       "-language:existentials",
       "-language:higherKinds",
-      "-Yno-adapted-args",
+      "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(monix, argParsing),
-    bnfcSettings,
+    libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
@@ -189,28 +190,101 @@ lazy val rholang = project
       baseDirectory.value / "src" / "main" / "k",
       baseDirectory.value / "src" / "main" / "rbl"
     ).map(_.getPath ++ "/.*").mkString(";"),
-
-    // Fix up root directory so tests find relative files they need
     fork in Test := true
-  ).dependsOn(models)
+  )
+  .dependsOn(models, rspace)
+
+lazy val rholangCLI = (project in file("rholang-cli"))
+  .settings(commonSettings: _*)
+  .settings(
+    mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
+  )
+  .dependsOn(rholang)
 
 lazy val roscala_macros = (project in file("roscala/macros"))
+  .settings(commonSettings: _*)
   .settings(
-    commonSettings,
     libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value)
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+    )
   )
 
-lazy val roscala = project
+lazy val roscala = (project in file("roscala"))
+  .settings(commonSettings: _*)
   .settings(
-    commonSettings,
     name := "Rosette",
     mainClass in assembly := Some("coop.rchain.rosette.Main"),
     assemblyJarName in assembly := "rosette.jar",
-    inThisBuild(List(
-      addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
+    inThisBuild(
+      List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
+    libraryDependencies ++= commonDependencies ++ Seq(catsCore, shapeless, scalacheck)
+  )
+  .dependsOn(roscala_macros)
+
+lazy val rspace = (project in file("rspace"))
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
+  .settings(commonSettings: _*)
+  .settings(
+    name := "rspace",
+    version := "0.1.1",
     libraryDependencies ++= commonDependencies ++ Seq(
-      cats,
-      shapeless,
-      scalaCheck)
-  ).dependsOn(roscala_macros)
+      lmdbjava,
+      catsCore,
+      scodecCore,
+      scodecBits
+    ),
+    /* Tutorial */
+    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
+    /* Publishing Settings */
+    scmInfo := Some(ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")),
+    git.remoteRepo := scmInfo.value.get.connection,
+    useGpg := true,
+    pomIncludeRepository := { _ => false },
+    publishMavenStyle := true,
+    publishTo := {
+      val nexus = "https://oss.sonatype.org/"
+      if (isSnapshot.value)
+        Some("snapshots" at nexus + "content/repositories/snapshots")
+      else
+        Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+    },
+    publishArtifact in Test := false,
+    licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
+    homepage := Some(url("https://www.rchain.coop")),
+    developers := List(
+      Developer(
+        id    = "guardbotmk3",
+        name  = "Kyle Butt",
+        email = "kyle@pyrofex.net",
+        url   = url("https://www.pyrofex.net")
+      ),
+      Developer(
+        id    = "ys-pyrofex",
+        name  = "Yaraslau Levashkevich",
+        email = "yaraslau@pyrofex.net",
+        url   = url("https://www.pyrofex.net")
+      ),
+      Developer(
+        id    = "KentShikama",
+        name  = "Kent Shikama",
+        email = "kent@kentshikama.com",
+        url   = url("https://www.rchain.coop")
+      ),
+      Developer(
+        id    = "henrytill",
+        name  = "Henry Till",
+        email = "henrytill@gmail.com",
+        url   = url("https://www.pyrofex.net")
+      )
+    )
+  )
+  .dependsOn(shared)
+
+lazy val rspaceBench = (project in file("rspace-bench"))
+  .settings(commonSettings, libraryDependencies ++= commonDependencies)
+  .enablePlugins(JmhPlugin)
+  .dependsOn(rspace)
+
+lazy val rchain = (project in file("."))
+  .settings(commonSettings: _*)
+  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)

@@ -5,6 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import implicits._
 import testImplicits._
 import BitSetBytesMapper._
+import coop.rchain.rspace.Serialize
 
 import scala.collection.immutable.BitSet
 

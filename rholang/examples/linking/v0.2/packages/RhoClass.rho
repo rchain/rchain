@@ -1,0 +1,27 @@
+export RhoClass in {
+  contract @[*RhoClass, "apply"](name, @args) = {
+    match args {
+      [a]                => { name!(a) }
+      [a, b]             => { name!(a, b) }
+      [a, b, c]          => { name!(a, b, c) }
+      [a, b, c, d]       => { name!(a, b, c, d) }
+      [a, b, c, d, e]    => { name!(a, b, c, d, e) }
+      [a, b, c, d, e, f] => { name!(a, b, c, d, e, f) }
+      _                  => { name!(args) }
+    }
+  } |
+  //Allow a function to be called with input arguments given as a list 
+  //and return channel given explicitly.
+  contract @[*RhoClass, "functionApply"](name, @input, return) = {
+    match input {
+      []                 => { name!(*return) }
+      [a]                => { name!(a, *return) }
+      [a, b]             => { name!(a, b, *return) }
+      [a, b, c]          => { name!(a, b, c, *return) }
+      [a, b, c, d]       => { name!(a, b, c, d, *return) }
+      [a, b, c, d, e]    => { name!(a, b, c, d, e, *return) }
+      [a, b, c, d, e, f] => { name!(a, b, c, d, e, f, *return) }
+      _                  => { name!(input, *return) }
+    }
+  }
+}

@@ -4,6 +4,8 @@ Rholang is a concurrent programming language, with a focus on message-passing an
 
 The language is still in the early stages of development, but for those who are interested, more information can be found in the [RChain Platform Architecture](http://rchain-architecture.readthedocs.io/en/latest/).
 
+Currently we have a working interpreter for the language. It should be considered an early preview of the language.
+
 ## Building and Running
 ### Building from source
 
@@ -23,59 +25,29 @@ The language is still in the early stages of development, but for those who are 
 			exec /usr/bin/java java_cup.Main "$@"
 			```
     * JFlex - install using apt 
-    * BNFC - must be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later
+    * BNFC - MUST be built from [git](https://github.com/BNFC/bnfc) b0252e5f666ed67a65b6e986748eccbfe802bc17 or later. If you use `cabal install` you will need to add your BNFC binary to the PATH.
     * Scala
-4. Run `sbt bnfc:generate` to generate the lexer/parser. Re-run whenever you modify the grammar
-5. Run `sbt compile` to compile classes
-6. Run `sbt assembly` to build a stand-alone `.jar` file
+4. Run `sbt rholang/bnfc:generate` to generate the lexer/parser. Re-run whenever you modify the grammar
+5. Run `sbt rholang/compile` to compile classes
+6. Run `sbt rholangCLI/assembly` to build a stand-alone `.jar` file
 
 ### Command-line usage
 
 ```
-$ ./rho2rbl examples/token.rho
-compiled examples/token.rho to examples/token.rbl
-```
-which is short for:
-```
-$ java -jar target/scala-2.11/rholang-assembly-0.1-SNAPSHOT.jar examples/token.rho 
-compiled examples/token.rho to examples/token.rbl
+$ java -jar rholang-cli/target/scala-2.12/rholangCLI-assembly-0.1.0-SNAPSHOT.jar rholang/tests/mercury-tut/coat_check_test.rho
+<interpreter output follows.>
 ```
 
-### Running rbl with Rosette
-After generating the rbl:
-1. in ../rosette, run build.sh
-2.  (cd ../rosette && ./build.out/src/rosette --boot-dir=rbl/rosette --boot=boot.rbl ../rholang/token.rbl)
+The interpereter can also be run as a REPL. Currently it won't accept multiline input, so each line must be a fully formed term.
 
 ## What's working, what's broken:
 See [the bugtracker](https://rchain.atlassian.net/projects/RHOL/issues/RHOL-95?filter=allopenissues) for an up-to-date list of known issues.
 ### The bad
 In general:
-  * Quoting doesn't work when sending processes.
-  * Similarly running a received process doesn't work.
-  * Listening on channels not created by new doesn't work in general, with a few exceptions
-  * Destructuring as a part of a pattern in a for or a contract doesn't work.
   * Conditional input doesn't work.
-  * We currently don't support multiple-arity receives. We support multi-arity sends, and we will shortly support arity-matching. When that lands, the mismatch will cause no forward progress. Right now it causes a crash in rosette.
   * 0-arity send and receive is currently broken.
-  * Whether a variable holds a name or a value is muddled. In order to do arithmetic, you must use the name directly, not `*name`. See the examples. As we implement destructuring in inputs, this will be straightened out.
+  * Matching is incomplete. We won't currently destructure receives or matches. We will match expressions.
+  * We don't pre-evaluate match cases. So matching 7 + 8 as a pattern currently doesn't work. Instead, you must match against 15.
+  * There is also work to support native functions. It hasn't landed yet.
 ### The good
-Several working examples have been included in the examples/ directory, and the tests in tests/ also work. If you run into something that doesn't work, check the bugtracker to see if it's a known issue, and if not, feel free to file a bug. We want rholang to be a useful programming environment.
-
-## Compiler Internals
-
-### Adding a new construct to Rholang
-1. Add the syntax of the new construct in `rholang/src/main/bnfc/rholang.cf`
-2. Run `sbt bnfc:generate` to get the new construct into the parser
-3. Add a new visit method in `src/main/scala/rholang/rosette/Roselang.scala` and specify what the new construct should translate to in RBL. For example, if we are adding the Map type to the compiler and it has type QMap in the AST and we want it to translate to a RblTable in Rosette, we would write as follows:
-```
-  override def visit( p : QMap, arg : A) : R = {
-    Tag( s"""(new RblTable)""")
-  }
-```
-4. Run `sbt compile` and `sbt assembly` to have that translation included into the compiler
-
-### Details of the Compiler Source
-The file `src/main/scala/rholang/rosette/Roselang.scala` is responsible for the meat of the compiler: essentially it translates the parsed Rholang AST into RBL source. The translation follows a Visitor pattern that comes with the default BNFC generator. There are a few useful implicits defined to reduce noise:
-  * Productions which do not bind new variables will be implicitly paired with the empty binding environment on return.
-  * A single RBL-token is either a `Tag` or a `Var`. This is implicitly converted to a `StrTermCtxt`.
-	  * If the `Tag` or `Var` needs to go into a list, it must be wrapped in an explicit call to `Leaf()`. This is because scala will not apply the implicit to infer a useful type for the list, instead it will infer a useless type for the list and fail to compile.
+Several working examples have been included in the examples directory, and the examples in the [Rholang tutorial](https://github.com/rchain/rchain/blob/master/docs/rholang/rholangtut-0.2.md) also work. If you run into something that doesn't work, check the bugtracker to see if it's a known issue, and if not, feel free to [file a bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link). We want Rholang to be a useful programming environment.

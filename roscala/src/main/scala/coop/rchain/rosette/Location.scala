@@ -1,11 +1,16 @@
 package coop.rchain.rosette
 
-import cats.data.State
+import cats.MonadError
+import cats.data.{ReaderT, State}
+import cats.implicits._
 import coop.rchain.rosette.Ob.Lenses._
 import coop.rchain.rosette.Ob.{getAddr, getLex, setLex}
-import coop.rchain.rosette.Ctxt.setReg
+import coop.rchain.rosette.Ctxt._
 
-sealed trait Location                                               extends Ob
+sealed trait Location extends Ob {
+  override val meta   = null
+  override val parent = null
+}
 case class ArgRegister(argReg: Int)                                 extends Location
 case class CtxtRegister(reg: Int)                                   extends Location
 case class AddrVariable(indirect: Boolean, level: Int, offset: Int) extends Location
@@ -24,33 +29,37 @@ object Location {
   val LocRslt = CtxtRegister(0)
   val LocTrgt = CtxtRegister(1)
 
-  def fetch(loc: Location, globalEnv: TblObject): State[Ctxt, Option[Ob]] = {
-    val pure = State.pure[Ctxt, Option[Ob]] _
-
+  /** Try to fetch an `Ob` which is stored at a position described by `loc`
+    *
+    * TODO: Type signature should be changed to `Reader[GlobalEnv, Option[Ob]]`
+    * since fetching a location can't schedule a continuation.
+    */
+  def fetch(loc: Location): CtxtTransition[Option[Ob]] =
     for {
-      ctxt <- State.get[Ctxt]
-      res <- loc match {
-              case CtxtRegister(reg) => pure(ctxt.getReg(reg))
+      ctxt      <- getCtxt
+      globalEnv <- getGlobalEnv
 
-              case ArgRegister(argReg) => pure(ctxt.argvec.elem.lift(argReg))
+      res <- loc match {
+              case CtxtRegister(reg) => pureCtxt(ctxt.getReg(reg))
+
+              case ArgRegister(argReg) => pureCtxt(ctxt.argvec.elem.lift(argReg))
 
               case LexVariable(indirect, level, offset) =>
-                pure(getLex(indirect, level, offset).runA(ctxt.env).value)
+                pureCtxt(getLex(indirect, level, offset).runA(ctxt.env).value)
 
               case AddrVariable(indirect, level, offset) =>
-                pure(getAddr(indirect, level, offset).runA(ctxt.env).value)
+                pureCtxt(getAddr(indirect, level, offset).runA(ctxt.env).value)
 
-              case GlobalVariable(offset) => pure(globalEnv.slot.lift(offset))
+              case GlobalVariable(offset) => pureCtxt(globalEnv.slot.lift(offset))
 
-              case BitField(indirect, level, offset, spanSize, sign) => pure(None)
+              case _: BitField => pureCtxt(None)
 
-              case BitField00(offset, spanSize, sign) => pure(None)
+              case _: BitField00 => pureCtxt(None)
 
               // TODO:
-              case _ => pure(None)
+              case _ => pureCtxt(None)
             }
     } yield res
-  }
 
   def store(loc: Location, value: Ob): State[Ctxt, StoreResult] = {
     val pure = State.pure[Ctxt, StoreResult] _
@@ -68,10 +77,33 @@ object Location {
 
       case LexVariable(indirect, level, offset) =>
         setLex(indirect, level, offset, value)
-          .transformS(_.env, (ctxt, env) => ctxt.copy(env = env))
+          .transformS[Ctxt](_.env, (ctxt, env) => ctxt.copy(env = env))
 
       // TODO:
       case _ => pure(Failure)
     }
   }
+
+  def valWrt[E[_]](loc: Location, v: Ob)(implicit E: MonadError[E, RblError]) =
+    ReaderT[E, GlobalEnv, Ob] { globalEnv =>
+      val value: PartialFunction[Location, Ob] = {
+        case LexVariable(indirect, level, offset) =>
+          v.getLex(indirect, level, offset)
+        case AddrVariable(indirect, level, offset) =>
+          v.getAddr(indirect, level, offset)
+        case BitField(indirect, level, offset, spanSize, sign) =>
+          v.getField(indirect, level, offset, spanSize, sign)
+        case BitField00(offset, spanSize, sign) =>
+          v.getField(indirect = false, level = 0, offset, spanSize, sign)
+        case GlobalVariable(offset) =>
+          globalEnv.getLex(indirect = true, level = 0, offset)
+      }
+
+      val err: Location => RblError = {
+        case Limbo => Absent
+        case _     => Suicide("valWrt(Location, Ob*)")
+      }
+
+      (value andThen E.pure) applyOrElse (loc, err andThen E.raiseError[Ob])
+    }
 }

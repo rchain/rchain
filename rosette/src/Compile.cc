@@ -72,6 +72,8 @@ extern "C" {
 
 #endif
 
+extern int DeferLookupFlag;
+
 extern Prim* tplNew;
 extern Prim* tplConsStar;
 extern Prim* tplConcat;
@@ -108,6 +110,7 @@ AttrNode::AttrNode(int sz, bool valueContext)
       word(0),
       dest(LocRslt),
       resume(NoParticularLabel),
+      deferredLookup(false),
       cu((CompilationUnit*)INVALID) {
     SET_ATTR(*this, f_valueContext, valueContext);
     SET_FLAG(word, f_producesValue);
@@ -412,6 +415,12 @@ void AttrNode::emitLookup(pOb symbol) {
     PROTECT_THIS(AttrNode);
 
     unsigned litOffset = SELF->cu->extendLitvec(symbol);
+    assert(litOffset <= CompilationUnit::MaximumLitVecSize);
+
+    // If doing deferred symbol lookup add the defer bit.
+    if (deferredLookup) {
+        litOffset |= CompilationUnit::LookupDeferMask;
+    }
 
     switch (locType) {
     case LT_CtxtRegister:
@@ -716,6 +725,15 @@ void SymbolNode::initialize(pOb ctEnv, pOb freeEnv, Location dest,
          */
         if (GET_LEXVAR_LEVEL(loc) == 0) {
             loc = GlobalVar(GET_LEXVAR_OFFSET(loc));
+
+            // If this symbol is not a primitive, defer the lookup until runtime.
+            // This is part of the effort to separate the compile and execute
+            // phases. The ultimate goal being to validate the Roscala VM by cross
+            // utilizing the compilers and VMs.
+            if (DeferLookupFlag && primNumber() < 0) {
+                loc = LocLimbo;
+                deferredLookup = true;
+            }
             return;
         }
     }
@@ -2382,8 +2400,7 @@ unsigned CompilationUnit::extendLitvec(pOb val) {
     for (int i = litOffset; i--;)
         if (val == litvec->elem(i))
             return i;
-
-    if (litOffset > 255)
+    if (litOffset > MaximumLitVecSize)
         abort("too many literals for one code object");
 
     PROTECT_THIS(CompilationUnit);

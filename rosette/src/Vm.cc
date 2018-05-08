@@ -19,6 +19,7 @@
 
 #include "Vm.h"
 #include "Code.h"
+#include "Compile.h"
 #include "CommandLine.h"
 #include "Ctxt.h"
 #include "Expr.h"
@@ -693,6 +694,24 @@ void VirtualMachine::evaluate(pOb expr) {
 }
 
 
+// This routine is a quick and dirty global environment lookup.  I think there
+// may be a more efficient way to do this, but I haven't researched it yet.
+int idxGlobalEnv(pOb key) {
+    int size=TAGVAL(GlobalEnv->keyVec->indexedSize());
+    const char *keyStr = BASE(key)->asCstring();
+
+    for(int i = 0; i < size; i++) {
+        const char * val = BASE(GlobalEnv->keyVec->nth(i))->asCstring();
+
+        if (strcmp(keyStr, val) == 0) {
+            return i;
+        }
+    }
+//    if (VerboseFlag)
+        warning("  %s NOT found in GlobalEnv!\n", keyStr);
+    return -1;
+}
+
 #define FETCH (*pc.absolute++)
 #define ARG_LIMIT (ctxt->argvec->numberOfElements())
 
@@ -703,6 +722,8 @@ void VirtualMachine::execute() {
     Location loc;
     pOb result = INVALID;
 
+    if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
+
 nextop:
 
     if (sigvec != 0)
@@ -712,6 +733,13 @@ nextop:
 
     instr = FETCH;
     bytecodes[OP_f0_opcode(instr)]++;
+
+    if (VerboseFlag) {
+        int opcode = OP_f0_opcode(instr);
+        if (0 <= opcode && opcode < MaxOpcodes) {
+            fprintf(stderr, "  %s:\n", opcodeStrings[opcode]);
+        }
+    }
 
     switch (OP_f0_opcode(instr)) {
     case opHalt:
@@ -1098,15 +1126,36 @@ nextop:
     case opLookupToArg | 0xe:
     case opLookupToArg | 0xf: {
         const int argno = OP_f2_op0(instr);
-        pOb key = code->lit(OP_f2_op1(instr));
-        pOb const val = BASE(BASE(ctxt->selfEnv)->meta())
+        int index = OP_f2_op1(instr);
+
+        // Extract the deferred lookup bit from the offset index
+        bool deferredLookup = ((index & CompilationUnit::LookupDeferMask) != 0);
+        index &= ~CompilationUnit::LookupDeferMask;
+
+        pOb key = code->lit(index);
+        pOb val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
         } else if (val == ABSENT) {
-            handleMissingBinding(key, ArgReg(argno));
-            goto doNextThread;
+            // If the deferred lookup bit was set, this is a deferred
+            // lookup that was emitted on purpose by the compiler. In this
+            // case we need to also check the global environment for the symbol.
+            if (deferredLookup) {
+                if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
+                int idx = idxGlobalEnv(key);
+                if (idx >= 0) {
+                    val = GlobalEnv->entry(idx);
+                }
+            } else {
+                warning("Absent but not deferred symbol lookup '%s'", BASE(key)->asCstring());
+            }
+
+            if (val == ABSENT) {
+                handleMissingBinding(key, ArgReg(argno));
+                goto doNextThread;
+            }
         }
 
         ASSIGN(ctxt->argvec, elem(argno), val);
@@ -1131,15 +1180,36 @@ nextop:
     case opLookupToReg | 0xe:
     case opLookupToReg | 0xf: {
         const int regno = OP_f2_op0(instr);
-        pOb key = code->lit(OP_f2_op1(instr));
-        pOb const val = BASE(BASE(ctxt->selfEnv)->meta())
+        int index = OP_f2_op1(instr);
+
+        // Extract the deferred lookup bit from the offset index
+        bool deferredLookup = ((index & CompilationUnit::LookupDeferMask) != 0);
+        index &= ~CompilationUnit::LookupDeferMask;
+
+        pOb key = code->lit(index);
+        pOb val = BASE(BASE(ctxt->selfEnv)->meta())
                             ->lookupOBO(ctxt->selfEnv, key, ctxt);
         if (val == UPCALL) {
             ctxt->pc = code->relativize(pc.absolute);
             goto doNextThread;
         } else if (val == ABSENT) {
-            handleMissingBinding(key, CtxtReg((CtxtRegName)regno));
-            goto doNextThread;
+            // If the deferred lookup bit was set, this is a deferred
+            // lookup that was emitted on purpose by the compiler. In this
+            // case we need to also check the global environment for the symbol.
+            if (deferredLookup) {
+                if (VerboseFlag) fprintf(stderr, "  Deferred symbol lookup '%s'\n", BASE(key)->asCstring());
+                int idx = idxGlobalEnv(key);
+                if (idx >= 0) {
+                    val = GlobalEnv->entry(idx);
+                }
+            } else {
+                warning("Absent but not deferred symbol lookup '%s'", BASE(key)->asCstring());
+            }
+
+            if (val == ABSENT) {
+                handleMissingBinding(key, ArgReg(regno));
+                goto doNextThread;
+            }
         }
 
         ASSIGN(ctxt, reg(regno), val);
@@ -1318,7 +1388,6 @@ nextop:
     case opImmediateLitToReg | 0xb:
         ctxt->reg(OP_f2_op1(instr)) = vmLiterals[OP_f2_op0(instr)];
         goto nextop;
-
 
     default:
         warning("illegal instruction (0x%.4x)", (int)instr.word);

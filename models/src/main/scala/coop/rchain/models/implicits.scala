@@ -1,25 +1,28 @@
 package coop.rchain.models
 
-import cats.syntax.either._
-import com.trueaccord.scalapb.{GeneratedMessage, GeneratedMessageCompanion}
+import cats.implicits._
+import com.trueaccord.scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
+import coop.rchain.models.Channel.ChannelInstance.Quote
+import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 object implicits {
-  case class rhoInstanceWrapper[T <: GeneratedMessage with com.trueaccord.scalapb.Message[T]](
-      companion: GeneratedMessageCompanion[T])
-      extends Serialize[T] {
-    override def encode(a: T): Array[Byte] = companion.toByteArray(a)
+  def mkProtobufInstance[T <: GeneratedMessage with Message[T]](
+      comp: GeneratedMessageCompanion[T]) = new Serialize[T] {
+
+    override def encode(a: T): Array[Byte] =
+      comp.toByteArray(a)
 
     override def decode(bytes: Array[Byte]): Either[Throwable, T] =
-      Either.catchNonFatal(companion.parseFrom(bytes))
+      Either.catchNonFatal(comp.parseFrom(bytes))
   }
 
-  implicit object parInstance     extends rhoInstanceWrapper(Par)
-  implicit object channelInstance extends rhoInstanceWrapper(Channel)
-  implicit object varInstance     extends rhoInstanceWrapper(Var)
-  implicit object sendInstance    extends rhoInstanceWrapper(Send)
-  implicit object receiveInstance extends rhoInstanceWrapper(Receive)
-  implicit object evalInstance    extends rhoInstanceWrapper(Eval)
-  implicit object newInstance     extends rhoInstanceWrapper(New)
-  implicit object exprInstance    extends rhoInstanceWrapper(Expr)
-  implicit object matchInstance   extends rhoInstanceWrapper(Match)
+  implicit val serializePar: Serialize[Par]         = mkProtobufInstance(Par)
+  implicit val serializeChannel: Serialize[Channel] = mkProtobufInstance(Channel)
+  implicit val serializeVar: Serialize[Var]         = mkProtobufInstance(Var)
+  implicit val serializeSend: Serialize[Send]       = mkProtobufInstance(Send)
+  implicit val serializeReceive: Serialize[Receive] = mkProtobufInstance(Receive)
+  implicit val serializeEval: Serialize[Eval]       = mkProtobufInstance(Eval)
+  implicit val serializeNew: Serialize[New]         = mkProtobufInstance(New)
+  implicit val serializeExpr: Serialize[Expr]       = mkProtobufInstance(Expr)
+  implicit val serializeMatch: Serialize[Match]     = mkProtobufInstance(Match)
 }

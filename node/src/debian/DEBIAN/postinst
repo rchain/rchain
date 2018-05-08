@@ -1,0 +1,23 @@
+#! /usr/bin/env bash
+
+set -e
+
+USERNAME="rnode"
+DIRECTORY="/var/lib/${USERNAME}"
+SYSTEMD_SERVICE_FILE="/lib/systemd/system/${USERNAME}.service"
+
+if id -u ${USERNAME} >/dev/null 2>&1; then
+    echo "User ${USERNAME} already exists."
+else
+    adduser --no-create-home --home /nonexistent --group --system ${USERNAME}
+fi
+
+if [ -d ${DIRECTORY} ] ; then
+    echo "Directory ${DIRECTORY} already exists."
+else
+    mkdir -p ${DIRECTORY}
+    chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
+    chmod 0644 ${SYSTEMD_SERVICE_FILE}
+fi
+
+systemctl enable rnode.service
