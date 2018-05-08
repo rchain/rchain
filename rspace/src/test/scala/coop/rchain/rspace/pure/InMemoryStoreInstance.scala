@@ -5,6 +5,7 @@ import java.security.MessageDigest
 import java.util.concurrent.locks.StampedLock
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
+import cats.implicits._
 import cats.Monad
 import cats.data.ReaderT
 import coop.rchain.catscontrib.Capture
@@ -30,10 +31,11 @@ class InMemoryStoreInstance {
     with mutable.MultiMap[C, String]
   }
 
-  def storeInMemory[F[_]: Monad, C, P, A, K <: Serializable](
+  def storeInMemory[F[_], C, P, A, K <: Serializable](
       implicit
       serializeC: Serialize[C],
-      captureF: Capture[F]
+      captureF: Capture[F],
+      monadF: Monad[F]
   ): Store[ReaderT[F, InMemoryContext[C, P, A, K], ?], C, P, A, K] = {
     type InMemoryCtx = InMemoryContext[C, P, A, K]
 
