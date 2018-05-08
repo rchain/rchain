@@ -39,6 +39,8 @@
 #include "ModuleInit.h"
 #include "config.h"
 
+#include "Export.h"
+
 #include <cstdlib>
 #include <ctime>
 
@@ -877,7 +879,7 @@ Code* Ob::compileWrt(pOb env, pOb info) {
     if (VerboseFlag) cp->dumpOn(stderr);
 
     if ('\0' != *ExportFile) {
-        cp->ExportCode();
+        collectExportCode(cp);
     }
 
     return cp;

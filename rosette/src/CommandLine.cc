@@ -205,7 +205,6 @@ int ParseCommandLine(int argc, char** argv) {
         case 'x':
         {
             strncpy(ExportFile, optarg, MAXPATHLEN);    // Save the filename
-            std::fstream output(ExportFile, std::ios::out | std::ios::trunc | std::ios::binary);    // Truncate the file
             DeferLookupFlag = 1;    // Defer is required when exporting object code
             break;
         }

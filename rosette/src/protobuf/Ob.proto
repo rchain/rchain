@@ -6,6 +6,57 @@ syntax = "proto3";
 
 package ObjectCodePB;
 
+
+
+message ObjectCode {
+    // There are two parts to an object code file.
+    //
+    // Part one (CodeBlocks) is a repeated list of code export blocks.
+    // Part two (Objects) is a repeated list of Rosette objects referenced by the code blocks.
+
+    CodeBlocks codeblocks = 1;
+    Objects objects = 2;
+}
+
+message CodeBlocks {
+    repeated CodeBlock codeblock = 1;
+}
+
+// This central objects list is for objects that are immutable, and should be accessed by
+// reference.
+message Objects {
+    repeated Object object = 1;
+}
+
+// A single code block contains a litvec with objects on which the code operates,
+// and the codevec with the actual opCodes that are executed by the VM.
+message CodeBlock {
+    LitVec litvec = 1;
+    CodeVec codevec = 2;
+}
+
+// This message contains the actual executable opCodes
+message CodeVec {
+    // Opcodes are serialized in binary
+    bytes opcodes = 1;
+}
+
+message LitVec {
+    // Items within a Litvec are accessed by index and must be stored in the same order as
+    // they originally existed at compile time.
+
+    repeated LitVecItem item = 1; // This ties to object id's within objects in the ObjectVector
+}
+
+// A LitVecItem can either contain an instance of the object itself, or an id that ties it
+// to an object in the central objects list.
+message LitVecItem {
+    oneof item {
+        Object ob = 2;
+        uint64 id = 3;
+    }
+}
+
 // Rather than implement all 100+ object types existing in Rosette, We will only implement those
 // used in loading boot.rbl, plus any deemed necessary by the Roscala compiler guys.
 
@@ -14,8 +65,11 @@ package ObjectCodePB;
 
 message Actor {}
 message BlockExpr {}
-message Char {}
-message Code {}
+message Char {
+    uint32 value = 1;
+}
+message Code {
+}
 message ExpandedLocation {}
 message Fixnum {
     int32 value = 1;
@@ -33,7 +87,9 @@ message MethodExpr {}
 message Proc {}
 message ProcExpr {}
 message QuoteExpr {}
-message RBLstring {}
+message RBLstring {
+    string value = 1;
+}
 message ReflectiveMethodExpr {}
 message RequestExpr {}
 message SendExpr {}
@@ -82,54 +138,38 @@ enum ObType {
 
 message Object {
     ObType type = 1;
+    uint64 id = 2;
 
     // One and only one of these should be populated
     oneof object {
-        Actor actor = 2;
-        BlockExpr blockexpr = 3;
-        Char char = 4;
-        Code code = 5;
-        ExpandedLocation expandedlocation = 6;
-        Fixnum fixnum = 7;
-        Float float = 8;
-        FreeExpr freeexpr = 9;
-        GotoExpr gotoexpr = 10;
-        IfExpr ifexpr = 11;
-        LabelExpr labelexpr = 12;
-        LetExpr letexpr = 13;
-        LetrecExpr letrecexpr = 14;
-        MethodExpr methodexpr = 15;
-        Proc proc = 16;
-        ProcExpr procexpr = 17;
-        QuoteExpr quoteexpr = 18;
-        RBLstring rblstring = 19;
-        ReflectiveMethodExpr reflectivemethodexpr = 20;
-        RequestExpr requestexpr = 21;
-        SendExpr sendexpr = 22;
-        SeqExpr seqexpr = 23;
-        SetExpr setexpr = 24;
-        StdMthd stdmthd = 25;
-        Symbol symbol = 26;
-        TblObject tblobject = 27;
-        Template template = 28;
-        Tuple tuple = 29;
-        TupleExpr tupleexpr = 30;
+        Actor actor = 10;
+        BlockExpr blockexpr = 11;
+        Char char = 12;
+        Code code = 13;
+        ExpandedLocation expandedlocation = 14;
+        Fixnum fixnum = 15;
+        Float float = 16;
+        FreeExpr freeexpr = 17;
+        GotoExpr gotoexpr = 18;
+        IfExpr ifexpr = 19;
+        LabelExpr labelexpr = 20;
+        LetExpr letexpr = 21;
+        LetrecExpr letrecexpr = 22;
+        MethodExpr methodexpr = 23;
+        Proc proc = 24;
+        ProcExpr procexpr = 25;
+        QuoteExpr quoteexpr = 26;
+        RBLstring rblstring = 27;
+        ReflectiveMethodExpr reflectivemethodexpr = 28;
+        RequestExpr requestexpr = 29;
+        SendExpr sendexpr = 30;
+        SeqExpr seqexpr = 31;
+        SetExpr setexpr = 32;
+        StdMthd stdmthd = 33;
+        Symbol symbol = 34;
+        TblObject tblobject = 35;
+        Template template = 36;
+        Tuple tuple = 37;
+        TupleExpr tupleexpr = 38;
     }
-        
-}
-
-message CodeVec {
-    // Opcodes are serialized in binary
-    bytes opcodes = 1;
-}
-
-message LitVec {
-    // Items within a Litvec are accessed by index and must be stored in the same order as
-    // they originally existed at compile time.
-    repeated Object object = 1;
-}
-
-message CodeExport {
-    LitVec lit = 1;
-    CodeVec code = 2;
 }
