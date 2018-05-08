@@ -14,12 +14,7 @@ object ctxt {
     override def fn: CtxtTransition[PrimResult] =
       for {
         ctxt <- getCtxt
-        optArg0 = ctxt
-          .arg(0)
-          .flatMap(_ match {
-            case c: Ctxt => Some(c.asInstanceOf[Ctxt])
-            case _       => None
-          })
+        optArg0 = ctxt.arg(0).filter(_.isInstanceOf[Ctxt]).map(_.asInstanceOf[Ctxt])
         optArg1 = ctxt.arg(1)
 
         result <- (optArg0, optArg1)
