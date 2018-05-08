@@ -85,7 +85,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "peers_total",
+          "expr": "peers",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"

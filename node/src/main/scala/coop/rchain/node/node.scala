@@ -4,14 +4,11 @@ import java.io.File
 import java.util.UUID
 import io.grpc.{Server, ServerBuilder}
 
-import cats.data._
-import cats.implicits._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.ski._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.comm.CommUtil.{casperPacketHandler, deployService}
+import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
@@ -19,8 +16,6 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
-
-import scala.concurrent.ExecutionContext
 
 class NodeRuntime(conf: Conf) {
 
@@ -36,16 +31,7 @@ class NodeRuntime(conf: Conf) {
 
   /** Run services */
   /** TODO all services should be defined in terms of `nodeProgram` */
-  val metricsServer = MetricsServer()
-
-  val http = HttpServer(conf.httpPort())
-  http.start()
-
-  val runtime: Runtime = Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size())
-
   val net = new UnicastNetwork(src, Some(p2p.Network))
-
-  type Eff[A] = EitherT[Task, CommError, A]
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -58,25 +44,6 @@ class NodeRuntime(conf: Conf) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
 
-  case class CommException(error: CommError) extends Exception
-
-  implicit class UnattemptOps[A](t: Task[CommErr[A]]) {
-    def unattempt: Task[A] =
-      t.map(_ match {
-        case Right(a)    => a
-        case Left(error) => throw new CommException(error)
-      })
-  }
-
-  implicit class AttemptOps[A](t: Task[A]) {
-    def attemptCE: Task[CommErr[A]] =
-      t.attempt.map(_ match {
-        case Right(a)                   => Right(a)
-        case Left(CommException(error)) => Left(error)
-        case Left(exception)            => throw exception
-      })
-  }
-
   /** Capabilities for Effect */
   implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                         = effects.log
@@ -87,7 +54,7 @@ class NodeRuntime(conf: Conf) {
   implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
 
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-    //TODO: figure out actual validator identities...
+//  TODO: figure out actual validator identities...
     com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte))
   )
 
@@ -95,55 +62,61 @@ class NodeRuntime(conf: Conf) {
     casperPacketHandler[Effect]
   )
 
-  case class Resources(grpcServer: Server)
+  case class Resources(grpcServer: Server,
+                       metricsServer: MetricsServer,
+                       httpServer: HttpServer,
+                       runtime: Runtime)
 
   def aquireResources(implicit scheduler: Scheduler): Effect[Resources] =
-    GrpcServer
-      .acquireServer[Effect](ExecutionContext.global, conf.grpcPort(), runtime)
-      .map(Resources(_))
+    for {
+      runtime <- Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size()).pure[Effect]
+      grpcServer <- GrpcServer
+                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
+      httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
+    } yield Resources(grpcServer, metricsServer, httpServer, runtime)
+
+  def startResources(resources: Resources): Effect[Unit] =
+    for {
+      _ <- resources.httpServer.start.toEffect
+      _ <- resources.metricsServer.start.toEffect
+      _ <- GrpcServer.start[Effect](resources.grpcServer)
+    } yield ()
+
+  def clearResources(resources: Resources): Unit = {
+    println("Shutting down gRPC server...")
+    resources.grpcServer.shutdown()
+    println("Shutting down transport layer, broadcasting DISCONNECT")
+    net.broadcast(
+      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+    println("Shutting down metrics server...")
+    resources.metricsServer.stop()
+    println("Shutting down HTTP server....")
+    resources.httpServer.stop()
+    println("Shutting down interpreter runtime ...")
+    resources.runtime.store.close()
+
+    println("Goodbye.")
+  }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
-    Task
-      .delay {
-        // THIS IS A SMELL
-        sys.addShutdownHook {
-          println("Shutting down gRPC server...")
-          resources.grpcServer.shutdown()
-          println("Shutting down interpreter runtime ...")
-          runtime.store.close()
-          println("Shutting down metrics server...")
-          metricsServer.stop
-          println("Shutting down HTTP server....")
-          http.stop
-          println("Shutting down transport layer, broadcasting DISCONNECT")
-          net.broadcast(
-            DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
-          println("Goodbye.")
-        }
-      }
+    Task.delay(sys.addShutdownHook(clearResources(resources)))
 
   def nodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
     for {
       resources <- aquireResources
-      _         <- GrpcServer.start[Effect](resources.grpcServer)
-      _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
+      _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
+      _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
-      _ <- if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
-          else
-            conf.bootstrap.toOption
-              .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
-              .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr))
-      _ <- MonadOps
-            .forever(MultiParentCasper[Effect].sendBlockWhenReady.value.void)
-            .executeAsync
-            .start
-            .toEffect
-      _ <- MonadOps
-            .forever(deployService[Effect].value.void)
-            .executeAsync
-            .start
-            .toEffect
-      _ <- MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
+      res <- ApplicativeError_[Effect, CommError].attempt(
+              if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
+              else
+                conf.bootstrap.toOption
+                  .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
+                  .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
+      _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
+          else ().pure[Effect]
+      _ <- Task.delay(System.exit(0)).toEffect // YEAH, I KNOW, DO BETTER, I DARE YOU
     } yield ()
 }
