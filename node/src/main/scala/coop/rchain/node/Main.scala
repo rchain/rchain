@@ -20,7 +20,7 @@ object Main {
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
 
-    import monix.execution.Scheduler.Implicits.global
+    implicit val io: SchedulerService = Scheduler.io("repl-io")
 
     implicit val replService: ReplService[Task] =
       new GrpcReplService(conf.grpcHost(), conf.grpcPort())
@@ -33,12 +33,10 @@ object Main {
       case Some(fileName) => {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
         new ReplRuntime(conf).evalProgram[Task](fileName)
-        // TODO close console
       }
       case None if (conf.repl()) => {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
-        new ReplRuntime(conf).replProgram[Task]
-        // TODO close console
+        new ReplRuntime(conf).replProgram[Task].as(())
       }
       case None if (conf.diagnostics()) => {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)

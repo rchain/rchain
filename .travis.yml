@@ -117,6 +117,7 @@ deploy:
   file:
     - "node/target/*.deb"
     - "node/target/rpm/RPMS/noarch/*.rpm"
+    - "node/target/universal/*.tgz"
   skip_cleanup: true
   on:
     tags: true

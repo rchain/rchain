@@ -8,6 +8,7 @@ import coop.rchain.metrics.Metrics
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
+import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
@@ -233,7 +234,7 @@ object effects {
     }
 
     def close: Task[Unit] = Task.delay {
-      () // TODO implement this... somehow...
+      TerminalFactory.get().restore()
     }
 
   }

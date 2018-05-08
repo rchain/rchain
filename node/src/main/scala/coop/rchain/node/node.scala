@@ -18,8 +18,6 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 
-import scala.concurrent.ExecutionContext
-
 class NodeRuntime(conf: Conf) {
 
   import ApplicativeError_._
@@ -74,7 +72,7 @@ class NodeRuntime(conf: Conf) {
     for {
       runtime <- Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size()).pure[Effect]
       grpcServer <- GrpcServer
-                     .acquireServer[Effect](ExecutionContext.global, conf.grpcPort(), runtime)
+                     .acquireServer[Effect](conf.grpcPort(), runtime)
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)

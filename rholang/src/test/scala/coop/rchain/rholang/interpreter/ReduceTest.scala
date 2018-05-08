@@ -2,8 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import cats.syntax.either._
-import coop.rchain.models
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -18,7 +16,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
-import scala.concurrent.Await
+import scala.concurrent.{Await, ExecutionException}
 import scala.concurrent.duration._
 
 trait PersistentStoreTester {
@@ -89,7 +87,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val result = withTestStore { store =>
       val reducer = RholangOnlyDispatcher.create(store).reducer
       val bundleSend =
-        Bundle(Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet()))
+        Bundle(Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet()))
       val interpreter = reducer
       val resultTask  = interpreter.eval(bundleSend)(Env())
       val inspectTask = for {
@@ -109,11 +107,52 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ))
   }
 
+  it should "throw an error if names are used against their polarity" in {
+    /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
+     */
+    val y = GString("y")
+    val receive = Receive(
+      Seq(ReceiveBind(Seq(Quote(Par())), Quote(Bundle(y, readFlag = false, writeFlag = true)))),
+      Par())
+
+    an[Error] should be thrownBy {
+      withTestStore { store =>
+        val reducer = RholangOnlyDispatcher.create(store).reducer
+        val task    = reducer.eval(receive)(Env()).map(_ => store.toMap)
+        try { // Await.result wraps any Exception with ExecutionException so we need to catch it, unwrap and rethrow
+          Await.result(task.runAsync, 3.seconds)
+        } catch {
+          case boxedError: ExecutionException =>
+            throw boxedError.getCause
+        }
+      }
+    }
+
+    /* @bundle- { x } !(7) -> x!(7)
+     */
+    val x = GString("channel")
+    val send =
+      Send(Channel(Quote(Bundle(x, writeFlag = false, readFlag = true))), Seq(Expr(GInt(7))))
+
+    an[Error] should be thrownBy {
+      withTestStore { store =>
+        val reducer = RholangOnlyDispatcher.create(store).reducer
+        val task    = reducer.eval(send)(Env()).map(_ => store.toMap)
+        try {
+          Await.result(task.runAsync, 3.seconds)
+        } catch {
+          case boxedError: ExecutionException =>
+            throw boxedError.getCause
+        }
+      }
+    }
+  }
+
   "eval of Send" should "place something in the tuplespace." in {
     val result = withTestStore { store =>
       val reducer = RholangOnlyDispatcher.create(store).reducer
       val send =
-        Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+        Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
       val interpreter = reducer
       val resultTask  = interpreter.eval(send)(Env())
       val inspectTask = for {
@@ -133,6 +172,24 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ))
   }
 
+  it should "verify that Bundle is writeable before sending on Bundle " in {
+    /* @bundle+ { x } !(7) -> x!(7)
+     */
+    val x = GString("channel")
+    val send =
+      Send(Channel(Quote(Bundle(x, writeFlag = true, readFlag = false))), Seq(Expr(GInt(7))))
+
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val task    = reducer.eval(send)(Env()).map(_ => store.toMap)
+      Await.result(task.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(List(Channel(Quote(x))) ->
+        Row(List(Datum[List[Channel]](List[Channel](Quote(GInt(7))), false)), List())))
+  }
+
   "eval of single channel Receive" should "place something in the tuplespace." in {
     val result = withTestStore { store =>
       val receive =
@@ -142,7 +199,6 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 Par(),
                 false,
                 3,
-                0,
                 BitSet())
       val reducer     = RholangOnlyDispatcher.create(store).reducer
       val interpreter = reducer
@@ -173,17 +229,49 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ))
   }
 
+  it should "verify that bundle is readable if receiving on Bundle" in {
+    /* for (@Nil <- @bundle- { y } ) { }  -> for (n <- y) { }
+     */
+
+    val y = GString("y")
+    val receive = Receive(binds = Seq(
+                            ReceiveBind(
+                              patterns = Seq(Quote(Par())),
+                              source = Quote(Bundle(y, readFlag = true, writeFlag = false))
+                            )),
+                          body = Par())
+
+    val result = withTestStore { store =>
+      val reducer = RholangOnlyDispatcher.create(store).reducer
+      val task    = reducer.eval(receive)(Env()).map(_ => store.toMap)
+      Await.result(task.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(
+        List(Channel(Quote(y))) ->
+          Row(
+            List(),
+            List(
+              WaitingContinuation[BindPattern, TaggedContinuation](
+                List(BindPattern(List(Channel(Quote(Par()))), None)),
+                TaggedContinuation(ParBody(Par())),
+                false))
+          )
+      ))
+  }
+
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
     val send =
-      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val receive = Receive(
       Seq(
         ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
-                    Quote(GString("channel")))),
-      Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+                    Quote(GString("channel")),
+                    freeCount = 3)),
+      Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
       false,
       3,
-      0,
       BitSet()
     )
     val sendFirstResult = withTestStore { store =>
@@ -219,15 +307,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
     val send =
-      Send(Quote(EPlus(GInt(7), GInt(8))), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+      Send(Quote(EPlus(GInt(7), GInt(8))), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val receive = Receive(
       Seq(
         ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
-                    Quote(GInt(15)))),
-      Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+                    Quote(GInt(15)),
+                    freeCount = 3)),
+      Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
       false,
       3,
-      0,
       BitSet()
     )
 
@@ -268,17 +356,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Par(),
       false,
       0,
-      0,
       BitSet()
     )
     val send =
-      Send(Quote(GInt(1)), Seq[Par](simpleReceive), false, 0, BitSet())
+      Send(Quote(GInt(1)), Seq[Par](simpleReceive), false, BitSet())
     val receive = Receive(
-      Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GInt(1)))),
+      Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GInt(1)), freeCount = 1)),
       Eval(ChanVar(BoundVar(0))),
       false,
       1,
-      0,
       BitSet()
     )
 
@@ -334,21 +420,23 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "Simple match" should "capture and add to the environment." in {
     val result = withTestStore { store =>
-      val pattern = Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, 2, BitSet())
+      val pattern = Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet())
+        .withConnectiveUsed(true)
       val sendTarget =
-        Send(ChanVar(BoundVar(1)), List(GInt(7), EVar(BoundVar(0))), false, 0, BitSet(0, 1))
-      val matchTerm = Match(sendTarget,
-                            List(
-                              MatchCase(
-                                pattern,
-                                Send(Quote(GString("result")),
-                                     List(Eval(ChanVar(BoundVar(1))), EVar(BoundVar(0))),
-                                     false,
-                                     0,
-                                     BitSet())
-                              )),
-                            0,
-                            BitSet(0, 1))
+        Send(ChanVar(BoundVar(1)), List(GInt(7), EVar(BoundVar(0))), false, BitSet(0, 1))
+      val matchTerm = Match(
+        sendTarget,
+        List(
+          MatchCase(
+            pattern,
+            Send(Quote(GString("result")),
+                 List(Eval(ChanVar(BoundVar(1))), EVar(BoundVar(0))),
+                 false,
+                 BitSet(0, 1)),
+            freeCount = 2
+          )),
+        BitSet()
+      )
       val env       = Env.makeEnv[Par](GPrivate("one"), GPrivate("zero"))
       val reducer   = RholangOnlyDispatcher.create(store).reducer
       val matchTask = reducer.eval(matchTerm)(env)
@@ -373,20 +461,21 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
     val send1 =
-      Send(Quote(GString("channel1")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+      Send(Quote(GString("channel1")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val send2 =
-      Send(Quote(GString("channel2")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
+      Send(Quote(GString("channel2")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val receive = Receive(
       Seq(
         ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
-                    Quote(GString("channel1"))),
+                    Quote(GString("channel1")),
+                    freeCount = 3),
         ReceiveBind(Seq(ChanVar(FreeVar(0)), ChanVar(FreeVar(1)), ChanVar(FreeVar(2))),
-                    Quote(GString("channel2")))
+                    Quote(GString("channel2")),
+                    freeCount = 3)
       ),
-      Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+      Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
       false,
       3,
-      0,
       BitSet()
     )
     val sendFirstResult = withTestStore { store =>
@@ -440,9 +529,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "eval of Send with remainder receive" should "capture the remainder." in {
     val send =
-      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, 0, BitSet())
-    val receive = Receive(Seq(ReceiveBind(Seq(), Quote(GString("channel")), Some(FreeVar(0)))),
-                          Send(Quote(GString("result")), Seq(EVar(BoundVar(0)))))
+      Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
+    val receive =
+      Receive(Seq(ReceiveBind(Seq(), Quote(GString("channel")), Some(FreeVar(0)), freeCount = 1)),
+              Send(Quote(GString("result")), Seq(EVar(BoundVar(0)))))
 
     val result = withTestStore { store =>
       val reducer = RholangOnlyDispatcher.create(store).reducer
@@ -478,7 +568,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       EMethod("nth",
               EList(
                 List(GInt(7),
-                     Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+                     Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
                      GInt(9),
                      GInt(10))),
               List[Par](GInt(1)))
@@ -503,12 +593,12 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       EMethod("nth",
               EList(
                 List(GInt(7),
-                     Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()),
+                     Send(Quote(GString("result")), List(GString("Success")), false, BitSet()),
                      GInt(9),
                      GInt(10))),
               List[Par](GInt(1)))
     val send: Par =
-      Send(Quote(GString("result")), List[Par](nthCallEvalToSend), false, 0, BitSet())
+      Send(Quote(GString("result")), List[Par](nthCallEvalToSend), false, BitSet())
     val result = withTestStore { store =>
       val reducer = RholangOnlyDispatcher.create(store).reducer
       val nthTask = reducer.eval(send)(Env())
@@ -520,12 +610,13 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(List(
-                Datum[List[Channel]](
-                  List[Channel](Quote(
-                    Send(Quote(GString("result")), List(GString("Success")), false, 0, BitSet()))),
-                  false)),
-              List())
+          Row(
+            List(
+              Datum[List[Channel]](
+                List[Channel](
+                  Quote(Send(Quote(GString("result")), List(GString("Success")), false, BitSet()))),
+                false)),
+            List())
       )
     )
   }

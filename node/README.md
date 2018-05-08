@@ -8,7 +8,7 @@ Rchain Node is a module that gathers all other subprojects into final executable
 
 #### 1.1.1 Prerequisites
 
-In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](readme.md). 
+In this pre-release version, successful building requires attention to several prerequisites. Prequisites are defined in [rchain/README.md](https://github.com/rchain/rchain/blob/master/README.md). 
 
 __Note__ Failure to attend to all prerequisites will result in errors.
       
@@ -106,7 +106,7 @@ Using flags you can specify which bootstrapping node should be used or if the no
 
 #### 2.1.1 gRPC API
 
-Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [node/src/main/protobuf/rnode.proto](rnode.proto)
+Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [node/src/main/protobuf/rnode.proto](https://github.com/rchain/rchain/blob/master/node/src/main/protobuf/rnode.proto)
 
 #### 2.1.2 Data directory
 
@@ -124,14 +124,18 @@ sudo chown $USER /var/lib/rnode
 
 ##### 2.1.2.1 via Docker
 
-By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build a docker image yourself](#building-via-docker) and then run it.
+By far the simplest way to run this code is by using Docker. Use this pull command in Docker to get the current version of RNode
+
+```docker pull rchain/rnode```
+
+You can also [build a docker image yourself](#building-via-docker) and then run it.
 
 __Note__ The port used has to be mapped to the proper host port for the node to be able to advertise itself to the network
 properly. This may happen automatically, and it may not; it completely depends on how your computer and network are configured. Some monkeying with `docker run` options may be required, and the `--host` and `--port` options to this system may also help.
 
 
 ```
-$ docker run -ti coop.rchain/rnode
+$ docker run -ti rchain/rnode
 17:12:21.938 [main] INFO main - uPnP: Some(/192.168.1.123) -> Some(93.158.233.123)
 17:12:22.450 [kamon.prometheus.PrometheusReporter] INFO kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
 17:12:22.850 [main] INFO org.http4s.blaze.channel.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
@@ -152,9 +156,9 @@ To use both the peer-to-peer and REPL capabilities of RNode, two containers runn
 ```bash
 > docker network create rnode-net
 
-> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+> docker run -dit --name rnode0 --network rnode-net rchain/rnode:latest -s
 
-> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+> docker run -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 -r
 ```
 
 ##### 2.1.2.2 via Java
@@ -184,10 +188,10 @@ In REPL mode users have the ability to execute Rholang commands in REPL environm
 
 
 #### 2.2.1 Running via Docker
-By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build docker image yourself](#building-via-docker) and then run it.
+Assuming you have a RNode running in Docker, use the command below to run the node in REPL mode.
 
 ```
-$ docker run -ti coop.rchain/rnode --repl
+$ docker run -ti rchain/rnode --repl
 ```
 
 #### 2.2.2. Running via Java
@@ -201,9 +205,7 @@ $ java -jar ./node/target/scala-2.12/rnode-assembly-0.1.3.jar --repl
 When running the program with `--eval`, it will fire up a thin program that will connect to running node instance via gRPC to evaluate Rholang code that is stored in a plain text file on the node itself.
 
 ### 2.3.1 Running via Docker
-By far the simplest way to run this code is by using Docker and the official image at Docker Hub. You can also [build docker image yourself](#building-via-docker) and then run it.
-
-To run Rholang that is stored in a plain text file (filename.rho), use
+This assumes you have a RNode running in Docker. To run Rholang that is stored in a plain text file (filename.rho), use
 
 '''
 docker run -it --mount type=bind,source="$(pwd)"/file_directory,target=/tmp rchain/rnode --eval /tmp/filename.rho
