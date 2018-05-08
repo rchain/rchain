@@ -13,12 +13,18 @@ _. Proc9 ::= Proc10 ;
 _. Proc10 ::= Proc11 ;
 _. Proc11 ::= Proc12 ;
 _. Proc12 ::= Proc13 ;
-_. Proc13 ::= "{" Proc "}" ;
+_. Proc13 ::= Proc14 ;
+_. Proc14 ::= Proc15 ;
+_. Proc15 ::= Proc16 ;
+_. Proc16 ::= "{" Proc "}" ;
 
 -- Processes
 -- In general the expression style processes are higher precedence.
 -- Expression style is anything that necessary resolves to a single ground value
 -- or a collection.
+PNegation.    Proc16 ::= "~" Proc16 ;
+PConjunction. Proc15 ::= Proc15 "/\\" Proc16 ;
+PDisjunction. Proc14 ::= Proc14 "\\/" Proc15 ;
 PGround.      Proc13 ::= Ground ;
 PCollect.     Proc13 ::= Collection ;
 PVar.         Proc13 ::= ProcVar ;
@@ -45,7 +51,7 @@ PContr.       Proc2 ::= "contract" Name "(" [Name] NameRemainder")" "=" "{" Proc
 PInput.       Proc2 ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.      Proc2 ::= "select" "{" [Branch] "}" ;
 PMatch.       Proc2 ::= "match" Proc4 "{" [Case] "}" ;
-PBundle.      Proc2 ::= "bundle" "{" Proc "}" ;
+PBundle.      Proc2 ::= Bundle "{" Proc "}" ;
 PIf.          Proc1 ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
@@ -63,6 +69,12 @@ NameWildcard. Name ::= "_" ;
 NameVar.      Name ::= Var ;
 NameQuote.    Name ::= "@" Proc12 ;
 separator Name "," ;
+
+-- Bundle
+BundleWrite.    Bundle ::= "bundle+" ;
+BundleRead.     Bundle ::= "bundle-" ;
+BundleEquiv.    Bundle ::= "bundle0" ;
+BundleReadWrite. Bundle ::= "bundle"  ;
 
 -- Receipt
 ReceiptLinear.    Receipt ::= ReceiptLinearImpl ;

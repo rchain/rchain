@@ -1,39 +1,22 @@
-new channel, iterate in {
-    contract iterate(list, channel) = {
-        new ack, right in {
-            channel(ack) |
-            for (_ <- ack) {
-                contract right(pair) = {
-                    match pair with [i, limit] => {
-                        channel([list.nth(i), i < limit]) |
-                        for (_ <- ack) {
-                            match i + 1 < limit with true => { right([i + 1, limit]) }
-                        }
-                    }
-                } |
-                right([0, list.size()])
+contract @"IterateDemo"(_) = {
+  new chan, loop, iCh in {
+    contract loop(@list, @acc, return) = {
+      match list { 
+        [hd, tl] => {
+          for(@i <- iCh) {
+            iCh!(i + 1) |
+            match [hd == i, acc] {
+              [true, true] => { loop!(tl, true, *return) }
+              _ => { loop!(tl, false, *return) }
             }
+          }
         }
+        _ => { return!(acc) }
+      }
     } |
-    // Invoke the iterator contract on channel
-    iterate([4,5,6], channel) |
-    
-    // Interacts with the iterator
-    for (ack <- channel) {
-        ack(Nil) |
-        new left in {
-            contract left(_) = {
-                for (pair <- channel) {
-                    match pair with [v, keepGoing] => {
-                        v.display("\n") |
-                        match keepGoing with true => { 
-                            ack(Nil) |
-                            left(Nil) 
-                        }
-                    }
-                }
-            } |
-            left(Nil)
-        }
-    }
-}
+    iCh!(1) |
+    loop!([1, [2, [3, [4, []]]]], true, *chan) |
+    for(@c <- chan){ @"testResult"!(c) }
+  }
+} |
+@"IterateDemo"!(Nil)

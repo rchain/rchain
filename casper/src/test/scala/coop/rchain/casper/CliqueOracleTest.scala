@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.internals._
+import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.catscontrib._
@@ -18,7 +18,15 @@ import monix.execution.Scheduler.Implicits.global
 import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
-  type StateWithChain[A] = State[Chain, A]
+  type StateWithChain[A] = State[BlockDag, A]
+  val initState =
+    BlockDag(
+      HashMap.empty[Int, BlockMessage],
+      HashMap.empty[BlockHash, BlockMessage],
+      HashMap.empty[BlockHash, HashSet[BlockHash]],
+      HashMap.empty[Validator, BlockHash],
+      0
+    )
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in {
@@ -60,12 +68,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
                                           HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash))
       } yield b8
 
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[BlockHash, BlockMessage],
-            HashMap.empty[BlockHash, HashSet[BlockHash]],
-            0)
-    val chain: Chain = createChain.runS(initState).value
+    val chain: BlockDag = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)
@@ -145,12 +148,7 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash))
       } yield b8
 
-    val initState =
-      Chain(HashMap.empty[Int, BlockMessage],
-            HashMap.empty[BlockHash, BlockMessage],
-            HashMap.empty[BlockHash, HashSet[BlockHash]],
-            0)
-    val chain: Chain = createChain.runS(initState).value
+    val chain: BlockDag = createChain.runS(initState).value
 
     val genesis = chain.idToBlocks(1)
     val b2      = chain.idToBlocks(2)

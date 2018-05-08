@@ -5,6 +5,7 @@ import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
 import coop.rchain.shared.StringOps._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski.kp
+import monix.eval.Task
 
 class ReplRuntime(conf: Conf) {
 
@@ -15,16 +16,21 @@ class ReplRuntime(conf: Conf) {
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
     """.red
 
-  def replProgram[F[_]: Monad: ConsoleIO: ReplService]: F[Unit] = {
-    val rep: F[Unit] = for {
+  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplService]: F[Boolean] = {
+    val rep: F[Boolean] = for {
       line <- ConsoleIO[F].readLine
-      _ <- line.trim match {
-            case ""   => ConsoleIO[F].println("")
-            case line => ReplService[F].run(line) >>= (s => ConsoleIO[F].println(s.blue))
-          }
-    } yield ()
+      res <- line.trim match {
+              case ""   => ConsoleIO[F].println("").as(true)
+              case ":q" => false.pure[F]
+              case line =>
+                (ReplService[F].run(line) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
+            }
+    } yield res
 
-    val repl: F[Unit] = rep.forever
+    def repl: F[Boolean] = rep >>= {
+      case true  => repl
+      case false => ConsoleIO[F].close.as(false)
+    }
 
     ConsoleIO[F].println(logo) >>= kp(repl)
   }
@@ -34,16 +40,17 @@ class ReplRuntime(conf: Conf) {
       _   <- ConsoleIO[F].println(s"Evaluating from $fileName")
       res <- ReplService[F].eval(fileName)
       _   <- ConsoleIO[F].println(res)
+      _   <- ConsoleIO[F].close
     } yield ()
 
 }
 
 object ReplRuntime {
   def keywords: List[String] = List(
-    "stdOut",
-    "stdOutAck",
-    "stdErr",
-    "stdErrAck",
+    "stdout",
+    "stdoutack",
+    "stderr",
+    "stderrack",
     "for",
     "!!"
   )
