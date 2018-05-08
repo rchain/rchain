@@ -15,6 +15,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -142,6 +143,10 @@ object Score {
   final val BUNDLE_READ       = 306
   final val BUNDLE_WRITE      = 307
   final val BUNDLE_READ_WRITE = 308
+
+  final val CONNECTIVE_NOT = 400
+  final val CONNECTIVE_AND = 401
+  final val CONNECTIVE_OR  = 402
 
   final val PAR = 999
 }
@@ -451,18 +456,37 @@ object BundleSortMatcher {
   }
 }
 
+object ConnectiveSortMatcher {
+  def sortMatch(c: Connective): ScoredTerm[Connective] =
+    c.connectiveInstance match {
+      case ConnAndBody(cb) =>
+        val pars = cb.ps.map(par => ParSortMatcher.sortMatch(par))
+        ScoredTerm(Connective(ConnAndBody(cb.withPs(pars.map(_.term.get)))),
+                   Node(Score.CONNECTIVE_AND, pars.map(_.score): _*))
+      case ConnOrBody(cb) =>
+        val pars = cb.ps.map(par => ParSortMatcher.sortMatch(par))
+        ScoredTerm(Connective(ConnOrBody(cb.withPs(pars.map(_.term.get)))),
+                   Node(Score.CONNECTIVE_OR, pars.map(_.score): _*))
+      case ConnNotBody(p) =>
+        val scoredPar = ParSortMatcher.sortMatch(p)
+        ScoredTerm(Connective(ConnNotBody(scoredPar.term.get)),
+                   Node(Score.CONNECTIVE_NOT, scoredPar.score))
+    }
+}
+
 object ParSortMatcher {
   def sortMatch(parOption: Option[Par]): ScoredTerm[Option[Par]] =
     parOption match {
       case Some(p) =>
-        val sends    = p.sends.map(s => SendSortMatcher.sortMatch(s)).sorted
-        val receives = p.receives.map(r => ReceiveSortMatcher.sortMatch(r)).sorted
-        val exprs    = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
-        val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
-        val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
-        val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
-        val bundles  = p.bundles.map(b => BundleSortMatcher.sortMatch(b)).sorted
-        val ids      = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
+        val sends       = p.sends.map(s => SendSortMatcher.sortMatch(s)).sorted
+        val receives    = p.receives.map(r => ReceiveSortMatcher.sortMatch(r)).sorted
+        val exprs       = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
+        val evals       = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
+        val news        = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
+        val matches     = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
+        val bundles     = p.bundles.map(b => BundleSortMatcher.sortMatch(b)).sorted
+        val connectives = p.connectives.map(c => ConnectiveSortMatcher.sortMatch(c)).sorted
+        val ids         = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
         val sortedPar = Par(
           sends = sends.map(_.term),
           receives = receives.map(_.term),
@@ -471,6 +495,7 @@ object ParSortMatcher {
           news = news.map(_.term),
           matches = matches.map(_.term),
           bundles = bundles.map(_.term),
+          connectives = connectives.map(_.term),
           ids = ids.map(_.term),
           locallyFree = p.locallyFree,
           connectiveUsed = p.connectiveUsed

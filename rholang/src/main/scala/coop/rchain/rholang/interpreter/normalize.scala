@@ -276,7 +276,8 @@ object ProcNormalizeMatcher {
         val bodyResult = normalizeMatch(
           p.proc_,
           ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
-        ProcVisitOutputs(input.par.prepend(Connective(ConnNot(bodyResult.par))), input.knownFree)
+        ProcVisitOutputs(input.par.prepend(Connective(ConnNotBody(bodyResult.par))),
+                         input.knownFree)
 
       case p: PConjunction =>
         val leftResult: ProcVisitOutputs =

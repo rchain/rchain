@@ -816,7 +816,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch(proc, inputs)
     val expectedResult = inputs.par
-      .addConnectives(Connective(ConnNot(EVar(FreeVar(0)))))
+      .addConnectives(Connective(ConnNotBody(EVar(FreeVar(0)))))
       .withConnectiveUsed(true)
 
     result.par should be(expectedResult)
