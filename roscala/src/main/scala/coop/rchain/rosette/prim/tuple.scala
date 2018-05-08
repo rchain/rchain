@@ -11,7 +11,8 @@ object tuple {
     override val minArgs: Int = 1
     override val maxArgs: Int = 1
 
-    override def fnSimple(ctxt: Ctxt): Right[PrimError, RblBool] = {
+    @checkArgumentMismatch
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
       val elem = ctxt.argvec.elem
       Right(RblBool(elem(0) == Tuple.NIL))
     }
