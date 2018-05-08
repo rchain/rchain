@@ -41,13 +41,14 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix
+      monix,
+      scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(comm % "compile->compile;test->test", shared, crypto) // TODO: Add models, rspace
+  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -101,7 +102,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.2.1",
+    version := "0.3.1",
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
@@ -140,7 +141,6 @@ lazy val node = (project in file("node"))
         add(entry, entryTargetPath)
         run("apk", "update")
         run("apk", "add", "libsodium")
-        run("mkdir", "/var/lib/rnode")
         entryPoint("/bin/main.sh")
       }
     },

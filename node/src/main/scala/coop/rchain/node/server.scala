@@ -6,7 +6,9 @@ import org.http4s.server.blaze._
 import com.typesafe.scalalogging.Logger
 
 import coop.rchain.node.service._
+import monix.eval.Task
 
+// TODO rewritte this abominatntion as http4s functional god damn it!
 case class HttpServer(port: Int) {
 
   val logger = Logger("main")
@@ -19,8 +21,9 @@ case class HttpServer(port: Int) {
     .mountService(Lykke.service, "/lykke")
     .start
 
-  def start(): Unit =
+  def start: Task[Unit] = Task.delay {
     server = Some(bld.unsafeRunSync)
+  }
 
   def stop(): Unit =
     server.foreach(_.shutdown.unsafeRunSync)

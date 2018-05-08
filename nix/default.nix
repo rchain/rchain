@@ -16,9 +16,18 @@ let
 
   bnfcHEAD = pkgs.haskellPackages.callCabal2nix "bnfc-HEAD" bnfcSrc {};
 
-in {
+  jdk = pkgs.openjdk8;
+
+  sbt = pkgs.sbt.override { jre = jdk.jre; };
+
+in rec {
 
   bnfc = bnfcHEAD;
 
-  rchainPackages = with pkgs; [ bnfcHEAD jflex ];
+  rchainEnv = pkgs.buildFHSUserEnv {
+    name = "rchain";
+    targetPkgs = ps: rchainPackages;
+  };
+
+  rchainPackages = with pkgs; [ bnfcHEAD git jflex libsodium sbt jdk ];
 }

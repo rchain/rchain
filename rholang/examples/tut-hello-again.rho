@@ -1,12 +1,17 @@
 new helloAgain in {
   contract helloAgain(_) = {
     new chan in {
-      chan("Hello again, world!") |
-      for (text <- chan) {
-        text.display("\n")
+      chan!("Hello again, world!") |
+      for (@text <- chan) {
+        new ack in {
+          @"stdoutAck"!(text, *ack) |
+          for (_ <- ack) {
+            @"stdout"!("\n")
+          }
+        }
       }
     }
   } |
-  helloAgain(Nil) |
-  helloAgain(Nil)
+  helloAgain!(Nil) |
+  helloAgain!(Nil)
 }

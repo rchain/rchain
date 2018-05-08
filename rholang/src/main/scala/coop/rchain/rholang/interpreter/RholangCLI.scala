@@ -12,8 +12,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
-import monix.execution.CancelableFuture
-import monix.execution.Scheduler.Implicits.global
+import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.ScallopConf
 
 import scala.annotation.tailrec
@@ -44,6 +43,7 @@ object RholangCLI {
   }
 
   def main(args: Array[String]): Unit = {
+    import monix.execution.Scheduler.Implicits.global
 
     val conf = new Conf(args)
 
@@ -99,7 +99,7 @@ object RholangCLI {
     } yield ()
 
   @tailrec
-  def repl(runtime: Runtime): Unit = {
+  def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
