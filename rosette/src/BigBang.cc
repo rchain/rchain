@@ -53,6 +53,7 @@
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
 
+#include "Export.h"
 
 int access(const char*, int);
 
@@ -594,6 +595,8 @@ std::tuple<int, bool> BigBang(int argc, char** argv, char** envp) {
         did_run_file = LoadRunFile();
         LoadBootFiles();
         heap->tenureEverything();
+
+        writeExportCode();
     }
 
     handleInterrupts();
