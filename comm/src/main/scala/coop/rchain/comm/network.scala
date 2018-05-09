@@ -4,8 +4,9 @@ import java.net.{SocketAddress, SocketTimeoutException}
 import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
-import coop.rchain.kademlia.PeerTable
 import coop.rchain.comm.protocol.routing.Header
+import coop.rchain.kademlia.PeerTable
+import coop.rchain.metrics.Metrics
 import com.typesafe.scalalogging.Logger
 import scala.collection.mutable
 import scala.util.{Failure, Success}
