@@ -2,8 +2,6 @@ package coop.rchain.casper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDagState._
-import coop.rchain.casper.protocol.{Resource => ResourceProto, _}
-import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.crypto.hash.Sha256
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -14,6 +12,7 @@ import cats._
 import cats.data._
 import cats.implicits._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.protocol._
 
 trait BlockGenerator {
   def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash]): F[BlockMessage] =
@@ -31,11 +30,10 @@ trait BlockGenerator {
       bonds: Seq[Bond],
       justifications: collection.Map[Validator, BlockHash]): F[BlockMessage] =
     for {
-      chain          <- blockDagState[F].get
-      nextId         = chain.currentId + 1
-      uniqueResource = ResourceProto(ProduceResource(Produce(nextId)))
-      postState      = RChainState().withResources(Seq(uniqueResource)).withBonds(bonds)
-      postStateHash  = Sha256.hash(postState.toByteArray)
+      chain         <- blockDagState[F].get
+      nextId        = chain.currentId + 1
+      postState     = RChainState().withBonds(bonds).withBlockNumber(nextId.toLong)
+      postStateHash = Sha256.hash(postState.toByteArray)
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
@@ -59,8 +57,10 @@ trait BlockGenerator {
           val updatedChildrenHashes = currentChildrenHashes + serializedBlockHash
           parentHash -> updatedChildrenHashes
       }: _*)
-      childMap: HashMap[BlockHash, HashSet[BlockHash]] = chain.childMap ++ updatedChildren
-      newChain: BlockDag                               = BlockDag(idToBlocks, blockLookup, childMap, chain.latestMessages, nextId)
-      _                                                <- blockDagState[F].set(newChain)
+      childMap = chain.childMap
+        .++[(BlockHash, HashSet[BlockHash]), HashMap[BlockHash, HashSet[BlockHash]]](
+          updatedChildren)
+      newChain: BlockDag = BlockDag(idToBlocks, blockLookup, childMap, chain.latestMessages, nextId)
+      _                  <- blockDagState[F].set(newChain)
     } yield block
 }

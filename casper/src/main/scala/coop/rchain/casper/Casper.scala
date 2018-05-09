@@ -3,11 +3,11 @@ package coop.rchain.casper
 import cats.{Applicative, Monad}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.{Checkpoint, Tuplespace}
 import coop.rchain.catscontrib.{Capture, IOUtil}
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
@@ -16,6 +16,8 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable
 import scala.collection.immutable.{HashMap, HashSet}
+
+import java.nio.file.Path
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[Unit]
@@ -48,6 +50,8 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       id: ByteString,
+      storageLocation: Path,
+      storageSize: Long,
       genesis: BlockMessage = genesisBlock): MultiParentCasper[F] =
     //TODO: Get rid of all the mutable data structures and write proper FP code
     new MultiParentCasper[F] {
@@ -60,6 +64,8 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
       private val deployBuff: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
+
+      private val staging: Tuplespace = new Tuplespace("staging", storageLocation, storageSize)
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -102,9 +108,14 @@ sealed abstract class MultiParentCasperInstances {
 
         val orderedHeads = estimator
 
-        //TODO: define conflict model for blocks
-        //(maybe wait until we are actually dealing with rholang terms)
-        val p = orderedHeads.map(_.take(1)) //for now, just take top choice
+        val p = orderedHeads.map(_.foldLeft(List.empty[BlockMessage]) {
+          case (acc, b) =>
+            if (acc.forall(!conflicts(_, b, genesis, blockDag))) {
+              b :: acc
+            } else {
+              acc
+            }
+        })
         val r = p.map(blocks => {
           val remDeploys = deployHist.clone()
           DagOperations
@@ -132,12 +143,11 @@ sealed abstract class MultiParentCasperInstances {
                 None
               }
             } else {
-              //TODO: only pick non-conflicting deploys
-              val deploys = requests.take(10).toSeq
+              val deploys = requests.toSeq
               //TODO: compute postState properly
               val newPostState = parentPostState
                 .withBlockNumber(parentPostState.blockNumber + 1)
-                .withResources(deploys.map(_.resource.get))
+              //.withNewCode(deploys.map(_.resource.get))
               //TODO: include reductions
               val body = Body()
                 .withPostState(newPostState)

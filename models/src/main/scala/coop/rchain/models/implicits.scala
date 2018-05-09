@@ -1,7 +1,7 @@
 package coop.rchain.models
 
 import cats.implicits._
-import com.trueaccord.scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
+import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
