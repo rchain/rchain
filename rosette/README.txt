@@ -52,6 +52,25 @@ Dependencies
         sudo apt-get install cmake
         sudo apt-get install clang
 
+    Rosette requires 32-bit c++ Google protobufs:
+
+        To get the source, download one of the release .tar.gz or .zip packages in the release page.
+
+        For example:
+
+        https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-cpp-3.5.1.tar.gz
+
+        For example, download protobuf-cpp-[VERSION].tar.gz and extract it into a directory on your system.
+
+        To build and install the C++ Protocol Buffer runtime and the Protocol Buffer compiler (protoc),
+        cd into the directory where you extracted the above .tar.gz and execute the following:
+
+        $ ./configure --build=i686-pc-linux-gnu CFLAGS="-m32 -DNDEBUG" CXXFLAGS="-m32 -DNDEBUG" LDFLAGS=-m32
+        $ make
+        $ make check
+        $ sudo make install
+        $ sudo ldconfig # refresh shared library cache.
+
     Optional tools and libraries:
 
         sudo apt-get install doxygen
