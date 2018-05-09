@@ -7,6 +7,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Sha256
+import coop.rchain.models.Par
 
 import scala.annotation.tailrec
 
@@ -66,6 +67,21 @@ object ProtoUtil {
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 
+  def deploys(b: BlockMessage): Seq[Deploy] =
+    b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+
+  def bonds(b: BlockMessage): Seq[Bond] =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.bonds).getOrElse(List.empty[Bond])
+
+  def blockNumber(b: BlockMessage): Long =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.blockNumber).getOrElse(0L)
+
   //Two blocks conflict if they both use the same deploy in different histories
   def conflicts(b1: BlockMessage,
                 b2: BlockMessage,
@@ -73,7 +89,7 @@ object ProtoUtil {
                 dag: BlockDag): Boolean = {
     val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag)
     if (gca == b1 || gca == b2) {
-      //blocks which already in each other's chains do not conflict
+      //blocks which already exist in each other's chains do not conflict
       false
     } else {
       def getDeploys(b: BlockMessage) =
@@ -146,8 +162,13 @@ object ProtoUtil {
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def basicDeploy(id: Int): Deploy = {
+    val term = InterpreterUtil.mkTerm(s"@${id}!($id)").right.get
+
+    termDeploy(term)
+  }
+
+  def termDeploy(term: Par): Deploy = {
     val nonce = scala.util.Random.nextInt(10000)
-    val term  = InterpreterUtil.mkTerm(s"@${id}!($id)").right.get
 
     Deploy()
       .withUser(ByteString.EMPTY)

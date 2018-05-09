@@ -18,7 +18,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 
-class NodeRuntime(conf: Conf) {
+class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   import ApplicativeError_._
 
@@ -72,7 +72,7 @@ class NodeRuntime(conf: Conf) {
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def aquireResources(implicit scheduler: Scheduler): Effect[Resources] =
+  def aquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
@@ -107,7 +107,7 @@ class NodeRuntime(conf: Conf) {
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
-  def nodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
+  def nodeProgram: Effect[Unit] =
     for {
       resources <- aquireResources
       _         <- startResources(resources)
