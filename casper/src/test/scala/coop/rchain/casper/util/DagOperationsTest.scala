@@ -39,7 +39,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator {
         b5      <- createBlock[F](Seq(b3.blockHash))
         b6      <- createBlock[F](Seq(b2.blockHash, b4.blockHash))
         b7      <- createBlock[F](Seq(b4.blockHash, b5.blockHash))
-      } yield b3
+      } yield b7
     val chain   = createChain[StateWithChain].runS(initState).value
     val genesis = chain.idToBlocks(0)
 

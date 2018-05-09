@@ -2,6 +2,7 @@ package coop.rchain.casper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDagState._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Sha256
 
 import scala.collection.immutable.{HashMap, HashSet}
@@ -15,20 +16,13 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash]): F[BlockMessage] =
-    createBlock[F](parentsHashList, ByteString.EMPTY)
-  def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash],
-                                              creator: Validator): F[BlockMessage] =
-    createBlock[F](parentsHashList, creator, Seq.empty[Bond])
-  def createBlock[F[_]: Monad: BlockDagState](parentsHashList: Seq[BlockHash],
-                                              creator: Validator,
-                                              bonds: Seq[Bond]): F[BlockMessage] =
-    createBlock[F](parentsHashList, creator, bonds, HashMap.empty[Validator, BlockHash])
+
   def createBlock[F[_]: Monad: BlockDagState](
       parentsHashList: Seq[BlockHash],
-      creator: Validator,
-      bonds: Seq[Bond],
-      justifications: collection.Map[Validator, BlockHash]): F[BlockMessage] =
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[Deploy] = Seq.empty[Deploy]): F[BlockMessage] =
     for {
       chain         <- blockDagState[F].get
       nextId        = chain.currentId + 1
@@ -38,7 +32,7 @@ trait BlockGenerator {
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
       blockHash = Sha256.hash(header.toByteArray)
-      body      = Body().withPostState(postState)
+      body      = Body().withPostState(postState).withNewCode(deploys)
       serializedJustifications = justifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Justification(creator, latestBlockHash)

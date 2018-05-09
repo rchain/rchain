@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 
 import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Sha256
 
@@ -84,7 +85,7 @@ object ProtoUtil {
           })
           .toSet
 
-      getDeploys(b1).intersect(getDeploys(b2)).isEmpty
+      getDeploys(b1).intersect(getDeploys(b2)).nonEmpty
     }
   }
 
@@ -146,9 +147,11 @@ object ProtoUtil {
 
   def basicDeploy(id: Int): Deploy = {
     val nonce = scala.util.Random.nextInt(10000)
+    val term  = InterpreterUtil.mkTerm(s"@${id}!($id)").right.get
 
     Deploy()
       .withUser(ByteString.EMPTY)
       .withNonce(nonce)
+      .withTerm(term)
   }
 }
