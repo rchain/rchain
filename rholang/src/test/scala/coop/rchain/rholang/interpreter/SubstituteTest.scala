@@ -9,6 +9,7 @@ import coop.rchain.rholang.interpreter.implicits._
 import org.scalatest.{FlatSpec, Matchers}
 import cats.{Eval => CEval}
 import cats.implicits._
+import coop.rchain.rholang.interpreter.errors.SubstituteError
 import monix.eval.Coeval
 
 import scala.collection.immutable.BitSet
@@ -17,7 +18,7 @@ class VarSubSpec extends FlatSpec with Matchers {
   "FreeVar" should "throw an error" in {
     val source: Par   = GPrivate()
     val env: Env[Par] = Env.makeEnv(source)
-    an[Error] should be thrownBy maybeSubstitute[Coeval](FreeVar(0)).run(env).value
+    an[SubstituteError] should be thrownBy maybeSubstitute[Coeval](FreeVar(0)).run(env).value
   }
 
   "BoundVar" should "be substituted for process" in {

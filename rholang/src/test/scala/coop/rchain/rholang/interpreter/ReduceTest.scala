@@ -7,6 +7,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
+import coop.rchain.rholang.interpreter.errors.ReduceError
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
@@ -120,7 +121,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Seq(ReceiveBind(Seq(Quote(Par())), Quote(Bundle(y, readFlag = false, writeFlag = true)))),
       Par())
 
-    an[Error] should be thrownBy {
+    an[ReduceError] should be thrownBy {
       withTestStore { store =>
         implicit val env = Env[Par]()
         val reducer      = RholangOnlyDispatcher.create(store).reducer
@@ -140,7 +141,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val send =
       Send(Channel(Quote(Bundle(x, writeFlag = false, readFlag = true))), Seq(Expr(GInt(7))))
 
-    an[Error] should be thrownBy {
+    an[ReduceError] should be thrownBy {
       withTestStore { store =>
         implicit val env = Env[Par]()
         val reducer      = RholangOnlyDispatcher.create(store).reducer

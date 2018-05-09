@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import cats.data.EitherT
 import cats.implicits._
 import cats.{Functor, Monad, MonadError, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
@@ -8,10 +9,12 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, ReduceError}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{IStore, consume => internalConsume, produce => internalProduce}
 import monix.eval.Task
+import coop.rchain.catscontrib._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.BitSet
@@ -29,10 +32,10 @@ trait Reduce[M[_]] {
   def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
       implicit env: Env[Par]): M[Unit]
 
-  def eval(par: Par)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit]
+  def eval(par: Par)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit]
 
   // This makes sense. Run a Par in the empty environment.
-  def inj(par: Par)(implicit me: MonadError[M, Throwable]): M[Unit] =
+  def inj(par: Par)(implicit me: MonadError[M, InterpreterError]): M[Unit] =
     for { _ <- eval(par)(Env[Par](), me) } yield ()
 
   /**
@@ -46,22 +49,19 @@ trait Reduce[M[_]] {
     *         binding into the monadic context, else signal
     *         an exception.
     */
-  def eval(valproc: Var)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Par] =
+  def eval(valproc: Var)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Par] =
     valproc.varInstance match {
       case BoundVar(level) =>
         env.get(level) match {
           case Some(par) =>
             me.pure(par)
           case None =>
-            me raiseError new IllegalStateException(
-              "Unbound variable: " + level + " in " + env.envMap)
+            me.raiseError(ReduceError("Unbound variable: " + level + " in " + env.envMap))
         }
       case Wildcard(_) =>
-        me raiseError new IllegalStateException(
-          "Unbound variable: attempting to evaluate a pattern")
+        me.raiseError(ReduceError("Unbound variable: attempting to evaluate a pattern"))
       case FreeVar(_) =>
-        me raiseError new IllegalStateException(
-          "Unbound variable: attempting to evaluate a pattern")
+        me.raiseError(ReduceError("Unbound variable: attempting to evaluate a pattern"))
     }
 
   /**
@@ -78,7 +78,8 @@ trait Reduce[M[_]] {
     *            a binding for channel
     * @return A quoted process or "channel value"
     */
-  def eval(channel: Channel)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Quote] =
+  def eval(channel: Channel)(implicit env: Env[Par],
+                             me: MonadError[M, InterpreterError]): M[Quote] =
     channel.channelInstance match {
       case Quote(p) =>
         for { evaled <- evalExpr(p) } yield Quote(evaled)
@@ -102,7 +103,7 @@ trait Reduce[M[_]] {
     * @param env An execution context
     * @return
     */
-  def eval(send: Send)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] =
+  def eval(send: Send)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] =
     for {
       quote <- eval(send.chan.get)
       data  <- send.data.toList.traverse(x => evalExpr(x))
@@ -111,7 +112,7 @@ trait Reduce[M[_]] {
       unbundled <- subChan.value.singleBundle() match {
                     case Some(value) =>
                       if (!value.writeFlag) {
-                        me.raiseError(new Error("Trying to send on non-writeable channel."))
+                        me.raiseError(ReduceError("Trying to send on non-writeable channel."))
                       } else {
                         me.pure(Quote(value.body.get))
                       }
@@ -120,7 +121,7 @@ trait Reduce[M[_]] {
       _ <- produce(unbundled, data, send.persistent)
     } yield ()
 
-  def eval(mat: Match)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] = {
+  def eval(mat: Match)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] = {
     def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
       Range(0, freeCount).foldLeft(env)(
         (acc, e) =>
@@ -133,7 +134,7 @@ trait Reduce[M[_]] {
       )
     @tailrec
     def firstMatch(target: Par, cases: Seq[MatchCase])(
-        implicit me: MonadError[M, Throwable]): M[Unit] =
+        implicit me: MonadError[M, InterpreterError]): M[Unit] =
       cases match {
         case Nil => me.pure(())
         case singleCase +: caseRem =>
@@ -165,7 +166,7 @@ trait Reduce[M[_]] {
     * @param env
     * @return
     */
-  def eval(neu: New)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] = {
+  def eval(neu: New)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] = {
     def alloc(level: Int)(implicit env: Env[Par]): M[Env[Par]] =
       me pure {
         (env /: (0 until level).toList) { (_env, _) =>
@@ -179,8 +180,8 @@ trait Reduce[M[_]] {
     } yield ()
   }
 
-  private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par],
-                                                     me: MonadError[M, Throwable]): M[Quote] =
+  private[this] def unbundleReceive(
+      rb: ReceiveBind)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Quote] =
     for {
       quote <- eval(rb.source.get)
       subst <- substituteQuote[M].substitute(quote).run(env)
@@ -188,7 +189,7 @@ trait Reduce[M[_]] {
       unbndl <- subst.quote.get.singleBundle() match {
                  case Some(value) =>
                    if (!value.readFlag) {
-                     me.raiseError(new Error("Trying to read from non-readable channel."))
+                     me.raiseError(ReduceError("Trying to read from non-readable channel."))
                    } else {
                      me.pure(Quote(value.body.get))
                    }
@@ -202,13 +203,13 @@ trait Reduce[M[_]] {
     * a binding exists for the variable. It simply gets the
     * quoted process and calls eval.
     */
-  def eval(drop: Eval)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] =
+  def eval(drop: Eval)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] =
     for {
       quote <- eval(drop.channel.get)
       _     <- eval(quote.value)
     } yield ()
 
-  def eval(receive: Receive)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] =
+  def eval(receive: Receive)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] =
     for {
       binds <- receive.binds.toList
                 .traverse(rb =>
@@ -219,16 +220,17 @@ trait Reduce[M[_]] {
       _         <- consume(binds, substBody, receive.persistent)
     } yield ()
 
-  def eval(bundle: Bundle)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] =
+  def eval(bundle: Bundle)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] =
     eval(bundle.body.get)
 
   /**
     * Continue is straightforward in this case, it just calls eval.
     */
-  def continue(body: Par)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Unit] =
+  def continue(body: Par)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Unit] =
     eval(body)
 
-  def evalExprToPar(expr: Expr)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Par] =
+  def evalExprToPar(expr: Expr)(implicit env: Env[Par],
+                                me: MonadError[M, InterpreterError]): M[Par] =
     expr.exprInstance match {
       case EVarBody(EVar(v)) =>
         for {
@@ -241,7 +243,7 @@ trait Reduce[M[_]] {
           evaledTarget <- evalExpr(target.get)
           evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
           resultPar <- methodLookup match {
-                        case None    => me raiseError new Error("Unimplemented method: " + method)
+                        case None    => me.raiseError(ReduceError("Unimplemented method: " + method))
                         case Some(f) => f(target.get, evaledArgs)(env)
                       }
         } yield resultPar
@@ -249,7 +251,8 @@ trait Reduce[M[_]] {
       case _ => evalExprToExpr(expr).map(e => (fromExpr(e)(identity)))
     }
 
-  def evalExprToExpr(expr: Expr)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Expr] = {
+  def evalExprToExpr(expr: Expr)(implicit env: Env[Par],
+                                 me: MonadError[M, InterpreterError]): M[Expr] = {
     implicit val parSubstitute = Substitute.substitutePar[M]
     def relop(p1: Par,
               p2: Par,
@@ -263,7 +266,7 @@ trait Reduce[M[_]] {
                    case (GBool(b1), GBool(b2))     => me.pure(GBool(relopb(b1, b2)))
                    case (GInt(i1), GInt(i2))       => me.pure(GBool(relopi(i1, i2)))
                    case (GString(s1), GString(s2)) => me.pure(GBool(relops(s1, s2)))
-                   case _                          => me raiseError new Error("Unexpected compare: " + v1 + " vs. " + v2)
+                   case _                          => me.raiseError(ReduceError("Unexpected compare: " + v1 + " vs. " + v2))
                  }
       } yield result
 
@@ -346,30 +349,30 @@ trait Reduce[M[_]] {
           evaledTarget <- evalExpr(target.get)
           evaledArgs   <- arguments.toList.traverse(expr => evalExpr(expr))
           resultPar <- methodLookup match {
-                        case None    => me raiseError new Error("Unimplemented method: " + method)
+                        case None    => me raiseError ReduceError("Unimplemented method: " + method)
                         case Some(f) => f(target.get, evaledArgs)(env)
                       }
           resultExpr <- evalSingleExpr(resultPar)
         } yield resultExpr
       }
-      case _ => me.raiseError(new Error("Unimplemented expression: " + expr))
+      case _ => me.raiseError(ReduceError("Unimplemented expression: " + expr))
     }
   }
 
   private[this] def nth(
-      implicit ev: MonadError[M, Throwable]): (Par, Seq[Par]) => Env[Par] => M[Par] = {
+      implicit err: MonadError[M, InterpreterError]): (Par, Seq[Par]) => Env[Par] => M[Par] = {
     def localNth(ps: Seq[Par], nth: Int): M[Par] =
       if (ps.isDefinedAt(nth)) {
         Monad[M].pure(ps(nth))
       } else {
-        MonadError[M, Throwable].raiseError(new Error("Error: index out of bound: " + nth))
+        err.raiseError(ReduceError("Error: index out of bound: " + nth))
       }
 
     (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       {
         implicit val environment = env
         if (args.length != 1) {
-          MonadError[M, Throwable].raiseError(new Error("Error: nth expects 1 argument"))
+          err.raiseError(ReduceError("Error: nth expects 1 argument"))
         } else {
           for {
             nth <- evalToInt(args(0))
@@ -378,8 +381,8 @@ trait Reduce[M[_]] {
                        case EListBody(EList(ps, _, _, _)) => localNth(ps, nth)
                        case ETupleBody(ETuple(ps, _, _))  => localNth(ps, nth)
                        case _ =>
-                         MonadError[M, Throwable].raiseError(
-                           new Error(
+                         err.raiseError(
+                           ReduceError(
                              "Error: nth applied to something that wasn't a list or tuple."))
                      }
           } yield result
@@ -388,25 +391,27 @@ trait Reduce[M[_]] {
   }
 
   def methodTable(method: String)(
-      implicit ev: MonadError[M, Throwable]): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
+      implicit ev: MonadError[M, InterpreterError]): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
     method match {
       case "nth" => Some(nth)
       case _     => None
     }
 
-  def evalSingleExpr(p: Par)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Expr] =
+  def evalSingleExpr(p: Par)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Expr] =
     if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-      me.raiseError(new Error("Error: parallel or non expression found where expression expected."))
+      me.raiseError(
+        ReduceError("Error: parallel or non expression found where expression expected."))
     else
       p.exprs match {
         case (e: Expr) +: Nil => evalExprToExpr(e)
         case _ =>
-          me.raiseError(new Error("Error: Multiple expressions given."))
+          me.raiseError(ReduceError("Error: Multiple expressions given."))
       }
 
-  def evalToInt(p: Par)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Int] =
+  def evalToInt(p: Par)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Int] =
     if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-      me.raiseError(new Error("Error: parallel or non expression found where expression expected."))
+      me.raiseError(
+        ReduceError("Error: parallel or non expression found where expression expected."))
     else
       p.exprs match {
         case Expr(GInt(v)) +: Nil => Monad[M].pure(v)
@@ -421,16 +426,17 @@ trait Reduce[M[_]] {
             result <- evaled.exprInstance match {
                        case GInt(v) => Monad[M].pure(v)
                        case _ =>
-                         me.raiseError(new Error("Error: expression didn't evaluate to integer."))
+                         me.raiseError(ReduceError("Error: expression didn't evaluate to integer."))
                      }
           } yield result
         case _ =>
-          me.raiseError(new Error("Error: Integer expected, or unimplemented expression."))
+          me.raiseError(ReduceError("Error: Integer expected, or unimplemented expression."))
       }
 
-  def evalToBool(p: Par)(implicit env: Env[Par], me: MonadError[M, Throwable]): M[Boolean] =
+  def evalToBool(p: Par)(implicit env: Env[Par], me: MonadError[M, InterpreterError]): M[Boolean] =
     if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
-      me.raiseError(new Error("Error: parallel or non expression found where expression expected."))
+      me.raiseError(
+        ReduceError("Error: parallel or non expression found where expression expected."))
     else
       p.exprs match {
         case Expr(GBool(b)) +: Nil => Monad[M].pure(b)
@@ -445,11 +451,11 @@ trait Reduce[M[_]] {
             result <- evaled.exprInstance match {
                        case GBool(b) => Monad[M].pure(b)
                        case _ =>
-                         me.raiseError(new Error("Error: expression didn't evaluate to boolean."))
+                         me.raiseError(ReduceError("Error: expression didn't evaluate to boolean."))
                      }
           } yield result
         case _ =>
-          me.raiseError(new Error("Error: Multiple expressions given."))
+          me.raiseError(ReduceError("Error: Multiple expressions given."))
       }
 
   def updateLocallyFree(par: Par): Par = {
@@ -471,7 +477,7 @@ trait Reduce[M[_]] {
   /**
     * Evaluate any top level expressions in @param Par .
     */
-  def evalExpr(par: Par)(implicit env: Env[Par], ev: MonadError[M, Throwable]): M[Par] =
+  def evalExpr(par: Par)(implicit env: Env[Par], ev: MonadError[M, InterpreterError]): M[Par] =
     for {
       evaledExprs <- par.exprs.toList.traverse(expr => evalExprToPar(expr))
       result = evaledExprs.foldLeft(par.copy(exprs = Vector())) { (acc, newPar) =>
@@ -536,7 +542,7 @@ object Reduce {
     def consume(binds: Seq[(BindPattern, Quote)], body: Par, persistent: Boolean)(
         implicit env: Env[Par]): Task[Unit] =
       binds match {
-        case Nil => Task raiseError new Error("Error: empty binds")
+        case Nil => Task.raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) =
             binds.unzip
@@ -573,52 +579,54 @@ object Reduce {
       * @param env
       * @return
       */
-    def eval(par: Par)(implicit env: Env[Par], me: MonadError[Task, Throwable]): Task[Unit] =
-      Task.gatherUnordered(
-        Seq(
-          Task.wanderUnordered(par.sends) { send =>
-            eval(send)
-          },
-          Task.wanderUnordered(par.receives) { recv =>
-            eval(recv)
-          },
-          Task.wanderUnordered(par.news) { neu =>
-            eval(neu)
-          },
-          Task.wanderUnordered(par.evals) { deref =>
-            eval(deref)
-          },
-          Task.wanderUnordered(par.matches) { mat =>
-            eval(mat)
-          },
-          Task.wanderUnordered(par.bundles) { bundle =>
-            eval(bundle)
-          },
-          Task.wanderUnordered(par.exprs.filter { expr =>
-            expr.exprInstance match {
-              case _: EVarBody    => true
-              case _: EMethodBody => true
-              case _              => false
+    override def eval(par: Par)(implicit env: Env[Par],
+                                me: MonadError[Task, InterpreterError]): Task[Unit] =
+      Task
+        .gatherUnordered(
+          Seq(
+            Task
+              .wanderUnordered(par.sends) { send =>
+                eval(send)
+              },
+            Task.wanderUnordered(par.receives) { recv =>
+              eval(recv)
+            },
+            Task.wanderUnordered(par.news) { neu =>
+              eval(neu)
+            },
+            Task.wanderUnordered(par.evals) { deref =>
+              eval(deref)
+            },
+            Task.wanderUnordered(par.matches) { mat =>
+              eval(mat)
+            },
+            Task.wanderUnordered(par.bundles) { bundle =>
+              eval(bundle)
+            },
+            Task.wanderUnordered(par.exprs.filter { expr =>
+              expr.exprInstance match {
+                case _: EVarBody    => true
+                case _: EMethodBody => true
+                case _              => false
+              }
+            }) { expr =>
+              expr.exprInstance match {
+                case EVarBody(EVar(v)) =>
+                  for {
+                    varref <- eval(v.get)
+                    _      <- eval(varref)
+                  } yield ()
+                case e: EMethodBody =>
+                  for {
+                    p <- evalExprToPar(Expr(e))
+                    _ <- eval(p)
+                  } yield ()
+                case _ => Task.unit
+              }
             }
-          }) { expr =>
-            expr.exprInstance match {
-              case EVarBody(EVar(v)) =>
-                for {
-                  varref <- eval(v.get)
-                  _      <- eval(varref)
-                } yield ()
-              case e: EMethodBody =>
-                for {
-                  p <- evalExprToPar(Expr(e))
-                  _ <- eval(p)
-                } yield ()
-              case _ => Task.unit
-            }
-          }
+          )
         )
-      ) map { xxs =>
-        ()
-      }
+        .map(_ => ())
 
     def debug(msg: String): Unit = {
       val now = java.time.format.DateTimeFormatter.ISO_INSTANT

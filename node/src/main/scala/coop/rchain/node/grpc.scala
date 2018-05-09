@@ -60,7 +60,7 @@ object GrpcServer {
   class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {
     import RholangCLI.{buildNormalizedTerm, evaluate}
 
-    def exec(reader: Reader): Future[ReplResponse] = buildNormalizedTerm(reader) match {
+    def exec(reader: Reader): Future[ReplResponse] = buildNormalizedTerm(reader).runAttempt match {
       case Left(er) =>
         Future.successful(ReplResponse(s"Error: $er"))
       case Right(term) =>
