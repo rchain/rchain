@@ -96,7 +96,8 @@ object Substitute {
                                case Right(p) => Quote(p)
                              }
                          }
-        } yield ChannelSortMatcher.sortMatch(channelSubst).term
+          sortedChan <- Kleisli.liftF(ChannelSortMatcher.sortMatch[M](channelSubst))
+        } yield sortedChan.term
     }
 
   implicit def substitutePar[M[_]](
@@ -158,14 +159,15 @@ object Substitute {
         (for {
           channelsSub <- substituteChannel[M].substitute(term.chan.get)
           parsSub     <- term.data.toList.traverse(substitutePar[M].substitute(_))
-        } yield
-          Send(
+          send = Send(
             chan = channelsSub,
             data = parsSub,
             persistent = term.persistent,
             locallyFree = term.locallyFree.until(env.shift),
             connectiveUsed = term.connectiveUsed
-          )).map(SendSortMatcher.sortMatch(_)).map(_.term).run(env)
+          )
+          sortedSend <- Kleisli.liftF(SendSortMatcher.sortMatch[M](send))
+        } yield sortedSend.term).run(env)
       }
     }
 
@@ -198,10 +200,10 @@ object Substitute {
       implicit ev: MonadError[M, InterpreterError]): Substitute[M, New] =
     new Substitute[M, New] {
       override def substitute(term: New): Kleisli[M, Env[Par], New] = Kleisli { env =>
-        substitutePar[M].substitute(term.p.get)(env.shift(term.bindCount)).map { parSub =>
+        substitutePar[M].substitute(term.p.get)(env.shift(term.bindCount)).flatMap { parSub =>
           NewSortMatcher
-            .sortMatch(New(term.bindCount, parSub, term.locallyFree.until(env.shift)))
-            .term
+            .sortMatch[M](New(term.bindCount, parSub, term.locallyFree.until(env.shift)))
+            .map(_.term)
         }
       }
     }
@@ -219,11 +221,14 @@ object Substitute {
                            MatchCase(_case, par, freeCount)
                          }
                      })
-        } yield
-          MatchSortMatcher
-            .sortMatch(
-              Match(targetSub, casesSub, term.locallyFree.until(env.shift), term.connectiveUsed))
-            .term
+          sortedMatch <- Kleisli.liftF(
+                          MatchSortMatcher
+                            .sortMatch[M](
+                              Match(targetSub,
+                                    casesSub,
+                                    term.locallyFree.until(env.shift),
+                                    term.connectiveUsed)))
+        } yield sortedMatch.term
     }
 
   implicit def substituteExpr[M[_]](

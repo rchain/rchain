@@ -524,7 +524,8 @@ object ProcNormalizeMatcher {
           sourcesP                                                         <- processSources(bindings)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
           bindingsSources                                                  <- processBindings(sources)
-          receipts                                                         = ReceiveSortMatcher.preSortBinds(bindingsSources)
+          receipts <- ReceiveSortMatcher
+                       .preSortBinds[M, VarSort](bindingsSources)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {

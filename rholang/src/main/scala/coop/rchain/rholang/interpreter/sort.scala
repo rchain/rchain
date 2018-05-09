@@ -14,12 +14,16 @@
   */
 package coop.rchain.rholang.interpreter
 
+import cats.{ApplicativeError, Functor, MonadError}
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, SortMatchError}
 import implicits._
+import cats.implicits._
+import coop.rchain.catscontrib._
 
 sealed trait Tree[T] {
   def size: Int
@@ -156,20 +160,25 @@ object BoolSortMatcher {
 }
 
 object GroundSortMatcher {
-  def sortMatch(g: ExprInstance): ScoredTerm[ExprInstance] =
+  def sortMatch[M[_]](g: ExprInstance)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[ExprInstance]] =
     g match {
-      case gb: GBool   => ScoredTerm(g, BoolSortMatcher.sortMatch(gb).score)
-      case gi: GInt    => ScoredTerm(g, Leaves(Score.INT, gi.value))
-      case gs: GString => ScoredTerm(g, Node(Score.STRING, Leaf(gs.value)))
-      case gu: GUri    => ScoredTerm(g, Node(Score.URI, Leaf(gu.value)))
+      case gb: GBool   => ScoredTerm(g, BoolSortMatcher.sortMatch(gb).score).pure[M]
+      case gi: GInt    => ScoredTerm(g, Leaves(Score.INT, gi.value)).pure[M]
+      case gs: GString => ScoredTerm(g, Node(Score.STRING, Leaf(gs.value))).pure[M]
+      case gu: GUri    => ScoredTerm(g, Node(Score.URI, Leaf(gu.value))).pure[M]
       case EListBody(gl) =>
-        val pars = gl.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(EListBody(gl.withPs(pars.map(_.term.get))),
-                   Node(Score.ELIST, pars.map(_.score): _*))
+        gl.ps.toList
+          .traverse(par => ParSortMatcher.sortMatch[M](par))
+          .map(pars =>
+            ScoredTerm(EListBody(gl.withPs(pars.map(_.term.get))),
+                       Node(Score.ELIST, pars.map(_.score): _*)))
       case ETupleBody(gt) =>
-        val pars = gt.ps.map(par => ParSortMatcher.sortMatch(par))
-        ScoredTerm(ETupleBody(gt.withPs(pars.map(_.term.get))),
-                   Node(Score.ETUPLE, pars.map(_.score): _*))
+        gt.ps.toList
+          .traverse(par => ParSortMatcher.sortMatch[M](par))
+          .map(pars =>
+            ScoredTerm(ETupleBody(gt.withPs(pars.map(_.term.get))),
+                       Node(Score.ETUPLE, pars.map(_.score): _*)))
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case ESetBody(gs) =>
@@ -183,16 +192,20 @@ object GroundSortMatcher {
                 exists
               }
           }
-        val sortedPars       = gs.ps.map(par => ParSortMatcher.sortMatch(par)).sorted
-        val deduplicatedPars = deduplicate(sortedPars)
-        ScoredTerm(ESetBody(gs.withPs(deduplicatedPars.map(_.term.get))),
-                   Node(Score.ESET, deduplicatedPars.map(_.score): _*))
+        gs.ps.toList
+          .traverse(par => ParSortMatcher.sortMatch[M](par))
+          .map(_.sorted)
+          .map(sortedPars => deduplicate(sortedPars))
+          .map(deduplicatedPars =>
+            ScoredTerm(ESetBody(gs.withPs(deduplicatedPars.map(_.term.get))),
+                       Node(Score.ESET, deduplicatedPars.map(_.score): _*)))
       case EMapBody(gm) =>
-        def sortKeyValuePair(kv: KeyValuePair): ScoredTerm[KeyValuePair] = {
-          val sortedKey   = ParSortMatcher.sortMatch(kv.key)
-          val sortedValue = ParSortMatcher.sortMatch(kv.value)
-          ScoredTerm(KeyValuePair(sortedKey.term, sortedValue.term), sortedKey.score)
-        }
+        def sortKeyValuePair(kv: KeyValuePair): M[ScoredTerm[KeyValuePair]] =
+          for {
+            sortedKey   <- ParSortMatcher.sortMatch[M](kv.key)
+            sortedValue <- ParSortMatcher.sortMatch[M](kv.value)
+          } yield ScoredTerm(KeyValuePair(sortedKey.term, sortedValue.term), sortedKey.score)
+
         def deduplicateLastWriteWins(scoredTerms: Seq[ScoredTerm[KeyValuePair]]) =
           scoredTerms.reverse.filterNot {
             var set = Set[Par]()
@@ -203,241 +216,304 @@ object GroundSortMatcher {
                 exists
               }
           }.reverse
-        val sortedPars       = gm.kvs.map(kv => sortKeyValuePair(kv)).sorted
-        val deduplicatedPars = deduplicateLastWriteWins(sortedPars)
-        ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
-                   Node(Score.EMAP, deduplicatedPars.map(_.score): _*))
-      case _ => throw new Error("GroundSortMatcher passed unknown Expr instance")
+        gm.kvs.toList
+          .traverse(kv => sortKeyValuePair(kv))
+          .map(_.sorted)
+          .map(sortedPars => deduplicateLastWriteWins(sortedPars))
+          .map(deduplicatedPars =>
+            ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
+                       Node(Score.EMAP, deduplicatedPars.map(_.score): _*)))
+      case _ =>
+        ApplicativeError[M, InterpreterError].raiseError(
+          SortMatchError("GroundSortMatcher passed unknown Expr instance"))
     }
 }
 
 object ExprSortMatcher {
-  def sortBinaryOperation(
-      p1: Option[Par],
-      p2: Option[Par]): Tuple2[ScoredTerm[Option[Par]], ScoredTerm[Option[Par]]] =
-    Seq(ParSortMatcher.sortMatch(p1), ParSortMatcher.sortMatch(p2)) match {
-      case (p1 +: p2 +: _) => (p1, p2)
-      case _               => throw new Error("Unexpected sequence length.")
-    }
+  def sortBinaryOperation[M[_]](p1: Option[Par], p2: Option[Par])(
+      implicit err: MonadError[M, InterpreterError])
+    : M[Tuple2[ScoredTerm[Option[Par]], ScoredTerm[Option[Par]]]] =
+    for {
+      p1 <- ParSortMatcher.sortMatch[M](p1)
+      p2 <- ParSortMatcher.sortMatch[M](p2)
+    } yield (p1, p2)
+//  Seq(ParSortMatcher.sortMatch(p1), ParSortMatcher.sortMatch(p2)) match {
+//    case (p1 +: p2 +: _) => (p1, p2)
+//    case _               => throw new Error("Unexpected sequence length.")
+//  }
 
-  def sortMatch(e: Expr): ScoredTerm[Expr] = {
+  def sortMatch[M[_]](e: Expr)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Expr]] = {
     def constructExpr(exprInstance: ExprInstance, score: Tree[ScoreAtom]) =
       ScoredTerm(Expr(exprInstance = exprInstance), score)
     e.exprInstance match {
       case ENegBody(en) =>
-        val sortedPar = ParSortMatcher.sortMatch(en.p)
-        constructExpr(ENegBody(ENeg(sortedPar.term)), Node(Score.ENEG, sortedPar.score))
+        ParSortMatcher
+          .sortMatch[M](en.p)
+          .map(sortedPar =>
+            constructExpr(ENegBody(ENeg(sortedPar.term)), Node(Score.ENEG, sortedPar.score)))
       case EVarBody(ev) =>
-        val sortedVar = VarSortMatcher.sortMatch(ev.v)
-        constructExpr(EVarBody(EVar(sortedVar.term)), Node(Score.EVAR, sortedVar.score))
+        VarSortMatcher
+          .sortMatch[M](ev.v)
+          .map(sortedVar =>
+            constructExpr(EVarBody(EVar(sortedVar.term)), Node(Score.EVAR, sortedVar.score)))
       case ENotBody(en) =>
-        val sortedPar = ParSortMatcher.sortMatch(en.p)
-        constructExpr(ENotBody(ENot(sortedPar.term)), Node(Score.ENOT, sortedPar.score))
+        ParSortMatcher
+          .sortMatch[M](en.p)
+          .map(sortedPar =>
+            constructExpr(ENotBody(ENot(sortedPar.term)), Node(Score.ENOT, sortedPar.score)))
       case EMultBody(em) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(em.p1, em.p2)
-        constructExpr(EMultBody(EMult(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EMULT, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](em.p1, em.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EMultBody(EMult(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EMULT, sortedPar1.score, sortedPar2.score))
+        }
       case EDivBody(ed) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(ed.p1, ed.p2)
-        constructExpr(EDivBody(EDiv(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EDIV, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](ed.p1, ed.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EDivBody(EDiv(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EDIV, sortedPar1.score, sortedPar2.score))
+        }
       case EPlusBody(ep) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(ep.p1, ep.p2)
-        constructExpr(EPlusBody(EPlus(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EPLUS, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](ep.p1, ep.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EPlusBody(EPlus(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EPLUS, sortedPar1.score, sortedPar2.score))
+        }
       case EMinusBody(em) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(em.p1, em.p2)
-        constructExpr(EMinusBody(EMinus(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EMINUS, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](em.p1, em.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EMinusBody(EMinus(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EMINUS, sortedPar1.score, sortedPar2.score))
+        }
       case ELtBody(el) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(el.p1, el.p2)
-        constructExpr(ELtBody(ELt(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.ELT, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](el.p1, el.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(ELtBody(ELt(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.ELT, sortedPar1.score, sortedPar2.score))
+        }
       case ELteBody(el) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(el.p1, el.p2)
-        constructExpr(ELteBody(ELte(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.ELTE, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](el.p1, el.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(ELteBody(ELte(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.ELTE, sortedPar1.score, sortedPar2.score))
+        }
       case EGtBody(eg) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(eg.p1, eg.p2)
-        constructExpr(EGtBody(EGt(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EGT, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](eg.p1, eg.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EGtBody(EGt(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EGT, sortedPar1.score, sortedPar2.score))
+        }
       case EGteBody(eg) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(eg.p1, eg.p2)
-        constructExpr(EGteBody(EGte(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EGTE, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](eg.p1, eg.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EGteBody(EGte(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EGTE, sortedPar1.score, sortedPar2.score))
+        }
       case EEqBody(ee) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(ee.p1, ee.p2)
-        constructExpr(EEqBody(EEq(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EEQ, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](ee.p1, ee.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EEqBody(EEq(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EEQ, sortedPar1.score, sortedPar2.score))
+        }
       case ENeqBody(en) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(en.p1, en.p2)
-        constructExpr(ENeqBody(ENeq(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.ENEQ, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](en.p1, en.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(ENeqBody(ENeq(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.ENEQ, sortedPar1.score, sortedPar2.score))
+        }
       case EAndBody(ea) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(ea.p1, ea.p2)
-        constructExpr(EAndBody(EAnd(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EAND, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](ea.p1, ea.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EAndBody(EAnd(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EAND, sortedPar1.score, sortedPar2.score))
+        }
       case EOrBody(eo) =>
-        val (sortedPar1, sortedPar2) = sortBinaryOperation(eo.p1, eo.p2)
-        constructExpr(EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
-                      Node(Score.EOR, sortedPar1.score, sortedPar2.score))
+        sortBinaryOperation[M](eo.p1, eo.p2).map {
+          case (sortedPar1, sortedPar2) =>
+            constructExpr(EOrBody(EOr(sortedPar1.term, sortedPar2.term)),
+                          Node(Score.EOR, sortedPar1.score, sortedPar2.score))
+        }
       case EMethodBody(em) =>
-        val args         = em.arguments.map(par => ParSortMatcher.sortMatch(par))
-        val sortedTarget = ParSortMatcher.sortMatch(em.target.get)
-        constructExpr(
-          EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
-          Node(
-            Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(_.score))
-        )
+        for {
+          args         <- em.arguments.toList.traverse(par => ParSortMatcher.sortMatch[M](par))
+          sortedTarget <- ParSortMatcher.sortMatch[M](em.target.get)
+        } yield
+          constructExpr(
+            EMethodBody(em.withArguments(args.map(_.term.get)).withTarget(sortedTarget.term.get)),
+            Node(
+              Seq(Leaf(Score.EMETHOD), Leaf(em.methodName), sortedTarget.score) ++ args.map(
+                _.score))
+          )
       case eg =>
-        val sortedGround = GroundSortMatcher.sortMatch(eg)
-        constructExpr(sortedGround.term, sortedGround.score)
+        GroundSortMatcher
+          .sortMatch[M](eg)
+          .map(sortedGround => constructExpr(sortedGround.term, sortedGround.score))
     }
   }
 }
 
 object VarSortMatcher {
-  def sortMatch(varOption: Option[Var]): ScoredTerm[Var] =
+  def sortMatch[M[_]](varOption: Option[Var])(
+      implicit err: ApplicativeError[M, InterpreterError]): M[ScoredTerm[Var]] =
     varOption match {
       case Some(v) =>
         v.varInstance match {
-          case BoundVar(level) => ScoredTerm(v, Leaves(Score.BOUND_VAR, level))
-          case FreeVar(level)  => ScoredTerm(v, Leaves(Score.FREE_VAR, level))
-          case Wildcard(_)     => ScoredTerm(v, Leaves(Score.WILDCARD))
+          case BoundVar(level) => ScoredTerm(v, Leaves(Score.BOUND_VAR, level)).pure[M]
+          case FreeVar(level)  => ScoredTerm(v, Leaves(Score.FREE_VAR, level)).pure[M]
+          case Wildcard(_)     => ScoredTerm(v, Leaves(Score.WILDCARD)).pure[M]
         }
-      case None => throw new Error("VarSortMatcher was passed None")
+      case None => err.raiseError(SortMatchError("VarSortMatcher was passed None"))
     }
 }
 
 object ChannelSortMatcher {
-  def sortMatch(channelOption: Option[Channel]): ScoredTerm[Channel] =
+  def sortMatch[M[_]: Functor](channelOption: Option[Channel])(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Channel]] =
     channelOption match {
       case Some(c) =>
         c.channelInstance match {
           case Quote(par) =>
-            val sortedPar = ParSortMatcher.sortMatch(par)
-            ScoredTerm(Quote(sortedPar.term.get), Node(Score.QUOTE, sortedPar.score))
+            ParSortMatcher
+              .sortMatch[M](par)
+              .map(sortedPar =>
+                ScoredTerm(Quote(sortedPar.term.get), Node(Score.QUOTE, sortedPar.score)))
           case ChanVar(par) =>
-            val sortedVar = VarSortMatcher.sortMatch(par)
-            ScoredTerm(ChanVar(sortedVar.term), Node(Score.CHAN_VAR, sortedVar.score))
+            VarSortMatcher
+              .sortMatch[M](par)
+              .map(sortedVar =>
+                ScoredTerm(ChanVar(sortedVar.term), Node(Score.CHAN_VAR, sortedVar.score)))
         }
-      case None => throw new Error("ChannelSortMatcher was passed None")
+      case None => err.raiseError(SortMatchError("ChannelSortMatcher was passed None"))
     }
 
 }
 
 object SendSortMatcher {
-  def sortMatch(s: Send): ScoredTerm[Send] = {
-    val sortedChan = ChannelSortMatcher.sortMatch(s.chan)
-    val sortedData = s.data.map(d => ParSortMatcher.sortMatch(d))
-    val sortedSend =
-      Send(
+  def sortMatch[M[_]](s: Send)(implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Send]] =
+    for {
+      sortedChan <- ChannelSortMatcher.sortMatch[M](s.chan)
+      sortedData <- s.data.toList.traverse(ParSortMatcher.sortMatch[M](_))
+      sortedSend = Send(
         chan = sortedChan.term,
         data = sortedData.map(_.term.get),
         persistent = s.persistent,
         locallyFree = s.locallyFree,
         connectiveUsed = s.connectiveUsed
       )
-    val persistentScore = if (s.persistent) 1 else 0
-    val sendScore = Node(
-      Score.SEND,
-      Seq(Leaf(persistentScore)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score): _*)
-    ScoredTerm(sortedSend, sendScore)
-  }
+      persistentScore = if (s.persistent) 1 else 0
+      sendScore = Node(
+        Score.SEND,
+        Seq(Leaf(persistentScore)) ++ Seq(sortedChan.score) ++ sortedData.map(_.score): _*)
+    } yield ScoredTerm(sortedSend, sendScore)
 }
 
 object ReceiveSortMatcher {
-  def sortBind(bind: ReceiveBind): ScoredTerm[ReceiveBind] = {
-    val patterns       = bind.patterns
-    val source         = bind.source
-    val sortedPatterns = patterns.map(channel => ChannelSortMatcher.sortMatch(channel))
-    val sortedChannel  = ChannelSortMatcher.sortMatch(source)
-    val sortedRemainder = bind.remainder match {
-      case s @ Some(_) => {
-        val scoredVar = VarSortMatcher.sortMatch(s)
-        ScoredTerm(Some(scoredVar.term), scoredVar.score)
-      }
-      case None => ScoredTerm(None, Leaf(Score.ABSENT))
-    }
-
-    ScoredTerm(
-      ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder, bind.freeCount),
-      Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
-    )
+  def sortBind[M[_]](bind: ReceiveBind)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[ReceiveBind]] = {
+    val patterns = bind.patterns
+    val source   = bind.source
+    for {
+      sortedPatterns <- patterns.toList.traverse(channel =>
+                         ChannelSortMatcher.sortMatch[M](channel))
+      sortedChannel <- ChannelSortMatcher.sortMatch[M](source)
+      sortedRemainder <- bind.remainder match {
+                          case s @ Some(_) => {
+                            VarSortMatcher
+                              .sortMatch[M](s)
+                              .map(scoredVar => ScoredTerm(Some(scoredVar.term), scoredVar.score))
+                          }
+                          case None => ScoredTerm(None, Leaf(Score.ABSENT)).pure[M]
+                        }
+    } yield
+      ScoredTerm(
+        ReceiveBind(sortedPatterns.map(_.term), sortedChannel.term, bind.remainder, bind.freeCount),
+        Node(Seq(sortedChannel.score) ++ sortedPatterns.map(_.score) ++ Seq(sortedRemainder.score))
+      )
   }
 
   // Used during normalize to presort the binds.
-  def preSortBinds[T](binds: Seq[Tuple4[Seq[Channel], Channel, Option[Var], DebruijnLevelMap[T]]])
-    : Seq[Tuple2[ReceiveBind, DebruijnLevelMap[T]]] = {
-    val sortedBind = binds.map {
-      case (patterns: Seq[Channel],
-            channel: Channel,
-            remainder: Option[Var],
-            knownFree: DebruijnLevelMap[T]) =>
-        val sortedBind =
-          sortBind(
+  def preSortBinds[M[_], T](
+      binds: Seq[Tuple4[Seq[Channel], Channel, Option[Var], DebruijnLevelMap[T]]])(
+      implicit err: MonadError[M, InterpreterError])
+    : M[Seq[Tuple2[ReceiveBind, DebruijnLevelMap[T]]]] = {
+    val sortedBind = binds.toList
+      .traverse {
+        case (patterns: Seq[Channel],
+              channel: Channel,
+              remainder: Option[Var],
+              knownFree: DebruijnLevelMap[T]) =>
+          sortBind[M](
             ReceiveBind(patterns, channel, remainder, freeCount = knownFree.countNoWildcards))
-        ScoredTerm((sortedBind.term, knownFree), sortedBind.score)
-    }.sorted
-    sortedBind.map(_.term)
+            .map(sortedBind => ScoredTerm((sortedBind.term, knownFree), sortedBind.score))
+      }
+      .map(_.sorted)
+    sortedBind.map(_.map(_.term))
   }
 
   // The order of the binds must already be presorted by the time this is called.
   // This function will then sort the insides of the preordered binds.
-  def sortMatch(r: Receive): ScoredTerm[Receive] = {
-    val sortedBinds     = r.binds.map(bind => sortBind(bind))
-    val persistentScore = if (r.persistent) 1 else 0
-    val sortedBody      = ParSortMatcher.sortMatch(r.body)
-    ScoredTerm(
-      Receive(sortedBinds.map(_.term),
-              sortedBody.term,
-              r.persistent,
-              r.bindCount,
-              r.locallyFree,
-              r.connectiveUsed),
-      Node(Score.RECEIVE,
-           Seq(Leaf(persistentScore)) ++
-             sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
-    )
-  }
+  def sortMatch[M[_]](r: Receive)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Receive]] =
+    for {
+      sortedBinds     <- r.binds.toList.traverse(bind => sortBind[M](bind))
+      persistentScore = if (r.persistent) 1 else 0
+      sortedBody      <- ParSortMatcher.sortMatch[M](r.body)
+    } yield
+      ScoredTerm(
+        Receive(sortedBinds.map(_.term),
+                sortedBody.term,
+                r.persistent,
+                r.bindCount,
+                r.locallyFree,
+                r.connectiveUsed),
+        Node(Score.RECEIVE,
+             Seq(Leaf(persistentScore)) ++
+               sortedBinds.map(_.score) ++ Seq(sortedBody.score): _*)
+      )
 }
 
 object EvalSortMatcher {
-  def sortMatch(e: Eval): ScoredTerm[Eval] = {
-    val sortedChannel = ChannelSortMatcher.sortMatch(e.channel)
-    ScoredTerm(Eval(sortedChannel.term), Node(Score.EVAL, sortedChannel.score))
-  }
+  def sortMatch[M[_]](e: Eval)(implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Eval]] =
+    ChannelSortMatcher
+      .sortMatch[M](e.channel)
+      .map(sortedChannel =>
+        ScoredTerm(Eval(sortedChannel.term), Node(Score.EVAL, sortedChannel.score)))
 }
 
 object NewSortMatcher {
-  def sortMatch(n: New): ScoredTerm[New] = {
-    val sortedPar = ParSortMatcher.sortMatch(n.p)
-    ScoredTerm(New(bindCount = n.bindCount, p = sortedPar.term, locallyFree = n.locallyFree),
-               Node(Score.NEW, Leaf(n.bindCount), sortedPar.score))
-  }
+  def sortMatch[M[_]: Functor](n: New)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[New]] =
+    ParSortMatcher
+      .sortMatch[M](n.p)
+      .map(sortedPar =>
+        ScoredTerm(New(bindCount = n.bindCount, p = sortedPar.term, locallyFree = n.locallyFree),
+                   Node(Score.NEW, Leaf(n.bindCount), sortedPar.score)))
 }
 
 object MatchSortMatcher {
-  def sortMatch(m: Match): ScoredTerm[Match] = {
-    def sortCase(matchCase: MatchCase): ScoredTerm[MatchCase] = {
-      val sortedPattern = ParSortMatcher.sortMatch(matchCase.pattern)
-      val sortedBody    = ParSortMatcher.sortMatch(matchCase.source)
-      ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
-                 Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
-    }
+  def sortMatch[M[_]](m: Match)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Match]] = {
+    def sortCase(matchCase: MatchCase): M[ScoredTerm[MatchCase]] =
+      for {
+        sortedPattern <- ParSortMatcher.sortMatch[M](matchCase.pattern)
+        sortedBody    <- ParSortMatcher.sortMatch[M](matchCase.source)
+      } yield
+        ScoredTerm(MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
+                   Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score)))
 
-    val sortedValue = ParSortMatcher.sortMatch(m.target)
-    val scoredCases = m.cases.map(c => sortCase(c))
-    ScoredTerm(
-      Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
-      Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*)
-    )
+    for {
+      sortedValue <- ParSortMatcher.sortMatch[M](m.target)
+      scoredCases <- m.cases.toList.traverse(sortCase)
+    } yield
+      ScoredTerm(Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),
+                 Node(Score.MATCH, Seq(sortedValue.score) ++ scoredCases.map(_.score): _*))
   }
 }
 
 object BundleSortMatcher {
-  def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
-    val sortedPar = ParSortMatcher.sortMatch(b.body)
+  def sortMatch[M[_]: Functor](b: Bundle)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Bundle]] = {
     val score: Int = if (b.writeFlag && b.readFlag) {
       Score.BUNDLE_READ_WRITE
     } else if (b.writeFlag && !b.readFlag) {
@@ -447,41 +523,49 @@ object BundleSortMatcher {
     } else {
       Score.BUNDLE_EQUIV
     }
-    ScoredTerm(b.copy(body = sortedPar.term), Node(score, sortedPar.score))
+    ParSortMatcher
+      .sortMatch[M](b.body)
+      .map(sortedPar => ScoredTerm(b.copy(body = sortedPar.term), Node(score, sortedPar.score)))
   }
 }
 
 object ParSortMatcher {
-  def sortMatch(parOption: Option[Par]): ScoredTerm[Option[Par]] =
+  def sortMatch[M[_]](parOption: Option[Par])(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Option[Par]]] =
     parOption match {
       case Some(p) =>
-        val sends    = p.sends.map(s => SendSortMatcher.sortMatch(s)).sorted
-        val receives = p.receives.map(r => ReceiveSortMatcher.sortMatch(r)).sorted
-        val exprs    = p.exprs.map(e => ExprSortMatcher.sortMatch(e)).sorted
-        val evals    = p.evals.map(e => EvalSortMatcher.sortMatch(e)).sorted
-        val news     = p.news.map(n => NewSortMatcher.sortMatch(n)).sorted
-        val matches  = p.matches.map(m => MatchSortMatcher.sortMatch(m)).sorted
-        val bundles  = p.bundles.map(b => BundleSortMatcher.sortMatch(b)).sorted
-        val ids      = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
-        val sortedPar = Par(
-          sends = sends.map(_.term),
-          receives = receives.map(_.term),
-          exprs = exprs.map(_.term),
-          evals = evals.map(_.term),
-          news = news.map(_.term),
-          matches = matches.map(_.term),
-          bundles = bundles.map(_.term),
-          ids = ids.map(_.term),
-          locallyFree = p.locallyFree,
-          connectiveUsed = p.connectiveUsed
-        )
-        val parScore = Node(
-          Score.PAR,
-          sends.map(_.score) ++ bundles.map(_.score) ++
-            receives.map(_.score) ++ exprs.map(_.score) ++
-            evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*
-        )
-        ScoredTerm(sortedPar, parScore)
-      case None => throw new Error("ParSortMatcher was passed None")
+        for {
+          sends <- p.sends.toList.traverse(s => SendSortMatcher.sortMatch[M](s)).map(_.sorted)
+          receives <- p.receives.toList
+                       .traverse(r => ReceiveSortMatcher.sortMatch[M](r))
+                       .map(_.sorted)
+          exprs   <- p.exprs.toList.traverse(e => ExprSortMatcher.sortMatch[M](e)).map(_.sorted)
+          evals   <- p.evals.toList.traverse(e => EvalSortMatcher.sortMatch[M](e)).map(_.sorted)
+          news    <- p.news.toList.traverse(n => NewSortMatcher.sortMatch[M](n)).map(_.sorted)
+          matches <- p.matches.toList.traverse(m => MatchSortMatcher.sortMatch[M](m)).map(_.sorted)
+          bundles <- p.bundles.toList.traverse(b => BundleSortMatcher.sortMatch[M](b)).map(_.sorted)
+          ids     = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
+          sortedPar = Par(
+            sends = sends.map(_.term),
+            receives = receives.map(_.term),
+            exprs = exprs.map(_.term),
+            evals = evals.map(_.term),
+            news = news.map(_.term),
+            matches = matches.map(_.term),
+            bundles = bundles.map(_.term),
+            ids = ids.map(_.term),
+            locallyFree = p.locallyFree,
+            connectiveUsed = p.connectiveUsed
+          )
+          parScore = Node(
+            Score.PAR,
+            sends.map(_.score) ++ bundles.map(_.score) ++
+              receives.map(_.score) ++ exprs.map(_.score) ++
+              evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*
+          )
+
+        } yield ScoredTerm(sortedPar.pure[Option], parScore)
+
+      case None => err.raiseError(SortMatchError("ParSortMatcher was passed None"))
     }
 }

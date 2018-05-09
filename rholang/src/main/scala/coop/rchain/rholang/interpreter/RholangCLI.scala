@@ -135,10 +135,12 @@ object RholangCLI {
                                  DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
         par <- ParSortMatcher
-                .sortMatch(Some(outputs.par))
-                .term
-                .fold(Coeval.raiseError[Par](SortMatchError("ParSortMatcher failed")))(par =>
-                  Coeval.delay(par))
+                .sortMatch[Coeval](Some(outputs.par))
+                .map(_.term)
+                .flatMap {
+                  case None      => Coeval.raiseError[Par](SortMatchError("ParSortMatcher failed"))
+                  case Some(par) => Coeval.delay(par)
+                }
       } yield par
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
