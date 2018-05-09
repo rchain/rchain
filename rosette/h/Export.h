@@ -17,26 +17,13 @@
  *	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#if !defined(_RBL_CommandLine_h)
-#define _RBL_CommandLine_h 1
+#if !defined(_Export_h)
+#define _Export_h
 
-#include "rosette.h"
+#include "Code.h"
 
-extern unsigned SurvivorSpaceSize;
-extern unsigned InfantSpaceSize;
-extern unsigned OldSpaceChunkSize;
-
-extern int TenuringAge;
-extern int ParanoidAboutGC;
-extern char BootDirectory[];
-extern char BootFile[];
-extern char RunFile[];
-extern int RestoringImage;
-extern bool ForceEnableRepl;
-extern int VerboseFlag;
-extern int DeferLookupFlag;
-extern char ExportFile[];
-
-extern int ParseCommandLine(int, char**);
+void writeExportCode();
+void collectExportCode(Code *code);
 
 #endif
+

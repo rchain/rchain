@@ -10,6 +10,7 @@ import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
