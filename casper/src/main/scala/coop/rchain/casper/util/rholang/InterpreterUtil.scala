@@ -9,6 +9,6 @@ import java.io.StringReader
 object InterpreterUtil {
 
   def mkTerm(s: String): Either[Throwable, Par] =
-    RholangCLI.buildNormalizedTerm(new StringReader(s))
+    RholangCLI.buildNormalizedTerm(new StringReader(s)).runAttempt
 
 }
