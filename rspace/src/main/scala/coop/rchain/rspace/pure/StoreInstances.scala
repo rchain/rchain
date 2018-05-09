@@ -169,7 +169,7 @@ object StoreInstances {
       def getWaitingContinuation(
           txn: T,
           channels: Seq[C]): ReaderT[F, LMDBContext, Seq[WaitingContinuation[P, K]]] =
-        for {
+        for { 
           channelsHash                    <- hashChannels(channels)
           maybeWaitingContinuationByteses <- readWaitingContinuationByteses(txn, channelsHash)
         } yield
