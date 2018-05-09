@@ -52,7 +52,6 @@ object CommUtil {
     for {
       _          <- MultiParentCasper[F].addBlock(b)
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
-      _          <- sendBlock[F](b)
     } yield
       s"CASPER: Received ${PrettyPrinter.buildString(b)}. New fork-choice is ${PrettyPrinter.buildString(forkchoice)}"
 
