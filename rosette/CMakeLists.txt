@@ -37,8 +37,8 @@ configure_file("${PROJECT_SOURCE_DIR}/h/config.h.in" "${PROJECT_BINARY_DIR}/incl
 include_directories("${PROJECT_BINARY_DIR}/include")
 include_directories("${PROJECT_SOURCE_DIR}/h")
 include_directories("${PROJECT_SOURCE_DIR}/h/sys")
-add_subdirectory (src)
-add_subdirectory (rbl/rosette)
+add_subdirectory(src)
+add_subdirectory(rbl/rosette)
 
 include_directories("${PROJECT_BINARY_DIR}")
 

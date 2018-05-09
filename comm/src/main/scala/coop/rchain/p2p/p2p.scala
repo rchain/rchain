@@ -10,6 +10,7 @@ import coop.rchain.comm._
 import CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
+import coop.rchain.metrics.Metrics
 
 import scala.util.control.NonFatal
 import cats._
