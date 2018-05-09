@@ -2,7 +2,8 @@ package coop.rchain.rspace.pure
 
 import java.nio.ByteBuffer
 
-import cats.data.{ReaderT}
+import cats.data.ReaderT
+import cats.implicits._
 import coop.rchain.catscontrib.Capture
 import coop.rchain.rspace.Serialize
 import coop.rchain.rspace.internal._
@@ -22,13 +23,14 @@ import scala.collection.JavaConverters._
 
 object StoreInstances {
 
-  implicit def storeLMDB[F[_]: Monad, C, P, A, K](
+  implicit def storeLMDB[F[_], C, P, A, K](
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeA: Serialize[A],
       serializeK: Serialize[K],
-      captureF: Capture[F]): Store[ReaderT[F, LMDBContext, ?], C, P, A, K] =
+      captureF: Capture[F],
+      monadF: Monad[F]): Store[ReaderT[F, LMDBContext, ?], C, P, A, K] =
     new Store[ReaderT[F, LMDBContext, ?], C, P, A, K] {
 
       private[this] def capture[X](x: X): F[X] = captureF.capture(x)
@@ -59,38 +61,41 @@ object StoreInstances {
       private[this] def hashChannelsInner(channels: Seq[C]): ByteBuffer =
         hashBytes(toByteBuffer(channels))
 
-      override def hashChannels(channels: Seq[C]): ReaderT[F, LMDBContext, ByteBuffer] =
+      def hashChannels(channels: Seq[C]): ReaderT[F, LMDBContext, ByteBuffer] =
         ReaderT.pure(hashChannelsInner(channels))
 
-      override def getChannels(txn: T, channelsHash: H): ReaderT[F, LMDBContext, Seq[C]] =
-        ReaderT(ctx =>
+      def getChannels(txn: T, channelsHash: H): ReaderT[F, LMDBContext, Seq[C]] =
+        ReaderT { ctx =>
           capture {
             Option(ctx.dbKeys.get(txn, channelsHash))
               .map(fromByteBuffer[C])
               .getOrElse(Seq.empty[C])
-        })
+          }
+        }
 
       private[rspace] def putChannels(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, H] =
-        ReaderT(ctx =>
+        ReaderT { ctx =>
           capture {
             val channelsBytes = toByteBuffer(channels)
             val channelsHash  = hashBytes(channelsBytes)
             ctx.dbKeys.put(txn, channelsHash, channelsBytes)
             channelsHash
-        })
+          }
+        }
 
       private[this] def readDatumByteses(
           txn: T,
           channelsHash: H): ReaderT[F, LMDBContext, Option[Seq[DatumBytes]]] =
-        ReaderT(ctx =>
+        ReaderT { ctx =>
           capture {
             Option(ctx.dbData.get(txn, channelsHash)).map(fromByteBuffer(_, datumBytesesCodec))
-        })
+          }
+        }
 
       private[this] def writeDatumByteses(txn: T,
                                           channelsHash: H,
                                           values: Seq[DatumBytes]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(ctx =>
+        ReaderT { ctx =>
           capture {
             if (values.nonEmpty) {
               ctx.dbData.put(txn, channelsHash, toByteBuffer(values, datumBytesesCodec))
@@ -98,58 +103,57 @@ object StoreInstances {
               ctx.dbData.delete(txn, channelsHash)
               collectGarbage(txn, channelsHash, dataCollected = true)
             }
-            ()
-        })
+          }
+        }
 
-      override def getData(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Seq[Datum[A]]] =
+      def getData(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Seq[Datum[A]]] =
         hashChannels(channels)
-          .flatMap(channelsHash => readDatumByteses(txn, channelsHash))
-          .map(
-            datumByteses =>
-              datumByteses
-                .map(_.map(bytes => Datum(fromByteVector[A](bytes.datumBytes), bytes.persist)))
-                .getOrElse(Seq.empty[Datum[A]]))
+          .flatMap(readDatumByteses(txn, _))
+          .map {
+            _.map(_.map(bytes => Datum(fromByteVector[A](bytes.datumBytes), bytes.persist)))
+              .getOrElse(Seq.empty[Datum[A]])
+          }
 
-      override def putDatum(txn: T,
-                            channels: Seq[C],
-                            datum: Datum[A]): ReaderT[F, LMDBContext, Unit] =
-        putChannels(txn, channels).map(channelsHash => {
-          readDatumByteses(txn, channelsHash).map(oldDatumByteses => {
-            val newDatumBytes = DatumBytes(toByteVector(datum.a), datum.persist)
-            writeDatumByteses(txn,
-                              channelsHash,
-                              newDatumBytes +: oldDatumByteses.getOrElse(Seq.empty[DatumBytes]))
-          })
-        })
+      def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): ReaderT[F, LMDBContext, Unit] =
+        for {
+          channelsHash    <- putChannels(txn, channels)
+          oldDatumByteses <- readDatumByteses(txn, channelsHash)
+          newDatumBytes   = DatumBytes(toByteVector(datum.a), datum.persist)
+          _ <- writeDatumByteses(txn,
+                                 channelsHash,
+                                 newDatumBytes +: oldDatumByteses.getOrElse(Seq.empty[DatumBytes]))
+        } yield ()
 
-      override def removeDatum(txn: T, channel: C, index: Int): ReaderT[F, LMDBContext, Unit] =
+      def removeDatum(txn: T, channel: C, index: Int): ReaderT[F, LMDBContext, Unit] =
         removeDatum(txn, Seq(channel), index)
 
-      override def removeDatum(txn: T,
-                               channels: Seq[C],
-                               index: Int): ReaderT[F, LMDBContext, Unit] =
-        hashChannels(channels).flatMap(channelsHash => {
-          readDatumByteses(txn, channelsHash).map {
+      def removeDatum(txn: T, channels: Seq[C], index: Int): ReaderT[F, LMDBContext, Unit] =
+        for {
+          channelsHash <- hashChannels(channels)
+          datumByteses <- readDatumByteses(txn, channelsHash)
+        } yield
+          datumByteses match {
             case Some(datumByteses) =>
               writeDatumByteses(txn, channelsHash, util.dropIndex(datumByteses, index))
-            case None => throw new IllegalArgumentException(s"removeDatum: no values at $channels")
+            case None =>
+              captureF.fail(new IllegalArgumentException(s"removeDatum: no values at $channels"))
           }
-        })
 
       private[this] def readWaitingContinuationByteses(
           txn: T,
           channelsHash: H): ReaderT[F, LMDBContext, Option[Seq[WaitingContinuationBytes]]] =
-        ReaderT(ctx =>
+        ReaderT { ctx =>
           capture {
             Option(ctx.dbWaitingContinuations.get(txn, channelsHash))
               .map(fromByteBuffer(_, waitingContinuationsSeqCodec))
-        })
+          }
+        }
 
       private[this] def writeWaitingContinuationByteses(
           txn: T,
           channelsHash: H,
           values: Seq[WaitingContinuationBytes]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(ctx =>
+        ReaderT { ctx =>
           capture {
             if (values.nonEmpty) {
               ctx.dbWaitingContinuations.put(txn,
@@ -159,56 +163,63 @@ object StoreInstances {
               ctx.dbWaitingContinuations.delete(txn, channelsHash)
               collectGarbage(txn, channelsHash, waitingContinuationsCollected = true)
             }
-            ()
-        })
+          }
+        }
 
-      override def getWaitingContinuation(
+      def getWaitingContinuation(
           txn: T,
           channels: Seq[C]): ReaderT[F, LMDBContext, Seq[WaitingContinuation[P, K]]] =
-        hashChannels(channels)
-          .flatMap(channelsHash => readWaitingContinuationByteses(txn, channelsHash))
-          .map(
-            _.map(
-              _.map(waitingContinuation =>
-                WaitingContinuation(fromByteVectors[P](waitingContinuation.patterns),
-                                    fromByteVector[K](waitingContinuation.kvalue),
-                                    waitingContinuation.persist)))
-              .getOrElse(Seq.empty[WaitingContinuation[P, K]]))
+        for { 
+          channelsHash                    <- hashChannels(channels)
+          maybeWaitingContinuationByteses <- readWaitingContinuationByteses(txn, channelsHash)
+        } yield
+          maybeWaitingContinuationByteses match {
+            case Some(waitingContinuationsByteses) =>
+              waitingContinuationsByteses.map { waitingContinuationBytes =>
+                WaitingContinuation(fromByteVectors[P](waitingContinuationBytes.patterns),
+                                    fromByteVector[K](waitingContinuationBytes.kvalue),
+                                    waitingContinuationBytes.persist)
+              }
+            case None =>
+              Seq.empty[WaitingContinuation[P, K]]
+          }
 
-      override def removeWaitingContinuation(txn: T,
-                                             channels: Seq[C],
-                                             index: Int): ReaderT[F, LMDBContext, Unit] =
-        hashChannels(channels).flatMap(channelsHash => {
-          readWaitingContinuationByteses(txn, channelsHash).map {
+      def removeWaitingContinuation(txn: T,
+                                    channels: Seq[C],
+                                    index: Int): ReaderT[F, LMDBContext, Unit] =
+        for {
+          channelsHash                <- hashChannels(channels)
+          waitingContinuationsByteses <- readWaitingContinuationByteses(txn, channelsHash)
+        } yield
+          waitingContinuationsByteses match {
             case Some(waitingContinuationByteses) =>
               writeWaitingContinuationByteses(txn,
                                               channelsHash,
                                               util.dropIndex(waitingContinuationByteses, index))
             case None =>
-              throw new IllegalArgumentException(
-                s"removeWaitingContinuation: no values at $channels")
+              captureF.fail(
+                new IllegalArgumentException(s"removeWaitingContinuation: no values at $channels"))
           }
-        })
 
-      override def putWaitingContinuation(
+      def putWaitingContinuation(
           txn: T,
           channels: Seq[C],
           continuation: WaitingContinuation[P, K]): ReaderT[F, LMDBContext, Unit] =
-        putChannels(txn, channels).map(channelsHash => {
-          readWaitingContinuationByteses(txn, channelsHash).map(oldWaitingContinuations => {
-            val newWaitingContinuation =
-              WaitingContinuationBytes(toByteVectorSeq(continuation.patterns),
-                                       toByteVector(continuation.continuation),
-                                       continuation.persist)
-            writeWaitingContinuationByteses(txn,
-                                            channelsHash,
-                                            newWaitingContinuation +: oldWaitingContinuations
-                                              .getOrElse(Seq.empty[WaitingContinuationBytes]))
-          })
-        })
+        for {
+          channelsHash            <- putChannels(txn, channels)
+          oldWaitingContinuations <- readWaitingContinuationByteses(txn, channelsHash)
+          newWaitingContinuation = WaitingContinuationBytes(toByteVectorSeq(continuation.patterns),
+                                                            toByteVector(continuation.continuation),
+                                                            continuation.persist)
+          _ <- writeWaitingContinuationByteses(
+                txn,
+                channelsHash,
+                newWaitingContinuation +: oldWaitingContinuations.getOrElse(
+                  Seq.empty[WaitingContinuationBytes]))
+        } yield ()
 
-      override def removeJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(ctx =>
+      def removeJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
+        ReaderT { ctx =>
           capture {
             val joinKey = hashChannelsInner(Seq(channel))
             Option(ctx.dbJoins.get(txn, joinKey))
@@ -234,18 +245,20 @@ object StoreInstances {
                   }
               }
               .getOrElse(())
-        })
+          }
+        }
 
-      override def removeAllJoins(txn: T, channel: C): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(ctx =>
+      def removeAllJoins(txn: T, channel: C): ReaderT[F, LMDBContext, Unit] =
+        ReaderT { ctx =>
           capture {
             val joinKey = hashChannelsInner(Seq(channel))
             ctx.dbJoins.delete(txn, joinKey)
             collectGarbage(txn, joinKey)
-        })
+          }
+        }
 
-      override def putJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(ctx =>
+      def putJoin(txn: T, channel: C, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
+        ReaderT { ctx =>
           capture {
             val joinKey = hashChannelsInner(Seq(channel))
             val oldJoinsBv =
@@ -257,74 +270,81 @@ object StoreInstances {
             if (!oldJoinsBv.contains(newJoin)) {
               ctx.dbJoins.put(txn, joinKey, toByteBuffer(newJoin +: oldJoinsBv))
             }
-        })
+          }
+        }
 
-      override def getJoin(txn: T, channel: C): ReaderT[F, LMDBContext, Seq[Seq[C]]] =
-        ReaderT(ctx =>
+      def getJoin(txn: T, channel: C): ReaderT[F, LMDBContext, Seq[Seq[C]]] =
+        ReaderT { ctx =>
           capture {
             val joinKey = hashChannelsInner(Seq(channel))
             Option(ctx.dbJoins.get(txn, joinKey))
               .map(toByteVectors)
               .map(_.map(fromByteVectors[C]))
               .getOrElse(Seq.empty[Seq[C]])
-        })
-
-      override def removeAll(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
-        hashChannels(channels)
-          .flatMap(channelsHash => {
-            readWaitingContinuationByteses(txn, channelsHash)
-              .map(_ => writeWaitingContinuationByteses(txn, channelsHash, Seq.empty))
-
-            readDatumByteses(txn, channelsHash)
-              .map(_ => writeDatumByteses(txn, channelsHash, Seq.empty))
-          })
-          .map(_ => channels.foreach(c => removeJoin(txn, c, channels)))
-
-      override def toMap: ReaderT[F, LMDBContext, Map[Seq[C], Row[P, A, K]]] = {
-        def readMap(txn: T): ReaderT[F, LMDBContext, Map[Seq[C], Row[P, A, K]]] = {
-          val initMap = ReaderT((_: LMDBContext) => capture(Map[Seq[C], Row[P, A, K]]()))
-
-          ReaderT((ctx: LMDBContext) =>
-            capture {
-              val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
-              withResource(ctx.dbKeys.iterate(txn, keyRange)) { (it: CursorIterator[ByteBuffer]) =>
-                {
-                  it.asScala.foldLeft(initMap) { (mp, x: CursorIterator.KeyVal[ByteBuffer]) =>
-                    {
-                      for {
-                        channels             <- getChannels(txn, x.key())
-                        data                 <- getData(txn, channels)
-                        waitingContinuations <- getWaitingContinuation(txn, channels)
-                        mpx                  <- mp
-                      } yield mpx + (channels -> Row(data, waitingContinuations))
-                    }
-                  }
-                }
-              }
-          }).flatMap(x => x)
+          }
         }
 
-        createTxnRead().flatMap(txn => {
-          withTxn(txn) { txn =>
-            readMap(txn)
+      def removeAll(txn: T, channels: Seq[C]): ReaderT[F, LMDBContext, Unit] =
+        hashChannels(channels)
+          .flatMap { channelsHash =>
+            {
+              readWaitingContinuationByteses(txn, channelsHash)
+                .map(_ => writeWaitingContinuationByteses(txn, channelsHash, Seq.empty))
+
+              readDatumByteses(txn, channelsHash)
+                .map(_ => writeDatumByteses(txn, channelsHash, Seq.empty))
+            }
           }
-        })
+          .map(_ => channels.foreach(c => removeJoin(txn, c, channels)))
+
+      def toMap: ReaderT[F, LMDBContext, Map[Seq[C], Row[P, A, K]]] = {
+        def getIterator(txn: Txn[ByteBuffer]): ReaderT[F, LMDBContext, CursorIterator[ByteBuffer]] =
+          ReaderT { ctx: LMDBContext =>
+            capture {
+              val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
+              ctx.dbKeys.iterate(txn, keyRange)
+            }
+          }
+
+        def go(txn: Txn[ByteBuffer]): ReaderT[F, LMDBContext, List[(Seq[C], Row[P, A, K])]] =
+          withTxn(txn) { txn =>
+            getIterator(txn).flatMap { iterator =>
+              withResource(iterator) { (it: CursorIterator[ByteBuffer]) =>
+                it.asScala.toList.traverse[ReaderT[F, LMDBContext, ?], (Seq[C], Row[P, A, K])] {
+                  (ci: CursorIterator.KeyVal[ByteBuffer]) =>
+                    for {
+                      channels             <- getChannels(txn, ci.key())
+                      data                 <- getData(txn, channels)
+                      waitingContinuations <- getWaitingContinuation(txn, channels)
+                    } yield channels -> Row(data, waitingContinuations)
+                }
+              }
+            }
+          }
+
+        for {
+          txn <- createTxnRead()
+          res <- go(txn)
+        } yield res.toMap
       }
 
-      override def close(): ReaderT[F, LMDBContext, Unit] =
-        ReaderT(ctx => capture(ctx.close()))
+      def close(): ReaderT[F, LMDBContext, Unit] =
+        ReaderT { ctx =>
+          capture { ctx.close() }
+        }
 
       def clear(): ReaderT[F, LMDBContext, Unit] =
         createTxnWrite().flatMap(txn =>
           withTxn(txn) { txn =>
-            ReaderT(ctx =>
+            ReaderT { ctx =>
               capture {
                 ctx.dbKeys.drop(txn)
                 ctx.dbData.drop(txn)
                 ctx.dbWaitingContinuations.drop(txn)
                 ctx.dbJoins.drop(txn)
                 ()
-            })
+              }
+            }
         })
 
       def collectGarbage(txn: T,
