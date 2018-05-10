@@ -11,6 +11,7 @@ import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
+import coop.rchain.metrics.Metrics
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
@@ -29,6 +30,8 @@ class NodeRuntime(conf: Conf) {
   private val src            = p2p.NetworkAddress.parse(address).right.get
   private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"${name}-rnode-remote.keys")
   private val keysPath       = conf.data_dir().resolve("keys").resolve(s"${name}-rnode.keys")
+  private val storagePath    = conf.data_dir().resolve("rspace")
+  private val storageSize    = conf.map_size()
 
   /** Run services */
   /** TODO all services should be defined in terms of `nodeProgram` */
@@ -56,7 +59,9 @@ class NodeRuntime(conf: Conf) {
 
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
 //  TODO: figure out actual validator identities...
-    com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte))
+    com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte)),
+    storagePath,
+    storageSize
   )
 
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
@@ -70,7 +75,7 @@ class NodeRuntime(conf: Conf) {
 
   def aquireResources(implicit scheduler: Scheduler): Effect[Resources] =
     for {
-      runtime <- Runtime.create(conf.data_dir().resolve("rspace"), conf.map_size()).pure[Effect]
+      runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
                      .acquireServer[Effect](conf.grpcPort(), runtime)
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
