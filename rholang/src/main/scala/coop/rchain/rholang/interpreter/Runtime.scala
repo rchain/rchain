@@ -43,7 +43,7 @@ object Runtime {
 
   def create(dataDir: Path, mapSize: Long): Runtime = {
 
-    if (Files.notExists(dataDir)) Files.createDirectory(dataDir)
+    if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 
     val store =
       LMDBStore
