@@ -20,6 +20,7 @@ in pkgs.stdenv.mkDerivation {
 
   buildInputs = with pkgs;
     [ # deps go here
+      protobuf
     ];
 
   doCheck = true;

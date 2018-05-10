@@ -106,4 +106,58 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator {
     isInMainChain(chain.blockLookup, b2, b8) should be(true)
     isInMainChain(chain.blockLookup, b4, b2) should be(false)
   }
+
+  /*
+   * DAG Looks like this:
+   *
+   *       b9      b10
+   *        \      /
+   *        b7   b8
+   *          \  /
+   *           b6
+   *           / \
+   *      b4  /   \  b5
+   *       | /     \ |
+   *       b2       b3
+   *        \       /
+   *         genesis
+   */
+  "Blocks" should "conflict if they use the same deploys in different histories" in {
+    val deploys = (0 until 6).map(basicDeploy)
+
+    def createChain[F[_]: Monad: BlockDagState]: F[BlockMessage] =
+      for {
+        genesis <- createBlock[F](Seq())
+        b2      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(0)))
+        b3      <- createBlock[F](Seq(genesis.blockHash), deploys = Seq(deploys(1)))
+        b4      <- createBlock[F](Seq(b2.blockHash), deploys = Seq(deploys(2)))
+        b5      <- createBlock[F](Seq(b3.blockHash), deploys = Seq(deploys(2)))
+        b6      <- createBlock[F](Seq(b2.blockHash, b3.blockHash), deploys = Seq(deploys(2)))
+        b7      <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(3)))
+        b8      <- createBlock[F](Seq(b6.blockHash), deploys = Seq(deploys(5)))
+        b9      <- createBlock[F](Seq(b7.blockHash), deploys = Seq(deploys(5)))
+        b10     <- createBlock[F](Seq(b8.blockHash), deploys = Seq(deploys(4)))
+      } yield b10
+
+    val chain   = createChain[StateWithChain].runS(initState).value
+    val genesis = chain.idToBlocks(1)
+
+    val b2  = chain.idToBlocks(2)
+    val b3  = chain.idToBlocks(3)
+    val b4  = chain.idToBlocks(4)
+    val b5  = chain.idToBlocks(5)
+    val b6  = chain.idToBlocks(6)
+    val b7  = chain.idToBlocks(7)
+    val b8  = chain.idToBlocks(8)
+    val b9  = chain.idToBlocks(9)
+    val b10 = chain.idToBlocks(10)
+
+    conflicts(b2, b3, genesis, chain) should be(false)
+    conflicts(b4, b5, genesis, chain) should be(true)
+    conflicts(b6, b6, genesis, chain) should be(false)
+    conflicts(b6, b9, genesis, chain) should be(false)
+    conflicts(b7, b8, genesis, chain) should be(false)
+    conflicts(b7, b10, genesis, chain) should be(false)
+    conflicts(b9, b10, genesis, chain) should be(true)
+  }
 }
