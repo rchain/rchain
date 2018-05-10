@@ -34,6 +34,8 @@ case "$SUBPROJECT" in "rosette")
 
 "p2p-test-network")
 
+    sudo apt-get -yq install python3-minimal python3-pexpect python3-pip
+    sudo pip3 install argparse
     ./scripts/p2p-test-network.sh
     ;;
 
