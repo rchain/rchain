@@ -78,9 +78,6 @@ matrix:
           - haskell-platform
           - rpm
           - fakeroot
-          - python3-minimal
-          - python3-pexpect
-          - python3-argparse
   - language: scala
     env: SUBPROJECT=cloud-p2p-test-network
     scala: 2.12.4
