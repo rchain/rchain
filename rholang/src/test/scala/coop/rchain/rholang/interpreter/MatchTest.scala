@@ -62,23 +62,33 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val target: Send =
       Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
     val pattern: Send =
-      Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet())
-    val result = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> GPrivate("unforgeable"))))
+      Send(ChanVar(FreeVar(0)), List(EVar(wc), GInt(8)), false, BitSet(), true)
+    val expectedResult = Some(Map[Int, Par](0 -> GPrivate("unforgeable")))
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching a send's body" should "work" in {
     val target: Send =
       Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8)), false, BitSet())
-    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet())
+    val pattern: Send  = Send(ChanVar(wc), List(EVar(FreeVar(0)), GInt(8)), false, BitSet(), true)
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(7)))
     val result =
       spatialMatch(target, pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> GInt(7))))
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
   "Matching a send" should "require arity matching in" in {
     val target: Send =
       Send(Quote(GPrivate("unforgeable")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
-    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet())
+    val pattern: Send = Send(ChanVar(wc), List(EVar(FreeVar(0)), EVar(wc)), false, BitSet(), true)
     val result        = spatialMatch(target, pattern).runS(emptyMap)
     result should be(None)
   }
@@ -105,10 +115,15 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val sendTarget: Par =
       Send(Quote(GPrivate("zero")), List(GInt(7), GPrivate("one")), false, BitSet())
     val pattern: Par =
-      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet())
+      Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet(), true)
         .withConnectiveUsed(true)
-    val result = spatialMatch(sendTarget, pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one"))))
+    val expectedResult = Some(Map[Int, Par](0 -> GPrivate("zero"), 1 -> GPrivate("one")))
+    val result         = spatialMatch(sendTarget, pattern).runS(emptyMap)
+    result should be(expectedResult)
+    val targetPar: Par  = sendTarget
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching a receive with a free variable in the channel and a free variable in the body" should "capture for both variables." in {
@@ -128,21 +143,32 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       ),
       EVar(FreeVar(1)),
       false,
-      4
+      4,
+      connectiveUsed = true
     )
-    val result = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(
+    val expectedResult =
       Some(
         Map[Int, Par](
           0 -> GInt(8),
-          1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet()))))
+          1 -> Send(Quote(GPrivate("unforgeable")), List(GInt(9), GInt(10)), false, BitSet())))
+    val result = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching an eval with no free variables" should "Succeed, but not capture anything." in {
-    val target: Eval  = Eval(ChanVar(BoundVar(0)))
-    val pattern: Eval = Eval(ChanVar(BoundVar(0)))
-    val result        = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(Some(Map.empty[Int, Par]))
+    val target: Eval   = Eval(ChanVar(BoundVar(0)))
+    val pattern: Eval  = Eval(ChanVar(BoundVar(0)))
+    val expectedResult = Some(Map.empty[Int, Par])
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching between New's" should "match the bodies if the new count is the same" in {
@@ -156,9 +182,14 @@ class VarMatcherSpec extends FlatSpec with Matchers {
           Par()
             .prepend(Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), false).withConnectiveUsed(true))
             .prepend(EVar(Wildcard(WildcardMsg()))))
-    val result = spatialMatch(target, pattern).runS(emptyMap)
 
-    result should be(Some(Map[Int, Par](0 -> GInt(42))))
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(42)))
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching between matches " should "require equality of cases, but match targets and inside bodies." in {
@@ -179,18 +210,29 @@ class VarMatcherSpec extends FlatSpec with Matchers {
         EVar(FreeVar(0)),
         Seq(MatchCase(EList(Seq(EVar(FreeVar(0)), EVar(FreeVar(1)))),
                       EVar(Wildcard(WildcardMsg()))),
-            MatchCase(EVar(Wildcard(WildcardMsg())), EVar(FreeVar(1))))
+            MatchCase(EVar(Wildcard(WildcardMsg())), EVar(FreeVar(1)))),
+        connectiveUsed = true
       )
     val result = spatialMatch(target, pattern).runS(emptyMap)
 
-    result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(4), GInt(20))), 1 -> Par())))
+    val expectedResult = (Some(Map[Int, Par](0 -> EList(Seq(GInt(4), GInt(20))), 1 -> Par())))
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching a list with a remainder" should "capture the remainder." in {
-    val target: Expr  = EList(Seq(GInt(1), GInt(2)))
-    val pattern: Expr = EList(Seq(GInt(1)), remainder = Some(FreeVar(0)))
-    val result        = spatialMatch(target, pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> EList(Seq(GInt(2))))))
+    val target: Expr   = EList(Seq(GInt(1), GInt(2)))
+    val pattern: Expr  = EList(Seq(GInt(1)), remainder = Some(FreeVar(0)), connectiveUsed = true)
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+    val expectedResult = (Some(Map[Int, Par](0 -> EList(Seq(GInt(2))))))
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 
   "Matching inside bundles" should "not be possible" in {
@@ -223,7 +265,12 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
     val pattern: Par = EVar(FreeVar(0))
 
-    val result = spatialMatch(Par(bundles = Seq(target)), pattern).runS(emptyMap)
-    result should be(Some(Map[Int, Par](0 -> target)))
+    val result         = spatialMatch(Par(bundles = Seq(target)), pattern).runS(emptyMap)
+    val expectedResult = (Some(Map[Int, Par](0 -> target)))
+    result should be(expectedResult)
+    val targetPar: Par  = target
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
   }
 }
