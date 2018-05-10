@@ -12,11 +12,15 @@ import coop.rchain.rholang.interpreter.implicits.{
   fromEList,
   fromExpr,
   BundleLocallyFree,
+  EvalLocallyFree,
   ExprLocallyFree,
   GPrivateLocallyFree,
   MatchCaseLocallyFree,
+  MatchLocallyFree,
+  NewLocallyFree,
   ParLocallyFree,
   ReceiveBindLocallyFree,
+  ReceiveLocallyFree,
   SendLocallyFree,
   VectorPar
 }
@@ -280,21 +284,41 @@ object SpatialMatcher {
                                      (p, s) => p.withSends(s +: p.sends),
                                      varLevel,
                                      wildcard)
+          _ <- listMatchSingle[Receive](target.receives,
+                                        pattern.receives,
+                                        (p, s) => p.withReceives(s +: p.receives),
+                                        varLevel,
+                                        wildcard)
+          _ <- listMatchSingle[Eval](target.evals,
+                                     pattern.evals,
+                                     (p, s) => p.withEvals(s +: p.evals),
+                                     varLevel,
+                                     wildcard)
+          _ <- listMatchSingle[New](target.news,
+                                    pattern.news,
+                                    (p, s) => p.withNews(s +: p.news),
+                                    varLevel,
+                                    wildcard)
           _ <- listMatchSingle[Expr](target.exprs,
                                      NoFrees(pattern.exprs),
                                      (p, e) => p.withExprs(e +: p.exprs),
                                      varLevel,
                                      wildcard)
-          _ <- listMatchSingle[GPrivate](target.ids,
-                                         pattern.ids,
-                                         (p, i) => p.withIds(i +: p.ids),
-                                         varLevel,
-                                         wildcard)
+          _ <- listMatchSingle[Match](target.matches,
+                                      pattern.matches,
+                                      (p, e) => p.withMatches(e +: p.matches),
+                                      varLevel,
+                                      wildcard)
           _ <- listMatchSingle[Bundle](target.bundles,
                                        pattern.bundles,
                                        (p, b) => p.withBundles(b +: p.bundles),
                                        varLevel,
                                        wildcard)
+          _ <- listMatchSingle[GPrivate](target.ids,
+                                         pattern.ids,
+                                         (p, i) => p.withIds(i +: p.ids),
+                                         varLevel,
+                                         wildcard)
         } yield Unit
       }
   }
