@@ -143,14 +143,13 @@ run_tests_on_network() {
   network_name=$1
   repl_load_count=$2
 
-  sleep 120 # wait for rnode network to boot up and converge 
+  loop_count=1 # only run once
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
 
-    # This takes too long when it fails - will rewrite shortly
-    loop_count=1 # only run once
-    if [[ ${loop_count} -lt 2 ]]; then
+    # Test for network convergence before running all tests # simpler is above WAIT_TIME
+    if [[ ${loop_count} == 1 ]]; then
       check_network_convergence ${container_name} # Check that network has converged and api up before running tests 
-      loop=$(($loop+1))
+      loop_count=$(($loop_count+1))
     fi
 
     line_bar
@@ -260,9 +259,10 @@ check_network_convergence() {
   count=0
   metric_string="peers 2.0"
   while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^${metric_string}'") ]]; do
-    echo "Checking ${container_name} metric ${metric_string}. ${count} seconds of max 200."
-    if [[ $count -gt 200 ]]; then
-      echo "Max wait time of 200 reached. Exiting network convergence check & wait loop."
+    MAX_WAIT_SECONDS=200
+    echo "Checking ${container_name} metric ${metric_string}. ${count} seconds of max ${MAX_WAIT_SECONDS}."
+    if [[ $count -gt $MAX_WAIT_SECONDS ]]; then
+      echo "Max wait time of ${MAX_WAIT_SECONDS} reached. Exiting network convergence check & wait loop."
       return
     fi
     sleep 10
@@ -289,7 +289,7 @@ elif [[ $1 == "local" ]]; then
   create_docker_rnode_image "local"
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
-elif [[ $1 == "run-tests" ]]; then
+elif [[ $1 == "run-tests" && $2 ]]; then
   repl_load_count=$2
   sudo echo "" # Ask for sudo early
   run_tests_on_network "${network_name}" "${repl_load_count}"
@@ -318,7 +318,7 @@ else
   echo "Usage: $0 local"
   echo "Usage: $0 start"
   echo "Usage: $0 stop"
-  echo "Usage: $0 run-tests"
+  echo "Usage: $0 run-tests 50 (where 50 is number of repl command list load count)"
   echo "Usage: $0 docker-help"
   exit
 fi
