@@ -20,6 +20,12 @@ import monix.execution.Scheduler
 
 class NodeRuntime(conf: Conf) {
 
+  implicit class ThrowableOps(th: Throwable) {
+    def containsMessageWith(str: String): Boolean =
+      if (th.getCause() == null) th.getMessage.contains(str)
+      else th.getMessage.contains(str) || th.getCause().containsMessageWith(str)
+  }
+
   import ApplicativeError_._
 
   /** Configuration */
@@ -107,7 +113,9 @@ class NodeRuntime(conf: Conf) {
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
-  def nodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
+  private def exit0: Task[Unit] = Task.delay(System.exit(0))
+
+  private def unrecoverableNodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
     for {
       resources <- aquireResources
       _         <- startResources(resources)
@@ -122,6 +130,16 @@ class NodeRuntime(conf: Conf) {
                   .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
       _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
           else ().pure[Effect]
-      _ <- Task.delay(System.exit(0)).toEffect // YEAH, I KNOW, DO BETTER, I DARE YOU
+      _ <- exit0.toEffect
     } yield ()
+
+  def nodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
+    EitherT[Task, CommError, Unit](unrecoverableNodeProgram.value.onErrorHandleWith {
+      case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
+        Log[Task]
+          .error(
+            "Libsodium is NOT installed ono your system. Please install libsodium and try again.")
+      case th =>
+        th.getStackTrace().toList.traverse(ste => Log[Task].error(ste.toString))
+    } *> exit0.as(Right(())))
 }
