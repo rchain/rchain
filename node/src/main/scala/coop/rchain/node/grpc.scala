@@ -60,24 +60,23 @@ object GrpcServer {
   class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {
     import RholangCLI.{buildNormalizedTerm, evaluate}
 
-    def exec(reader: Reader): Future[ReplResponse] = buildNormalizedTerm(reader).runAttempt match {
-      case Left(er) =>
-        Future.successful(ReplResponse(s"Error: $er"))
-      case Right(term) =>
-        val evalAttempt: Either[Throwable, Unit] =
-          evaluate(runtime.reducer, term).attempt.unsafeRunSync
-
-        Task
-          .pure(
-            evalAttempt match {
+    def exec(reader: Reader): Future[ReplResponse] =
+      Task
+        .defer(Task.coeval(buildNormalizedTerm(reader)))
+        .attempt
+        .flatMap {
+          case Left(er) =>
+            Task.now(s"Error: $er")
+          case Right(term) =>
+            evaluate(runtime.reducer, term).attempt.map {
               case Left(ex) => s"Caught boxed exception: $ex"
               case Right(_) =>
                 s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
             }
-          )
-          .map(ReplResponse(_))
-          .runAsync
-    }
+        }
+        .map(ReplResponse(_))
+        .executeAsync
+        .runAsync
 
     def run(request: CmdRequest): Future[ReplResponse] =
       exec(new StringReader(request.line))

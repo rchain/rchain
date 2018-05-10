@@ -41,11 +41,7 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix,
-      scalapbRuntimegGrpc
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen() -> (sourceManaged in Compile).value
+      monix
     )
   )
   .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang)
@@ -90,7 +86,8 @@ lazy val models = (project in file("models"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       scalacheck,
-      scalacheckShapeless
+      scalacheckShapeless,
+      scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
