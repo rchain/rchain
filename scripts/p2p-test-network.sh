@@ -226,7 +226,7 @@ run_tests_on_network() {
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
     echo "Dumping metrics and logs"
-    # exit 1 # comment out this line to enable failures
+    exit 1 # comment out this line to enable failures
   elif [[ $all_pass == true ]]; then
     echo "SUCCESS: All checks passed"
   else
