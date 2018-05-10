@@ -17,9 +17,8 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
-import scala.concurrent.{Await, ExecutionException}
 import scala.concurrent.duration._
-import monix.eval.Task.catsAsync
+import scala.concurrent.{Await, ExecutionException}
 
 trait PersistentStoreTester {
   def withTestStore[R](
@@ -40,10 +39,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "handle simple addition" in {
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      val addExpr           = EPlus(GInt(7), GInt(8))
-      implicit val emptyEnv = Env[Par]()
-      val resultTask        = reducer.evalExpr(addExpr)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      val addExpr      = EPlus(GInt(7), GInt(8))
+      implicit val env = Env[Par]()
+      val resultTask   = reducer.evalExpr(addExpr)
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
@@ -53,10 +52,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "leave ground values alone" in {
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      val groundExpr        = GInt(7)
-      implicit val emptyEnv = Env[Par]()
-      val resultTask        = reducer.evalExpr(groundExpr)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      val groundExpr   = GInt(7)
+      implicit val env = Env[Par]()
+      val resultTask   = reducer.evalExpr(groundExpr)
       Await.result(resultTask.runAsync, 3.seconds)
     }
 
@@ -66,10 +65,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
   "evalExpr" should "handle equality between arbitary processes" in {
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      val eqExpr            = EEq(GPrivate("private_name"), GPrivate("private_name"))
-      implicit val emptyEnv = Env[Par]()
-      val resultTask        = reducer.evalExpr(eqExpr)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      val eqExpr       = EEq(GPrivate("private_name"), GPrivate("private_name"))
+      implicit val env = Env[Par]()
+      val resultTask   = reducer.evalExpr(eqExpr)
       Await.result(resultTask.runAsync, 3.seconds)
     }
     val expected = Seq(Expr(GBool(true)))
@@ -79,7 +78,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "evalExpr" should "substitute before comparison." in {
     val result = withTestStore { store =>
       val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit lazy val env = Env.makeEnv(Par(), Par())
+      implicit val emptyEnv = Env.makeEnv(Par(), Par())
       val eqExpr            = EEq(EVar(BoundVar(0)), EVar(BoundVar(1)))
       val resultTask        = reducer.evalExpr(eqExpr)
       Await.result(resultTask.runAsync, 3.seconds)
@@ -93,9 +92,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create(store).reducer
       val bundleSend =
         Bundle(Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet()))
-      val interpreter       = reducer
-      implicit val emptyEnv = Env[Par]()
-      val resultTask        = interpreter.eval(bundleSend)
+      val interpreter  = reducer
+      implicit val env = Env[Par]()
+      val resultTask   = interpreter.eval(bundleSend)
       val inspectTask = for {
         _ <- resultTask
       } yield store.toMap
@@ -161,9 +160,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       val reducer = RholangOnlyDispatcher.create(store).reducer
       val send =
         Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
-      val interpreter       = reducer
-      implicit val emptyEnv = Env[Par]()
-      val resultTask        = interpreter.eval(send)
+      val interpreter  = reducer
+      implicit val env = Env[Par]()
+      val resultTask   = interpreter.eval(send)
       val inspectTask = for {
         _ <- resultTask
       } yield store.toMap
@@ -189,9 +188,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Send(Channel(Quote(Bundle(x, writeFlag = true, readFlag = false))), Seq(Expr(GInt(7))))
 
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
-      val task              = reducer.eval(send).map(_ => store.toMap)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
+      val task         = reducer.eval(send).map(_ => store.toMap)
       Await.result(task.runAsync, 3.seconds)
     }
 
@@ -210,10 +209,10 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 false,
                 3,
                 BitSet())
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      val interpreter       = reducer
-      implicit val emptyEnv = Env[Par]()
-      val resultTask        = interpreter.eval(receive)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      val interpreter  = reducer
+      implicit val env = Env[Par]()
+      val resultTask   = interpreter.eval(receive)
       val inspectTask = for {
         _ <- resultTask
       } yield store.toMap
@@ -253,9 +252,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                           body = Par())
 
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
-      val task              = reducer.eval(receive).map(_ => store.toMap)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
+      val task         = reducer.eval(receive).map(_ => store.toMap)
       Await.result(task.runAsync, 3.seconds)
     }
 
@@ -287,8 +286,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       BitSet()
     )
     val sendFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
         _ <- reducer.eval(send)
         _ <- reducer.eval(receive)
@@ -303,8 +302,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val receiveFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
         _ <- reducer.eval(receive)
         _ <- reducer.eval(send)
@@ -334,8 +333,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val sendFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
         _ <- reducer.eval(send)
         _ <- reducer.eval(receive)
@@ -350,8 +349,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val receiveFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
         _ <- reducer.eval(receive)
         _ <- reducer.eval(send)
@@ -385,9 +384,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val sendFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      val interpreter       = reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      val interpreter  = reducer
+      implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
         _ <- interpreter.eval(send)
         _ <- interpreter.eval(receive)
@@ -411,8 +410,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val receiveFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
         _ <- reducer.eval(receive)
         _ <- reducer.eval(send)
@@ -497,8 +496,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       BitSet()
     )
     val sendFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskSendFirst = for {
         _ <- reducer.eval(send1)
         _ <- reducer.eval(send2)
@@ -514,8 +513,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val receiveFirstResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskReceiveFirst = for {
         _ <- reducer.eval(receive)
         _ <- reducer.eval(send1)
@@ -531,8 +530,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val interleavedResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val inspectTaskInterleaved = for {
         _ <- reducer.eval(send1)
         _ <- reducer.eval(receive)
@@ -556,8 +555,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               Send(Quote(GString("result")), Seq(EVar(BoundVar(0)))))
 
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
       val task = for {
         _ <- reducer.eval(receive)
         _ <- reducer.eval(send)
@@ -579,9 +578,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val nthCall: Expr =
       EMethod("nth", EList(List(GInt(7), GInt(8), GInt(9), GInt(10))), List[Par](GInt(2)))
     val directResult: Par = withTestStore { store =>
-      implicit val emptyEnv = Env[Par]()
+      implicit val env = Env[Par]()
       val reducer =
-        RholangOnlyDispatcher.create(store).reducer.asInstanceOf[Reduce.DebruijnInterpreter]
+        RholangOnlyDispatcher.create(store).reducer
       Await.result(reducer.evalExprToPar(nthCall).runAsync, 3.seconds)
     }
     val expectedResult: Par = GInt(9)
@@ -596,9 +595,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                      GInt(10))),
               List[Par](GInt(1)))
     val indirectResult = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
-      val nthTask           = reducer.eval(nthCallEvalToSend)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
+      val nthTask      = reducer.eval(nthCallEvalToSend)
       val inspectTask = for {
         _ <- nthTask
       } yield store.toMap
@@ -624,9 +623,9 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val send: Par =
       Send(Quote(GString("result")), List[Par](nthCallEvalToSend), false, BitSet())
     val result = withTestStore { store =>
-      val reducer           = RholangOnlyDispatcher.create(store).reducer
-      implicit val emptyEnv = Env[Par]()
-      val nthTask           = reducer.eval(send)
+      val reducer      = RholangOnlyDispatcher.create(store).reducer
+      implicit val env = Env[Par]()
+      val nthTask      = reducer.eval(send)
       val inspectTask = for {
         _ <- nthTask
       } yield store.toMap

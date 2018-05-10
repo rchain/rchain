@@ -5,7 +5,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBo
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rspace.IStore
 import monix.eval.Task
-import monix.eval.Task.catsAsync
+import monix.eval.Task.catsParallel
 
 trait Dispatch[M[_], A, K] {
 
@@ -45,7 +45,7 @@ object RholangOnlyDispatcher {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[Task] =
-      new Reduce.DebruijnInterpreter(tuplespace, dispatcher)
+      new Reduce.DebruijnInterpreter[Task, Task.Par](tuplespace, dispatcher)
     dispatcher
   }
 }
@@ -80,7 +80,7 @@ object RholangAndScalaDispatcher {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[Task] =
-      new Reduce.DebruijnInterpreter(tuplespace, dispatcher)
+      new Reduce.DebruijnInterpreter[Task, Task.Par](tuplespace, dispatcher)
     dispatcher
   }
 }

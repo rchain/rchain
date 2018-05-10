@@ -1,11 +1,14 @@
 package coop.rchain.rholang.interpreter
 
-import cats.MonadError
+import cats.{Monad, MonadError}
 import monix.eval.{Coeval, Task}
 import monix.eval.Task.catsAsync
 import cats.implicits._
 
 object errors {
+  type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
+  def interpreterErrorM[M[_]: Monad: InterpreterErrorsM] = MonadError[M, InterpreterError]
+
   trait InterpreterError                        extends Throwable
   final case class NormalizerError(msg: String) extends InterpreterError
   final case class SyntaxError(msg: String)     extends InterpreterError
