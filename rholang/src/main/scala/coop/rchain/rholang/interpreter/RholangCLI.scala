@@ -114,9 +114,7 @@ object RholangCLI {
           case Left(SyntaxError(msg)) =>
             // we don't want to print stack trace for syntax errors
             Console.err.print(msg)
-          case Left(UnrecognizedNormalizerError(msg)) =>
-            Console.err.print(msg)
-          case Left(UnrecognizedInterpreterError(th)) =>
+          case Left(th) =>
             th.printStackTrace(Console.err)
         }
       case None =>

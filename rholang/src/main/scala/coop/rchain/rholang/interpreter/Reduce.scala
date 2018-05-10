@@ -154,7 +154,8 @@ object Reduce {
         })
       ).parSequence.map(_ => ())
 
-    override def inj(par: Par): M[Unit] = for { _ <- eval(par)(Env[Par]()) } yield ()
+    override def inj(par: Par): M[Unit] =
+      for { _ <- eval(par)(Env[Par]()) } yield ()
 
     def debug(msg: String): Unit = {
       val now = java.time.format.DateTimeFormatter.ISO_INSTANT
@@ -272,29 +273,28 @@ object Reduce {
           )
         )
 
+      @annotation.tailrec
       def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] =
-        for {
-          _ <- cases match {
-                case Nil => Applicative[M].pure(())
-                case singleCase +: caseRem =>
-                  val matchResult = SpatialMatcher
-                    .spatialMatch(target, singleCase.pattern.get)
-                    .runS(SpatialMatcher.emptyMap)
-                  matchResult match {
-                    case None => firstMatch(target, caseRem)
-                    case Some(freeMap) => {
-                      val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                      eval(singleCase.source.get)(newEnv)
-                    }
-                  }
+        cases match {
+          case Nil => Applicative[M].pure(())
+          case singleCase +: caseRem =>
+            val matchResult = SpatialMatcher
+              .spatialMatch(target, singleCase.pattern.get)
+              .runS(SpatialMatcher.emptyMap)
+            matchResult match {
+              case None => firstMatch(target, caseRem)
+              case Some(freeMap) => {
+                val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
+                eval(singleCase.source.get)(newEnv)
               }
-        } yield ()
+            }
+        }
 
       for {
         evaledTarget <- evalExpr(mat.target.get)
         // TODO(kyle): Make the matcher accept an environment, instead of
         // substituting it.
-        substTarget <- substitutePar[M].substitute(evaledTarget)
+        substTarget <- substitutePar[M].substitute(evaledTarget)(env)
         _           <- firstMatch(substTarget, mat.cases)
       } yield ()
     }
