@@ -4,6 +4,7 @@ import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
+import coop.rchain.metrics.Metrics
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
