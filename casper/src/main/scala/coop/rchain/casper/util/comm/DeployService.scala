@@ -1,11 +1,16 @@
 package coop.rchain.casper.util.comm
 
+import cats.implicits._
+
+import com.google.protobuf.empty.Empty
+
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc}
+import coop.rchain.casper.protocol.{DeployServiceGrpc, DeployString}
 import monix.eval.Task
 
 trait DeployService[F[_]] {
-  def deploy(d: Deploy): F[Boolean]
+  def deploy(d: DeployString): F[(Boolean, String)]
+  def propose(): F[Unit] //force Casper to propose a block
 }
 
 object DeployService {
@@ -18,8 +23,13 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] {
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
   private val blockingStub = DeployServiceGrpc.blockingStub(channel)
 
-  def deploy(d: Deploy): Task[Boolean] = Task.delay {
+  def deploy(d: DeployString): Task[(Boolean, String)] = Task.delay {
     val response = blockingStub.doDeploy(d)
-    response.success
+    (response.success, response.message)
   }
+
+  def propose(): Task[Unit] =
+    Task.delay {
+      blockingStub.propose(Empty())
+    }.void
 }

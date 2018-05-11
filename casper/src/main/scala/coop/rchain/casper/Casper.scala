@@ -25,7 +25,7 @@ trait Casper[F[_], A] {
   def deploy(d: Deploy): F[Unit]
   def estimator: F[A]
   def proposeBlock: F[Option[BlockMessage]]
-  def sendBlockWhenReady: F[Unit]
+  def sendBlockWhenReady(force: Boolean = false): F[Unit]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]]
@@ -42,8 +42,8 @@ sealed abstract class MultiParentCasperInstances {
       def deploy(r: Deploy): F[Unit]            = ().pure[F]
       def estimator: F[IndexedSeq[BlockMessage]] =
         Applicative[F].pure[IndexedSeq[BlockMessage]](Vector(BlockMessage()))
-      def proposeBlock: F[Option[BlockMessage]] = Applicative[F].pure[Option[BlockMessage]](None)
-      def sendBlockWhenReady: F[Unit]           = ().pure[F]
+      def proposeBlock: F[Option[BlockMessage]]               = Applicative[F].pure[Option[BlockMessage]](None)
+      def sendBlockWhenReady(force: Boolean = false): F[Unit] = ().pure[F]
     }
 
   //TODO: figure out Casper key management for validators
@@ -87,7 +87,7 @@ sealed abstract class MultiParentCasperInstances {
                 deployHist += d
               }
           _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(d)}")
-          _ <- sendBlockWhenReady
+          _ <- sendBlockWhenReady()
         } yield ()
 
       def estimator: F[IndexedSeq[BlockMessage]] =
@@ -174,13 +174,13 @@ sealed abstract class MultiParentCasperInstances {
         }
       }
 
-      def sendBlockWhenReady: F[Unit] =
+      def sendBlockWhenReady(force: Boolean = false): F[Unit] =
         for {
-          _ <- if (deployBuff.size < 10) {
-                Monad[F].pure(()) //nothing to do yet
-              } else {
+          _ <- if (force || deployBuff.size >= 10) {
                 val clearBuff = Capture[F].capture { deployBuff.clear() }
                 proposeBlock *> clearBuff
+              } else {
+                Monad[F].pure(()) //nothing to do yet
               }
         } yield ()
 

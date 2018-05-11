@@ -42,7 +42,10 @@ object Main {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
         DiagnosticsRuntime.diagnosticsProgram[Task]
       }
-      case None if (conf.deployDemo()) => DeployRuntime.deployProgram[Task]
+      case None if (conf.deploy.toOption.isDefined) =>
+        DeployRuntime.deployFileProgram[Task](conf.deploy.toOption.get)
+      case None if (conf.deployDemo()) => DeployRuntime.deployDemoProgram[Task]
+      case None if (conf.propose())    => DeployRuntime.forcePropose[Task]
       case None =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
