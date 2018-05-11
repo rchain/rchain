@@ -2,11 +2,15 @@ package coop.rchain.node
 
 import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
+
 import scala.concurrent.Future
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
@@ -14,8 +18,9 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.Task
 import monix.execution.Scheduler
 import com.google.protobuf.ByteString
-
 import java.io.{Reader, StringReader}
+
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object GrpcServer {
 
@@ -66,10 +71,14 @@ object GrpcServer {
         .attempt
         .flatMap {
           case Left(er) =>
-            Task.now(s"Error: $er")
+            er match {
+              case _: InterpreterError => Task.now(s"Error: ${er.toString}")
+              case th: Throwable => Task.now(s"Error: $th")
+            }
           case Right(term) =>
             evaluate(runtime.reducer, term).attempt.map {
-              case Left(ex) => s"Caught boxed exception: $ex"
+              case Left(ie: InterpreterError) => s"Error: ${ie.toString}"
+              case Left(ex)                   => s"Caught boxed exception: $ex"
               case Right(_) =>
                 s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
             }

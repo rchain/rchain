@@ -9,9 +9,9 @@ object errors {
   type InterpreterErrorsM[M[_]] = MonadError[M, InterpreterError]
   def interpreterErrorM[M[_]: Monad: InterpreterErrorsM] = MonadError[M, InterpreterError]
 
-  trait InterpreterError                        extends Throwable
-  final case class NormalizerError(msg: String) extends InterpreterError
-  final case class SyntaxError(msg: String)     extends InterpreterError
+  trait InterpreterError                                          extends Throwable
+  final case class NormalizerError(override val toString: String) extends InterpreterError
+  final case class SyntaxError(override val toString: String)     extends InterpreterError
   final case class UnexpectedNameContext(varName: String,
                                          procVarLine: Int,
                                          procVarCol: Int,
@@ -55,12 +55,13 @@ object errors {
       s"Free variable $varName is used twice as a binder (at $firstUseLine:$firstUseCol and $secondUseLine:$secondUseCol) in process context."
   }
 
-  final case class UnexpectedBundleContent(msg: String)               extends InterpreterError
-  final case class UnrecognizedNormalizerError(msg: String)           extends InterpreterError
-  final case class SubstituteError(msg: String)                       extends InterpreterError
+  final case class UnexpectedBundleContent(override val toString: String) extends InterpreterError
+  final case class UnrecognizedNormalizerError(override val toString: String)
+      extends InterpreterError
+  final case class SubstituteError(override val toString: String)     extends InterpreterError
   final case class UnrecognizedInterpreterError(throwable: Throwable) extends InterpreterError
-  final case class SortMatchError(msg: String)                        extends InterpreterError
-  final case class ReduceError(msg: String)                           extends InterpreterError
+  final case class SortMatchError(override val toString: String)      extends InterpreterError
+  final case class ReduceError(override val toString: String)         extends InterpreterError
 
   implicit val monadErrorTask: MonadError[Task, InterpreterError] =
     new MonadError[Task, InterpreterError] {
