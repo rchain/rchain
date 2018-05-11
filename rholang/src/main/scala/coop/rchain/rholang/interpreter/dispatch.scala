@@ -61,6 +61,8 @@ class RholangAndScalaDispatcher private (
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
+        println(s"DISPATCH ENV $env")
+        println(s"DISPATCH PAR $par")
         reducer.eval(par)(env)
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
@@ -79,8 +81,8 @@ object RholangAndScalaDispatcher {
     : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
-    lazy val reducer: Reduce[Task] =
-      new Reduce.DebruijnInterpreter[Task, Task.Par](tuplespace, dispatcher)
+    lazy val reducer: Reduce[Task] = Reduce.taskInterpreter(tuplespace, dispatcher)
+//      new Reduce.DebruijnInterpreter[Task, Task.Par](tuplespace, dispatcher)
     dispatcher
   }
 }

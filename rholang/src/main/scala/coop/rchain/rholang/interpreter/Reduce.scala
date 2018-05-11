@@ -12,6 +12,7 @@ import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, 
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{IStore, consume => internalConsume, produce => internalProduce}
+import monix.eval.Task
 
 import scala.collection.immutable.BitSet
 
@@ -42,6 +43,70 @@ trait Reduce[M[_]] {
 
 object Reduce {
 
+  def taskInterpreter(tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+                      dispatcher: => Dispatch[Task, Seq[Channel], TaggedContinuation]) =
+    new DebruijnInterpreter[Task, Task.Par](tupleSpace, dispatcher) {
+
+      /** WanderUnordered is the non-deterministic analogue
+        * of traverse - it parallelizes eval.
+        *
+        * 1. For a Par, parallelize the interpretation of each list
+        * of processes in the Par. That's the outer wander.
+        * 2. For each process list, parallelize the interpretation
+        * of each process in the list. That's the inner wander.
+        *
+        * @param par
+        * @return */
+      override def eval(par: Par)(implicit env: Env[Par]): Task[Unit] =
+        Task.wanderUnordered(
+          Seq(
+            Task.wanderUnordered(par.sends) { send =>
+              eval(send)(env)
+            },
+            Task.wanderUnordered(par.receives) { recv =>
+              eval(recv)(env)
+            },
+            Task.wanderUnordered(par.news) { neu =>
+              eval(neu)(env)
+            },
+            Task.wanderUnordered(par.evals) { deref =>
+              eval(deref)(env)
+            },
+            Task.wanderUnordered(par.matches) { mat =>
+              eval(mat)(env)
+            },
+            Task.wanderUnordered(par.bundles) { bundle =>
+              println(s"Bundle before: $bundle")
+              eval(bundle)
+            },
+            Task.wanderUnordered(par.exprs.filter { expr =>
+              expr.exprInstance match {
+                case _: EVarBody    => true
+                case _: EMethodBody => true
+                case _              => false
+              }
+            }) { expr =>
+              expr.exprInstance match {
+                case EVarBody(EVar(v)) =>
+                  for {
+                    varref <- eval(v.get)
+                    _      <- eval(varref)
+                  } yield ()
+                case e: EMethodBody =>
+                  for {
+                    p <- evalExprToPar(Expr(e))
+                    _ <- eval(p)
+                  } yield ()
+                case _ => Task.unit
+              }
+            }
+          )) { xs =>
+          xs
+        } map { xxs =>
+          ()
+        }
+    }
+
   class DebruijnInterpreter[M[_]: InterpreterErrorsM, F[_]](
       tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
@@ -64,9 +129,15 @@ object Reduce {
       // TODO: Handle the environment in the store
       for {
         substData <- data.toList
-                      .traverse(substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
+                      .traverse(substitutePar[M].substitute(_)(env).map(p => Channel(Quote(p))))
+        _ = println(s"DISPATCH PRODUCE")
+        _ = println(s"DATA $data")
+        _ = println(s"SUBSTDATA $substData")
+        _ = println(s"CHAN $chan")
         res <- internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
                 case Some((continuation, dataList)) =>
+                  println(s"CONTINUATION $continuation")
+                  println(s"DATA LIST $dataList")
                   if (persistent) {
                     Parallel.parSequence_[List, M, F, Unit](
                       List(dispatcher.dispatch(continuation, dataList),
@@ -96,12 +167,16 @@ object Reduce {
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) =
             binds.unzip
-          internalConsume(tupleSpace,
-                          sources.map(q => Channel(q)).toList,
-                          patterns.toList,
-                          TaggedContinuation(ParBody(body)),
-                          persist = persistent) match {
+          val srcs    = sources.map(q => Channel(q)).toList
+          val ptrns   = patterns.toList
+          val tgdBody = TaggedContinuation(ParBody(body))
+          println("DISPATCH CONSUME")
+          println(s"SOURCES $srcs")
+          println(s"PATTERNS $ptrns")
+          println(s"TAGGED CONTINUATIONS $tgdBody")
+          internalConsume(tupleSpace, srcs, ptrns, tgdBody, persist = persistent) match {
             case Some((continuation, dataList)) =>
+              println("DISPATCH CONSUME SOME")
               dispatcher.dispatch(continuation, dataList)
               if (persistent) {
                 List(dispatcher.dispatch(continuation, dataList), consume(binds, body, persistent)).parSequence
@@ -109,7 +184,9 @@ object Reduce {
               } else {
                 dispatcher.dispatch(continuation, dataList)
               }
-            case None => Applicative[M].pure(())
+            case None =>
+              println("DISPATCH CONSUME NONE")
+              Applicative[M].pure(())
           }
       }
 
@@ -126,12 +203,12 @@ object Reduce {
       */
     override def eval(par: Par)(implicit env: Env[Par]): M[Unit] =
       List(
-        Parallel.parTraverse(par.sends.toList)(send => eval(send)),
-        Parallel.parTraverse(par.receives.toList)(recv => eval(recv)),
-        Parallel.parTraverse(par.news.toList)(neu => eval(neu)),
-        Parallel.parTraverse(par.evals.toList)(deref => eval(deref)),
-        Parallel.parTraverse(par.matches.toList)(mat => eval(mat)),
-        Parallel.parTraverse(par.bundles.toList)(bundle => eval(bundle)),
+        Parallel.parTraverse(par.sends.toList)(send => eval(send)(env)),
+        Parallel.parTraverse(par.receives.toList)(recv => eval(recv)(env)),
+        Parallel.parTraverse(par.news.toList)(neu => eval(neu)(env)),
+        Parallel.parTraverse(par.evals.toList)(deref => eval(deref)(env)),
+        Parallel.parTraverse(par.matches.toList)(mat => eval(mat)(env)),
+        Parallel.parTraverse(par.bundles.toList)(bundle => eval(bundle)(env)),
         Parallel.parTraverse(par.exprs.filter { expr =>
           expr.exprInstance match {
             case _: EVarBody    => true
@@ -142,13 +219,13 @@ object Reduce {
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
               for {
-                varref <- eval(v.get)
-                _      <- eval(varref)
+                varref <- eval(v.get)(env)
+                _      <- eval(varref)(env)
               } yield ()
             case e: EMethodBody =>
               for {
-                p <- evalExprToPar(Expr(e))
-                _ <- eval(p)
+                p <- evalExprToPar(Expr(e))(env)
+                _ <- eval(p)(env)
               } yield ()
             case _ => Applicative[M].pure(())
         })
@@ -181,18 +258,23 @@ object Reduce {
     def eval(send: Send)(implicit env: Env[Par]): M[Unit] =
       for {
         quote <- eval(send.chan.get)
-        data  <- send.data.toList.traverse(x => evalExpr(x))
+        _     = println(s"Channel: ${send.chan}")
+        data  <- send.data.toList.traverse(x => evalExpr(x)(env))
 
         subChan <- substituteQuote[M].substitute(quote)
+        _       = println(s"Send on ${subChan.value}")
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
+                        println(s"Bundle value $value")
                         if (!value.writeFlag) {
                           interpreterErrorM[M].raiseError(
                             ReduceError("Trying to send on non-writeable channel."))
                         } else {
                           interpreterErrorM[M].pure(Quote(value.body.get))
                         }
-                      case None => Applicative[M].pure(subChan)
+                      case None =>
+                        println(s"Not a singleBundle")
+                        Applicative[M].pure(subChan)
                     }
         _ <- produce(unbundled, data, send.persistent)
       } yield ()
@@ -438,15 +520,15 @@ object Reduce {
             v1 <- evalExpr(p1.get)
             v2 <- evalExpr(p2.get)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substitute[M, Par](v1)
-            sv2 <- substitute[M, Par](v2)
+            sv1 <- substitutePar[M].substitute(v1)
+            sv2 <- substitutePar[M].substitute(v2)
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
             v1  <- evalExpr(p1.get)
             v2  <- evalExpr(p2.get)
-            sv1 <- substitute[M, Par](v1)
-            sv2 <- substitute[M, Par](v2)
+            sv1 <- substitutePar[M].substitute(v1)
+            sv2 <- substitutePar[M].substitute(v2)
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
