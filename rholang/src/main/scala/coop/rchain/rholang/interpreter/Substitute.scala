@@ -97,7 +97,7 @@ object Substitute {
   implicit def substitutePar[M[_]: InterpreterErrorsM]: Substitute[M, Par] =
     new Substitute[M, Par] {
       def subExp(exprs: Seq[Expr])(implicit env: Env[Par]): M[Par] =
-        exprs.toList.foldM(VectorPar()) { (par, expr) =>
+        exprs.toList.reverse.foldM(VectorPar()) { (par, expr) =>
           expr.exprInstance match {
             case EVarBody(e @ EVar(_)) =>
               maybeSubstitute[M](e).map {
@@ -109,7 +109,7 @@ object Substitute {
         }
 
       def subEval(evals: Seq[Eval])(implicit env: Env[Par]): M[Par] =
-        evals.toList.foldM(VectorPar()) { (par, eval) =>
+        evals.toList.reverse.foldM(VectorPar()) { (par, eval) =>
           maybeSubstitute[M](eval).map {
             case Left(plainEval)   => par.prepend(plainEval)
             case Right(droppedPar) => droppedPar ++ par
@@ -118,15 +118,13 @@ object Substitute {
 
       override def substitute(term: Par)(implicit env: Env[Par]): M[Par] =
         for {
-          exprs          <- subExp(term.exprs)
-          evals          <- subEval(term.evals)
-          sends          <- term.sends.toList.traverse(substituteSend[M].substitute(_))
-          bundles        <- term.bundles.toList.traverse(substituteBundle[M].substitute(_))
-          receives       <- term.receives.toList.traverse(substituteReceive[M].substitute(_))
-          news           <- term.news.toList.traverse(substituteNew[M].substitute(_))
-          matches        <- term.matches.toList.traverse(substituteMatch[M].substitute(_))
-          locallyFree    = term.locallyFree.until(env.shift)
-          connectiveUsed = term.connectiveUsed
+          exprs    <- subExp(term.exprs)
+          evals    <- subEval(term.evals)
+          sends    <- term.sends.toList.traverse(substituteSend[M].substitute(_))
+          bundles  <- term.bundles.toList.traverse(substituteBundle[M].substitute(_))
+          receives <- term.receives.toList.traverse(substituteReceive[M].substitute(_))
+          news     <- term.news.toList.traverse(substituteNew[M].substitute(_))
+          matches  <- term.matches.toList.traverse(substituteMatch[M].substitute(_))
           par = exprs ++
             evals ++
             Par(
@@ -138,8 +136,8 @@ object Substitute {
               news = news,
               matches = matches,
               ids = term.ids,
-              locallyFree = locallyFree,
-              connectiveUsed = connectiveUsed
+              locallyFree = term.locallyFree.until(env.shift),
+              connectiveUsed = term.connectiveUsed
             )
           sortedPar <- ParSortMatcher.sortMatch[M](par)
         } yield sortedPar.term.get

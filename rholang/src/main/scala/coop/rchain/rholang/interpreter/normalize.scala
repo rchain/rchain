@@ -308,7 +308,7 @@ object ProcNormalizeMatcher {
                      ProcVisitInputs(Par(), input.env, targetResult.knownFree),
                      BitSet(),
                      false)
-          argResults <- p.listproc_.asScala.toList.foldM(initAcc)((acc, e) => {
+          argResults <- p.listproc_.asScala.toList.reverse.foldM(initAcc)((acc, e) => {
                          normalizeMatch[M](e, acc._2).map(
                            procMatchResult =>
                              (procMatchResult.par :: acc._1,
@@ -389,7 +389,7 @@ object ProcNormalizeMatcher {
         import scala.collection.JavaConverters._
         // A free variable can only be used once in any of the parameters.
         // And we start with the empty free variable map because these free
-        // variables aren't free in the surrounding context: they're binders.
+        // variables aren't free in the surrounding context: they're binders
         for {
           nameMatchResult <- NameNormalizeMatcher
                               .normalizeMatch[M](p.name_,
