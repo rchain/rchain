@@ -438,15 +438,15 @@ object Reduce {
             v1 <- evalExpr(p1.get)
             v2 <- evalExpr(p2.get)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substitute[M, Par](v1)
-            sv2 <- substitute[M, Par](v2)
+            sv1 <- substitutePar[M].substitute(v1)
+            sv2 <- substitutePar[M].substitute(v2)
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
             v1  <- evalExpr(p1.get)
             v2  <- evalExpr(p2.get)
-            sv1 <- substitute[M, Par](v1)
-            sv2 <- substitute[M, Par](v2)
+            sv1 <- substitutePar[M].substitute(v1)
+            sv2 <- substitutePar[M].substitute(v2)
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
