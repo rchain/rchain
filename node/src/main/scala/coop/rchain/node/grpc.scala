@@ -92,7 +92,7 @@ object GrpcServer {
           case Left(er) =>
             er match {
               case _: InterpreterError => Task.now(s"Error: ${er.toString}")
-              case th: Throwable => Task.now(s"Error: $th")
+              case th: Throwable       => Task.now(s"Error: $th")
             }
           case Right(term) =>
             evaluate(runtime.reducer, term).attempt.map {
