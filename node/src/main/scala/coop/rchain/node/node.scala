@@ -115,7 +115,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def unrecoverableNodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
+  private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- aquireResources
       _         <- startResources(resources)

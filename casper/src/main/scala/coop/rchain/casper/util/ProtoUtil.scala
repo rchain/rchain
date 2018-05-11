@@ -181,4 +181,14 @@ object ProtoUtil {
       sig = d.sig
     )
   }
+
+  def termDeploy(term: Par): Deploy = {
+    val d = basicDeployString(0)
+    Deploy(
+      user = d.user,
+      nonce = d.nonce,
+      term = Some(term),
+      sig = d.sig
+    )
+  }
 }
