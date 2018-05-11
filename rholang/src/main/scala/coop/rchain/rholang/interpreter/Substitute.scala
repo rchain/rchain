@@ -23,9 +23,6 @@ object Substitute {
       bSub <- evB.substitute(termB)
     } yield f(aSub, bSub)
 
-  def substitute[M[_], A](term: A)(implicit ev: Substitute[M, A], env: Env[Par]): M[A] =
-    ev.substitute(term)
-
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
   def maybeSubstitute[M[+ _]: InterpreterErrorsM](term: Var)(
