@@ -30,18 +30,16 @@ object Substitute {
 
   def maybeSubstitute[M[+ _]: InterpreterErrorsM](term: Var)(
       implicit env: Env[Par]): M[Either[Var, Par]] =
-    for {
-      res <- term.varInstance match {
-              case BoundVar(index) =>
-                env.get(index) match {
-                  case Some(par) => Applicative[M].pure(Right(par))
-                  case None =>
-                    Applicative[M].pure(Left[Var, Par](BoundVar(index))) //scalac is not helping here
-                }
-              case _ =>
-                interpreterErrorM[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
-            }
-    } yield res
+    term.varInstance match {
+      case BoundVar(index) =>
+        env.get(index) match {
+          case Some(par) => Applicative[M].pure(Right(par))
+          case None =>
+            Applicative[M].pure(Left[Var, Par](BoundVar(index))) //scalac is not helping here
+        }
+      case _ =>
+        interpreterErrorM[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
+    }
 
   def maybeSubstitute[M[_]: InterpreterErrorsM](term: EVar)(
       implicit env: Env[Par]): M[Either[EVar, Par]] =
@@ -129,8 +127,7 @@ object Substitute {
           matches        <- term.matches.toList.traverse(substituteMatch[M].substitute(_))
           locallyFree    = term.locallyFree.until(env.shift)
           connectiveUsed = term.connectiveUsed
-        } yield
-          exprs ++
+          par = exprs ++
             evals ++
             Par(
               exprs = Nil,
@@ -144,6 +141,9 @@ object Substitute {
               locallyFree = locallyFree,
               connectiveUsed = connectiveUsed
             )
+          sortedPar <- ParSortMatcher.sortMatch[M](par)
+        } yield sortedPar.term.get
+
     }
 
   implicit def substituteSend[M[_]: InterpreterErrorsM]: Substitute[M, Send] =
@@ -174,8 +174,7 @@ object Substitute {
                          }
                      }
           bodySub <- substitutePar[M].substitute(term.body.get)(env.shift(term.bindCount))
-        } yield
-          Receive(
+          rec = Receive(
             binds = bindsSub,
             body = bodySub,
             persistent = term.persistent,
@@ -183,18 +182,20 @@ object Substitute {
             locallyFree = term.locallyFree.until(env.shift),
             connectiveUsed = term.connectiveUsed
           )
+          sortedReceive <- ReceiveSortMatcher.sortMatch[M](rec)
+        } yield sortedReceive.term
+
     }
 
   implicit def substituteNew[M[_]: InterpreterErrorsM]: Substitute[M, New] =
     new Substitute[M, New] {
       override def substitute(term: New)(implicit env: Env[Par]): M[New] =
         for {
-          parSub <- substitutePar[M].substitute(term.p.get)(env.shift(term.bindCount))
+          newSub <- substitutePar[M].substitute(term.p.get)(env.shift(term.bindCount))
           sortedMatch <- NewSortMatcher
                           .sortMatch[M](
-                            New(term.bindCount, parSub, term.locallyFree.until(env.shift)))
-                          .map(_.term)
-        } yield sortedMatch
+                            New(term.bindCount, newSub, term.locallyFree.until(env.shift)))
+        } yield sortedMatch.term
     }
 
   implicit def substituteMatch[M[_]: InterpreterErrorsM]: Substitute[M, Match] =
