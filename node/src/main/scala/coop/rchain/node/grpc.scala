@@ -61,7 +61,8 @@ object GrpcServer {
     import RholangCLI.{buildNormalizedTerm, evaluate}
 
     def exec(reader: Reader): Future[ReplResponse] =
-      Task.coeval(buildNormalizedTerm(reader))
+      Task
+        .coeval(buildNormalizedTerm(reader))
         .attempt
         .flatMap {
           case Left(er) =>
