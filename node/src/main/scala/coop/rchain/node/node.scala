@@ -138,7 +138,7 @@ class NodeRuntime(conf: Conf) {
       case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
         Log[Task]
           .error(
-            "Libsodium is NOT installed ono your system. Please install libsodium and try again.")
+            "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
       case th =>
         th.getStackTrace().toList.traverse(ste => Log[Task].error(ste.toString))
     } *> exit0.as(Right(())))
