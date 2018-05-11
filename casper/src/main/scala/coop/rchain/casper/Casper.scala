@@ -7,7 +7,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang.{Checkpoint, Tuplespace}
+import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
 import coop.rchain.catscontrib.{Capture, IOUtil}
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
@@ -16,8 +16,11 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable
 import scala.collection.immutable.{HashMap, HashSet}
+import scala.concurrent.SyncVar
 
 import java.nio.file.Path
+
+import monix.execution.Scheduler
 
 trait Casper[F[_], A] {
   def addBlock(b: BlockMessage): F[Unit]
@@ -52,7 +55,7 @@ sealed abstract class MultiParentCasperInstances {
       id: ByteString,
       storageLocation: Path,
       storageSize: Long,
-      genesis: BlockMessage = genesisBlock): MultiParentCasper[F] =
+      genesis: BlockMessage = genesisBlock)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     //TODO: Get rid of all the mutable data structures and write proper FP code
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -60,12 +63,25 @@ sealed abstract class MultiParentCasperInstances {
 
       var blockDag: BlockDag = BlockDag().copy(
         blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
+
+      val checkpoints: SyncVar[Map[ByteString, Checkpoint]] = new SyncVar()
+      checkpoints.put(
+        InterpreterUtil
+          .computeBlockCheckpoint(
+            genesis,
+            genesis,
+            blockDag,
+            storageLocation,
+            storageSize,
+            HashMap.empty[ByteString, Checkpoint]
+          )
+          ._2
+      )
+
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
       private val deployBuff: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
-
-      private val staging: Tuplespace = new Tuplespace("staging", storageLocation, storageSize)
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -123,39 +139,38 @@ sealed abstract class MultiParentCasperInstances {
             .foreach(b => {
               b.body.foreach(_.newCode.foreach(remDeploys -= _))
             })
-          remDeploys
+          remDeploys.toSeq
         })
 
         val proposal = p.flatMap(parents => {
-          //TODO: Compute this properly
-          val parentPostState = parents.head.body.get.postState.get
-          val justifications  = justificationProto(blockDag.latestMessages)
+          val justifications = justificationProto(blockDag.latestMessages)
           r.map(requests => {
-            if (requests.isEmpty) {
-              if (parents.length > 1) {
-                val body = Body()
-                  .withPostState(parentPostState)
-                val header = blockHeader(body, parents.map(_.blockHash))
-                val block  = blockProto(body, header, justifications, id)
-
-                Some(block)
-              } else {
-                None
-              }
-            } else {
-              val deploys = requests.toSeq
-              //TODO: compute postState properly
-              val newPostState = parentPostState
-                .withBlockNumber(parentPostState.blockNumber + 1)
-              //.withNewCode(deploys.map(_.resource.get))
+            if (requests.nonEmpty || parents.length > 1) {
+              val currCheckpoints = checkpoints.take()
+              val (tsCheckpoint, newCheckpoints) = InterpreterUtil.computeDeploysCheckpoint(
+                parents,
+                requests,
+                genesis,
+                blockDag,
+                storageLocation,
+                storageSize,
+                currCheckpoints
+              )
+              checkpoints.put(newCheckpoints)
+              val postState = RChainState()
+                .withTuplespace(tsCheckpoint.hash)
+                .withBonds(bonds(parents.head))
+                .withBlockNumber(blockNumber(parents.head) + 1)
               //TODO: include reductions
               val body = Body()
-                .withPostState(newPostState)
-                .withNewCode(deploys)
+                .withPostState(postState)
+                .withNewCode(requests)
               val header = blockHeader(body, parents.map(_.blockHash))
               val block  = blockProto(body, header, justifications, id)
 
               Some(block)
+            } else {
+              None
             }
           })
         })
@@ -221,8 +236,8 @@ sealed abstract class MultiParentCasperInstances {
           })
           .flatMap {
             case true =>
-              //Add successful! Send block to peers
-              CommUtil.sendBlock[F](block) *> true.pure[F]
+              //Add successful! Send block to peers and create tuplespace checkpoint
+              CommUtil.sendBlock[F](block) *> updateCheckpoints(block) *> true.pure[F]
 
             //TODO: Ask peers for missing parents/justifications of blocks
             case false => false.pure[F]
@@ -239,5 +254,19 @@ sealed abstract class MultiParentCasperInstances {
           case None => ().pure[F]
         }
       }
+
+      private def updateCheckpoints(b: BlockMessage): F[Unit] =
+        Capture[F].capture {
+          val currCheckpoints = checkpoints.take()
+          val (_, newCheckpoints) = InterpreterUtil.computeBlockCheckpoint(
+            b,
+            genesis,
+            blockDag,
+            storageLocation,
+            storageSize,
+            currCheckpoints
+          )
+          checkpoints.put(newCheckpoints)
+        }
     }
 }

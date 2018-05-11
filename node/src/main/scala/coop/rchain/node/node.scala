@@ -18,7 +18,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 
-class NodeRuntime(conf: Conf) {
+class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
@@ -78,7 +78,7 @@ class NodeRuntime(conf: Conf) {
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def aquireResources(implicit scheduler: Scheduler): Effect[Resources] =
+  def aquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
@@ -115,7 +115,7 @@ class NodeRuntime(conf: Conf) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
-  private def unrecoverableNodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
+  private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- aquireResources
       _         <- startResources(resources)
@@ -133,7 +133,7 @@ class NodeRuntime(conf: Conf) {
       _ <- exit0.toEffect
     } yield ()
 
-  def nodeProgram(implicit scheduler: Scheduler): Effect[Unit] =
+  def nodeProgram: Effect[Unit] =
     EitherT[Task, CommError, Unit](unrecoverableNodeProgram.value.onErrorHandleWith {
       case th if th.containsMessageWith("Error loading shared library libsodium.so") =>
         Log[Task]
