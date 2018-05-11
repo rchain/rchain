@@ -54,13 +54,13 @@ class NodeRuntime(conf: Conf) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                         = effects.log
-  implicit val timeEffect: Time[Task]                       = effects.time
-  implicit val metricsEffect: Metrics[Task]                 = effects.metrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
-  implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
+  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                       = effects.log
+  implicit val timeEffect: Time[Task]                     = effects.time
+  implicit val metricsEffect: Metrics[Task]               = effects.metrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
+  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer[Task](net)
 
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
 //  TODO: figure out actual validator identities...
