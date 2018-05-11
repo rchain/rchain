@@ -69,7 +69,21 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val deployDemo = opt[Boolean](
     default = Some(false),
-    descr = "Demo sending some placeholder Deploy operations to Casper at regular intervals")
+    descr =
+      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals")
+
+  val deploy = opt[String](
+    default = None,
+    descr =
+      "Deploy a Rholang source file to Casper on an existing running node. " +
+        "The deploy will be packaged and sent as a block to the network depending " +
+        "on the configuration of the Casper instance."
+  )
+
+  val propose = opt[Boolean](
+    default = Some(false),
+    descr =
+      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys.")
 
   def fetchHost(): String =
     host.toOption match {

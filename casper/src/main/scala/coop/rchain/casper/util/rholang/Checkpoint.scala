@@ -17,4 +17,14 @@ class Checkpoint(val hash: ByteString, val location: Path, val size: Long) {
 
     new Tuplespace(name, location, size)
   }
+
+  def toTuplespace: Tuplespace = {
+    val name       = Tuplespace.randomName
+    val tsLocation = location.resolve(name)
+
+    tsLocation.toFile.mkdir()
+    Tuplespace.copyDB(dbLocation, tsLocation)
+
+    new Tuplespace(name, location, size)
+  }
 }

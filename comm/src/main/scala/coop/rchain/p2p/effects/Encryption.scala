@@ -15,8 +15,8 @@ final case class PublicPrivateKeys(pub: Encryption.Key, priv: Encryption.Key)
 
 object Encryption extends EncryptionInstances {
 
-  type Nonce    = Array[Byte]
-  type Key      = Array[Byte]
+  type Nonce   = Array[Byte]
+  type Key     = Array[Byte]
   type Message = Array[Byte]
 
   def apply[F[_]](implicit L: Encryption[F]): Encryption[F] = L
