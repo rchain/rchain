@@ -7,10 +7,15 @@ import scala.concurrent.Future
 import cats._
 import cats.data._
 import cats.implicits._
+import cats._, cats.data._, cats.implicits._
+import com.google.protobuf.empty.Empty
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
 import coop.rchain.catscontrib._
 import Catscontrib._
+import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
+import coop.rchain.casper.util.rholang.InterpreterUtil
+import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.node.rnode._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
@@ -24,7 +29,7 @@ import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object GrpcServer {
 
-  def acquireServer[F[_]: Capture: Functor: MultiParentCasper: NodeDiscovery: Futurable](
+  def acquireServer[F[_]: Capture: Applicative: MultiParentCasper: NodeDiscovery: Futurable](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
@@ -51,15 +56,29 @@ object GrpcServer {
       }.toFuture
   }
 
-  class DeployImpl[F[_]: Functor: MultiParentCasper: Futurable]
+  class DeployImpl[F[_]: Applicative: MultiParentCasper: Futurable]
       extends DeployServiceGrpc.DeployService {
-    def doDeploy(d: Deploy): Future[DeployServiceResponse] = {
-      val f = for {
-        _ <- MultiParentCasper[F].deploy(d)
-      } yield DeployServiceResponse(true)
+    override def doDeploy(d: DeployString): Future[DeployServiceResponse] =
+      InterpreterUtil.mkTerm(d.term) match {
+        case Right(term) =>
+          val deploy = Deploy(
+            user = d.user,
+            nonce = d.nonce,
+            term = Some(term),
+            sig = d.sig
+          )
+          val f = for {
+            _ <- MultiParentCasper[F].deploy(deploy)
+          } yield DeployServiceResponse(true, "Success!")
 
-      f.toFuture
-    }
+          f.toFuture
+
+        case Left(err) =>
+          Future.successful(DeployServiceResponse(false, s"Error in parsing term: \n$err"))
+      }
+
+    override def propose(e: Empty): Future[Empty] =
+      (MultiParentCasper[F].sendBlockWhenReady(true) *> Applicative[F].pure(Empty())).toFuture
   }
 
   class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {

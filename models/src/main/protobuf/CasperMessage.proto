@@ -1,6 +1,7 @@
 syntax = "proto3";
 package coop.rchain.casper.protocol;
 
+import "google/protobuf/empty.proto";
 import "scalapb/scalapb.proto";
 import "RhoTypes.proto";
 
@@ -55,11 +56,19 @@ message Deploy {
   bytes sig   = 4; //signature of (hash(resource) + nonce) using private key
 }
 
+message DeployString {
+  bytes  user  = 1; //public key
+  int32  nonce = 2; //for uniqueness
+  string term  = 3; //rholang source code to deploy (will be parsed into `Par`)
+  bytes  sig   = 4; //signature of (hash(resource) + nonce) using private key
+}
 service DeployService {
-  rpc DoDeploy(Deploy) returns (DeployServiceResponse) {}
+  rpc DoDeploy(DeployString) returns (DeployServiceResponse) {}
+  rpc propose(google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 message DeployServiceResponse {
-  bool success = 1;
+  bool   success = 1;
+  string message = 2;
 }
 
 message Justification {
