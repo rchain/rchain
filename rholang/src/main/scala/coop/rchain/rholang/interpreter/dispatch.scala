@@ -29,8 +29,8 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
   def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
-        implicit val env = Dispatch.buildEnv(dataList)
-        reducer.eval(par)
+        val env = Dispatch.buildEnv(dataList)
+        reducer.eval(par)(env)
       case ScalaBodyRef(_) =>
         Task.unit
       case Empty =>
@@ -60,8 +60,8 @@ class RholangAndScalaDispatcher private (
   def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
-        implicit val env = Dispatch.buildEnv(dataList)
-        reducer.eval(par)
+        val env = Dispatch.buildEnv(dataList)
+        reducer.eval(par)(env)
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) => f(dataList)
