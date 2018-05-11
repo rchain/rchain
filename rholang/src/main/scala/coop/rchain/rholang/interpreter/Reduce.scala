@@ -286,7 +286,7 @@ object Reduce {
                     unbundleReceive(rb).map(q =>
                       (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substitutePar[M].substitute(receive.body.get)
+        substBody <- substitutePar[M].substitute(receive.body.get)(env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)
       } yield ()
 
