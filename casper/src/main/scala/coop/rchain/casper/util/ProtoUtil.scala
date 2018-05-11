@@ -161,18 +161,24 @@ object ProtoUtil {
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
-  def basicDeploy(id: Int): Deploy = {
-    val term = InterpreterUtil.mkTerm(s"@${id}!($id)").right.get
-
-    termDeploy(term)
-  }
-
-  def termDeploy(term: Par): Deploy = {
+  def basicDeployString(id: Int): DeployString = {
     val nonce = scala.util.Random.nextInt(10000)
+    val term  = s"@${id}!($id)"
 
-    Deploy()
+    DeployString()
       .withUser(ByteString.EMPTY)
       .withNonce(nonce)
       .withTerm(term)
+  }
+
+  def basicDeploy(id: Int): Deploy = {
+    val d    = basicDeployString(id)
+    val term = InterpreterUtil.mkTerm(d.term).right.get
+    Deploy(
+      user = d.user,
+      nonce = d.nonce,
+      term = Some(term),
+      sig = d.sig
+    )
   }
 }

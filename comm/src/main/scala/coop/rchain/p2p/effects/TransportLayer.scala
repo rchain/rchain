@@ -11,10 +11,13 @@ import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.{PeerNode, ProtocolMessage, ProtocolNode}
 
 trait TransportLayer[F[_]] {
+  // TODO rename
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]]
+  // TODO return PeerNode
   def local: F[ProtocolNode]
+  // TODO remove ProtocolMessage, use raw messages from protocol
   def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
 }

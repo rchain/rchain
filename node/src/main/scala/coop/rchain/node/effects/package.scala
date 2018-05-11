@@ -17,8 +17,7 @@ import coop.rchain.catscontrib._
 import Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 
-object effects {
-
+package object effects {
   private def createDirectoryIfNotExists(path: Path): Path =
     if (Files.notExists(path)) Files.createDirectory(path) else path
 
