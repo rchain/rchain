@@ -62,7 +62,7 @@ object GrpcServer {
 
     def exec(reader: Reader): Future[ReplResponse] =
       Task
-        .defer(Task.coeval(buildNormalizedTerm(reader)))
+        .coeval(buildNormalizedTerm(reader))
         .attempt
         .flatMap {
           case Left(er) =>

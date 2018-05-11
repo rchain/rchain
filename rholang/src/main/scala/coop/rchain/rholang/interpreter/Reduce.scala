@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.{Applicative, Monad, MonadError, Parallel, Eval => _}
+import cats.{Applicative, Monad, Parallel, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -65,6 +65,7 @@ object Reduce {
       for {
         substData <- data.toList
                       .traverse(substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
+        _ = println(s"Into internal produce")
         res <- internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
                 case Some((continuation, dataList)) =>
                   if (persistent) {
@@ -72,6 +73,7 @@ object Reduce {
                       List(dispatcher.dispatch(continuation, dataList),
                            produce(chan, data, persistent)))
                   } else {
+                    println("Dispatcher…")
                     dispatcher.dispatch(continuation, dataList)
                   }
                 case None => Applicative[M].pure(())
@@ -124,7 +126,9 @@ object Reduce {
       * @param par
       * @return
       */
-    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] =
+    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] = {
+      debug(s"I'm here for ${par.toString}")
+      debug(s"Send size: ${par.sends.length}")
       List(
         Parallel.parTraverse(par.sends.toList)(send => eval(send)),
         Parallel.parTraverse(par.receives.toList)(recv => eval(recv)),
@@ -153,6 +157,7 @@ object Reduce {
             case _ => Applicative[M].pure(())
         })
       ).parSequence.map(_ => ())
+    }
 
     override def inj(par: Par): M[Unit] =
       for { _ <- eval(par)(Env[Par]()) } yield ()
@@ -160,7 +165,7 @@ object Reduce {
     def debug(msg: String): Unit = {
       val now = java.time.format.DateTimeFormatter.ISO_INSTANT
         .format(java.time.Instant.now)
-        .substring(11, 23)
+//        .substring(11, 23)
       val thread = Thread.currentThread.getName
       println(s"$now [$thread]" + "\n" + msg)
     }
@@ -180,10 +185,15 @@ object Reduce {
       */
     def eval(send: Send)(implicit env: Env[Par]): M[Unit] =
       for {
-        quote <- eval(send.chan.get)
-        data  <- send.data.toList.traverse(x => evalExpr(x))
-
+        _       <- Applicative[M].pure(())
+        _       = debug(s"Evaluating $send ")
+        _       = debug(s"Channel ${send.chan.get}")
+        quote   <- eval(send.chan.get)
+        _       = debug(s"Channel evaulated")
+        data    <- send.data.toList.traverse(x => evalExpr(x))
+        _       = debug(s"Send data evaled")
         subChan <- substituteQuote[M].substitute(quote)
+        _       = debug("Channel substituted")
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
@@ -194,6 +204,7 @@ object Reduce {
                         }
                       case None => Applicative[M].pure(subChan)
                     }
+        _ = debug("Into produce…")
         _ <- produce(unbundled, data, send.persistent)
       } yield ()
 
