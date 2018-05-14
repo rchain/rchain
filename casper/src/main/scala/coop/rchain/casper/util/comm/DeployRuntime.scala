@@ -1,8 +1,8 @@
 package coop.rchain.casper.util.comm
 
-import cats.Monad
+import cats.{Functor, Monad}
 import cats.implicits._
-import coop.rchain.casper.protocol.DeployString
+import coop.rchain.casper.protocol.{BlockQuery, DeployString}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.{Capture, IOUtil, MonadOps}
 
@@ -12,6 +12,9 @@ import scala.util.{Failure, Success, Try}
 object DeployRuntime {
   //force Casper to propose a block
   def forcePropose[F[_]: DeployService]: F[Unit] = DeployService[F].propose()
+
+  def showBlock[F[_]: Functor: DeployService](hash: String): F[Unit] =
+    DeployService[F].showBlock(BlockQuery(hash)).map(println(_))
 
   //Accepts a Rholang source file and deploys it to Casper
   def deployFileProgram[F[_]: Monad: Capture: DeployService](file: String): F[Unit] =

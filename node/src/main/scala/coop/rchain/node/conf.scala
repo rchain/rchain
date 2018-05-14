@@ -80,6 +80,13 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         "on the configuration of the Casper instance."
   )
 
+  val showBlock = opt[String](
+    default = None,
+    descr =
+      "View properties of a block known by Casper on an existing running node." +
+        "Output includes: parent hashes, storage contents of the tuplespace."
+  )
+
   val propose = opt[Boolean](
     default = Some(false),
     descr =
