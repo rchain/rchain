@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import java.net.SocketAddress
 import java.io.File
 import java.util.UUID
 import io.grpc.{Server, ServerBuilder}
@@ -38,10 +39,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private val storagePath    = conf.data_dir().resolve("rspace")
   private val storageSize    = conf.map_size()
 
-  /** Run services */
-  /** TODO all services should be defined in terms of `nodeProgram` */
-  val net = new UnicastNetwork(src, Some(p2p.Network))
-
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
@@ -59,11 +56,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val timeEffect: Time[Task]                     = effects.time
   implicit val metricsEffect: Metrics[Task]               = effects.metrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
+  val net                                                 = new UnicastNetwork(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer[Task](net)
-
+  implicit val protocolDispatcher: ProtocolDispatcher[Effect, SocketAddress] =
+    effects.RChainProtocolDispatcher.get[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-//  TODO: figure out actual validator identities...
+    //  TODO: figure out actual validator identities...
     com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte)),
     storagePath,
     storageSize

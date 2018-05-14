@@ -4,22 +4,16 @@ import coop.rchain.p2p.effects._
 
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import routing.Header
-import coop.rchain.comm._
-import CommError._
+import coop.rchain.comm.protocol.routing, routing.Header
+import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.metrics.Metrics
 
 import scala.util.control.NonFatal
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 import com.google.protobuf.ByteString
-import ski._
 
 /*
  * Inspiration from ethereum:
@@ -55,7 +49,7 @@ case object NetworkAddress {
     }
 }
 
-object Network extends ProtocolDispatcher[java.net.SocketAddress] {
+object Network {
 
   type KeysStore[F[_]]    = Kvs[F, PeerNode, Array[Byte]]
   type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
@@ -109,7 +103,7 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
 
     for {
       bootstrapAddr <- errorHandler[F].fromEither(NetworkAddress.parse(bootstrapAddrStr))
-      _             <- Log[F].info(s"Bootstrapping from $bootstrapAddr.")
+      _             <- Log[F].info(s"Bootstrapping from ${bootstrapAddr.toAddress}.")
       _             <- connectAttempt(attempt = 1, defaultTimeout, bootstrapAddr)
       _             <- Log[F].info(s"Connected $bootstrapAddr.")
     } yield ()
@@ -170,13 +164,17 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       sender: PeerNode,
       msg: EncryptionHandshakeMessage): F[Unit] =
     for {
+      _            <- Log[F].info("**** handleEncryptionHandshake")
       _            <- Metrics[F].incrementCounter("p2p-encryption-handshake-recv-count")
       local        <- TransportLayer[F].local
+      _            <- Log[F].info(s"**** local = $local")
       keys         <- Encryption[F].fetchKeys
       handshakeErr <- NetworkProtocol.toEncryptionHandshake(msg.proto).pure[F]
+      _            <- Log[F].info(s"**** handshakeErr = $handshakeErr")
       _ <- handshakeErr.fold(kp(Log[F].error("could not fetch proto message")),
                              hs => keysStore[F].put(sender, hs.publicKey.toByteArray))
       responseErr <- msg.response[F](local, keys)
+      _           <- Log[F].info(s"**** responseErr = $responseErr")
       result      <- responseErr.traverse(resp => TransportLayer[F].commSend(resp, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
@@ -222,7 +220,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                 Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
     } yield res
 
-  private def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption](
+  private def handleProtocolHandshake[
+      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption: Log](
       remote: PeerNode,
       maybeHeader: Option[Header],
       maybePh: Option[ProtocolHandshake])(implicit
@@ -237,7 +236,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       _     <- NodeDiscovery[F].addNode(remote)
     } yield s"Responded to protocol handshake request from $remote"
 
-  override def dispatch[
+  // TODO F is tooooo rich
+  def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler: PacketHandler](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
@@ -255,9 +255,9 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
             msg.typeUrl match {
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
-                handleEncryptionHandshake[F](sender,
-                                             EncryptionHandshakeMessage(proto,
-                                                                        System.currentTimeMillis))
+                Log[F].info("$$$$ encryption handshake") *> handleEncryptionHandshake[F](
+                  sender,
+                  EncryptionHandshakeMessage(proto, System.currentTimeMillis))
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Frame" =>
                 val err     = ApplicativeError_[F, CommError]

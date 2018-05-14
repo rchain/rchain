@@ -17,20 +17,19 @@ import kamon._
 // generation. For reproducibility, this should be a passed-in value.
 
 // TODO REMOVE inheritance hierarchy for composition
-trait ProtocolDispatcher[A] {
+trait ProtocolDispatcher[F[_], A] {
 
   /**
     * Handle an incoming message. This function is intended to thread
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
-        ?[_],
-        PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
-      extra: A,
-      msg: ProtocolMessage): F[Unit]
+  def dispatch(extra: A, msg: ProtocolMessage): F[Unit]
+  def exists: F[Boolean]
+}
+
+object ProtocolDispatcher {
+  def apply[F[_], A](implicit pd: ProtocolDispatcher[F, A]): ProtocolDispatcher[F, A] = pd
 }
 
 /**
