@@ -9,30 +9,15 @@ package ObjectCodePB;
 
 
 message ObjectCode {
-    // There are two parts to an object code file.
-    //
-    // Part one (CodeBlocks) is a repeated list of code export blocks.
-    // Part two (Objects) is a repeated list of Rosette objects referenced by the code blocks.
-
-    CodeBlocks codeblocks = 1;
-    Objects objects = 2;
-}
-
-message CodeBlocks {
     repeated CodeBlock codeblock = 1;
-}
-
-// This central objects list is for objects that are immutable, and should be accessed by
-// reference.
-message Objects {
-    repeated Object object = 1;
 }
 
 // A single code block contains a litvec with objects on which the code operates,
 // and the codevec with the actual opCodes that are executed by the VM.
 message CodeBlock {
-    LitVec litvec = 1;
-    CodeVec codevec = 2;
+    uint64 id = 1;
+    LitVec litvec = 2;
+    CodeVec codevec = 3;
 }
 
 // This message contains the actual executable opCodes
@@ -45,16 +30,7 @@ message LitVec {
     // Items within a Litvec are accessed by index and must be stored in the same order as
     // they originally existed at compile time.
 
-    repeated LitVecItem item = 1; // This ties to object id's within objects in the ObjectVector
-}
-
-// A LitVecItem can either contain an instance of the object itself, or an id that ties it
-// to an object in the central objects list.
-message LitVecItem {
-    oneof item {
-        Object ob = 2;
-        uint64 id = 3;
-    }
+    repeated Object ob = 1;
 }
 
 // Rather than implement all 100+ object types existing in Rosette, We will only implement those
@@ -69,6 +45,7 @@ message Char {
     uint32 value = 1;
 }
 message Code {
+    uint64 id = 1;
 }
 message ExpandedLocation {}
 message Fixnum {
@@ -134,6 +111,7 @@ enum ObType {
     OT_Template = 26;
     OT_Tuple = 27;
     OT_TupleExpr = 28;
+    OT_unknown = 999;
 }
 
 message Object {
