@@ -136,6 +136,8 @@ object Substitute {
               locallyFree = term.locallyFree.until(env.shift),
               connectiveUsed = term.connectiveUsed
             )
+          // This may be a minor thing, but sorting this par causes all of the insides to be sorted.
+          // Maybe we want to split substitute so that there's an external API that sorts and an internal API that doesn't
           sortedPar <- ParSortMatcher.sortMatch[M](par)
         } yield sortedPar.term.get
 
