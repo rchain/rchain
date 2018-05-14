@@ -2,19 +2,27 @@ package coop.rchain.node
 
 import java.io.File
 import java.util.UUID
-import io.grpc.{Server, ServerBuilder}
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import io.grpc.{Server, ServerBuilder}
+import cats._
+import cats.data._
+import cats.implicits._
+
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
+import CommError._
 import coop.rchain.metrics.Metrics
+import coop.rchain.node.metrics.MetricsServer
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
+
 import monix.eval.Task
 import monix.execution.Scheduler
 

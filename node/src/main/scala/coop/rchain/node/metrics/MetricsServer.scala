@@ -1,10 +1,12 @@
-package coop.rchain.node
+package coop.rchain.node.metrics
 
-import cats._, cats.data._, cats.implicits._
-import kamon.prometheus._
-import kamon._
-import monix.eval.Task
+import cats._
+import cats.implicits._
+
 import com.typesafe.config.ConfigValueFactory
+import kamon._
+import kamon.prometheus._
+import monix.eval.Task
 
 object MetricsServer {
   def create[F[_]: Applicative](port: Int): F[MetricsServer] = new MetricsServer(port).pure[F]
