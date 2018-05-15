@@ -11,3 +11,7 @@ trait Serialize[A] {
 
   def decode(bytes: Array[Byte]): Either[Throwable, A]
 }
+
+object Serialize {
+  def apply[A](implicit ev: Serialize[A]): Serialize[A] = ev
+}

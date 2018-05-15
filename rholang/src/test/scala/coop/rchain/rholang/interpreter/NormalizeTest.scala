@@ -1,12 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
-  Bundle => AbsynBundle,
-  Ground => AbsynGround,
-  KeyValuePair => AbsynKeyValuePair,
-  Send => AbsynSend,
-  _
-}
+import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Bundle => AbsynBundle, Ground => AbsynGround, KeyValuePair => AbsynKeyValuePair, Send => AbsynSend, _}
 import org.scalatest._
 
 import scala.collection.immutable.BitSet
@@ -15,6 +9,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
+import coop.rchain.rspace.Serialize
 import errors._
 import implicits._
 import monix.eval.Coeval
@@ -722,7 +717,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
-  "PMethod" should "Produce a method call" in {
+  "PMethod" should "produce `nth` a method call" in {
     val listProc = new ListProc()
     listProc.add(new PGround(new GroundInt(0)))
     val methodName  = "nth"
@@ -734,6 +729,21 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       inputs.par.prepend(EMethod("nth", EVar(BoundVar(0)), List(GInt(0)), BitSet(0), false))
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
+  }
+
+  it should "produce `toByteArray` method call" in {
+    val listProc = new ListProc()
+    listProc.add(new PGround(new GroundInt(0)))
+    val methodName  = "toByteArray"
+    val target      = new PVar(new ProcVarVar("x"))
+    val pMethod     = new PMethod(target, methodName, listProc)
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val result      = ProcNormalizeMatcher.normalizeMatch[Coeval](pMethod, boundInputs).value
+    val expectedResult =
+      inputs.par.prepend(EMethod("toByteArray", EVar(BoundVar(0)), List(GInt(0)), BitSet(0), false))
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+
   }
 
   "PBundle" should "normalize terms inside a bundle" in {

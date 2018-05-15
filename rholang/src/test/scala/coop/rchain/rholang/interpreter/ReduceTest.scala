@@ -12,6 +12,8 @@ import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.{IStore, LMDBStore}
+import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -112,6 +114,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       ))
   }
 
+  // Await.result wraps any Exception with ExecutionException so we need to catch it, unwrap and rethrow
+  def runAndRethrowBoxedErrors[A](task: Task[A], timeout: Duration = 3.seconds): A =
+    try {
+      Await.result(task.runAsync, timeout)
+    } catch {
+      case boxedError: ExecutionException =>
+        throw boxedError.getCause
+    }
+
   it should "throw an error if names are used against their polarity" in {
     /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
      */
@@ -125,12 +136,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         implicit val env = Env[Par]()
         val reducer      = RholangOnlyDispatcher.create(store).reducer
         val task         = reducer.eval(receive).map(_ => store.toMap)
-        try { // Await.result wraps any Exception with ExecutionException so we need to catch it, unwrap and rethrow
-          Await.result(task.runAsync, 3.seconds)
-        } catch {
-          case boxedError: ExecutionException =>
-            throw boxedError.getCause
-        }
+        runAndRethrowBoxedErrors(task)
       }
     }
 
@@ -145,12 +151,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         implicit val env = Env[Par]()
         val reducer      = RholangOnlyDispatcher.create(store).reducer
         val task         = reducer.eval(send).map(_ => store.toMap)
-        try {
-          Await.result(task.runAsync, 3.seconds)
-        } catch {
-          case boxedError: ExecutionException =>
-            throw boxedError.getCause
-        }
+        runAndRethrowBoxedErrors(task)
       }
     }
   }
@@ -643,5 +644,31 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List())
       )
     )
+  }
+
+  "eval of `toByteArray` method on any process" should "return that process serialized" in {
+
+    /** TODO: add scalacheck generator for [[Par]] */
+    pending
+  }
+
+  it should "return an error when `toByteArray` is called with arguments" in {
+    val toByteArrayWithArgumentsCall: EMethod =
+      EMethod(
+        "toByteArray",
+        Par(sends = Seq(Send(Quote(GString("result")), List(GString("Success")), false, BitSet()))),
+        List[Par](GInt(1)))
+
+    an[ReduceError] should be thrownBy {
+      val result = withTestStore { store =>
+        val reducer      = RholangOnlyDispatcher.create(store).reducer
+        implicit val env = Env[Par]()
+        val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
+        val inspectTask = for {
+          _ <- nthTask
+        } yield store.toMap
+        runAndRethrowBoxedErrors(inspectTask)
+      }
+    }
   }
 }

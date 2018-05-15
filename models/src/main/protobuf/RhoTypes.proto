@@ -19,6 +19,7 @@ message Par {
     repeated GPrivate ids = 7;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 10;
+    bytes Bytes = 12;
 }
 
 message TaggedContinuation {
