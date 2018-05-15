@@ -19,7 +19,7 @@ class Blake2b256Hash private (val bytes: ByteVector) {
   override def toString: String = s"Blake2b256Hash(bytes: ${bytes.toString})"
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case b: Blake2b256Hash => b.bytes == bytes
+    case b: Blake2b256Hash => b.bytes === bytes
     case _                 => false
   }
 
