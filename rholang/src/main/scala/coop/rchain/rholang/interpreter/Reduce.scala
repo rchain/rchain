@@ -62,14 +62,8 @@ object Reduce {
         implicit env: Env[Par]): Task[Unit] = {
       // TODO: Handle the environment in the store
       val substData: Seq[Channel] = data.toList.map(p => Channel(Quote(substitute(p)(env))))
-      println(s"DISPATCH PRODUCE")
-      println(s"DATA $data")
-      println(s"SUBSTDATA $substData")
-      println(s"CHAN $chan")
       internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
         case Some((continuation, dataList)) =>
-          println(s"CONTINUATION $continuation")
-          println(s"DATA LIST $dataList")
           if (persistent) {
             Task
               .gather {
@@ -102,13 +96,6 @@ object Reduce {
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) =
             binds.unzip
-          val srcs    = sources.map(q => Channel(q)).toList
-          val ptrns   = patterns.toList
-          val tgdBody = TaggedContinuation(ParBody(body))
-          println("DISPATCH CONSUME")
-          println(s"SOURCES $srcs")
-          println(s"PATTERNS $ptrns")
-          println(s"TAGGED CONTINUATIONS $tgdBody")
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)).toList,
                           patterns.toList,
@@ -200,22 +187,17 @@ object Reduce {
     def eval(send: Send)(implicit env: Env[Par]): Task[Unit] =
       for {
         quote <- eval(send.chan.get)
-        _     = println(s"Channel: ${send.chan}")
         data  <- send.data.toList.traverse(x => evalExpr(x)(env))
 
         subChan: Quote = substitute(quote)
-        _              = println(s"Send on ${subChan.value}")
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
-                        println(s"Bundle value $value")
                         if (!value.writeFlag) {
                           Task.raiseError(new Error("Trying to send on non-writeable channel."))
                         } else {
                           Task.now(Quote(value.body.get))
                         }
-                      case None =>
-                        println(s"Not a singleBundle")
-                        Task.now(subChan)
+                      case None => Task.now(subChan)
                     }
         _ <- produce(unbundled, data, send.persistent)
       } yield ()
