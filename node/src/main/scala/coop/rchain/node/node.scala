@@ -119,7 +119,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       resources <- aquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
-      _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
+      _         <- MonadOps.forever(net.receiver[Effect].value.void).executeAsync.start.toEffect
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
