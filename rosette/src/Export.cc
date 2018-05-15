@@ -7,10 +7,10 @@
 
 #include <google/protobuf/text_format.h>
 #include <Ob.pb.h>
+
 #include <fstream>
-
-
 #include <string>
+#include <map>
 
 uint64_t createCodeId(Code * code) {
     // For now, use the code pointer as the id.  This is what Rosette does internally, 
@@ -24,22 +24,13 @@ uint64_t createCodeId(Code * code) {
 //    return (uint64_t)code->serial;
 }
 
-// The following enum, structure, functions, and table orchestrate the handling of
+// The following functions and table orchestrate the handling of
 // Rosette Object export within the litvec portion of the exported object code.
 // To add support for an additional object type:
 //  - define a protobuf object for it in Ob.proto
-//  - write a handler that populates the protobuf
+//  - write a handler that populates the protobuf from the Rosette Ob
 //  - add it to the handlers table.
 //
-
-// Define the object handlers table
-enum exportObjectHandling { HandleDirect, HandleReference };
-typedef struct ExportObjectHandling {
-    public:
-    std::string obtypename;
-    void (*handler)(ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype);
-    ObjectCodePB::ObType pbtype;
-} ExportObjectHandling;
 
 // Handlers to populate specific objects
 void defaultObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
@@ -61,80 +52,56 @@ void codeObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObTyp
 }
 
 void floatObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-
     ObjectCodePB::Float *fl = lvob->mutable_float_();
     fl->set_value(((Float*)(ob))->val);
 }
 
 void symbolObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-
     ObjectCodePB::Symbol *sym = lvob->mutable_symbol();
     sym->set_name(BASE(ob)->asPathname());
 }
 
 void rblstringObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-
     ObjectCodePB::RBLstring *str = lvob->mutable_rblstring();
     str->set_value(BASE(ob)->asPathname());
 }
 
 // The handler table that defines which objects are supported, and how they are handled.
+typedef std::string ExportObjectKey;
+typedef void (*ExportObjectHandler)(ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype);
+typedef ObjectCodePB::ObType ExportObjectType;
 
-ExportObjectHandling handlers[] = {
-    // Must be in name order!
-    {"Actor",               defaultObjectHandler,   ObjectCodePB::OT_Actor},
-    {"BlockExpr",           defaultObjectHandler,   ObjectCodePB::OT_BlockExpr},
-    {"Char",                charObjectHandler,      ObjectCodePB::OT_Char},
-    {"Code",                codeObjectHandler,      ObjectCodePB::OT_Code},
-    {"ExpandedLocation",    defaultObjectHandler,   ObjectCodePB::OT_ExpandedLocation},
-    {"Fixnum",              fixnumObjectHandler,    ObjectCodePB::OT_Fixnum},
-    {"Float",               floatObjectHandler,     ObjectCodePB::OT_Float},
-    {"FreeExpr",            defaultObjectHandler,   ObjectCodePB::OT_FreeExpr},
-    {"GotoExpr",            defaultObjectHandler,   ObjectCodePB::OT_GotoExpr},
-    {"IfExpr",              defaultObjectHandler,   ObjectCodePB::OT_IfExpr},
-    {"LabelExpr",           defaultObjectHandler,   ObjectCodePB::OT_LabelExpr},
-    {"LetExpr",             defaultObjectHandler,   ObjectCodePB::OT_LetExpr},
-    {"LetrecExpr",          defaultObjectHandler,   ObjectCodePB::OT_LetrecExpr},
-    {"MethodExpr",          defaultObjectHandler,   ObjectCodePB::OT_MethodExpr},
-    {"Proc",                defaultObjectHandler,   ObjectCodePB::OT_Proc},
-    {"ProcExpr",            defaultObjectHandler,   ObjectCodePB::OT_ProcExpr},
-    {"QuoteExpr",           defaultObjectHandler,   ObjectCodePB::OT_QuoteExpr},
-    {"RBLstring",           rblstringObjectHandler, ObjectCodePB::OT_RBLstring},
-    {"ReflectiveMethodExpr",defaultObjectHandler,   ObjectCodePB::OT_ReflectiveMethodExpr},
-    {"RequestExpr",         defaultObjectHandler,   ObjectCodePB::OT_RequestExpr},
-    {"SendExpr",            defaultObjectHandler,   ObjectCodePB::OT_SendExpr},
-    {"SeqExpr",             defaultObjectHandler,   ObjectCodePB::OT_SeqExpr},
-    {"SetExpr",             defaultObjectHandler,   ObjectCodePB::OT_SetExpr},
-    {"StdMthd",             defaultObjectHandler,   ObjectCodePB::OT_StdMthd},
-    {"Symbol",              symbolObjectHandler,    ObjectCodePB::OT_Symbol},
-    {"TblObject",           defaultObjectHandler,   ObjectCodePB::OT_TblObject},
-    {"Template",            defaultObjectHandler,   ObjectCodePB::OT_Template},
-    {"Tuple",               defaultObjectHandler,   ObjectCodePB::OT_Tuple},
-    {"TupleExpr",           defaultObjectHandler,   ObjectCodePB::OT_TupleExpr},
+std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  handlers = {
+    {"Actor",               {defaultObjectHandler,   ObjectCodePB::OT_Actor} },
+    {"BlockExpr",           {defaultObjectHandler,   ObjectCodePB::OT_BlockExpr} },
+    {"Char",                {charObjectHandler,      ObjectCodePB::OT_Char} },
+    {"Code",                {codeObjectHandler,      ObjectCodePB::OT_Code} },
+    {"ExpandedLocation",    {defaultObjectHandler,   ObjectCodePB::OT_ExpandedLocation} },
+    {"Fixnum",              {fixnumObjectHandler,    ObjectCodePB::OT_Fixnum} },
+    {"Float",               {floatObjectHandler,     ObjectCodePB::OT_Float} },
+    {"FreeExpr",            {defaultObjectHandler,   ObjectCodePB::OT_FreeExpr} },
+    {"GotoExpr",            {defaultObjectHandler,   ObjectCodePB::OT_GotoExpr} },
+    {"IfExpr",              {defaultObjectHandler,   ObjectCodePB::OT_IfExpr} },
+    {"LabelExpr",           {defaultObjectHandler,   ObjectCodePB::OT_LabelExpr} },
+    {"LetExpr",             {defaultObjectHandler,   ObjectCodePB::OT_LetExpr} },
+    {"LetrecExpr",          {defaultObjectHandler,   ObjectCodePB::OT_LetrecExpr} },
+    {"MethodExpr",          {defaultObjectHandler,   ObjectCodePB::OT_MethodExpr} },
+    {"Proc",                {defaultObjectHandler,   ObjectCodePB::OT_Proc} },
+    {"ProcExpr",            {defaultObjectHandler,   ObjectCodePB::OT_ProcExpr} },
+    {"QuoteExpr",           {defaultObjectHandler,   ObjectCodePB::OT_QuoteExpr} },
+    {"RBLstring",           {rblstringObjectHandler, ObjectCodePB::OT_RBLstring} },
+    {"ReflectiveMethodExpr",{defaultObjectHandler,   ObjectCodePB::OT_ReflectiveMethodExpr} },
+    {"RequestExpr",         {defaultObjectHandler,   ObjectCodePB::OT_RequestExpr} },
+    {"SendExpr",            {defaultObjectHandler,   ObjectCodePB::OT_SendExpr} },
+    {"SeqExpr",             {defaultObjectHandler,   ObjectCodePB::OT_SeqExpr} },
+    {"SetExpr",             {defaultObjectHandler,   ObjectCodePB::OT_SetExpr} },
+    {"StdMthd",             {defaultObjectHandler,   ObjectCodePB::OT_StdMthd} },
+    {"Symbol",              {symbolObjectHandler,    ObjectCodePB::OT_Symbol} },
+    {"TblObject",           {defaultObjectHandler,   ObjectCodePB::OT_TblObject} },
+    {"Template",            {defaultObjectHandler,   ObjectCodePB::OT_Template} },
+    {"Tuple",               {defaultObjectHandler,   ObjectCodePB::OT_Tuple} },
+    {"TupleExpr",           {defaultObjectHandler,   ObjectCodePB::OT_TupleExpr} },
 };
-
-// Helper that searches the handler table for a specific object type
-ExportObjectHandling * findHandling(std::string type) {
-    int first = 0;
-    int last = sizeof(handlers)/sizeof(ExportObjectHandling) - 1;
-    int middle = (first+last)/2;
-
-    // Standard binary search of the list of handlers
-    while (first <= last) {
-        if (handlers[middle].obtypename == type) {
-            return &handlers[middle];
-        } else if (handlers[middle].obtypename < type) {
-            first = middle + 1;
-        } else {
-            last = middle - 1;
-        }
-
-        middle = (first + last)/2;
-    }
-    printf("Not found! %s isn't present in the list.\n", type.c_str());
-
-    return NULL;
-}
 
 std::set<uint64_t> codeblocks;  // temp debug
 
@@ -188,10 +155,10 @@ void collectExportCode(Code *code) {
         ObjectCodePB::Object *lvob = lv->add_ob();
 
         // Find the handler for this type
-        ExportObjectHandling * oh = findHandling(type);
-        if (oh) {
-            lvob->set_type(oh->pbtype);
-            oh->handler(lvob, ob, oh->pbtype);
+        auto oh = handlers.find(type);
+        if (oh != handlers.end()) {
+            lvob->set_type(oh->second.second);
+            oh->second.first(lvob, ob, oh->second.second);
         } else {
             warning("Exporting object %s not yet implemented!", type.c_str());
 
