@@ -76,7 +76,11 @@ case class PrettyPrinter(freeShift: Int,
       case GUri(u)           => s"`$u`"
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => "Nil"
-      case _                  => throw new Error("Attempted to print unknown Expr type")
+      case EMethodBody(method) =>
+        "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
+          .map(buildString)
+          .mkString(",") + ")"
+      case _ => throw new Error("Attempted to print unknown Expr type")
     }
 
   def buildString(v: Var): String =
@@ -180,7 +184,7 @@ case class PrettyPrinter(freeShift: Int,
           }
         }._2
 
-      case _ => throw new Error("Attempt to print unknown GeneratedMessage type")
+      case _ => throw new Error("Attempt to print unknown GeneratedMessage type.")
     }
 
   def increment(id: String): String = {
