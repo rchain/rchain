@@ -164,17 +164,13 @@ object Network {
       sender: PeerNode,
       msg: EncryptionHandshakeMessage): F[Unit] =
     for {
-      _            <- Log[F].info("**** handleEncryptionHandshake")
       _            <- Metrics[F].incrementCounter("p2p-encryption-handshake-recv-count")
       local        <- TransportLayer[F].local
-      _            <- Log[F].info(s"**** local = $local")
       keys         <- Encryption[F].fetchKeys
       handshakeErr <- NetworkProtocol.toEncryptionHandshake(msg.proto).pure[F]
-      _            <- Log[F].info(s"**** handshakeErr = $handshakeErr")
       _ <- handshakeErr.fold(kp(Log[F].error("could not fetch proto message")),
                              hs => keysStore[F].put(sender, hs.publicKey.toByteArray))
       responseErr <- msg.response[F](local, keys)
-      _           <- Log[F].info(s"**** responseErr = $responseErr")
       result      <- responseErr.traverse(resp => TransportLayer[F].commSend(resp, sender))
       _ <- result.traverse {
             case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
@@ -255,9 +251,9 @@ object Network {
             msg.typeUrl match {
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
-                Log[F].info("$$$$ encryption handshake") *> handleEncryptionHandshake[F](
-                  sender,
-                  EncryptionHandshakeMessage(proto, System.currentTimeMillis))
+                handleEncryptionHandshake[F](sender,
+                                             EncryptionHandshakeMessage(proto,
+                                                                        System.currentTimeMillis))
               // TODO interpolate this string to check if class exists
               case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Frame" =>
                 val err     = ApplicativeError_[F, CommError]
