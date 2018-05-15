@@ -6,7 +6,8 @@ import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm.CommError._
+import coop.rchain.metrics.Metrics
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.p2p.effects._

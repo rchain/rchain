@@ -5,7 +5,7 @@
 # "delete testnet" removes all testnet resources 
 
 if [[ "${TRAVIS}" == "true" ]]; then
-  set -eox pipefail # x enables verbosity on CI environment for debugging
+  set -eo pipefail # x enables verbosity on CI environment for debugging
 else
   set -eo pipefail
 fi
@@ -25,7 +25,6 @@ line_bar() {
   done
 echo
 }
-
 
 create_test_network_resources() {
   if [[ ! $1 ]]; then
@@ -99,7 +98,6 @@ docker_help_info() {
   line_bar
 }
 
-
 delete_test_network_resources() {
   if [[ ! $1 ]]; then
     echo "E: Requires network name as argument"
@@ -119,10 +117,10 @@ delete_test_network_resources() {
 }
 
 create_artifacts() {
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
-  #cp node/target/rnode_0.2.1_all.deb /tmp/rnode_dev.deb
-  #cp node/target/rpm/RPMS/noarch/rnode-0.2.1-1.noarch.rpm /tmp/rnode_dev.rpm
   artifacts_dir=$(mktemp -d /tmp/artifacts.XXXXXXXX)
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
+  cp node/target/*.deb ${artifacts_dir}/
+  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/
   cp node/target/*.deb ${artifacts_dir}/rnode.deb
   cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
   cp node/target/*.deb ${artifacts_dir}/rnode_dev_all.deb
@@ -133,21 +131,26 @@ create_artifacts() {
   rm -rf ${artifacts_dir}
 }
 
-
 run_tests_on_network() {
   set +eo pipefail # turn off exit immediately for tests
   all_pass=true
 
-
-  if [[ ! $1 ]]; then
-    echo "E: Requires network name as argument"
+  if [[ ! $2 ]]; then
+    echo "E: Requires network name as argument and repl load count"
     exit
   fi
 
-  #set +eo pipefail # turn of exit immediately for tests
+  network_name=$1
+  repl_load_count=$2
+
+  loop_count=1 # only run once
   for container_name in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
-    
-    check_services_up ${container_name} # dynamic check before actually running all tests
+
+    # Test for network convergence before running all tests # simpler is above WAIT_TIME
+    if [[ ${loop_count} == 1 ]]; then
+      check_network_convergence ${container_name} # Check that network has converged and api up before running tests 
+      loop_count=$(($loop_count+1))
+    fi
 
     line_bar
     echo "Running tests on node: ${container_name}"
@@ -185,6 +188,13 @@ run_tests_on_network() {
       sudo docker logs ${container_name} | grep ERR
     fi
 
+    if [[ $(./scripts/repl_load_runner.py -r ${repl_load_count}) ]]; then
+      echo "PASS: Repl load runner ran with no errors"
+    else
+      all_pass=false
+      echo "FAIL: Repl load runner failed"
+    fi
+
   done
 
   echo "Pause for 5 seconds then dumping info"
@@ -216,7 +226,7 @@ run_tests_on_network() {
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
     echo "Dumping metrics and logs"
-    # exit 1 # comment out this line to enable failures
+    exit 1 # comment out this line to enable failures
   elif [[ $all_pass == true ]]; then
     echo "SUCCESS: All checks passed"
   else
@@ -244,13 +254,15 @@ create_docker_rnode_image() {
   fi
 }
 
-check_services_up() {
+check_network_convergence() {
   container_name=$1
   count=0
-  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^peers '") ]]; do
-    echo "Not up yet. Sleeping for 10. Count ${count} of 400."
-    if [[ $count > 400 ]]; then
-      echo "max wait time reached. Exiting loop."
+  metric_string="peers 2.0"
+  while [[ ! $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095 | grep '^${metric_string}'") ]]; do
+    MAX_WAIT_SECONDS=200
+    echo "Checking ${container_name} metric ${metric_string}. ${count} seconds of max ${MAX_WAIT_SECONDS}."
+    if [[ $count -gt $MAX_WAIT_SECONDS ]]; then
+      echo "Max wait time of ${MAX_WAIT_SECONDS} reached. Exiting network convergence check & wait loop."
       return
     fi
     sleep 10
@@ -258,35 +270,29 @@ check_services_up() {
   done
 }
 
-
 # ======================================================
 
 # MAIN
 if [[ "${TRAVIS}" == "true" ]]; then
+  repl_load_count=100
   echo "Running in TRAVIS CI"
   sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
 
-  echo "Running tests on network in 240 seconds after bootup and convergence"
-  echo "Please be patient"
-  echo "====list docker resources before===="
-  sudo docker ps
-  sudo docker network ls 
-  #sleep 240 # allow plenty of time for network to boot and converge
-  echo "====list docker resources after===="
-  sudo docker ps
-  sudo docker network ls 
-  run_tests_on_network "${network_name}"
+  echo "Running tests on network after it has converged"
+  echo "Please be patient. This could take a while."
+  run_tests_on_network "${network_name}" "${repl_load_count}"
 
 elif [[ $1 == "local" ]]; then
   sudo echo "" # Ask for sudo early
   create_docker_rnode_image "local"
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
-elif [[ $1 == "run-tests" ]]; then
+elif [[ $1 == "run-tests" && $2 ]]; then
+  repl_load_count=$2
   sudo echo "" # Ask for sudo early
-  run_tests_on_network "${network_name}"
+  run_tests_on_network "${network_name}" "${repl_load_count}"
 elif [[ $1 == "start" ]]; then
   sudo echo "" # Ask for sudo early
   delete_test_network_resources "${network_name}"
@@ -312,7 +318,7 @@ else
   echo "Usage: $0 local"
   echo "Usage: $0 start"
   echo "Usage: $0 stop"
-  echo "Usage: $0 run-tests"
+  echo "Usage: $0 run-tests 50 (where 50 is number of repl command list load count)"
   echo "Usage: $0 docker-help"
   exit
 fi

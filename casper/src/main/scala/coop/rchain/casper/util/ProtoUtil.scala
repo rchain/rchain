@@ -2,10 +2,12 @@ package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
 
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
+import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Sha256
+import coop.rchain.models.Par
 
 import scala.annotation.tailrec
 
@@ -65,6 +67,44 @@ object ProtoUtil {
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 
+  def deploys(b: BlockMessage): Seq[Deploy] =
+    b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+
+  def bonds(b: BlockMessage): Seq[Bond] =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.bonds).getOrElse(List.empty[Bond])
+
+  def blockNumber(b: BlockMessage): Long =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.blockNumber).getOrElse(0L)
+
+  //Two blocks conflict if they both use the same deploy in different histories
+  def conflicts(b1: BlockMessage,
+                b2: BlockMessage,
+                genesis: BlockMessage,
+                dag: BlockDag): Boolean = {
+    val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag)
+    if (gca == b1 || gca == b2) {
+      //blocks which already exist in each other's chains do not conflict
+      false
+    } else {
+      def getDeploys(b: BlockMessage) =
+        DagOperations
+          .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(dag.blockLookup))
+          .takeWhile(_ != gca)
+          .flatMap(b => {
+            b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+          })
+          .toSet
+
+      getDeploys(b1).intersect(getDeploys(b2)).nonEmpty
+    }
+  }
+
   def justificationProto(
       latestMessages: collection.Map[ByteString, ByteString]): Seq[Justification] =
     latestMessages.toSeq.map {
@@ -121,13 +161,34 @@ object ProtoUtil {
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
-  def basicDeploy(id: Int): Deploy = {
+  def basicDeployString(id: Int): DeployString = {
     val nonce = scala.util.Random.nextInt(10000)
-    val r     = Resource(ProduceResource(Produce(id)))
+    val term  = s"@${id}!($id)"
 
-    Deploy()
+    DeployString()
       .withUser(ByteString.EMPTY)
       .withNonce(nonce)
-      .withResource(r)
+      .withTerm(term)
+  }
+
+  def basicDeploy(id: Int): Deploy = {
+    val d    = basicDeployString(id)
+    val term = InterpreterUtil.mkTerm(d.term).right.get
+    Deploy(
+      user = d.user,
+      nonce = d.nonce,
+      term = Some(term),
+      sig = d.sig
+    )
+  }
+
+  def termDeploy(term: Par): Deploy = {
+    val d = basicDeployString(0)
+    Deploy(
+      user = d.user,
+      nonce = d.nonce,
+      term = Some(term),
+      sig = d.sig
+    )
   }
 }

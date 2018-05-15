@@ -38,6 +38,13 @@ class Tuplespace(val name: String, val location: Path, val size: Long) {
 
   def storageRepr: String =
     StoragePrinter.prettyPrint(runtime.store)
+
+  def delete(): Unit = {
+    runtime.store.close()
+    dbLocation.resolve("lock.mdb").toFile.delete()
+    dbLocation.resolve("data.mdb").toFile.delete()
+    dbLocation.toFile.delete()
+  }
 }
 
 object Tuplespace {
@@ -51,4 +58,9 @@ object Tuplespace {
     Files.copy(srcLock, destLock, StandardCopyOption.REPLACE_EXISTING)
     Files.copy(srcData, destData, StandardCopyOption.REPLACE_EXISTING)
   }
+
+  def randomName: String = "ts-" + (scala.util.Random.nextInt(10000)).formatted("%04d")
+
+  def apply(location: Path, size: Long): Tuplespace =
+    new Tuplespace(randomName, location, size)
 }
