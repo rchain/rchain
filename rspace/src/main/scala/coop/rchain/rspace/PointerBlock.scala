@@ -25,7 +25,7 @@ object PointerBlock {
 
   implicit val codecPointerBlock: Codec[PointerBlock] =
     vectorOfN(
-      provide(256),
+      provide(length),
       optional(ignore(size = 7) ~> bool, Blake2b256Hash.codecBlake2b256Hash)
     ).as[PointerBlock]
 }
