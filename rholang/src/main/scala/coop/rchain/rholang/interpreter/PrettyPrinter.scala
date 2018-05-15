@@ -76,7 +76,11 @@ case class PrettyPrinter(freeShift: Int,
       case GUri(u)           => s"`$u`"
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => "Nil"
-      case _                  => throw new Error(s"Attempted to print unknown Expr type: $e")
+      case EMethodBody(method) =>
+        "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
+          .map(buildString)
+          .mkString(",") + ")"
+      case _ => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
 
   def buildString(v: Var): String =
