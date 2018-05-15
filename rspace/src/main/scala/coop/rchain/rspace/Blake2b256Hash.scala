@@ -1,6 +1,9 @@
 package coop.rchain.rspace
 
 import coop.rchain.crypto.hash.Blake2b256
+import scodec.Codec
+import scodec.bits.ByteVector
+import scodec.codecs._
 
 /**
   * Represents a Blake2b256 Hash
@@ -9,9 +12,24 @@ import coop.rchain.crypto.hash.Blake2b256
   *
   * TODO: Restrict access
   */
-class Blake2b256Hash private (val bytes: Array[Byte])
+class Blake2b256Hash private (val bytes: ByteVector) {
+
+  require(bytes.length == Blake2b256Hash.length)
+
+  override def toString: String = s"Blake2b256Hash(bytes: ${bytes.toString})"
+
+  override def equals(obj: scala.Any): Boolean = obj match {
+    case b: Blake2b256Hash => b.bytes == bytes
+    case _                 => false
+  }
+
+  override def hashCode(): Int =
+    bytes.hashCode
+}
 
 object Blake2b256Hash {
+
+  val length: Int = 32
 
   /**
     * Constructs a [[Blake2b256Hash]]
@@ -20,13 +38,8 @@ object Blake2b256Hash {
     * @return The hash
     */
   def create(bytes: Array[Byte]): Blake2b256Hash =
-    new Blake2b256Hash(Blake2b256.hash(bytes))
+    new Blake2b256Hash(ByteVector(Blake2b256.hash(bytes)))
 
-  implicit object serializeHash extends Serialize[Blake2b256Hash] {
-
-    def encode(a: Blake2b256Hash): Array[Byte] = a.bytes
-
-    def decode(bytes: Array[Byte]): Either[Throwable, Blake2b256Hash] =
-      Right(new Blake2b256Hash(bytes))
-  }
+  implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
+    fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 }
