@@ -871,17 +871,10 @@ pOb Ob::unquote() { return self(); }
 Code* Ob::compileWrt(pOb env, pOb info) {
     PROTECT(env);
     pOb me = self();
-    if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
     CompilationUnit* cu = CompilationUnit::create(me, info, me);
     cu->atTopLevel();
 
     Code * cp = cu->compileExpr(env, TopEnv);
-    if (VerboseFlag) cp->dumpOn(stderr);
-
-    if ('\0' != *ExportFile) {
-        collectExportCode(cp);
-    }
-
     return cp;
 }
 

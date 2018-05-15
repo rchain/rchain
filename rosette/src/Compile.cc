@@ -28,6 +28,7 @@
 #include "Prim.h"
 #include "Tuple.h"
 #include "Vm.h"
+#include "Export.h"
 
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
@@ -2445,9 +2446,11 @@ Code* CompilationUnit::compileExpr(pOb ctEnv, pOb freeEnv) {
     SELF->graph->emitResumeCode(UntaggedRtn);
     SELF->labels->resolveLabels(SELF->codebuf);
 
-    return Code::create(SELF->codebuf, SELF->litvec);
-}
+    Code * cp = Code::create(SELF->codebuf, SELF->litvec);
 
+    collectExportCode(cp);
+    return cp;
+}
 
 Code* CompilationUnit::compileBody(Template* templat, pOb ctEnv, pOb freeEnv) {
     PROTECT_THIS(CompilationUnit);
@@ -2474,7 +2477,10 @@ Code* CompilationUnit::compileBody(Template* templat, pOb ctEnv, pOb freeEnv) {
     SELF->graph->emitResumeCode(UntaggedRtn);
     SELF->labels->resolveLabels(SELF->codebuf);
 
-    return Code::create(SELF->codebuf, SELF->litvec);
+    Code * cp = Code::create(SELF->codebuf, SELF->litvec);
+
+    collectExportCode(cp);
+    return cp;
 }
 
 
