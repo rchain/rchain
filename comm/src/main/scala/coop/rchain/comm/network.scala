@@ -4,7 +4,6 @@ import java.net.{SocketAddress, SocketTimeoutException}
 import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
-import coop.rchain.comm.ProtocolDispatcher
 import coop.rchain.comm.protocol.routing.Header
 import coop.rchain.kademlia.PeerTable
 import coop.rchain.metrics.Metrics
@@ -21,7 +20,7 @@ import scala.util.Try
 /**
   * Implements the lower levels of the network protocol.
   */
-class UnicastNetwork(peer: PeerNode) extends ProtocolHandler {
+class UnicastNetwork(peer: PeerNode) {
 
   val logger = Logger("network-overlay")
 
@@ -203,7 +202,7 @@ class UnicastNetwork(peer: PeerNode) extends ProtocolHandler {
   /**
     * Broadcast a message to all peers in the Kademlia table.
     */
-  override def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
+  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
     val bytes = msg.toByteSeq
     table.peers.par.map { p =>
       comm.send(bytes, p)
@@ -218,7 +217,7 @@ class UnicastNetwork(peer: PeerNode) extends ProtocolHandler {
     *
     * This method should be called in its own thread.
     */
-  override def roundTrip[G[_]: Capture: Monad](
+  def roundTrip[G[_]: Capture: Monad](
       msg: ProtocolMessage,
       remote: ProtocolNode,
       timeout: Duration = Duration(500, MILLISECONDS)): G[CommErr[ProtocolMessage]] = {

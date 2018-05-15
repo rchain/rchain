@@ -32,33 +32,6 @@ object ProtocolDispatcher {
   def apply[F[_], A](implicit pd: ProtocolDispatcher[F, A]): ProtocolDispatcher[F, A] = pd
 }
 
-/**
-  * Implements broadcasting and round-trip (request-response) messaging
-  * for higher level protocols.
-  */
-trait ProtocolHandler {
-
-  /**
-    * The node that anchors this handler; `local` becomes the source
-    * for outgoing communications.
-    */
-  def local: ProtocolNode
-
-  /**
-    * Send a message to a single, remote node, and wait up to the
-    * specified duration for a response.
-    */
-  def roundTrip[F[_]: Capture: Monad](
-      msg: ProtocolMessage,
-      remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): F[Either[CommError, ProtocolMessage]]
-
-  /**
-    * Asynchronously broadcast a message to all known peers.
-    */
-  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]]
-}
-
 object ProtocolNode {
 
   def apply(peer: PeerNode,
