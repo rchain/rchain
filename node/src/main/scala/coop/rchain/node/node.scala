@@ -59,17 +59,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   val net                                                 = new UnicastNetwork(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer[Task](net)
-  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
-    casperPacketHandler[Effect]
-  )
-  implicit val protocolDispatcher: ProtocolDispatcher[Effect, SocketAddress] =
-    effects.RChainProtocolDispatcher.get[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     //  TODO: figure out actual validator identities...
     com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte)),
     storagePath,
     storageSize
   )
+  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+    casperPacketHandler[Effect]
+  )
+  implicit val protocolDispatcher: ProtocolDispatcher[Effect, SocketAddress] =
+    effects.RChainProtocolDispatcher.get[Effect]
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
