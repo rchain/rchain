@@ -820,6 +820,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       .withConnectiveUsed(true)
 
     result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
   }
 
   "PConjunction" should "delegate, and count any free variables inside" in {

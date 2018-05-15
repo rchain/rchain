@@ -504,7 +504,8 @@ object ParSortMatcher {
           Score.PAR,
           sends.map(_.score) ++ bundles.map(_.score) ++
             receives.map(_.score) ++ exprs.map(_.score) ++
-            evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score): _*
+            evals.map(_.score) ++ news.map(_.score) ++ ids.map(_.score) ++ connectives
+            .map(_.score): _*
         )
         ScoredTerm(sortedPar, parScore)
       case None => throw new Error("ParSortMatcher was passed None")
