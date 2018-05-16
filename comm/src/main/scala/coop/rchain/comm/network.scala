@@ -161,8 +161,8 @@ class UnicastNetwork(peer: PeerNode) {
     handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
   }
 
-  private def handlePing[F[_]: Monad: Capture: Log: Time: Metrics](sender: PeerNode,
-                                                                   ping: PingMessage): F[Unit] =
+  private def handlePing[F[_]: Functor: Capture: Log: Metrics](sender: PeerNode,
+                                                               ping: PingMessage): F[Unit] =
     ping
       .response(local)
       .map { pong =>
@@ -175,9 +175,8 @@ class UnicastNetwork(peer: PeerNode) {
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup[F[_]: Monad: Capture: Log: Time: Metrics](
-      sender: PeerNode,
-      lookup: LookupMessage): F[Unit] =
+  private def handleLookup[F[_]: Monad: Capture: Log: Metrics](sender: PeerNode,
+                                                               lookup: LookupMessage): F[Unit] =
     (for {
       id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
@@ -189,7 +188,7 @@ class UnicastNetwork(peer: PeerNode) {
   /**
     * Remove sending peer from table.
     */
-  private def handleDisconnect[F[_]: Monad: Capture: Log: Time: Metrics](
+  private def handleDisconnect[F[_]: Monad: Capture: Log: Metrics](
       sender: PeerNode,
       disconnect: DisconnectMessage): F[Unit] =
     for {
