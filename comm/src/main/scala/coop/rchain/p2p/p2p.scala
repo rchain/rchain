@@ -103,7 +103,7 @@ object Network {
 
     for {
       bootstrapAddr <- errorHandler[F].fromEither(NetworkAddress.parse(bootstrapAddrStr))
-      _             <- Log[F].info(s"Bootstrapping from ${bootstrapAddr}.")
+      _             <- Log[F].info(s"Bootstrapping from $bootstrapAddr.")
       _             <- connectAttempt(attempt = 1, defaultTimeout, bootstrapAddr)
       _             <- Log[F].info(s"Connected $bootstrapAddr.")
     } yield ()
