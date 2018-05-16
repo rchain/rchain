@@ -6,7 +6,7 @@ import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Sha256
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.Par
 
 import scala.annotation.tailrec
@@ -115,13 +115,13 @@ object ProtoUtil {
     }
 
   def protoHash[A <: { def toByteArray: Array[Byte] }](proto: A): ByteString =
-    ByteString.copyFrom(Sha256.hash(proto.toByteArray))
+    ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
 
   def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString = {
     val bytes = protoSeq.foldLeft(Array.empty[Byte]) {
       case (acc, proto) => acc ++ proto.toByteArray
     }
-    ByteString.copyFrom(Sha256.hash(bytes))
+    ByteString.copyFrom(Blake2b256.hash(bytes))
   }
 
   def blockHeader(body: Body, parentHashes: Seq[ByteString]): Header =
@@ -131,32 +131,29 @@ object ProtoUtil {
       .withNewCodeHash(protoSeqHash(body.newCode))
       .withCommReductionsHash(protoSeqHash(body.commReductions))
 
-  //TODO: add signature
-  def blockProto(body: Body,
-                 header: Header,
-                 justifications: Seq[Justification],
-                 sender: ByteString): BlockMessage =
+  def unsignedBlockProto(body: Body,
+                         header: Header,
+                         justifications: Seq[Justification]): BlockMessage =
     BlockMessage()
       .withBlockHash(protoHash(header))
       .withHeader(header)
       .withBody(body)
       .withJustifications(justifications)
-      .withSender(sender)
 
-  def genesisBlock: BlockMessage = {
-    val bonds = (1 to 10).map(i => {
-      val validator = ByteString.copyFrom(Array(i.toByte))
-      val stake     = i
-      Bond(validator, stake)
-    })
+  def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
+    val bondsProto = bonds.toSeq.map {
+      case (pk, stake) =>
+        val validator = ByteString.copyFrom(pk)
+        Bond(validator, stake)
+    }
     val state = RChainState()
       .withBlockNumber(0)
-      .withBonds(bonds)
+      .withBonds(bondsProto)
     val body = Body()
       .withPostState(state)
     val header = blockHeader(body, List.empty[ByteString])
 
-    blockProto(body, header, List.empty[Justification], ByteString.copyFrom(Array.empty[Byte]))
+    unsignedBlockProto(body, header, List.empty[Justification])
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)

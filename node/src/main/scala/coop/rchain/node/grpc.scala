@@ -80,8 +80,11 @@ object GrpcServer {
           Future.successful(DeployServiceResponse(false, s"Error in parsing term: \n$err"))
       }
 
-    override def propose(e: Empty): Future[Empty] =
-      (MultiParentCasper[F].sendBlockWhenReady(true) *> Monad[F].pure(Empty())).toFuture
+    override def createBlock(e: Empty): Future[MaybeBlockMessage] =
+      MultiParentCasper[F].createBlock.map(MaybeBlockMessage.apply).toFuture
+
+    override def addBlock(b: BlockMessage): Future[Empty] =
+      MultiParentCasper[F].addBlock(b).map(_ => Empty()).toFuture
 
     override def showBlock(q: BlockQuery): Future[BlockInfo] = {
       val dag = MultiParentCasper[F].blockDag
