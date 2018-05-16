@@ -16,6 +16,8 @@ class PointerBlock private (val toVector: Vector[Option[Blake2b256Hash]]) {
   def children: Vector[(Int, Blake2b256Hash)] =
     toVector.zipWithIndex.collect { case (Some(hash), idx) => (idx, hash) }
 
+  override def toString: String = s"PointerBlock(toVector: ${toVector.toString})"
+
   override def equals(obj: scala.Any): Boolean = obj match {
     case pb: PointerBlock => pb.toVector == toVector
     case _                => false
