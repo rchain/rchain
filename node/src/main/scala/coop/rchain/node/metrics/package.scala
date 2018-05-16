@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import java.lang.management.ManagementFactory
+import java.lang.management.{ManagementFactory, MemoryType}
 
 import scala.collection.JavaConverters._
 
@@ -32,13 +32,13 @@ package object metrics {
           Memory(
             committed = heap.getCommitted,
             init = heap.getInit,
-            max = heap.getMax,
+            max = check(heap.getMax),
             used = heap.getUsed
           ),
           Memory(
             committed = nonHeap.getCommitted,
             init = nonHeap.getInit,
-            max = nonHeap.getMax,
+            max = check(nonHeap.getMax),
             used = nonHeap.getUsed
           )
         ).pure[F]
@@ -74,17 +74,20 @@ package object metrics {
             val peakUsage = b.getPeakUsage
             MemoryPool(
               name = b.getName,
-              poolType = b.getType.toString,
+              poolType = b.getType match {
+                case MemoryType.HEAP     => "HEAP"
+                case MemoryType.NON_HEAP => "NON_HEAP"
+              },
               usage = Memory(
                 committed = usage.getCommitted,
                 init = usage.getInit,
-                max = usage.getMax,
+                max = check(usage.getMax),
                 used = usage.getUsed
               ),
               peakUsage = Memory(
                 committed = peakUsage.getCommitted,
                 init = peakUsage.getInit,
-                max = peakUsage.getMax,
+                max = check(peakUsage.getMax),
                 used = peakUsage.getUsed
               )
             )

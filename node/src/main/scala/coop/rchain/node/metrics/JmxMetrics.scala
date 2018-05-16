@@ -26,7 +26,7 @@ case class Memory(
     // amount of memory that the JVM initially requested in bytes
     init: Long,
     // maximum amount of memory possible in bytes
-    max: Long,
+    max: Option[Long],
     // amount of used memory in bytes
     used: Long
 )
