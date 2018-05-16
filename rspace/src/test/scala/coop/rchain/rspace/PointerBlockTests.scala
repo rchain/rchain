@@ -37,7 +37,7 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
 
   val helloHash: Blake2b256Hash = Blake2b256Hash.create("hello".getBytes())
 
-  val fullPb: PointerBlock = PointerBlock(Vector.fill(256)(Some(helloHash)))
+  val fullPb: PointerBlock = PointerBlock.fromVector(Vector.fill(256)(Some(helloHash)))
 
   "An empty PointerBlock" should "have the expected hash" in {
 
