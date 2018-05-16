@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 
+import coop.rchain.shared.AttemptOps._
+
 import scala.collection.immutable.Seq
 
 object internal {
@@ -47,11 +49,8 @@ object internal {
     lazy val waitingContinuationsSeqCodec: Codec[Seq[WaitingContinuationBytes]] =
       seqOfN(int32, waitingContinuationBytesCodec).as[Seq[WaitingContinuationBytes]]
 
-    private[this] def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =
-      attempt.toEither match {
-        case Right(res) => res.value
-        case Left(err)  => throw new Exception(err.toString)
-      }
+    private def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =
+      attempt.get.value
 
     def toBitVector[T](value: T, codec: Codec[T]): BitVector =
       codec.encode(value).toEither match {
