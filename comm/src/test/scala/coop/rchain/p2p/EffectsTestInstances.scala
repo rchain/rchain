@@ -1,5 +1,6 @@
 package coop.rchain.p2p
 
+import java.net.SocketAddress
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
 import cats._
@@ -70,6 +71,8 @@ object EffectsTestInstances {
         Right(())
       }
     def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+
+    def receive: F[Option[(SocketAddress, ProtocolMessage)]] = ???
   }
 
   import Encryption._

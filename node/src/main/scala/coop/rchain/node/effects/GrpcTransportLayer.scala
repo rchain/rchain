@@ -1,5 +1,6 @@
 package coop.rchain.node.effects
 
+import java.net.SocketAddress
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
@@ -22,5 +23,7 @@ object GrpcTransportLayer {
       def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = ???
 
       def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+
+      def receive: F[Option[(SocketAddress, ProtocolMessage)]] = ???
     }
 }
