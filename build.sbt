@@ -31,7 +31,9 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
-      monix
+      monix,
+      scodecCore,
+      scodecBits
     )
   )
 
@@ -275,7 +277,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
-  .dependsOn(shared)
+  .dependsOn(shared, crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)

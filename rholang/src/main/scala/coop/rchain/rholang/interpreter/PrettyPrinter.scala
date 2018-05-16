@@ -80,9 +80,7 @@ case class PrettyPrinter(freeShift: Int,
         "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
           .map(buildString)
           .mkString(",") + ")"
-      case ByteArray(array) =>
-        array.toString()
-      case _ => throw new Error(s"Attempted to print unknown Expr type: $e")
+      case _ => throw new Error("Attempted to print unknown Expr type")
     }
 
   def buildString(v: Var): String =
@@ -186,7 +184,7 @@ case class PrettyPrinter(freeShift: Int,
           }
         }._2
 
-      case _ => throw new Error(s"Attempt to print unknown GeneratedMessage type.")
+      case _ => throw new Error("Attempt to print unknown GeneratedMessage type.")
     }
 
   def increment(id: String): String = {

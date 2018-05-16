@@ -94,7 +94,6 @@ class Code : public Ob {
     CodeVec* codevec;
     Tuple* litvec;
 
-    static Code* create(CodeVec*, Tuple*);
     static Code* create(CodeBuf*, Tuple*);
 
     Instr* dumpInstr(Instr*, char*);
