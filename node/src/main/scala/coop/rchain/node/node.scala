@@ -17,6 +17,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
+import metrics.MetricsServer
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
