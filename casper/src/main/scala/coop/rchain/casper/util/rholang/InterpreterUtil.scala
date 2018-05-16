@@ -18,7 +18,7 @@ import scala.collection.immutable.HashSet
 object InterpreterUtil {
 
   def mkTerm(s: String): Either[Throwable, Par] =
-    RholangCLI.buildNormalizedTerm(new StringReader(s))
+    RholangCLI.buildNormalizedTerm(new StringReader(s)).runAttempt
 
   def computeParentsPostState(parents: Seq[BlockMessage],
                               genesis: BlockMessage,

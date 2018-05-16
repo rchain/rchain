@@ -5,6 +5,8 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
 
 import coop.rchain.rspace.util.ignore
+import scodec.bits.BitVector
+import scodec.{Attempt, Codec, DecodeResult}
 
 package object test {
 
@@ -39,4 +41,7 @@ package object test {
     byteBuffer.reset()
     fetched.toSeq.map(x => x.toString).mkString("-")
   }
+
+  def roundTripCodec[T](t: T)(implicit codec: Codec[T]): Attempt[DecodeResult[T]] =
+    codec.encode(t).flatMap((vector: BitVector) => codec.decode(vector))
 }
