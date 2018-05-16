@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError, Parallel, Eval => _}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -539,9 +540,10 @@ object Reduce {
             interpreterErrorM[M].raiseError(
               ReduceError("Error: toByteArray does not take arguments"))
           } else {
-            interpreterErrorM[M]
-              .fromEither(serialize(p))
-              .map(b => Par(bytes = com.google.protobuf.ByteString.copyFrom(b)))
+            evalExpr(p)(env)
+              .map(serialize(_))
+              .flatMap(interpreterErrorM[M].fromEither)
+              .map(b => Expr(ByteArray(com.google.protobuf.ByteString.copyFrom(b))))
           }
         }
     }

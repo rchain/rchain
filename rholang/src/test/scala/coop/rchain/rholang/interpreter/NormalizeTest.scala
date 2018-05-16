@@ -723,32 +723,20 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.knownFree should be(inputs.knownFree)
   }
 
-  "PMethod" should "produce `nth` a method call" in {
-    val listProc = new ListProc()
-    listProc.add(new PGround(new GroundInt(0)))
-    val methodName  = "nth"
-    val target      = new PVar(new ProcVarVar("x"))
-    val pMethod     = new PMethod(target, methodName, listProc)
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
-    val result      = ProcNormalizeMatcher.normalizeMatch[Coeval](pMethod, boundInputs).value
-    val expectedResult =
-      inputs.par.prepend(EMethod("nth", EVar(BoundVar(0)), List(GInt(0)), BitSet(0), false))
-    result.par should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
-  }
-
-  it should "produce `toByteArray` method call" in {
-    val listProc = new ListProc()
-    listProc.add(new PGround(new GroundInt(0)))
-    val methodName  = "toByteArray"
-    val target      = new PVar(new ProcVarVar("x"))
-    val pMethod     = new PMethod(target, methodName, listProc)
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
-    val result      = ProcNormalizeMatcher.normalizeMatch[Coeval](pMethod, boundInputs).value
-    val expectedResult =
-      inputs.par.prepend(EMethod("toByteArray", EVar(BoundVar(0)), List(GInt(0)), BitSet(0), false))
-    result.par should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
+  "PMethod" should "produce proper method call" in {
+    val methods = List("nth", "toByteArray")
+    def test(methodName: String): Boolean = {
+      val listProc = new ListProc()
+      listProc.add(new PGround(new GroundInt(0)))
+      val target      = new PVar(new ProcVarVar("x"))
+      val pMethod     = new PMethod(target, methodName, listProc)
+      val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+      val result      = ProcNormalizeMatcher.normalizeMatch[Coeval](pMethod, boundInputs).value
+      val expectedResult =
+        inputs.par.prepend(EMethod(methodName, EVar(BoundVar(0)), List(GInt(0)), BitSet(0), false))
+      result.par === expectedResult && result.knownFree === inputs.knownFree
+    }
+    methods.forall(m => test(m))
 
   }
 

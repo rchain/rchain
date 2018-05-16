@@ -11,9 +11,8 @@ import coop.rchain.rholang.interpreter.errors.ReduceError
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.rspace.{IStore, LMDBStore}
+import coop.rchain.rspace.{IStore, LMDBStore, Serialize}
 import monix.eval.Task
-import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -647,9 +646,31 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
+    import coop.rchain.models.implicits._
+    val proc = Receive(Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GString("channel")))),
+                       Par(),
+                       false,
+                       1,
+                       BitSet())
+    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc))
+    val toByteArrayCall           = EMethod("toByteArray", proc, List[Par]())
+    def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
+    val result = withTestStore { store =>
+      val reducer     = RholangOnlyDispatcher.create(store).reducer
+      val env         = Env[Par]()
+      val nthTask     = reducer.eval(wrapWithSend(toByteArrayCall))(env)
+      val inspectTask = for { _ <- nthTask } yield store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
 
-    /** TODO: add scalacheck generator for [[Par]] */
-    pending
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(Datum[List[Channel]](List[Channel](Quote(Expr(ByteArray(serializedProcess)))),
+                                        persist = false)),
+              List())
+      )
+    )
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {

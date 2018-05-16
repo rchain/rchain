@@ -19,7 +19,6 @@ message Par {
     repeated GPrivate ids = 7;
     bytes locallyFree = 9 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 10;
-    bytes Bytes = 12;
 }
 
 message TaggedContinuation {
@@ -156,6 +155,8 @@ message Expr {
         ESet e_set_body = 22;
         EMap e_map_body = 23;
         EMethod e_method_body = 24;
+
+        bytes ByteArray = 25;
     }
 }
 

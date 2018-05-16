@@ -293,6 +293,7 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EMethodBody(e)             => e.connectiveUsed
+        case ByteArray(_)               => false
       }
 
     def locallyFree(e: Expr) =
@@ -323,6 +324,8 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
         case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
         case EMethodBody(e)             => e.locallyFree
+        case ByteArray(_)               => BitSet()
+
       }
   }
 
