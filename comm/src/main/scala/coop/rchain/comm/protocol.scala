@@ -17,47 +17,19 @@ import kamon._
 // generation. For reproducibility, this should be a passed-in value.
 
 // TODO REMOVE inheritance hierarchy for composition
-trait ProtocolDispatcher[A] {
+trait ProtocolDispatcher[F[_], A] {
 
   /**
     * Handle an incoming message. This function is intended to thread
     * levels of protocol together, such that inner protocols can
     * bubble unhandled messages up to outer levels.
     */
-  def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
-        ?[_],
-        PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
-      extra: A,
-      msg: ProtocolMessage): F[Unit]
+  def dispatch(extra: A, msg: ProtocolMessage): F[Unit]
+  def exists: F[Boolean]
 }
 
-/**
-  * Implements broadcasting and round-trip (request-response) messaging
-  * for higher level protocols.
-  */
-trait ProtocolHandler {
-
-  /**
-    * The node that anchors this handler; `local` becomes the source
-    * for outgoing communications.
-    */
-  def local: ProtocolNode
-
-  /**
-    * Send a message to a single, remote node, and wait up to the
-    * specified duration for a response.
-    */
-  def roundTrip[F[_]: Capture: Monad](
-      msg: ProtocolMessage,
-      remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): F[Either[CommError, ProtocolMessage]]
-
-  /**
-    * Asynchronously broadcast a message to all known peers.
-    */
-  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]]
+object ProtocolDispatcher {
+  def apply[F[_], A](implicit pd: ProtocolDispatcher[F, A]): ProtocolDispatcher[F, A] = pd
 }
 
 object ProtocolNode {
