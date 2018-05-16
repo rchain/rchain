@@ -12,6 +12,6 @@ object ArbitraryInstances {
     Arbitrary(Gen.sized { _ =>
       Gen
         .listOfN(256, Arbitrary.arbitrary[Option[Blake2b256Hash]])
-        .map(maybeHashes => new PointerBlock(maybeHashes.toVector))
+        .map(maybeHashes => PointerBlock(maybeHashes.toVector))
     })
 }
