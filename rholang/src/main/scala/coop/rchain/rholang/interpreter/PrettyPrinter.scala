@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
@@ -80,7 +81,8 @@ case class PrettyPrinter(freeShift: Int,
         "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
           .map(buildString)
           .mkString(",") + ")"
-      case _ => throw new Error("Attempted to print unknown Expr type")
+      case ExprInstance.ByteArray(bs) => Base16.encode(bs.toByteArray)
+      case _                          => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
 
   def buildString(v: Var): String =

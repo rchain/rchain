@@ -215,6 +215,16 @@ object implicits {
         None
       }
 
+    def singleExpr(): Option[Expr] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
+        p.exprs match {
+          case List(single) => Some(single)
+          case _            => None
+        }
+      } else {
+        None
+      }
+
     def singleNew(): Option[New] =
       if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
         p.news match {
