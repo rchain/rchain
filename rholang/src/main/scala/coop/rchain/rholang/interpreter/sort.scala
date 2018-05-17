@@ -14,8 +14,9 @@
   */
 package coop.rchain.rholang.interpreter
 
-import cats.{ApplicativeError, Functor, MonadError}
+import cats.{Applicative, ApplicativeError, Functor, MonadError}
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -147,6 +148,10 @@ object Score {
   final val BUNDLE_READ       = 306
   final val BUNDLE_WRITE      = 307
   final val BUNDLE_READ_WRITE = 308
+
+  final val CONNECTIVE_NOT = 400
+  final val CONNECTIVE_AND = 401
+  final val CONNECTIVE_OR  = 402
 
   final val PAR = 999
 }
@@ -528,6 +533,31 @@ object BundleSortMatcher {
   }
 }
 
+object ConnectiveSortMatcher {
+  def sortMatch[M[_]: Functor: Applicative](c: Connective)(
+      implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Connective]] =
+    c.connectiveInstance match {
+      case ConnAndBody(cb) =>
+        cb.ps.toList
+          .traverse(par => ParSortMatcher.sortMatch(par)(err))
+          .map(pars =>
+            ScoredTerm(Connective(ConnAndBody(cb.withPs(pars.map(_.term.get)))),
+                       Node(Score.CONNECTIVE_AND, pars.map(_.score): _*)))
+      case ConnOrBody(cb) =>
+        cb.ps.toList
+          .traverse(par => ParSortMatcher.sortMatch(par)(err))
+          .map(pars =>
+            ScoredTerm(Connective(ConnOrBody(cb.withPs(pars.map(_.term.get)))),
+                       Node(Score.CONNECTIVE_OR, pars.map(_.score): _*)))
+      case ConnNotBody(p) =>
+        ParSortMatcher
+          .sortMatch(p)(err)
+          .map(scoredPar =>
+            ScoredTerm(Connective(ConnNotBody(scoredPar.term.get)),
+                       Node(Score.CONNECTIVE_NOT, scoredPar.score)))
+    }
+}
+
 object ParSortMatcher {
   def sortMatch[M[_]](parOption: Option[Par])(
       implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Option[Par]]] =
@@ -543,7 +573,10 @@ object ParSortMatcher {
           news    <- p.news.toList.traverse(n => NewSortMatcher.sortMatch[M](n)).map(_.sorted)
           matches <- p.matches.toList.traverse(m => MatchSortMatcher.sortMatch[M](m)).map(_.sorted)
           bundles <- p.bundles.toList.traverse(b => BundleSortMatcher.sortMatch[M](b)).map(_.sorted)
-          ids     = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
+          connectives <- p.connectives.toList
+                          .traverse(c => ConnectiveSortMatcher.sortMatch[M](c))
+                          .map(_.sorted)
+          ids = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
           sortedPar = Par(
             sends = sends.map(_.term),
             receives = receives.map(_.term),
@@ -552,6 +585,7 @@ object ParSortMatcher {
             news = news.map(_.term),
             matches = matches.map(_.term),
             bundles = bundles.map(_.term),
+            connectives = connectives.map(_.term),
             ids = ids.map(_.term),
             locallyFree = p.locallyFree,
             connectiveUsed = p.connectiveUsed
@@ -560,7 +594,8 @@ object ParSortMatcher {
             Score.PAR,
             sends.map(_.score) ++ receives.map(_.score) ++
               exprs.map(_.score) ++ evals.map(_.score) ++ news.map(_.score) ++
-              matches.map(_.score) ++ bundles.map(_.score) ++ ids.map(_.score): _*
+              matches.map(_.score) ++ bundles.map(_.score) ++ ids.map(_.score) ++ connectives.map(
+              _.score): _*
           )
 
         } yield ScoredTerm(sortedPar.pure[Option], parScore)

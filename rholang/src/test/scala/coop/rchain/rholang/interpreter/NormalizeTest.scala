@@ -11,6 +11,7 @@ import org.scalatest._
 
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
@@ -814,7 +815,45 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
     assert(result.par === expectedResults)
     assert(result.knownFree === boundInputs.knownFree)
+  }
 
+  "PNegation" should "delegate, but not count any free variables inside" in {
+    val proc = new PNegation(new PVar(new ProcVarVar("x")))
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, inputs).value
+    val expectedResult = inputs.par
+      .addConnectives(Connective(ConnNotBody(EVar(FreeVar(0)))))
+      .withConnectiveUsed(true)
+
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  "PConjunction" should "delegate, and count any free variables inside" in {
+    val proc = new PConjunction(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("y")))
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, inputs).value
+    val expectedResult = inputs.par
+      .addConnectives(
+        Connective(ConnAndBody(ConnectiveBody(Vector(EVar(FreeVar(0)), EVar(FreeVar(1)))))))
+      .withConnectiveUsed(true)
+
+    result.par should be(expectedResult)
+    result.knownFree should be(
+      inputs.knownFree.newBindings(List(("x", ProcSort, 0, 0), ("y", ProcSort, 0, 0)))._1)
+  }
+
+  "PDisjunction" should "delegate, but not count any free variables inside" in {
+    val proc = new PDisjunction(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, inputs).value
+    val expectedResult = inputs.par
+      .addConnectives(
+        Connective(ConnOrBody(ConnectiveBody(Vector(EVar(FreeVar(0)), EVar(FreeVar(0)))))))
+      .withConnectiveUsed(true)
+
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
   }
 }
 

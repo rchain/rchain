@@ -20,9 +20,7 @@ import scala.util.Try
 /**
   * Implements the lower levels of the network protocol.
   */
-class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddress]] = None)
-    extends ProtocolHandler
-    with ProtocolDispatcher[SocketAddress] {
+class UnicastNetwork(peer: PeerNode) {
 
   val logger = Logger("network-overlay")
 
@@ -42,18 +40,13 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  def receiver[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
-        ?[_],
-        PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler]: F[Unit] =
+  def receiver[F[_]: Monad: Capture: Log: Time: Metrics](
+      implicit protocolDispatcher: ProtocolDispatcher[F, SocketAddress]): F[Unit] =
     for {
       result <- Capture[F].capture(comm.recv)
       _ <- result match {
             case Right((sock, res)) =>
-              ProtocolMessage.parse(res).traverse { msg =>
-                dispatch[F](sock, msg)
-              }
+              ProtocolMessage.parse(res).traverse(msg => dispatch[F](sock, msg))
             // TODO flatten that pattern match
             case Left(err: CommError) =>
               err match {
@@ -66,9 +59,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
                 case DatagramException(ex) => Log[F].error(s"datgram error, ex: $ex")
                 case _                     => ().pure[F]
               }
-
           }
-
     } yield ()
 
   /**
@@ -111,13 +102,8 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
     potentials.toSeq
   }
 
-  def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
-        ?[_],
-        PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
-      sock: SocketAddress,
-      msg: ProtocolMessage): F[Unit] = {
+  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics](sock: SocketAddress, msg: ProtocolMessage)(
+      implicit protocolDispatcher: ProtocolDispatcher[F, SocketAddress]): F[Unit] = {
 
     val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
       val sender =
@@ -129,10 +115,11 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
 
       // Update sender's last-seen time, adding it if there are no higher-level protocols.
       for {
-        ti <- Time[F].nanoTime
-        _ <- Capture[F].capture(
-              table.observe(ProtocolNode(sender, local, unsafeRoundTrip), next.isEmpty))
-        tf <- Time[F].nanoTime
+        ti     <- Time[F].nanoTime
+        exists <- protocolDispatcher.exists
+        doAdd  = !exists
+        _      <- Capture[F].capture(table.observe(ProtocolNode(sender, local, unsafeRoundTrip), doAdd))
+        tf     <- Time[F].nanoTime
         // Capture µs timing for roundtrips
         _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
         _ <- msg match {
@@ -140,7 +127,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
               case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
               case disconnect @ DisconnectMessage(_, _) => handleDisconnect[F](sender, disconnect)
               case resp: ProtocolResponse               => handleResponse[F](sock, sender, resp)
-              case _                                    => next.traverse(d => d.dispatch[F](sock, msg)).void
+              case _                                    => protocolDispatcher.dispatch(sock, msg)
             }
       } yield ()
 
@@ -156,20 +143,16 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
-  private def handleResponse[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
-        ?[_],
-        PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
-      sock: SocketAddress,
-      sender: PeerNode,
-      msg: ProtocolResponse): F[Unit] = {
+  private def handleResponse[F[_]: Monad: Capture: Log: Time: Metrics](sock: SocketAddress,
+                                                                       sender: PeerNode,
+                                                                       msg: ProtocolResponse)(
+      implicit protocolDispatcher: ProtocolDispatcher[F, SocketAddress]): F[Unit] = {
     val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
       for {
         result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
         _ <- result match {
               case Some(promise) => Capture[F].capture(promise.success(Right(msg)))
-              case None          => next.traverse(_.dispatch[F](sock, msg)).void
+              case None          => protocolDispatcher.dispatch(sock, msg)
             }
 
       } yield ()
@@ -218,7 +201,7 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
   /**
     * Broadcast a message to all peers in the Kademlia table.
     */
-  override def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
+  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
     val bytes = msg.toByteSeq
     table.peers.par.map { p =>
       comm.send(bytes, p)
@@ -233,32 +216,32 @@ class UnicastNetwork(peer: PeerNode, next: Option[ProtocolDispatcher[SocketAddre
     *
     * This method should be called in its own thread.
     */
-  override def roundTrip[F[_]: Capture: Monad](
+  def roundTrip[G[_]: Capture: Monad](
       msg: ProtocolMessage,
       remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] = {
+      timeout: Duration = Duration(500, MILLISECONDS)): G[CommErr[ProtocolMessage]] = {
 
-    def send(header: Header): CommErrT[F, ProtocolMessage] = {
-      val sendIt: F[CommErr[ProtocolMessage]] = for {
-        promise <- Capture[F].capture(Promise[Either[CommError, ProtocolMessage]])
+    def send(header: Header): CommErrT[G, ProtocolMessage] = {
+      val sendIt: G[CommErr[ProtocolMessage]] = for {
+        promise <- Capture[G].capture(Promise[Either[CommError, ProtocolMessage]])
         bytes   = msg.toByteSeq
         pend    = PendingKey(remote.key, header.timestamp, header.seq)
-        result <- Capture[F].capture {
+        result <- Capture[G].capture {
                    pending.put(pend, promise)
                    comm.send(bytes, remote)
                    Try(Await.result(promise.future, timeout)).toEither
                      .leftMap(protocolException)
                      .flatten
                  }
-        _ <- Capture[F].capture(pending.remove(pend))
+        _ <- Capture[G].capture(pending.remove(pend))
       } yield result
       EitherT(sendIt)
     }
 
-    def fetchHeader(maybeHeader: Option[Header]): CommErrT[F, Header] =
-      maybeHeader.fold[CommErrT[F, Header]](
-        EitherT(unknownProtocol("malformed message").asLeft[Header].pure[F]))(
-        _.pure[CommErrT[F, ?]])
+    def fetchHeader(maybeHeader: Option[Header]): CommErrT[G, Header] =
+      maybeHeader.fold[CommErrT[G, Header]](
+        EitherT(unknownProtocol("malformed message").asLeft[Header].pure[G]))(
+        _.pure[CommErrT[G, ?]])
 
     (for {
       header     <- fetchHeader(msg.header)
