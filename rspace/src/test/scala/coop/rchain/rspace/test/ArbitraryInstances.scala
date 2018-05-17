@@ -1,6 +1,7 @@
 package coop.rchain.rspace.test
 
 import coop.rchain.rspace._
+import coop.rchain.rspace.history._
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits.ByteVector
 
