@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
@@ -40,8 +41,8 @@ class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
 
 object RholangOnlyDispatcher {
 
-  def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])
-    : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
+  def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])(
+      implicit captureTask: Capture[Task]): Dispatch[Task, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[Task] =
@@ -75,8 +76,8 @@ class RholangAndScalaDispatcher private (
 object RholangAndScalaDispatcher {
 
   def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-             dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])
-    : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
+             dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])(
+      implicit captureTask: Capture[Task]): Dispatch[Task, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[Task] =
