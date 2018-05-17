@@ -40,27 +40,33 @@ class UnicastNetwork(peer: PeerNode) {
   val comm  = new UnicastComm(local)
   val table = PeerTable(local)
 
-  def receiver[F[_]: Monad: Capture: Log: Time: Metrics](
-      implicit protocolDispatcher: ProtocolDispatcher[F, SocketAddress]): F[Unit] =
-    for {
-      result <- Capture[F].capture(comm.recv)
-      _ <- result match {
-            case Right((sock, res)) =>
-              ProtocolMessage.parse(res).traverse(msg => dispatch[F](sock, msg))
-            // TODO flatten that pattern match
-            case Left(err: CommError) =>
-              err match {
-                case DatagramException(_: SocketTimeoutException) => ().pure[F]
-                // TODO These next ones may ding a node's reputation; just
-                // printing for now.
-                case DatagramSizeError(sz) => Log[F].warn(s"bad datagram size $sz")
-                case DatagramFramingError(ex) =>
-                  Log[F].error(s"datgram framing error, ex: $ex")
-                case DatagramException(ex) => Log[F].error(s"datgram error, ex: $ex")
-                case _                     => ().pure[F]
-              }
+  def receiver[F[_]: Monad: Capture: Log: Time: Metrics]
+    : F[Option[(SocketAddress, ProtocolMessage)]] =
+    Capture[F].capture(comm.recv) >>= (result => {
+      result match {
+        case Right((sock, res)) =>
+          val msgErr: Either[CommError, ProtocolMessage] = ProtocolMessage.parse(res)
+          val dispatched: F[Either[CommError, Option[(SocketAddress, ProtocolMessage)]]] =
+            msgErr.traverse(msg => dispatch[F](sock, msg))
+          dispatched.flatMap(e =>
+            e match {
+              case Left(commErr) => Log[F].error("Error in receiver: " + commErr).as(None)
+              case Right(r)      => r.pure[F]
+          })
+        // TODO flatten that pattern match
+        case Left(err: CommError) =>
+          err match {
+            case DatagramException(_: SocketTimeoutException) => none.pure[F]
+            // TODO These next ones may ding a node's reputation; just
+            // printing for now.
+            case DatagramSizeError(sz) => Log[F].warn(s"bad datagram size $sz").as(none)
+            case DatagramFramingError(ex) =>
+              Log[F].error(s"datgram framing error, ex: $ex").as(none)
+            case DatagramException(ex) => Log[F].error(s"datgram error, ex: $ex").as(none)
+            case _                     => none.pure[F]
           }
-    } yield ()
+      }
+    })
 
   /**
     * Return up to `limit` candidate peers.
@@ -102,38 +108,39 @@ class UnicastNetwork(peer: PeerNode) {
     potentials.toSeq
   }
 
-  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics](sock: SocketAddress, msg: ProtocolMessage)(
-      implicit protocolDispatcher: ProtocolDispatcher[F, SocketAddress]): F[Unit] = {
+  def dispatch[F[_]: Monad: Capture: Log: Time: Metrics](
+      sock: SocketAddress,
+      msg: ProtocolMessage): F[Option[(SocketAddress, ProtocolMessage)]] = {
 
-    val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
-      val sender =
-        sock match {
-          case (s: java.net.InetSocketAddress) =>
-            sndr.withUdpSocket(s)
-          case _ => sndr
-        }
+    val dispatchForSender: Option[F[Option[(SocketAddress, ProtocolMessage)]]] = msg.sender.map {
+      sndr =>
+        val sender =
+          sock match {
+            case (s: java.net.InetSocketAddress) =>
+              sndr.withUdpSocket(s)
+            case _ => sndr
+          }
 
-      // Update sender's last-seen time, adding it if there are no higher-level protocols.
-      for {
-        ti     <- Time[F].nanoTime
-        exists <- protocolDispatcher.exists
-        doAdd  = !exists
-        _      <- Capture[F].capture(table.observe(ProtocolNode(sender, local, unsafeRoundTrip), doAdd))
-        tf     <- Time[F].nanoTime
-        // Capture µs timing for roundtrips
-        _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
-        _ <- msg match {
-              case ping @ PingMessage(_, _)             => handlePing[F](sender, ping)
-              case lookup @ LookupMessage(_, _)         => handleLookup[F](sender, lookup)
-              case disconnect @ DisconnectMessage(_, _) => handleDisconnect[F](sender, disconnect)
-              case resp: ProtocolResponse               => handleResponse[F](sock, sender, resp)
-              case _                                    => protocolDispatcher.dispatch(sock, msg)
-            }
-      } yield ()
+        // Update sender's last-seen time, adding it if there are no higher-level protocols.
+        for {
+          ti <- Time[F].nanoTime
+          _  <- Capture[F].capture(table.observe(ProtocolNode(sender, local, unsafeRoundTrip), true))
+          tf <- Time[F].nanoTime
+          // Capture µs timing for roundtrips
+          _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
+          ret <- msg match {
+                  case ping @ PingMessage(_, _)     => handlePing[F](sender, ping).as(None)
+                  case lookup @ LookupMessage(_, _) => handleLookup[F](sender, lookup).as(None)
+                  case disconnect @ DisconnectMessage(_, _) =>
+                    handleDisconnect[F](sender, disconnect).as(None)
+                  case resp: ProtocolResponse => handleResponse[F](sock, sender, resp)
+                  case _                      => Some((sock, msg)).pure[F]
+                }
+        } yield ret
 
     }
 
-    dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender"))
+    dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender").as(None))
   }
 
   def add(peer: PeerNode): Unit =
@@ -143,22 +150,24 @@ class UnicastNetwork(peer: PeerNode) {
    * Handle a response to a message. If this message isn't one we were
    * expecting, propagate it to the next dispatcher.
    */
-  private def handleResponse[F[_]: Monad: Capture: Log: Time: Metrics](sock: SocketAddress,
-                                                                       sender: PeerNode,
-                                                                       msg: ProtocolResponse)(
-      implicit protocolDispatcher: ProtocolDispatcher[F, SocketAddress]): F[Unit] = {
-    val handleWithHeader: Option[F[Unit]] = msg.returnHeader.map { ret =>
-      for {
-        result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
-        _ <- result match {
-              case Some(promise) => Capture[F].capture(promise.success(Right(msg)))
-              case None          => protocolDispatcher.dispatch(sock, msg)
-            }
+  private def handleResponse[F[_]: Monad: Capture: Log: Time: Metrics](
+      sock: SocketAddress,
+      sender: PeerNode,
+      msg: ProtocolResponse): F[Option[(SocketAddress, ProtocolMessage)]] = {
+    val handleWithHeader: Option[F[Option[(SocketAddress, ProtocolMessage)]]] =
+      msg.returnHeader.map { ret =>
+        for {
+          result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
+          ret <- result match {
+                  case Some(promise) => Capture[F].capture(promise.success(Right(msg))).as(None)
+                  case None          => Some((sock, msg)).pure[F]
+                }
 
-      } yield ()
+        } yield ret
 
-    }
-    handleWithHeader.getOrElse(Log[F].error("Could not handle response, header not available"))
+      }
+    handleWithHeader.getOrElse(
+      Log[F].error("Could not handle response, header not available").as(None))
   }
 
   private def handlePing[F[_]: Functor: Capture: Log: Metrics](sender: PeerNode,

@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import java.net.SocketAddress
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
@@ -219,6 +220,8 @@ package object effects {
         Capture[F].capture {
           net.broadcast(msg)
         }
+
+      def receive: F[Option[(SocketAddress, ProtocolMessage)]] = net.receiver[F]
     }
 
   class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
