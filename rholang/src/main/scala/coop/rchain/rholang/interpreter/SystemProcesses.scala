@@ -67,7 +67,8 @@ object SystemProcesses {
   def secp256k1Verify(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                       dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
-  case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
+    case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
+      //TODO: use actual secp256k1 algorithm
       Task.now(false).flatMap { verified =>
         produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GBool(verified))))))), false) match {
           case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
