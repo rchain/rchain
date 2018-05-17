@@ -21,7 +21,7 @@ trait TransportLayer[F[_]] {
   // TODO remove ProtocolMessage, use raw messages from protocol
   def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
-  def receive: F[Option[(SocketAddress, ProtocolMessage)]] // FIX-ME Socket to be removed!!
+  def receive: F[Option[ProtocolMessage]]
 }
 
 object TransportLayer extends TransportLayerInstances {
@@ -38,7 +38,7 @@ object TransportLayer extends TransportLayerInstances {
       def commSend(msg: ProtocolMessage, p: PeerNode): T[F, CommErr[Unit]] =
         C.commSend(msg, p).liftM[T]
       def broadcast(msg: ProtocolMessage): T[F, Seq[CommErr[Unit]]] = C.broadcast(msg).liftM[T]
-      def receive: T[F, Option[(SocketAddress, ProtocolMessage)]]   = C.receive.liftM[T]
+      def receive: T[F, Option[ProtocolMessage]]                    = C.receive.liftM[T]
     }
 }
 

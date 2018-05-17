@@ -113,8 +113,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def receiveAndDispatch: Effect[Unit] =
     TransportLayer[Effect].receive >>= {
-      case None                => ().pure[Effect]
-      case Some((socket, msg)) => p2p.Network.dispatch[Effect](socket, msg)
+      case None      => ().pure[Effect]
+      case Some(msg) => p2p.Network.dispatch[Effect](msg)
     }
 
   private def unrecoverableNodeProgram: Effect[Unit] =

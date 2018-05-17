@@ -24,6 +24,6 @@ object GrpcTransportLayer {
 
       def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
 
-      def receive: F[Option[(SocketAddress, ProtocolMessage)]] = ???
+      def receive: F[Option[ProtocolMessage]] = ???
     }
 }
