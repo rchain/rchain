@@ -281,6 +281,7 @@ object implicits {
         case GInt(_)                    => false
         case GString(_)                 => false
         case GUri(_)                    => false
+        case GByteArray(_)              => false
         case EListBody(e)               => e.connectiveUsed
         case ETupleBody(e)              => e.connectiveUsed
         case ESetBody(e)                => e.connectiveUsed
@@ -309,6 +310,7 @@ object implicits {
         case GInt(_)       => BitSet()
         case GString(_)    => BitSet()
         case GUri(_)       => BitSet()
+        case GByteArray(_) => BitSet()
         case EListBody(e)  => e.locallyFree
         case ETupleBody(e) => e.locallyFree
         case ESetBody(e)   => e.locallyFree
