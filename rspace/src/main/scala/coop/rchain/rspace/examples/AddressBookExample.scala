@@ -26,7 +26,7 @@ object AddressBookExample {
 
   /* Here we define a type for patterns */
 
-  sealed trait Pattern                       extends Product with Serializable
+  sealed trait Pattern                       extends Serializable
   final case class NameMatch(last: String)   extends Pattern
   final case class CityMatch(city: String)   extends Pattern
   final case class StateMatch(state: String) extends Pattern
