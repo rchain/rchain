@@ -4,22 +4,16 @@ import coop.rchain.p2p.effects._
 
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
-import coop.rchain.comm.protocol.routing
-import routing.Header
-import coop.rchain.comm._
-import CommError._
+import coop.rchain.comm.protocol.routing, routing.Header
+import coop.rchain.comm._, CommError._
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.metrics.Metrics
 
 import scala.util.control.NonFatal
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski._
 import com.google.protobuf.ByteString
-import ski._
 
 /*
  * Inspiration from ethereum:
@@ -55,7 +49,7 @@ case object NetworkAddress {
     }
 }
 
-object Network extends ProtocolDispatcher[java.net.SocketAddress] {
+object Network {
 
   type KeysStore[F[_]]    = Kvs[F, PeerNode, Array[Byte]]
   type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
@@ -222,7 +216,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
                 Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
     } yield res
 
-  private def handleProtocolHandshake[F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption](
+  private def handleProtocolHandshake[
+      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption: Log](
       remote: PeerNode,
       maybeHeader: Option[Header],
       maybePh: Option[ProtocolHandshake])(implicit
@@ -237,7 +232,8 @@ object Network extends ProtocolDispatcher[java.net.SocketAddress] {
       _     <- NodeDiscovery[F].addNode(remote)
     } yield s"Responded to protocol handshake request from $remote"
 
-  override def dispatch[
+  // TODO F is tooooo rich
+  def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler: PacketHandler](
       sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {

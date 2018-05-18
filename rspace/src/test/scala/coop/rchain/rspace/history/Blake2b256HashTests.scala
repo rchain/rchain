@@ -1,4 +1,4 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.history
 
 import java.util.Arrays
 

@@ -2,9 +2,9 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
-import java.security.MessageDigest
 import scala.collection.immutable.Seq
 
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
@@ -394,7 +394,7 @@ object LMDBStore {
   }
 
   private[rspace] def hashBytes(bytes: Array[Byte]): ByteBuffer = {
-    val dataArr    = MessageDigest.getInstance("SHA-256").digest(bytes)
+    val dataArr    = Blake2b256.hash(bytes)
     val byteBuffer = ByteBuffer.allocateDirect(dataArr.length)
     byteBuffer.put(dataArr).flip()
     byteBuffer
