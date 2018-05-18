@@ -134,6 +134,7 @@ message Expr {
         sint32 g_int = 2;
         string g_string = 3;
         string g_uri = 4;
+        bytes g_byte_array = 25;
 
         ENot e_not_body = 5;
         ENeg e_neg_body = 6;
@@ -156,8 +157,6 @@ message Expr {
         ESet e_set_body = 22;
         EMap e_map_body = 23;
         EMethod e_method_body = 24;
-
-        bytes ByteArray = 25;
     }
 }
 

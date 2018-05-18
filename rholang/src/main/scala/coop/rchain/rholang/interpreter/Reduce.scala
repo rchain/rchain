@@ -544,7 +544,7 @@ object Reduce {
             evalExpr(p)(env)
               .map(serialize(_))
               .flatMap(interpreterErrorM[M].fromEither)
-              .map(b => Expr(ByteArray(com.google.protobuf.ByteString.copyFrom(b))))
+              .map(b => Expr(GByteArray(com.google.protobuf.ByteString.copyFrom(b))))
           }
         }
     }

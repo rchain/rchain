@@ -292,6 +292,7 @@ object implicits {
         case GInt(_)                    => false
         case GString(_)                 => false
         case GUri(_)                    => false
+        case GByteArray(_)              => false
         case EListBody(e)               => e.connectiveUsed
         case ETupleBody(e)              => e.connectiveUsed
         case ESetBody(e)                => e.connectiveUsed
@@ -312,7 +313,6 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EOrBody(EOr(p1, p2))       => p1.get.connectiveUsed || p2.get.connectiveUsed
         case EMethodBody(e)             => e.connectiveUsed
-        case ByteArray(_)               => false
       }
 
     def locallyFree(e: Expr) =
@@ -321,6 +321,7 @@ object implicits {
         case GInt(_)       => BitSet()
         case GString(_)    => BitSet()
         case GUri(_)       => BitSet()
+        case GByteArray(_) => BitSet()
         case EListBody(e)  => e.locallyFree
         case ETupleBody(e) => e.locallyFree
         case ESetBody(e)   => e.locallyFree
@@ -343,8 +344,6 @@ object implicits {
         case EAndBody(EAnd(p1, p2))     => p1.get.locallyFree | p2.get.locallyFree
         case EOrBody(EOr(p1, p2))       => p1.get.locallyFree | p2.get.locallyFree
         case EMethodBody(e)             => e.locallyFree
-        case ByteArray(_)               => BitSet()
-
       }
   }
 

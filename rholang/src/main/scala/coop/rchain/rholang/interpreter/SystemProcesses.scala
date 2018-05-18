@@ -5,7 +5,7 @@ import coop.rchain.crypto.encryption.Curve25519
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.{ByteArray, GBool}
+import coop.rchain.models.Expr.ExprInstance.{GByteArray, GBool}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{IStore, produce}
@@ -56,7 +56,7 @@ object SystemProcesses {
       p match {
         case Channel(Quote(par)) =>
           par.singleExpr().collect {
-            case Expr(ByteArray(bs)) => bs.toByteArray
+            case Expr(GByteArray(bs)) => bs.toByteArray
           }
         case _ => None
       }
@@ -94,7 +94,7 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
   case Seq(Seq(IsByteArray(pub), IsByteArray(sec), IsByteArray(nonce), IsByteArray(message), ack)) =>
     Task(Curve25519.encrypt(pub, sec, nonce, message)).flatMap { encrypted =>
-      produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(ByteArray(ByteString.copyFrom(encrypted)))))))), false) match {
+      produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(encrypted)))))))), false) match {
         case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
         case None                           => Task.unit
       }
@@ -106,7 +106,7 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.now(Sha256.hash(input)).flatMap { hash =>
-        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(ByteArray(ByteString.copyFrom(hash)))))))), false) match {
+        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(hash)))))))), false) match {
           case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
           case None                           => Task.unit
         }
@@ -118,7 +118,7 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.now(Keccak256.hash(input)).flatMap { hash =>
-        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(ByteArray(ByteString.copyFrom(hash)))))))), false) match {
+        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(hash)))))))), false) match {
           case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
           case None                           => Task.unit
         }
@@ -130,7 +130,7 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
   case Seq(Seq(IsByteArray(input), ack)) =>
     Task.now(Blake2b256.hash(input)).flatMap { hash =>
-      produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(ByteArray(ByteString.copyFrom(hash)))))))), false) match {
+      produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(hash)))))))), false) match {
         case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
         case None                           => Task.unit
       }
