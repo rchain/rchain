@@ -224,7 +224,7 @@ object GroundSortMatcher {
           .map(deduplicatedPars =>
             ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
                        Node(Score.EMAP, deduplicatedPars.map(_.score): _*)))
-      case ByteArray(ba) =>
+      case GByteArray(ba) =>
         ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toString))).pure[M]
       case _ =>
         ApplicativeError[M, InterpreterError].raiseError(

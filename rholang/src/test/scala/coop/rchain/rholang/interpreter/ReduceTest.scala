@@ -666,7 +666,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result should be(
       HashMap(
         List(Channel(Quote(GString("result")))) ->
-          Row(List(Datum[List[Channel]](List[Channel](Quote(Expr(ByteArray(serializedProcess)))),
+          Row(List(Datum[List[Channel]](List[Channel](Quote(Expr(GByteArray(serializedProcess)))),
                                         persist = false)),
               List())
       )
