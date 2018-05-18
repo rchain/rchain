@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import java.net.SocketAddress
 import java.io.File
 import java.util.UUID
 import io.grpc.{Server, ServerBuilder}
@@ -38,10 +39,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private val storagePath    = conf.data_dir().resolve("rspace")
   private val storageSize    = conf.map_size()
 
-  /** Run services */
-  /** TODO all services should be defined in terms of `nodeProgram` */
-  val net = new UnicastNetwork(src, Some(p2p.Network))
-
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
   type Effect[A]         = CommErrT[Task, A]
@@ -54,21 +51,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                       = effects.log
-  implicit val timeEffect: Time[Task]                     = effects.time
-  implicit val metricsEffect: Metrics[Task]               = effects.metrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer[Task](net)
-
+  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                         = effects.log
+  implicit val timeEffect: Time[Task]                       = effects.time
+  implicit val metricsEffect: Metrics[Task]                 = effects.metrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
+  val net                                                   = new UnicastNetwork(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
+  implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-//  TODO: figure out actual validator identities...
+    //  TODO: figure out actual validator identities...
     com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte)),
     storagePath,
     storageSize
   )
-
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
   )
@@ -115,13 +111,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
+  private def receiveAndDispatch: Effect[Unit] =
+    TransportLayer[Effect].receive >>= {
+      case None                => ().pure[Effect]
+      case Some((socket, msg)) => p2p.Network.dispatch[Effect](socket, msg)
+    }
+
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- aquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
-      _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
-      _         <- Log[Effect].info(s"Listening for traffic on $address.")
+      // TODO handle errors on receive (currently ignored)
+      _ <- receiveAndDispatch.value.void.forever.executeAsync.start.toEffect
+      _ <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else

@@ -112,29 +112,29 @@ object implicits {
   // Par Related
   def apply(): Par = new Par()
   def apply(s: Send): Par =
-    new Par(sends = List(s), locallyFree = s.locallyFree, connectiveUsed = s.connectiveUsed)
+    new Par(sends = Vector(s), locallyFree = s.locallyFree, connectiveUsed = s.connectiveUsed)
   def apply(r: Receive): Par =
-    new Par(receives = List(r), locallyFree = r.locallyFree, connectiveUsed = r.connectiveUsed)
+    new Par(receives = Vector(r), locallyFree = r.locallyFree, connectiveUsed = r.connectiveUsed)
   def apply(e: Eval): Par =
-    new Par(evals = List(e),
+    new Par(evals = Vector(e),
             locallyFree = EvalLocallyFree.locallyFree(e),
             connectiveUsed = EvalLocallyFree.connectiveUsed(e))
   def apply(n: New): Par =
-    new Par(news = List(n),
+    new Par(news = Vector(n),
             locallyFree = NewLocallyFree.locallyFree(n),
             connectiveUsed = NewLocallyFree.connectiveUsed(n))
   def apply(e: Expr): Par =
-    new Par(exprs = List(e),
+    new Par(exprs = Vector(e),
             locallyFree = ExprLocallyFree.locallyFree(e),
             connectiveUsed = ExprLocallyFree.connectiveUsed(e))
   def apply(m: Match): Par =
-    new Par(matches = List(m), locallyFree = m.locallyFree, connectiveUsed = m.connectiveUsed)
+    new Par(matches = Vector(m), locallyFree = m.locallyFree, connectiveUsed = m.connectiveUsed)
   def apply(g: GPrivate): Par =
-    new Par(ids = List(g), locallyFree = BitSet(), connectiveUsed = false)
+    new Par(ids = Vector(g), locallyFree = BitSet(), connectiveUsed = false)
 
   def apply(b: Bundle): Par =
     new Par(
-      bundles = Seq(b),
+      bundles = Vector(b),
       locallyFree = b.body.get.locallyFree,
       connectiveUsed = false
     )
@@ -157,6 +157,8 @@ object implicits {
       exprs = Vector.empty[Expr],
       matches = Vector.empty[Match],
       ids = Vector.empty[GPrivate],
+      bundles = Vector.empty[Bundle],
+      connectives = Vector.empty[Connective],
     )
   }
 
@@ -168,68 +170,73 @@ object implicits {
   implicit class ParExtension[T](p: T)(implicit toPar: T => Par) {
     // Convenience prepend methods
     def prepend(s: Send): Par =
-      p.copy(sends = Seq(s) ++ p.sends,
+      p.copy(sends = s +: p.sends,
              locallyFree = p.locallyFree | s.locallyFree,
              connectiveUsed = p.connectiveUsed || s.connectiveUsed)
     def prepend(r: Receive): Par =
       p.copy(
-        receives = Seq(r) ++ p.receives,
+        receives = r +: p.receives,
         locallyFree = p.locallyFree | r.locallyFree,
         connectiveUsed = p.connectiveUsed || r.connectiveUsed
       )
     def prepend(e: Eval): Par =
       p.copy(
-        evals = Seq(e) ++ p.evals,
+        evals = e +: p.evals,
         locallyFree = p.locallyFree | EvalLocallyFree.locallyFree(e),
         connectiveUsed = p.connectiveUsed || EvalLocallyFree.connectiveUsed(e)
       )
     def prepend(n: New): Par =
       p.copy(
-        news = Seq(n) ++ p.news,
+        news = n +: p.news,
         locallyFree = p.locallyFree | NewLocallyFree.locallyFree(n),
         connectiveUsed = p.connectiveUsed || NewLocallyFree.connectiveUsed(n)
       )
     def prepend(e: Expr): Par =
       p.copy(
-        exprs = Seq(e) ++ p.exprs,
+        exprs = e +: p.exprs,
         locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e),
         connectiveUsed = p.connectiveUsed || ExprLocallyFree.connectiveUsed(e)
       )
-    def prepend(b: Bundle): Par =
-      p.copy(
-        bundles = Seq(b) ++ p.bundles,
-        locallyFree = b.body.get.locallyFree | p.locallyFree
-      )
     def prepend(m: Match): Par =
-      p.copy(matches = Seq(m) ++ p.matches,
+      p.copy(matches = m +: p.matches,
              locallyFree = p.locallyFree | m.locallyFree,
              connectiveUsed = p.connectiveUsed || m.connectiveUsed)
+    def prepend(b: Bundle): Par =
+      p.copy(
+        bundles = b +: p.bundles,
+        locallyFree = b.body.get.locallyFree | p.locallyFree
+      )
+    def prepend(c: Connective): Par =
+      p.copy(
+        connectives = c +: p.connectives,
+        connectiveUsed = true
+      )
 
     def singleEval(): Option[Eval] =
-      if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
         p.evals match {
-          case List(single) => Some(single)
-          case _            => None
+          case Seq(single) => Some(single)
+          case _           => None
         }
       } else {
         None
       }
 
     def singleNew(): Option[New] =
-      if (p.bundles.isEmpty && p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
         p.news match {
-          case List(single) => Some(single)
-          case _            => None
+          case Seq(single) => Some(single)
+          case _           => None
         }
       } else {
         None
       }
 
     def singleBundle(): Option[Bundle] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.connectives.isEmpty) {
         p.bundles.toList match {
-          case List(single) => Some(single)
-          case _            => None
+          case Seq(single) => Some(single)
+          case _           => None
         }
       } else {
         None
@@ -243,8 +250,9 @@ object implicits {
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
-        that.bundles ++ p.bundles,
         that.ids ++ p.ids,
+        that.bundles ++ p.bundles,
+        that.connectives ++ p.connectives,
         that.locallyFree | p.locallyFree,
         that.connectiveUsed || p.connectiveUsed
       )

@@ -1,8 +1,8 @@
 package coop.rchain.rspace.test
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.examples._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
@@ -168,7 +168,7 @@ object InMemoryStore {
   }
 
   def hashBytes(bs: Array[Byte]): Array[Byte] =
-    MessageDigest.getInstance("SHA-256").digest(bs)
+    Blake2b256.hash(bs)
 
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
