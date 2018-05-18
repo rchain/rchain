@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.{Applicative, Functor, Monad, MonadError}
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
@@ -105,7 +106,7 @@ object CollectionNormalizeMatcher {
     }
 
     def foldMatchMap(listProc: List[AbsynKeyValuePair]): M[CollectVisitOutputs] = {
-      val init = (Seq[KeyValuePair](), input.knownFree, BitSet(), false)
+      val init = (Vector[KeyValuePair](), input.knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
           e match {
@@ -118,7 +119,7 @@ object CollectionNormalizeMatcher {
                               e.proc_2,
                               ProcVisitInputs(VectorPar(), input.env, keyResult.knownFree))
               } yield
-                (Seq(KeyValuePair(keyResult.par, valResult.par)) ++ acc._1,
+                (Vector(KeyValuePair(keyResult.par, valResult.par)) ++ acc._1,
                  valResult.knownFree,
                  acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
                  acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed)
@@ -241,6 +242,52 @@ object ProcNormalizeMatcher {
       } yield ProcVisitOutputs(input.par.prepend(desugaredIf), falseCaseBody.knownFree)
 
     p match {
+      case p: PNegation =>
+        normalizeMatch[M](p.proc_,
+                          ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]())).map(
+          bodyResult =>
+            ProcVisitOutputs(input.par.prepend(Connective(ConnNotBody(bodyResult.par))),
+                             input.knownFree))
+
+      case p: PConjunction =>
+        for {
+          leftResult <- normalizeMatch[M](p.proc_1,
+                                          ProcVisitInputs(VectorPar(), input.env, input.knownFree))
+          rightResult <- normalizeMatch[M](
+                          p.proc_2,
+                          ProcVisitInputs(VectorPar(), input.env, leftResult.knownFree))
+          lp = leftResult.par
+          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+            lp.connectives match {
+              case List(Connective(ConnAndBody(ConnectiveBody(ps)))) =>
+                Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
+              case _ => Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
+            }
+          } else {
+            Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
+          }
+        } yield ProcVisitOutputs(input.par.prepend(resultConnective), rightResult.knownFree)
+
+      case p: PDisjunction =>
+        for {
+          leftResult <- normalizeMatch[M](
+                         p.proc_1,
+                         ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
+          rightResult <- normalizeMatch[M](
+                          p.proc_2,
+                          ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
+          lp = leftResult.par
+          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+            lp.connectives match {
+              case List(Connective(ConnOrBody(ConnectiveBody(ps)))) =>
+                Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
+              case _ => Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
+            }
+          } else {
+            Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
+          }
+        } yield ProcVisitOutputs(input.par.prepend(resultConnective), input.knownFree)
+
       case p: PGround =>
         ProcVisitOutputs(input.par.prepend(GroundNormalizeMatcher.normalizeMatch(p.ground_)),
                          input.knownFree).pure[M]

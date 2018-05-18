@@ -1,4 +1,4 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.history
 
 import coop.rchain.crypto.hash.Blake2b256
 import scodec.Codec

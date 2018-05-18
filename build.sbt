@@ -230,6 +230,7 @@ lazy val rspace = (project in file("rspace"))
       lmdbjava,
       catsCore,
       scodecCore,
+      scodecCats,
       scodecBits
     ),
     /* Tutorial */

@@ -13,53 +13,6 @@ import coop.rchain.catscontrib._, Catscontrib._
 import coop.rchain.p2p.effects._
 import kamon._
 
-// TODO: In message construction, the system clock is used for nonce
-// generation. For reproducibility, this should be a passed-in value.
-
-// TODO REMOVE inheritance hierarchy for composition
-trait ProtocolDispatcher[A] {
-
-  /**
-    * Handle an incoming message. This function is intended to thread
-    * levels of protocol together, such that inner protocols can
-    * bubble unhandled messages up to outer levels.
-    */
-  def dispatch[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: Kvs[
-        ?[_],
-        PeerNode,
-        Array[Byte]]: ApplicativeError_[?[_], CommError]: PacketHandler](
-      extra: A,
-      msg: ProtocolMessage): F[Unit]
-}
-
-/**
-  * Implements broadcasting and round-trip (request-response) messaging
-  * for higher level protocols.
-  */
-trait ProtocolHandler {
-
-  /**
-    * The node that anchors this handler; `local` becomes the source
-    * for outgoing communications.
-    */
-  def local: ProtocolNode
-
-  /**
-    * Send a message to a single, remote node, and wait up to the
-    * specified duration for a response.
-    */
-  def roundTrip[F[_]: Capture: Monad](
-      msg: ProtocolMessage,
-      remote: ProtocolNode,
-      timeout: Duration = Duration(500, MILLISECONDS)): F[Either[CommError, ProtocolMessage]]
-
-  /**
-    * Asynchronously broadcast a message to all known peers.
-    */
-  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]]
-}
-
 object ProtocolNode {
 
   def apply(peer: PeerNode,

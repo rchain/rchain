@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
@@ -490,5 +491,36 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
         Bundle(Bundle(sortedParExpr, writeFlag = true, readFlag = false),
                writeFlag = false,
                readFlag = true)))
+  }
+
+  it should "sort logical connectives in \"not\", \"and\", \"or\" order" in {
+    val parExpr =
+      p.copy(
+        connectives = List(
+          Connective(
+            ConnAndBody(ConnectiveBody(
+              List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))))),
+          Connective(
+            ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
+                                           New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+          Connective(ConnNotBody(Par()))
+        ),
+        connectiveUsed = true
+      )
+    val sortedParExpr: Option[Par] =
+      p.copy(
+        connectives = List(
+          Connective(ConnNotBody(Par())),
+          Connective(
+            ConnAndBody(ConnectiveBody(
+              List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))))),
+          Connective(
+            ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
+                                           New(2, EVar(Wildcard(Var.WildcardMsg())))))))
+        ),
+        connectiveUsed = true
+      )
+    val result = ParSortMatcher.sortMatch[Coeval](parExpr).value
+    result.term should be(sortedParExpr)
   }
 }
