@@ -28,6 +28,7 @@ object implicits {
   implicit def fromGInt(g: GInt): Expr       = apply(g)
   implicit def fromGString(g: GString): Expr = apply(g)
   implicit def fromGUri(g: GUri): Expr       = apply(g)
+  implicit def fromByeArray(g: ByteArray): Expr       = apply(g)
 
   def apply(e: EList): Expr =
     new Expr(exprInstance = EListBody(e))
