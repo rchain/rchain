@@ -4,11 +4,12 @@ import java.util.UUID
 import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.metrics.Metrics
+import coop.rchain.node.metrics._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
@@ -53,6 +54,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val logEffect: Log[Task]                         = effects.log
   implicit val timeEffect: Time[Task]                       = effects.time
   implicit val metricsEffect: Metrics[Task]                 = metrics.metrics
+  implicit val jvmMetricsEffect: JvmMetrics[Task]           = metrics.jvmMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   val net                                                   = new UnicastNetwork(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
@@ -104,6 +106,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Goodbye.")
   }
 
+  def startReportJvmMetrics: Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
@@ -120,6 +128,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       resources <- acquireResources()
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
+      _         <- startReportJvmMetrics.toEffect
       // TODO handle errors on receive (currently ignored)
       _ <- receiveAndDispatch.value.void.forever.executeAsync.start.toEffect
       _ <- Log[Effect].info(s"Listening for traffic on $address.")
