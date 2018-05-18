@@ -29,8 +29,6 @@ object internal {
       wks: Seq[WaitingContinuation[P, K]]
   )
 
-  object codecs {}
-
   private[rspace] object scodecs {
 
     import scodec.{Attempt, Codec, DecodeResult}
