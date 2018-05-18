@@ -5,6 +5,7 @@ import cats.data._
 import cats.implicits._
 
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
@@ -272,5 +273,99 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val patternPar: Par = pattern
     val parResult       = spatialMatch(targetPar, patternPar).runS(emptyMap)
     parResult should be(expectedResult)
+  }
+
+  "Matching a single and" should "match both sides" in {
+    val target: Par = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
+    val pattern: Connective = Connective(
+      ConnAndBody(ConnectiveBody(Seq(
+        Send(Quote(GInt(7)), Seq(EVar(FreeVar(0))), persistent = false, connectiveUsed = true),
+        Send(ChanVar(FreeVar(1)), Seq(GInt(8)), persistent = false, connectiveUsed = true)
+      ))))
+
+    val expectedResult = Some(Map[Int, Par](0 -> GInt(8), 1 -> GInt(7)))
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+
+    result should be(expectedResult)
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(target, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
+  }
+
+  "Matching a single or" should "match some side" in {
+    val target: Par = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
+    val pattern: Connective = Connective(
+      ConnOrBody(ConnectiveBody(Seq(
+        Send(Quote(GInt(9)), Seq(EVar(FreeVar(0))), persistent = false, connectiveUsed = true),
+        Send(ChanVar(FreeVar(0)), Seq(GInt(8)), persistent = false, connectiveUsed = true)
+      ))))
+
+    val expectedResult = Some(Map.empty[Int, Par])
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+
+    result should be(expectedResult)
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(target, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
+  }
+
+  "Matching negation" should "work" in {
+    val target: Par = VectorPar().addSends(
+      Send(Quote(GInt(1)), Seq(GInt(2)), persistent = false),
+      Send(Quote(GInt(2)), Seq(GInt(3)), persistent = false),
+      Send(Quote(GInt(3)), Seq(GInt(4)), persistent = false)
+    )
+    val pattern: Connective = Connective(ConnNotBody(VectorPar()))
+
+    val expectedResult = Some(Map.empty[Int, Par])
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+
+    result should be(expectedResult)
+
+    val patternPar: Par = pattern
+    val parResult       = spatialMatch(target, patternPar).runS(emptyMap)
+    parResult should be(expectedResult)
+
+    val doublePatternPar = patternPar.addConnectives(pattern)
+    val doubleResult     = spatialMatch(target, doublePatternPar).runS(emptyMap)
+    doubleResult should be(expectedResult)
+
+    val triplePatternPar = doublePatternPar.addConnectives(pattern)
+    val tripleResult     = spatialMatch(target, triplePatternPar).runS(emptyMap)
+    tripleResult should be(expectedResult)
+
+    val quadruplePatternPar = triplePatternPar.addConnectives(pattern)
+    val quadrupleResult     = spatialMatch(target, quadruplePatternPar).runS(emptyMap)
+    quadrupleResult should be(None)
+  }
+
+  "Matching a complicated connective" should "work" in {
+    val target: Par = VectorPar().addSends(
+      Send(Quote(GInt(1)), Seq(GInt(6)), persistent = false),
+      Send(Quote(GInt(2)), Seq(GInt(7)), persistent = false),
+      Send(Quote(GInt(3)), Seq(GInt(8)), persistent = false)
+    )
+    val nonNullConn: Connective = Connective(ConnNotBody(Par()))
+    val nonNull: Par            = Par().addConnectives(nonNullConn).withConnectiveUsed(true)
+    val singleFactor: Connective = Connective(
+      ConnNotBody(
+        Par()
+          .addConnectives(nonNullConn, nonNullConn)
+          .withConnectiveUsed(true)))
+    val prime: Connective = Connective(
+      ConnAndBody(
+        ConnectiveBody(Seq(nonNull, Par().addConnectives(singleFactor).withConnectiveUsed(true)))))
+    val capture: Connective =
+      Connective(
+        ConnAndBody(ConnectiveBody(
+          Seq(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), Seq(GInt(7))).withConnectiveUsed(true)))))
+    val alternative: Connective = Connective(
+      ConnOrBody(
+        ConnectiveBody(Seq(Send(ChanVar(FreeVar(0)), Seq(GInt(7))).withConnectiveUsed(true),
+                           Send(ChanVar(FreeVar(0)), Seq(GInt(8))).withConnectiveUsed(true)))))
+    val pattern: Par   = Par().addConnectives(prime, capture, alternative).withConnectiveUsed(true)
+    val expectedResult = Some(Map[Int, Par](0 -> Send(Quote(GInt(2)), Seq(GInt(7))), 1 -> GInt(2)))
+    val result         = spatialMatch(target, pattern).runS(emptyMap)
+    result should be(expectedResult)
   }
 }
