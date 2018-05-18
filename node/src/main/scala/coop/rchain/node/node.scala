@@ -1,13 +1,11 @@
 package coop.rchain.node
 
-import java.io.File
 import java.util.UUID
-import io.grpc.{Server, ServerBuilder}
+import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.metrics.Metrics
@@ -23,8 +21,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
-      if (th.getCause() == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause().containsMessageWith(str)
+      if (th.getCause == null) th.getMessage.contains(str)
+      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
@@ -58,7 +56,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                       = effects.log
   implicit val timeEffect: Time[Task]                     = effects.time
-  implicit val metricsEffect: Metrics[Task]               = effects.metrics
+  implicit val metricsEffect: Metrics[Task]               = metrics.metrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer[Task](net)
@@ -79,7 +77,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def aquireResources: Effect[Resources] =
+  def acquireResources(): Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
@@ -118,7 +116,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      resources <- aquireResources
+      resources <- acquireResources()
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- Task.fork(MonadOps.forever(net.receiver[Effect].value.void)).start.toEffect
@@ -141,6 +139,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           .error(
             "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
       case th =>
-        th.getStackTrace().toList.traverse(ste => Log[Task].error(ste.toString))
+        th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
     } *> exit0.as(Right(())))
 }

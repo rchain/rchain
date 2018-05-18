@@ -4,23 +4,17 @@ import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 
 import scala.concurrent.Future
-import cats._
-import cats.data._
-import cats.implicits._
 import cats._, cats.data._, cats.implicits._
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
-import coop.rchain.catscontrib._
-import Catscontrib._
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.catscontrib._, Catscontrib._
-import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.node.rnode._
+import coop.rchain.node.model.repl._
+import coop.rchain.node.model.diagnostics._
 import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.Task

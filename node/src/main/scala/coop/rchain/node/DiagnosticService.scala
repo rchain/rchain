@@ -1,9 +1,9 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
-import coop.rchain.node.rnode._
-import coop.rchain.comm.{Endpoint, NodeIdentifier, PeerNode}
+import coop.rchain.comm._
+import coop.rchain.node.model.diagnostics._
+
+import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait DiagnosticsService[F[_]] {
@@ -25,7 +25,6 @@ class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService
       .listPeers(ListPeersRequest())
       .peers
       .toList
-      .map(p =>
-        new PeerNode(NodeIdentifier(p.key.toByteArray.toSeq), Endpoint(p.host, p.port, p.port)))
+      .map(p => PeerNode(NodeIdentifier(p.key.toByteArray.toSeq), Endpoint(p.host, p.port, p.port)))
   }
 }

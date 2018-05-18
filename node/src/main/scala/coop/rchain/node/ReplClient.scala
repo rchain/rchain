@@ -1,8 +1,8 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
-import coop.rchain.node.rnode._
+import coop.rchain.node.model.repl._
+
+import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait ReplService[F[_]] {

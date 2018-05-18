@@ -92,54 +92,6 @@ package object effects {
     }
   }
 
-  def metrics: Metrics[Task] = new Metrics[Task] {
-    import kamon._
-
-    val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
-
-    def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
-        case c: metric.Counter => c.increment(delta)
-      }
-    }
-
-    def incrementSampler(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case c: metric.RangeSampler => c.increment(delta)
-      }
-    }
-
-    def sample(name: String): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case c: metric.RangeSampler => c.sample
-      }
-    }
-
-    def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.set(value)
-      }
-    }
-
-    def incrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.increment(delta)
-      }
-    }
-
-    def decrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.decrement(delta)
-      }
-    }
-
-    def record(name: String, value: Long, count: Long = 1): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.histogram(name) }) match {
-        case c: metric.Histogram => c.record(value, count)
-      }
-    }
-  }
-
   def remoteKeysKvs(remoteKeysPath: Path): Kvs[Task, PeerNode, Array[Byte]] =
     new Kvs[Task, PeerNode, Array[Byte]] {
       import com.google.protobuf.ByteString
