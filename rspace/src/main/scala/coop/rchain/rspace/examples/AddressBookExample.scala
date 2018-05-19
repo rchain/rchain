@@ -3,7 +3,6 @@ package coop.rchain.rspace.examples
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import java.nio.file.{Files, Path}
 
-import cats.implicits._
 import coop.rchain.rspace._
 import coop.rchain.rspace.extended._
 import coop.rchain.rspace.util.ignore
@@ -26,7 +25,7 @@ object AddressBookExample {
 
   /* Here we define a type for patterns */
 
-  sealed trait Pattern                       extends Product with Serializable
+  sealed trait Pattern                       extends Serializable
   final case class NameMatch(last: String)   extends Pattern
   final case class CityMatch(city: String)   extends Pattern
   final case class StateMatch(state: String) extends Pattern
