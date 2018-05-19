@@ -42,8 +42,6 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private implicit val codecA: Codec[A] = sa.toCodec
   private implicit val codecK: Codec[K] = sk.toCodec
 
-  private val codecHistory: Codec[Trie[Blake2b256Hash, GNAT[C, P, A, K]]] = Trie.codecTrie
-
   import coop.rchain.rspace.LMDBStore._
 
   private[rspace] type H = ByteBuffer
@@ -301,8 +299,9 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private[rspace] def putTrie(txn: Txn[ByteBuffer],
                               key: Blake2b256Hash,
                               value: Trie[Blake2b256Hash, GNAT[C, P, A, K]]): Unit = {
-    val encodedValue = codecHistory.encode(value).get
-    val keyBuff      = toByteBuffer(key.bytes)
+    val encodedKey   = Codec[Blake2b256Hash].encode(key).get
+    val encodedValue = Codec[Trie[Blake2b256Hash, GNAT[C, P, A, K]]].encode(value).get
+    val keyBuff      = toByteBuffer(encodedKey)
     val valBuff      = toByteBuffer(encodedValue)
     _dbTrie.put(txn, keyBuff, valBuff)
   }
@@ -310,10 +309,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private[rspace] def getTrie(
       txn: Txn[ByteBuffer],
       key: Blake2b256Hash): Option[Trie[Blake2b256Hash, GNAT[C, P, A, K]]] = {
-    val keyBuff = toByteBuffer(key.bytes)
+    val encodedKey = Codec[Blake2b256Hash].encode(key).get
+    val keyBuff    = toByteBuffer(encodedKey)
     Option(_dbTrie.get(txn, keyBuff)).map { (buffer: ByteBuffer) =>
       // ht: Yes, I want to throw an exception if deserialization fails
-      codecHistory.decode(BitVector(buffer)).map(_.value).get
+      Codec[Trie[Blake2b256Hash, GNAT[C, P, A, K]]].decode(BitVector(buffer)).map(_.value).get
     }
   }
 }
