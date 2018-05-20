@@ -1,4 +1,4 @@
-package coop.rchain.node.metrics
+package coop.rchain.node.diagnostics
 
 trait NodeMXBean {
 

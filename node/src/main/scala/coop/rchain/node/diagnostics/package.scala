@@ -3,14 +3,20 @@ package coop.rchain.node
 import java.lang.management.{ManagementFactory, MemoryType}
 
 import scala.collection.JavaConverters._
+import scala.concurrent.Future
 
-import coop.rchain.catscontrib.Capture
+import cats._, cats.data._, cats.implicits._
+
+import coop.rchain.catscontrib.{Capture, Futurable}
 import coop.rchain.metrics.Metrics
-import coop.rchain.node.model.metrics._
+import coop.rchain.node.model.diagnostics._
+import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.p2p.effects.NodeDiscovery
 
+import com.google.protobuf.ByteString, com.google.protobuf.empty.Empty
 import javax.management.ObjectName
 
-package object metrics {
+package object diagnostics {
 
   def jvmMetrics[F[_]: Capture]: JvmMetrics[F] =
     new JvmMetrics[F] {
@@ -204,6 +210,15 @@ package object metrics {
             case c: metric.Histogram => c.record(value, count)
           }
         }
+    }
+
+  def grpc[F[_]: Functor: NodeDiscovery: Futurable]: DiagnosticsGrpc.Diagnostics =
+    new DiagnosticsGrpc.Diagnostics {
+      def listPeers(request: Empty): Future[Peers] =
+        NodeDiscovery[F].peers.map { ps =>
+          Peers(ps.map(p =>
+            Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
+        }.toFuture
     }
 
 }

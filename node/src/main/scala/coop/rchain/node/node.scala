@@ -9,14 +9,14 @@ import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.metrics.Metrics
-import coop.rchain.node.metrics._
+import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
-import metrics.MetricsServer
+import diagnostics.MetricsServer
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
@@ -53,8 +53,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                         = effects.log
   implicit val timeEffect: Time[Task]                       = effects.time
-  implicit val metricsEffect: Metrics[Task]                 = metrics.metrics
-  implicit val jvmMetricsEffect: JvmMetrics[Task]           = metrics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                 = diagnostics.metrics
+  implicit val jvmMetricsEffect: JvmMetrics[Task]           = diagnostics.jvmMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   val net                                                   = new UnicastNetwork(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)

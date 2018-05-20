@@ -1,7 +1,7 @@
 package coop.rchain.node
 
 import coop.rchain.shared.StringOps._
-import cats._, cats.data._, cats.implicits._
+import cats.implicits._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
@@ -12,8 +12,6 @@ import coop.rchain.catscontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
-import scala.concurrent._
-import scala.concurrent.duration._
 
 object Main {
 
@@ -24,8 +22,8 @@ object Main {
 
     implicit val replService: ReplService[Task] =
       new GrpcReplService(conf.grpcHost(), conf.grpcPort())
-    implicit val diagnosticsService: DiagnosticsService[Task] =
-      new GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
+    implicit val diagnosticsService: diagnostics.client.DiagnosticsService[Task] =
+      new diagnostics.client.GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
     implicit val deployService: DeployService[Task] =
       new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
 
@@ -34,19 +32,19 @@ object Main {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
         new ReplRuntime(conf).evalProgram[Task](fileName)
       }
-      case None if (conf.repl()) => {
+      case None if conf.repl() => {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
         new ReplRuntime(conf).replProgram[Task].as(())
       }
-      case None if (conf.diagnostics()) => {
+      case None if conf.diagnostics() => {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
-        DiagnosticsRuntime.diagnosticsProgram[Task]
+        diagnostics.client.Runtime.diagnosticsProgram[Task]
       }
-      case None if (conf.deploy.toOption.isDefined) =>
+      case None if conf.deploy.toOption.isDefined =>
         DeployRuntime.deployFileProgram[Task](conf.deploy.toOption.get)
-      case None if (conf.deployDemo()) => DeployRuntime.deployDemoProgram[Task]
-      case None if (conf.propose())    => DeployRuntime.forcePropose[Task]
-      case None if (conf.showBlock.toOption.isDefined) =>
+      case None if conf.deployDemo() => DeployRuntime.deployDemoProgram[Task]
+      case None if conf.propose()    => DeployRuntime.forcePropose[Task]
+      case None if conf.showBlock.toOption.isDefined =>
         DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
       case None =>
         new NodeRuntime(conf).nodeProgram.value.map {

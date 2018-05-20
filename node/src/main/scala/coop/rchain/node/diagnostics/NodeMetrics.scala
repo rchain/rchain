@@ -1,11 +1,11 @@
-package coop.rchain.node.metrics
+package coop.rchain.node.diagnostics
 
 import cats.Monad
 import cats.data.EitherT
 
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.node.model.metrics.NodeCoreMetrics
+import coop.rchain.node.model.diagnostics.NodeCoreMetrics
 
 trait NodeMetrics[F[_]] {
   def metrics: F[NodeCoreMetrics]

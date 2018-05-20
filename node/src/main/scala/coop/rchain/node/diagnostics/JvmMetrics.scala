@@ -1,11 +1,11 @@
-package coop.rchain.node.metrics
+package coop.rchain.node.diagnostics
 
 import cats._, cats.data._, cats.implicits._
 
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.metrics.Metrics
-import coop.rchain.node.model.metrics._
+import coop.rchain.node.model.diagnostics._
 
 trait JvmMetrics[F[_]] {
   def processCpu: F[ProcessCpu]

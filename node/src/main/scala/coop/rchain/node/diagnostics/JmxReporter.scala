@@ -1,4 +1,4 @@
-package coop.rchain.node.metrics
+package coop.rchain.node.diagnostics
 
 import java.lang.management.ManagementFactory
 import java.time.Duration
@@ -37,7 +37,7 @@ class JmxReporter extends MetricReporter {
 
 }
 
-private[metrics] class NodeMetricsSnapshotBean(metrics: MetricsSnapshot) extends NodeMXBean {
+private[diagnostics] class NodeMetricsSnapshotBean(metrics: MetricsSnapshot) extends NodeMXBean {
 
   private lazy val counters = toMap(metrics.counters)
   private lazy val gauges   = toMap(metrics.gauges)
@@ -70,14 +70,14 @@ private[metrics] class NodeMetricsSnapshotBean(metrics: MetricsSnapshot) extends
     getValue("peers", gauges)
 }
 
-private[metrics] object NodeMetricsSnapshotBean {
+private[diagnostics] object NodeMetricsSnapshotBean {
   def apply(): NodeMetricsSnapshotBean =
     new NodeMetricsSnapshotBean(MetricsSnapshot(Nil, Nil, Nil, Nil))
   def apply(metrics: MetricsSnapshot): NodeMetricsSnapshotBean =
     new NodeMetricsSnapshotBean(metrics)
 }
 
-private[metrics] class NodeMetricsBean(bean: AtomicReference[NodeMetricsSnapshotBean])
+private[diagnostics] class NodeMetricsBean(bean: AtomicReference[NodeMetricsSnapshotBean])
     extends NodeMXBean {
   def getPingReceiverCount: Long                   = bean.get.getPingReceiverCount
   def getLookupReceiverCount: Long                 = bean.get.getLookupReceiverCount

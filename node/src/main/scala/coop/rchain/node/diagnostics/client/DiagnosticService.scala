@@ -1,8 +1,9 @@
-package coop.rchain.node
+package coop.rchain.node.diagnostics.client
 
 import coop.rchain.comm._
 import coop.rchain.node.model.diagnostics._
 
+import com.google.protobuf.empty.Empty
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -22,7 +23,7 @@ class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService
 
   def listPeers: Task[List[PeerNode]] = Task.delay {
     blockingStub
-      .listPeers(ListPeersRequest())
+      .listPeers(Empty())
       .peers
       .toList
       .map(p => PeerNode(NodeIdentifier(p.key.toByteArray.toSeq), Endpoint(p.host, p.port, p.port)))

@@ -33,7 +33,7 @@ object GrpcServer {
       ServerBuilder
         .forPort(port)
         .addService(ReplGrpc.bindService(new ReplImpl(runtime), scheduler))
-        .addService(DiagnosticsGrpc.bindService(new DiagnosticsImpl[F], scheduler))
+        .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
         .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
         .build
     }
@@ -43,15 +43,6 @@ object GrpcServer {
       _ <- Capture[F].capture(server.start)
       _ <- Log[F].info("gRPC server started, listening on ")
     } yield ()
-
-  class DiagnosticsImpl[F[_]: Functor: NodeDiscovery: Futurable]
-      extends DiagnosticsGrpc.Diagnostics {
-    def listPeers(request: ListPeersRequest): Future[Peers] =
-      NodeDiscovery[F].peers.map { ps =>
-        Peers(ps.map(p =>
-          Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
-      }.toFuture
-  }
 
   class DeployImpl[F[_]: Monad: MultiParentCasper: Futurable]
       extends DeployServiceGrpc.DeployService {
