@@ -125,7 +125,7 @@ package object diagnostics {
         }
     }
 
-  def nodeMetrics[F[_]: Capture]: NodeMetrics[F] =
+  def nodeCoreMetrics[F[_]: Capture]: NodeMetrics[F] =
     new NodeMetrics[F] {
       private val mbs  = ManagementFactory.getPlatformMBeanServer
       private val name = ObjectName.getInstance(NodeMXBean.Name)
@@ -212,13 +212,32 @@ package object diagnostics {
         }
     }
 
-  def grpc[F[_]: Functor: NodeDiscovery: Futurable]: DiagnosticsGrpc.Diagnostics =
+  def grpc[F[_]: Functor: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable]
+    : DiagnosticsGrpc.Diagnostics =
     new DiagnosticsGrpc.Diagnostics {
       def listPeers(request: Empty): Future[Peers] =
         NodeDiscovery[F].peers.map { ps =>
           Peers(ps.map(p =>
             Peer(p.endpoint.host, p.endpoint.udpPort, ByteString.copyFrom(p.id.key.toArray))))
         }.toFuture
+
+      def getProcessCpu(request: Empty): Future[ProcessCpu] =
+        JvmMetrics[F].processCpu.toFuture
+
+      def getMemoryUsage(request: Empty): Future[MemoryUsage] =
+        JvmMetrics[F].memoryUsage.toFuture
+
+      def getGarbageCollectors(request: Empty): Future[GarbageCollectors] =
+        JvmMetrics[F].garbageCollectors.map(GarbageCollectors.apply).toFuture
+
+      def getMemoryPools(request: Empty): Future[MemoryPools] =
+        JvmMetrics[F].memoryPools.map(MemoryPools.apply).toFuture
+
+      def getThreads(request: Empty): Future[Threads] =
+        JvmMetrics[F].threads.toFuture
+
+      def getNodeCoreMetrics(request: Empty): Future[NodeCoreMetrics] =
+        NodeMetrics[F].metrics.toFuture
     }
 
 }

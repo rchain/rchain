@@ -22,11 +22,13 @@ import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
 
+import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object GrpcServer {
 
-  def acquireServer[F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: Futurable](
+  def acquireServer[
+      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {

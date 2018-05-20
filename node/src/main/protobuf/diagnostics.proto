@@ -78,7 +78,21 @@ message NodeCoreMetrics {
 }
 
 service Diagnostics {
-  rpc ListPeers (google.protobuf.Empty) returns (Peers) {}
+  rpc ListPeers (google.protobuf.Empty) returns (Peers);
+  rpc GetProcessCpu (google.protobuf.Empty) returns (ProcessCpu);
+  rpc GetMemoryUsage (google.protobuf.Empty) returns (MemoryUsage);
+  rpc GetGarbageCollectors (google.protobuf.Empty) returns (GarbageCollectors);
+  rpc GetMemoryPools (google.protobuf.Empty) returns (MemoryPools);
+  rpc GetThreads (google.protobuf.Empty) returns (Threads);
+  rpc GetNodeCoreMetrics (google.protobuf.Empty) returns (NodeCoreMetrics);
+}
+
+message GarbageCollectors {
+  repeated GarbageCollector garbageCollectors = 1;
+}
+
+message MemoryPools {
+  repeated MemoryPool memoryPools = 1;
 }
 
 message Peers {
