@@ -201,27 +201,36 @@ package object effects {
         }
     }
 
-  def transportLayer[F[_]: Monad: Capture: Log: Time: Metrics](
-      net: UnicastNetwork): TransportLayer[F] =
-    new TransportLayer[F] {
+  def transportLayer(net: UnicastNetwork)(implicit
+                                          ev1: Log[Task],
+                                          ev2: Time[Task],
+                                          ev3: Metrics[Task]): TransportLayer[Task] =
+    new TransportLayer[Task] {
       import scala.concurrent.duration._
 
       def roundTrip(msg: ProtocolMessage,
                     remote: ProtocolNode,
-                    timeout: Duration): F[CommErr[ProtocolMessage]] =
-        net.roundTrip[F](msg, remote, timeout)
+                    timeout: Duration): Task[CommErr[ProtocolMessage]] =
+        net.roundTrip[Task](msg, remote, timeout)
 
-      def local: F[ProtocolNode] = net.local.pure[F]
+      def local: Task[ProtocolNode] = net.local.pure[Task]
 
-      def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
-        Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
+      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
+        Task.delay(net.comm.send(msg.toByteSeq, peer))
 
-      def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
-        Capture[F].capture {
+      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] =
+        Task.delay {
           net.broadcast(msg)
         }
 
-      def receive: F[Option[ProtocolMessage]] = net.receiver[F]
+      def receive(dispatch: Option[ProtocolMessage] => Task[Unit]): Task[Unit] =
+        net
+          .receiver[Task]
+          .flatMap(dispatch)
+          .forever
+          .executeAsync
+          .start
+          .void
     }
 
   class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
