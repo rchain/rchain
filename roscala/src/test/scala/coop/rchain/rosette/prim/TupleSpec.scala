@@ -22,6 +22,15 @@ class TupleSpec extends FlatSpec with Matchers {
     monitor = null
   )
 
+  /** null? */
+  "obNullQ" should "return true when first argument is tuple.NIL, otherwise return false" in {
+    val newCtxt = ctxt.copy(nargs = 1, argvec = Tuple(Tuple.NIL))
+    obNullQ.fnSimple(newCtxt) should be(Right(RblBool(true)))
+
+    val newCtxt2 = ctxt.copy(nargs = 1, argvec = Tuple(Tuple(Fixnum(1))))
+    obNullQ.fnSimple(newCtxt2) should be(Right(RblBool(false)))
+  }
+
   /** tuple-cons */
   "tplCons" should "correctly cons an Ob with a Tuple" in {
     val tup = Seq(Fixnum(2), Fixnum(3), Fixnum(4))

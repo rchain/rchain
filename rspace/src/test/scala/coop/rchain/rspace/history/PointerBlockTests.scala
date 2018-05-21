@@ -1,6 +1,5 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.history
 
-import coop.rchain.rspace.PointerBlock._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
 import coop.rchain.shared.AttemptOps._

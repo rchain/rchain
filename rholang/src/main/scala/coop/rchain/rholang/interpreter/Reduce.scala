@@ -4,6 +4,7 @@ import cats.implicits._
 import cats.{Applicative, Monad, MonadError, Parallel, Eval => _}
 import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
+import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -12,10 +13,13 @@ import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.IStore
+import coop.rchain.rspace.{IStore, Serialize}
 import coop.rchain.rspace.pure.{consume => internalConsume, produce => internalProduce}
+import scalapb.descriptors.ScalaType.ByteString
 
 import scala.collection.immutable.BitSet
+import scala.util.Try
+import coop.rchain.models.implicits._
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -495,11 +499,11 @@ object Reduce {
     }
 
     private[this] def nth: (Par, Seq[Par]) => Env[Par] => M[Par] = {
-      def localNth(ps: Seq[Par], nth: Int): M[Par] =
+      def localNth(ps: Seq[Par], nth: Int): Either[ReduceError, Par] =
         if (ps.isDefinedAt(nth)) {
-          Monad[M].pure(ps(nth))
+          Right(ps(nth))
         } else {
-          interpreterErrorM[M].raiseError(ReduceError("Error: index out of bound: " + nth))
+          Left(ReduceError("Error: index out of bound: " + nth))
         }
 
       (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
@@ -511,8 +515,10 @@ object Reduce {
               nth <- evalToInt(args(0))(env)
               v   <- evalSingleExpr(p)(env)
               result <- v.exprInstance match {
-                         case EListBody(EList(ps, _, _, _)) => localNth(ps, nth)
-                         case ETupleBody(ETuple(ps, _, _))  => localNth(ps, nth)
+                         case EListBody(EList(ps, _, _, _)) =>
+                           interpreterErrorM[M].fromEither(localNth(ps, nth))
+                         case ETupleBody(ETuple(ps, _, _)) =>
+                           interpreterErrorM[M].fromEither(localNth(ps, nth))
                          case _ =>
                            interpreterErrorM[M].raiseError(
                              ReduceError(
@@ -523,10 +529,32 @@ object Reduce {
         }
     }
 
+    private[this] def toByteArray: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+      def serialize(p: Par): Either[ReduceError, Array[Byte]] =
+        Either
+          .fromTry(Try(Serialize[Par].encode(p)))
+          .leftMap(th =>
+            ReduceError(s"Error: exception thrown when serializing $p." + th.getMessage))
+
+      (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+        {
+          if (args.nonEmpty) {
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: toByteArray does not take arguments"))
+          } else {
+            evalExpr(p)(env)
+              .map(serialize(_))
+              .flatMap(interpreterErrorM[M].fromEither)
+              .map(b => Expr(GByteArray(com.google.protobuf.ByteString.copyFrom(b))))
+          }
+        }
+    }
+
     def methodTable(method: String): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
       method match {
-        case "nth" => Some(nth)
-        case _     => None
+        case "nth"         => Some(nth)
+        case "toByteArray" => Some(toByteArray)
+        case _             => None
       }
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =

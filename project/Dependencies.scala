@@ -33,7 +33,7 @@ object Dependencies {
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "0.5.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
-  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
+  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.1" % "test"
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
@@ -41,6 +41,7 @@ object Dependencies {
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.6.0"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
