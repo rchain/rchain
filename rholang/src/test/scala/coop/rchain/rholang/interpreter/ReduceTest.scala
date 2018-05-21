@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import coop.rchain.catscontrib.Capture
+import coop.rchain.catscontrib.Capture._
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -38,8 +38,6 @@ trait PersistentStoreTester {
 }
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
-
-  implicit val captureTask: Capture[Task] = Capture.taskCapture
 
   "evalExpr" should "handle simple addition" in {
     val result = withTestStore { store =>
