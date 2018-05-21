@@ -190,44 +190,6 @@ object SpatialMatcher {
       }
     }
 
-    def min(par: Par): ParCount =
-      par.connectives.foldLeft(ParCount(par)) { (acc, con) =>
-        acc + min(con)
-      }
-
-    def max(par: Par): ParCount =
-      par.connectives.foldLeft(ParCount(par)) { (acc, con) =>
-        acc + max(con)
-      }
-
-    def min(con: Connective): ParCount =
-      con.connectiveInstance match {
-        case ConnAndBody(ConnectiveBody(ps)) =>
-          ps.map(min).foldLeft(ParCount())(_ max _)
-        case ConnOrBody(ConnectiveBody(ps)) =>
-          ps.map(min).foldLeft(ParCount())(_ min _)
-        case ConnNotBody(_) => ParCount()
-      }
-
-    def max(con: Connective): ParCount =
-      con.connectiveInstance match {
-        case ConnAndBody(ConnectiveBody(ps)) =>
-          ps.map(max).foldLeft(ParCount())(_ min _)
-        case ConnOrBody(ConnectiveBody(ps)) =>
-          ps.map(max).foldLeft(ParCount())(_ max _)
-        case ConnNotBody(_) =>
-          ParCount(
-            sends = Int.MaxValue,
-            receives = Int.MaxValue,
-            evals = Int.MaxValue,
-            news = Int.MaxValue,
-            matches = Int.MaxValue,
-            exprs = Int.MaxValue,
-            ids = Int.MaxValue,
-            bundles = Int.MaxValue
-          )
-      }
-
     def minMax(con: Connective): (ParCount, ParCount) =
       con.connectiveInstance match {
         case ConnAndBody(ConnectiveBody(ps)) =>
@@ -237,17 +199,7 @@ object SpatialMatcher {
           val pMinMax = ps.map(minMax)
           (pMinMax.foldLeft(ParCount.max)(_ min _._1), pMinMax.foldLeft(ParCount())(_ max _._2))
         case ConnNotBody(_) =>
-          (ParCount(),
-           ParCount(
-             sends = Int.MaxValue,
-             receives = Int.MaxValue,
-             evals = Int.MaxValue,
-             news = Int.MaxValue,
-             matches = Int.MaxValue,
-             exprs = Int.MaxValue,
-             ids = Int.MaxValue,
-             bundles = Int.MaxValue
-           ))
+          (ParCount(), ParCount.max)
       }
   }
 
@@ -352,19 +304,6 @@ object SpatialMatcher {
         }
     worker(as, minSize, maxSize).map(x => (x._1, x._2))
   }
-
-  def interleave[A](streams: Stream[A]*): Stream[A] = interleaveInternal(streams, Seq())
-  def interleaveInternal[A](left: Seq[Stream[A]], right: Seq[Stream[A]]): Stream[A] =
-    (left, right) match {
-      // If both sequences of streams are empty, then so is the result stream.
-      case (Nil, Nil) => Stream.Empty
-      case (Nil, r)   => interleaveInternal(r, Nil)
-      case (lh +: lrem, r) =>
-        lh match {
-          case lhh #:: lht  => lhh #:: interleaveInternal(lrem, lht +: r)
-          case Stream.Empty => interleaveInternal(lrem, r)
-        }
-    }
 
   // This helper function is useful in several productions
   def foldMatch[T, P](tlist: Seq[T], plist: Seq[P], remainder: Option[Var] = None)(
@@ -804,12 +743,12 @@ object SpatialMatcher {
         case ConnOrBody(ConnectiveBody(ps)) => {
           def firstMatch(target: Par, patterns: Seq[Par]): OptionalFreeMap[Unit] =
             patterns match {
-              case Nil => StateT.pure(Unit)
+              case Nil => StateT.liftF(None)
               case p +: rem =>
                 StateT[Option, FreeMap, Unit]((s: FreeMap) => {
                   spatialMatch(target, p).run(s) match {
-                    case None            => firstMatch(target, rem).run(s)
-                    case Some((_, unit)) => Some((s, unit))
+                    case None               => firstMatch(target, rem).run(s)
+                    case Some((_, _: Unit)) => Some((s, Unit))
                   }
                 })
             }
