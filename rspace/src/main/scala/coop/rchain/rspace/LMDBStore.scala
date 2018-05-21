@@ -93,11 +93,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       .getOrElse(Seq.empty[Datum[A]])
   }
 
-  def collectGarbage(txn: T,
-                     channelsHash: H,
-                     dataCollected: Boolean = false,
-                     waitingContinuationsCollected: Boolean = false,
-                     joinsCollected: Boolean = false): Unit = {
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit = {
 
     def isEmpty(dbi: Dbi[ByteBuffer]): Boolean =
       dbi.get(txn, channelsHash) == null
