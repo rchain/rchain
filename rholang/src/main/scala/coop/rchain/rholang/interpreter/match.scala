@@ -98,14 +98,14 @@ object SpatialMatcher {
 
   def emptyMap: FreeMap = Map.empty[Int, Par]
 
-  case class ParCount(val sends: Int = 0,
-                      val receives: Int = 0,
-                      val evals: Int = 0,
-                      val news: Int = 0,
-                      val exprs: Int = 0,
-                      val matches: Int = 0,
-                      val ids: Int = 0,
-                      val bundles: Int = 0) {
+  case class ParCount(sends: Int = 0,
+                      receives: Int = 0,
+                      evals: Int = 0,
+                      news: Int = 0,
+                      exprs: Int = 0,
+                      matches: Int = 0,
+                      ids: Int = 0,
+                      bundles: Int = 0) {
     def binOp(op: (Int, Int) => Int, other: ParCount): ParCount =
       ParCount(
         sends = op(sends, other.sends),
