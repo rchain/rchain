@@ -42,7 +42,14 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  def collectGarbage(key: H): Unit = {
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit =
+    collectGarbage(channelsHash)
+
+  private[this] def collectGarbage(key: H): Unit = {
     val as = _data.get(key).exists(_.nonEmpty)
     if (!as) {
       //we still may have empty list, remove it as well

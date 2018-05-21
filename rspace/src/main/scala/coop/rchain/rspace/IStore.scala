@@ -60,6 +60,12 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeAllJoins(txn: T, channel: C): Unit
 
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit
+
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   def close(): Unit
