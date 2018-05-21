@@ -1,5 +1,6 @@
 package coop.rchain.models
 
+import com.google.protobuf.ByteString
 import org.scalacheck.Arbitrary
 import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.Gen.{const, frequency, resize, sized}
@@ -16,6 +17,9 @@ object testImplicits {
   // We override so that we cannot get None for these required objects.
   implicit def arbOption[T](implicit a: Arbitrary[T]): Arbitrary[Option[T]] =
     Arbitrary(for { s <- a.arbitrary } yield Some(s))
+
+  implicit val arbByteArray: Arbitrary[ByteString] =
+    Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(ba => ByteString.copyFrom(ba)))
 
   implicit val arbPar = implicitly[Arbitrary[Par]]
 }

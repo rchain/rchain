@@ -117,22 +117,23 @@ object Score {
   final val WILDCARD  = 52
 
   // Expr
-  final val EVAR    = 100
-  final val ENEG    = 101
-  final val EMULT   = 102
-  final val EDIV    = 103
-  final val EPLUS   = 104
-  final val EMINUS  = 105
-  final val ELT     = 106
-  final val ELTE    = 107
-  final val EGT     = 108
-  final val EGTE    = 109
-  final val EEQ     = 110
-  final val ENEQ    = 111
-  final val ENOT    = 112
-  final val EAND    = 113
-  final val EOR     = 114
-  final val EMETHOD = 115
+  final val EVAR     = 100
+  final val ENEG     = 101
+  final val EMULT    = 102
+  final val EDIV     = 103
+  final val EPLUS    = 104
+  final val EMINUS   = 105
+  final val ELT      = 106
+  final val ELTE     = 107
+  final val EGT      = 108
+  final val EGTE     = 109
+  final val EEQ      = 110
+  final val ENEQ     = 111
+  final val ENOT     = 112
+  final val EAND     = 113
+  final val EOR      = 114
+  final val EMETHOD  = 115
+  final val EBYTEARR = 116
 
   // Other
   final val QUOTE    = 203
@@ -228,6 +229,8 @@ object GroundSortMatcher {
           .map(deduplicatedPars =>
             ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
                        Node(Score.EMAP, deduplicatedPars.map(_.score): _*)))
+      case GByteArray(ba) =>
+        ScoredTerm(g, Node(Score.EBYTEARR, Leaf(ba.toString))).pure[M]
       case _ =>
         ApplicativeError[M, InterpreterError].raiseError(
           SortMatchError("GroundSortMatcher passed unknown Expr instance"))
@@ -242,10 +245,6 @@ object ExprSortMatcher {
       p1 <- ParSortMatcher.sortMatch[M](p1)
       p2 <- ParSortMatcher.sortMatch[M](p2)
     } yield (p1, p2)
-//  Seq(ParSortMatcher.sortMatch(p1), ParSortMatcher.sortMatch(p2)) match {
-//    case (p1 +: p2 +: _) => (p1, p2)
-//    case _               => throw new Error("Unexpected sequence length.")
-//  }
 
   def sortMatch[M[_]](e: Expr)(
       implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Expr]] = {

@@ -1,10 +1,22 @@
 package coop.rchain.rosette.prim
 
-import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, Tuple}
 import coop.rchain.rosette.macros.{checkArgumentMismatch, checkTypeMismatch}
 import coop.rchain.rosette.prim.Prim._
+import coop.rchain.rosette.{Ctxt, Fixnum, Ob, RblBool, Tuple}
 
 object tuple {
+
+  object obNullQ extends Prim {
+    override val name: String = "null?"
+    override val minArgs: Int = 1
+    override val maxArgs: Int = 1
+
+    @checkArgumentMismatch
+    override def fnSimple(ctxt: Ctxt): Either[PrimError, RblBool] = {
+      val elem = ctxt.argvec.elem
+      Right(RblBool(elem(0) == Tuple.NIL))
+    }
+  }
 
   /**
     * Define the tuple-cons primitive.

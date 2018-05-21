@@ -43,4 +43,7 @@ object Serialize {
           }
     }
   }
+
+  def apply[A](implicit ev: Serialize[A]): Serialize[A] = ev
+
 }
