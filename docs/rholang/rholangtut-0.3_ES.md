@@ -91,7 +91,7 @@ No existe un entorno de desarrollo integrado (IDE) para Rholang. Comience con Rh
 
 1) Creamos un nuevo canal MakeCell y después lo usamos en la línea 3 como el nombre de un contrato interno. Ningún proceso que no sea el código dentro de este ámbito léxico puede invocarlo.
 
-3) El contrato `MakeCell` toma tres argumentos. El primer argumento es el valor inicial que seráa guardado en la celda. El segundo y tercer argumentos son canales en los cuales la celda recibirá solicitudes para obtener y establecer el valor. Tenga en cuenta que queremos que el primer argumento sea un proceso y el segundo y el tercero sean nombres, pero los nombres siempre se reciben por canales, por lo que debemos hacer que el primer argumento sea un patrón que comience con `@` para indicar que el nombre que recibimos como el primer argumento es un proceso citado y es ese el proceso que queremos vincular a la variable.
+3) El contrato `MakeCell` toma tres argumentos. El primer argumento es el valor inicial que será guardado en la celda. El segundo y tercer argumentos son canales en los cuales la celda recibirá solicitudes para obtener y establecer el valor. Tenga en cuenta que queremos que el primer argumento sea un proceso y el segundo y el tercero sean nombres, pero los nombres siempre se reciben por canales, por lo que debemos hacer que el primer argumento sea un patrón que comience con `@` para indicar que el nombre que recibimos como el primer argumento es un proceso citado y es ese el proceso que queremos vincular a la variable.
 
 4) Para guardar el valor, creamos un nuevo canal. Este canal tendrá como máximo un mensaje que contenga el valor actual de la celda.
 
