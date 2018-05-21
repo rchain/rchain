@@ -9,7 +9,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._
 import Catscontrib._, ski._, TaskContrib._
 
-object GrpcTransportLayer {
+object TcpTransportLayer {
   def get[F[_]: Monad: Capture: Metrics]: TransportLayer[F] =
     new TransportLayer[F] {
       import scala.concurrent.duration._
