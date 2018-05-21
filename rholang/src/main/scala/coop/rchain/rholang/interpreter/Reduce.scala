@@ -410,7 +410,7 @@ object Reduce {
         case x: GInt    => Applicative[M].pure[Expr](x)
         case x: GString => Applicative[M].pure[Expr](x)
         case x: GUri    => Applicative[M].pure[Expr](x)
-        case x: ByteArray => Applicative[M].pure[Expr](x)
+        case x: GByteArray => Applicative[M].pure[Expr](x)
         case ENotBody(ENot(p)) =>
           for {
             b <- evalToBool(p.get)

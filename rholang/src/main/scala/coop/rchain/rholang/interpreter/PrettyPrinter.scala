@@ -81,7 +81,7 @@ case class PrettyPrinter(freeShift: Int,
         "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
           .map(buildString)
           .mkString(",") + ")"
-      case ExprInstance.ByteArray(bs) => Base16.encode(bs.toByteArray)
+      case ExprInstance.GByteArray(bs) => Base16.encode(bs.toByteArray)
       case _                          => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
 
