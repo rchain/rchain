@@ -37,7 +37,7 @@ object Runtime {
   def showProcessCpu(processCpu: ProcessCpu): String = {
     val time = processCpu.time.map(Duration.fromNanos(_).toMillis).getOrElse(0L)
     s"""Process CPU:
-       |  - CPU load: ${processCpu.load.map("%.1f".format(_)).getOrElse("0.0")}%
+       |  - CPU load: ${processCpu.load.map(_ * 100).map("%.1f".format(_)).getOrElse("0.0")}%
        |  - CPU time: ${time}ms
        |""".stripMargin
   }
@@ -45,7 +45,7 @@ object Runtime {
   def showMemory(memory: Memory): String =
     s"""    - committed: ${memory.committed} bytes
        |    - init: ${memory.init} bytes
-       |    - max: ${memory.max.getOrElse(0)} bytes
+       |    - max: ${memory.max.getOrElse(-1)} bytes
        |    - used: ${memory.used} bytes""".stripMargin
 
   def showMemoryUsage(memoryUsage: MemoryUsage): String =

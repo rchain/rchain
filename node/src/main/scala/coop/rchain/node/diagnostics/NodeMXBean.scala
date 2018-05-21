@@ -28,5 +28,5 @@ object NodeMXBean {
                                         Connects,
                                         P2pEncryptionHandshakeReceiverCount,
                                         P2pProtocolHandshakeReceiverCount,
-                                        Connects)
+                                        Peers)
 }

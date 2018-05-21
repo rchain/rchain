@@ -54,7 +54,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val logEffect: Log[Task]                         = effects.log
   implicit val timeEffect: Time[Task]                       = effects.time
   implicit val metricsEffect: Metrics[Task]                 = diagnostics.metrics
-  implicit val jvmMetricsEffect: JvmMetrics[Task]           = diagnostics.jvmMetrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]     = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   val net                                                   = new UnicastNetwork(src)
@@ -69,6 +68,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
   )
+  implicit val jvmMetricsEffect: JvmMetrics[Task] =
+    if (conf.diagnosticsJvmTest())
+      diagnostics.jvmMetricsTest
+    else
+      diagnostics.jvmMetrics
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
