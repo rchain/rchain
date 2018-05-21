@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.Monad
 import cats.implicits._
-import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter, Validate}
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.p2p.effects._
@@ -50,7 +50,8 @@ object CommUtil {
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       b: BlockMessage): F[String] =
     for {
-      _          <- MultiParentCasper[F].addBlock(b)
+      validSig   <- Validate.blockSignature[F](b)
+      _          <- if (validSig) MultiParentCasper[F].addBlock(b) else ().pure[F]
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
     } yield
       s"CASPER: Received ${PrettyPrinter.buildString(b)}. New fork-choice is ${PrettyPrinter.buildString(forkchoice)}"
