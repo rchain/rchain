@@ -58,17 +58,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                         = effects.log
-  implicit val timeEffect: Time[Task]                       = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]           = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                 = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]     = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                   = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
-  implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
-
+  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                       = effects.log
+  implicit val timeEffect: Time[Task]                     = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]         = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
+  val net                                                 = new UnicastNetwork(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
+  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
       .flatMap(path => {
@@ -81,7 +80,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           None
         }
       })
-
   val genesisBonds: Map[Array[Byte], Int] = bondsFile match {
     case Some(file) =>
       Try {
@@ -99,11 +97,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         )
         newValidators
       })
-
     case None => newValidators
-
   }
-
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
@@ -195,7 +190,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   private def receiveAndDispatch: Effect[Unit] =
-    TransportLayer[Effect].receive >>= {
+    TransportLayer[Effect].receive {
       case None      => ().pure[Effect]
       case Some(msg) => p2p.Network.dispatch[Effect](msg)
     }
@@ -207,7 +202,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
       // TODO handle errors on receive (currently ignored)
-      _ <- receiveAndDispatch.value.void.forever.executeAsync.start.toEffect
+      _ <- receiveAndDispatch
       _ <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")

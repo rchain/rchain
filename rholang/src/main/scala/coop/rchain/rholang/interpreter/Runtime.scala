@@ -10,7 +10,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{IStore, LMDBStore, install}
+import coop.rchain.rspace.{install, IStore, LMDBStore}
 import monix.eval.Task
 
 import scala.collection.immutable
