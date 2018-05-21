@@ -53,6 +53,8 @@ lazy val comm = (project in file("comm"))
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      grpcNetty,
+      scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
       hasher,
