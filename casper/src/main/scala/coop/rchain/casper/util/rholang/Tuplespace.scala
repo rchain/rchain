@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import com.google.protobuf.ByteString
 
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.hash.Sha256
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
@@ -22,7 +22,7 @@ class Tuplespace(val name: String, val location: Path, val size: Long) {
 
   def hash: Array[Byte] = {
     val bytes = ByteString.copyFromUtf8(StoragePrinter.prettyPrint(runtime.store))
-    Sha256.hash(bytes.toByteArray)
+    Blake2b256.hash(bytes.toByteArray)
   }
 
   def checkpoint: Checkpoint = {
