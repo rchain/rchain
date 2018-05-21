@@ -91,7 +91,8 @@ sealed abstract class MultiParentCasperInstances {
 
         case Some(success) =>
           if (success)
-            Log[F].info(s"CASPER: Added ${PrettyPrinter.buildString(b)}") *> reAttemptBuffer
+            Log[F]
+              .info(s"CASPER: Added ${PrettyPrinter.buildString(b.blockHash)}") *> reAttemptBuffer
           else Capture[F].capture { blockBuffer += b }
       }
 
@@ -253,7 +254,8 @@ sealed abstract class MultiParentCasperInstances {
             case f @ Some(false) => Monad[F].pure[Option[Boolean]](f)
 
             case _ =>
-              Log[F].info(s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block)}") *>
+              Log[F].info(
+                s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}") *>
                 Monad[F].pure[Option[Boolean]](None)
           }
 

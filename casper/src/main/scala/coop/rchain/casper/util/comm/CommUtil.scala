@@ -26,7 +26,7 @@ object CommUtil {
       _ <- sends.traverse {
             case (Left(err), _) => Log[F].error(s"$err")
             case (Right(_), peer) =>
-              Log[F].info(s"CASPER: Sent ${PrettyPrinter.buildString(b)} to $peer")
+              Log[F].info(s"CASPER: Sent ${PrettyPrinter.buildString(b.blockHash)} to $peer")
           }
     } yield ()
   }
@@ -38,23 +38,26 @@ object CommUtil {
       case b: BlockMessage =>
         for {
           isOldBlock <- MultiParentCasper[F].contains(b)
-          logMessage <- if (isOldBlock) {
-                         s"CASPER: Received ${PrettyPrinter.buildString(b)} again.".pure[F]
-                       } else {
-                         handleNewBlock[F](b)
-                       }
-        } yield logMessage
+          _ <- if (isOldBlock) {
+                Log[F].info(
+                  s"CASPER: Received block ${PrettyPrinter.buildString(b.blockHash)} again.")
+              } else {
+                handleNewBlock[F](b)
+              }
+        } yield ""
     }
 
   private def handleNewBlock[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       b: BlockMessage): F[String] =
     for {
+      _          <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
       validSig   <- Validate.blockSignature[F](b)
       _          <- if (validSig) MultiParentCasper[F].addBlock(b) else ().pure[F]
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
-    } yield
-      s"CASPER: Received ${PrettyPrinter.buildString(b)}. New fork-choice is ${PrettyPrinter.buildString(forkchoice)}"
+      _ <- Log[F].info(
+            s"New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
+    } yield ""
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =

@@ -15,7 +15,7 @@ import coop.rchain.p2p.effects.Log
 
 object Validate {
   private def ignore(b: BlockMessage, reason: String): String =
-    s"CASPER: Ignoring block ${PrettyPrinter.buildString(b)} because $reason"
+    s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
 
   def blockSignature[F[_]: Monad: Log](block: BlockMessage): F[Boolean] =
     block
