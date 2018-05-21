@@ -741,7 +741,7 @@ void Code::dumpOn(FILE* f) {
         for (int i = 0; i < litvec->numberOfElements(); i++) {
             fprintf(f, "%4d:\t", i);
             BASE(litvec->elem(i))->printQuotedOn(f);
-            putc('\n', f);
+            fprintf(f, " (%llu)\n", BASE(litvec->elem(i))->id);
         }
     }
     fprintf(f, "codevec:\n");
