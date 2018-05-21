@@ -48,11 +48,10 @@ trait Reduce[M[_]] {
 
 object Reduce {
 
-  class DebruijnInterpreter[M[_]: InterpreterErrorsM, F[_]](
+  class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
       tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
-      implicit parallel: cats.Parallel[M, F],
-      captureM: Capture[M])
+      implicit parallel: cats.Parallel[M, F])
       extends Reduce[M] {
 
     type Cont[Data, Body] = (Body, Env[Data])
