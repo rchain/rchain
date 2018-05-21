@@ -277,7 +277,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
 
   "Matching a single and" should "match both sides" in {
     // @7!(8)
-    val target: Par = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
+    val target: Par     = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
+    val failTarget: Par = Send(Quote(GInt(7)), Seq(GInt(9)), persistent = false)
     // @7!(x) /\ @y!(8)
     val pattern: Connective = Connective(
       ConnAndBody(ConnectiveBody(Seq(
@@ -292,11 +293,17 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val patternPar: Par = pattern
     val parResult       = spatialMatch(target, patternPar).runS(emptyMap)
     parResult should be(expectedResult)
+
+    val failResult    = spatialMatch(failTarget, pattern).runS(emptyMap)
+    val failParResult = spatialMatch(failTarget, patternPar).runS(emptyMap)
+    failResult should be(None)
+    failParResult should be(None)
   }
 
   "Matching a single or" should "match some side" in {
     // @7!(8)
-    val target: Par = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
+    val target: Par     = Send(Quote(GInt(7)), Seq(GInt(8)), persistent = false)
+    val failTarget: Par = Send(Quote(GInt(7)), Seq(GInt(9)), persistent = false)
     // @9!(x) \/ @x!(8)
     val pattern: Connective = Connective(
       ConnOrBody(ConnectiveBody(Seq(
@@ -311,6 +318,11 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val patternPar: Par = pattern
     val parResult       = spatialMatch(target, patternPar).runS(emptyMap)
     parResult should be(expectedResult)
+
+    val failResult    = spatialMatch(failTarget, pattern).runS(emptyMap)
+    val failParResult = spatialMatch(failTarget, patternPar).runS(emptyMap)
+    failResult should be(None)
+    failParResult should be(None)
   }
 
   "Matching negation" should "work" in {
@@ -357,6 +369,12 @@ class VarMatcherSpec extends FlatSpec with Matchers {
       Send(Quote(GInt(3)), Seq(GInt(8)), persistent = false)
     )
 
+    val failTarget: Par = Par().addSends(
+      Send(Quote(GInt(1)), Seq(GInt(6)), persistent = false),
+      Send(Quote(GInt(2)), Seq(GInt(9)), persistent = false),
+      Send(Quote(GInt(3)), Seq(GInt(8)), persistent = false)
+    )
+
     // ~Nil
     val nonNullConn: Connective = Connective(ConnNotBody(Par()))
     val nonNull: Par            = nonNullConn
@@ -386,5 +404,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
     val expectedResult = Some(Map[Int, Par](0 -> Send(Quote(GInt(2)), Seq(GInt(7))), 1 -> GInt(2)))
     val result         = spatialMatch(target, pattern).runS(emptyMap)
     result should be(expectedResult)
+
+    val failResult = spatialMatch(failTarget, pattern).runS(emptyMap)
+    failResult should be(None)
   }
 }
