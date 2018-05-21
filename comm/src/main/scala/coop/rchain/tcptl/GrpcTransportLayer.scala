@@ -1,4 +1,4 @@
-package coop.rchain.node.effects
+package coop.rchain.tcptl
 
 import java.net.SocketAddress
 import coop.rchain.comm._, CommError._
