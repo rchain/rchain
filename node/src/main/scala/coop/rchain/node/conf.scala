@@ -14,10 +14,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
 
-  val diagnosticsJvmTest = opt[Boolean](
-    default = Some(false),
-    descr = "For integration tests, node will return static JVM metrics.")
-
   val name =
     opt[String](default = None,
                 short = 'n',

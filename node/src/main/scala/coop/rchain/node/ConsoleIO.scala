@@ -5,7 +5,7 @@ import cats._, cats.data._, cats.implicits._
 
 trait ConsoleIO[F[_]] {
   def readLine: F[String]
-  def println(str: String = ""): F[Unit]
+  def println(str: String): F[Unit]
   def updateCompletion(history: Set[String]): F[Unit]
   def close: F[Unit]
 }

@@ -125,45 +125,6 @@ package object diagnostics {
         }
     }
 
-  def jvmMetricsTest[F[_]: Capture]: JvmMetrics[F] =
-    new JvmMetrics[F] {
-      def processCpu: F[ProcessCpu] =
-        Capture[F].capture(ProcessCpu(Some(0.012D), Some(3000000000L)))
-
-      def memoryUsage: F[MemoryUsage] =
-        Capture[F].capture {
-          MemoryUsage(
-            Some(Memory(444000000L, 333000000L, Some(222000000L), 111000000L)),
-            Some(Memory(888000000L, 777000000L, Some(666000000L), 555000000L))
-          )
-        }
-
-      def garbageCollectors: F[Seq[GarbageCollector]] =
-        Capture[F].capture {
-          Seq(
-            GarbageCollector("GC 1", 3, 4000, Some(5000L), Some(6000L), Some(1000L)),
-            GarbageCollector("GC 2", 4, 5000, Some(6000L), Some(8000L), Some(2000L))
-          )
-        }
-
-      def memoryPools: F[Seq[MemoryPool]] =
-        Capture[F].capture {
-          Seq(
-            MemoryPool("Pool 1",
-                       "HEAP",
-                       Some(Memory(444100000L, 333100000L, Some(222100000L), 111100000L)),
-                       Some(Memory(888100000L, 777100000L, Some(666100000L), 555100000L))),
-            MemoryPool("Pool 2",
-                       "NON_HEAP",
-                       Some(Memory(444200000L, 333200000L, Some(222200000L), 111200000L)),
-                       Some(Memory(888200000L, 777200000L, Some(666200000L), 555200000L)))
-          )
-        }
-
-      def threads: F[Threads] =
-        Capture[F].capture(Threads(333, 222, 444, 5555L))
-    }
-
   def nodeCoreMetrics[F[_]: Capture]: NodeMetrics[F] =
     new NodeMetrics[F] {
       private val mbs  = ManagementFactory.getPlatformMBeanServer

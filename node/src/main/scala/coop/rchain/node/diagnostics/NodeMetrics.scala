@@ -22,6 +22,7 @@ object NodeMetrics extends NodeMetricsInstances {
 }
 
 sealed abstract class NodeMetricsInstances {
-  implicit def eitherTJmxMetrics[E, F[_]: Monad: NodeMetrics[?[_]]]: NodeMetrics[EitherT[F, E, ?]] =
+  implicit def eitherTNodeMetrics[E, F[_]: Monad: NodeMetrics[?[_]]]
+    : NodeMetrics[EitherT[F, E, ?]] =
     NodeMetrics.forTrans[F, EitherT[?[_], E, ?]]
 }

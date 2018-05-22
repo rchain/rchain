@@ -61,6 +61,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                         = effects.log
   implicit val timeEffect: Time[Task]                       = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]           = diagnostics.jvmMetrics
   implicit val metricsEffect: Metrics[Task]                 = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]     = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
@@ -111,18 +112,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
   )
-  implicit val jvmMetricsEffect: JvmMetrics[Task] =
-    if (conf.diagnosticsJvmTest())
-      diagnostics.jvmMetricsTest
-    else
-      diagnostics.jvmMetrics
 
   case class Resources(grpcServer: Server,
                        metricsServer: MetricsServer,
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def acquireResources(): Effect[Resources] =
+  def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
@@ -206,7 +202,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      resources <- acquireResources()
+      resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
