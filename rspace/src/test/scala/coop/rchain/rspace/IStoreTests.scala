@@ -16,6 +16,34 @@ trait IStoreTests
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(1000))
 
+  "putDatum" should "put datum" in withTestStore { store =>
+    forAll("channel", "datum") { (channel: String, datumValue: String) =>
+      val key   = List(channel)
+      val datum = Datum(datumValue, persist = false)
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.putDatum(txn, key, datum)
+        store.getData(txn, key) should contain theSameElementsAs (Seq(datum))
+        store.removeAll(txn, key)
+      }
+    }
+  }
+
+  it should "append datum if channel already exists" in withTestStore { store =>
+    forAll("channel", "datum") { (channel: String, datumValue: String) =>
+      val key    = List(channel)
+      val datum1 = Datum(datumValue, persist = false)
+      val datum2 = Datum(datumValue + "2", persist = false)
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.putDatum(txn, key, datum1)
+        store.putDatum(txn, key, datum2)
+        store.getData(txn, key) should contain theSameElementsAs (Seq(datum1, datum2))
+        store.removeAll(txn, key)
+      }
+    }
+  }
+
   "collectGarbage" should "not remove used channels" in withTestStore { store =>
     forAll("channel", "datum") { (channel: String, datum: String) =>
       val key  = List(channel)
