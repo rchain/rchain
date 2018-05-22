@@ -1,8 +1,12 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
+import java.io.{Closeable, File}
+
+import scala.io.Source
+
 import coop.rchain.node.rnode._
+
+import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
 trait ReplService[F[_]] {
@@ -25,6 +29,20 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
   }
 
   def eval(fileName: String): Task[String] = Task.delay {
-    blockingStub.eval(EvalRequest(fileName)).output
+    val file = new File(fileName)
+    if (file.exists()) {
+      using(Source.fromFile(file)) { source =>
+        blockingStub.eval(EvalRequest(source.getLines.mkString)).output
+      }
+    } else {
+      s"File $fileName not found"
+    }
   }
+
+  private def using[S <: Closeable, A](source: S)(use: S => A): A =
+    try {
+      use(source)
+    } finally {
+      source.close()
+    }
 }
