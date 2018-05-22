@@ -406,10 +406,10 @@ object Reduce {
         } yield result
 
       expr.exprInstance match {
-        case x: GBool   => Applicative[M].pure[Expr](x)
-        case x: GInt    => Applicative[M].pure[Expr](x)
-        case x: GString => Applicative[M].pure[Expr](x)
-        case x: GUri    => Applicative[M].pure[Expr](x)
+        case x: GBool      => Applicative[M].pure[Expr](x)
+        case x: GInt       => Applicative[M].pure[Expr](x)
+        case x: GString    => Applicative[M].pure[Expr](x)
+        case x: GUri       => Applicative[M].pure[Expr](x)
         case x: GByteArray => Applicative[M].pure[Expr](x)
         case ENotBody(ENot(p)) =>
           for {

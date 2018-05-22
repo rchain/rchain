@@ -82,7 +82,7 @@ case class PrettyPrinter(freeShift: Int,
           .map(buildString)
           .mkString(",") + ")"
       case ExprInstance.GByteArray(bs) => Base16.encode(bs.toByteArray)
-      case _                          => throw new Error(s"Attempted to print unknown Expr type: $e")
+      case _                           => throw new Error(s"Attempted to print unknown Expr type: $e")
     }
 
   def buildString(v: Var): String =

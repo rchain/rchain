@@ -23,12 +23,12 @@ object implicits {
   implicit def fromVar[T](v: T)(implicit toVar: T => Var): Option[Var] = Some(v)
 
   // Expr Related
-  def apply(e: ExprInstance)                 = new Expr(exprInstance = e)
-  implicit def fromGBool(g: GBool): Expr     = apply(g)
-  implicit def fromGInt(g: GInt): Expr       = apply(g)
-  implicit def fromGString(g: GString): Expr = apply(g)
-  implicit def fromGUri(g: GUri): Expr       = apply(g)
-  implicit def fromByteArray(g: GByteArray): Expr       = apply(g)
+  def apply(e: ExprInstance)                      = new Expr(exprInstance = e)
+  implicit def fromGBool(g: GBool): Expr          = apply(g)
+  implicit def fromGInt(g: GInt): Expr            = apply(g)
+  implicit def fromGString(g: GString): Expr      = apply(g)
+  implicit def fromGUri(g: GUri): Expr            = apply(g)
+  implicit def fromByteArray(g: GByteArray): Expr = apply(g)
 
   def apply(e: EList): Expr =
     new Expr(exprInstance = EListBody(e))
