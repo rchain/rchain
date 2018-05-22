@@ -26,10 +26,12 @@ object CertificateHelper {
   def publicAddress(certificate: X509Certificate): Option[String] =
     certificate.getPublicKey match {
       case p: ECPublicKey if isSecp256k1(certificate) =>
-        val publicKey      = Array.ofDim[Byte](64)
-        val x: Array[Byte] = p.getW.getAffineX.toByteArray
-        val y: Array[Byte] = p.getW.getAffineY.toByteArray
-        x.copyToArray(publicKey)
+        val publicKey = Array.ofDim[Byte](64)
+        val x         = p.getW.getAffineX.toByteArray
+        val y         = p.getW.getAffineY.toByteArray
+        assert(x.length <= 32)
+        assert(y.length <= 32)
+        x.copyToArray(publicKey, 32 - x.length)
         y.copyToArray(publicKey, 64 - y.length)
         Some(publicAddress(publicKey))
       case _ => None
