@@ -235,16 +235,9 @@ object Network {
   // TODO F is tooooo rich
   def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler: PacketHandler](
-      sock: java.net.SocketAddress,
       msg: ProtocolMessage): F[Unit] = {
 
-    val dispatchForSender: Option[F[Unit]] = msg.sender.map { sndr =>
-      val sender =
-        sock match {
-          case (s: java.net.InetSocketAddress) => sndr.withUdpSocket(s)
-          case _                               => sndr
-        }
-
+    val dispatchForSender: Option[F[Unit]] = msg.sender.map { sender =>
       msg match {
         case UpstreamMessage(proto, _) =>
           proto.message.upstream.traverse { msg =>
