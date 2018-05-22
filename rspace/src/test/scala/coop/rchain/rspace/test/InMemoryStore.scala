@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.examples._
+import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
 import coop.rchain.rspace.{IStore, ITestableStore, Serialize}
@@ -16,7 +17,8 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, Seq[C]],
     _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.MultiMap[C, String]
+    _joinMap: mutable.MultiMap[C, String],
+    _trie: mutable.HashMap[Blake2b256Hash, Trie[Blake2b256Hash, GNAT[C, P, A, K]]]
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
@@ -157,6 +159,15 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
         val wks  = _waitingContinuations.getOrElse(hash, Seq.empty[WaitingContinuation[P, K]])
         (cs, Row(data, wks))
     }.toMap
+
+  private[rspace] def putTrie(txn: Unit,
+                              key: Blake2b256Hash,
+                              value: Trie[Blake2b256Hash, GNAT[C, P, A, K]]): Unit =
+    _trie.put(key, value)
+
+  private[rspace] def getTrie(txn: Unit,
+                              key: Blake2b256Hash): Option[Trie[Blake2b256Hash, GNAT[C, P, A, K]]] =
+    _trie.get(key)
 }
 
 object InMemoryStore {
@@ -178,6 +189,7 @@ object InMemoryStore {
       _keys = mutable.HashMap.empty[String, Seq[C]],
       _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
       _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
+      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String],
+      _trie = mutable.HashMap.empty[Blake2b256Hash, Trie[Blake2b256Hash, GNAT[C, P, A, K]]]
     )
 }
