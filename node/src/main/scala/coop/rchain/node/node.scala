@@ -5,6 +5,7 @@ import java.net.SocketAddress
 import java.util.UUID
 import io.grpc.{Server, ServerBuilder}
 
+import coop.rchain.shared.StringOps._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.casper.MultiParentCasper
@@ -193,6 +194,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
+      _         <- Log[Effect].info(s"  ============= RChain Node ${BuildInfo.version} ============".blue)
       resources <- aquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
