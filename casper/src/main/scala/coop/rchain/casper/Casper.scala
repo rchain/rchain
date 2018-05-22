@@ -263,17 +263,18 @@ sealed abstract class MultiParentCasperInstances {
         def findAddedBlockMessages(attempts: List[(BlockMessage, Boolean)]): List[BlockMessage] =
           attempts.filter(_._2).map(_._1)
 
-        for {
-          attempts <- blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
-          validAttempts = attempts.flatMap {
+        def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, Option[Boolean])]) =
+          attempts.flatMap {
             case (b, None) =>
-              //do not re-attempt invalid blocks
               blockBuffer -= b
               None
-
             case (b, Some(success)) =>
               Some(b -> success)
           }
+
+        for {
+          attempts      <- blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
+          validAttempts = removeInvalidBlocksFromBuffer(attempts)
           _ <- findAddedBlockMessages(validAttempts) match {
                 case Nil => ().pure[F]
                 case addedBlocks =>
