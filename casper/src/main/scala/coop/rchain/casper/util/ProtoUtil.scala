@@ -105,6 +105,20 @@ object ProtoUtil {
     }
   }
 
+  def chooseNonConflicting(blocks: Seq[BlockMessage],
+                           genesis: BlockMessage,
+                           dag: BlockDag): Seq[BlockMessage] =
+    blocks
+      .foldLeft(List.empty[BlockMessage]) {
+        case (acc, b) =>
+          if (acc.forall(!conflicts(_, b, genesis, dag))) {
+            b :: acc
+          } else {
+            acc
+          }
+      }
+      .reverse
+
   def justificationProto(
       latestMessages: collection.Map[ByteString, ByteString]): Seq[Justification] =
     latestMessages.toSeq.map {

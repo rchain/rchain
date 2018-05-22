@@ -5,10 +5,10 @@ import coop.rchain.casper.protocol.BlockMessage
 
 import scala.collection.immutable.{HashMap, HashSet}
 
-final case class BlockDag(idToBlocks: HashMap[Int, BlockMessage],
-                          blockLookup: HashMap[BlockHash, BlockMessage],
-                          childMap: HashMap[BlockHash, HashSet[BlockHash]],
-                          latestMessages: HashMap[Validator, BlockHash],
+final case class BlockDag(idToBlocks: Map[Int, BlockMessage],
+                          blockLookup: Map[BlockHash, BlockMessage],
+                          childMap: Map[BlockHash, Set[BlockHash]],
+                          latestMessages: Map[Validator, BlockHash],
                           currentId: Int)
 
 object BlockDag {

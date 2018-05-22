@@ -5,7 +5,7 @@ import cats.implicits._
 
 import com.google.protobuf.ByteString
 
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
 
 import coop.rchain.crypto.hash.Blake2b256
@@ -36,5 +36,43 @@ object Validate {
             ignore(b, s"signature algorithm ${b.sigAlgorithm} is unsupported.")
           ) *> false.pure[F]
         }
+      })
+
+  def blockNumber[F[_]: Monad: Log](block: BlockMessage, dag: BlockDag): F[Boolean] =
+    block
+      .pure[F]
+      .flatMap(b => {
+        val parentNumber =
+          ProtoUtil.parents(b).map(dag.blockLookup andThen ProtoUtil.blockNumber).max
+        val number = ProtoUtil.blockNumber(b)
+        if (parentNumber + 1 != number) {
+          Log[F].warn(
+            ignore(b, s"block number $number is not one more than parent number $parentNumber.")
+          ) *> false.pure[F]
+        } else {
+          true.pure[F]
+        }
+      })
+
+  def parents[F[_]: Monad: Log](block: BlockMessage,
+                                genesis: BlockMessage,
+                                dag: BlockDag): F[Boolean] =
+    block
+      .pure[F]
+      .flatMap(b => {
+        val latestMessages = b.justifications.map {
+          case Justification(v, hash) => v -> hash
+        }.toMap
+        val viewDag     = dag.copy(latestMessages = latestMessages)
+        val estimate    = Estimator.tips(viewDag, genesis)
+        val trueParents = ProtoUtil.chooseNonConflicting(estimate, genesis, dag).map(_.blockHash)
+        val bParents    = b.header.map(_.parentsHashList).getOrElse(Seq.empty[BlockMessage])
+
+        if (bParents == trueParents)
+          true.pure[F]
+        else
+          Log[F].warn(
+            ignore(b, "block parents did not match estimate based on justification")
+          ) *> false.pure[F]
       })
 }
