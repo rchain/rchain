@@ -12,6 +12,36 @@ package object history {
 
   private val logger: Logger = Logger[this.type]
 
+  def lookup[T, K, V](store: ITrieStore[T, K, V], key: K)(implicit codecK: Codec[K]): Option[V] = {
+    val path = codecK.encode(key).map(_.bytes.toSeq).get
+    @tailrec
+    def loop(txn: T, depth: Int, curr: Trie[K, V]): Option[V] =
+      curr match {
+        case Node(pointerBlock) =>
+          val index: Int = JByte.toUnsignedInt(path(depth))
+          // We use an explicit match here instead of flatMapping in order to make this function
+          // tail-recursive
+          pointerBlock.toVector(index) match {
+            case None =>
+              None
+            case Some(hash: Blake2b256Hash) =>
+              store.get(txn, hash) match {
+                case Some(next) => loop(txn, depth + 1, next)
+                case None       => throw new LookupException(s"No node at $hash")
+              }
+          }
+        case Leaf(lk, lv) if key == lk =>
+          Some(lv)
+        case Leaf(_, _) =>
+          None
+      }
+    store.withTxn(store.createTxnRead()) { (txn: T) =>
+      store.get(txn, store.workingRootHash.get).flatMap { (currentRoot: Trie[K, V]) =>
+        loop(txn, 0, currentRoot)
+      }
+    }
+  }
+
   @tailrec
   def getParents[T, K, V](store: ITrieStore[T, K, V],
                           txn: T,
