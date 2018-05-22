@@ -154,11 +154,11 @@ class UnicastNetwork(peer: PeerNode) {
       sender: PeerNode,
       msg: ProtocolResponse): F[Option[ProtocolMessage]] = {
     val handleWithHeader: Option[F[Option[ProtocolMessage]]] = for {
-      ret  <- msg.returnHeader
-      sndr <- msg.sender
+      returnHeader <- msg.returnHeader
     } yield {
       for {
-        result <- Capture[F].capture(pending.get(PendingKey(sender.key, ret.timestamp, ret.seq)))
+        result <- Capture[F].capture(
+                   pending.get(PendingKey(sender.key, returnHeader.timestamp, returnHeader.seq)))
         ret <- result match {
                 case Some(promise) => Capture[F].capture(promise.success(Right(msg))).as(None)
                 case None          => Some(msg).pure[F]
