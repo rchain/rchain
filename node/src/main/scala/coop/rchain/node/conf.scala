@@ -37,6 +37,15 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     opt[String](default = Some("localhost"),
                 descr = "Hostname or IP of node on which gRPC service is running.")
 
+  val numValidators = opt[Int](default = Some(5), descr = "Number of validators at genesis.")
+  val bondsFile = opt[String](
+    default = None,
+    descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
+      "which defines the bond amounts for each validator at genesis. " +
+      "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
+      "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
+  )
+
   val bootstrap =
     opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
                 short = 'b',
@@ -88,7 +97,13 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val propose = opt[Boolean](
     default = Some(false),
     descr =
-      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys.")
+      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys. " +
+        "Requires a value of --secret-key to be set."
+  )
+
+  val secretKey = opt[String](
+    default = None,
+    descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
 
   def fetchHost(): String =
     host.toOption match {
