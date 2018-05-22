@@ -44,7 +44,8 @@ object Main {
       case None if conf.deploy.toOption.isDefined =>
         DeployRuntime.deployFileProgram[Task](conf.deploy.toOption.get)
       case None if conf.deployDemo() => DeployRuntime.deployDemoProgram[Task]
-      case None if conf.propose()    =>conf.secretKey.toOption match {
+      case None if conf.propose() =>
+        conf.secretKey.toOption match {
           case Some(sk) => DeployRuntime.propose[Task](Base16.decode(sk))
           case None =>
             Task.delay {
