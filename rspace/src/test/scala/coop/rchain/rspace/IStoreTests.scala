@@ -16,7 +16,7 @@ trait IStoreTests
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(1000))
 
-  "putDatum" should "put datum" in withTestStore { store =>
+  "putDatum" should "put datum in a new channel" in withTestStore { store =>
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
       val key   = List(channel)
       val datum = Datum(datumValue, persist = false)
@@ -24,8 +24,8 @@ trait IStoreTests
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putDatum(txn, key, datum)
         store.getData(txn, key) should contain theSameElementsAs (Seq(datum))
-        store.removeAll(txn, key)
       }
+      store.clear()
     }
   }
 
@@ -39,8 +39,8 @@ trait IStoreTests
         store.putDatum(txn, key, datum1)
         store.putDatum(txn, key, datum2)
         store.getData(txn, key) should contain theSameElementsAs (Seq(datum1, datum2))
-        store.removeAll(txn, key)
       }
+      store.clear()
     }
   }
 
@@ -55,6 +55,7 @@ trait IStoreTests
         store.collectGarbage(txn, store.hashChannels(key))
         store.getChannels(txn, hash) should contain theSameElementsAs (key)
       }
+      store.clear()
     }
   }
 
@@ -68,6 +69,7 @@ trait IStoreTests
         store.removeDatum(txn, key, 0)
         store.getChannels(txn, hash) shouldBe empty
       }
+      store.clear()
     }
   }
 }
