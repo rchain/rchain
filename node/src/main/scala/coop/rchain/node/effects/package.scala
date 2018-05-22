@@ -221,7 +221,7 @@ package object effects {
           net.broadcast(msg)
         }
 
-      def receive: F[Option[(SocketAddress, ProtocolMessage)]] = net.receiver[F]
+      def receive: F[Option[ProtocolMessage]] = net.receiver[F]
     }
 
   class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
