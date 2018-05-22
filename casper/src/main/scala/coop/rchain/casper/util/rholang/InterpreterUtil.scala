@@ -117,22 +117,60 @@ object InterpreterUtil {
       ch <- checkpoints.get(ts)
     } yield (ch -> checkpoints)
 
-    preComputedCheckPoint.getOrElse({
-      val parents = ProtoUtil
-        .parents(b)
-        .map(dag.blockLookup)
+    preComputedCheckPoint.getOrElse(
+      computeBlockCheckpointFromDeploys(b, genesis, dag, tsLocation, tsSize, checkpoints)
+    )
+  }
 
-      val deploys = ProtoUtil.deploys(b)
+  //Returns (None, checkpoints) if the block's tuplespace hash
+  //does not match the computed hash based on the deploys
+  def validateBlockCheckpoint(b: BlockMessage,
+                              genesis: BlockMessage,
+                              dag: BlockDag,
+                              tsLocation: Path,
+                              tsSize: Long,
+                              checkpoints: Map[ByteString, Checkpoint])(
+      implicit scheduler: Scheduler): (Option[Checkpoint], Map[ByteString, Checkpoint]) = {
 
-      computeDeploysCheckpoint(
-        parents,
-        deploys,
-        genesis,
-        dag,
-        tsLocation,
-        tsSize,
-        checkpoints
-      )
-    })
+    val tsHash = for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.tuplespace
+
+    val (computedCheckpoint, updatedMap) =
+      computeBlockCheckpointFromDeploys(b, genesis, dag, tsLocation, tsSize, checkpoints)
+
+    if (tsHash.exists(_ == computedCheckpoint.hash)) {
+      //hash in block matches computed hash!
+      Some(computedCheckpoint) -> updatedMap
+    } else {
+      //hash in block does not match computed hash -- invalid!
+      //return no checkpoint, do not update the map
+      None -> checkpoints
+    }
+  }
+
+  private def computeBlockCheckpointFromDeploys(b: BlockMessage,
+                                                genesis: BlockMessage,
+                                                dag: BlockDag,
+                                                tsLocation: Path,
+                                                tsSize: Long,
+                                                checkpoints: Map[ByteString, Checkpoint])(
+      implicit scheduler: Scheduler): (Checkpoint, Map[ByteString, Checkpoint]) = {
+    val parents = ProtoUtil
+      .parents(b)
+      .map(dag.blockLookup)
+
+    val deploys = ProtoUtil.deploys(b)
+
+    computeDeploysCheckpoint(
+      parents,
+      deploys,
+      genesis,
+      dag,
+      tsLocation,
+      tsSize,
+      checkpoints
+    )
   }
 }
