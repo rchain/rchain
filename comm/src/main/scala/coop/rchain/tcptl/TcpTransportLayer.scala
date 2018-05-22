@@ -14,14 +14,9 @@ import Catscontrib._, ski._, TaskContrib._
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class TcpTransportLayer[F[_]: Monad: Capture: Metrics](host: String, port: Int)(loc: ProtocolNode)(
+class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc: ProtocolNode)(
     implicit executionContext: ExecutionContext)
     extends TransportLayer[F] {
-
-  val server = ServerBuilder
-    .forPort(port)
-    .addService(TransportLayerGrpc.bindService(new TranportLayerImpl, executionContext))
-    .build
 
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
@@ -33,10 +28,18 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics](host: String, port: Int)(
 
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
 
-  def receive(dispatchdispatch: Option[ProtocolMessage] => F[Unit]): F[Unit] = ???
+  def receive(dispatch: Option[ProtocolMessage] => F[Unit]): F[Unit] = Capture[F].capture {
+    ServerBuilder
+      .forPort(port)
+      .addService(
+        TransportLayerGrpc.bindService(new TranportLayerImpl[F](dispatch), executionContext))
+      .build
+      .start
+  }
 }
 
-class TranportLayerImpl extends TransportLayerGrpc.TransportLayer {
+class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
+    dispatch: Option[ProtocolMessage] => F[Unit])
+    extends TransportLayerGrpc.TransportLayer {
   def run(request: Protocol): Future[Protocol] = ???
-
 }
