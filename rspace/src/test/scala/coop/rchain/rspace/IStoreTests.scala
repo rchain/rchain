@@ -5,6 +5,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
+import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -41,6 +42,30 @@ trait IStoreTests
         store.getData(txn, key) should contain theSameElementsAs (Seq(datum1, datum2))
       }
       store.clear()
+    }
+  }
+
+  val validIndices =
+    for (n <- Gen.choose(1, 10)) yield n
+
+  "removeDatum" should s"remove datum at index" in withTestStore { store =>
+    val size = 11
+    forAll("channel", "datum", validIndices, minSuccessful(10)) {
+      (channel: String, datumValue: String, index: Int) =>
+        val key = List(channel)
+        val data = List.tabulate(size) { i =>
+          Datum(datumValue + i, persist = false)
+        }
+
+        store.withTxn(store.createTxnWrite()) { txn =>
+          data.foreach { d =>
+            store.putDatum(txn, key, d)
+          }
+          store.removeDatum(txn, key(0), index - 1)
+          store.getData(txn, key) should contain theSameElementsAs (data.filterNot(
+            _.a == datumValue + (size - index)))
+        }
+        store.clear()
     }
   }
 
