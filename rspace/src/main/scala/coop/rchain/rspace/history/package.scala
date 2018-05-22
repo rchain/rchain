@@ -12,6 +12,18 @@ package object history {
 
   private val logger: Logger = Logger[this.type]
 
+  def initialize[T, K, V](store: ITrieStore[T, K, V])(implicit
+                                                      codecK: Codec[K],
+                                                      codecV: Codec[V]): Unit = {
+    val root     = Trie.create[K, V]()
+    val rootHash = Trie.hash(root)
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.put(txn, rootHash, root)
+    }
+    store.workingRootHash.put(rootHash)
+    logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+  }
+
   def lookup[T, K, V](store: ITrieStore[T, K, V], key: K)(implicit codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
     @tailrec
