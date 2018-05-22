@@ -868,7 +868,10 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
   }
 }
 
-class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOperationsTests {
+class InMemoryStoreStorageActionsTests
+    extends StorageActionsTests
+    with JoinOperationsTests
+    with IStoreTests {
 
   override def withTestStore(f: T => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
@@ -884,7 +887,8 @@ class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOper
 class LMDBStoreActionsTests
     extends StorageActionsTests
     with JoinOperationsTests
-    with BeforeAndAfterAll {
+    with BeforeAndAfterAll
+    with IStoreTests {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
