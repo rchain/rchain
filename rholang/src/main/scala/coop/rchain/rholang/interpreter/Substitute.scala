@@ -19,17 +19,11 @@ object Substitute {
 
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C)(implicit evA: Substitute[M, A], evB: Substitute[M, B], env: Env[Par]): M[C] =
-    for {
-      aSub <- evA.substitute(termA)
-      bSub <- evB.substitute(termB)
-    } yield f(aSub, bSub)
+    (evA.substitute(termA), evB.substitute(termB)).mapN(f)
 
   def substituteNoSort2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C)(implicit evA: Substitute[M, A], evB: Substitute[M, B], env: Env[Par]): M[C] =
-    for {
-      aSub <- evA.substituteNoSort(termA)
-      bSub <- evB.substituteNoSort(termB)
-    } yield f(aSub, bSub)
+    (evA.substituteNoSort(termA), evB.substituteNoSort(termB)).mapN(f)
 
   def apply[M[_], A](implicit ev: Substitute[M, A]): Substitute[M, A] = ev
 
