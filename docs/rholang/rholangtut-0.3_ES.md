@@ -144,7 +144,7 @@ En el siguiente código, mostramos un ejemplo de iteración mediante una lista.
 
 3) La construcción `match` permite desestructurar una variable mediante la coincidencia de patrones.
 
-4) Los patrones de la lista facilitan la coincidencia con el resto de una lista. Si `list` coincide con el patrón de un par head/tail ejecutamos el cuerpo principal del ciclo.
+4) Los patrones de la lista facilitan la coincidencia con el resto de una lista. Si `list` coincide con el patrón de un par cabeza/cola ejecutamos el cuerpo principal del ciclo.
 
 5) Creamos un canal para que el handler de elementos nos notifique que ya está hecho con el elemento actual.
 
