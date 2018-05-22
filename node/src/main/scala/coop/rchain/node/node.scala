@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 
-class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
+class NodeRuntime(conf: Conf, name: String)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
@@ -31,7 +31,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   /** Configuration */
   private val host           = conf.fetchHost()
-  private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
   private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"${name}-rnode-remote.keys")

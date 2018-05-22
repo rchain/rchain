@@ -1,7 +1,7 @@
 package coop.rchain.node
 
 import coop.rchain.shared.StringOps._
-import cats._, cats.data._, cats.implicits._
+import cats.implicits._
 import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
@@ -12,8 +12,7 @@ import coop.rchain.catscontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
-import scala.concurrent._
-import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 
 object Main {
 
@@ -28,6 +27,19 @@ object Main {
       new GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
     implicit val deployService: DeployService[Task] =
       new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
+
+    val certificate = conf.certificate.map(c => Try(CertificateHelper.from(c))).toOption match {
+      case Some(Success(c)) if CertificateHelper.isSecp256k1(c) => Some(c)
+      case Some(Success(_)) =>
+        println("Certificate must contain a secp256k1 EC Public Key")
+        System.exit(1)
+        None
+      case Some(Failure(e)) =>
+        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
+        System.exit(1)
+        None
+      case _ => None
+    }
 
     val exec: Task[Unit] = conf.eval.toOption match {
       case Some(fileName) => {
@@ -49,12 +61,17 @@ object Main {
       case None if (conf.showBlock.toOption.isDefined) =>
         DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
       case None =>
-        new NodeRuntime(conf).nodeProgram.value.map {
-          case Right(_) => ()
-          case Left(CouldNotConnectToBootstrap) =>
-            Task.delay(println("Node could not connect to bootstrap node."))
-          case Left(error) => Task.delay(println(s"Failed! Reason: '$error"))
-        }
+        certificate
+          .flatMap(CertificateHelper.publicAddress)
+          .map { name =>
+            new NodeRuntime(conf, name).nodeProgram.value.map {
+              case Right(_) => ()
+              case Left(CouldNotConnectToBootstrap) =>
+                println("Node could not connect to bootstrap node.")
+              case Left(error) => println(s"Failed! Reason: '$error")
+            }
+          }
+          .getOrElse(Task.eval(println("No server certificate provided")))
     }
     exec.unsafeRunSync
   }
