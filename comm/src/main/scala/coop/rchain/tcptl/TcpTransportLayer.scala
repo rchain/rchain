@@ -28,7 +28,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc
 
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
 
-  def receive(dispatch: Option[ProtocolMessage] => F[Unit]): F[Unit] = Capture[F].capture {
+  def receive(dispatch: ProtocolMessage => F[Unit]): F[Unit] = Capture[F].capture {
     ServerBuilder
       .forPort(port)
       .addService(
@@ -39,7 +39,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc
 }
 
 class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
-    dispatch: Option[ProtocolMessage] => F[Unit])
+    dispatch: ProtocolMessage => F[Unit])
     extends TransportLayerGrpc.TransportLayer {
   def run(request: Protocol): Future[Protocol] = ???
 }

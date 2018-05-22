@@ -223,10 +223,13 @@ package object effects {
           net.broadcast(msg)
         }
 
-      def receive(dispatch: Option[ProtocolMessage] => Task[Unit]): Task[Unit] =
+      def receive(dispatch: ProtocolMessage => Task[Unit]): Task[Unit] =
         net
           .receiver[Task]
-          .flatMap(dispatch)
+          .flatMap {
+            case None      => ().pure[Task]
+            case Some(msg) => dispatch(msg)
+          }
           .forever
           .executeAsync
           .start
