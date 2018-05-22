@@ -155,10 +155,13 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
     val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
 
-    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val deploys     = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val invalidHash = ByteString.EMPTY
 
     val chain =
-      createBlock[StateWithChain](Seq.empty, deploys = deploys).runS(initState).value
+      createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = invalidHash)
+        .runS(initState)
+        .value
     val block = chain.idToBlocks(0)
 
     val (checkpoint, _) =
