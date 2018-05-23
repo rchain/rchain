@@ -28,18 +28,19 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc
 
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
 
-  def receive(dispatch: ProtocolMessage => F[Unit]): F[Unit] = Capture[F].capture {
-    ServerBuilder
-      .forPort(port)
-      .addService(
-        TransportLayerGrpc.bindService(new TranportLayerImpl[F](dispatch), executionContext))
-      .build
-      .start
-  }
+  def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] =
+    Capture[F].capture {
+      ServerBuilder
+        .forPort(port)
+        .addService(
+          TransportLayerGrpc.bindService(new TranportLayerImpl[F](dispatch), executionContext))
+        .build
+        .start
+    }
 }
 
 class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
-    dispatch: ProtocolMessage => F[Unit])
+    dispatch: ProtocolMessage => F[Option[ProtocolMessage]])
     extends TransportLayerGrpc.TransportLayer {
   def run(request: Protocol): Future[Protocol] = ???
 }
