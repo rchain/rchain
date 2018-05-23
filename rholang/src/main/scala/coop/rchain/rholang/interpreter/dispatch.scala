@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter
 
+import cats.Parallel
+import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.errors.InterpreterErrorsM
 import coop.rchain.rspace.IStore
-import monix.eval.Task
-import monix.eval.Task.catsParallel
 
 trait Dispatch[M[_], A, K] {
 
@@ -21,43 +22,48 @@ object Dispatch {
     Env.makeEnv(dataList.flatten.map({ case Channel(Quote(p)) => p }): _*)
 }
 
-class RholangOnlyDispatcher private (_reducer: => Reduce[Task])
-    extends Dispatch[Task, Seq[Channel], TaggedContinuation] {
+class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit captureM: Capture[M])
+    extends Dispatch[M, Seq[Channel], TaggedContinuation] {
 
-  val reducer: Reduce[Task] = _reducer
+  val reducer: Reduce[M] = _reducer
 
-  def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): M[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
         reducer.eval(par)(env)
       case ScalaBodyRef(_) =>
-        Task.unit
+        captureM.apply(())
       case Empty =>
-        Task.unit
+        captureM.apply(())
     }
 }
 
 object RholangOnlyDispatcher {
 
-  def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])
-    : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
-    lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
+  def create[M[_], F[_]](
+      tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])(
+      implicit
+      intepreterErrorsM: InterpreterErrorsM[M],
+      captureM: Capture[M],
+      parallel: Parallel[M, F]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+    lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
-    lazy val reducer: Reduce[Task] =
-      new Reduce.DebruijnInterpreter[Task, Task.Par](tuplespace, dispatcher)
+    lazy val reducer: Reduce[M] =
+      new Reduce.DebruijnInterpreter[M, F](tuplespace, dispatcher)
     dispatcher
   }
 }
 
-class RholangAndScalaDispatcher private (
-    _reducer: => Reduce[Task],
-    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])
-    extends Dispatch[Task, Seq[Channel], TaggedContinuation] {
+class RholangAndScalaDispatcher[M[_]] private (
+    _reducer: => Reduce[M],
+    _dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
+    implicit captureM: Capture[M])
+    extends Dispatch[M, Seq[Channel], TaggedContinuation] {
 
-  val reducer: Reduce[Task] = _reducer
+  val reducer: Reduce[M] = _reducer
 
-  def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): Task[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: Seq[Seq[Channel]]): M[Unit] =
     continuation.taggedCont match {
       case ParBody(par) =>
         val env = Dispatch.buildEnv(dataList)
@@ -65,22 +71,25 @@ class RholangAndScalaDispatcher private (
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
           case Some(f) => f(dataList)
-          case None    => Task.raiseError(new Exception(s"dispatch: no function for $ref"))
+          case None    => captureM.fail(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
-        Task.unit
+        captureM.apply(())
     }
 }
 
 object RholangAndScalaDispatcher {
 
-  def create(tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-             dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], Task[Unit]]])
-    : Dispatch[Task, Seq[Channel], TaggedContinuation] = {
-    lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
+  def create[M[_], F[_]](tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+                         dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
+      implicit
+      intepreterErrorsM: InterpreterErrorsM[M],
+      captureM: Capture[M],
+      parallel: Parallel[M, F]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+    lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
-    lazy val reducer: Reduce[Task] =
-      new Reduce.DebruijnInterpreter[Task, Task.Par](tuplespace, dispatcher)
+    lazy val reducer: Reduce[M] =
+      new Reduce.DebruijnInterpreter[M, F](tuplespace, dispatcher)
     dispatcher
   }
 }
