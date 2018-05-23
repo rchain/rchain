@@ -12,7 +12,7 @@ message CmdRequest {
 }
 
 message EvalRequest {
-  string fileName = 1;
+  string program = 1;
 }
 
 message ReplResponse {

@@ -10,6 +10,7 @@ package ObjectCodePB;
 
 message ObjectCode {
     repeated CodeBlock codeblock = 1;
+    ObjectStore objectstore = 2;
 }
 
 // A single code block contains a litvec with objects on which the code operates,
@@ -33,6 +34,14 @@ message LitVec {
     repeated Object ob = 1;
 }
 
+message ObjectReference {
+    uint64 id = 1;
+}
+
+message ObjectStore {
+    repeated Object objects = 1;
+}
+
 // Rather than implement all 100+ object types existing in Rosette, We will only implement those
 // used in loading boot.rbl, plus any deemed necessary by the Roscala compiler guys.
 
@@ -45,7 +54,6 @@ message Char {
     uint32 value = 1;
 }
 message Code {
-    uint64 id = 1;
 }
 message ExpandedLocation {}
 message Fixnum {
@@ -117,6 +125,8 @@ enum ObType {
 message Object {
     ObType type = 1;
     uint64 id = 2;
+    uint64 metaId = 3;
+    uint64 parentId = 4;
 
     // One and only one of these should be populated
     oneof object {

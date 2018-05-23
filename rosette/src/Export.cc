@@ -12,18 +12,6 @@
 #include <string>
 #include <map>
 
-uint64_t createCodeId(Code * code) {
-    // For now, use the code pointer as the id.  This is what Rosette does internally, 
-    // but for export, this results in duplicate ids due to code being compiled, executed,
-    // garbage collected, and then the memory being reused for additional code.
-
-    // The plan is to replace this with a serial number / ID that is carried with the 
-    // Code object and is never re-used or duplicated. 
-    return (uint64_t)code;
-
-//    return (uint64_t)code->serial;
-}
-
 // The following functions and table orchestrate the handling of
 // Rosette Object export within the litvec portion of the exported object code.
 // To add support for an additional object type:
@@ -47,8 +35,6 @@ void charObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObTyp
 }
 
 void codeObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
-    ObjectCodePB::Code *cod = lvob->mutable_code();
-    cod->set_id( createCodeId((Code*)ob) );
 }
 
 void floatObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
@@ -103,16 +89,28 @@ std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  ha
     {"TupleExpr",           {defaultObjectHandler,   ObjectCodePB::OT_TupleExpr} },
 };
 
-std::set<uint64_t> codeblocks;  // temp debug
+uint64_t createObjectId(Code * code) {
+    // Rosette internally, uses the object pointer but for export, this results in
+    // duplicate ids due to objects being garbage collected, and then the memory
+    // being reused.
+
+    // Here we will use the newly invented object ID that is generated when the
+    // object is created by Rosette
+
+    return BASE(code)->id;
+}
+
+
 
 // This is the protobuf that contains exported object code.
 ObjectCodePB::ObjectCode objectCode;
+
 
 // The collection routine that processes individual Code objects as they are compiled.
 void collectExportCode(Code *code) {
     if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
 
-    uint64_t codeId = createCodeId( code );
+    uint64_t codeId = createObjectId( code );
 
     if (VerboseFlag) {
         fprintf(stderr, "CodeId=%llu\n", codeId);
@@ -124,13 +122,6 @@ void collectExportCode(Code *code) {
 
     // Build the code block protobuf to export
     ObjectCodePB::CodeBlock * cb = objectCode.add_codeblock();
-
-    // Sanity check for reused code id's
-    auto search = codeblocks.find( codeId );
-    if(search != codeblocks.end()) {
-        warning("Reused code id %llu!", codeId);
-    }
-    codeblocks.insert(codeId);
 
     // Save the code id
     cb->set_id( codeId );
@@ -153,14 +144,18 @@ void collectExportCode(Code *code) {
         pOb ob = litvec->elem(i);
         std::string type = BASE(litvec->elem(i))->typestring();
         ObjectCodePB::Object *lvob = lv->add_ob();
+        lvob->set_id(BASE(ob)->id);
 
         // Find the handler for this type
         auto oh = handlers.find(type);
         if (oh != handlers.end()) {
-            lvob->set_type(oh->second.second);
-            oh->second.first(lvob, ob, oh->second.second);
+            ExportObjectHandler handler = oh->second.first;
+            ExportObjectType obType = oh->second.second;
+
+            lvob->set_type(obType);
+            handler(lvob, ob, obType);
         } else {
-            warning("Exporting object %s not yet implemented!", type.c_str());
+            warning("Exporting object type %s not yet implemented!", type.c_str());
 
             lvob->set_type(ObjectCodePB::OT_unknown);
             defaultObjectHandler(lvob, ob, ObjectCodePB::OT_unknown);
@@ -172,24 +167,6 @@ void collectExportCode(Code *code) {
 void writeExportCode() {
     if ('\0' == *ExportFile)
         return;
-
-warning("%d ids", codeblocks.size());   // temp debug
-warning("%d codeblocks", objectCode.codeblock_size());  // temp debug
-
-    // temp sanity check debug
-    for (const ObjectCodePB::CodeBlock& cb : objectCode.codeblock()) {
-        for(const ObjectCodePB::Object& ob : cb.litvec().ob()) {
-            if (ob.type() == ObjectCodePB::OT_Code) {
-                    warning("Checking %llu", ob.code().id());
-
-                auto search = codeblocks.find( ob.code().id());
-                if(search == codeblocks.end()) {
-                    warning("Referenced code id %llu not found in codeblocks!", ob.code().id());
-                }
-
-            }
-        }
-    } 
 
     // Text output of the protobuf for debugging
     if (VerboseFlag) {

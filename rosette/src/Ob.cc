@@ -114,7 +114,7 @@ char* Base::typestring() { return "unknown type"; }
 
 void Base::updateCnt() { suicide("suicide in Base::updateCnt()"); }
 
-
+IdType nextId = 1;
 Ob::Ob(InPlace_Constructor*, int sz) : header(sz) {}
 
 
