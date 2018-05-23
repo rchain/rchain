@@ -63,7 +63,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       val root1 = store.workingRootHash.get
       insert(store, key1, val2)
       val root2 = store.workingRootHash.get
-      root2 shouldBe root1
+      root2 should not be root1
       lookup(store, key1).value shouldBe val2
     }
 
