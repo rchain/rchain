@@ -13,7 +13,6 @@ import coop.rchain.rholang.interpreter.implicits.{
   fromEList,
   fromExpr,
   BundleLocallyFree,
-  EvalLocallyFree,
   ExprLocallyFree,
   GPrivateLocallyFree,
   MatchCaseLocallyFree,
@@ -330,11 +329,6 @@ object SpatialMatcher {
                                               (p, s) => p.withReceives(s +: p.receives),
                                               varLevel,
                                               wildcard)
-          _ <- listMatchSingleNonDet[Eval](target.evals,
-                                           pattern.evals,
-                                           (p, s) => p.withEvals(s +: p.evals),
-                                           varLevel,
-                                           wildcard)
           _ <- listMatchSingleNonDet[New](target.news,
                                           pattern.news,
                                           (p, s) => p.withNews(s +: p.news),
@@ -395,11 +389,6 @@ object SpatialMatcher {
         } yield Unit
     }
 
-  implicit val evalSpatialMatcherInstance: SpatialMatcher[Eval, Eval] = fromFunction[Eval, Eval] {
-    (target, pattern) =>
-      spatialMatch(target.channel.get, pattern.channel.get)
-  }
-
   implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
@@ -443,6 +432,8 @@ object SpatialMatcher {
             _ <- spatialMatch(t1.get, p1.get)
             _ <- spatialMatch(t2.get, p2.get)
           } yield Unit
+        case (EEvalBody(chan1), EEvalBody(chan2)) =>
+          spatialMatch(chan1, chan2)
         case _ => StateT.liftF(None)
       }
   }

@@ -45,13 +45,13 @@ object Substitute {
       case Right(par) => Right(par)
     }
 
-  def maybeSubstitute[M[_]: InterpreterErrorsM](term: Eval)(
-      implicit env: Env[Par]): M[Either[Eval, Par]] =
-    term.channel.get.channelInstance match {
+  def maybeSubstitute[M[_]: InterpreterErrorsM](term: EEvalBody)(
+      implicit env: Env[Par]): M[Either[Expr, Par]] =
+    term.value.channelInstance match {
       case Quote(p) => substitutePar[M].substitute(p).map(Right(_))
       case ChanVar(v) =>
         maybeSubstitute[M](v).map {
-          case Left(v)    => Left(Eval(ChanVar(v)))
+          case Left(v)    => Left(Expr(EEvalBody(ChanVar(v))))
           case Right(par) => Right(par)
         }
     }
@@ -101,32 +101,26 @@ object Substitute {
                 case Left(_e)    => par.prepend(_e)
                 case Right(_par) => _par ++ par
               }
+            case e @ EEvalBody(_) =>
+              maybeSubstitute[M](e).map {
+                case Left(expr)  => par.prepend(expr)
+                case Right(_par) => _par ++ par
+              }
             case _ => substituteExpr[M].substitute(expr).map(par.prepend(_))
-          }
-        }
-
-      def subEval(evals: Seq[Eval])(implicit env: Env[Par]): M[Par] =
-        evals.toList.reverse.foldM(VectorPar()) { (par, eval) =>
-          maybeSubstitute[M](eval).map {
-            case Left(plainEval)   => par.prepend(plainEval)
-            case Right(droppedPar) => droppedPar ++ par
           }
         }
 
       override def substitute(term: Par)(implicit env: Env[Par]): M[Par] =
         for {
           exprs    <- subExp(term.exprs)
-          evals    <- subEval(term.evals)
           sends    <- term.sends.toList.traverse(substituteSend[M].substitute(_))
           bundles  <- term.bundles.toList.traverse(substituteBundle[M].substitute(_))
           receives <- term.receives.toList.traverse(substituteReceive[M].substitute(_))
           news     <- term.news.toList.traverse(substituteNew[M].substitute(_))
           matches  <- term.matches.toList.traverse(substituteMatch[M].substitute(_))
           par = exprs ++
-            evals ++
             Par(
               exprs = Nil,
-              evals = Nil,
               sends = sends,
               bundles = bundles,
               receives = receives,
