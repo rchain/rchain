@@ -2,10 +2,12 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
-import coop.rchain.crypto.hash.Sha256
-import coop.rchain.models.Channel.ChannelInstance
+import com.google.protobuf.ByteString
+import coop.rchain.crypto.encryption.Curve25519
+import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance.{GByteArray, GString}
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GInt, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
@@ -34,9 +36,12 @@ class CryptoChannelsSpec
 
   type Store = IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]
 
-  val serialize: Par => Array[Byte] = Serialize[Par].encode _
-  val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
-    hashFn => serialize andThen hashFn
+  val serialize: Par => Array[Byte]                    = Serialize[Par].encode _
+  val byteArrayToByteString: Array[Byte] => ByteString = ba => ByteString.copyFrom(ba)
+  val byteStringToExpr: ByteString => Expr             = bs => Expr(GByteArray(bs))
+  val byteArrayToExpr                                  = byteArrayToByteString andThen byteStringToExpr
+  val parToByteString: Par => ByteString               = serialize andThen (ba => ByteString.copyFrom(ba))
+  val parToExpr: Par => Expr                           = parToByteString andThen byteStringToExpr
 
   // this should consume from the `ack` channel effectively preparing tuplespace for next test
   def clearStore(store: Store,
@@ -58,41 +63,156 @@ class CryptoChannelsSpec
       )
     )
 
+  def hashingChannel(channelName: String, hashFn: Array[Byte] => Array[Byte]): FixtureParam => Any =
+    fixture => {
+      val (reduce, store) = fixture
+
+      val serializeAndHash: (Array[Byte] => Array[Byte]) => Par => Array[Byte] =
+        hashFn => serialize andThen hashFn
+
+      val hashChannel              = Quote(GString(channelName))
+      val hash: Par => Array[Byte] = serializeAndHash(hashFn)
+
+      val ackChannel        = GString("x")
+      implicit val emptyEnv = Env[Par]()
+
+      val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
+
+      forAll { (par: Par) =>
+        val byteArrayToSend = Expr(GByteArray(par.toByteString))
+        val data: List[Par] = List(byteArrayToSend, ackChannel)
+        val send            = Send(hashChannel, data, false, BitSet())
+        val expected        = (hash andThen byteArrayToByteString andThen byteStringToExpr)(par)
+        // Send byte array on hash channel. This should:
+        // 1. meet with the system process in the tuplespace
+        // 2. hash input array
+        // 3. send result on supplied ack channel
+        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        storeContainsTest(List[Channel](Quote(expected)))
+        clearStore(store, reduce, ackChannel)
+      }
+    }
+
   "sha256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
+    hashingChannel("sha256Hash", Sha256.hash _)(fixture)
+
+  }
+
+  "blake2b256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
+    hashingChannel("blake2b256Hash", Blake2b256.hash _)(fixture)
+  }
+
+  "keccak256Hash channel" should "hash input data and send result on ack channel" in { fixture =>
+    hashingChannel("keccak256Hash", Keccak256.hash _)(fixture)
+
+  }
+
+  type Signature  = Array[Byte]
+  type PubKey     = Array[Byte]
+  type PrivateKey = Array[Byte]
+  type Nonce      = Array[Byte]
+  type Data       = Array[Byte]
+
+  "curve25519Encrypt channel" should "encrypt data and send result on ack channel" in { fixture =>
     val (reduce, store) = fixture
 
-    val Sha256HashChannel              = Quote(GString("sha256Hash"))
-    val sha256Hash: Par => Array[Byte] = serializeAndHash(Sha256.hash)
+    val curve25519EncryptChannel = Quote(GString("curve25519Encrypt"))
+    val ackChannel               = GString("x")
 
-    val ackChannel        = GString("x")
-    implicit val emptyEnv = Env[Par]()
+    val (secKey, pubKey) = Curve25519.newKeyPair
 
+    implicit val emptyEnv                             = Env[Par]()
     val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
 
     forAll { (par: Par) =>
-      val byteArrayToSend = Expr(GByteArray(par.toByteString))
-      val data: List[Par] = List(byteArrayToSend, ackChannel)
-      val send            = Send(Sha256HashChannel, data, false, BitSet())
-      val expected        = Expr(GByteArray(com.google.protobuf.ByteString.copyFrom(sha256Hash(par))))
-      // Send byte array on sha256Hash channel. This should:
-      // 1. meet with the system process in the tuplespace
-      // 2. hash input array
-      // 3. send result on supplied ack channel
-      Await.ready(reduce.eval(send).runAsync, 3.seconds)
-      storeContainsTest(List[Channel](Quote(expected)))
+      val parByteArray: Array[Byte] = serialize(par)
+      val nonce                     = Curve25519.newNonce
+      val encrypted                 = Curve25519.encrypt(pubKey, secKey, nonce, parByteArray)
+
+      val nonceExpr     = byteArrayToExpr(nonce)
+      val pubKeyExpr    = byteArrayToExpr(pubKey)
+      val secKeyExpr    = byteArrayToExpr(secKey)
+      val serializedPar = byteArrayToExpr(parByteArray)
+
+      val expecting = byteArrayToExpr(encrypted)
+
+      val send = Send(curve25519EncryptChannel,
+                      List(pubKeyExpr, secKeyExpr, nonceExpr, serializedPar, ackChannel),
+                      persistent = false,
+                      BitSet())
+      Await.result(reduce.eval(send).runAsync, 3.seconds)
+      storeContainsTest(List[Channel](Quote(expecting)))
       clearStore(store, reduce, ackChannel)
     }
   }
 
-  type Signature = Array[Byte]
-  type PubKey = Array[Byte]
+  "secp256k1Verify channel" should "verify integrity of the data and send result on ack channel" in {
+    fixture =>
+      pendingUntilFixed {
+        val (reduce, store) = fixture
 
-  "ed25519Verify" should "verify integrity of the data" in { fixture =>
-    val (reduce, store) = fixture
+        val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
 
-    val ed25519VerifyChannel = Quote(GString("ed25519Verify"))
-    val ed25519Verify: (Par, Signature, PubKey) => Boolean = ???
+        val (secKey, pubKey) = Secp256k1.newKeyPair
 
+        val ackChannel                                    = GString("x")
+        implicit val emptyEnv                             = Env[Par]()
+        val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
+
+        forAll { (par: Par) =>
+          val parByteArray: Array[Byte] = serialize(par)
+
+          val signature = Secp256k1.sign(parByteArray, secKey)
+
+          val serializedPar = byteArrayToExpr(parByteArray)
+          val signaturePar  = byteArrayToExpr(signature)
+          val pubKeyPar     = byteArrayToExpr(pubKey)
+
+          val refVerify = Secp256k1.verify(parByteArray, signature, pubKey)
+          assert(refVerify === true)
+
+          val send = Send(secp256k1VerifyhashChannel,
+                          List(serializedPar, signaturePar, pubKeyPar, ackChannel),
+                          persistent = false,
+                          BitSet())
+          Await.result(reduce.eval(send).runAsync, 3.seconds)
+          storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
+          clearStore(store, reduce, ackChannel)
+        }
+      }
+  }
+
+  "ed25519Verify channel" should "verify integrity of the data and send result on ack channel" in {
+    fixture =>
+      val (reduce, store) = fixture
+
+      val ed25519VerifyChannel = Quote(GString("ed25519Verify"))
+      val (secKey, pubKey)     = Ed25519.newKeyPair
+
+      val ackChannel                                    = GString("x")
+      implicit val emptyEnv                             = Env[Par]()
+      val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
+
+      forAll { (par: Par) =>
+        val parByteArray: Array[Byte] = serialize(par)
+
+        val signature = Ed25519.sign(parByteArray, secKey)
+
+        val serializedPar = byteArrayToExpr(parByteArray)
+        val signaturePar  = byteArrayToExpr(signature)
+        val pubKeyPar     = byteArrayToExpr(pubKey)
+
+        val refVerify = Ed25519.verify(parByteArray, signature, pubKey)
+        assert(refVerify === true)
+
+        val send = Send(ed25519VerifyChannel,
+                        List(serializedPar, signaturePar, pubKeyPar, ackChannel),
+                        persistent = false,
+                        BitSet())
+        Await.result(reduce.eval(send).runAsync, 3.seconds)
+        storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
+        clearStore(store, reduce, ackChannel)
+      }
   }
 
   override protected def withFixture(test: OneArgTest): Outcome = {
