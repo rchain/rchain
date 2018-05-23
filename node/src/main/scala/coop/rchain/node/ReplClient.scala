@@ -4,7 +4,7 @@ import java.io.File
 
 import scala.io.Source
 
-import coop.rchain.node.rnode._
+import coop.rchain.node.model.repl._
 import coop.rchain.shared.Resources._
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
