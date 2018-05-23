@@ -189,18 +189,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     bonds
   }
 
-  private def receiveAndDispatch: Effect[Unit] =
-    TransportLayer[Effect].receive(p2p.Network.dispatch[Effect])
-
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      // TODO handle errors on receive (currently ignored)
-      _ <- receiveAndDispatch
-      _ <- Log[Effect].info(s"Listening for traffic on $address.")
+      _         <- TransportLayer[Effect].receive(p2p.Network.dispatch[Effect])
+      _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
