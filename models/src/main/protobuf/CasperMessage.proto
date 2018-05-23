@@ -53,10 +53,11 @@ message BlockQuery {
   string hash = 1;
 }
 message BlockInfo {
-  bytes blockHash      = 1;
-  int64 blockNumber  = 2;
-  repeated bytes parentsHashList = 3;
-  string tsDesc = 4;
+  string status = 1;
+  string blockHash = 2;
+  int64 blockNumber  = 3;
+  repeated string parentsHashList = 4;
+  string tsDesc = 5;
 }
 
 message Deploy {

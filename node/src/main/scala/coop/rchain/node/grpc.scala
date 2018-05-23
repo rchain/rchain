@@ -7,9 +7,11 @@ import scala.concurrent.Future
 import cats._
 import cats.data._
 import cats.implicits._
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse}
@@ -17,7 +19,8 @@ import coop.rchain.catscontrib._
 import Catscontrib._
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.node.rnode._
@@ -98,7 +101,7 @@ object GrpcServer {
           blockInfo <- maybeBlock match {
                         case Some(block) =>
                           val ps          = block.body.flatMap(_.postState)
-                          val blockNumber = ps.fold(0L)(_.blockNumber)
+                          val blockNumber = ProtoUtil.blockNumber(block)
                           val parents     = block.header.fold(Seq.empty[ByteString])(_.parentsHashList)
                           val tsHash      = ps.fold(ByteString.EMPTY)(_.tuplespace)
                           for {
@@ -116,12 +119,17 @@ object GrpcServer {
                                              s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
                                        })
                           } yield
-                            BlockInfo(blockHash = block.blockHash,
-                                      blockNumber = blockNumber,
-                                      parentsHashList = parents,
-                                      tsDesc = tsDesc)
+                            BlockInfo(
+                              status = "Success",
+                              blockHash = PrettyPrinter.buildString(block.blockHash),
+                              blockNumber = blockNumber,
+                              parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
+                              tsDesc = tsDesc
+                            )
                         case None =>
-                          BlockInfo().withBlockHash(ByteString.copyFromUtf8(q.hash)).pure[F]
+                          BlockInfo(status =
+                            s"Error: Failure to find block with hash ${ByteString.copyFromUtf8(q.hash)}")
+                            .pure[F]
                       }
         } yield blockInfo
       blockInfo.toFuture
