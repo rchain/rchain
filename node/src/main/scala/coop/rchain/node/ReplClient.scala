@@ -1,10 +1,11 @@
 package coop.rchain.node
 
-import java.io.{Closeable, File}
+import java.io.File
 
 import scala.io.Source
 
 import coop.rchain.node.rnode._
+import coop.rchain.shared.Resources._
 
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
@@ -31,18 +32,11 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
   def eval(fileName: String): Task[String] = Task.delay {
     val file = new File(fileName)
     if (file.exists()) {
-      using(Source.fromFile(file)) { source =>
+      withResource(Source.fromFile(file)) { source =>
         blockingStub.eval(EvalRequest(source.getLines.mkString)).output
       }
     } else {
       s"File $fileName not found"
     }
   }
-
-  private def using[S <: Closeable, A](source: S)(use: S => A): A =
-    try {
-      use(source)
-    } finally {
-      source.close()
-    }
 }
