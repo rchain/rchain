@@ -128,8 +128,9 @@ package object history {
               case existingLeaf @ Leaf(_, _) if existingLeaf == newLeaf =>
                 store.workingRootHash.put(currentRootHash)
                 logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
-              // If the "tip" is an existing leaf, then we are in a situation where the new leaf
-              // shares some common prefix with the existing leaf.
+              // If the "tip" is an existing leaf with a different key than the new leaf, then
+              // we are in a situation where the new leaf shares some common prefix with the
+              // existing leaf.
               case existingLeaf @ Leaf(ek, _) if key != ek =>
                 val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
                 val sharedPrefix       = commonPrefix(encodedKeyNew, encodedKeyExisting)
@@ -150,9 +151,21 @@ package object history {
                 val newRootHash   = insertTries(store, txn, rehashedNodes).get
                 store.workingRootHash.put(newRootHash)
                 logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
-              case Leaf(_, ev) if value != ev =>
-                // TODO(ht): Handle this - it is effectively updating the value at a given key.
-                throw new InsertException("unhandled")
+              // If the "tip" is an existing leaf with the same key as the new leaf, but the
+              // existing leaf and new leaf have different values, then we are in the situation
+              // where we are "updating" an existing leaf
+              case Leaf(ek, ev) if key == ek && value != ev =>
+                // Update the pointer block of the immediate parent at the given index
+                // to point to the new leaf instead of the existing leaf
+                val (hd, tl) = parents match {
+                  case (idx, Node(pointerBlock)) +: remaining =>
+                    (Node(pointerBlock.updated(List((idx, Some(newLeafHash))))), remaining)
+                  case Seq() =>
+                    throw new InsertException("A leaf had no parents")
+                }
+                val rehashedNodes = rehash[K, V](hd, tl)
+                val newRootHash   = insertTries(store, txn, rehashedNodes).get
+                store.workingRootHash.put(newRootHash)
               // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
               // pointer block and rehash.
               case Node(pb) =>

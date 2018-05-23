@@ -56,8 +56,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key1).value shouldBe val1
     }
 
-  // TODO(ht): enable this test
-  "Two inserts at same key with different values, lookup" should "work" ignore
+  "Two inserts at same key with different values, lookup" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
       insert(store, key1, val1)
       val root1 = store.workingRootHash.get
