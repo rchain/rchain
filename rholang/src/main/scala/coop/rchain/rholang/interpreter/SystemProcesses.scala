@@ -3,9 +3,9 @@ package coop.rchain.rholang.interpreter
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.encryption.Curve25519
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
-import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.models.Expr.ExprInstance.{GByteArray, GBool}
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{IStore, produce}
@@ -69,7 +69,7 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
       //TODO: use actual secp256k1 algorithm
-      Task.now(false).flatMap { verified =>
+      Task.now(Secp256k1.verify(data, signature, pub)).flatMap { verified =>
         produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GBool(verified))))))), false) match {
           case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
           case None                           => Task.unit
