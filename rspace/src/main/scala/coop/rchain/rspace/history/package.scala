@@ -130,26 +130,33 @@ package object history {
                 logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
               // If the "tip" is an existing leaf, then we are in a situation where the new leaf
               // shares some common prefix with the existing leaf.
-              case existingLeaf @ Leaf(ek, _) =>
+              case currentLeaf @ Leaf(ek, _) =>
                 val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
                 val sharedPrefix       = commonPrefix(encodedKeyNew, encodedKeyExisting)
                 val sharedPrefixLength = sharedPrefix.length
                 val sharedPath         = sharedPrefix.drop(parents.length).reverse
-                val newLeafIndex       = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
-                val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
-                val hd = Node(
-                  PointerBlock
-                    .create()
-                    .updated(List((newLeafIndex, Some(newLeafHash)),
-                                  (existingLeafIndex, Some(Trie.hash[K, V](existingLeaf)))))
-                )
-                val emptyNode     = Node(PointerBlock.create())
-                val emptyNodes    = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
-                val nodes         = emptyNodes ++ parents
-                val rehashedNodes = rehash[K, V](hd, nodes)
-                val newRootHash   = insertTries(store, txn, rehashedNodes).get
-                store.workingRootHash.put(newRootHash)
-                logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+                if (sharedPrefixLength < encodedKeyNew.length) {
+                  val newLeafIndex     = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
+                  val currentLeafIndex = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
+                  val hd = Node(
+                    PointerBlock
+                      .create()
+                      .updated(List((newLeafIndex, Some(newLeafHash)),
+                                    (currentLeafIndex, Some(Trie.hash[K, V](currentLeaf)))))
+                  )
+                  val emptyNode     = Node(PointerBlock.create())
+                  val emptyNodes    = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
+                  val nodes         = emptyNodes ++ parents
+                  val rehashedNodes = rehash[K, V](hd, nodes)
+                  val newRootHash   = insertTries(store, txn, rehashedNodes).get
+                  store.workingRootHash.put(newRootHash)
+                  logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+                } else if (sharedPrefixLength == encodedKeyNew.length) {
+                  // TODO(ht): Handle this - it is effectively updating the value at a given key.
+                  throw new InsertException("unhandled")
+                } else {
+                  throw new InsertException("Something terrible happened")
+                }
               // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
               // pointer block and rehash.
               case Node(pb) =>
