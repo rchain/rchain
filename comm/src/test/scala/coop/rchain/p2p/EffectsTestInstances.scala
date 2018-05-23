@@ -38,8 +38,9 @@ object EffectsTestInstances {
     def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
       nodes = node :: nodes
     }
-    def findMorePeers(limit: Int): F[Seq[PeerNode]] = ???
-    def peers: F[Seq[PeerNode]]                     = ???
+    def findMorePeers(limit: Int): F[Seq[PeerNode]]                         = ???
+    def peers: F[Seq[PeerNode]]                                             = ???
+    def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] = ???
   }
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: ProtocolNode)
