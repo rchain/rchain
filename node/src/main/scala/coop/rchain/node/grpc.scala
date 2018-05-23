@@ -5,10 +5,6 @@ import io.grpc.{Server, ServerBuilder}
 
 import scala.concurrent.Future
 import cats._
-import cats.data._
-import cats.implicits._
-import cats._
-import cats.data._
 import cats.implicits._
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
@@ -31,6 +27,7 @@ import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
 
+import coop.rchain.casper.api.BlockAPI
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object GrpcServer {
@@ -83,57 +80,11 @@ object GrpcServer {
           Future.successful(DeployServiceResponse(false, s"Error in parsing term: \n$err"))
       }
 
-    override def createBlock(e: Empty): Future[MaybeBlockMessage] =
-      MultiParentCasper[F].createBlock.map(MaybeBlockMessage.apply).toFuture
+    override def createBlock(e: Empty): Future[MaybeBlockMessage] = BlockAPI.createBlock[F].toFuture
 
-    override def addBlock(b: BlockMessage): Future[Empty] =
-      MultiParentCasper[F].addBlock(b).map(_ => Empty()).toFuture
+    override def addBlock(b: BlockMessage): Future[Empty] = BlockAPI.addBlock[F](b).toFuture
 
-    // TODO: Handle errors properly
-    override def showBlock(q: BlockQuery): Future[BlockInfo] = {
-      val dag = MultiParentCasper[F].blockDag
-      val blockInfo: F[BlockInfo] =
-        for {
-          fullHash <- dag.map(_.blockLookup.keys.find(h => {
-                       Base16.encode(h.toByteArray).startsWith(q.hash)
-                     }))
-          maybeBlock <- fullHash.traverse(h => dag.map(_.blockLookup(h)))
-          blockInfo <- maybeBlock match {
-                        case Some(block) =>
-                          val ps          = block.body.flatMap(_.postState)
-                          val blockNumber = ProtoUtil.blockNumber(block)
-                          val parents     = block.header.fold(Seq.empty[ByteString])(_.parentsHashList)
-                          val tsHash      = ps.fold(ByteString.EMPTY)(_.tuplespace)
-                          for {
-                            tsDesc <- MultiParentCasper[F]
-                                       .tsCheckpoint(tsHash)
-                                       .map(maybeCheckPoint => {
-                                         maybeCheckPoint
-                                           .map(checkpoint => {
-                                             val ts     = checkpoint.toTuplespace
-                                             val result = ts.storageRepr
-                                             ts.delete()
-                                             result
-                                           })
-                                           .getOrElse(
-                                             s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
-                                       })
-                          } yield
-                            BlockInfo(
-                              status = "Success",
-                              blockHash = PrettyPrinter.buildString(block.blockHash),
-                              blockNumber = blockNumber,
-                              parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
-                              tsDesc = tsDesc
-                            )
-                        case None =>
-                          BlockInfo(status =
-                            s"Error: Failure to find block with hash ${ByteString.copyFromUtf8(q.hash)}")
-                            .pure[F]
-                      }
-        } yield blockInfo
-      blockInfo.toFuture
-    }
+    override def showBlock(q: BlockQuery): Future[BlockInfo] = BlockAPI.getBlockInfo[F](q).toFuture
   }
 
   class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {
