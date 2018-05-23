@@ -223,13 +223,27 @@ package object effects {
           net.broadcast(msg)
         }
 
-      def receive(dispatch: ProtocolMessage => Task[Unit]): Task[Unit] =
+      private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
+        : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
+        dispatch(pm) >>= {
+          case None => ().pure[Task]
+          case Some(response) =>
+            pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
+              commSend(response, sender) >>= {
+                case Left(error) =>
+                  Log[Task].warn(
+                    s"Was unable to send response $response for request: $pm, error: $error")
+                case _ =>
+                  Log[Task].info(s"Response $response for request: $pm was sent, sender: $sender")
+              }
+            }
+        }
+      }
+
+      def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
         net
           .receiver[Task]
-          .flatMap {
-            case None      => ().pure[Task]
-            case Some(msg) => dispatch(msg)
-          }
+          .flatMap(handle(dispatch))
           .forever
           .executeAsync
           .start

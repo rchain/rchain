@@ -19,7 +19,7 @@ trait TransportLayer[F[_]] {
   // TODO remove ProtocolMessage, use raw messages from protocol
   def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
-  def receive(dispatch: ProtocolMessage => F[Unit]): F[Unit]
+  def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit]
 }
 
 object TransportLayer extends TransportLayerInstances {
@@ -43,11 +43,13 @@ sealed abstract class TransportLayerInstances {
 
       def broadcast(msg: ProtocolMessage): EitherT[F, E, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(msg))
-      def receive(dispatch: ProtocolMessage => EitherT[F, E, Unit]): EitherT[F, E, Unit] = {
-        val dis: ProtocolMessage => F[Unit] = msg =>
-          dispatch(msg).value.map(_ match {
-            case Left(err)   => Log[F].error(s"Error while handling message. Error: $err")
-            case Right(unit) => unit
+      def receive(dispatch: ProtocolMessage => EitherT[F, E, Option[ProtocolMessage]])
+        : EitherT[F, E, Unit] = {
+        val dis: ProtocolMessage => F[Option[ProtocolMessage]] = msg =>
+          dispatch(msg).value.flatMap(_ match {
+            case Left(err) =>
+              Log[F].error(s"Error while handling message. Error: $err") *> none.pure[F]
+            case Right(msg) => msg.pure[F]
           })
         EitherT.liftF(evF.receive(dis))
       }
