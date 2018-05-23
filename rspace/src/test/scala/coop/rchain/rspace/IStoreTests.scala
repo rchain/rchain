@@ -94,6 +94,43 @@ trait IStoreTests
       store.clear()
     }
   }
+
+  "putWaitingContinuation" should "put waiting continuation in a new channel" in withTestStore {
+    store =>
+      forAll("channel", "continuation") { (channel: String, pattern: String) =>
+        val key          = List(channel)
+        val patterns     = List(StringMatch(pattern))
+        val continuation = new StringsCaptor
+        val wc: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation(patterns, continuation, false)
+
+        store.withTxn(store.createTxnWrite()) { txn =>
+          store.putWaitingContinuation(txn, key, wc)
+          store.getWaitingContinuation(txn, key) shouldBe List(wc)
+        }
+        store.clear()
+      }
+  }
+
+  it should "append continuation if channel already exists" in withTestStore { store =>
+    forAll("channel", "continuation") { (channel: String, pattern: String) =>
+      val key          = List(channel)
+      val patterns     = List(StringMatch(pattern))
+      val continuation = new StringsCaptor
+      val wc1: WaitingContinuation[Pattern, StringsCaptor] =
+        WaitingContinuation(patterns, continuation, false)
+
+      val wc2: WaitingContinuation[Pattern, StringsCaptor] =
+        WaitingContinuation(List(StringMatch(pattern + 2)), continuation, false)
+
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.putWaitingContinuation(txn, key, wc1)
+        store.putWaitingContinuation(txn, key, wc2)
+        store.getWaitingContinuation(txn, key) should contain theSameElementsAs List(wc1, wc2)
+      }
+      store.clear()
+    }
+  }
 }
 
 class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
