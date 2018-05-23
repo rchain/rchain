@@ -151,6 +151,50 @@ package object effects {
         Capture[F].capture {
           net.table.peers
         }
+
+      def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] =
+        pm =>
+          pm.sender.fold(none[ProtocolMessage].pure[F]) { sender =>
+            pm match {
+              case ping @ PingMessage(_, _)             => handlePing(sender, ping)
+              case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
+              case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
+              case _                                    => none[ProtocolMessage].pure[F]
+            }
+        }
+
+      private def handlePing(sender: PeerNode, ping: PingMessage): F[Option[ProtocolMessage]] =
+        ping
+          .response(net.local)
+          .traverse { pong =>
+            Metrics[F].incrementCounter("ping-recv-count").as(pong)
+          }
+
+      /**
+        * Validate incoming LOOKUP message and return an answering
+        * LOOKUP_RESPONSE.
+        */
+      private def handleLookup(sender: PeerNode,
+                               lookup: LookupMessage): F[Option[ProtocolMessage]] =
+        (for {
+          id   <- lookup.lookupId
+          resp <- lookup.response(net.local, net.table.lookup(id))
+        } yield {
+          Metrics[F].incrementCounter("lookup-recv-count").as(resp)
+        }).sequence
+
+      /**
+        * Remove sending peer from table.
+        */
+      private def handleDisconnect(sender: PeerNode,
+                                   disconnect: DisconnectMessage): F[Option[ProtocolMessage]] =
+        for {
+          _ <- Log[F].info(s"Forgetting about $sender.")
+          _ <- Capture[F].capture(net.table.remove(sender.key))
+          _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+          _ <- Metrics[F].decrementGauge("peers")
+        } yield none[ProtocolMessage]
+
     }
 
   def transportLayer(net: UnicastNetwork)(implicit

@@ -189,13 +189,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     bonds
   }
 
+  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+    pm =>
+      NodeDiscovery[Effect].handleCommunications(pm) >>= {
+        case None     => p2p.Network.dispatch[Effect](pm)
+        case resultPM => resultPM.pure[Effect]
+    }
+
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- TransportLayer[Effect].receive(p2p.Network.dispatch[Effect])
+      _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
