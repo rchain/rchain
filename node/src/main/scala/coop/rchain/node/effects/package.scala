@@ -185,8 +185,7 @@ package object effects {
                 case Left(error) =>
                   Log[Task].warn(
                     s"Was unable to send response $response for request: $pm, error: $error")
-                case _ =>
-                  Log[Task].info(s"Response $response for request: $pm was sent, sender: $sender")
+                case _ => ().pure[Task]
               }
             }
         }
@@ -221,12 +220,16 @@ package object effects {
 
   }
 
-  def packetHandler[F[_]: Applicative: Log](
-      pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
+  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
+      implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[String] = {
+      def handlePacket(packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"
-        if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+        if (pf.isDefinedAt(packet)) pf(packet)
+        else
+          Log[F].error(errorMsg) *> errorHandler
+            .raiseError(unknownProtocol(errorMsg))
+            .as(none[Packet])
       }
     }
 
