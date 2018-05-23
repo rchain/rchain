@@ -260,24 +260,27 @@ sealed abstract class MultiParentCasperInstances {
           }
 
       private def reAttemptBuffer: F[Unit] = {
-        val attempts = blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
-        val validAttempts = attempts.map(_.flatMap {
-          case (b, None) =>
-            //do not re-attempt invalid blocks
-            blockBuffer -= b
-            None
+        def findAddedBlockMessages(attempts: List[(BlockMessage, Boolean)]): List[BlockMessage] =
+          attempts.filter(_._2).map(_._1)
 
-          case (b, Some(success)) =>
-            Some(b -> success)
-        })
-        val maybeAdded = validAttempts.map(_.find(_._2).map(_._1))
+        def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, Option[Boolean])]) =
+          attempts.flatMap {
+            case (b, None) =>
+              blockBuffer -= b
+              None
+            case (b, Some(success)) =>
+              Some(b -> success)
+          }
 
-        maybeAdded.flatMap {
-          case Some(added) =>
-            Capture[F].capture { blockBuffer -= added } *> reAttemptBuffer
-
-          case None => ().pure[F]
-        }
+        for {
+          attempts      <- blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
+          validAttempts = removeInvalidBlocksFromBuffer(attempts)
+          _ <- findAddedBlockMessages(validAttempts) match {
+                case Nil => ().pure[F]
+                case addedBlocks =>
+                  Capture[F].capture { addedBlocks.map { blockBuffer -= _ } } *> reAttemptBuffer
+              }
+        } yield ()
       }
     }
 }
