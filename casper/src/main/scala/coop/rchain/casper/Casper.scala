@@ -86,13 +86,15 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
 
-      def addBlock(b: BlockMessage): F[Unit] =
-        for {
-          success <- attemptAdd(b)
-          _ <- if (success)
-                Log[F].info(s"CASPER: Added ${PrettyPrinter.buildString(b)}") *> reAttemptBuffer
-              else Capture[F].capture { blockBuffer += b }
-        } yield ()
+      def addBlock(b: BlockMessage): F[Unit] = attemptAdd(b).flatMap {
+        case None => ().pure[F]
+
+        case Some(success) =>
+          if (success)
+            Log[F]
+              .info(s"CASPER: Added ${PrettyPrinter.buildString(b.blockHash)}") *> reAttemptBuffer
+          else Capture[F].capture { blockBuffer += b }
+      }
 
       def contains(b: BlockMessage): F[Boolean] =
         Capture[F].capture {
@@ -187,7 +189,8 @@ sealed abstract class MultiParentCasperInstances {
         checkpoints.get.get(hash)
       }
 
-      private def attemptAdd(block: BlockMessage): F[Boolean] =
+      //invalid blocks return None
+      private def attemptAdd(block: BlockMessage): F[Option[Boolean]] =
         Monad[F]
           .pure[BlockMessage](block)
           .map(b => {
@@ -195,71 +198,89 @@ sealed abstract class MultiParentCasperInstances {
             val bParents = parents(b)
 
             if (bParents.exists(p => !_blockDag.get.blockLookup.contains(p))) {
-              //cannot add a block if not all parents are known
-              false
+              //Cannot add a block if not all parents are known,
+              //but can re-try in the future
+              Some(false)
             } else if (b.justifications.exists(j =>
                          !_blockDag.get.blockLookup.contains(j.latestBlockHash))) {
-              //cannot add a block if not all justifications are known
-              false
+              //Cannot add a block if not all justifications are known,
+              //but can re-try in the future
+              Some(false)
             } else {
+              //Check that tuplespace hash is valid
+              val Right((maybeCheckPoint, _)) =
+                checkpoints.mapAndUpdate[(Option[Checkpoint], Map[ByteString, Checkpoint])](
+                  InterpreterUtil.validateBlockCheckpoint(
+                    b,
+                    genesis,
+                    _blockDag.get,
+                    storageLocation,
+                    storageSize,
+                    _
+                  ),
+                  _._2
+                )
               //TODO: check if block is an equivocation and update observed faults
 
-              _blockDag.update(bd => {
-                //add current block as new child to each of its parents
-                val newChildMap = bParents.foldLeft(bd.childMap) {
-                  case (acc, p) =>
-                    val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
-                    acc.updated(p, currChildren + hash)
-                }
+              maybeCheckPoint.map(_ => {
+                _blockDag.update(bd => {
+                  //add current block as new child to each of its parents
+                  val newChildMap = bParents.foldLeft(bd.childMap) {
+                    case (acc, p) =>
+                      val currChildren = acc.getOrElse(p, HashSet.empty[BlockHash])
+                      acc.updated(p, currChildren + hash)
+                  }
 
-                bd.copy(
-                  blockLookup = bd.blockLookup.updated(hash, b),
-                  //Assume that a non-equivocating validator must include
-                  //its own latest message in the justification. Therefore,
-                  //for a given validator the blocks are guaranteed to arrive in causal order.
-                  latestMessages = bd.latestMessages.updated(b.sender, hash),
-                  childMap = newChildMap
-                )
+                  bd.copy(
+                    blockLookup = bd.blockLookup.updated(hash, b),
+                    //Assume that a non-equivocating validator must include
+                    //its own latest message in the justification. Therefore,
+                    //for a given validator the blocks are guaranteed to arrive in causal order.
+                    latestMessages = bd.latestMessages.updated(b.sender, hash),
+                    childMap = newChildMap
+                  )
+                })
+
+                true
               })
-
-              true
             }
           })
           .flatMap {
-            case true =>
+            case t @ Some(true) =>
               //Add successful! Send block to peers and create tuplespace checkpoint
-              CommUtil.sendBlock[F](block) *> updateCheckpoints(block) *> true.pure[F]
+              CommUtil.sendBlock[F](block) *> Monad[F].pure[Option[Boolean]](t)
 
             //TODO: Ask peers for missing parents/justifications of blocks
-            case false => false.pure[F]
+            case f @ Some(false) => Monad[F].pure[Option[Boolean]](f)
+
+            case _ =>
+              Log[F].info(
+                s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}") *>
+                Monad[F].pure[Option[Boolean]](None)
           }
 
       private def reAttemptBuffer: F[Unit] = {
-        val attempts   = blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
-        val maybeAdded = attempts.map(_.find(_._2).map(_._1))
+        def findAddedBlockMessages(attempts: List[(BlockMessage, Boolean)]): List[BlockMessage] =
+          attempts.filter(_._2).map(_._1)
 
-        maybeAdded.flatMap {
-          case Some(added) =>
-            Capture[F].capture { blockBuffer -= added } *> reAttemptBuffer
+        def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, Option[Boolean])]) =
+          attempts.flatMap {
+            case (b, None) =>
+              blockBuffer -= b
+              None
+            case (b, Some(success)) =>
+              Some(b -> success)
+          }
 
-          case None => ().pure[F]
-        }
+        for {
+          attempts      <- blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
+          validAttempts = removeInvalidBlocksFromBuffer(attempts)
+          _ <- findAddedBlockMessages(validAttempts) match {
+                case Nil => ().pure[F]
+                case addedBlocks =>
+                  Capture[F].capture { addedBlocks.map { blockBuffer -= _ } } *> reAttemptBuffer
+              }
+        } yield ()
       }
-
-      private def updateCheckpoints(b: BlockMessage): F[Unit] =
-        Capture[F].capture {
-          checkpoints.mapAndUpdate[(Checkpoint, Map[ByteString, Checkpoint])](
-            InterpreterUtil.computeBlockCheckpoint(
-              b,
-              genesis,
-              _blockDag.get,
-              storageLocation,
-              storageSize,
-              _
-            ),
-            _._2
-          )
-          ()
-        }
     }
 }

@@ -22,11 +22,15 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      deploys: Seq[Deploy] = Seq.empty[Deploy]): F[BlockMessage] =
+      deploys: Seq[Deploy] = Seq.empty[Deploy],
+      tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
     for {
-      chain         <- blockDagState[F].get
-      nextId        = chain.currentId + 1
-      postState     = RChainState().withBonds(bonds).withBlockNumber(nextId.toLong)
+      chain  <- blockDagState[F].get
+      nextId = chain.currentId + 1
+      postState = RChainState()
+        .withTuplespace(tsHash)
+        .withBonds(bonds)
+        .withBlockNumber(nextId.toLong)
       postStateHash = Blake2b256.hash(postState.toByteArray)
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))

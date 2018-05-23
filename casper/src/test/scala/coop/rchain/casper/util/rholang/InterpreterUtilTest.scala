@@ -151,4 +151,46 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
   }
+
+  "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
+    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
+
+    val deploys     = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val invalidHash = ByteString.EMPTY
+
+    val chain =
+      createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = invalidHash)
+        .runS(initState)
+        .value
+    val block = chain.idToBlocks(0)
+
+    val (checkpoint, _) =
+      validateBlockCheckpoint(block, block, chain, storageDirectory, storageSize, Map.empty)
+
+    checkpoint should be(None)
+  }
+
+  "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
+    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
+
+    val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
+    val (ch, _) = computeDeploysCheckpoint(Seq.empty,
+                                           deploys,
+                                           BlockMessage(),
+                                           initState,
+                                           storageDirectory,
+                                           storageSize,
+                                           Map.empty)
+
+    val chain =
+      createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = ch.hash)
+        .runS(initState)
+        .value
+    val block = chain.idToBlocks(0)
+
+    val (checkpoint, _) =
+      validateBlockCheckpoint(block, block, chain, storageDirectory, storageSize, Map.empty)
+
+    checkpoint.map(_.hash) should be(Some(ch.hash))
+  }
 }
