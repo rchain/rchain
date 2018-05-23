@@ -95,3 +95,6 @@ trait IStoreTests
     }
   }
 }
+
+class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
+class LMDBStoreTests     extends LMDBStoreTestsBase with IStoreTests
