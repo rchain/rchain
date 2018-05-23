@@ -86,46 +86,45 @@ object GrpcServer {
     override def addBlock(b: BlockMessage): Future[Empty] =
       MultiParentCasper[F].addBlock(b).map(_ => Empty()).toFuture
 
+    // TODO: Handle errors properly
     override def showBlock(q: BlockQuery): Future[BlockInfo] = {
       val dag = MultiParentCasper[F].blockDag
-      val fullHash = dag.map(_.blockLookup.keys.find(h => {
-        Base16.encode(h.toByteArray).startsWith(q.hash)
-      }))
-      val fBlock = fullHash.flatMap(hash => {
-        hash.traverse(h => dag.map(_.blockLookup(h)))
-      })
-
-      fBlock
-        .flatMap[BlockInfo] {
-          case Some(block) =>
-            val parents =
-              ProtoUtil.parents(block).map(hash => "  " + Base16.encode(hash.toByteArray))
-            val ps     = block.body.flatMap(_.postState)
-            val tsHash = ps.map(_.tuplespace).getOrElse(ByteString.EMPTY)
-            MultiParentCasper[F]
-              .tsCheckpoint(tsHash)
-              .map(maybeCheckPoint => {
-                val tsDesc =
-                  maybeCheckPoint
-                    .map(checkpoint => {
-                      val ts     = checkpoint.toTuplespace
-                      val result = ts.storageRepr
-                      ts.delete()
-                      result
-                    })
-                    .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
-
-                val blockDesc =
-                  s"Parents:\n${parents.mkString("\n")}\n" +
-                    s"Tuplespace:\n${tsDesc}\n"
-
-                BlockInfo(blockDesc)
-              })
-
-          case None =>
-            BlockInfo(s"Block with hash ${q.hash} not found!").pure[F]
-        }
-        .toFuture
+      val blockInfo: F[BlockInfo] =
+        for {
+          fullHash <- dag.map(_.blockLookup.keys.find(h => {
+                       Base16.encode(h.toByteArray).startsWith(q.hash)
+                     }))
+          maybeBlock <- fullHash.traverse(h => dag.map(_.blockLookup(h)))
+          blockInfo <- maybeBlock match {
+                        case Some(block) =>
+                          val ps          = block.body.flatMap(_.postState)
+                          val blockNumber = ps.fold(0L)(_.blockNumber)
+                          val parents     = block.header.fold(Seq.empty[ByteString])(_.parentsHashList)
+                          val tsHash      = ps.fold(ByteString.EMPTY)(_.tuplespace)
+                          for {
+                            tsDesc <- MultiParentCasper[F]
+                                       .tsCheckpoint(tsHash)
+                                       .map(maybeCheckPoint => {
+                                         maybeCheckPoint
+                                           .map(checkpoint => {
+                                             val ts     = checkpoint.toTuplespace
+                                             val result = ts.storageRepr
+                                             ts.delete()
+                                             result
+                                           })
+                                           .getOrElse(
+                                             s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
+                                       })
+                          } yield
+                            BlockInfo(blockHash = block.blockHash,
+                                      blockNumber = blockNumber,
+                                      parentsHashList = parents,
+                                      tsDesc = tsDesc)
+                        case None =>
+                          BlockInfo().withBlockHash(ByteString.copyFromUtf8(q.hash)).pure[F]
+                      }
+        } yield blockInfo
+      blockInfo.toFuture
     }
   }
 

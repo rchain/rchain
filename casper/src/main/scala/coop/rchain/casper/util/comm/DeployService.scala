@@ -40,7 +40,7 @@ class GrpcDeployService(host: String, port: Int) extends DeployService[Task] {
 
   def showBlock(q: BlockQuery): Task[String] = Task.delay {
     val response = blockingStub.showBlock(q)
-    response.desc
+    response.toProtoString
   }
 
   def addBlock(b: BlockMessage): Task[Unit] =
