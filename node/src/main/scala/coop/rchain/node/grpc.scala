@@ -158,6 +158,6 @@ object GrpcServer {
       exec(new StringReader(request.line))
 
     def eval(request: EvalRequest): Future[ReplResponse] =
-      exec(RholangCLI.reader(request.fileName))
+      exec(new StringReader(request.program))
   }
 }
