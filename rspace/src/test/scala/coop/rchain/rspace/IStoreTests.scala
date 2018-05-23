@@ -42,7 +42,7 @@ trait IStoreTests
     }
   }
 
-  val validIndices =
+  private[this] val validIndices =
     for (n <- Gen.choose(1, 10)) yield n
 
   "removeDatum" should s"remove datum at index" in withTestStore { store =>
@@ -130,6 +130,27 @@ trait IStoreTests
       }
       store.clear()
     }
+  }
+
+  "removeWaitingContinuation" should "remove waiting continuation from index" ignore withTestStore {
+    store =>
+      forAll("channel", "continuation") { (channel: String, pattern: String) =>
+        val key          = List(channel)
+        val patterns     = List(StringMatch(pattern))
+        val continuation = new StringsCaptor
+        val wc1: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation(patterns, continuation, false)
+        val wc2: WaitingContinuation[Pattern, StringsCaptor] =
+          WaitingContinuation(List(StringMatch(pattern + 2)), continuation, false)
+
+        store.withTxn(store.createTxnWrite()) { txn =>
+          store.putWaitingContinuation(txn, key, wc1)
+          store.putWaitingContinuation(txn, key, wc2)
+          store.removeWaitingContinuation(txn, key, 0)
+          store.getWaitingContinuation(txn, key) shouldBe List(wc1)
+        }
+        store.clear()
+      }
   }
 }
 
