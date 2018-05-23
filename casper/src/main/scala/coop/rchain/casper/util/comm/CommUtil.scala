@@ -12,6 +12,7 @@ import coop.rchain.p2p.NetworkProtocol
 import scala.util.Try
 
 object CommUtil {
+
   def sendBlock[
       F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       b: BlockMessage): F[Unit] = {
@@ -33,7 +34,7 @@ object CommUtil {
 
   def casperPacketHandler[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler]
-    : PartialFunction[Packet, F[String]] =
+    : PartialFunction[Packet, F[Option[Packet]]] =
     Function.unlift(packetToBlockMessage).andThen {
       case b: BlockMessage =>
         for {
@@ -44,12 +45,12 @@ object CommUtil {
               } else {
                 handleNewBlock[F](b)
               }
-        } yield ""
+        } yield none[Packet]
     }
 
   private def handleNewBlock[
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
-      b: BlockMessage): F[String] =
+      b: BlockMessage): F[Unit] =
     for {
       _          <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
       validSig   <- Validate.blockSignature[F](b)
@@ -57,7 +58,7 @@ object CommUtil {
       forkchoice <- MultiParentCasper[F].estimator.map(_.head)
       _ <- Log[F].info(
             s"New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
-    } yield ""
+    } yield ()
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid
   private def packetToBlockMessage(msg: Packet): Option[BlockMessage] =

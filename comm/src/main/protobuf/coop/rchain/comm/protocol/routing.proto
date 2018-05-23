@@ -58,3 +58,7 @@ message Protocol {
         Disconnect          disconnect      = 8;
     }
 }
+
+service TransportLayer {
+  rpc Run (Protocol) returns (Protocol) {}
+}
