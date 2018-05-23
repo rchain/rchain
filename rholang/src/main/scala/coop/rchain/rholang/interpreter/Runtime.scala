@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -9,7 +10,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{install, IStore, LMDBStore}
+import coop.rchain.rspace.{IStore, LMDBStore, install}
 import monix.eval.Task
 
 import scala.collection.immutable
@@ -41,7 +42,7 @@ object Runtime {
         )
     }
 
-  def create(dataDir: Path, mapSize: Long): Runtime = {
+  def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 

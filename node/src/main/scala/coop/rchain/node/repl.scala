@@ -1,11 +1,8 @@
 package coop.rchain.node
 
-import java.util.concurrent.TimeUnit
-import io.grpc.{ManagedChannel, ManagedChannelBuilder, StatusRuntimeException}
 import coop.rchain.shared.StringOps._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski.kp
-import monix.eval.Task
 
 class ReplRuntime(conf: Conf) {
 
@@ -18,12 +15,13 @@ class ReplRuntime(conf: Conf) {
 
   def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplService]: F[Boolean] = {
     val rep: F[Boolean] = for {
-      line <- ConsoleIO[F].readLine
-      res <- line.trim match {
-              case ""   => ConsoleIO[F].println("").as(true)
-              case ":q" => false.pure[F]
-              case line =>
-                (ReplService[F].run(line) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
+      line <- ConsoleIO[F].readLine.map(Option.apply)
+      res <- line.map(_.trim) match {
+              case Some("")   => ConsoleIO[F].println("").as(true)
+              case Some(":q") => false.pure[F]
+              case Some(program) =>
+                (ReplService[F].run(program) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
+              case _ => false.pure[F]
             }
     } yield res
 

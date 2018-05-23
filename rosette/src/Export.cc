@@ -2,6 +2,7 @@
 #include "Code.h"
 #include "Prim.h"
 #include "Number.h"
+#include "Expr.h"
 
 #include "CommandLine.h"
 
@@ -20,8 +21,32 @@
 //  - add it to the handlers table.
 //
 
+typedef std::string ExportObjectKey;
+typedef void (*ExportObjectHandler)(ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype);
+typedef ObjectCodePB::ObType ExportObjectType;
+extern std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  handlers;
+
 // Handlers to populate specific objects
 void defaultObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+}
+
+// This function looks up an object in the handlers table based on its type string
+// and then calls the appropriate handler to populate it.
+void populateObjectByType(pOb ob, ObjectCodePB::Object *exOb) {
+    std::string type = BASE(ob)->typestring();
+    auto oh = handlers.find(type);
+    if (oh != handlers.end()) {
+        ExportObjectHandler handler = oh->second.first;
+        ExportObjectType obType = oh->second.second;
+
+        exOb->set_type(obType);
+        handler(exOb, ob, obType);
+    } else {
+        warning("Exporting object type %s not yet implemented!", type.c_str());
+
+        exOb->set_type(ObjectCodePB::OT_unknown);
+        defaultObjectHandler(exOb, ob, ObjectCodePB::OT_unknown);
+    }
 }
 
 void fixnumObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
@@ -47,19 +72,64 @@ void symbolObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObT
     sym->set_name(BASE(ob)->asPathname());
 }
 
+void rblboolObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::RblBool *bl = lvob->mutable_rblbool();
+    bl->set_value(RBLBOOL(ob));
+}
 void rblstringObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
     ObjectCodePB::RBLstring *str = lvob->mutable_rblstring();
     str->set_value(BASE(ob)->asPathname());
 }
 
+void tupleObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype) {
+    ObjectCodePB::Tuple *pbTup = lvob->mutable_tuple();
+    Tuple * tup = (Tuple *)ob;
+
+    // A tuple is a list of objects.  Retrieve and call the handler for each of them.
+    for (int i = 0; i < tup->numberOfElements(); i++) {
+        pOb ob = tup->elem(i);
+        std::string type = BASE(tup->elem(i))->typestring();
+        ObjectCodePB::Object *elOb = pbTup->add_elements();
+        elOb->set_id(BASE(ob)->id);
+        elOb->set_metaid(BASE(ob)->meta()->id);
+        elOb->set_parentid(BASE(ob)->parent()->id);
+
+        populateObjectByType(ob, elOb);
+    }
+}
+
+void blockexprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::BlockExpr *blob = lvob->mutable_blockexpr();
+    BlockExpr * be = (BlockExpr *)ob;
+
+    ObjectCodePB::Object *subexprs = blob->mutable_subexprs();
+    populateObjectByType(be->subExprs, subexprs);
+
+    ObjectCodePB::Object *implicit = blob->mutable_implicit();
+    populateObjectByType(be->implicit, implicit);
+}
+
+void actorObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::Actor *actob = lvob->mutable_actor();
+    Actor * act = (Actor *)ob;
+
+    ObjectCodePB::Object *extension = actob->mutable_extension();
+    populateObjectByType(act->extension, extension);
+}
+
+void nivObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::Niv *nivob = lvob->mutable_niv();
+}
+
+void stdExtensionObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::StdExtension *sextob = lvob->mutable_stdextension();
+}
+
 // The handler table that defines which objects are supported, and how they are handled.
-typedef std::string ExportObjectKey;
-typedef void (*ExportObjectHandler)(ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype);
-typedef ObjectCodePB::ObType ExportObjectType;
 
 std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  handlers = {
-    {"Actor",               {defaultObjectHandler,   ObjectCodePB::OT_Actor} },
-    {"BlockExpr",           {defaultObjectHandler,   ObjectCodePB::OT_BlockExpr} },
+    {"Actor",               {actorObjectHandler,     ObjectCodePB::OT_Actor} },
+    {"BlockExpr",           {blockexprObjectHandler, ObjectCodePB::OT_BlockExpr} },
     {"Char",                {charObjectHandler,      ObjectCodePB::OT_Char} },
     {"Code",                {codeObjectHandler,      ObjectCodePB::OT_Code} },
     {"ExpandedLocation",    {defaultObjectHandler,   ObjectCodePB::OT_ExpandedLocation} },
@@ -72,20 +142,23 @@ std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  ha
     {"LetExpr",             {defaultObjectHandler,   ObjectCodePB::OT_LetExpr} },
     {"LetrecExpr",          {defaultObjectHandler,   ObjectCodePB::OT_LetrecExpr} },
     {"MethodExpr",          {defaultObjectHandler,   ObjectCodePB::OT_MethodExpr} },
+    {"Niv",                 {nivObjectHandler,       ObjectCodePB::OT_Niv}},
     {"Proc",                {defaultObjectHandler,   ObjectCodePB::OT_Proc} },
     {"ProcExpr",            {defaultObjectHandler,   ObjectCodePB::OT_ProcExpr} },
     {"QuoteExpr",           {defaultObjectHandler,   ObjectCodePB::OT_QuoteExpr} },
+    {"RblBool",             {rblboolObjectHandler,   ObjectCodePB::OT_RblBool}},
     {"RBLstring",           {rblstringObjectHandler, ObjectCodePB::OT_RBLstring} },
     {"ReflectiveMethodExpr",{defaultObjectHandler,   ObjectCodePB::OT_ReflectiveMethodExpr} },
     {"RequestExpr",         {defaultObjectHandler,   ObjectCodePB::OT_RequestExpr} },
     {"SendExpr",            {defaultObjectHandler,   ObjectCodePB::OT_SendExpr} },
     {"SeqExpr",             {defaultObjectHandler,   ObjectCodePB::OT_SeqExpr} },
     {"SetExpr",             {defaultObjectHandler,   ObjectCodePB::OT_SetExpr} },
+    {"StdExtension",        {stdExtensionObjectHandler, ObjectCodePB::OT_StdExtension} },
     {"StdMthd",             {defaultObjectHandler,   ObjectCodePB::OT_StdMthd} },
     {"Symbol",              {symbolObjectHandler,    ObjectCodePB::OT_Symbol} },
     {"TblObject",           {defaultObjectHandler,   ObjectCodePB::OT_TblObject} },
     {"Template",            {defaultObjectHandler,   ObjectCodePB::OT_Template} },
-    {"Tuple",               {defaultObjectHandler,   ObjectCodePB::OT_Tuple} },
+    {"Tuple",               {tupleObjectHandler,     ObjectCodePB::OT_Tuple} },
     {"TupleExpr",           {defaultObjectHandler,   ObjectCodePB::OT_TupleExpr} },
 };
 
@@ -142,24 +215,12 @@ void collectExportCode(Code *code) {
     // Add objects or references to them to the export litvec
     for (int i = 0; i < litvec->numberOfElements(); i++) {
         pOb ob = litvec->elem(i);
-        std::string type = BASE(litvec->elem(i))->typestring();
         ObjectCodePB::Object *lvob = lv->add_ob();
         lvob->set_id(BASE(ob)->id);
+        lvob->set_metaid(BASE(ob)->meta()->id);
+        lvob->set_parentid(BASE(ob)->parent()->id);
 
-        // Find the handler for this type
-        auto oh = handlers.find(type);
-        if (oh != handlers.end()) {
-            ExportObjectHandler handler = oh->second.first;
-            ExportObjectType obType = oh->second.second;
-
-            lvob->set_type(obType);
-            handler(lvob, ob, obType);
-        } else {
-            warning("Exporting object type %s not yet implemented!", type.c_str());
-
-            lvob->set_type(ObjectCodePB::OT_unknown);
-            defaultObjectHandler(lvob, ob, ObjectCodePB::OT_unknown);
-        }
+        populateObjectByType(ob, lvob);
     }
 }
 

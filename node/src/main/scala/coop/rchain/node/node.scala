@@ -3,24 +3,25 @@ package coop.rchain.node
 import java.io.{File, PrintWriter}
 import java.net.SocketAddress
 import java.util.UUID
-import io.grpc.{Server, ServerBuilder}
+import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
+import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
+import diagnostics.MetricsServer
 
 import scala.io.Source
 import scala.util.Try
@@ -29,8 +30,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
-      if (th.getCause() == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause().containsMessageWith(str)
+      if (th.getCause == null) th.getMessage.contains(str)
+      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
@@ -60,7 +61,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                         = effects.log
   implicit val timeEffect: Time[Task]                       = effects.time
-  implicit val metricsEffect: Metrics[Task]                 = effects.metrics
+  implicit val jvmMetricsEffect: JvmMetrics[Task]           = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]                 = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]     = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
   val net                                                   = new UnicastNetwork(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
@@ -115,7 +118,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def aquireResources: Effect[Resources] =
+  def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
@@ -146,6 +149,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     println("Goodbye.")
   }
+
+  def startReportJvmMetrics: Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
@@ -193,9 +202,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      resources <- aquireResources
+      resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
+      _         <- startReportJvmMetrics.toEffect
       // TODO handle errors on receive (currently ignored)
       _ <- receiveAndDispatch.value.void.forever.executeAsync.start.toEffect
       _ <- Log[Effect].info(s"Listening for traffic on $address.")
@@ -217,6 +227,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           .error(
             "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
       case th =>
-        th.getStackTrace().toList.traverse(ste => Log[Task].error(ste.toString))
+        th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
     } *> exit0.as(Right(())))
 }

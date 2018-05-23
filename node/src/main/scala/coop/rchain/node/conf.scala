@@ -63,6 +63,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     default = Some(false),
     short = 'r',
     descr = "Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
+
   val eval = opt[String](
     default = None,
     descr =
