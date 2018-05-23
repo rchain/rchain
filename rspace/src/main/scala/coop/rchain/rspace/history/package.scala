@@ -130,18 +130,18 @@ package object history {
                 logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
               // If the "tip" is an existing leaf, then we are in a situation where the new leaf
               // shares some common prefix with the existing leaf.
-              case currentLeaf @ Leaf(ek, _) if key != ek =>
+              case existingLeaf @ Leaf(ek, _) if key != ek =>
                 val encodedKeyExisting = codecK.encode(ek).map(_.bytes.toSeq).get
                 val sharedPrefix       = commonPrefix(encodedKeyNew, encodedKeyExisting)
                 val sharedPrefixLength = sharedPrefix.length
                 val sharedPath         = sharedPrefix.drop(parents.length).reverse
                 val newLeafIndex       = JByte.toUnsignedInt(encodedKeyNew(sharedPrefixLength))
-                val currentLeafIndex   = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
+                val existingLeafIndex  = JByte.toUnsignedInt(encodedKeyExisting(sharedPrefixLength))
                 val hd = Node(
                   PointerBlock
                     .create()
                     .updated(List((newLeafIndex, Some(newLeafHash)),
-                                  (currentLeafIndex, Some(Trie.hash[K, V](currentLeaf)))))
+                                  (existingLeafIndex, Some(Trie.hash[K, V](existingLeaf)))))
                 )
                 val emptyNode     = Node(PointerBlock.create())
                 val emptyNodes    = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
