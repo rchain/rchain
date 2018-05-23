@@ -2,12 +2,9 @@ package coop.rchain.rspace
 
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
-import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
