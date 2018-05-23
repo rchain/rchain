@@ -122,7 +122,7 @@ package object history {
           // Using the path we created from the key, get the existing parents of the new leaf.
           val (tip, parents) = getParents(store, txn, encodedKeyNew, 0, currentRoot)
           tip match {
-            // If the "tip" is the same as the new leaf, than the given (key, value) pair is
+            // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
             case existingLeaf @ Leaf(_, _) if existingLeaf == newLeaf =>
               store.workingRootHash.put(currentRootHash)
