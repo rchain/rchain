@@ -25,6 +25,8 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
     val val4 = ByteVector("value4".getBytes)
     val key5 = TestKey.create(Seq(1, 0, 2, 1))
     val val5 = ByteVector("value5".getBytes)
+    val key6 = TestKey.create(Seq(1, 0, 0, 2))
+    val val6 = ByteVector("value6".getBytes)
   }
 
   import TestData._
@@ -77,6 +79,19 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       actual1.value shouldBe val1
       actual2.value shouldBe val2
       actual3.value shouldBe val3
+    }
+
+  "Three inserts, three lookups (alt)" should "work" in
+    withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
+      insert(store, key1, val1)
+      insert(store, key2, val2)
+      insert(store, key6, val6)
+      val actual1 = lookup(store, key1)
+      val actual2 = lookup(store, key2)
+      val actual3 = lookup(store, key6)
+      actual1.value shouldBe val1
+      actual2.value shouldBe val2
+      actual3.value shouldBe val6
     }
 
   "Four inserts, four lookups" should "work" in
