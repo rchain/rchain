@@ -1,7 +1,10 @@
 '''RChain casper client
 
 Usage:
-  python Casper.py contract1.rho
+  $ export FLASK_APP=Casper.py
+  $ flask run
+
+  Navigate to http://localhost:5000/api/block/<block_hash>
 
 We assume the RChain node is running and that it is listening on port
 5000. Double-check that you see this message in the logs:
@@ -11,7 +14,7 @@ We assume the RChain node is running and that it is listening on port
 The output should be something like:
 
 
-Currently untested TODO (Update): Tested with rnode-assembly.jar from commit 8a357eed5dd Apr 12 2018.
+Tested with rnode-assembly-0.3.1.jar from commit 2424b43caae May 22 2018.
 
 '''
 
