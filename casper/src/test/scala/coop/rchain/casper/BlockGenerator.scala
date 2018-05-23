@@ -47,8 +47,9 @@ trait BlockGenerator {
                            Some(body),
                            serializedJustifications,
                            creator)
-      idToBlocks  = chain.idToBlocks + (nextId               -> block)
-      blockLookup = chain.blockLookup + (serializedBlockHash -> block)
+      idToBlocks     = chain.idToBlocks + (nextId               -> block)
+      blockLookup    = chain.blockLookup + (serializedBlockHash -> block)
+      latestMessages = chain.latestMessages + (block.sender     -> serializedBlockHash)
       updatedChildren = HashMap[BlockHash, Set[BlockHash]](parentsHashList.map {
         parentHash: BlockHash =>
           val currentChildrenHashes = chain.childMap.getOrElse(parentHash, HashSet.empty[BlockHash])
@@ -57,7 +58,7 @@ trait BlockGenerator {
       }: _*)
       childMap = chain.childMap
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
-      newChain: BlockDag = BlockDag(idToBlocks, blockLookup, childMap, chain.latestMessages, nextId)
+      newChain: BlockDag = BlockDag(idToBlocks, blockLookup, childMap, latestMessages, nextId)
       _                  <- blockDagState[F].set(newChain)
     } yield block
 }

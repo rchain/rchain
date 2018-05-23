@@ -26,7 +26,7 @@ object Estimator {
       val newBlocks =
         ListContrib
           .sortBy[BlockHash, Int](
-            blocks.flatMap(replaceBlockHashWithChildren(childMap, _)).distinct,
+            blocks.flatMap(replaceBlockHashWithChildren(childMap, _, scores)).distinct,
             scores)
       if (stillSame(blocks, newBlocks)) {
         blocks
@@ -34,9 +34,13 @@ object Estimator {
         sortChildren(newBlocks, childMap, scores)
       }
     }
-    def replaceBlockHashWithChildren(childMap: Map[BlockHash, Set[BlockHash]], b: BlockHash) = {
-      val empty             = Set.empty[BlockHash]
-      val c: Set[BlockHash] = childMap.getOrElse(b, empty)
+    def replaceBlockHashWithChildren(childMap: Map[BlockHash, Set[BlockHash]],
+                                     b: BlockHash,
+                                     scores: Map[BlockHash, Int]) = {
+      //Only include children that have been scored,
+      //this ensures that the search does not go beyond
+      //the messages defined by blockDag.latestmessages
+      val c: Set[BlockHash] = childMap.getOrElse(b, Set.empty[BlockHash]).filter(scores.contains)
       if (c.nonEmpty) {
         c.toIndexedSeq
       } else {
@@ -87,7 +91,7 @@ object Estimator {
         .get(latestBlockHash)
         .foldLeft(scoreMap) {
           case (acc, children) =>
-            children.foldLeft(acc) {
+            children.filter(scoreMap.contains).foldLeft(acc) {
               case (acc, cHash) =>
                 val c = blockLookup(cHash)
                 if (parents(c).size > 1 && c.sender != validator) {
