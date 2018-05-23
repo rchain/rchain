@@ -25,6 +25,7 @@ from sys import argv, stdout
 from grpc import insecure_channel
 from flask import Flask
 from flask import jsonify
+import json
 
 def buildCasperCh(argv, stdout, insecure_channel,
          host='127.0.0.1',
@@ -39,4 +40,9 @@ casperCh = buildCasperCh(argv, stdout, insecure_channel)
 def block(block_hash):
     req = CasperMessage_pb2.BlockQuery(hash=block_hash)
     output = casperCh.showBlock(req)
-    return jsonify(str(output))
+    output_dict = {}
+    for field in output.ListFields():
+        field_name = field[0].name
+        field_value = str(field[1])
+        output_dict.update({field_name: field_value})
+    return jsonify(output_dict)
