@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package coop.rchain.node.model;
+
+service Repl {
+  rpc Run (CmdRequest) returns (ReplResponse) {}
+  rpc Eval (EvalRequest) returns (ReplResponse) {}
+}
+
+message CmdRequest {
+  string line = 1;
+}
+
+message EvalRequest {
+  string program = 1;
+}
+
+message ReplResponse {
+  string output = 1;
+}

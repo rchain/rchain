@@ -2,7 +2,6 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
-import scala.collection.immutable.Seq
 
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
@@ -14,13 +13,14 @@ import scodec.Codec
 import scodec.bits._
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Seq
 
 /**
   * The main store class.
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
+class LMDBStore[C, P, A, K] private (val env: Env[ByteBuffer],
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbWaitingContinuations: Dbi[ByteBuffer],
                                      _dbData: Dbi[ByteBuffer],
@@ -31,6 +31,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
                                                                 sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
+
+  private implicit val codecC: Codec[C] = sc.toCodec
+  private implicit val codecP: Codec[P] = sp.toCodec
+  private implicit val codecA: Codec[A] = sa.toCodec
+  private implicit val codecK: Codec[K] = sk.toCodec
 
   import coop.rchain.rspace.LMDBStore._
 
@@ -340,13 +345,15 @@ object LMDBStore {
   private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
     toByteBuffer(toBitVector(toByteVectorSeq(values), byteVectorsCodec))
 
-  private[rspace] def toByteBuffer(vector: BitVector): ByteBuffer = {
-    val bytes          = vector.bytes
-    val bb: ByteBuffer = ByteBuffer.allocateDirect(bytes.size.toInt)
-    bytes.copyToBuffer(bb)
-    bb.flip()
-    bb
+  private[rspace] def toByteBuffer(byteVector: ByteVector): ByteBuffer = {
+    val buffer: ByteBuffer = ByteBuffer.allocateDirect(byteVector.size.toInt)
+    byteVector.copyToBuffer(buffer)
+    buffer.flip()
+    buffer
   }
+
+  private[rspace] def toByteBuffer(bitVector: BitVector): ByteBuffer =
+    toByteBuffer(bitVector.bytes)
 
   private[rspace] def toByteVectorSeq[T](values: Seq[T])(
       implicit st: Serialize[T]): Seq[ByteVector] =

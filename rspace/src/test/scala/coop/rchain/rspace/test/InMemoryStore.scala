@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.examples._
+import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
 import coop.rchain.rspace.{IStore, ITestableStore, Serialize}
@@ -16,7 +17,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, Seq[C]],
     _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.MultiMap[C, String]
+    _joinMap: mutable.MultiMap[C, String],
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
