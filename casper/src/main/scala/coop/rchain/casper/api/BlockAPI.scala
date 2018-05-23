@@ -21,39 +21,42 @@ object BlockAPI {
       dag        <- MultiParentCasper[F].blockDag
       maybeBlock = getBlock[F](q, dag)
       blockInfo <- maybeBlock match {
-                    case Some(block) =>
-                      val ps          = block.body.flatMap(_.postState)
-                      val blockNumber = ProtoUtil.blockNumber(block)
-                      val parents     = block.header.fold(Seq.empty[ByteString])(_.parentsHashList)
-                      val tsHash      = ps.fold(ByteString.EMPTY)(_.tuplespace)
-                      for {
-                        tsDesc <- MultiParentCasper[F]
-                                   .tsCheckpoint(tsHash)
-                                   .map(maybeCheckPoint => {
-                                     maybeCheckPoint
-                                       .map(checkpoint => {
-                                         val ts     = checkpoint.toTuplespace
-                                         val result = ts.storageRepr
-                                         ts.delete()
-                                         result
-                                       })
-                                       .getOrElse(
-                                         s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
-                                   })
-                      } yield
-                        BlockInfo(
-                          status = "Success",
-                          blockHash = PrettyPrinter.buildString(block.blockHash),
-                          blockNumber = blockNumber,
-                          parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
-                          tsDesc = tsDesc
-                        )
+                    case Some(block) => getBlockInfo[F](block)
                     case None =>
                       BlockInfo(status =
                         s"Error: Failure to find block with hash ${ByteString.copyFromUtf8(q.hash)}")
                         .pure[F]
                   }
     } yield blockInfo
+
+  private def getBlockInfo[F[_]: Monad: MultiParentCasper](block: BlockMessage): F[BlockInfo] =
+    for {
+      parents <- block.header.fold(Seq.empty[ByteString])(_.parentsHashList).pure[F]
+      tsHash <- {
+        val ps = block.body.flatMap(_.postState)
+        ps.fold(ByteString.EMPTY)(_.tuplespace).pure[F]
+      }
+      tsDesc <- MultiParentCasper[F]
+                 .tsCheckpoint(tsHash)
+                 .map(maybeCheckPoint => {
+                   maybeCheckPoint
+                     .map(checkpoint => {
+                       val ts     = checkpoint.toTuplespace
+                       val result = ts.storageRepr
+                       ts.delete()
+                       result
+                     })
+                     .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
+                 })
+    } yield {
+      BlockInfo(
+        status = "Success",
+        blockHash = PrettyPrinter.buildString(block.blockHash),
+        blockNumber = ProtoUtil.blockNumber(block),
+        parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
+        tsDesc = tsDesc
+      )
+    }
 
   private def getBlock[F[_]: Monad: MultiParentCasper](q: BlockQuery,
                                                        dag: BlockDag): Option[BlockMessage] = {
