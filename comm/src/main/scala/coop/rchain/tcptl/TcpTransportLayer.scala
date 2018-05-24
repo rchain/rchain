@@ -6,24 +6,52 @@ import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
-import io.grpc.{Server, ServerBuilder}
+import io.grpc.{ManagedChannel, ManagedChannelBuilder, Server, ServerBuilder}
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 
+import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.util.Try
+import scala.concurrent.{Await, Promise}
 import scala.concurrent.{ExecutionContext, Future}
 
-class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc: ProtocolNode)(
-    implicit executionContext: ExecutionContext)
+class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, port: Int)(
+    src: PeerNode)(implicit executionContext: ExecutionContext)
     extends TransportLayer[F] {
+
+  private def client(endpoint: Endpoint) =
+    TransportLayerGrpc.stub(
+      ManagedChannelBuilder.forAddress(endpoint.host, endpoint.tcpPort).usePlaintext(true).build)
 
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
-                timeout: Duration): F[CommErr[ProtocolMessage]] = ???
+                timeout: Duration): F[CommErr[ProtocolMessage]] =
+    for {
+      tlResponseErr <- Capture[F].capture {
+                        Try(
+                          Await.result(client(remote.endpoint).send(TLRequest(msg.proto.some)),
+                                       timeout)).toEither
+                          .leftMap(protocolException)
+                      }
+      pmErr <- tlResponseErr
+                .flatMap(tlr =>
+                  tlr.payload match {
+                    case p if p.isProtocol => ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                    case p if p.isNoResponse =>
+                      Left(internalCommunicationError("Was expecting message, nothing arrived"))
+                    case p if p.isInternalServerError =>
+                      Left(internalCommunicationError("crap"))
+                })
+                .pure[F]
+    } yield pmErr
 
-  def local: F[ProtocolNode] = loc.pure[F]
+  val local: F[ProtocolNode] = ProtocolNode(src).pure[F]
 
-  def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = ???
+  def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+    Capture[F]
+      .capture(client(peer.endpoint).send(TLRequest(msg.proto.some)))
+      .as(Right(()))
 
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(peer => commSend(msg, peer)).map(_.toSeq)
@@ -45,20 +73,23 @@ class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
 
   def send(request: TLRequest): Future[TLResponse] =
     (request.protocol
-      .fold(internalServerError.pure[F]) { protocol =>
-        dispatch(toProtocolMessage(protocol)) >>= {
-          case None     => noResponse.pure[F]
-          case Some(pm) => returnProtocol(pm.proto).pure[F]
+      .fold(internalServerError("protocol not available in request").pure[F]) { protocol =>
+        ProtocolMessage.toProtocolMessage(protocol) match {
+          case Left(error) => internalServerError(error.toString).pure[F]
+          case Right(pm) =>
+            dispatch(pm) >>= {
+              case None     => noResponse.pure[F]
+              case Some(pm) => returnProtocol(pm.proto).pure[F]
+            }
         }
       })
       .toFuture
 
-  private def toProtocolMessage(protocol: Protocol): ProtocolMessage = ???
-
   private def returnProtocol(protocol: Protocol): TLResponse =
     TLResponse(TLResponse.Payload.Protocol(protocol))
 
-  private def internalServerError: TLResponse =
+  // TODO InternalServerError should take msg in constructor
+  private def internalServerError(msg: String): TLResponse =
     TLResponse(TLResponse.Payload.InternalServerError(InternalServerError()))
 
   private def noResponse: TLResponse =

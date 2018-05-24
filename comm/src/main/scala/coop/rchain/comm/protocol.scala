@@ -176,27 +176,28 @@ object ProtocolMessage {
       .withReturnHeader(returnHeader(h))
       .withUpstream(upstream)
 
+  def toProtocolMessage(proto: Protocol): Either[CommError, ProtocolMessage] = proto match {
+    case msg: Protocol =>
+      msg.message match {
+        case Protocol.Message.Ping(_)   => Right(PingMessage(msg, System.currentTimeMillis))
+        case Protocol.Message.Pong(_)   => Right(PongMessage(msg, System.currentTimeMillis))
+        case Protocol.Message.Lookup(_) => Right(LookupMessage(msg, System.currentTimeMillis))
+        case Protocol.Message.LookupResponse(_) =>
+          Right(LookupResponseMessage(msg, System.currentTimeMillis))
+        case Protocol.Message.Disconnect(_) =>
+          Right(DisconnectMessage(msg, System.currentTimeMillis))
+        case Protocol.Message.Upstream(_) =>
+          msg.returnHeader match {
+            case Some(_) => Right(UpstreamResponse(msg, System.currentTimeMillis))
+            case None    => Right(UpstreamMessage(msg, System.currentTimeMillis))
+          }
+
+        case _ => Left(UnknownProtocolError("unable to unmarshal protocol buffer"))
+      }
+  }
   def parse(bytes: Seq[Byte]): Either[CommError, ProtocolMessage] =
     try {
-      Protocol.parseFrom(bytes.toArray) match {
-        case msg: Protocol =>
-          msg.message match {
-            case Protocol.Message.Ping(_)   => Right(PingMessage(msg, System.currentTimeMillis))
-            case Protocol.Message.Pong(_)   => Right(PongMessage(msg, System.currentTimeMillis))
-            case Protocol.Message.Lookup(_) => Right(LookupMessage(msg, System.currentTimeMillis))
-            case Protocol.Message.LookupResponse(_) =>
-              Right(LookupResponseMessage(msg, System.currentTimeMillis))
-            case Protocol.Message.Disconnect(_) =>
-              Right(DisconnectMessage(msg, System.currentTimeMillis))
-            case Protocol.Message.Upstream(_) =>
-              msg.returnHeader match {
-                case Some(_) => Right(UpstreamResponse(msg, System.currentTimeMillis))
-                case None    => Right(UpstreamMessage(msg, System.currentTimeMillis))
-              }
-
-            case _ => Left(UnknownProtocolError("unable to unmarshal protocol buffer"))
-          }
-      }
+      toProtocolMessage(Protocol.parseFrom(bytes.toArray))
     } catch {
       case NonFatal(ex: Exception) => Left(ProtocolException(ex))
     }
