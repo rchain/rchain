@@ -1,14 +1,12 @@
 package coop.rchain.node
 
-import java.net.SocketAddress
 import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
+import coop.rchain.p2p, p2p.NetworkAddress
 import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
 import coop.rchain.metrics.Metrics
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
-import coop.rchain.kademlia.PeerTable
 
 import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
@@ -130,6 +128,17 @@ package object effects {
         KeysStore(m.map {
           case (k, v) => (k.toAddress, ByteString.copyFrom(v))
         }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
+    }
+
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
+    new Ping[F] {
+      import scala.concurrent.duration._
+      def ping(node: ProtocolNode): F[Boolean] =
+        for {
+          _   <- Metrics[F].incrementCounter("protocol-ping-sends")
+          req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)
+          res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
+        } yield res.isDefined
     }
 
   def transportLayer(src: PeerNode)(implicit

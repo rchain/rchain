@@ -1,7 +1,7 @@
 package coop.rchain.node.effects
 
 import scala.collection.mutable
-import scala.util.{Failure, Success}
+import scala.concurrent.duration._
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
@@ -9,18 +9,16 @@ import coop.rchain.kademlia.PeerTable
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 
-class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer](src: PeerNode)(
-    toProtocolNode: ((PeerNode, Option[ProtocolNode])) => ProtocolNode)
+class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
     extends NodeDiscovery[F] {
 
-  private val local = toProtocolNode(src, none)
+  private val local = ProtocolNode(src)
   private val table = PeerTable(local)
 
   private def updateLastSeen(peer: PeerNode): F[Unit] =
-    Capture[F].capture(table.observe(toProtocolNode(peer, local.some), add = true))
+    table.observe[F](ProtocolNode(peer), add = true)
 
   private val id: NodeIdentifier = src.id
-  private val endpoint: Endpoint = src.endpoint
 
   def addNode(peer: PeerNode): F[Unit] =
     for {
@@ -38,36 +36,35 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer](
     * function should be called with a relatively small `limit` parameter like
     * 10 to avoid making too many unproductive networking calls.
     */
-  def findMorePeers(limit: Int): F[Seq[PeerNode]] =
-    Capture[F].capture {
-      var currentSet = table.peers.toSet
-      val potentials = mutable.Set[PeerNode]()
-      if (currentSet.nonEmpty) {
-        val dists = table.sparseness()
-        var i     = 0
-        while (currentSet.nonEmpty && potentials.size < limit && i < dists.size) {
-          val dist = dists(i)
-          /*
-           * The general idea is to ask a peer for its peers around a certain
-           * distance from our own key. So, construct a key that first differs
-           * from ours at bit position dist.
-           */
-          val target       = id.key.to[mutable.ArrayBuffer] // Our key
-          val byteIndex    = dist / 8
-          val differentBit = 1 << (dist % 8)
-          target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-          currentSet.head.lookup(target) match {
-            case Success(results) =>
-              potentials ++= results.filter(r =>
-                !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key).isEmpty)
-            case _ => ()
-          }
-          currentSet -= currentSet.head
-          i += 1
-        }
+  def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
+    val dists = table.sparseness().toArray
+
+    def find(peerSet: Set[ProtocolNode], potentials: Set[PeerNode], i: Int): F[Seq[PeerNode]] =
+      if (peerSet.nonEmpty && potentials.size < limit && i < dists.length) {
+        val dist = dists(i)
+        /*
+         * The general idea is to ask a peer for its peers around a certain
+         * distance from our own key. So, construct a key that first differs
+         * from ours at bit position dist.
+         */
+        val target       = id.key.to[mutable.ArrayBuffer] // Our key
+        val byteIndex    = dist / 8
+        val differentBit = 1 << (dist % 8)
+        target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
+        lookup(target, peerSet.head)
+          .map { results =>
+            potentials ++ results.filter(
+              r =>
+                !potentials.contains(r)
+                  && r.id.key != id.key
+                  && table.find(r.id.key).isEmpty)
+          } >>= (find(peerSet.tail, _, i + 1))
+      } else {
+        potentials.toSeq.pure[F]
       }
-      potentials.toSeq
-    }
+
+    find(table.peers.toSet, Set(), 0)
+  }
 
   def peers: F[Seq[PeerNode]] = Capture[F].capture(table.peers)
 
@@ -113,4 +110,20 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer](
       _ <- Metrics[F].decrementGauge("peers")
     } yield none[ProtocolMessage]
 
+  private def lookup(key: Seq[Byte], remoteNode: ProtocolNode): F[Seq[PeerNode]] =
+    for {
+      _   <- Metrics[F].incrementCounter("protocol-lookup-send")
+      req = LookupMessage(ProtocolMessage.lookup(local, key), System.currentTimeMillis)
+      r <- TransportLayer[F]
+            .roundTrip(req, remoteNode, 500.milliseconds)
+            .map(_.toOption
+              .map {
+                case LookupResponseMessage(proto, _) =>
+                  proto.message.lookupResponse
+                    .map(_.nodes.map(ProtocolMessage.toPeerNode))
+                    .getOrElse(Seq())
+                case _ => Seq()
+              }
+              .getOrElse(Seq()))
+    } yield r
 }
