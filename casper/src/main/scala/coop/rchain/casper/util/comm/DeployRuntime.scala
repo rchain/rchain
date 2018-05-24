@@ -8,13 +8,11 @@ import coop.rchain.casper.protocol.{BlockMessage, BlockQuery, DeployString}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.{Capture, IOUtil, MonadOps}
 
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Ed25519
-
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 object DeployRuntime {
+
   //Propose a block, sign using given secret key with Ed25519.
   //Note that this is just an example thin-client making use of the
   //gRPC functionalities that are exposed. A node operator could easily
@@ -22,12 +20,7 @@ object DeployRuntime {
   def propose[F[_]: DeployService: Monad](sk: Array[Byte]): F[Unit] =
     DeployService[F].createBlock().flatMap {
       case Some(block) =>
-        val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
-        val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
-        val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
-        val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
-        val signedBlock       = block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
-
+        val signedBlock = ProtoUtil.signBlock(block, sk)
         DeployService[F].addBlock(signedBlock)
 
       case None =>
