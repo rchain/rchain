@@ -4,6 +4,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
+import coop.rchain.casper.api.BlockAPI.getBlockInfo
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter}
@@ -18,7 +19,7 @@ object BlockAPI {
   def addBlock[F[_]: Monad: MultiParentCasper](b: BlockMessage): F[Empty] =
     MultiParentCasper[F].addBlock(b).map(_ => Empty())
 
-  def getBlocksInfo[F[_]: Monad: MultiParentCasper]: F[BlocksInfo] =
+  def getBlocksResponse[F[_]: Monad: MultiParentCasper]: F[BlocksResponse] =
     for {
       estimates <- MultiParentCasper[F].estimator
       dag       <- MultiParentCasper[F].blockDag
@@ -26,7 +27,7 @@ object BlockAPI {
                                                             dag,
                                                             IndexedSeq.empty[BlockMessage])
       blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
-    } yield BlocksInfo(blockInfos)
+    } yield BlocksResponse(status = "Success", blocks = blockInfos)
 
   @tailrec
   private def getMainChain[F[_]: Monad: MultiParentCasper](
@@ -44,17 +45,23 @@ object BlockAPI {
     }
   }
 
-  def getBlockInfo[F[_]: Monad: MultiParentCasper](q: BlockQuery): F[BlockInfo] =
+  def getBlockQueryResponse[F[_]: Monad: MultiParentCasper](q: BlockQuery): F[BlockQueryResponse] =
     for {
       dag        <- MultiParentCasper[F].blockDag
       maybeBlock = getBlock[F](q, dag)
-      blockInfo <- maybeBlock match {
-                    case Some(block) => getBlockInfo[F](block)
-                    case None =>
-                      BlockInfo(status = s"Error: Failure to find block with hash ${q.hash}")
-                        .pure[F]
-                  }
-    } yield blockInfo
+      blockQueryResponse <- maybeBlock match {
+                             case Some(block) => {
+                               for {
+                                 blockInfo <- getBlockInfo[F](block)
+                               } yield
+                                 BlockQueryResponse(status = "Success", blockInfo = Some(blockInfo))
+                             }
+                             case None =>
+                               BlockQueryResponse(
+                                 status = s"Error: Failure to find block with hash ${q.hash}")
+                                 .pure[F]
+                           }
+    } yield blockQueryResponse
 
   private def getBlockInfo[F[_]: Monad: MultiParentCasper](block: BlockMessage): F[BlockInfo] =
     for {
@@ -77,11 +84,10 @@ object BlockAPI {
                  })
     } yield {
       BlockInfo(
-        status = "Success",
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
         blockNumber = ProtoUtil.blockNumber(block),
         parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
-        tsDesc = tsDesc
+        tupleSpaceDump = tsDesc
       )
     }
 

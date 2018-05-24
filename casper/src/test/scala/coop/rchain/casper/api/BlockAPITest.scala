@@ -50,17 +50,19 @@ class BlockAPITest extends FlatSpec with Matchers with BlockGenerator {
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlockInfo" should "return successful block info response" in {
-    val q         = BlockQuery(hash = testHashQuery)
-    val blockInfo = BlockAPI.getBlockInfo[Id](q)
-    blockInfo.status should be("Success")
+    val q                  = BlockQuery(hash = testHashQuery)
+    val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)
+    val blockInfo          = blockQueryResponse.blockInfo.get
+    blockQueryResponse.status should be("Success")
     blockInfo.blockHash should be(testHashEncoded)
     blockInfo.blockNumber should be(testBlockNumber)
     blockInfo.parentsHashList should be(testParentsHashListEncoded)
   }
 
   "getBlockInfo" should "return error when no block exists" in {
-    val q         = BlockQuery(hash = badTestHashQuery)
-    val blockInfo = BlockAPI.getBlockInfo[Id](q)
-    blockInfo.status should be(s"Error: Failure to find block with hash ${badTestHashQuery}")
+    val q                  = BlockQuery(hash = badTestHashQuery)
+    val blockQueryResponse = BlockAPI.getBlockQueryResponse[Id](q)
+    blockQueryResponse.status should be(
+      s"Error: Failure to find block with hash ${badTestHashQuery}")
   }
 }
