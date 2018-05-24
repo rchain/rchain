@@ -80,17 +80,10 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     val deploy = ProtoUtil.basicDeploy(0)
     MultiParentCasper[Id].deploy(deploy)
 
-    val Some(block)      = MultiParentCasper[Id].createBlock
-    val parents          = ProtoUtil.parents(block)
-    val deploys          = block.body.get.newCode
-    val tsHash           = block.body.get.postState.get.tuplespace
-    val Some(checkpoint) = MultiParentCasper[Id].tsCheckpoint(tsHash)
-    val storage = {
-      val ts     = checkpoint.toTuplespace
-      val result = ts.storageRepr
-      ts.delete()
-      result
-    }
+    val Some(block) = MultiParentCasper[Id].createBlock
+    val parents     = ProtoUtil.parents(block)
+    val deploys     = block.body.get.newCode
+    val storage     = blockTuplespaceContents(block)
 
     parents.size should be(1)
     parents.head should be(genesis.blockHash)
@@ -139,10 +132,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     val Some(block2) = MultiParentCasper[Id].deploy(deploys(1)) *> MultiParentCasper[Id].createBlock
     val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
     MultiParentCasper[Id].addBlock(signedBlock2)
+    val storage = blockTuplespaceContents(signedBlock2)
 
     logEff.warns should be(Nil)
     ProtoUtil.parents(signedBlock2) should be(Seq(signedBlock1.blockHash))
     MultiParentCasper[Id].estimator should be(IndexedSeq(signedBlock2))
+    storage.contains("!(12)") should be(true)
   }
 
   it should "reject unsigned blocks" in {
@@ -155,6 +150,19 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     MultiParentCasper[Id].addBlock(block)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+  }
+
+  private def blockTuplespaceContents(block: BlockMessage)(
+      implicit casper: MultiParentCasper[Id]): String = {
+    val tsHash           = block.body.get.postState.get.tuplespace
+    val Some(checkpoint) = MultiParentCasper[Id].tsCheckpoint(tsHash)
+    val storage = {
+      val ts     = checkpoint.toTuplespace
+      val result = ts.storageRepr
+      ts.delete()
+      result
+    }
+    storage
   }
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
