@@ -28,10 +28,9 @@ import coop.rchain.rholang.interpreter.errors.InterpreterError
 object GrpcServer {
 
   def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable](
+      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable](
       port: Int,
-      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] = {
-    implicit val storeMetricsCapture: StoreMetrics[F] = diagnostics.storeMetrics[F](runtime.store)
+      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
@@ -40,7 +39,6 @@ object GrpcServer {
         .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
         .build
     }
-  }
 
   def start[F[_]: FlatMap: Capture: Log](server: Server): F[Unit] =
     for {

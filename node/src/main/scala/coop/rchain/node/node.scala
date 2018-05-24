@@ -123,8 +123,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      grpcServer <- {
+        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        GrpcServer
+          .acquireServer[Effect](conf.grpcPort(), runtime)
+      }
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
