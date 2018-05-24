@@ -81,9 +81,7 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-final class PeerTable[A <: ProtocolNode](home: A,
-                                         k: Int = PeerTable.Redundancy,
-                                         alpha: Int = PeerTable.Alpha) {
+final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, alpha: Int) {
 
   private[kademlia] type Entry = PeerTableEntry[A]
 
