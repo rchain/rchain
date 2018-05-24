@@ -38,7 +38,6 @@ class UnicastNetwork(peer: PeerNode) {
 
   val local = ProtocolNode(peer, unsafeRoundTrip)
   val comm  = new UnicastComm(local)
-  val table = PeerTable(local)
 
   def receiver[F[_]: Monad: Capture: Log: Time: Metrics]: F[Option[ProtocolMessage]] =
     Capture[F].capture(comm.recv) >>= (result => {
@@ -73,20 +72,10 @@ class UnicastNetwork(peer: PeerNode) {
 
     val dispatchForSender: Option[F[Option[ProtocolMessage]]] = msg.sender.map { sndr =>
       val sender = pumpSender(sock, sndr)
-
-      // Update sender's last-seen time, adding it if there are no higher-level protocols.
-      for {
-        ti <- Time[F].nanoTime
-        _  <- Capture[F].capture(table.observe(ProtocolNode(sender, local, unsafeRoundTrip), true))
-        tf <- Time[F].nanoTime
-        // Capture µs timing for roundtrips
-        _ <- Metrics[F].record("network-roundtrip-micros", (tf - ti) / 1000)
-        ret <- msg match {
-                case resp: ProtocolResponse => handleResponse[F](sock, sender, resp)
-                case _                      => Some(msg).pure[F]
-              }
-      } yield ret
-
+      msg match {
+        case resp: ProtocolResponse => handleResponse[F](sock, sender, resp)
+        case _                      => msg.some.pure[F]
+      }
     }
 
     dispatchForSender.getOrElse(Log[F].error("Tried to dispatch message without a sender").as(None))
@@ -116,16 +105,6 @@ class UnicastNetwork(peer: PeerNode) {
     }
     handleWithHeader.getOrElse(
       Log[F].error("Could not handle response, header or sender not available").as(None))
-  }
-
-  /**
-    * Broadcast a message to all peers in the Kademlia table.
-    */
-  def broadcast(msg: ProtocolMessage): Seq[Either[CommError, Unit]] = {
-    val bytes = msg.toByteSeq
-    table.peers.par.map { p =>
-      comm.send(bytes, p)
-    }.toList
   }
 
   /**
@@ -170,54 +149,11 @@ class UnicastNetwork(peer: PeerNode) {
 
   }
 
-  /**
-    * Return up to `limit` candidate peers.
-    *
-    * Curently, this function determines the distances in the table that are
-    * least populated and searches for more peers to fill those. It asks one
-    * node for peers at one distance, then moves on to the next node and
-    * distance. The queried nodes are not in any particular order. For now, this
-    * function should be called with a relatively small `limit` parameter like
-    * 10 to avoid making too many unproductive networking calls.
-    */
-  def findMorePeers(limit: Int): Seq[PeerNode] = {
-    var currentSet = table.peers.toSet
-    val potentials = mutable.Set[PeerNode]()
-    if (currentSet.nonEmpty) {
-      val dists = table.sparseness()
-      var i     = 0
-      while (currentSet.nonEmpty && potentials.size < limit && i < dists.size) {
-        val dist = dists(i)
-        /*
-         * The general idea is to ask a peer for its peers around a certain
-         * distance from our own key. So, construct a key that first differs
-         * from ours at bit position dist.
-         */
-        val target       = id.key.to[mutable.ArrayBuffer] // Our key
-        val byteIndex    = dist / 8
-        val differentBit = 1 << (dist % 8)
-        target(byteIndex) = (target(byteIndex) ^ differentBit).toByte // A key at a distance dist from me
-        currentSet.head.lookup(target) match {
-          case Success(results) =>
-            potentials ++= results.filter(r =>
-              !potentials.contains(r) && r.id.key != id.key && table.find(r.id.key).isEmpty)
-          case _ => ()
-        }
-        currentSet -= currentSet.head
-        i += 1
-      }
-    }
-    potentials.toSeq
-  }
-
   def pumpSender(sock: SocketAddress, sndr: PeerNode): PeerNode = sock match {
     case (s: java.net.InetSocketAddress) =>
       sndr.withUdpSocket(s)
     case _ => sndr
   }
-
-  def add(peer: PeerNode): Unit =
-    table.observe(ProtocolNode(peer, local, unsafeRoundTrip), add = true)
 
   override def toString = s"#{Network $local ${local.endpoint.udpSocketAddress}}"
 }

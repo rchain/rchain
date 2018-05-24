@@ -71,7 +71,7 @@ object EffectsTestInstances {
         requests = requests :+ msg
         Right(())
       }
-    def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+    def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
 
     def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] = ???
   }

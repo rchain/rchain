@@ -5,6 +5,7 @@ import java.net.SocketAddress
 import java.util.UUID
 import io.grpc.Server
 
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
@@ -22,6 +23,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
+import coop.rchain.node.effects.TLNodeDiscovery
 
 import scala.io.Source
 import scala.util.Try
@@ -65,9 +67,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                 = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
+  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
+  val unsafeRoundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] = (pm, pn) =>
+    transportLayerEffect.roundTrip(pm, pn, Duration(500, MILLISECONDS)).unsafeRunSync
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)({
+    case (local, None)       => ProtocolNode(local, unsafeRoundTrip)
+    case (peer, Some(local)) => ProtocolNode(peer, local, unsafeRoundTrip)
+  })
+
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
       .flatMap(path => {
@@ -133,8 +140,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+
+    (for {
+      peers <- nodeDiscoveryEffect.peers
+      loc   <- transportLayerEffect.local
+      ts    <- timeEffect.currentMillis
+      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      _     <- transportLayerEffect.broadcast(msg, peers)
+    } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
     println("Shutting down HTTP server....")
