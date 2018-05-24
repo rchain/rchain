@@ -55,12 +55,13 @@ package object history {
   }
 
   @tailrec
-  def getParents[T, K, V](store: ITrieStore[T, K, V],
-                          txn: T,
-                          path: Seq[Byte],
-                          depth: Int,
-                          curr: Trie[K, V],
-                          acc: Seq[(Int, Node)] = Seq.empty): (Trie[K, V], Seq[(Int, Node)]) =
+  private[rspace] def getParents[T, K, V](
+      store: ITrieStore[T, K, V],
+      txn: T,
+      path: Seq[Byte],
+      depth: Int,
+      curr: Trie[K, V],
+      acc: Seq[(Int, Node)] = Seq.empty): (Trie[K, V], Seq[(Int, Node)]) =
     curr match {
       case node @ Node(pointerBlock) =>
         val index: Int = JByte.toUnsignedInt(path(depth))
@@ -79,10 +80,10 @@ package object history {
         (leaf, acc)
     }
 
-  def commonPrefix(a: Seq[Byte], b: Seq[Byte]): Seq[Byte] =
+  private[rspace] def commonPrefix(a: Seq[Byte], b: Seq[Byte]): Seq[Byte] =
     a.zip(b).takeWhile { case (l, r) => l == r }.map(_._1)
 
-  def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
+  private[rspace] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
@@ -92,7 +93,7 @@ package object history {
         (Trie.hash[K, V](node), node)
     }
 
-  def insertTries[T, K, V](
+  private[rspace] def insertTries[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
       rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
