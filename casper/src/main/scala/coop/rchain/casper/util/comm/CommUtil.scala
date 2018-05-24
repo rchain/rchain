@@ -52,12 +52,8 @@ object CommUtil {
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       b: BlockMessage): F[Unit] =
     for {
-      _          <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
-      validSig   <- Validate.blockSignature[F](b)
-      _          <- if (validSig) MultiParentCasper[F].addBlock(b) else ().pure[F]
-      forkchoice <- MultiParentCasper[F].estimator.map(_.head)
-      _ <- Log[F].info(
-            s"New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
+      _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
+      _ <- MultiParentCasper[F].addBlock(b)
     } yield ()
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid

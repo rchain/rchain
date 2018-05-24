@@ -1,7 +1,6 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.net.SocketAddress
 import java.util.UUID
 
 import io.grpc.Server
@@ -29,6 +28,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
+import coop.rchain.node.effects.TLNodeDiscovery
 
 import scala.io.Source
 import scala.util.Try
@@ -72,9 +72,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                 = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
+  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
+  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
+
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
       .flatMap(path => {
@@ -106,15 +107,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       })
     case None => newValidators
   }
-  // TODO: Ask Pawel about using Time[F] and replace timestamp with solution
-  val version_stub   = 0L
-  val timestamp_stub = 0L
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
-    ProtoUtil.genesisBlock(genesisBonds, version_stub, timestamp_stub),
-    version_stub,
-    timestamp_stub
+    ProtoUtil.genesisBlock(genesisBonds),
   )
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
@@ -128,8 +124,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      grpcServer <- {
+        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        GrpcServer
+          .acquireServer[Effect](conf.grpcPort(), runtime)
+      }
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
@@ -145,8 +144,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+
+    (for {
+      peers <- nodeDiscoveryEffect.peers
+      loc   <- transportLayerEffect.local
+      ts    <- timeEffect.currentMillis
+      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      _     <- transportLayerEffect.broadcast(msg, peers)
+    } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
     println("Shutting down HTTP server....")
@@ -161,6 +166,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
+  def startReportStoreMetrics(resources: Resources): Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      implicit val storeMetrics: StoreMetrics[Task] =
+        diagnostics.storeMetrics[Task](resources.runtime.store)
+      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
@@ -214,6 +227,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
+      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(

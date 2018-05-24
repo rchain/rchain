@@ -7,7 +7,7 @@ import coop.rchain.rspace.examples._
 import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize}
+import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.immutable.Seq
@@ -147,6 +147,9 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _data.clear()
     _joinMap.clear()
   }
+
+  def getStoreSize: StoreSize =
+    StoreSize(0, (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
 
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty

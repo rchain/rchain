@@ -23,13 +23,13 @@ import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
 
 import coop.rchain.casper.api.BlockAPI
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
+import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object GrpcServer {
 
   def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable](
+      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable](
       port: Int,
       runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
     Capture[F].capture {
