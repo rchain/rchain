@@ -23,8 +23,7 @@ object BlockAPI {
       blockInfo <- maybeBlock match {
                     case Some(block) => getBlockInfo[F](block)
                     case None =>
-                      BlockInfo(status =
-                        s"Error: Failure to find block with hash ${ByteString.copyFromUtf8(q.hash)}")
+                      BlockInfo(status = s"Error: Failure to find block with hash ${q.hash}")
                         .pure[F]
                   }
     } yield blockInfo
