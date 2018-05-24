@@ -186,6 +186,17 @@ trait IStoreTests
     }
   }
 
+  "removeAllJoins" should "remove all joins for a channel" in withTestStore { store =>
+    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.addJoin(txn, channel, channels)
+        store.addJoin(txn, channel, List("otherChannel"))
+        store.removeAllJoins(txn, channel)
+        store.getJoin(txn, channel) shouldBe List()
+      }
+      store.clear()
+    }
+  }
 }
 
 class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
