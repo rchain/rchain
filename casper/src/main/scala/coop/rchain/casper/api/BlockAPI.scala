@@ -50,7 +50,7 @@ object BlockAPI {
     } yield {
       BlockInfo(
         status = "Success",
-        blockHash = PrettyPrinter.buildString(block.blockHash),
+        blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
         blockNumber = ProtoUtil.blockNumber(block),
         parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
         tsDesc = tsDesc

@@ -15,7 +15,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 class BlockAPITest extends FlatSpec with Matchers with BlockGenerator {
   val testHashQuery              = "1234"
   val badTestHashQuery           = "No such a hash"
-  val testHash                   = ByteString.copyFrom(Base16.decode("12345678"))
+  val testHash                   = ByteString.copyFrom(Base16.decode("12345678910111213141516171819"))
   val testHashEncoded            = Base16.encode(testHash.toByteArray)
   val testBlockNumber            = 47L
   val testParentsHashList        = Vector(ByteString.copyFrom(Base16.decode("testParent")))
