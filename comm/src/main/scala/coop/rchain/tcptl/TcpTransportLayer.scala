@@ -3,7 +3,7 @@ package coop.rchain.tcptl
 import scala.concurrent.duration._
 import java.net.SocketAddress
 import coop.rchain.comm._, CommError._
-import coop.rchain.comm.protocol.routing.{Protocol, TransportLayerGrpc}
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
 import io.grpc.{Server, ServerBuilder}
@@ -42,5 +42,25 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc
 class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
     dispatch: ProtocolMessage => F[Option[ProtocolMessage]])
     extends TransportLayerGrpc.TransportLayer {
-  def run(request: Protocol): Future[Protocol] = ???
+
+  def send(request: TLRequest): Future[TLResponse] =
+    (request.protocol
+      .fold(internalServerError.pure[F]) { protocol =>
+        dispatch(toProtocolMessage(protocol)) >>= {
+          case None     => noResponse.pure[F]
+          case Some(pm) => returnProtocol(pm.proto).pure[F]
+        }
+      })
+      .toFuture
+
+  private def toProtocolMessage(protocol: Protocol): ProtocolMessage = ???
+
+  private def returnProtocol(protocol: Protocol): TLResponse =
+    TLResponse(TLResponse.Payload.Protocol(protocol))
+
+  private def internalServerError: TLResponse =
+    TLResponse(TLResponse.Payload.InternalServerError(InternalServerError()))
+
+  private def noResponse: TLResponse =
+    TLResponse(TLResponse.Payload.NoResponse(NoResponse()))
 }
