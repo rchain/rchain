@@ -3,7 +3,7 @@ package coop.rchain.casper
 import com.google.protobuf.ByteString
 import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.crypto.hash.Sha256
+import coop.rchain.crypto.hash.Blake2b256
 
 import scala.collection.immutable.{HashMap, HashSet}
 import scala.language.higherKinds
@@ -22,16 +22,20 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
-      deploys: Seq[Deploy] = Seq.empty[Deploy]): F[BlockMessage] =
+      deploys: Seq[Deploy] = Seq.empty[Deploy],
+      tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
     for {
-      chain         <- blockDagState[F].get
-      nextId        = chain.currentId + 1
-      postState     = RChainState().withBonds(bonds).withBlockNumber(nextId.toLong)
-      postStateHash = Sha256.hash(postState.toByteArray)
+      chain  <- blockDagState[F].get
+      nextId = chain.currentId + 1
+      postState = RChainState()
+        .withTuplespace(tsHash)
+        .withBonds(bonds)
+        .withBlockNumber(nextId.toLong)
+      postStateHash = Blake2b256.hash(postState.toByteArray)
       header = Header()
         .withPostStateHash(ByteString.copyFrom(postStateHash))
         .withParentsHashList(parentsHashList)
-      blockHash = Sha256.hash(header.toByteArray)
+      blockHash = Blake2b256.hash(header.toByteArray)
       body      = Body().withPostState(postState).withNewCode(deploys)
       serializedJustifications = justifications.toList.map {
         case (creator: Validator, latestBlockHash: BlockHash) =>

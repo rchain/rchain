@@ -93,54 +93,6 @@ package object effects {
     }
   }
 
-  def metrics: Metrics[Task] = new Metrics[Task] {
-    import kamon._
-
-    val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
-
-    def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
-        case c: metric.Counter => c.increment(delta)
-      }
-    }
-
-    def incrementSampler(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case c: metric.RangeSampler => c.increment(delta)
-      }
-    }
-
-    def sample(name: String): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case c: metric.RangeSampler => c.sample
-      }
-    }
-
-    def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.set(value)
-      }
-    }
-
-    def incrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.increment(delta)
-      }
-    }
-
-    def decrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.decrement(delta)
-      }
-    }
-
-    def record(name: String, value: Long, count: Long = 1): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.histogram(name) }) match {
-        case c: metric.Histogram => c.record(value, count)
-      }
-    }
-  }
-
   def remoteKeysKvs(remoteKeysPath: Path): Kvs[Task, PeerNode, Array[Byte]] =
     new Kvs[Task, PeerNode, Array[Byte]] {
       import com.google.protobuf.ByteString
@@ -212,6 +164,50 @@ package object effects {
         Capture[F].capture {
           net.table.peers
         }
+
+      def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] =
+        pm =>
+          pm.sender.fold(none[ProtocolMessage].pure[F]) { sender =>
+            pm match {
+              case ping @ PingMessage(_, _)             => handlePing(sender, ping)
+              case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
+              case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
+              case _                                    => none[ProtocolMessage].pure[F]
+            }
+        }
+
+      private def handlePing(sender: PeerNode, ping: PingMessage): F[Option[ProtocolMessage]] =
+        ping
+          .response(net.local)
+          .traverse { pong =>
+            Metrics[F].incrementCounter("ping-recv-count").as(pong)
+          }
+
+      /**
+        * Validate incoming LOOKUP message and return an answering
+        * LOOKUP_RESPONSE.
+        */
+      private def handleLookup(sender: PeerNode,
+                               lookup: LookupMessage): F[Option[ProtocolMessage]] =
+        (for {
+          id   <- lookup.lookupId
+          resp <- lookup.response(net.local, net.table.lookup(id))
+        } yield {
+          Metrics[F].incrementCounter("lookup-recv-count").as(resp)
+        }).sequence
+
+      /**
+        * Remove sending peer from table.
+        */
+      private def handleDisconnect(sender: PeerNode,
+                                   disconnect: DisconnectMessage): F[Option[ProtocolMessage]] =
+        for {
+          _ <- Log[F].info(s"Forgetting about $sender.")
+          _ <- Capture[F].capture(net.table.remove(sender.key))
+          _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+          _ <- Metrics[F].decrementGauge("peers")
+        } yield none[ProtocolMessage]
+
     }
 
   def transportLayer[F[_]: Monad: Capture: Log: Time: Metrics: Ping](
@@ -244,8 +240,7 @@ package object effects {
                 case Left(error) =>
                   Log[F].warn(
                     s"Was unable to send response $response for request: $pm, error: $error")
-                case _ =>
-                  Log[F].info(s"Response $response for request: $pm was sent, sender: $sender")
+                case _ => ().pure[F]
               }
             }
         }
@@ -276,12 +271,16 @@ package object effects {
 
   }
 
-  def packetHandler[F[_]: Applicative: Log](
-      pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
+  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
+      implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[String] = {
+      def handlePacket(packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"
-        if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+        if (pf.isDefinedAt(packet)) pf(packet)
+        else
+          Log[F].error(errorMsg) *> errorHandler
+            .raiseError(unknownProtocol(errorMsg))
+            .as(none[Packet])
       }
     }
 

@@ -10,6 +10,7 @@ package ObjectCodePB;
 
 message ObjectCode {
     repeated CodeBlock codeblock = 1;
+    ObjectStore objectstore = 2;
 }
 
 // A single code block contains a litvec with objects on which the code operates,
@@ -33,19 +34,32 @@ message LitVec {
     repeated Object ob = 1;
 }
 
+message ObjectReference {
+    uint64 id = 1;
+}
+
+message ObjectStore {
+    repeated Object objects = 1;
+}
+
 // Rather than implement all 100+ object types existing in Rosette, We will only implement those
 // used in loading boot.rbl, plus any deemed necessary by the Roscala compiler guys.
 
 // TODO: These messages need to be filled out with the required fields. Also if there are objects that
 // contain other objects, they will need to be added to this list.
 
-message Actor {}
-message BlockExpr {}
+message Actor {
+    Object extension = 1;
+}
+message BlockExpr {
+    Object subExprs = 1;
+    Object implicit = 2;
+}
 message Char {
     uint32 value = 1;
 }
 message Code {
-    uint64 id = 1;
+    // Handle by reference. ID in parent Object.
 }
 message ExpandedLocation {}
 message Fixnum {
@@ -61,24 +75,31 @@ message LabelExpr {}
 message LetExpr {}
 message LetrecExpr {}
 message MethodExpr {}
+message Niv {}
 message Proc {}
 message ProcExpr {}
 message QuoteExpr {}
 message RBLstring {
     string value = 1;
 }
+message RblBool {
+    bool value = 1;
+}
 message ReflectiveMethodExpr {}
 message RequestExpr {}
 message SendExpr {}
 message SeqExpr {}
 message SetExpr {}
+message StdExtension {}
 message StdMthd {}
 message Symbol {
     string name = 1;
 }
 message TblObject {}
 message Template {}
-message Tuple {}
+message Tuple {
+    repeated Object elements = 1;
+}
 message TupleExpr {}
 
 enum ObType {
@@ -111,14 +132,20 @@ enum ObType {
     OT_Template = 26;
     OT_Tuple = 27;
     OT_TupleExpr = 28;
+    OT_RblBool = 29;
+    OT_Niv = 30;
+    OT_StdExtension = 31;
     OT_unknown = 999;
 }
 
 message Object {
     ObType type = 1;
     uint64 id = 2;
+    uint64 metaId = 3;
+    uint64 parentId = 4;
 
-    // One and only one of these should be populated
+    // One and only one of these should be populated. These contain information specific to the
+    // Object type.
     oneof object {
         Actor actor = 10;
         BlockExpr blockexpr = 11;
@@ -149,5 +176,8 @@ message Object {
         Template template = 36;
         Tuple tuple = 37;
         TupleExpr tupleexpr = 38;
+        RblBool rblbool = 39;
+        Niv niv = 40;
+        StdExtension stdextension = 41;
     }
 }

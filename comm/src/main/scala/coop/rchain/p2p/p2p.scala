@@ -176,8 +176,9 @@ object Network {
       _           <- Log[F].info(s"Responded to encryption handshake request from $sender.")
     } yield response.some
 
-  /**
-  def handlePacket[F[_]: FlatMap: ErrorHandler: Log: PacketHandler](
+  def handlePacket[
+      F[_]: Monad: Time: TransportLayer: Encryption: KeysStore: ErrorHandler: Log: PacketHandler](
+      remote: PeerNode,
       maybePacket: Option[Packet]): F[Option[ProtocolMessage]] = {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
     val handleNone: F[Option[ProtocolMessage]] = for {
@@ -186,9 +187,13 @@ object Network {
     } yield none[ProtocolMessage]
 
     maybePacket.fold(handleNone)(p =>
-      PacketHandler[F].handlePacket(p) >>= (p => frameResponseMessage[F](remote, h, kp(p))))
+      for {
+        maybeResponsePacket <- PacketHandler[F].handlePacket(p)
+        maybeResponsePacketMessage <- maybeResponsePacket.traverse(rp =>
+                                       frameMessage[F](remote, kp(framePacket(remote, rp))))
+      } yield maybeResponsePacketMessage)
   }
-    */
+
   def handleFrame[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: PacketHandler: ErrorHandler: KeysStore](
       remote: PeerNode,
@@ -207,13 +212,9 @@ object Network {
       unframed       = Frameable.parseFrom(decryptedBytes).message
       res <- if (unframed.isProtocolHandshake) {
               handleProtocolHandshake[F](remote, msg.header, unframed.protocolHandshake)
-            }
-            /**
-      else if (unframed.isPacket) {
-              handlePacket[F](unframed.packet)
-            }
-              */
-            else
+            } else if (unframed.isPacket) {
+              handlePacket[F](remote, unframed.packet)
+            } else
               errorHandler[F]
                 .fromEither(
                   Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))

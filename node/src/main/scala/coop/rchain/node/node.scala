@@ -1,30 +1,37 @@
 package coop.rchain.node
 
+import java.io.{File, PrintWriter}
 import java.net.SocketAddress
-import java.io.File
 import java.util.UUID
-import io.grpc.{Server, ServerBuilder}
+import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
+import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
+import diagnostics.MetricsServer
+
+import scala.io.Source
+import scala.util.Try
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
-      if (th.getCause() == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause().containsMessageWith(str)
+      if (th.getCause == null) th.getMessage.contains(str)
+      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
@@ -54,17 +61,49 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                       = effects.log
   implicit val timeEffect: Time[Task]                     = effects.time
-  implicit val metricsEffect: Metrics[Task]               = effects.metrics
+  implicit val jvmMetricsEffect: JvmMetrics[Task]         = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
   val net                                                 = new UnicastNetwork(src)
   implicit val pingEffect: Ping[Task]                     = effects.ping
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
+  val bondsFile: Option[File] =
+    conf.bondsFile.toOption
+      .flatMap(path => {
+        val f = new File(path)
+        if (f.exists) Some(f)
+        else {
+          Log[Task].warn(
+            s"Specified bonds file $path does not exist. Falling back on generating random validators."
+          )
+          None
+        }
+      })
+  val genesisBonds: Map[Array[Byte], Int] = bondsFile match {
+    case Some(file) =>
+      Try {
+        Source
+          .fromFile(file)
+          .getLines()
+          .map(line => {
+            val Array(pk, stake) = line.trim.split(" ")
+            Base16.decode(pk) -> (stake.toInt)
+          })
+          .toMap
+      }.getOrElse({
+        Log[Task].warn(
+          s"Specified bonds file ${file.getPath} cannot be parsed. Falling back on generating random validators."
+        )
+        newValidators
+      })
+    case None => newValidators
+  }
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-    //  TODO: figure out actual validator identities...
-    com.google.protobuf.ByteString.copyFrom(Array((scala.util.Random.nextInt(10) + 1).toByte)),
     storagePath,
-    storageSize
+    storageSize,
+    genesisBlock(genesisBonds)
   )
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
@@ -75,7 +114,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def aquireResources: Effect[Resources] =
+  def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- GrpcServer
@@ -107,14 +146,60 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Goodbye.")
   }
 
+  def startReportJvmMetrics: Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
+  private def newValidators: Map[Array[Byte], Int] = {
+    val numValidators  = conf.numValidators.toOption.getOrElse(5)
+    val keys           = Vector.fill(numValidators)(Ed25519.newKeyPair)
+    val (_, pubKeys)   = keys.unzip
+    val validatorsPath = conf.data_dir().resolve("validators")
+    validatorsPath.toFile.mkdir()
+
+    keys.foreach { //create files showing the secret key for each public key
+      case (sec, pub) =>
+        val sk      = Base16.encode(sec)
+        val pk      = Base16.encode(pub)
+        val skFile  = validatorsPath.resolve(s"$pk.sk").toFile
+        val printer = new PrintWriter(skFile)
+        printer.println(sk)
+        printer.close()
+    }
+
+    val bonds        = pubKeys.zip((1 to numValidators).toVector).toMap
+    val genBondsFile = validatorsPath.resolve(s"bonds.txt").toFile
+
+    //create bonds file for editing/future use
+    val printer = new PrintWriter(genBondsFile)
+    bonds.foreach {
+      case (pub, stake) =>
+        val pk = Base16.encode(pub)
+        Log[Task].info(s"Created validator $pk with bond $stake")
+        printer.println(s"$pk $stake")
+    }
+    printer.close
+
+    bonds
+  }
+
+  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+    pm =>
+      NodeDiscovery[Effect].handleCommunications(pm) >>= {
+        case None     => p2p.Network.dispatch[Effect](pm)
+        case resultPM => resultPM.pure[Effect]
+    }
+
   private def receiveAndDispatch: Effect[Unit] =
     TransportLayer[Effect]
-      .receive(p2p.Network.dispatch[Effect])
+      .receive(handleCommunications)
       .value
       .forever
       .executeAsync
@@ -124,12 +209,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      resources <- aquireResources
+      resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
-      // TODO handle errors on receive (currently ignored)
-      _ <- receiveAndDispatch
-      _ <- Log[Effect].info(s"Listening for traffic on $address.")
+      _         <- startReportJvmMetrics.toEffect
+      _         <- receiveAndDispatch
+      _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
@@ -148,6 +233,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           .error(
             "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
       case th =>
-        th.getStackTrace().toList.traverse(ste => Log[Task].error(ste.toString))
+        th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
     } *> exit0.as(Right(())))
 }

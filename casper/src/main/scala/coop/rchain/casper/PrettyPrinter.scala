@@ -42,7 +42,7 @@ object PrettyPrinter {
       str
     }
 
-  private def buildString(b: ByteString): String =
+  def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
   private def buildString(par: Option[Par]): String =
