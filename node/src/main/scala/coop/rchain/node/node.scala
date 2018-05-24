@@ -1,7 +1,6 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.net.SocketAddress
 import java.util.UUID
 import io.grpc.Server
 
@@ -22,6 +21,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
+import coop.rchain.node.effects.TLNodeDiscovery
 
 import scala.io.Source
 import scala.util.Try
@@ -65,9 +65,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                 = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
+  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
+  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
+
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
       .flatMap(path => {
@@ -133,8 +134,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+
+    (for {
+      peers <- nodeDiscoveryEffect.peers
+      loc   <- transportLayerEffect.local
+      ts    <- timeEffect.currentMillis
+      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      _     <- transportLayerEffect.broadcast(msg, peers)
+    } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
     println("Shutting down HTTP server....")
@@ -189,13 +196,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     bonds
   }
 
+  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+    pm =>
+      NodeDiscovery[Effect].handleCommunications(pm) >>= {
+        case None     => p2p.Network.dispatch[Effect](pm)
+        case resultPM => resultPM.pure[Effect]
+    }
+
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- TransportLayer[Effect].receive(p2p.Network.dispatch[Effect])
+      _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")

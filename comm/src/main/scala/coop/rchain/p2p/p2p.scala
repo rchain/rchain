@@ -122,7 +122,7 @@ object Network {
         ts1          <- Time[F].currentMillis
         local        <- TransportLayer[F].local
         ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
-        remote       = ProtocolNode(peer, local, unsafeRoundTrip[F])
+        remote       = ProtocolNode(peer)
         ehsrespmsg   <- TransportLayer[F].roundTrip(ehs, remote, timeout) >>= (errorHandler[F].fromEither _)
         ehsresp      <- errorHandler[F].fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
         remotePubKey = ehsresp.publicKey.toByteArray
@@ -134,7 +134,7 @@ object Network {
       for {
         _       <- Log[F].info(s"Initialize second phase handshake (protocol handshake) to $peer")
         local   <- TransportLayer[F].local
-        remote  = ProtocolNode(peer, local, unsafeRoundTrip[F])
+        remote  = ProtocolNode(peer)
         fm      <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
         phsresp <- TransportLayer[F].roundTrip(fm, remote, timeout) >>= errorHandler[F].fromEither
         _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")

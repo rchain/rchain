@@ -1,8 +1,7 @@
 package coop.rchain.node
 
-import java.net.SocketAddress
 import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.p2p, p2p.NetworkAddress, p2p.Network.KeysStore
+import coop.rchain.p2p, p2p.NetworkAddress
 import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
 import coop.rchain.metrics.Metrics
@@ -14,8 +13,7 @@ import scala.tools.jline.console._, completer.StringsCompleter
 import scala.collection.JavaConverters._
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._, ski._, TaskContrib._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 
 package object effects {
@@ -132,32 +130,24 @@ package object effects {
         }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
     }
 
-  def nodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics](
-      net: UnicastNetwork): NodeDiscovery[F] =
-    new NodeDiscovery[F] {
-
-      def addNode(node: PeerNode): F[Unit] =
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
+    new Ping[F] {
+      import scala.concurrent.duration._
+      def ping(node: ProtocolNode): F[Boolean] =
         for {
-          _ <- Capture[F].capture(net.add(node))
-          _ <- Metrics[F].incrementGauge("peers")
-        } yield ()
-
-      def findMorePeers(limit: Int): F[Seq[PeerNode]] =
-        Capture[F].capture {
-          net.findMorePeers(limit)
-        }
-
-      def peers: F[Seq[PeerNode]] =
-        Capture[F].capture {
-          net.table.peers
-        }
+          _   <- Metrics[F].incrementCounter("protocol-ping-sends")
+          req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)
+          res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
+        } yield res.isDefined
     }
 
-  def transportLayer(net: UnicastNetwork)(implicit
-                                          ev1: Log[Task],
-                                          ev2: Time[Task],
-                                          ev3: Metrics[Task]): TransportLayer[Task] =
+  def transportLayer(src: PeerNode)(implicit
+                                    ev1: Log[Task],
+                                    ev2: Time[Task],
+                                    ev3: Metrics[Task]): TransportLayer[Task] =
     new TransportLayer[Task] {
+
+      val net = new UnicastNetwork(src)
       import scala.concurrent.duration._
 
       def roundTrip(msg: ProtocolMessage,
@@ -170,25 +160,27 @@ package object effects {
       def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
         Task.delay(net.comm.send(msg.toByteSeq, peer))
 
-      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] =
-        Task.delay {
-          net.broadcast(msg)
-        }
+      def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): Task[Seq[CommErr[Unit]]] =
+        peers.toList.traverse(peer => commSend(msg, peer)).map(_.toSeq)
 
       private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
         : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
-        dispatch(pm) >>= {
-          case None => ().pure[Task]
-          case Some(response) =>
-            pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
-              commSend(response, sender) >>= {
-                case Left(error) =>
-                  Log[Task].warn(
-                    s"Was unable to send response $response for request: $pm, error: $error")
-                case _ => ().pure[Task]
-              }
-            }
-        }
+        for {
+          ti <- Time[Task].nanoTime
+          r1 <- dispatch(pm)
+          r2 <- r1.fold(().pure[Task]) { response =>
+                 pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
+                   commSend(response, sender) >>= {
+                     case Left(error) =>
+                       Log[Task].warn(
+                         s"Was unable to send response $response for request: $pm, error: $error")
+                     case _ => ().pure[Task]
+                   }
+                 }
+               }
+          tf <- Time[Task].nanoTime
+          _  <- Metrics[Task].record("network-roundtrip-micros", (tf - ti) / 1000)
+        } yield r2
       }
 
       def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
