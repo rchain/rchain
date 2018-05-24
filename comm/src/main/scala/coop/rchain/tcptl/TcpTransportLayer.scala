@@ -9,8 +9,7 @@ import coop.rchain.metrics.Metrics
 import io.grpc.{Server, ServerBuilder}
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._, ski._, TaskContrib._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -26,7 +25,8 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](port: Int)(loc
 
   def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = ???
 
-  def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+  def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
+    peers.toList.traverse(peer => commSend(msg, peer)).map(_.toSeq)
 
   def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] =
     Capture[F].capture {
