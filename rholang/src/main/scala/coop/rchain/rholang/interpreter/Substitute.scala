@@ -116,7 +116,7 @@ object Substitute {
                 case Left(_e)    => par.prepend(_e)
                 case Right(_par) => _par ++ par
               }
-            case e @ EEvalBody(_) =>
+            case e: EEvalBody =>
               maybeSubstitute[M](e).map {
                 case Left(expr)  => par.prepend(expr)
                 case Right(_par) => _par ++ par

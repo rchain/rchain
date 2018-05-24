@@ -81,7 +81,6 @@ case class PrettyPrinter(freeShift: Int,
         "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
           .map(buildString)
           .mkString(",") + ")"
-      case EEvalBody(chan) => "*" + buildString(chan)
       case _               => throw new Error("Attempted to print unknown Expr type")
     }
 

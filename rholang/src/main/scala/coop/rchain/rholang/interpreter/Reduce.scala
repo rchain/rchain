@@ -158,7 +158,6 @@ object Reduce {
             case e: EEvalBody =>
               for {
                 p <- evalExprToPar(Expr(e))
-                _ = println("p is: " + p.toProtoString)
                 _ <- eval(p)
               } yield ()
             case e: EMethodBody =>
