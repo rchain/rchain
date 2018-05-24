@@ -54,8 +54,7 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer], _dbTrie: Dbi[ByteBu
 
   private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]] =
     withTxn(createTxnRead()) { txn =>
-      val keyRange: KeyRange[ByteBuffer] = KeyRange.all()
-      withResource(_dbTrie.iterate(txn, keyRange)) { (it: CursorIterator[ByteBuffer]) =>
+      withResource(_dbTrie.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
         it.asScala.foldLeft(Map.empty[Blake2b256Hash, Trie[K, V]]) {
           (map: Map[Blake2b256Hash, Trie[K, V]], x: CursorIterator.KeyVal[ByteBuffer]) =>
             val key   = Codec[Blake2b256Hash].decode(BitVector(x.key())).map(_.value).get
