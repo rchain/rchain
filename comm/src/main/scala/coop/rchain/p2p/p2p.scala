@@ -275,7 +275,8 @@ object Network {
         }
       case upstream @ UpstreamResponse(_, _) =>
         Log[F].debug(s"Out-of-sequence message: $upstream") *> none[ProtocolMessage].pure[F]
-      case _ => Log[F].error(s"Unrecognized msg $msg") *> none[ProtocolMessage].pure[F]
+      // FIX-ME This MUST be an ERROR, fix it when handlers are rertngin Either[Option]
+      case _ => Log[F].warn(s"Unrecognized msg $msg") *> none[ProtocolMessage].pure[F]
     }
 
   }
