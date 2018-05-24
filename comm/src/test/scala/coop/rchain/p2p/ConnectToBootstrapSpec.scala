@@ -81,12 +81,9 @@ class ConnectToBootstrapSpec
     }
   }
 
-  private val roundTripNOP =
-    kp2[ProtocolMessage, ProtocolNode, CommErr[ProtocolMessage]](Left(unknownProtocol("unknown")))
-
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ EncryptionHandshakeMessage(_, _) =>
-      hs.response[Effect](ProtocolNode(remote, roundTripNOP), remoteKeys).value.right.get
+      hs.response[Effect](ProtocolNode(remote), remoteKeys).value.right.get
   }
 
   private val failEverything = kp(Left[CommError, ProtocolResponse](unknownProtocol("unknown")))
@@ -94,11 +91,9 @@ class ConnectToBootstrapSpec
   private val sndPhaseSucc: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ FrameMessage(_, _) =>
       Right(
-        FrameMessage(frameResponse(ProtocolNode(remote, roundTripNOP),
-                                   hs.header.get,
-                                   Array.empty[Byte],
-                                   Array.empty[Byte]),
-                     1))
+        FrameMessage(
+          frameResponse(ProtocolNode(remote), hs.header.get, Array.empty[Byte], Array.empty[Byte]),
+          1))
   }
 
   private def generateResponses(
@@ -113,5 +108,5 @@ class ConnectToBootstrapSpec
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(peerNode(name, port), roundTripNOP)
+    ProtocolNode(peerNode(name, port))
 }
