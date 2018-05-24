@@ -80,7 +80,8 @@ package object history {
         (leaf, acc)
     }
 
-  private[rspace] def commonPrefix(a: Seq[Byte], b: Seq[Byte]): Seq[Byte] =
+  // TODO(ht): make this more efficient
+  private[rspace] def commonPrefix[A](a: Seq[A], b: Seq[A]): Seq[A] =
     a.zip(b).takeWhile { case (l, r) => l == r }.map(_._1)
 
   private[rspace] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
