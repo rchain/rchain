@@ -152,6 +152,17 @@ trait IStoreTests
         store.clear()
       }
   }
+
+  "addJoin" should "add join for a channel" ignore withTestStore { store =>
+    forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      store.withTxn(store.createTxnWrite()) { txn =>
+        store.addJoin(txn, channel, channels)
+        store.getJoin(txn, channel) shouldBe List(channels)
+      }
+      store.clear()
+    }
+
+  }
 }
 
 class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
