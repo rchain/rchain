@@ -21,7 +21,7 @@ import scala.collection.immutable.Seq
   * To create an instance, use [[LMDBStore.create]].
   */
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
-                                     databaseBath: Path,
+                                     databasePath: Path,
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbWaitingContinuations: Dbi[ByteBuffer],
                                      _dbData: Dbi[ByteBuffer],
@@ -270,7 +270,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   def getStoreSize: StoreSize = {
     val sizeOnDisk = Files
-      .walk(databaseBath)
+      .walk(databasePath)
       .mapToLong(p => {
         val f = p.toFile
         if (f.isFile)

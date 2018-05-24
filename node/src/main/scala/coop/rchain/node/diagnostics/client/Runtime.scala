@@ -4,7 +4,7 @@ import cats._
 import cats.implicits._
 import coop.rchain.node.ConsoleIO
 import coop.rchain.node.model.diagnostics._
-import coop.rchain.shared.LongOps.toHumanReadableSize
+import coop.rchain.shared.LongOps._
 
 import scala.concurrent.duration._
 import coop.rchain.comm.PeerNode
@@ -115,7 +115,7 @@ object Runtime {
 
   def showStoreUsage(storeUsage: StoreUsage): String =
     s"""Store metrics:
-       | - Size On Disk: ${toHumanReadableSize(storeUsage.sizeOnDisk)}
+       | - Size On Disk: ${storeUsage.sizeOnDisk.toHumanReadableSize}
        | - Data Entries: ${storeUsage.dataEntries}
        |""".stripMargin
 }

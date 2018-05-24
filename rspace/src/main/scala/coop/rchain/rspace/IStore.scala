@@ -4,8 +4,6 @@ import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
 
-case class StoreSize(sizeOnDisk: Long, dataEntries: Long)
-
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
