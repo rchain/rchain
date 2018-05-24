@@ -27,7 +27,8 @@ object BlockAPI {
                                                             dag,
                                                             IndexedSeq.empty[BlockMessage])
       blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
-    } yield BlocksResponse(status = "Success", blocks = blockInfos)
+    } yield
+      BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
 
   @tailrec
   private def getMainChain[F[_]: Monad: MultiParentCasper](

@@ -92,6 +92,7 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
   "getBlocksResponse" should "return only blocks in the main chain" in {
     val blocksResponse = BlockAPI.getBlocksResponse[Id]
     val blocks         = blocksResponse.blocks
+    blocksResponse.length should be(5)
     blocks.length should be(5)
   }
 }

@@ -47,7 +47,9 @@ message BlockQueryResponse {
 message BlocksResponse {
   string status = 1;
   repeated BlockInfo blocks = 2;
+  int64 length = 3;
 }
+
 // For node clients, see BlockMessage for actual Casper protocol Block representation
 message BlockInfo {
   string blockHash = 1;
