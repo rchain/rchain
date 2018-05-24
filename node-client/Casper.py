@@ -12,7 +12,13 @@ We assume the RChain node is running and that it is listening on port
   Server started, listening on 50000
 
 The output should be something like:
-
+  {
+    "blockHash": "9310ded826...",
+    "blockNumber": "1",
+    "parentsHashList": "['6b52036b26fcc8bc17140c8aad712f65e97d7b7d603727d5934bbbc3f893db9b']",
+    "status": "Success",
+    "tsDesc": "@{11}!(11) | for( x0 <= @{\"stdout\"} ) { Nil } | for( x0 <= @{\"stderr\"} ) { Nil } | for( x0, x1 <= @{\"stderrAck\"} ) { Nil } | for( x0, x1 <= @{\"stdoutAck\"} ) { Nil }"
+  }
 
 Tested with rnode-assembly-0.3.1.jar from commit 2424b43caae May 22 2018.
 
