@@ -77,6 +77,11 @@ message NodeCoreMetrics {
   int64 peers = 7;
 }
 
+message StoreUsage {
+  int64 sizeOnDisk = 1;
+  int64 dataEntries = 2;
+}
+
 service Diagnostics {
   rpc ListPeers (google.protobuf.Empty) returns (Peers);
   rpc GetProcessCpu (google.protobuf.Empty) returns (ProcessCpu);
@@ -85,6 +90,7 @@ service Diagnostics {
   rpc GetMemoryPools (google.protobuf.Empty) returns (MemoryPools);
   rpc GetThreads (google.protobuf.Empty) returns (Threads);
   rpc GetNodeCoreMetrics (google.protobuf.Empty) returns (NodeCoreMetrics);
+  rpc GetStoreUsage (google.protobuf.Empty) returns (StoreUsage);
 }
 
 message GarbageCollectors {
