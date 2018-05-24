@@ -12,7 +12,7 @@ trait IStoreTests
     with GeneratorDrivenPropertyChecks {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = PosInt(1000))
+    PropertyCheckConfiguration(minSuccessful = PosInt(10))
 
   "putDatum" should "put datum in a new channel" in withTestStore { store =>
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
