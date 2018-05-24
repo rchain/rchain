@@ -17,7 +17,6 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable
 import scala.collection.immutable.{HashMap, HashSet}
-
 import java.nio.file.Path
 
 import monix.execution.Scheduler
@@ -64,10 +63,8 @@ sealed abstract class MultiParentCasperInstances {
       type BlockHash = ByteString
       type Validator = ByteString
 
-      // Extract hardcoded version and timestamp
-      // TODO: Ask Pawel about using Time[F] and replace timestamp with solution
-      val version   = 0L
-      val timestamp = 0L
+      // Extract hardcoded version
+      val version = 0L
 
       val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
         BlockDag().copy(
@@ -119,69 +116,64 @@ sealed abstract class MultiParentCasperInstances {
           Estimator.tips(_blockDag.get, genesis)
         }
 
-      def createBlock: F[Option[BlockMessage]] = {
-        /*
-         * Logic:
-         *  -Score each of the blockDAG heads extracted from the block messages via GHOST
-         *  -Let P = subset of heads such that P contains no conflicts and the total score is maximized
-         *  -Let R = subset of deploy messages which are not included in DAG obtained by following blocks in P
-         *  -If R is non-empty then create a new block with parents equal to P and (non-conflicting) txns obtained from R
-         *  -Else if R is empty and |P| > 1 then create a block with parents equal to P and no transactions
-         *  -Else None
-         */
+      /*
+       * Logic:
+       *  -Score each of the blockDAG heads extracted from the block messages via GHOST
+       *  -Let P = subset of heads such that P contains no conflicts and the total score is maximized
+       *  -Let R = subset of deploy messages which are not included in DAG obtained by following blocks in P
+       *  -If R is non-empty then create a new block with parents equal to P and (non-conflicting) txns obtained from R
+       *  -Else if R is empty and |P| > 1 then create a block with parents equal to P and no transactions
+       *  -Else None
+       */
+      def createBlock: F[Option[BlockMessage]] =
+        for {
+          orderedHeads <- estimator
+          p            = chooseNonConflicting(orderedHeads, genesis, _blockDag.get)
+          r = {
+            val remDeploys = deployHist.clone()
+            DagOperations
+              .bfTraverse(p)(parents(_).iterator.map(_blockDag.get.blockLookup))
+              .foreach(b => {
+                b.body.foreach(_.newCode.foreach(remDeploys -= _))
+              })
+            remDeploys.toSeq
+          }
+          justifications = justificationProto(_blockDag.get.latestMessages)
+          proposal <- if (r.nonEmpty || p.length > 1) {
+                       createProposal(p, r, justifications)
+                     } else {
+                       none[BlockMessage].pure[F]
+                     }
+        } yield proposal
 
-        val orderedHeads = estimator
-
-        val p = orderedHeads.map(chooseNonConflicting(_, genesis, _blockDag.get))
-        val r = p.map(blocks => {
-          val remDeploys = deployHist.clone()
-          DagOperations
-            .bfTraverse(blocks)(parents(_).iterator.map(_blockDag.get.blockLookup))
-            .foreach(b => {
-              b.body.foreach(_.newCode.foreach(remDeploys -= _))
-            })
-          remDeploys.toSeq
-        })
-
-        val proposal = p.flatMap(parents => {
-          val justifications = justificationProto(_blockDag.get.latestMessages)
-          r.map(requests => {
-            if (requests.nonEmpty || parents.length > 1) {
-              val Right((tsCheckpoint, _)) =
-                checkpoints.mapAndUpdate[(Checkpoint, Map[ByteString, Checkpoint])](
-                  InterpreterUtil.computeDeploysCheckpoint(
-                    parents,
-                    requests,
-                    genesis,
-                    _blockDag.get,
-                    storageLocation,
-                    storageSize,
-                    _
-                  ),
-                  _._2
-                )
-              val postState = RChainState()
-                .withTuplespace(tsCheckpoint.hash)
-                .withBonds(bonds(parents.head))
-                .withBlockNumber(parents.headOption.fold(0L)(blockNumber) + 1)
-              //TODO: include reductions
-              val body = Body()
-                .withPostState(postState)
-                .withNewCode(requests)
-              // TODO: Fix with actual stuff
-              val header =
-                blockHeader(body, parents.map(_.blockHash), version, timestamp)
-              val block = unsignedBlockProto(body, header, justifications)
-
-              Some(block)
-            } else {
-              None
-            }
-          })
-        })
-
-        proposal
-      }
+      private def createProposal(p: Seq[BlockMessage],
+                                 r: Seq[Deploy],
+                                 justifications: Seq[Justification]): F[Option[BlockMessage]] =
+        for {
+          now <- Time[F].currentMillis
+          Right((tsCheckpoint, _)) = checkpoints
+            .mapAndUpdate[(Checkpoint, Map[BlockHash, Checkpoint])](
+              InterpreterUtil.computeDeploysCheckpoint(
+                p,
+                r,
+                genesis,
+                _blockDag.get,
+                storageLocation,
+                storageSize,
+                _
+              ),
+              _._2
+            )
+          postState = RChainState()
+            .withTuplespace(tsCheckpoint.hash)
+            .withBonds(bonds(p.head))
+            .withBlockNumber(p.headOption.fold(0L)(blockNumber) + 1)
+          body = Body()
+            .withPostState(postState)
+            .withNewCode(r)
+          header = blockHeader(body, p.map(_.blockHash), version, now)
+          block  = unsignedBlockProto(body, header, justifications)
+        } yield Some(block)
 
       def blockDag: F[BlockDag] = Capture[F].capture { _blockDag.get }
 
