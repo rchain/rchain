@@ -1,9 +1,6 @@
 package coop.rchain.kademlia
 
 import scala.collection.mutable
-import scala.concurrent.duration.Duration
-import scala.util.{Failure, Success, Try}
-import java.util.concurrent.Executors
 
 import scala.annotation.tailrec
 
@@ -119,8 +116,8 @@ final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, 
   private def ping[F[_]: Functor: Ping](ps: mutable.ListBuffer[Entry],
                                         older: Entry,
                                         newer: A): F[Unit] =
-    Ping[F].ping(older.entry).map { result =>
-      val winner = result.map(_ => older).getOrElse(new Entry(newer))
+    Ping[F].ping(older.entry).map { response =>
+      val winner = if (response) older else new Entry(newer)
       ps synchronized {
         ps -= older
         ps += winner
@@ -140,7 +137,7 @@ final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, 
     * If `peer` is already in the table, it becomes the most recently
     * seen entry at its distance.
     */
-  def observe[F[_]: Functor: Capture: Ping](peer: A, add: Boolean): F[Unit] =
+  def observe[F[_]: Applicative: Capture: Ping](peer: A, add: Boolean): F[Unit] =
     distance(home.key, peer.key) match {
       case Some(index) =>
         if (index < 8 * width) {
@@ -165,16 +162,14 @@ final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, 
                       candidate.pinging = true
                       ping[F](ps, candidate, peer)
                     }
-                    .getOrElse(noop)
+                    .getOrElse(().pure[F])
                 }
-              case None => noop
+              case None => ().pure[F]
             }
           }
-        } else noop
-      case None => noop
+        } else ().pure[F]
+      case None => ().pure[F]
     }
-
-  private def noop[F[_]: Capture] = Capture[F].capture(())
 
   /**
     * Remove a peer with the given key.
