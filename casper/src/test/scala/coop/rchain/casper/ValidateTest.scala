@@ -42,13 +42,8 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     }
 
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
-    val block             = chain.idToBlocks(i)
-    val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
-    val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
-    val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
-    val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
-
-    block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
+    val block = chain.idToBlocks(i)
+    ProtoUtil.signBlock(block, sk)
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {

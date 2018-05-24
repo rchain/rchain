@@ -7,6 +7,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 
 import scala.annotation.tailrec
@@ -153,6 +154,16 @@ object ProtoUtil {
       .withHeader(header)
       .withBody(body)
       .withJustifications(justifications)
+
+  def signBlock(block: BlockMessage, sk: Array[Byte]): BlockMessage = {
+    val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
+    val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
+    val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
+    val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
+    val signedBlock       = block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
+
+    signedBlock
+  }
 
   def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
     import Sorting.byteArrayOrdering

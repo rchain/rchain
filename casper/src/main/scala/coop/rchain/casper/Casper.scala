@@ -86,7 +86,15 @@ sealed abstract class MultiParentCasperInstances {
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
 
-      def addBlock(b: BlockMessage): F[Unit] = attemptAdd(b).void
+      def addBlock(b: BlockMessage): F[Unit] =
+        for {
+          validSig <- Validate.blockSignature[F](b)
+          _ <- if (validSig) attemptAdd(b).void
+              else ().pure[F]
+          forkchoice <- estimator.map(_.head)
+          _ <- Log[F].info(
+                s"CASPER: New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
+        } yield ()
 
       def contains(b: BlockMessage): F[Boolean] =
         Capture[F].capture {
@@ -174,16 +182,21 @@ sealed abstract class MultiParentCasperInstances {
         checkpoints.get.get(hash)
       }
 
-      private def isValid(block: BlockMessage): F[Boolean] = {
-        val dag = _blockDag.get
+      private def isValid(block: BlockMessage): F[Boolean] =
         for {
-          bn <- Validate.blockNumber[F](block, dag)
-          p  <- Validate.parents[F](block, genesis, dag)
+          dag <- Capture[F].capture { _blockDag.get }
+          bn  <- Validate.blockNumber[F](block, dag)
+          p   <- Validate.parents[F](block, genesis, dag)
           //only try checkpoint if other validity checks pass
           ch <- if (bn && p) updateCheckpoints(block)
                else Monad[F].pure[Option[Checkpoint]](None)
-        } yield ch.isDefined
-      }
+          //_  <- if (bn && p && ch.isEmpty) Log[F].warn(Validate.ignore(block, "tuplespace hash could not be reproduced.")
+          //      else ().pure[F]
+          //TODO: Put tuplespace validation back in after we have
+          //      tuplespace replay. Cannot put it in now because
+          //      it fails on unforgable names (no way to replicate
+          //      the same unforgable name without an execution trace).
+        } yield bn && p //should be ch.isDefined
 
       //invlaid blocks return None and don't update the checkpoints
       private def updateCheckpoints(block: BlockMessage): F[Option[Checkpoint]] =
