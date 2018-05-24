@@ -165,7 +165,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
         b4 <- createValidatorBlock[F](Seq(b1), Seq(b1), 0)
         b5 <- createValidatorBlock[F](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
         b6 <- createValidatorBlock[F](Seq(b5), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[F](Seq(b4), Seq(b1, b4, b5), 1) //not heightest weight parent
+        b7 <- createValidatorBlock[F](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
         b8 <- createValidatorBlock[F](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
         b9 <- createValidatorBlock[F](Seq(b6), Seq.empty, 0) //empty justification
       } yield b9

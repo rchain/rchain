@@ -155,7 +155,9 @@ object ProtoUtil {
       .withJustifications(justifications)
 
   def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    val bondsProto = bonds.toSeq.map {
+    import Sorting.byteArrayOrdering
+    //sort to have deterministic order (to get reproducible hash)
+    val bondsProto = bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk)
         Bond(validator, stake)
