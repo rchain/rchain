@@ -1,21 +1,20 @@
 package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
-
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-
 import java.nio.file.{Files, Path, StandardCopyOption}
 
+import coop.rchain.catscontrib.Capture
 import monix.execution.Scheduler
 
 class Tuplespace(val name: String, val location: Path, val size: Long) {
   val dbLocation: Path = location.resolve(name)
-  val runtime: Runtime = Runtime.create(dbLocation, size)
+  val runtime: Runtime = Runtime.create(dbLocation, size)(Capture.taskCapture)
 
   def addTerm(term: Par)(implicit scheduler: Scheduler): Unit =
     runtime.reducer.inj(term).unsafeRunSync

@@ -93,54 +93,6 @@ package object effects {
     }
   }
 
-  def metrics: Metrics[Task] = new Metrics[Task] {
-    import kamon._
-
-    val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
-
-    def incrementCounter(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.counter(name) }) match {
-        case c: metric.Counter => c.increment(delta)
-      }
-    }
-
-    def incrementSampler(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case c: metric.RangeSampler => c.increment(delta)
-      }
-    }
-
-    def sample(name: String): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.rangeSampler(name) }) match {
-        case c: metric.RangeSampler => c.sample
-      }
-    }
-
-    def setGauge(name: String, value: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.set(value)
-      }
-    }
-
-    def incrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.increment(delta)
-      }
-    }
-
-    def decrementGauge(name: String, delta: Long): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.gauge(name) }) match {
-        case c: metric.Gauge => c.decrement(delta)
-      }
-    }
-
-    def record(name: String, value: Long, count: Long = 1): Task[Unit] = Task.delay {
-      m.getOrElseUpdate(name, { Kamon.histogram(name) }) match {
-        case c: metric.Histogram => c.record(value, count)
-      }
-    }
-  }
-
   def remoteKeysKvs(remoteKeysPath: Path): Kvs[Task, PeerNode, Array[Byte]] =
     new Kvs[Task, PeerNode, Array[Byte]] {
       import com.google.protobuf.ByteString
@@ -199,29 +151,98 @@ package object effects {
         Capture[F].capture {
           net.table.peers
         }
+
+      def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] =
+        pm =>
+          pm.sender.fold(none[ProtocolMessage].pure[F]) { sender =>
+            pm match {
+              case ping @ PingMessage(_, _)             => handlePing(sender, ping)
+              case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
+              case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
+              case _                                    => none[ProtocolMessage].pure[F]
+            }
+        }
+
+      private def handlePing(sender: PeerNode, ping: PingMessage): F[Option[ProtocolMessage]] =
+        ping
+          .response(net.local)
+          .traverse { pong =>
+            Metrics[F].incrementCounter("ping-recv-count").as(pong)
+          }
+
+      /**
+        * Validate incoming LOOKUP message and return an answering
+        * LOOKUP_RESPONSE.
+        */
+      private def handleLookup(sender: PeerNode,
+                               lookup: LookupMessage): F[Option[ProtocolMessage]] =
+        (for {
+          id   <- lookup.lookupId
+          resp <- lookup.response(net.local, net.table.lookup(id))
+        } yield {
+          Metrics[F].incrementCounter("lookup-recv-count").as(resp)
+        }).sequence
+
+      /**
+        * Remove sending peer from table.
+        */
+      private def handleDisconnect(sender: PeerNode,
+                                   disconnect: DisconnectMessage): F[Option[ProtocolMessage]] =
+        for {
+          _ <- Log[F].info(s"Forgetting about $sender.")
+          _ <- Capture[F].capture(net.table.remove(sender.key))
+          _ <- Metrics[F].incrementCounter("disconnect-recv-count")
+          _ <- Metrics[F].decrementGauge("peers")
+        } yield none[ProtocolMessage]
+
     }
 
-  def transportLayer[F[_]: Monad: Capture: Log: Time: Metrics](
-      net: UnicastNetwork): TransportLayer[F] =
-    new TransportLayer[F] {
+  def transportLayer(net: UnicastNetwork)(implicit
+                                          ev1: Log[Task],
+                                          ev2: Time[Task],
+                                          ev3: Metrics[Task]): TransportLayer[Task] =
+    new TransportLayer[Task] {
       import scala.concurrent.duration._
 
       def roundTrip(msg: ProtocolMessage,
                     remote: ProtocolNode,
-                    timeout: Duration): F[CommErr[ProtocolMessage]] =
-        net.roundTrip[F](msg, remote, timeout)
+                    timeout: Duration): Task[CommErr[ProtocolMessage]] =
+        net.roundTrip[Task](msg, remote, timeout)
 
-      def local: F[ProtocolNode] = net.local.pure[F]
+      def local: Task[ProtocolNode] = net.local.pure[Task]
 
-      def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
-        Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
+      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
+        Task.delay(net.comm.send(msg.toByteSeq, peer))
 
-      def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
-        Capture[F].capture {
+      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] =
+        Task.delay {
           net.broadcast(msg)
         }
 
-      def receive: F[Option[ProtocolMessage]] = net.receiver[F]
+      private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
+        : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
+        dispatch(pm) >>= {
+          case None => ().pure[Task]
+          case Some(response) =>
+            pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
+              commSend(response, sender) >>= {
+                case Left(error) =>
+                  Log[Task].warn(
+                    s"Was unable to send response $response for request: $pm, error: $error")
+                case _ => ().pure[Task]
+              }
+            }
+        }
+      }
+
+      def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
+        net
+          .receiver[Task]
+          .flatMap(handle(dispatch))
+          .forever
+          .executeAsync
+          .start
+          .void
     }
 
   class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
@@ -243,12 +264,16 @@ package object effects {
 
   }
 
-  def packetHandler[F[_]: Applicative: Log](
-      pf: PartialFunction[Packet, F[String]]): PacketHandler[F] =
+  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
+      implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[String] = {
+      def handlePacket(packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"
-        if (pf.isDefinedAt(packet)) pf(packet) else Log[F].error(errorMsg) *> errorMsg.pure[F]
+        if (pf.isDefinedAt(packet)) pf(packet)
+        else
+          Log[F].error(errorMsg) *> errorHandler
+            .raiseError(unknownProtocol(errorMsg))
+            .as(none[Packet])
       }
     }
 
