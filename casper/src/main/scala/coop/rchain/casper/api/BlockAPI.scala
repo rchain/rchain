@@ -20,12 +20,11 @@ object BlockAPI {
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasper]: F[BlocksResponse] =
     for {
-      estimates <- MultiParentCasper[F].estimator
-      dag       <- MultiParentCasper[F].blockDag
-      mainChain: IndexedSeq[BlockMessage] = getMainChain[F](estimates.head,
-                                                            dag,
-                                                            IndexedSeq.empty[BlockMessage])
-      blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
+      estimates                           <- MultiParentCasper[F].estimator
+      dag                                 <- MultiParentCasper[F].blockDag
+      tip                                 = estimates.head
+      mainChain: IndexedSeq[BlockMessage] = getMainChain[F](tip, dag, IndexedSeq(tip))
+      blockInfos                          <- mainChain.toList.traverse(getBlockInfo[F])
     } yield BlocksResponse(status = "Success", blocks = blockInfos)
 
   @tailrec
@@ -33,14 +32,17 @@ object BlockAPI {
       estimate: BlockMessage,
       dag: BlockDag,
       acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
-    val parentsHashes    = ProtoUtil.parents(estimate)
-    val mainParentHash   = parentsHashes.head
-    val maybeNewEstimate = dag.blockLookup.get(mainParentHash)
-    maybeNewEstimate match {
-      case Some(newEstimate) =>
-        getMainChain[F](newEstimate, dag, acc :+ estimate)
-      case None =>
-        acc
+    val parentsHashes       = ProtoUtil.parents(estimate)
+    val maybeMainParentHash = parentsHashes.headOption
+    maybeMainParentHash match {
+      case Some(mainParentHash) =>
+        val maybeNewEstimate = dag.blockLookup.get(mainParentHash)
+        maybeNewEstimate match {
+          case Some(newEstimate) =>
+            getMainChain[F](newEstimate, dag, acc :+ estimate)
+          case None => acc
+        }
+      case None => acc
     }
   }
 
@@ -85,7 +87,7 @@ object BlockAPI {
                      .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
                  })
       timestamp       <- header.timestamp.pure[F]
-      mainParent      <- header.parentsHashList.head.pure[F]
+      mainParent      <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
       parentsHashList <- header.parentsHashList.pure[F]
     } yield {
       BlockInfo(
