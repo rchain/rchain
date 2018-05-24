@@ -3,14 +3,21 @@ package coop.rchain.node
 import java.io.{File, PrintWriter}
 import java.net.SocketAddress
 import java.util.UUID
-import io.grpc.Server
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import io.grpc.Server
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
+import CommError._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
@@ -99,10 +106,15 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       })
     case None => newValidators
   }
+  // TODO: Ask Pawel about using Time[F] and replace timestamp with solution
+  val version_stub   = 0L
+  val timestamp_stub = 0L
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
-    genesisBlock(genesisBonds)
+    ProtoUtil.genesisBlock(genesisBonds, version_stub, timestamp_stub),
+    version_stub,
+    timestamp_stub
   )
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]

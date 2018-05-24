@@ -4,7 +4,6 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.api.BlockAPI.getBlockInfo
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter}
@@ -63,9 +62,12 @@ object BlockAPI {
                            }
     } yield blockQueryResponse
 
+  // TODO: Add fault tolerance
   private def getBlockInfo[F[_]: Monad: MultiParentCasper](block: BlockMessage): F[BlockInfo] =
     for {
-      parents <- block.header.fold(Seq.empty[ByteString])(_.parentsHashList).pure[F]
+      header      <- block.header.getOrElse(Header.defaultInstance).pure[F]
+      version     <- header.version.pure[F]
+      deployCount <- header.deployCount.pure[F]
       tsHash <- {
         val ps = block.body.flatMap(_.postState)
         ps.fold(ByteString.EMPTY)(_.tuplespace).pure[F]
@@ -82,12 +84,21 @@ object BlockAPI {
                      })
                      .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
                  })
+      timestamp       <- header.timestamp.pure[F]
+      mainParent      <- header.parentsHashList.head.pure[F]
+      parentsHashList <- header.parentsHashList.pure[F]
     } yield {
       BlockInfo(
         blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
+        blockSize = block.serializedSize.toString,
         blockNumber = ProtoUtil.blockNumber(block),
-        parentsHashList = parents.map(PrettyPrinter.buildStringNoLimit),
-        tupleSpaceDump = tsDesc
+        version = version,
+        deployCount = deployCount,
+        tupleSpaceHash = PrettyPrinter.buildStringNoLimit(tsHash),
+        tupleSpaceDump = tsDesc,
+        timestamp = timestamp,
+        mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
+        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit)
       )
     }
 

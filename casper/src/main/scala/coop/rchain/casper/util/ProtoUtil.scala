@@ -124,12 +124,18 @@ object ProtoUtil {
     ByteString.copyFrom(Blake2b256.hash(bytes))
   }
 
-  def blockHeader(body: Body, parentHashes: Seq[ByteString]): Header =
+  def blockHeader(body: Body,
+                  parentHashes: Seq[ByteString],
+                  version: Long,
+                  timestamp: Long): Header =
     Header()
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
       .withNewCodeHash(protoSeqHash(body.newCode))
       .withCommReductionsHash(protoSeqHash(body.commReductions))
+      .withDeployCount(body.newCode.length)
+      .withVersion(version)
+      .withTimestamp(timestamp)
 
   def unsignedBlockProto(body: Body,
                          header: Header,
@@ -140,7 +146,7 @@ object ProtoUtil {
       .withBody(body)
       .withJustifications(justifications)
 
-  def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
+  def genesisBlock(bonds: Map[Array[Byte], Int], version: Long, timestamp: Long): BlockMessage = {
     val bondsProto = bonds.toSeq.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk)
@@ -151,12 +157,15 @@ object ProtoUtil {
       .withBonds(bondsProto)
     val body = Body()
       .withPostState(state)
-    val header = blockHeader(body, List.empty[ByteString])
+    val header = blockHeader(body, List.empty[ByteString], version, timestamp)
 
     unsignedBlockProto(body, header, List.empty[Justification])
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
+
+  def stringToByteString(string: String): ByteString =
+    ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
     val nonce = scala.util.Random.nextInt(10000)

@@ -58,7 +58,9 @@ sealed abstract class MultiParentCasperInstances {
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       storageLocation: Path,
       storageSize: Long,
-      genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
+      genesis: BlockMessage,
+      version: Long,
+      timestamp: Long)(implicit scheduler: Scheduler): MultiParentCasper[F] =
     //TODO: Get rid of all the mutable data structures and write proper FP code
     new MultiParentCasper[F] {
       type BlockHash = ByteString
@@ -170,8 +172,10 @@ sealed abstract class MultiParentCasperInstances {
               val body = Body()
                 .withPostState(postState)
                 .withNewCode(requests)
-              val header = blockHeader(body, parents.map(_.blockHash))
-              val block  = unsignedBlockProto(body, header, justifications)
+              // TODO: Fix with actual stuff
+              val header =
+                blockHeader(body, parents.map(_.blockHash), version, timestamp)
+              val block = unsignedBlockProto(body, header, justifications)
 
               Some(block)
             } else {
