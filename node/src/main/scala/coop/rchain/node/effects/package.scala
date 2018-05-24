@@ -132,15 +132,15 @@ package object effects {
         }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
     }
 
-  def ping[F[_]: Monad: Capture: Metrics: TransportLayer]: Ping[F] =
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
-      def ping(localNode: ProtocolNode, remoteNode: ProtocolNode): F[Option[Duration]] =
+      def ping(node: ProtocolNode): F[Option[Duration]] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
-          req = PingMessage(ProtocolMessage.ping(localNode), System.currentTimeMillis)
+          req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)
           res <- TransportLayer[F]
-                  .roundTrip(req, remoteNode, 500.milliseconds)
+                  .roundTrip(req, node, 500.milliseconds)
                   .map(_.toOption.flatMap(resp =>
                     req.header.map(incoming =>
                       Duration(resp.timestamp - incoming.timestamp, MILLISECONDS))))

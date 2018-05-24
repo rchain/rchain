@@ -119,7 +119,7 @@ final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, 
   private def ping[F[_]: Functor: Ping](ps: mutable.ListBuffer[Entry],
                                         older: Entry,
                                         newer: A): F[Unit] =
-    Ping[F].ping(home, older.entry).map { result =>
+    Ping[F].ping(older.entry).map { result =>
       val winner = result.map(_ => older).getOrElse(new Entry(newer))
       ps synchronized {
         ps -= older

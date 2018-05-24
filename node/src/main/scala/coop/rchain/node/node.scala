@@ -66,7 +66,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
-  implicit val pingEffect: Ping[Task]                     = effects.ping
+  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
