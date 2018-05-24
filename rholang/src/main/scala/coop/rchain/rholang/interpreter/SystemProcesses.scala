@@ -8,8 +8,9 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{IStore, produce}
+import coop.rchain.rspace.{produce, IStore}
 import monix.eval.Task
+import implicits._
 
 object SystemProcesses {
 
@@ -25,10 +26,8 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(arg, ack)) =>
       Task(Console.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
-        produce(store, ack, Seq(Channel(Quote(Par.defaultInstance))), false) match {
-          case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-          case None                           => Task.unit
-        }
+        produce(store, ack, Seq(Channel(Quote(Par.defaultInstance))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
@@ -42,10 +41,8 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(arg, ack)) =>
       Task(Console.err.println(prettyPrinter.buildString(arg))).flatMap { (_: Unit) =>
-        produce(store, ack, Seq(Channel(Quote(Par.defaultInstance))), false) match {
-          case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-          case None                           => Task.unit
-        }
+        produce(store, ack, Seq(Channel(Quote(Par.defaultInstance))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
@@ -68,10 +65,8 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
       Task.now(Secp256k1.verify(data, signature, pub)).flatMap { verified =>
-        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GBool(verified))))))), false) match {
-          case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-          case None                           => Task.unit
-        }
+        produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
@@ -80,34 +75,32 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
       Task(Ed25519.verify(data, signature, pub)).flatMap { verified =>
-        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GBool(verified))))))), false) match {
-          case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-          case None                           => Task.unit
-        }
+        produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
   def curve25519Encrypt(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                         dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
-  case Seq(Seq(IsByteArray(pub), IsByteArray(sec), IsByteArray(nonce), IsByteArray(message), ack)) =>
-    Task(Curve25519.encrypt(pub, sec, nonce, message)).flatMap { encrypted =>
-      produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(encrypted)))))))), false) match {
-        case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-        case None                           => Task.unit
+    case Seq(
+        Seq(IsByteArray(pub), IsByteArray(sec), IsByteArray(nonce), IsByteArray(message), ack)) =>
+      Task(Curve25519.encrypt(pub, sec, nonce, message)).flatMap { encrypted =>
+        produce(store,
+                ack,
+                Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(encrypted)))))),
+                false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
-    }
-}
+  }
 
   def sha256Hash(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                  dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.now(Sha256.hash(input)).flatMap { hash =>
-        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(hash)))))))), false) match {
-          case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-          case None                           => Task.unit
-        }
+        produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
@@ -116,22 +109,23 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
       Task.now(Keccak256.hash(input)).flatMap { hash =>
-        produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(hash)))))))), false) match {
-          case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-          case None                           => Task.unit
-        }
+        produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
   }
 
   def blake2b256Hash(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
-  case Seq(Seq(IsByteArray(input), ack)) =>
-    Task.now(Blake2b256.hash(input)).flatMap { hash =>
-      produce(store, ack, Seq(Channel(Quote(Par(exprs = Seq(Expr(GByteArray(ByteString.copyFrom(hash)))))))), false) match {
-        case Some((continuation, dataList)) => dispatcher.dispatch(continuation, dataList)
-        case None                           => Task.unit
+    case Seq(Seq(IsByteArray(input), ack)) =>
+      Task.now(Blake2b256.hash(input)).flatMap { hash =>
+        produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
+          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
-    }
-}
+  }
+
+  private def _dispatch(dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])(
+      cont: TaggedContinuation,
+      dataList: Seq[Seq[Channel]]): Task[Unit] =
+    dispatcher.dispatch(cont, dataList)
 }
