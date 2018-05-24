@@ -210,46 +210,53 @@ package object effects {
 
     }
 
-  def transportLayer[F[_]: Monad: Capture: Log: Time: Metrics: Ping](
-      net: UnicastNetwork): TransportLayer[F] =
-    new TransportLayer[F] {
+  def transportLayer(net: UnicastNetwork)(implicit
+                                          ev1: Log[Task],
+                                          ev2: Time[Task],
+                                          ev3: Metrics[Task],
+                                          ev4: Ping[Task]): TransportLayer[Task] =
+    new TransportLayer[Task] {
       import scala.concurrent.duration._
 
       def roundTrip(msg: ProtocolMessage,
                     remote: ProtocolNode,
-                    timeout: Duration): F[CommErr[ProtocolMessage]] =
-        net.roundTrip[F](msg, remote, timeout)
+                    timeout: Duration): Task[CommErr[ProtocolMessage]] =
+        net.roundTrip[Task](msg, remote, timeout)
 
-      def local: F[ProtocolNode] = net.local.pure[F]
+      def local: Task[ProtocolNode] = net.local.pure[Task]
 
-      def commSend(msg: ProtocolMessage, peer: PeerNode): F[Either[CommError, Unit]] =
-        Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
+      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
+        Task.delay(net.comm.send(msg.toByteSeq, peer))
 
-      def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
-        Capture[F].capture {
+      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] =
+        Task.delay {
           net.broadcast(msg)
         }
 
-      private def handle(dispatch: ProtocolMessage => F[Option[ProtocolMessage]])
-        : Option[ProtocolMessage] => F[Unit] = _.fold(().pure[F]) { pm =>
+      private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
+        : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
         dispatch(pm) >>= {
-          case None => ().pure[F]
+          case None => ().pure[Task]
           case Some(response) =>
-            pm.sender.fold(Log[F].error(s"Sender not available for $pm")) { sender =>
+            pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
               commSend(response, sender) >>= {
                 case Left(error) =>
-                  Log[F].warn(
+                  Log[Task].warn(
                     s"Was unable to send response $response for request: $pm, error: $error")
-                case _ => ().pure[F]
+                case _ => ().pure[Task]
               }
             }
         }
       }
 
-      def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] =
+      def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
         net
-          .receiver[F]
+          .receiver[Task]
           .flatMap(handle(dispatch))
+          .forever
+          .executeAsync
+          .start
+          .void
     }
 
   class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {

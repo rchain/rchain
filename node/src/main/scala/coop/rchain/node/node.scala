@@ -197,23 +197,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         case resultPM => resultPM.pure[Effect]
     }
 
-  private def receiveAndDispatch: Effect[Unit] =
-    TransportLayer[Effect]
-      .receive(handleCommunications)
-      .value
-      .forever
-      .executeAsync
-      .start
-      .void
-      .toEffect
-
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      _         <- receiveAndDispatch
+      _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
