@@ -61,29 +61,47 @@ message Char {
 message Code {
     // Handle by reference. ID in parent Object.
 }
-message ExpandedLocation {}
+message ExpandedLocation {
+}
 message Fixnum {
     int32 value = 1;
 }
 message Float {
     double value = 1;
 }
-message FreeExpr {}
-message GotoExpr {}
-message IfExpr {}
-message LabelExpr {}
-message LetExpr {}
+message FreeExpr {
+    Object freeids = 1;
+    Object body = 2;
+}
+message GotoExpr {
+    Object label = 1;
+}
+message IfExpr {
+    Object condition = 1;
+    Object truebranch = 2;
+    Object falsebranch = 3;
+}
+message LabelExpr {
+    Object label = 1;
+    Object body = 2;
+}
+message LetExpr {
+    Object bindings = 1;
+    Object body = 2;
+}
 message LetrecExpr {}
 message MethodExpr {}
 message Niv {}
+message NullExpr {}
 message Proc {}
 message ProcExpr {}
 message QuoteExpr {}
-message RBLstring {
-    string value = 1;
-}
+message RblAtom {}
 message RblBool {
     bool value = 1;
+}
+message RBLstring {
+    string value = 1;
 }
 message ReflectiveMethodExpr {}
 message RequestExpr {}
@@ -100,7 +118,9 @@ message Template {}
 message Tuple {
     repeated Object elements = 1;
 }
-message TupleExpr {}
+message TupleExpr {
+    Object rest = 1;
+}
 
 enum ObType {
     OT_Actor = 0;
@@ -135,6 +155,8 @@ enum ObType {
     OT_RblBool = 29;
     OT_Niv = 30;
     OT_StdExtension = 31;
+    OT_RblAtom = 32;
+    OT_NullExpr = 33;
     OT_unknown = 999;
 }
 
@@ -143,6 +165,7 @@ message Object {
     uint64 id = 2;
     uint64 metaId = 3;
     uint64 parentId = 4;
+    bool reference = 5;;
 
     // One and only one of these should be populated. These contain information specific to the
     // Object type.
@@ -179,5 +202,7 @@ message Object {
         RblBool rblbool = 39;
         Niv niv = 40;
         StdExtension stdextension = 41;
+        RblAtom rblatom = 42;
+        NullExpr nullexpr = 43;
     }
 }
