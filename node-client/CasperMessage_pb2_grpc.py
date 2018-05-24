@@ -6,8 +6,8 @@ from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
 class DeployServiceStub(object):
-  # missing associated documentation comment in .proto file
-  pass
+  """--------- DeployService  --------
+  """
 
   def __init__(self, channel):
     """Constructor.
@@ -33,13 +33,18 @@ class DeployServiceStub(object):
     self.showBlock = channel.unary_unary(
         '/coop.rchain.casper.protocol.DeployService/showBlock',
         request_serializer=CasperMessage__pb2.BlockQuery.SerializeToString,
-        response_deserializer=CasperMessage__pb2.BlockInfo.FromString,
+        response_deserializer=CasperMessage__pb2.BlockQueryResponse.FromString,
+        )
+    self.showBlocks = channel.unary_unary(
+        '/coop.rchain.casper.protocol.DeployService/showBlocks',
+        request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+        response_deserializer=CasperMessage__pb2.BlocksResponse.FromString,
         )
 
 
 class DeployServiceServicer(object):
-  # missing associated documentation comment in .proto file
-  pass
+  """--------- DeployService  --------
+  """
 
   def DoDeploy(self, request, context):
     # missing associated documentation comment in .proto file
@@ -69,6 +74,13 @@ class DeployServiceServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def showBlocks(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
 
 def add_DeployServiceServicer_to_server(servicer, server):
   rpc_method_handlers = {
@@ -90,7 +102,12 @@ def add_DeployServiceServicer_to_server(servicer, server):
       'showBlock': grpc.unary_unary_rpc_method_handler(
           servicer.showBlock,
           request_deserializer=CasperMessage__pb2.BlockQuery.FromString,
-          response_serializer=CasperMessage__pb2.BlockInfo.SerializeToString,
+          response_serializer=CasperMessage__pb2.BlockQueryResponse.SerializeToString,
+      ),
+      'showBlocks': grpc.unary_unary_rpc_method_handler(
+          servicer.showBlocks,
+          request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+          response_serializer=CasperMessage__pb2.BlocksResponse.SerializeToString,
       ),
   }
   generic_handler = grpc.method_handlers_generic_handler(
