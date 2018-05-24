@@ -42,7 +42,7 @@ object EffectsTestInstances {
     def peers: F[Seq[PeerNode]] = Capture[F].capture {
       nodes
     }
-    
+
     def findMorePeers(limit: Int): F[Seq[PeerNode]]                         = ???
     def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] = ???
   }

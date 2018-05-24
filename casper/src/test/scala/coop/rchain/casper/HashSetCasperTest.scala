@@ -157,15 +157,12 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
   }
 
-  private val roundTripNOP =
-    kp2[ProtocolMessage, ProtocolNode, CommErr[ProtocolMessage]](Left(unknownProtocol("unknown")))
-
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(peerNode(name, port), roundTripNOP)
+    ProtocolNode(peerNode(name, port))
 
 }
