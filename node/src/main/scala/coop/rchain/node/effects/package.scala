@@ -180,20 +180,33 @@ package object effects {
         }).writeTo(new FileOutputStream(remoteKeysPath.toFile))
     }
 
-  def nodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics](
+  def ping[F[_]: Monad: Capture: Metrics: TransportLayer]: Ping[F] =
+    new Ping[F] {
+      import scala.concurrent.duration._
+      def ping(localNode: ProtocolNode, remoteNode: ProtocolNode): F[Option[Duration]] =
+        for {
+          _   <- Metrics[F].incrementCounter("protocol-ping-sends")
+          req = PingMessage(ProtocolMessage.ping(localNode), System.currentTimeMillis)
+          res <- TransportLayer[F]
+                  .roundTrip(req, remoteNode, 500.milliseconds)
+                  .map(_.toOption.flatMap(resp =>
+                    req.header.map(incoming =>
+                      Duration(resp.timestamp - incoming.timestamp, MILLISECONDS))))
+        } yield res
+    }
+
+  def nodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: Ping](
       net: UnicastNetwork): NodeDiscovery[F] =
     new NodeDiscovery[F] {
 
       def addNode(node: PeerNode): F[Unit] =
         for {
-          _ <- Capture[F].capture(net.add(node))
+          _ <- net.add[F](node)
           _ <- Metrics[F].incrementGauge("peers")
         } yield ()
 
       def findMorePeers(limit: Int): F[Seq[PeerNode]] =
-        Capture[F].capture {
-          net.findMorePeers(limit)
-        }
+        net.findMorePeers[F](limit)
 
       def peers: F[Seq[PeerNode]] =
         Capture[F].capture {
@@ -201,53 +214,47 @@ package object effects {
         }
     }
 
-  def transportLayer(net: UnicastNetwork)(implicit
-                                          ev1: Log[Task],
-                                          ev2: Time[Task],
-                                          ev3: Metrics[Task]): TransportLayer[Task] =
-    new TransportLayer[Task] {
+  def transportLayer[F[_]: Monad: Capture: Log: Time: Metrics: Ping](
+      net: UnicastNetwork): TransportLayer[F] =
+    new TransportLayer[F] {
       import scala.concurrent.duration._
 
       def roundTrip(msg: ProtocolMessage,
                     remote: ProtocolNode,
-                    timeout: Duration): Task[CommErr[ProtocolMessage]] =
-        net.roundTrip[Task](msg, remote, timeout)
+                    timeout: Duration): F[CommErr[ProtocolMessage]] =
+        net.roundTrip[F](msg, remote, timeout)
 
-      def local: Task[ProtocolNode] = net.local.pure[Task]
+      def local: F[ProtocolNode] = net.local.pure[F]
 
-      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
-        Task.delay(net.comm.send(msg.toByteSeq, peer))
+      def commSend(msg: ProtocolMessage, peer: PeerNode): F[Either[CommError, Unit]] =
+        Capture[F].capture(net.comm.send(msg.toByteSeq, peer))
 
-      def broadcast(msg: ProtocolMessage): Task[Seq[CommErr[Unit]]] =
-        Task.delay {
+      def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] =
+        Capture[F].capture {
           net.broadcast(msg)
         }
 
-      private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
-        : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
+      private def handle(dispatch: ProtocolMessage => F[Option[ProtocolMessage]])
+        : Option[ProtocolMessage] => F[Unit] = _.fold(().pure[F]) { pm =>
         dispatch(pm) >>= {
-          case None => ().pure[Task]
+          case None => ().pure[F]
           case Some(response) =>
-            pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
+            pm.sender.fold(Log[F].error(s"Sender not available for $pm")) { sender =>
               commSend(response, sender) >>= {
                 case Left(error) =>
-                  Log[Task].warn(
+                  Log[F].warn(
                     s"Was unable to send response $response for request: $pm, error: $error")
                 case _ =>
-                  Log[Task].info(s"Response $response for request: $pm was sent, sender: $sender")
+                  Log[F].info(s"Response $response for request: $pm was sent, sender: $sender")
               }
             }
         }
       }
 
-      def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
+      def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] =
         net
-          .receiver[Task]
+          .receiver[F]
           .flatMap(handle(dispatch))
-          .forever
-          .executeAsync
-          .start
-          .void
     }
 
   class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {

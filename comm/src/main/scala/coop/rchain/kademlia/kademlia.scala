@@ -4,17 +4,20 @@ import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success, Try}
 import java.util.concurrent.Executors
+
 import scala.annotation.tailrec
+
+import cats._, cats.data._, cats.implicits._
+
+import coop.rchain.catscontrib.Capture
+import coop.rchain.comm.ProtocolNode
+import coop.rchain.p2p.effects.Ping
 
 trait Keyed {
   def key: Seq[Byte]
 }
 
-trait Remote {
-  def ping: Try[Duration]
-}
-
-trait Peer extends Remote with Keyed
+trait Peer extends Keyed
 
 trait Latent {
   def latency: Double
@@ -39,6 +42,12 @@ final case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
 }
 
 object PeerTable {
+
+  def apply[A <: ProtocolNode](home: A,
+                               k: Int = PeerTable.Redundancy,
+                               alpha: Int = PeerTable.Alpha): PeerTable[A] =
+    new PeerTable[A](home, k, alpha)
+
   // Number of bits considered in the distance function. Taken from the
   // passed-in "home" value to the table.
   //
@@ -72,14 +81,14 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-final case class PeerTable[A <: Peer](home: A,
-                                      val k: Int = PeerTable.Redundancy,
-                                      val alpha: Int = PeerTable.Alpha) {
+final class PeerTable[A <: ProtocolNode](home: A,
+                                         k: Int = PeerTable.Redundancy,
+                                         alpha: Int = PeerTable.Alpha) {
 
-  type Entry = PeerTableEntry[A]
+  private[kademlia] type Entry = PeerTableEntry[A]
 
-  val width = home.key.size // in bytes
-  val table = Array.fill(8 * width) {
+  private[kademlia] val width = home.key.size // in bytes
+  private[kademlia] val table = Array.fill(8 * width) {
     new mutable.ListBuffer[Entry]
   }
 
@@ -92,7 +101,7 @@ final case class PeerTable[A <: Peer](home: A,
     * @return `Some(Int)` if `a` and `b` are comparable in this table,
     * `None` otherwise.
     */
-  def distance(a: Seq[Byte], b: Seq[Byte]): Option[Int] = {
+  private[kademlia] def distance(a: Seq[Byte], b: Seq[Byte]): Option[Int] = {
     @tailrec
     def highBit(idx: Int): Int =
       if (idx == width) 8 * width
@@ -106,25 +115,20 @@ final case class PeerTable[A <: Peer](home: A,
     else Some(highBit(0))
   }
 
-  def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
-  def distance(other: A): Option[Int]            = distance(other.key)
+  private[kademlia] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
+  private[kademlia] def distance(other: A): Option[Int]            = distance(other.key)
 
-  private val pool = Executors.newFixedThreadPool(alpha)
-  private def ping(ps: mutable.ListBuffer[Entry], older: Entry, newer: A): Unit =
-    pool.execute(new Runnable {
-      def run = {
-        val winner =
-          older.entry.ping match {
-            case Success(_) => older
-            case Failure(_) => new Entry(newer)
-          }
-        ps synchronized {
-          ps -= older
-          ps += winner
-          winner.pinging = false
-        }
+  private def ping[F[_]: Functor: Ping](ps: mutable.ListBuffer[Entry],
+                                        older: Entry,
+                                        newer: A): F[Unit] =
+    Ping[F].ping(home, older.entry).map { result =>
+      val winner = result.map(_ => older).getOrElse(new Entry(newer))
+      ps synchronized {
+        ps -= older
+        ps += winner
+        winner.pinging = false
       }
-    })
+    }
 
   /** Update the last-seen time of `peer`, possibly adding it to the
     * routing table.
@@ -138,39 +142,41 @@ final case class PeerTable[A <: Peer](home: A,
     * If `peer` is already in the table, it becomes the most recently
     * seen entry at its distance.
     */
-  def observe(peer: A, add: Boolean): Unit =
+  def observe[F[_]: Functor: Capture: Ping](peer: A, add: Boolean): F[Unit] =
     distance(home.key, peer.key) match {
       case Some(index) =>
         if (index < 8 * width) {
           val ps = table(index)
           ps synchronized {
             ps.find(_.key == peer.key) match {
-              case Some(entry) => {
-                ps -= entry
-                ps += entry
-              }
+              case Some(entry) =>
+                Capture[F].capture {
+                  ps -= entry
+                  ps += entry
+                }
               case None if add =>
                 if (ps.size < k) {
-                  ps += new Entry(peer)
+                  Capture[F].capture(ps += new Entry(peer))
                 } else {
                   // ping first (oldest) element that isn't already being
                   // pinged. If it responds, move it to back (newest
                   // position); if it doesn't respond, remove it and place
                   // a in back instead
-                  ps.find(!_.pinging) foreach {
-                    case candidate => {
+                  ps.find(!_.pinging)
+                    .map { candidate =>
                       candidate.pinging = true
-                      ping(ps, candidate, peer)
+                      ping[F](ps, candidate, peer)
                     }
-                  }
+                    .getOrElse(noop)
                 }
-              case None => ()
+              case None => noop
             }
-            ()
           }
-        }
-      case None => ()
+        } else noop
+      case None => noop
     }
+
+  private def noop[F[_]: Capture] = Capture[F].capture(())
 
   /**
     * Remove a peer with the given key.

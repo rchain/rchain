@@ -57,6 +57,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val metricsEffect: Metrics[Task]               = effects.metrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
   val net                                                 = new UnicastNetwork(src)
+  implicit val pingEffect: Ping[Task]                     = effects.ping
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
@@ -112,7 +113,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def receiveAndDispatch: Effect[Unit] =
-    TransportLayer[Effect].receive(p2p.Network.dispatch[Effect])
+    TransportLayer[Effect]
+      .receive(p2p.Network.dispatch[Effect])
+      .value
+      .forever
+      .executeAsync
+      .start
+      .void
+      .toEffect
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
