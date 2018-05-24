@@ -4,10 +4,12 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import coop.rchain.casper.protocol.{BlockInfo, BlockMessage, BlockQuery, MaybeBlockMessage}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.{BlockDag, MultiParentCasper, PrettyPrinter}
 import coop.rchain.crypto.codec.Base16
+
+import scala.annotation.tailrec
 
 object BlockAPI {
   def createBlock[F[_]: Monad: MultiParentCasper]: F[MaybeBlockMessage] =
@@ -15,6 +17,32 @@ object BlockAPI {
 
   def addBlock[F[_]: Monad: MultiParentCasper](b: BlockMessage): F[Empty] =
     MultiParentCasper[F].addBlock(b).map(_ => Empty())
+
+  def getBlocksInfo[F[_]: Monad: MultiParentCasper]: F[BlocksInfo] =
+    for {
+      estimates <- MultiParentCasper[F].estimator
+      dag       <- MultiParentCasper[F].blockDag
+      mainChain: IndexedSeq[BlockMessage] = getMainChain[F](estimates.head,
+                                                            dag,
+                                                            IndexedSeq.empty[BlockMessage])
+      blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
+    } yield BlocksInfo(blockInfos)
+
+  @tailrec
+  private def getMainChain[F[_]: Monad: MultiParentCasper](
+      estimate: BlockMessage,
+      dag: BlockDag,
+      acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
+    val parentsHashes    = ProtoUtil.parents(estimate)
+    val mainParentHash   = parentsHashes.head
+    val maybeNewEstimate = dag.blockLookup.get(mainParentHash)
+    maybeNewEstimate match {
+      case Some(newEstimate) =>
+        getMainChain[F](newEstimate, dag, acc :+ estimate)
+      case None =>
+        acc
+    }
+  }
 
   def getBlockInfo[F[_]: Monad: MultiParentCasper](q: BlockQuery): F[BlockInfo] =
     for {

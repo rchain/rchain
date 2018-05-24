@@ -73,6 +73,8 @@ object GrpcServer {
     override def addBlock(b: BlockMessage): Future[Empty] = BlockAPI.addBlock[F](b).toFuture
 
     override def showBlock(q: BlockQuery): Future[BlockInfo] = BlockAPI.getBlockInfo[F](q).toFuture
+
+    override def showBlocks(e: Empty): Future[BlocksInfo] = BlockAPI.getBlocksInfo[F].toFuture
   }
 
   class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {

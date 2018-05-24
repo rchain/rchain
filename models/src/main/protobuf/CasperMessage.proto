@@ -59,6 +59,9 @@ message BlockInfo {
   repeated string parentsHashList = 4;
   string tsDesc = 5;
 }
+message BlocksInfo {
+  repeated BlockInfo blocks = 1;
+}
 
 message Deploy {
   bytes user  = 1; //public key
@@ -78,6 +81,7 @@ service DeployService {
   rpc createBlock(google.protobuf.Empty) returns (MaybeBlockMessage) {}
   rpc addBlock(BlockMessage) returns (google.protobuf.Empty) {}
   rpc showBlock(BlockQuery) returns (BlockInfo) {}
+  rpc showBlocks(google.protobuf.Empty) returns (BlocksInfo) {}
 }
 message DeployServiceResponse {
   bool   success = 1;
