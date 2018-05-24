@@ -1,11 +1,9 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.net.SocketAddress
 import java.util.UUID
 import io.grpc.Server
 
-import scala.concurrent.duration.{Duration, MILLISECONDS}
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
@@ -68,12 +66,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
-  val unsafeRoundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] = (pm, pn) =>
-    transportLayerEffect.roundTrip(pm, pn, Duration(500, MILLISECONDS)).unsafeRunSync
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)({
-    case (local, None)       => ProtocolNode(local, unsafeRoundTrip)
-    case (peer, Some(local)) => ProtocolNode(peer, local, unsafeRoundTrip)
-  })
+  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
     conf.bondsFile.toOption

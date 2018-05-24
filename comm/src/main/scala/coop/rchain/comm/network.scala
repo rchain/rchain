@@ -5,13 +5,9 @@ import scala.collection.concurrent
 import scala.concurrent.{Await, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import coop.rchain.comm.protocol.routing.Header
-import coop.rchain.kademlia.PeerTable
 import coop.rchain.metrics.Metrics
 import com.typesafe.scalalogging.Logger
-import scala.collection.mutable
-import scala.util.{Failure, Success}
 import CommError._
-import cats._, cats.data._, cats.implicits._
 import coop.rchain.p2p.effects._
 import coop.rchain.catscontrib._, Catscontrib._
 import cats._, cats.data._, cats.implicits._
@@ -33,10 +29,7 @@ class UnicastNetwork(peer: PeerNode) {
   val pending =
     new concurrent.TrieMap[PendingKey, Promise[Either[CommError, ProtocolMessage]]]
 
-  val unsafeRoundTrip: (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
-    (pm, pn) => roundTrip[Id](pm, pn)
-
-  val local = ProtocolNode(peer, unsafeRoundTrip)
+  val local = ProtocolNode(peer)
   val comm  = new UnicastComm(local)
 
   def receiver[F[_]: Monad: Capture: Log: Time: Metrics]: F[Option[ProtocolMessage]] =
@@ -150,9 +143,8 @@ class UnicastNetwork(peer: PeerNode) {
   }
 
   def pumpSender(sock: SocketAddress, sndr: PeerNode): PeerNode = sock match {
-    case (s: java.net.InetSocketAddress) =>
-      sndr.withUdpSocket(s)
-    case _ => sndr
+    case s: java.net.InetSocketAddress => sndr.withUdpSocket(s)
+    case _                             => sndr
   }
 
   override def toString = s"#{Network $local ${local.endpoint.udpSocketAddress}}"
