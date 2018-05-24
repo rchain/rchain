@@ -181,19 +181,17 @@ Nel codice sottostante, mostriamo un esempio di iterazione attraverso un elenco 
     35         
     36         get!(*ret) | for(@r <- ret) {
     37           //r is equal to 0
-    38           for(_ <- ret){
-    39             set!(1, *ret) | for(_ <- ret) {
-    40               get!(*ret) | for(@r <- ret) {
-    41                 //r is equal to 1
-    42                 Nil
-    43               }
-    44             }
-    45           }
-    46         }
-    47       }
-    48     }
-    49   }
-    50 }
+    38           set!(1, *ret) | for(_ <- ret) {
+    39             get!(*ret) | for(@r <- ret) {
+    40               //r is equal to 1
+    41               Nil
+    42             }
+    43           }
+    44         }
+    45       }
+    46     }
+    47   }
+    48 }
 
 2) Uno schema di progettazione, utilizzato nel contratto MakeCell di cui sopra, è quello di ricevere dal chiamante un canale per ogni diversa funzionalità fornita da un processo. Un programmatore orientato agli oggetti potrebbe dire che MakeCell richiede al chiamante di fornire un canale per ogni metodo. MakeCoatCheck utilizza un approccio più orientato agli oggetti, come vedremo.
 
