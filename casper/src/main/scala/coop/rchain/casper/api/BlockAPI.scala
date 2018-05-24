@@ -20,11 +20,13 @@ object BlockAPI {
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasper]: F[BlocksResponse] =
     for {
-      estimates                           <- MultiParentCasper[F].estimator
-      dag                                 <- MultiParentCasper[F].blockDag
-      tip                                 = estimates.head
-      mainChain: IndexedSeq[BlockMessage] = getMainChain[F](tip, dag, IndexedSeq(tip))
-      blockInfos                          <- mainChain.toList.traverse(getBlockInfo[F])
+      estimates <- MultiParentCasper[F].estimator
+      dag       <- MultiParentCasper[F].blockDag
+      tip       = estimates.head
+      mainChain: IndexedSeq[BlockMessage] = getMainChain[F](tip,
+                                                            dag,
+                                                            IndexedSeq.empty[BlockMessage])
+      blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
     } yield BlocksResponse(status = "Success", blocks = blockInfos)
 
   @tailrec
@@ -40,9 +42,9 @@ object BlockAPI {
         maybeNewEstimate match {
           case Some(newEstimate) =>
             getMainChain[F](newEstimate, dag, acc :+ estimate)
-          case None => acc
+          case None => acc :+ estimate
         }
-      case None => acc
+      case None => acc :+ estimate
     }
   }
 
