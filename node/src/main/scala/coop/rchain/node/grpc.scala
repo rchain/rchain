@@ -22,7 +22,7 @@ import monix.execution.Scheduler
 import com.google.protobuf.ByteString
 import java.io.{Reader, StringReader}
 
-import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics}
+import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object GrpcServer {
@@ -30,7 +30,8 @@ object GrpcServer {
   def acquireServer[
       F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: JvmMetrics: NodeMetrics: Futurable](
       port: Int,
-      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
+      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] = {
+    implicit val storeMetricsCapture: StoreMetrics[F] = diagnostics.storeMetrics[F](runtime.store)
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
@@ -39,6 +40,7 @@ object GrpcServer {
         .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
         .build
     }
+  }
 
   def start[F[_]: FlatMap: Capture: Log](server: Server): F[Unit] =
     for {

@@ -164,6 +164,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
     }
 
+  def startReportStoreMetrics(resources: Resources): Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      implicit val storeMetrics: StoreMetrics[Task] =
+        diagnostics.storeMetrics[Task](resources.runtime.store)
+      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
+    }
+
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
 
@@ -215,6 +223,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
+      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(

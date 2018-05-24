@@ -4,6 +4,8 @@ import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
 
+case class StoreSize(sizeOnDisk: Long, dataEntries: Long)
+
 /** The interface for the underlying store
   *
   * @tparam C a type representing a channel
@@ -63,4 +65,6 @@ trait IStore[C, P, A, K] {
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   def close(): Unit
+
+  def getStoreSize: StoreSize
 }

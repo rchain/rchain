@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import java.nio.ByteBuffer
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
@@ -20,7 +20,8 @@ import scala.collection.immutable.Seq
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-class LMDBStore[C, P, A, K] private (val env: Env[ByteBuffer],
+class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
+                                     databaseBath: Path,
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbWaitingContinuations: Dbi[ByteBuffer],
                                      _dbData: Dbi[ByteBuffer],
@@ -267,6 +268,20 @@ class LMDBStore[C, P, A, K] private (val env: Env[ByteBuffer],
     env.close()
   }
 
+  def getStoreSize: StoreSize = {
+    val sizeOnDisk = Files
+      .walk(databaseBath)
+      .mapToLong(p => {
+        val f = p.toFile
+        if (f.isFile)
+          f.length
+        else
+          0
+      })
+      .sum()
+    StoreSize(sizeOnDisk, env.stat().entries)
+  }
+
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
       !_dbKeys.iterate(txn).hasNext &&
@@ -327,7 +342,10 @@ object LMDBStore {
     val dbData: Dbi[ByteBuffer]  = env.openDbi(dataTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](env, dbKeys, dbWaitingContinuations, dbData, dbJoins)(sc, sp, sa, sk)
+    new LMDBStore[C, P, A, K](env, path, dbKeys, dbWaitingContinuations, dbData, dbJoins)(sc,
+                                                                                          sp,
+                                                                                          sa,
+                                                                                          sk)
   }
 
   private[rspace] def toByteVector[T](value: T)(implicit st: Serialize[T]): ByteVector =

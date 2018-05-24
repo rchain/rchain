@@ -2,11 +2,11 @@ package coop.rchain.node.diagnostics.client
 
 import cats._
 import cats.implicits._
-
 import coop.rchain.node.ConsoleIO
 import coop.rchain.node.model.diagnostics._
-import scala.concurrent.duration._
+import coop.rchain.shared.LongOps.toHumanReadableSize
 
+import scala.concurrent.duration._
 import coop.rchain.comm.PeerNode
 
 object Runtime {
@@ -26,6 +26,8 @@ object Runtime {
       _       <- ConsoleIO[F].println(showGarbageCollectors(gc))
       threads <- DiagnosticsService[F].threads
       _       <- ConsoleIO[F].println(showThreads(threads))
+      store   <- DiagnosticsService[F].store
+      _       <- ConsoleIO[F].println(showStoreUsage(store))
     } yield ()
 
   def showPeers(peers: Seq[PeerNode]): String =
@@ -109,5 +111,11 @@ object Runtime {
        |  - P2P encryption handshake receivers: ${nodeCoreMetrics.p2PEncryptionHandshakeReceiverCount}
        |  - P2P protocol handshake receivers: ${nodeCoreMetrics.p2PProtocolHandshakeReceiverCount}
        |  - Peers: ${nodeCoreMetrics.peers}
+       |""".stripMargin
+
+  def showStoreUsage(storeUsage: StoreUsage): String =
+    s"""Store metrics:
+       | - Size On Disk: ${toHumanReadableSize(storeUsage.sizeOnDisk)}
+       | - Data Entries: ${storeUsage.dataEntries}
        |""".stripMargin
 }

@@ -1,5 +1,7 @@
 package coop.rchain.rspace
 
+import java.util.Locale
+
 import scala.collection.immutable.Seq
 
 package object util {

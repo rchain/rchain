@@ -15,6 +15,7 @@ trait DiagnosticsService[F[_]] {
   def garbageCollectors: F[Seq[GarbageCollector]]
   def memoryPools: F[Seq[MemoryPool]]
   def threads: F[Threads]
+  def store: F[StoreUsage]
 }
 
 object DiagnosticsService {
@@ -57,4 +58,7 @@ class GrpcDiagnosticsService(host: String, port: Int) extends DiagnosticsService
 
   def threads: Task[Threads] =
     Task.delay(blockingStub.getThreads(Empty()))
+
+  def store: Task[StoreUsage] =
+    Task.delay(blockingStub.getStoreUsage(Empty()))
 }
