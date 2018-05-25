@@ -156,7 +156,7 @@ lazy val node = (project in file("node"))
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
     },
     /* Debian */
-   debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
