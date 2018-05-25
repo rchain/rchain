@@ -23,13 +23,6 @@ object CertificateHelper {
       case _ => false
     }
 
-  // TODO: Remove this when turning on TLS
-  def randomPublicAddress: String = {
-    val b = Array[Byte](64)
-    scala.util.Random.nextBytes(b)
-    publicAddress(b)
-  }
-
   def publicAddress(certificate: X509Certificate): Option[String] =
     certificate.getPublicKey match {
       case p: ECPublicKey if isSecp256k1(certificate) =>

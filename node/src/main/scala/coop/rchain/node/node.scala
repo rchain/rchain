@@ -215,13 +215,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     }
 
   private def nodeName: String = {
-    val certificate = conf.certificate.map(c => Try(CertificateHelper.from(c))).toOption match {
-      case Some(Success(c)) if CertificateHelper.isSecp256k1(c) => Some(c)
-      case Some(Success(_)) =>
-        println("Certificate must contain a secp256k1 EC Public Key")
-        System.exit(1)
-        None
-      case Some(Failure(e)) =>
+    val certPath = conf.certificate.toOption
+      .getOrElse(java.nio.file.Paths.get(conf.data_dir().toString, "node.certificate.pem"))
+
+    val certificate = Try(CertificateHelper.fromFile(certPath.toFile)) match {
+      case Success(c) => Some(c)
+      case Failure(e) =>
         println(s"Failed to read the X.509 certificate: ${e.getMessage}")
         System.exit(1)
         None
@@ -230,7 +229,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     certificate
       .flatMap(CertificateHelper.publicAddress)
-      .getOrElse(CertificateHelper.randomPublicAddress)
+      .getOrElse {
+        println("Certificate must contain a secp256k1 EC Public Key")
+        System.exit(1)
+        ""
+      }
   }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
