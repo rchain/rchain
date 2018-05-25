@@ -127,24 +127,28 @@ sealed abstract class MultiParentCasperInstances {
        */
       def createBlock: F[Option[BlockMessage]] =
         for {
-          orderedHeads <- estimator
-          p            = chooseNonConflicting(orderedHeads, genesis, _blockDag.get)
-          r = {
-            val remDeploys = deployHist.clone()
-            DagOperations
-              .bfTraverse(p)(parents(_).iterator.map(_blockDag.get.blockLookup))
-              .foreach(b => {
-                b.body.foreach(_.newCode.foreach(remDeploys -= _))
-              })
-            remDeploys.toSeq
-          }
-          justifications = justificationProto(_blockDag.get.latestMessages)
+          orderedHeads   <- estimator
+          dag            <- blockDag
+          p              = chooseNonConflicting(orderedHeads, genesis, dag)
+          r              <- remDeploys(dag, p)
+          justifications = justificationProto(dag.latestMessages)
           proposal <- if (r.nonEmpty || p.length > 1) {
                        createProposal(p, r, justifications)
                      } else {
                        none[BlockMessage].pure[F]
                      }
         } yield proposal
+
+      private def remDeploys(dag: BlockDag, p: Seq[BlockMessage]): F[Seq[Deploy]] =
+        Capture[F].capture {
+          val result = deployHist.clone()
+          DagOperations
+            .bfTraverse(p)(parents(_).iterator.map(dag.blockLookup))
+            .foreach(b => {
+              b.body.foreach(_.newCode.foreach(result -= _))
+            })
+          result.toSeq
+        }
 
       private def createProposal(p: Seq[BlockMessage],
                                  r: Seq[Deploy],
