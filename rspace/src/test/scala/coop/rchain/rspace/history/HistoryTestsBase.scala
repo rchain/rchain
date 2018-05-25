@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import com.typesafe.scalalogging.Logger
-import org.scalactic.anyvals.{PosInt, PosZInt}
+import org.scalactic.anyvals.PosInt
 import org.scalatest.prop.{Configuration, GeneratorDrivenPropertyChecks}
 import org.scalatest.{FlatSpec, Matchers, OptionValues, Outcome}
 
@@ -13,7 +13,7 @@ trait HistoryTestsBase[T, K, V]
     with Configuration {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSize = PosZInt(100))
+    PropertyCheckConfiguration(minSuccessful = PosInt(100))
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
