@@ -527,14 +527,18 @@ extern convertArgReturnPair cnvArgRetPair;
 
 #include "Location.h"
 
+typedef uint64_t IdType;
+extern IdType nextId;
 
 class Base {
    public:
     static char** classNames;
     static uint32_t* obCounts;
     static int nClasses;
+    IdType id;
 
-    Base() {}
+    Base() : id(nextId++) {
+    }
 
     virtual char* typestring();
     virtual void updateCnt();

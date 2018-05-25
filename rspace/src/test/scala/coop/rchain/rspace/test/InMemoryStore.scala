@@ -7,7 +7,7 @@ import coop.rchain.rspace.examples._
 import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize}
+import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.immutable.Seq
@@ -42,7 +42,14 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  def collectGarbage(key: H): Unit = {
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit =
+    collectGarbage(channelsHash)
+
+  private[this] def collectGarbage(key: H): Unit = {
     val as = _data.get(key).exists(_.nonEmpty)
     if (!as) {
       //we still may have empty list, remove it as well
@@ -77,7 +84,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     putCs(txn, channels)
     val waitingContinuations =
       _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
-    _waitingContinuations.update(key, waitingContinuations :+ continuation)
+    _waitingContinuations.update(key, continuation +: waitingContinuations)
   }
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -147,6 +154,9 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _data.clear()
     _joinMap.clear()
   }
+
+  def getStoreSize: StoreSize =
+    StoreSize(0, (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
 
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty

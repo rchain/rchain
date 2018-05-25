@@ -1,26 +1,27 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.net.SocketAddress
 import java.util.UUID
-import io.grpc.{Server, ServerBuilder}
+import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._, CommError._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
+import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
+import diagnostics.MetricsServer
+import coop.rchain.node.effects.TLNodeDiscovery
 
 import scala.io.Source
 import scala.util.Try
@@ -29,8 +30,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
-      if (th.getCause() == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause().containsMessageWith(str)
+      if (th.getCause == null) th.getMessage.contains(str)
+      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
@@ -57,14 +58,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                         = effects.log
-  implicit val timeEffect: Time[Task]                       = effects.time
-  implicit val metricsEffect: Metrics[Task]                 = effects.metrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                   = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
-  implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
+  implicit val encryptionEffect: Encryption[Task]       = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                     = effects.log
+  implicit val timeEffect: Time[Task]                   = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
+  implicit val transportLayerEffect: TransportLayer[Task] =
+    effects.tcpTranposrtLayer[Task](host, conf.port())(src)
+  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
@@ -78,7 +82,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           None
         }
       })
-
   val genesisBonds: Map[Array[Byte], Int] = bondsFile match {
     case Some(file) =>
       Try {
@@ -96,11 +99,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         )
         newValidators
       })
-
     case None => newValidators
-
   }
-
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
@@ -115,11 +115,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                        httpServer: HttpServer,
                        runtime: Runtime)
 
-  def aquireResources: Effect[Resources] =
+  def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      grpcServer <- {
+        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        GrpcServer
+          .acquireServer[Effect](conf.grpcPort(), runtime)
+      }
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
@@ -135,8 +138,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+
+    (for {
+      peers <- nodeDiscoveryEffect.peers
+      loc   <- transportLayerEffect.local
+      ts    <- timeEffect.currentMillis
+      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      _     <- transportLayerEffect.broadcast(msg, peers)
+    } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
     println("Shutting down HTTP server....")
@@ -146,6 +155,20 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
     println("Goodbye.")
   }
+
+  def startReportJvmMetrics: Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
+  def startReportStoreMetrics(resources: Resources): Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      implicit val storeMetrics: StoreMetrics[Task] =
+        diagnostics.storeMetrics[Task](resources.runtime.store)
+      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
+    }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
     Task.delay(sys.addShutdownHook(clearResources(resources)))
@@ -185,20 +208,22 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     bonds
   }
 
-  private def receiveAndDispatch: Effect[Unit] =
-    TransportLayer[Effect].receive >>= {
-      case None      => ().pure[Effect]
-      case Some(msg) => p2p.Network.dispatch[Effect](msg)
+  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+    pm =>
+      NodeDiscovery[Effect].handleCommunications(pm) >>= {
+        case None     => p2p.Network.dispatch[Effect](pm)
+        case resultPM => resultPM.pure[Effect]
     }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
-      resources <- aquireResources
+      resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
-      // TODO handle errors on receive (currently ignored)
-      _ <- receiveAndDispatch.value.void.forever.executeAsync.start.toEffect
-      _ <- Log[Effect].info(s"Listening for traffic on $address.")
+      _         <- startReportJvmMetrics.toEffect
+      _         <- startReportStoreMetrics(resources).toEffect
+      _         <- TransportLayer[Effect].receive(handleCommunications)
+      _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
@@ -217,6 +242,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           .error(
             "Libsodium is NOT installed on your system. Please install libsodium (https://github.com/jedisct1/libsodium) and try again.")
       case th =>
-        th.getStackTrace().toList.traverse(ste => Log[Task].error(ste.toString))
+        th.getStackTrace.toList.traverse(ste => Log[Task].error(ste.toString))
     } *> exit0.as(Right(())))
 }
