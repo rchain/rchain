@@ -132,7 +132,7 @@ trait IStoreTests
     }
   }
 
-  "removeWaitingContinuation" should "remove waiting continuation from index" ignore withTestStore {
+  "removeWaitingContinuation" should "remove waiting continuation from index" in withTestStore {
     store =>
       forAll("channel", "continuation") { (channel: String, pattern: String) =>
         val key          = List(channel)

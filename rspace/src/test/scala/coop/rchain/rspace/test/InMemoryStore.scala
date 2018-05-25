@@ -84,7 +84,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     putCs(txn, channels)
     val waitingContinuations =
       _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
-    _waitingContinuations.update(key, waitingContinuations :+ continuation)
+    _waitingContinuations.update(key, continuation +: waitingContinuations)
   }
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
