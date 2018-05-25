@@ -148,37 +148,37 @@ class CryptoChannelsSpec
 
   "secp256k1Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
-      pendingUntilFixed {
-        val (reduce, store) = fixture
-
-        val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
-
-        val (secKey, pubKey) = Secp256k1.newKeyPair
-
-        val ackChannel                                    = GString("x")
-        implicit val emptyEnv                             = Env[Par]()
-        val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
-
-        forAll { (par: Par) =>
-          val parByteArray: Array[Byte] = serialize(par)
-
-          val signature = Secp256k1.sign(parByteArray, secKey)
-
-          val serializedPar = byteArrayToExpr(parByteArray)
-          val signaturePar  = byteArrayToExpr(signature)
-          val pubKeyPar     = byteArrayToExpr(pubKey)
-
-          val refVerify = Secp256k1.verify(parByteArray, signature, pubKey)
-          assert(refVerify === true)
-
-          val send = Send(secp256k1VerifyhashChannel,
-                          List(serializedPar, signaturePar, pubKeyPar, ackChannel),
-                          persistent = false,
-                          BitSet())
-          Await.result(reduce.eval(send).runAsync, 3.seconds)
-          storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
-          clearStore(store, reduce, ackChannel)
-        }
+      pending
+    //TODO: once we have secp256k1 packaged as jar
+//      val (reduce, store) = fixture
+//
+//      val secp256k1VerifyhashChannel = Quote(GString("secp256k1Verify"))
+//
+//      val (secKey, pubKey) = Secp256k1.newKeyPair
+//
+//      val ackChannel                                    = GString("x")
+//      implicit val emptyEnv                             = Env[Par]()
+//      val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
+//
+//      forAll { (par: Par) =>
+//        val parByteArray: Array[Byte] = serialize(par)
+//
+//        val signature = Secp256k1.sign(parByteArray, secKey)
+//
+//        val serializedPar = byteArrayToExpr(parByteArray)
+//        val signaturePar  = byteArrayToExpr(signature)
+//        val pubKeyPar     = byteArrayToExpr(pubKey)
+//
+//        val refVerify = Secp256k1.verify(parByteArray, signature, pubKey)
+//        assert(refVerify === true)
+//
+//        val send = Send(secp256k1VerifyhashChannel,
+//                        List(serializedPar, signaturePar, pubKeyPar, ackChannel),
+//                        persistent = false,
+//                        BitSet())
+//        Await.result(reduce.eval(send).runAsync, 3.seconds)
+//        storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
+//        clearStore(store, reduce, ackChannel)
       }
   }
 

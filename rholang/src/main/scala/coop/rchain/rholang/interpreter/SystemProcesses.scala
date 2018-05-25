@@ -60,17 +60,19 @@ object SystemProcesses {
       }
   }
 
-  //TODO: cryptographic functions throw exceptions. Wrap it with proper effect
   //  The following methods will be made available to contract authors.
-  def secp256k1Verify(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
-    : Seq[Seq[Channel]] => Task[Unit] = {
-    case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
-      Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
-        produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
-      }
-  }
+
+  //TODO(mateusz.gorski): we decided to look into delivering secp256k1 library (https://github.com/bitcoin-core/secp256k1)
+  // as separate jar in the future
+//  def secp256k1Verify(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+//                      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
+//    : Seq[Seq[Channel]] => Task[Unit] = {
+//    case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
+//      Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
+//        produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
+//          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
+//      }
+//  }
 
   def ed25519Verify(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                     dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
