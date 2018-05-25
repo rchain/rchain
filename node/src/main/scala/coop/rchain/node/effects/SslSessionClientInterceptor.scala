@@ -2,6 +2,7 @@ package coop.rchain.node.effects
 
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
+import coop.rchain.node.CertificateHelper
 
 import io.grpc._
 import javax.net.ssl.SSLSession
@@ -44,12 +45,13 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
             close()
           } else {
             sslSession.foreach { session =>
-              val pubKey = session.getPeerCertificates.head.getPublicKey.getEncoded
-              if (pubKey == sender.id) {
+              val verified = CertificateHelper
+                .publicAddress(session.getPeerCertificates.head.getPublicKey)
+                .exists(_ sameElements sender.id.toByteArray)
+              if (verified)
                 next.onMessage(message)
-              } else {
+              else
                 close()
-              }
             }
           }
 

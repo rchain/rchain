@@ -42,7 +42,7 @@ case object NetworkAddress {
 
       addy match {
         case Some(NetworkAddress(_, key, host, port)) =>
-          Right(PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
+          Right(PeerNode(NodeIdentifier(key), Endpoint(host, port, port)))
         case _ => Left(ParseError(s"bad address: $str"))
       }
     } catch {

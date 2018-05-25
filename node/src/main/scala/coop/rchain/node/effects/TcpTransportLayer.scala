@@ -18,15 +18,43 @@ import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 
-class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, port: Int)(
-    src: PeerNode)(implicit executionContext: ExecutionContext)
+class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
+    host: String,
+    port: Int,
+    cert: File,
+    key: File)(src: PeerNode)(implicit executionContext: ExecutionContext)
     extends TransportLayer[F] {
+
+  private lazy val serverSslContext: SslContext =
+    try {
+      GrpcSslContexts
+        .forServer(cert, key)
+        .trustManager(InsecureTrustManagerFactory.INSTANCE)
+        .clientAuth(ClientAuth.OPTIONAL)
+        .build()
+    } catch {
+      case e: Throwable =>
+        println(e.getMessage)
+        throw e
+    }
+
+  private lazy val clientSslContext: SslContext =
+    try {
+      val builder = GrpcSslContexts.forClient
+      builder.trustManager(InsecureTrustManagerFactory.INSTANCE)
+      builder.keyManager(cert, key)
+      builder.build
+    } catch {
+      case e: Throwable =>
+        println(e.getMessage)
+        throw e
+    }
 
   private def client(endpoint: Endpoint) = {
     val channel = NettyChannelBuilder
-      .forAddress(host, port)
+      .forAddress(endpoint.host, endpoint.tcpPort)
       .negotiationType(NegotiationType.TLS)
-      .sslContext(buildClientSslContext("", ""))
+      .sslContext(clientSslContext)
       .intercept(new SslSessionClientInterceptor())
       .build()
 
@@ -69,27 +97,13 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, 
     Capture[F].capture {
       NettyServerBuilder
         .forPort(port)
-        .sslContext(buildServerSslContext("", ""))
+        .sslContext(serverSslContext)
         .addService(
           TransportLayerGrpc.bindService(new TranportLayerImpl[F](dispatch), executionContext))
         .intercept(new SslSessionServerInterceptor())
         .build
         .start
     }
-
-  def buildServerSslContext(certChainFile: String, privateKeyFile: String): SslContext =
-    GrpcSslContexts
-      .forServer(new File(certChainFile), new File(privateKeyFile))
-      .trustManager(InsecureTrustManagerFactory.INSTANCE)
-      .clientAuth(ClientAuth.OPTIONAL)
-      .build()
-
-  def buildClientSslContext(certChainFile: String, privateKeyFile: String): SslContext = {
-    val builder = GrpcSslContexts.forClient
-    builder.trustManager(InsecureTrustManagerFactory.INSTANCE)
-    builder.keyManager(new File(certChainFile), new File(privateKeyFile))
-    builder.build
-  }
 }
 
 class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
@@ -103,8 +117,8 @@ class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
           case Left(error) => internalServerError(error.toString).pure[F]
           case Right(pm) =>
             dispatch(pm) >>= {
-              case None     => noResponse.pure[F]
-              case Some(pm) => returnProtocol(pm.proto).pure[F]
+              case None           => noResponse.pure[F]
+              case Some(response) => returnProtocol(response.proto).pure[F]
             }
         }
       }

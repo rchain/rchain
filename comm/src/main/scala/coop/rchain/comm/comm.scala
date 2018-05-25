@@ -7,14 +7,13 @@ trait Comm[A] {
   def recv: Either[CommError, (A, Seq[Byte])]
 }
 
-final case class NodeIdentifier(pKey: Seq[Byte]) {
-  def keccak256(iterations: Int = 1): Seq[Byte] =
-    // Not really hashing, yet.
-    Vector[Byte](pKey: _*)
+final case class NodeIdentifier(key: Seq[Byte]) {
+  override def toString: String = key.map("%02x".format(_)).mkString
+}
 
-  def key = keccak256(2)
-
-  override def toString = key.map("%02x" format _).mkString
+object NodeIdentifier {
+  def apply(name: String): NodeIdentifier =
+    NodeIdentifier(name.sliding(2, 2).toArray.map(Integer.parseInt(_, 16).toByte))
 }
 
 final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
@@ -34,7 +33,7 @@ final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def key  = id.key
-  val sKey = key.map(_.toChar).mkString
+  val sKey = id.toString
 
   override def toString =
     s"#{PeerNode $sKey}"

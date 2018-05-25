@@ -109,6 +109,7 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
+        nettyTcnative,
         jline,
         scallop,
         scalaUri,
