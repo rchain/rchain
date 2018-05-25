@@ -222,11 +222,10 @@ package object history {
             deleteLeaf(store, txn, tail)
           case c @ Vector(_, _) =>
             val otherHash = c.collect { case (childByte, child) if childByte != byte => child }.head
-            val otherNode = store.get(txn, otherHash)
-            otherNode match {
+            store.get(txn, otherHash) match {
               case Some(Node(_))    => updated
               case Some(Leaf(_, _)) => propagateLeafUpward(otherHash, tail)
-              case None             => throw new DeleteException(s"Could not get $otherHash")
+              case None             => throw new DeleteException(s"No value at $otherHash")
             }
           case _ =>
             updated
