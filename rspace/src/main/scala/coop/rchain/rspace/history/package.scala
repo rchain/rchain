@@ -188,4 +188,88 @@ package object history {
         throw ex
     }
   }
+
+  @tailrec
+  private[rspace] def propagateLeafUpward[T, K, V](
+      store: ITrieStore[T, K, V],
+      txn: T,
+      hash: Blake2b256Hash,
+      parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+    parents match {
+      case Seq((byte, Node(pointerBlock))) =>
+        (Node(pointerBlock.updated(List((byte, Some(hash))))), Seq.empty[(Int, Node)])
+      case (byte, Node(pointerBlock)) +: tail =>
+        pointerBlock.children match {
+          case Vector()  => throw new DeleteException("PointerBlock has no children")
+          case Vector(_) => propagateLeafUpward(store, txn, hash, tail)
+          case _         => (Node(pointerBlock.updated(List((byte, Some(hash))))), tail)
+        }
+      case _ =>
+        throw new DeleteException("Something terrible has happened")
+    }
+
+  @tailrec
+  private[rspace] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
+                                          txn: T,
+                                          parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+    parents match {
+      case Seq((byte, Node(pointerBlock))) =>
+        (Node(pointerBlock.updated(List((byte, None)))), Seq.empty[(Int, Node)])
+      case (byte, Node(pointerBlock)) +: tail =>
+        val updated = (Node(pointerBlock.updated(List((byte, None)))), tail)
+        pointerBlock.children match {
+          case Vector() =>
+            throw new DeleteException("PointerBlock has no children")
+          case Vector(_) =>
+            deleteLeaf(store, txn, tail)
+          case c @ Vector(_, _) =>
+            val otherHash = c.collect { case (childByte, child) if childByte != byte => child }.head
+            val otherNode = store.get(txn, otherHash)
+            otherNode match {
+              case Some(Node(_))    => updated
+              case Some(Leaf(_, _)) => propagateLeafUpward(store, txn, otherHash, tail)
+              case None             => throw new DeleteException(s"Could not get $otherHash")
+            }
+          case _ =>
+            updated
+        }
+    }
+
+  def delete[T, K, V](store: ITrieStore[T, K, V], key: K, value: V)(implicit
+                                                                    codecK: Codec[K],
+                                                                    codecV: Codec[V]): Boolean = {
+    // We take the current root hash, preventing other threads from operating on the Trie
+    val currentRootHash: Blake2b256Hash = store.workingRootHash.take()
+    try {
+      store.withTxn(store.createTxnWrite()) { (txn: T) =>
+        // Get the current root node
+        store.get(txn, currentRootHash) match {
+          case None =>
+            throw new LookupException(s"No node at $currentRootHash")
+          case Some(currentRoot) =>
+            // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
+            val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
+            // Using this path, get the parents of the given leaf.
+            val (tip, parents) = getParents(store, txn, encodedKey, 0, currentRoot)
+            tip match {
+              case Node(_) =>
+                store.workingRootHash.put(currentRootHash)
+                false
+              case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
+                val (hd, nodesToRehash) = deleteLeaf(store, txn, parents)
+                val rehashedNodes       = rehash[K, V](hd, nodesToRehash)
+                val newRootHash         = insertTries[T, K, V](store, txn, rehashedNodes).get
+                store.workingRootHash.put(newRootHash)
+                true
+              case Leaf(_, _) =>
+                throw new DeleteException("Something terrible happened")
+            }
+        }
+      }
+    } catch {
+      case ex: Throwable =>
+        store.workingRootHash.put(currentRootHash)
+        throw ex
+    }
+  }
 }
