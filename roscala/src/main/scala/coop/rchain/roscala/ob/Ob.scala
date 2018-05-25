@@ -19,12 +19,8 @@ abstract class Ob {
 
   def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
     var p = this
-    var l = level
 
-    while (l != 0) {
-      l -= 1
-      p = p.parent.asInstanceOf[Actor]
-    }
+    for (_ <- 0 to level) p = p.parent
 
     if (indirect) {
       p = p.asInstanceOf[Actor].extension
@@ -35,12 +31,8 @@ abstract class Ob {
 
   def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob = {
     var p = this
-    var l = level
 
-    while (l != 0) {
-      l -= 1
-      p = p.parent.asInstanceOf[Actor]
-    }
+    for (_ <- 0 to level) p = p.parent
 
     if (indirect) {
       p = p.asInstanceOf[Actor].extension
