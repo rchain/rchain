@@ -30,15 +30,15 @@ object Main {
 
     val exec: Task[Unit] = conf.eval.toOption match {
       case Some(fileName) => {
-        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime(conf).evalProgram[Task](fileName)
       }
       case None if conf.repl() => {
-        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime(conf).replProgram[Task].as(())
       }
       case None if conf.diagnostics() => {
-        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         diagnostics.client.Runtime.diagnosticsProgram[Task]
       }
       case None if conf.deploy.toOption.isDefined =>
