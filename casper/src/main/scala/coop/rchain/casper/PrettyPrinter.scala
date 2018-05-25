@@ -11,6 +11,8 @@ import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPP}
 object PrettyPrinter {
   private val rpp = RholangPP()
 
+  def buildStringNoLimit(b: ByteString): String = Base16.encode(b.toByteArray)
+
   def buildString(t: GeneratedMessage): String =
     t match {
       case b: BlockMessage => buildString(b)
@@ -42,7 +44,7 @@ object PrettyPrinter {
       str
     }
 
-  private def buildString(b: ByteString): String =
+  def buildString(b: ByteString): String =
     limit(Base16.encode(b.toByteArray), 10)
 
   private def buildString(par: Option[Par]): String =

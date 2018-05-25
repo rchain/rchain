@@ -8,6 +8,7 @@ import cats.data.EitherT
 import cats.{Monad, _}
 import cats.implicits._
 import cats.syntax._
+import coop.rchain.catscontrib.Capture._
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.implicits.VectorPar

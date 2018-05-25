@@ -53,6 +53,8 @@ lazy val comm = (project in file("comm"))
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      grpcNetty,
+      scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
       hasher,
@@ -163,7 +165,7 @@ lazy val node = (project in file("node"))
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
-    rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
+    rpmPrerequisites := Seq("libsodium >= 1.0.14-1", "java-1.8.0-openjdk-headless")
   )
   .dependsOn(casper, comm, crypto, rholang)
 
@@ -200,14 +202,6 @@ lazy val rholangCLI = (project in file("rholang-cli"))
   )
   .dependsOn(rholang)
 
-lazy val roscala_macros = (project in file("roscala/macros"))
-  .settings(commonSettings: _*)
-  .settings(
-    libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    )
-  )
-
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
   .settings(
@@ -216,9 +210,8 @@ lazy val roscala = (project in file("roscala"))
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
-    libraryDependencies ++= commonDependencies ++ Seq(catsCore, shapeless, scalacheck)
+    libraryDependencies ++= commonDependencies
   )
-  .dependsOn(roscala_macros)
 
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)

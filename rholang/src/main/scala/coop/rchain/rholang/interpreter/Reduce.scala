@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.implicits._
 import cats.{Applicative, Monad, MonadError, Parallel, Eval => _}
+import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
@@ -12,12 +13,8 @@ import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{
-  IStore,
-  Serialize,
-  consume => internalConsume,
-  produce => internalProduce
-}
+import coop.rchain.rspace.{IStore, Serialize}
+import coop.rchain.rspace.pure.{consume => internalConsume, produce => internalProduce}
 import scalapb.descriptors.ScalaType.ByteString
 
 import scala.collection.immutable.BitSet
@@ -51,7 +48,7 @@ trait Reduce[M[_]] {
 
 object Reduce {
 
-  class DebruijnInterpreter[M[_]: InterpreterErrorsM, F[_]](
+  class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
       tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
       implicit parallel: cats.Parallel[M, F])
@@ -69,23 +66,28 @@ object Reduce {
       * @return  An optional continuation resulting from a match in the tuplespace.
       */
     override def produce(chan: Quote, data: Seq[Par], persistent: Boolean)(
-        implicit env: Env[Par]): M[Unit] =
+        implicit env: Env[Par]): M[Unit] = {
       // TODO: Handle the environment in the store
+      def go(res: Option[(TaggedContinuation, Seq[Seq[Channel]])]) =
+        res match {
+          case Some((continuation, dataList)) =>
+            if (persistent) {
+              Parallel.parSequence_[List, M, F, Unit](
+                List(dispatcher.dispatch(continuation, dataList), produce(chan, data, persistent)))
+            } else {
+              dispatcher.dispatch(continuation, dataList)
+            }
+          case None =>
+            Applicative[M].pure(())
+        }
+
       for {
-        substData <- data.toList
-                      .traverse(substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
-        res <- internalProduce(tupleSpace, Channel(chan), substData, persist = persistent) match {
-                case Some((continuation, dataList)) =>
-                  if (persistent) {
-                    Parallel.parSequence_[List, M, F, Unit](
-                      List(dispatcher.dispatch(continuation, dataList),
-                           produce(chan, data, persistent)))
-                  } else {
-                    dispatcher.dispatch(continuation, dataList)
-                  }
-                case None => Applicative[M].pure(())
-              }
-      } yield res
+        substData <- data.toList.traverse(
+                      substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
+        res <- internalProduce(tupleSpace, Channel(chan), substData, persist = persistent)
+        _   <- go(res)
+      } yield ()
+    }
 
     /**
       * Materialize a send in the store, optionally returning the matched continuation.
@@ -103,13 +105,12 @@ object Reduce {
       binds match {
         case Nil => interpreterErrorM[M].raiseError(ReduceError("Error: empty binds"))
         case _ =>
-          val (patterns: Seq[BindPattern], sources: Seq[Quote]) =
-            binds.unzip
+          val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
           internalConsume(tupleSpace,
                           sources.map(q => Channel(q)).toList,
                           patterns.toList,
                           TaggedContinuation(ParBody(body)),
-                          persist = persistent) match {
+                          persist = persistent).flatMap {
             case Some((continuation, dataList)) =>
               dispatcher.dispatch(continuation, dataList)
               if (persistent) {

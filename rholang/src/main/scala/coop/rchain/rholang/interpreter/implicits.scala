@@ -140,6 +140,9 @@ object implicits {
       connectiveUsed = false
     )
 
+  def apply(c: Connective): Par =
+    new Par(connectives = Vector(c), connectiveUsed = true)
+
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
   implicit def fromEval[T](e: T)(implicit toEval: T => Eval): Par = apply(e)
@@ -148,6 +151,7 @@ object implicits {
   implicit def fromMatch(m: Match): Par                           = apply(m)
   implicit def fromGPrivate(g: GPrivate): Par                     = apply(g)
   implicit def fromBundle(b: Bundle): Par                         = apply(b)
+  implicit def fromConnective(c: Connective): Par                 = apply(c)
 
   object VectorPar {
     def apply(): Par = new Par(

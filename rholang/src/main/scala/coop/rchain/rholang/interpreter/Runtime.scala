@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
@@ -41,7 +42,7 @@ object Runtime {
         )
     }
 
-  def create(dataDir: Path, mapSize: Long): Runtime = {
+  def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
 

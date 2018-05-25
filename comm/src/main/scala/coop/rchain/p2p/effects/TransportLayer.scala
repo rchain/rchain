@@ -3,47 +3,55 @@ package coop.rchain.p2p.effects
 import java.net.SocketAddress
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 
-import cats.Monad
-import cats.data.EitherT
-
+import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.{PeerNode, ProtocolMessage, ProtocolNode}
 
 trait TransportLayer[F[_]] {
-  // TODO rename
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]]
   // TODO return PeerNode
   def local: F[ProtocolNode]
   // TODO remove ProtocolMessage, use raw messages from protocol
-  def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
-  def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]]
-  def receive: F[Option[ProtocolMessage]]
+  def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
+  def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
+  def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit]
 }
 
 object TransportLayer extends TransportLayerInstances {
   def apply[F[_]](implicit L: TransportLayer[F]): TransportLayer[F] = L
-
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](
-      implicit C: TransportLayer[F]): TransportLayer[T[F, ?]] =
-    new TransportLayer[T[F, ?]] {
-      def roundTrip(msg: ProtocolMessage,
-                    remote: ProtocolNode,
-                    timeout: Duration): T[F, CommErr[ProtocolMessage]] =
-        C.roundTrip(msg, remote, timeout).liftM[T]
-      def local: T[F, ProtocolNode] = C.local.liftM[T]
-      def commSend(msg: ProtocolMessage, p: PeerNode): T[F, CommErr[Unit]] =
-        C.commSend(msg, p).liftM[T]
-      def broadcast(msg: ProtocolMessage): T[F, Seq[CommErr[Unit]]] = C.broadcast(msg).liftM[T]
-      def receive: T[F, Option[ProtocolMessage]]                    = C.receive.liftM[T]
-    }
 }
 
 sealed abstract class TransportLayerInstances {
-  implicit def eitherTTransportLayer[E, F[_]: Monad: TransportLayer[?[_]]]
-    : TransportLayer[EitherT[F, E, ?]] =
-    TransportLayer.forTrans[F, EitherT[?[_], E, ?]]
+
+  implicit def eitherTTransportLayer[E, F[_]: Monad: Log](
+      implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, E, ?]] =
+    new TransportLayer[EitherT[F, E, ?]] {
+      def roundTrip(msg: ProtocolMessage,
+                    remote: ProtocolNode,
+                    timeout: Duration): EitherT[F, E, CommErr[ProtocolMessage]] =
+        EitherT.liftF(evF.roundTrip(msg, remote, timeout))
+
+      def local: EitherT[F, E, ProtocolNode] =
+        EitherT.liftF(evF.local)
+      def send(msg: ProtocolMessage, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
+        EitherT.liftF(evF.send(msg, p))
+
+      def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): EitherT[F, E, Seq[CommErr[Unit]]] =
+        EitherT.liftF(evF.broadcast(msg, peers))
+      def receive(dispatch: ProtocolMessage => EitherT[F, E, Option[ProtocolMessage]])
+        : EitherT[F, E, Unit] = {
+        val dis: ProtocolMessage => F[Option[ProtocolMessage]] = msg =>
+          dispatch(msg).value.flatMap(_ match {
+            case Left(err) =>
+              Log[F].error(s"Error while handling message. Error: $err") *> none.pure[F]
+            case Right(msg) => msg.pure[F]
+          })
+        EitherT.liftF(evF.receive(dis))
+      }
+
+    }
 }

@@ -1,16 +1,12 @@
 package coop.rchain.rspace
 
 import java.nio.ByteBuffer
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
-import coop.rchain.rspace.history.Trie
-import coop.rchain.rspace.history.Blake2b256Hash._
-import coop.rchain.shared.AttemptOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
@@ -25,15 +21,15 @@ import scala.collection.immutable.Seq
   * To create an instance, use [[LMDBStore.create]].
   */
 class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
+                                     databasePath: Path,
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbWaitingContinuations: Dbi[ByteBuffer],
                                      _dbData: Dbi[ByteBuffer],
-                                     _dbJoins: Dbi[ByteBuffer],
-                                     _dbTrie: Dbi[ByteBuffer])(implicit
-                                                               sc: Serialize[C],
-                                                               sp: Serialize[P],
-                                                               sa: Serialize[A],
-                                                               sk: Serialize[K])
+                                     _dbJoins: Dbi[ByteBuffer])(implicit
+                                                                sc: Serialize[C],
+                                                                sp: Serialize[P],
+                                                                sa: Serialize[A],
+                                                                sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
@@ -103,11 +99,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       .getOrElse(Seq.empty[Datum[A]])
   }
 
-  def collectGarbage(txn: T,
-                     channelsHash: H,
-                     dataCollected: Boolean = false,
-                     waitingContinuationsCollected: Boolean = false,
-                     joinsCollected: Boolean = false): Unit = {
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit = {
 
     def isEmpty(dbi: Dbi[ByteBuffer]): Boolean =
       dbi.get(txn, channelsHash) == null
@@ -272,6 +268,20 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     env.close()
   }
 
+  def getStoreSize: StoreSize = {
+    val sizeOnDisk = Files
+      .walk(databasePath)
+      .mapToLong(p => {
+        val f = p.toFile
+        if (f.isFile)
+          f.length
+        else
+          0
+      })
+      .sum()
+    StoreSize(sizeOnDisk, env.stat().entries)
+  }
+
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
       !_dbKeys.iterate(txn).hasNext &&
@@ -295,27 +305,6 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
         }.toMap
       }
     }
-
-  private[rspace] def putTrie(txn: Txn[ByteBuffer],
-                              key: Blake2b256Hash,
-                              value: Trie[Blake2b256Hash, GNAT[C, P, A, K]]): Unit = {
-    val encodedKey   = Codec[Blake2b256Hash].encode(key).get
-    val encodedValue = Codec[Trie[Blake2b256Hash, GNAT[C, P, A, K]]].encode(value).get
-    val keyBuff      = toByteBuffer(encodedKey)
-    val valBuff      = toByteBuffer(encodedValue)
-    _dbTrie.put(txn, keyBuff, valBuff)
-  }
-
-  private[rspace] def getTrie(
-      txn: Txn[ByteBuffer],
-      key: Blake2b256Hash): Option[Trie[Blake2b256Hash, GNAT[C, P, A, K]]] = {
-    val encodedKey = Codec[Blake2b256Hash].encode(key).get
-    val keyBuff    = toByteBuffer(encodedKey)
-    Option(_dbTrie.get(txn, keyBuff)).map { (buffer: ByteBuffer) =>
-      // ht: Yes, I want to throw an exception if deserialization fails
-      Codec[Trie[Blake2b256Hash, GNAT[C, P, A, K]]].decode(BitVector(buffer)).map(_.value).get
-    }
-  }
 }
 
 object LMDBStore {
@@ -323,7 +312,6 @@ object LMDBStore {
   private[this] val waitingContinuationsTableName: String = "WaitingContinuations"
   private[this] val dataTableName: String                 = "Data"
   private[this] val joinsTableName: String                = "Joins"
-  private[this] val trieTableName: String                 = "Trie"
 
   /**
     * Creates an instance of [[LMDBStore]]
@@ -353,12 +341,11 @@ object LMDBStore {
       env.openDbi(waitingContinuationsTableName, MDB_CREATE)
     val dbData: Dbi[ByteBuffer]  = env.openDbi(dataTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
-    val dbTrie: Dbi[ByteBuffer]  = env.openDbi(trieTableName, MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](env, dbKeys, dbWaitingContinuations, dbData, dbJoins, dbTrie)(sc,
-                                                                                            sp,
-                                                                                            sa,
-                                                                                            sk)
+    new LMDBStore[C, P, A, K](env, path, dbKeys, dbWaitingContinuations, dbData, dbJoins)(sc,
+                                                                                          sp,
+                                                                                          sa,
+                                                                                          sk)
   }
 
   private[rspace] def toByteVector[T](value: T)(implicit st: Serialize[T]): ByteVector =

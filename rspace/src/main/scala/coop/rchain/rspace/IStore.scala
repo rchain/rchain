@@ -1,9 +1,8 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
+import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
-import coop.rchain.rspace.internal._
 
 /** The interface for the underlying store
   *
@@ -61,14 +60,15 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeAllJoins(txn: T, channel: C): Unit
 
-  private[rspace] def putTrie(txn: T,
-                              key: Blake2b256Hash,
-                              value: Trie[Blake2b256Hash, GNAT[C, P, A, K]]): Unit
-
-  private[rspace] def getTrie(txn: T,
-                              key: Blake2b256Hash): Option[Trie[Blake2b256Hash, GNAT[C, P, A, K]]]
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit
 
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   def close(): Unit
+
+  def getStoreSize: StoreSize
 }
