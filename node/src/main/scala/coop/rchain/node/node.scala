@@ -9,7 +9,7 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
@@ -24,7 +24,7 @@ import diagnostics.MetricsServer
 import coop.rchain.node.effects.TLNodeDiscovery
 
 import scala.io.Source
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
@@ -37,12 +37,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
+  private val name           = nodeName
   private val host           = conf.fetchHost()
-  private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"${name}-rnode-remote.keys")
-  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"${name}-rnode.keys")
+  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
+  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
   private val storagePath    = conf.data_dir().resolve("rspace")
   private val storageSize    = conf.map_size()
 
@@ -203,7 +203,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         Log[Task].info(s"Created validator $pk with bond $stake")
         printer.println(s"$pk $stake")
     }
-    printer.close
+    printer.close()
 
     bonds
   }
@@ -214,6 +214,28 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         case None     => p2p.Network.dispatch[Effect](pm)
         case resultPM => resultPM.pure[Effect]
     }
+
+  private def nodeName: String = {
+    val certPath = conf.certificate.toOption
+      .getOrElse(java.nio.file.Paths.get(conf.data_dir().toString, "node.certificate.pem"))
+
+    val certificate = Try(CertificateHelper.fromFile(certPath.toFile)) match {
+      case Success(c) => Some(c)
+      case Failure(e) =>
+        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
+        System.exit(1)
+        None
+      case _ => None
+    }
+
+    certificate
+      .flatMap(CertificateHelper.publicAddress)
+      .getOrElse {
+        println("Certificate must contain a secp256k1 EC Public Key")
+        System.exit(1)
+        ""
+      }
+  }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
