@@ -103,7 +103,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
-    genesisBlock(genesisBonds),
+    genesisBlock(genesisBonds)
   )
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
