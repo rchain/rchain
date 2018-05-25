@@ -58,16 +58,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                       = effects.log
-  implicit val timeEffect: Time[Task]                     = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]         = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
-  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
+  implicit val encryptionEffect: Encryption[Task]       = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                     = effects.log
+  implicit val timeEffect: Time[Task]                   = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
+  implicit val transportLayerEffect: TransportLayer[Task] =
+    effects.tcpTranposrtLayer[Task](host, conf.port())(src)
+  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
