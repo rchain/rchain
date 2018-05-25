@@ -14,10 +14,11 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
 
-  val name =
-    opt[String](default = None,
-                short = 'n',
-                descr = "Node name or key (deprecated, will be removed in next release).")
+  val certificate =
+    opt[Path](
+      required = false,
+      short = 'c',
+      descr = "Path to node's X.509 certificate file, that is being used for identification")
 
   val port =
     opt[Int](default = Some(30304),

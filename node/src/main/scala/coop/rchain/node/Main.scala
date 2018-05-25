@@ -13,6 +13,7 @@ import coop.rchain.crypto.codec.Base16
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
+import scala.util.{Failure, Success, Try}
 
 object Main {
 
@@ -58,8 +59,8 @@ object Main {
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
           case Left(CouldNotConnectToBootstrap) =>
-            Task.delay(println("Node could not connect to bootstrap node."))
-          case Left(error) => Task.delay(println(s"Failed! Reason: '$error"))
+            println("Node could not connect to bootstrap node.")
+          case Left(error) => println(s"Failed! Reason: '$error")
         }
     }
     exec.unsafeRunSync
