@@ -1,4 +1,4 @@
-package coop.rchain.tcptl
+package coop.rchain.node.effects
 
 import scala.concurrent.duration._
 import java.net.SocketAddress

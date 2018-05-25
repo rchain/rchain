@@ -4,8 +4,6 @@ import java.io.{File, PrintWriter}
 import java.util.UUID
 import io.grpc.Server
 
-import coop.rchain.tcptl.TcpTransportLayer
-
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
@@ -68,7 +66,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
-    new TcpTransportLayer[Task](host, conf.port())(src)
+    effects.tcpTranposrtLayer[Task](host, conf.port())(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 

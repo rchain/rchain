@@ -15,6 +15,7 @@ import scala.collection.JavaConverters._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
+import scala.concurrent.{ExecutionContext, Future}
 
 package object effects {
   private def createDirectoryIfNotExists(path: Path): Path =
@@ -141,10 +142,14 @@ package object effects {
         } yield res.isDefined
     }
 
-  def transportLayer(src: PeerNode)(implicit
-                                    ev1: Log[Task],
-                                    ev2: Time[Task],
-                                    ev3: Metrics[Task]): TransportLayer[Task] =
+  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, port: Int)(
+      src: PeerNode)(implicit executionContext: ExecutionContext) =
+    new TcpTransportLayer[F](host, port)(src)
+
+  def udpTransportLayer(src: PeerNode)(implicit
+                                       ev1: Log[Task],
+                                       ev2: Time[Task],
+                                       ev3: Metrics[Task]): TransportLayer[Task] =
     new TransportLayer[Task] {
 
       val net = new UnicastNetwork(src)
