@@ -165,7 +165,7 @@ lazy val node = (project in file("node"))
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
-    rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
+    rpmPrerequisites := Seq("libsodium >= 1.0.14-1", "java-1.8.0-openjdk-headless")
   )
   .dependsOn(casper, comm, crypto, rholang)
 
