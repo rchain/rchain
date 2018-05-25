@@ -47,7 +47,15 @@ create_test_network_resources() {
     var_lib_rnode_dir=$(mktemp -d /tmp/var_lib_rnode.XXXXXXXX)
 
     echo "Creating node certificate"
-    sudo tee -a ${var_lib_rnode_dir}/node.certificate.pem > /dev/null <<EOF
+    if [[ $i == 0 ]]; then
+      sudo tee -a ${var_lib_rnode_dir}/node.key.pem > /dev/null <<EOF
+-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEII+ACRjC3sAf28o77SI3UvWtlw1V+9W4bKFRTfTiYKsgoAcGBSuBBAAK
+oUQDQgAEWyVYdp/rhANxVx4kdIMCSRVvGzWFQDsHQlxIfixNKM4AKWWIlBiMOblK
+OndPMKy8BwJz4X1HlxDES8XWqnRa4w==
+-----END EC PRIVATE KEY-----
+EOF
+      sudo tee -a ${var_lib_rnode_dir}/node.certificate.pem > /dev/null <<EOF
 -----BEGIN CERTIFICATE-----
 MIIBFTCBuwIJAN3H89VyG22uMAoGCCqGSM49BAMCMBQxEjAQBgNVBAMMCWxvY2Fs
 aG9zdDAeFw0xODA1MDExNDEwMDBaFw0xOTA1MDExNDEwMDBaMBQxEjAQBgNVBAMM
@@ -57,6 +65,11 @@ WuMwCgYIKoZIzj0EAwIDSQAwRgIhAMQsYq8J9V26Tarr1nfUfL0/aVoOetYDZ+c4
 QoU6g+xvAiEA1oTwyu+HHWCF8znOc6LpLaQvsqvfqgYc8s0qTi/p/5o=
 -----END CERTIFICATE-----
 EOF
+    else
+      openssl req -newkey ec:<(openssl ecparam -name secp256k1) -nodes \
+        -keyout ${var_lib_rnode_dir}/node.key.pem -x509 -days 365 \
+        -out ${var_lib_rnode_dir}/node.certificate.pem -subj "/CN=local"
+    fi
 
     if [[ $i == 0 ]]; then
       rnode_cmd="--port 30304 --standalone"
