@@ -24,9 +24,9 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 
 import scala.io.Source
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
-class NodeRuntime(conf: Conf, name: String)(implicit scheduler: Scheduler) {
+class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
@@ -37,11 +37,12 @@ class NodeRuntime(conf: Conf, name: String)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
+  private val name           = nodeName
   private val host           = conf.fetchHost()
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"${name}-rnode-remote.keys")
-  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"${name}-rnode.keys")
+  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
+  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
   private val storagePath    = conf.data_dir().resolve("rspace")
   private val storageSize    = conf.map_size()
 
@@ -188,7 +189,7 @@ class NodeRuntime(conf: Conf, name: String)(implicit scheduler: Scheduler) {
         Log[Task].info(s"Created validator $pk with bond $stake")
         printer.println(s"$pk $stake")
     }
-    printer.close
+    printer.close()
 
     bonds
   }
@@ -198,6 +199,25 @@ class NodeRuntime(conf: Conf, name: String)(implicit scheduler: Scheduler) {
       case None      => ().pure[Effect]
       case Some(msg) => p2p.Network.dispatch[Effect](msg)
     }
+
+  private def nodeName: String = {
+    val certificate = conf.certificate.map(c => Try(CertificateHelper.from(c))).toOption match {
+      case Some(Success(c)) if CertificateHelper.isSecp256k1(c) => Some(c)
+      case Some(Success(_)) =>
+        println("Certificate must contain a secp256k1 EC Public Key")
+        System.exit(1)
+        None
+      case Some(Failure(e)) =>
+        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
+        System.exit(1)
+        None
+      case _ => None
+    }
+
+    certificate
+      .flatMap(CertificateHelper.publicAddress)
+      .getOrElse(CertificateHelper.randomPublicAddress)
+  }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {

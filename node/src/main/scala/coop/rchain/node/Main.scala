@@ -29,19 +29,6 @@ object Main {
     implicit val deployService: DeployService[Task] =
       new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
 
-    val certificate = conf.certificate.map(c => Try(CertificateHelper.from(c))).toOption match {
-      case Some(Success(c)) if CertificateHelper.isSecp256k1(c) => Some(c)
-      case Some(Success(_)) =>
-        println("Certificate must contain a secp256k1 EC Public Key")
-        System.exit(1)
-        None
-      case Some(Failure(e)) =>
-        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
-        System.exit(1)
-        None
-      case _ => None
-    }
-
     val exec: Task[Unit] = conf.eval.toOption match {
       case Some(fileName) => {
         implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
@@ -69,10 +56,7 @@ object Main {
       case None if conf.showBlock.toOption.isDefined =>
         DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
       case None =>
-        val name = certificate
-          .flatMap(CertificateHelper.publicAddress)
-          .getOrElse(CertificateHelper.randomPublicAddress)
-        new NodeRuntime(conf, name).nodeProgram.value.map {
+        new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
           case Left(CouldNotConnectToBootstrap) =>
             println("Node could not connect to bootstrap node.")
