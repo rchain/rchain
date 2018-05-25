@@ -69,7 +69,10 @@ EOF
       openssl req -newkey ec:<(openssl ecparam -name secp256k1) -nodes \
         -keyout ${var_lib_rnode_dir}/node.key.pem -x509 -days 365 \
         -out ${var_lib_rnode_dir}/node.certificate.pem -subj "/CN=local"
-    fi
+
+      cat ${var_lib_rnode_dir}/node.key.pem
+      cat ${var_lib_rnode_dir}/node.certificate.pem
+   fi
 
     if [[ $i == 0 ]]; then
       rnode_cmd="--port 30304 --standalone"
