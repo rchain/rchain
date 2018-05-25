@@ -2,21 +2,14 @@ package coop.rchain.node
 
 import java.io.{File, PrintWriter}
 import java.util.UUID
-
 import io.grpc.Server
-import cats._
-import cats.data._
-import cats.implicits._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import ski._
-import TaskContrib._
+
+import cats._, cats.data._, cats.implicits._
+import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.comm._
-import CommError._
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.comm._, CommError._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
@@ -110,7 +103,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
-    ProtoUtil.genesisBlock(genesisBonds),
+    genesisBlock(genesisBonds),
   )
   implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
     casperPacketHandler[Effect]
