@@ -223,8 +223,18 @@ sealed abstract class MultiParentCasperInstances {
           addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
             s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}") *> reAttemptBuffer
 
-        //TODO: Ask peers for missing parents/justifications of blocks
-        case Some(false) => Capture[F].capture { blockBuffer += block }
+        case Some(false) =>
+          for {
+            _              <- Capture[F].capture { blockBuffer += block }
+            dag            <- blockDag
+            missingParents = parents(block).filterNot(dag.blockLookup.contains).toList
+            missingJustifictions = block.justifications
+              .map(_.latestBlockHash)
+              .filterNot(dag.blockLookup.contains)
+              .toList
+            _ <- (missingParents ::: missingJustifictions).traverse(hash =>
+                  CommUtil.sendBlockRequest[F](BlockRequest(hash)))
+          } yield ()
 
         case None =>
           Log[F].info(

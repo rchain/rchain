@@ -49,6 +49,10 @@ message Diff {
 
 //------------------------------------
 
+message BlockRequest {
+  bytes hash = 1;
+}
+
 message BlockQuery {
   string hash = 1;
 }
