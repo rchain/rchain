@@ -8,9 +8,11 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{produce, IStore}
+import coop.rchain.rspace.{IStore, produce}
 import monix.eval.Task
 import implicits._
+
+import scala.util.Try
 
 object SystemProcesses {
 
@@ -64,7 +66,7 @@ object SystemProcesses {
                       dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
-      Task.now(Secp256k1.verify(data, signature, pub)).flatMap { verified =>
+      Task.fromTry(Try(Secp256k1.verify(data, signature, pub))).flatMap { verified =>
         produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -74,7 +76,7 @@ object SystemProcesses {
                     dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(data), IsByteArray(signature), IsByteArray(pub), ack)) =>
-      Task(Ed25519.verify(data, signature, pub)).flatMap { verified =>
+      Task.fromTry(Try(Ed25519.verify(data, signature, pub))).flatMap { verified =>
         produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -85,7 +87,7 @@ object SystemProcesses {
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(
         Seq(IsByteArray(pub), IsByteArray(sec), IsByteArray(nonce), IsByteArray(message), ack)) =>
-      Task(Curve25519.encrypt(pub, sec, nonce, message)).flatMap { encrypted =>
+      Task.fromTry(Try(Curve25519.encrypt(pub, sec, nonce, message))).flatMap { encrypted =>
         produce(store,
                 ack,
                 Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(encrypted)))))),
@@ -98,7 +100,7 @@ object SystemProcesses {
                  dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
-      Task.now(Sha256.hash(input)).flatMap { hash =>
+      Task.fromTry(Try(Sha256.hash(input))).flatMap { hash =>
         produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -108,7 +110,7 @@ object SystemProcesses {
                     dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
-      Task.now(Keccak256.hash(input)).flatMap { hash =>
+      Task.fromTry(Try(Keccak256.hash(input))).flatMap { hash =>
         produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
@@ -118,7 +120,7 @@ object SystemProcesses {
                      dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
     case Seq(Seq(IsByteArray(input), ack)) =>
-      Task.now(Blake2b256.hash(input)).flatMap { hash =>
+      Task.fromTry(Try(Blake2b256.hash(input))).flatMap { hash =>
         produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
