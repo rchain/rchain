@@ -1,18 +1,20 @@
 #!/usr/bin/env python3.6
+# This is a simple script to help with p2p network boot/testing.
+# This requires Python 3.6 to be installed for fstring. Install dependencies via pip
+# python3.6 -m pip install docker argparse pexpect requests
+# Return code of 0 is success on test and 1 is fail.
 from pexpect import replwrap
 import subprocess
 import argparse
 import docker
 import os
 import tempfile
-#from prometheus_client.parser import text_string_to_metric_families
 import requests
 import re
 import time
 import sys
+# from prometheus_client.parser import text_string_to_metric_families # optional for future
 
-# default_domain = 'rchain.coop'
-# return code of 0 is success on test and 1 is fail
 
 parser = argparse.ArgumentParser()
 # parser.add_argument("-g", "--grpc-host", dest='grpc_host', default="peer0.rchain.coop", help="set grpc host")
