@@ -3,11 +3,12 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.Files
 
 import com.google.protobuf.ByteString
+import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.encryption.Curve25519
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
-import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GInt, GString}
+import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
@@ -179,7 +180,7 @@ class CryptoChannelsSpec
 //        Await.result(reduce.eval(send).runAsync, 3.seconds)
 //        storeContainsTest(List[Channel](Quote(Expr(GBool(true)))))
 //        clearStore(store, reduce, ackChannel)
-      }
+//      }
   }
 
   "ed25519Verify channel" should "verify integrity of the data and send result on ack channel" in {
@@ -218,8 +219,8 @@ class CryptoChannelsSpec
   override protected def withFixture(test: OneArgTest): Outcome = {
     val randomInt = scala.util.Random.nextInt
     val dbDir     = Files.createTempDirectory(s"rchain-storage-test-$randomInt")
-    val size      = 1024 * 1024 * 1024 //borrowed from other places in the code
-    val runtime   = Runtime.create(dbDir, size)
+    val size      = 1024L * 1024 * 1024 //borrowed from other places in the code
+    val runtime   = Runtime.create(dbDir, size)(Capture.taskCapture)
 
     try {
       test((runtime.reducer, runtime.store))

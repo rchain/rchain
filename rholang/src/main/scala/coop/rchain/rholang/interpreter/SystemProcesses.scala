@@ -8,7 +8,7 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{IStore, produce}
+import coop.rchain.rspace.{produce, IStore}
 import monix.eval.Task
 import implicits._
 
