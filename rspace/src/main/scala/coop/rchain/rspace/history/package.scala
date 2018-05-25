@@ -252,12 +252,14 @@ package object history {
             tip match {
               case Node(_) =>
                 store.workingRootHash.put(currentRootHash)
+                logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
                 false
               case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
                 val (hd, nodesToRehash) = deleteLeaf(store, txn, parents)
                 val rehashedNodes       = rehash[K, V](hd, nodesToRehash)
                 val newRootHash         = insertTries[T, K, V](store, txn, rehashedNodes).get
                 store.workingRootHash.put(newRootHash)
+                logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
                 true
               case Leaf(_, _) =>
                 throw new DeleteException("Something terrible happened")
@@ -267,6 +269,7 @@ package object history {
     } catch {
       case ex: Throwable =>
         store.workingRootHash.put(currentRootHash)
+        logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
         throw ex
     }
   }
