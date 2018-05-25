@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import java.io.{File, FileInputStream}
+import java.math.BigInteger
 import java.security.AlgorithmParameters
 import java.security.cert.{CertificateFactory, X509Certificate}
 import java.security.interfaces.ECPublicKey
@@ -27,10 +28,8 @@ object CertificateHelper {
     certificate.getPublicKey match {
       case p: ECPublicKey if isSecp256k1(certificate) =>
         val publicKey = Array.ofDim[Byte](64)
-        val x         = p.getW.getAffineX.toByteArray
-        val y         = p.getW.getAffineY.toByteArray
-        assert(x.length <= 32)
-        assert(y.length <= 32)
+        val x         = p.getW.getAffineX.toByteArray.takeRight(32)
+        val y         = p.getW.getAffineY.toByteArray.takeRight(32)
         x.copyToArray(publicKey, 32 - x.length)
         y.copyToArray(publicKey, 64 - y.length)
         Some(publicAddress(publicKey))
