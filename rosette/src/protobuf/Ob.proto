@@ -16,7 +16,7 @@ message ObjectCode {
 // A single code block contains a litvec with objects on which the code operates,
 // and the codevec with the actual opCodes that are executed by the VM.
 message CodeBlock {
-    uint64 id = 1;
+    uint64 objectId = 1;
     LitVec litvec = 2;
     CodeVec codevec = 3;
 }
@@ -35,7 +35,7 @@ message LitVec {
 }
 
 message ObjectReference {
-    uint64 id = 1;
+    uint64 objectId = 1;
 }
 
 message ObjectStore {
@@ -89,32 +89,67 @@ message LetExpr {
     Object bindings = 1;
     Object body = 2;
 }
-message LetrecExpr {}
-message MethodExpr {}
-message Niv {}
-message NullExpr {}
-message Proc {}
-message ProcExpr {}
-message QuoteExpr {}
-message RblAtom {}
+message LetrecExpr {
+}
+message MethodExpr {
+    Object identity = 1;
+    Object formals = 2;
+    Object body = 3;
+}
+message Niv {
+}
+message NullExpr {
+}
+message Proc {
+    Object env = 1;
+    Object code = 2;
+    Object id = 3;
+    Object source = 4;
+}
+message ProcExpr {
+}
+message QuoteExpr {
+    Object expr = 1;
+}
+message RblAtom {
+}
 message RblBool {
     bool value = 1;
 }
 message RBLstring {
     string value = 1;
 }
-message ReflectiveMethodExpr {}
-message RequestExpr {}
-message SendExpr {}
-message SeqExpr {}
-message SetExpr {}
-message StdExtension {}
-message StdMthd {}
+message ReflectiveMethodExpr {
+}
+message RequestExpr {
+    Object target = 1;
+    Object msg = 2;
+}
+message SendExpr {
+}
+message SeqExpr {
+    Object subexprs = 1;
+}
+message SetExpr {
+    Object trgt = 1;
+    Object val = 2;
+}
+message StdExtension {
+}
+message StdMthd {
+    Object code = 1;
+    Object id = 2;
+    Object source = 3;
+}
 message Symbol {
     string name = 1;
 }
-message TblObject {}
-message Template {}
+message TblObject {
+    Object validextent = 1;
+    Object keyvec = 2;
+}
+message Template {
+}
 message Tuple {
     repeated Object elements = 1;
 }
@@ -162,7 +197,7 @@ enum ObType {
 
 message Object {
     ObType type = 1;
-    uint64 id = 2;
+    uint64 objectId = 2;
     uint64 metaId = 3;
     uint64 parentId = 4;
     bool reference = 5;;
