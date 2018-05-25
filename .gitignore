@@ -60,3 +60,5 @@ Vagrantfile
 .ensime*
 ensime.sbt
 TAGS
+node-client/__pycache__
+node-client/ve

@@ -202,14 +202,6 @@ lazy val rholangCLI = (project in file("rholang-cli"))
   )
   .dependsOn(rholang)
 
-lazy val roscala_macros = (project in file("roscala/macros"))
-  .settings(commonSettings: _*)
-  .settings(
-    libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    )
-  )
-
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
   .settings(
@@ -218,9 +210,8 @@ lazy val roscala = (project in file("roscala"))
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
-    libraryDependencies ++= commonDependencies ++ Seq(catsCore, shapeless, scalacheck)
+    libraryDependencies ++= commonDependencies
   )
-  .dependsOn(roscala_macros)
 
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)

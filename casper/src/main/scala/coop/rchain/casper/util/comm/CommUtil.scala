@@ -22,7 +22,7 @@ object CommUtil {
       peers <- NodeDiscovery[F].peers
       sends <- peers.toList.traverse { peer =>
                 frameMessage[F](peer, nonce => NetworkProtocol.framePacket(peer, serializedBlock))
-                  .flatMap(msg => TransportLayer[F].commSend(msg, peer).map(_ -> peer))
+                  .flatMap(msg => TransportLayer[F].send(msg, peer).map(_ -> peer))
               }
       _ <- sends.traverse {
             case (Left(err), _) => Log[F].error(s"$err")
@@ -52,12 +52,8 @@ object CommUtil {
       F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
       b: BlockMessage): F[Unit] =
     for {
-      _          <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
-      validSig   <- Validate.blockSignature[F](b)
-      _          <- if (validSig) MultiParentCasper[F].addBlock(b) else ().pure[F]
-      forkchoice <- MultiParentCasper[F].estimator.map(_.head)
-      _ <- Log[F].info(
-            s"New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
+      _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")
+      _ <- MultiParentCasper[F].addBlock(b)
     } yield ()
 
   //TODO: Figure out what do with blocks that parse correctly, but are invalid

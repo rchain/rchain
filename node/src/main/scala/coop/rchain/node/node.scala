@@ -58,16 +58,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                       = effects.log
-  implicit val timeEffect: Time[Task]                     = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]         = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
-  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
+  implicit val encryptionEffect: Encryption[Task]       = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                     = effects.log
+  implicit val timeEffect: Time[Task]                   = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
+  implicit val transportLayerEffect: TransportLayer[Task] =
+    effects.tcpTranposrtLayer[Task](host, conf.port())(src)
+  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
@@ -117,8 +118,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      grpcServer <- {
+        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        GrpcServer
+          .acquireServer[Effect](conf.grpcPort(), runtime)
+      }
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
@@ -156,6 +160,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
+  def startReportStoreMetrics(resources: Resources): Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      implicit val storeMetrics: StoreMetrics[Task] =
+        diagnostics.storeMetrics[Task](resources.runtime.store)
+      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
@@ -209,6 +221,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
+      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(

@@ -38,8 +38,12 @@ object EffectsTestInstances {
     def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
       nodes = node :: nodes
     }
+
+    def peers: F[Seq[PeerNode]] = Capture[F].capture {
+      nodes
+    }
+
     def findMorePeers(limit: Int): F[Seq[PeerNode]]                         = ???
-    def peers: F[Seq[PeerNode]]                                             = ???
     def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] = ???
   }
 
@@ -66,7 +70,7 @@ object EffectsTestInstances {
       }
 
     def local: F[ProtocolNode] = src.pure[F]
-    def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+    def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
