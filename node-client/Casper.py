@@ -35,6 +35,7 @@ from grpc import insecure_channel
 from flask import Flask
 from flask import jsonify
 import json
+import math
 
 def buildCasperCh(argv, stdout, insecure_channel,
          host='127.0.0.1',
@@ -45,13 +46,38 @@ def buildCasperCh(argv, stdout, insecure_channel,
 app = Flask(__name__)
 casperCh = buildCasperCh(argv, stdout, insecure_channel)
 
+
+rename = {"blockHash": "hash", "blockNumber": "height", "blockSize": "size",
+           "timestamp": "time", "deployCount": "txlength", "mainParentHash": "previousblockhash",
+           "tupleSpaceHash": "merkleroot"}
+
+value_adjuster = {"time": lambda milliseconds : math.floor(milliseconds / 1000)}
+
+def add_field_to_block_dict(block_dict, field):
+    field_name = field[0].name
+    renamed_field_name = rename.get(field_name) if rename.get(field_name) else field_name
+    field_value = field[1]
+    adjusted_field_value = str(value_adjuster[renamed_field_name](field_value)) if value_adjuster.get(
+        renamed_field_name) else str(field_value)
+    block_dict.update({renamed_field_name: adjusted_field_value})
+
 @app.route("/api/block/<block_hash>")
 def block(block_hash):
     req = CasperMessage_pb2.BlockQuery(hash=block_hash)
     output = casperCh.showBlock(req)
-    output_dict = {}
-    for field in output.ListFields():
-        field_name = field[0].name
-        field_value = str(field[1])
-        output_dict.update({field_name: field_value})
-    return jsonify(output_dict)
+    block_dict = {"tx": [], "pool_info": {}}
+    for field in output.blockInfo.ListFields():
+        add_field_to_block_dict(block_dict, field)
+    return jsonify(block_dict)
+
+@app.route("/api/blocks")
+def blocks():
+    req = CasperMessage_pb2.google_dot_protobuf_dot_empty__pb2.Empty()
+    output = casperCh.showBlocks(req)
+    blocks = []
+    for block in output.blocks:
+        block_dict = {"pool_info": {}}
+        for field in block.ListFields():
+            add_field_to_block_dict(block_dict, field)
+        blocks.append(block_dict)
+    return jsonify({"blocks": blocks, "length": output.length})
