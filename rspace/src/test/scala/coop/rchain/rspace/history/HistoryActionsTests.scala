@@ -310,7 +310,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       withTestTrieStore { store =>
         val pairs = kvs.toList
 
-        val (first, second) = pairs.splitAt((pairs.length + 1) / 2)
+        val (first, second) = pairs.splitAt(pairs.length / 2)
 
         val root0 = store.workingRootHash.get
 
