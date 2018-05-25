@@ -157,11 +157,11 @@ package object effects {
 
       def local: Task[ProtocolNode] = net.local.pure[Task]
 
-      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
+      def send(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
         Task.delay(net.comm.send(msg.toByteSeq, peer))
 
       def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): Task[Seq[CommErr[Unit]]] =
-        peers.toList.traverse(peer => commSend(msg, peer)).map(_.toSeq)
+        peers.toList.traverse(peer => send(msg, peer)).map(_.toSeq)
 
       private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
         : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
@@ -170,7 +170,7 @@ package object effects {
           r1 <- dispatch(pm)
           r2 <- r1.fold(().pure[Task]) { response =>
                  pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
-                   commSend(response, sender) >>= {
+                   send(response, sender) >>= {
                      case Left(error) =>
                        Log[Task].warn(
                          s"Was unable to send response $response for request: $pm, error: $error")

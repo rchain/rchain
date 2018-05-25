@@ -18,7 +18,7 @@ trait TransportLayer[F[_]] {
   // TODO return PeerNode
   def local: F[ProtocolNode]
   // TODO remove ProtocolMessage, use raw messages from protocol
-  def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
+  def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
   def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit]
 }
@@ -39,8 +39,8 @@ sealed abstract class TransportLayerInstances {
 
       def local: EitherT[F, E, ProtocolNode] =
         EitherT.liftF(evF.local)
-      def commSend(msg: ProtocolMessage, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
-        EitherT.liftF(evF.commSend(msg, p))
+      def send(msg: ProtocolMessage, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
+        EitherT.liftF(evF.send(msg, p))
 
       def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): EitherT[F, E, Seq[CommErr[Unit]]] =
         EitherT.liftF(evF.broadcast(msg, peers))
