@@ -26,12 +26,10 @@ object Secp256k1 {
     * boolean value of verification
     *
     */
-  def verify(
-      data: Array[Byte],
-      signature: Array[Byte],
-      pub: Array[Byte]
-  ): Boolean = ???
-//   NativeSecp256k1.verify(data,signature,pub)
+  // def verify(
+  // data: Array[Byte], signature: Array[Byte], pub: Array[Byte]
+  // ): Boolean =
+  // NativeSecp256k1.verify(data,signature,pub)
 
   /**
     * libsecp256k1 Create an ECDSA signature.
@@ -54,13 +52,10 @@ object Secp256k1 {
     * byte array of signature
     *
   **/
-  def sign(
-      data: Array[Byte],
-      sec: Array[Byte]
-  ): Array[Byte] = ???
-//   NativeSecp256k1.sign(data,sec)
-
-  def newKeyPair: (Array[Byte], Array[Byte]) = ???
+  // def sign(
+  // data: Array[Byte], sec: Array[Byte]
+  // ): Array[Byte] =
+  // NativeSecp256k1.sign(data,sec)
 
   /**
     * libsecp256k1 Seckey Verify - returns true if valid, false if invalid
@@ -78,8 +73,8 @@ object Secp256k1 {
     * Return value
     * Boolean of secret key verification
     */
-  def secKeyVerify(seckey: Array[Byte]): Boolean = ???
-//   NativeSecp256k1.secKeyVerify(seckey)
+  // def secKeyVerify(seckey: Array[Byte]): Boolean =
+  // NativeSecp256k1.secKeyVerify(seckey)
 
   /**
     * libsecp256k1 Compute Pubkey - computes public key from secret key
@@ -96,7 +91,7 @@ object Secp256k1 {
     * Return values
     * @param pubkey ECDSA Public key, 33 or 65 bytes
     */
-  def toPublic(seckey: Array[Byte]): Array[Byte] = ???
-//   NativeSecp256k1.computePubkey(seckey)
+  // def toPublic(seckey: Array[Byte]): Array[Byte] =
+  // NativeSecp256k1.computePubkey(seckey)
 
 }
