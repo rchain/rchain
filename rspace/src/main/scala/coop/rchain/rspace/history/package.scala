@@ -191,8 +191,6 @@ package object history {
 
   @tailrec
   private[rspace] def propagateLeafUpward[T, K, V](
-      store: ITrieStore[T, K, V],
-      txn: T,
       hash: Blake2b256Hash,
       parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
     parents match {
@@ -201,7 +199,7 @@ package object history {
       case (byte, Node(pointerBlock)) +: tail =>
         pointerBlock.children match {
           case Vector()  => throw new DeleteException("PointerBlock has no children")
-          case Vector(_) => propagateLeafUpward(store, txn, hash, tail)
+          case Vector(_) => propagateLeafUpward(hash, tail)
           case _         => (Node(pointerBlock.updated(List((byte, Some(hash))))), tail)
         }
       case _ =>
@@ -227,7 +225,7 @@ package object history {
             val otherNode = store.get(txn, otherHash)
             otherNode match {
               case Some(Node(_))    => updated
-              case Some(Leaf(_, _)) => propagateLeafUpward(store, txn, otherHash, tail)
+              case Some(Leaf(_, _)) => propagateLeafUpward(otherHash, tail)
               case None             => throw new DeleteException(s"Could not get $otherHash")
             }
           case _ =>
