@@ -21,6 +21,7 @@ package object effects {
   private def createDirectoryIfNotExists(path: Path): Path =
     if (Files.notExists(path)) Files.createDirectory(path) else path
 
+  /** DEPRECATED - will be removed once TLS is working */
   def encryption(keysPath: Path): Encryption[Task] = new Encryption[Task] {
     import Encryption._
     import coop.rchain.crypto.encryption.Curve25519
@@ -152,24 +153,7 @@ package object effects {
                                        ev3: Metrics[Task]): TransportLayer[Task] =
     new UdpTransportLayer(src)
 
-  class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
-    def readLine: Task[String] = Task.delay {
-      console.readLine
-    }
-    def println(str: String): Task[Unit] = Task.delay {
-      console.println(str)
-      console.flush()
-    }
-    def updateCompletion(history: Set[String]): Task[Unit] = Task.delay {
-      console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
-      console.addCompleter(new StringsCompleter(history.asJava))
-    }
-
-    def close: Task[Unit] = Task.delay {
-      TerminalFactory.get().restore()
-    }
-
-  }
+  def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
       implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
