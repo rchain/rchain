@@ -10,8 +10,6 @@ import coop.rchain.comm.CommError.CommErr
 import coop.rchain.comm.{PeerNode, ProtocolMessage, ProtocolNode}
 
 trait TransportLayer[F[_]] {
-  // TODO rename
-  // TOOD remove timeout
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]]
