@@ -69,17 +69,15 @@ object Main {
       case None if conf.showBlock.toOption.isDefined =>
         DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
       case None =>
-        certificate
+        val name = certificate
           .flatMap(CertificateHelper.publicAddress)
-          .map { name =>
-            new NodeRuntime(conf, name).nodeProgram.value.map {
-              case Right(_) => ()
-              case Left(CouldNotConnectToBootstrap) =>
-                println("Node could not connect to bootstrap node.")
-              case Left(error) => println(s"Failed! Reason: '$error")
-            }
-          }
-          .getOrElse(Task.eval(println("No server certificate provided")))
+          .getOrElse(CertificateHelper.randomPublicAddress)
+        new NodeRuntime(conf, name).nodeProgram.value.map {
+          case Right(_) => ()
+          case Left(CouldNotConnectToBootstrap) =>
+            println("Node could not connect to bootstrap node.")
+          case Left(error) => println(s"Failed! Reason: '$error")
+        }
     }
     exec.unsafeRunSync
   }
