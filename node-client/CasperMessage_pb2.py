@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='CasperMessage.proto',
   package='coop.rchain.casper.protocol',
   syntax='proto3',
-  serialized_pb=_b('\n\x13\x43\x61sperMessage.proto\x12\x1b\x63oop.rchain.casper.protocol\x1a\x1bgoogle/protobuf/empty.proto\"F\n\x0c\x44\x65ployString\x12\x0c\n\x04user\x18\x01 \x01(\x0c\x12\r\n\x05nonce\x18\x02 \x01(\x05\x12\x0c\n\x04term\x18\x03 \x01(\t\x12\x0b\n\x03sig\x18\x04 \x01(\x0c\"\x1a\n\nBlockQuery\x12\x0c\n\x04hash\x18\x01 \x01(\t\"9\n\x15\x44\x65ployServiceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"M\n\x11MaybeBlockMessage\x12\x38\n\x05\x62lock\x18\x01 \x01(\x0b\x32).coop.rchain.casper.protocol.BlockMessage\"_\n\x12\x42lockQueryResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x39\n\tblockInfo\x18\x02 \x01(\x0b\x32&.coop.rchain.casper.protocol.BlockInfo\"h\n\x0e\x42locksResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x36\n\x06\x62locks\x18\x02 \x03(\x0b\x32&.coop.rchain.casper.protocol.BlockInfo\x12\x0e\n\x06length\x18\x03 \x01(\x03\"\xf8\x01\n\tBlockInfo\x12\x11\n\tblockHash\x18\x01 \x01(\t\x12\x11\n\tblockSize\x18\x02 \x01(\t\x12\x13\n\x0b\x62lockNumber\x18\x03 \x01(\x03\x12\x0f\n\x07version\x18\x04 \x01(\x03\x12\x13\n\x0b\x64\x65ployCount\x18\x05 \x01(\x05\x12\x16\n\x0etupleSpaceHash\x18\x06 \x01(\t\x12\x16\n\x0etupleSpaceDump\x18\x07 \x01(\t\x12\x11\n\ttimestamp\x18\x08 \x01(\x03\x12\x16\n\x0e\x66\x61ultTolerance\x18\t \x01(\x02\x12\x16\n\x0emainParentHash\x18\n \x01(\t\x12\x17\n\x0fparentsHashList\x18\x0b \x03(\t\"\x99\x02\n\x0c\x42lockMessage\x12\x11\n\tblockHash\x18\x01 \x01(\x0c\x12\x33\n\x06header\x18\x02 \x01(\x0b\x32#.coop.rchain.casper.protocol.Header\x12/\n\x04\x62ody\x18\x03 \x01(\x0b\x32!.coop.rchain.casper.protocol.Body\x12\x42\n\x0ejustifications\x18\x04 \x03(\x0b\x32*.coop.rchain.casper.protocol.Justification\x12\x0e\n\x06sender\x18\x05 \x01(\x0c\x12\x0b\n\x03sig\x18\x06 \x01(\x0c\x12\x14\n\x0csigAlgorithm\x18\x07 \x01(\t\x12\x19\n\x11reservedForFuture\x18\x08 \x01(\x0c\"\xbd\x01\n\x06Header\x12\x17\n\x0fparentsHashList\x18\x01 \x03(\x0c\x12\x15\n\rpostStateHash\x18\x02 \x01(\x0c\x12\x13\n\x0bnewCodeHash\x18\x03 \x01(\x0c\x12\x1a\n\x12\x63ommReductionsHash\x18\x04 \x01(\x0c\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x0f\n\x07version\x18\x06 \x01(\x03\x12\x13\n\x0b\x64\x65ployCount\x18\x07 \x01(\x05\x12\x19\n\x11reservedForFuture\x18\x08 \x01(\x0c\"\xcf\x01\n\x04\x42ody\x12;\n\tpostState\x18\x01 \x01(\x0b\x32(.coop.rchain.casper.protocol.RChainState\x12\x34\n\x07newCode\x18\x02 \x03(\x0b\x32#.coop.rchain.casper.protocol.Deploy\x12\x39\n\x0e\x63ommReductions\x18\x03 \x03(\x0b\x32!.coop.rchain.casper.protocol.Diff\x12\x19\n\x11reservedForFuture\x18\x04 \x01(\x0c\";\n\rJustification\x12\x11\n\tvalidator\x18\x01 \x01(\x0c\x12\x17\n\x0flatestBlockHash\x18\x02 \x01(\x0c\"h\n\x0bRChainState\x12\x12\n\ntuplespace\x18\x01 \x01(\x0c\x12\x30\n\x05\x62onds\x18\x02 \x03(\x0b\x32!.coop.rchain.casper.protocol.Bond\x12\x13\n\x0b\x62lockNumber\x18\x03 \x01(\x03\"2\n\x06\x44\x65ploy\x12\x0c\n\x04user\x18\x01 \x01(\x0c\x12\r\n\x05nonce\x18\x02 \x01(\x05\x12\x0b\n\x03sig\x18\x03 \x01(\x0c\"\xbc\x01\n\x04\x44iff\x12\x35\n\x05tdiff\x18\x01 \x01(\x0b\x32$.coop.rchain.casper.protocol.NewTermH\x00\x12\x36\n\x05\x62\x64iff\x18\x02 \x01(\x0b\x32%.coop.rchain.casper.protocol.BondDiffH\x00\x12\x38\n\x05udiff\x18\x03 \x01(\x0b\x32\'.coop.rchain.casper.protocol.UnbondDiffH\x00\x42\x0b\n\tdiffClass\"\t\n\x07NewTerm\"<\n\x08\x42ondDiff\x12\x30\n\x05\x61\x64\x64\x65\x64\x18\x01 \x01(\x0b\x32!.coop.rchain.casper.protocol.Bond\"&\n\nUnbondDiff\x12\x18\n\x10validatorRemoved\x18\x01 \x01(\x0c\"(\n\x04\x42ond\x12\x11\n\tvalidator\x18\x01 \x01(\x0c\x12\r\n\x05stake\x18\x02 \x01(\x05\x32\xe4\x03\n\rDeployService\x12k\n\x08\x44oDeploy\x12).coop.rchain.casper.protocol.DeployString\x1a\x32.coop.rchain.casper.protocol.DeployServiceResponse\"\x00\x12W\n\x0b\x63reateBlock\x12\x16.google.protobuf.Empty\x1a..coop.rchain.casper.protocol.MaybeBlockMessage\"\x00\x12O\n\x08\x61\x64\x64\x42lock\x12).coop.rchain.casper.protocol.BlockMessage\x1a\x16.google.protobuf.Empty\"\x00\x12g\n\tshowBlock\x12\'.coop.rchain.casper.protocol.BlockQuery\x1a/.coop.rchain.casper.protocol.BlockQueryResponse\"\x00\x12S\n\nshowBlocks\x12\x16.google.protobuf.Empty\x1a+.coop.rchain.casper.protocol.BlocksResponse\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\x13\x43\x61sperMessage.proto\x12\x1b\x63oop.rchain.casper.protocol\x1a\x1bgoogle/protobuf/empty.proto\"F\n\x0c\x44\x65ployString\x12\x0c\n\x04user\x18\x01 \x01(\x0c\x12\r\n\x05nonce\x18\x02 \x01(\x05\x12\x0c\n\x04term\x18\x03 \x01(\t\x12\x0b\n\x03sig\x18\x04 \x01(\x0c\"\x1a\n\nBlockQuery\x12\x0c\n\x04hash\x18\x01 \x01(\t\"9\n\x15\x44\x65ployServiceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"M\n\x11MaybeBlockMessage\x12\x38\n\x05\x62lock\x18\x01 \x01(\x0b\x32).coop.rchain.casper.protocol.BlockMessage\"_\n\x12\x42lockQueryResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x39\n\tblockInfo\x18\x02 \x01(\x0b\x32&.coop.rchain.casper.protocol.BlockInfo\"h\n\x0e\x42locksResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x36\n\x06\x62locks\x18\x02 \x03(\x0b\x32&.coop.rchain.casper.protocol.BlockInfo\x12\x0e\n\x06length\x18\x03 \x01(\x03\"\xf8\x01\n\tBlockInfo\x12\x11\n\tblockHash\x18\x01 \x01(\t\x12\x11\n\tblockSize\x18\x02 \x01(\t\x12\x13\n\x0b\x62lockNumber\x18\x03 \x01(\x03\x12\x0f\n\x07version\x18\x04 \x01(\x03\x12\x13\n\x0b\x64\x65ployCount\x18\x05 \x01(\x05\x12\x16\n\x0etupleSpaceHash\x18\x06 \x01(\t\x12\x16\n\x0etupleSpaceDump\x18\x07 \x01(\t\x12\x11\n\ttimestamp\x18\x08 \x01(\x03\x12\x16\n\x0e\x66\x61ultTolerance\x18\t \x01(\x02\x12\x16\n\x0emainParentHash\x18\n \x01(\t\x12\x17\n\x0fparentsHashList\x18\x0b \x03(\t\"\x92\x02\n\x0c\x42lockMessage\x12\x11\n\tblockHash\x18\x01 \x01(\x0c\x12\x33\n\x06header\x18\x02 \x01(\x0b\x32#.coop.rchain.casper.protocol.Header\x12/\n\x04\x62ody\x18\x03 \x01(\x0b\x32!.coop.rchain.casper.protocol.Body\x12\x42\n\x0ejustifications\x18\x04 \x03(\x0b\x32*.coop.rchain.casper.protocol.Justification\x12\x0e\n\x06sender\x18\x05 \x01(\x0c\x12\x0b\n\x03sig\x18\x06 \x01(\x0c\x12\x14\n\x0csigAlgorithm\x18\x07 \x01(\t\x12\x12\n\nextraBytes\x18\x08 \x01(\x0c\"\xb6\x01\n\x06Header\x12\x17\n\x0fparentsHashList\x18\x01 \x03(\x0c\x12\x15\n\rpostStateHash\x18\x02 \x01(\x0c\x12\x13\n\x0bnewCodeHash\x18\x03 \x01(\x0c\x12\x1a\n\x12\x63ommReductionsHash\x18\x04 \x01(\x0c\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x0f\n\x07version\x18\x06 \x01(\x03\x12\x13\n\x0b\x64\x65ployCount\x18\x07 \x01(\x05\x12\x12\n\nextraBytes\x18\x08 \x01(\x0c\"\xc8\x01\n\x04\x42ody\x12;\n\tpostState\x18\x01 \x01(\x0b\x32(.coop.rchain.casper.protocol.RChainState\x12\x34\n\x07newCode\x18\x02 \x03(\x0b\x32#.coop.rchain.casper.protocol.Deploy\x12\x39\n\x0e\x63ommReductions\x18\x03 \x03(\x0b\x32!.coop.rchain.casper.protocol.Diff\x12\x12\n\nextraBytes\x18\x04 \x01(\x0c\";\n\rJustification\x12\x11\n\tvalidator\x18\x01 \x01(\x0c\x12\x17\n\x0flatestBlockHash\x18\x02 \x01(\x0c\"h\n\x0bRChainState\x12\x12\n\ntuplespace\x18\x01 \x01(\x0c\x12\x30\n\x05\x62onds\x18\x02 \x03(\x0b\x32!.coop.rchain.casper.protocol.Bond\x12\x13\n\x0b\x62lockNumber\x18\x03 \x01(\x03\"2\n\x06\x44\x65ploy\x12\x0c\n\x04user\x18\x01 \x01(\x0c\x12\r\n\x05nonce\x18\x02 \x01(\x05\x12\x0b\n\x03sig\x18\x04 \x01(\x0c\"\xbc\x01\n\x04\x44iff\x12\x35\n\x05tdiff\x18\x01 \x01(\x0b\x32$.coop.rchain.casper.protocol.NewTermH\x00\x12\x36\n\x05\x62\x64iff\x18\x02 \x01(\x0b\x32%.coop.rchain.casper.protocol.BondDiffH\x00\x12\x38\n\x05udiff\x18\x03 \x01(\x0b\x32\'.coop.rchain.casper.protocol.UnbondDiffH\x00\x42\x0b\n\tdiffClass\"\t\n\x07NewTerm\"<\n\x08\x42ondDiff\x12\x30\n\x05\x61\x64\x64\x65\x64\x18\x01 \x01(\x0b\x32!.coop.rchain.casper.protocol.Bond\"&\n\nUnbondDiff\x12\x18\n\x10validatorRemoved\x18\x01 \x01(\x0c\"(\n\x04\x42ond\x12\x11\n\tvalidator\x18\x01 \x01(\x0c\x12\r\n\x05stake\x18\x02 \x01(\x05\x32\xe4\x03\n\rDeployService\x12k\n\x08\x44oDeploy\x12).coop.rchain.casper.protocol.DeployString\x1a\x32.coop.rchain.casper.protocol.DeployServiceResponse\"\x00\x12W\n\x0b\x63reateBlock\x12\x16.google.protobuf.Empty\x1a..coop.rchain.casper.protocol.MaybeBlockMessage\"\x00\x12O\n\x08\x61\x64\x64\x42lock\x12).coop.rchain.casper.protocol.BlockMessage\x1a\x16.google.protobuf.Empty\"\x00\x12g\n\tshowBlock\x12\'.coop.rchain.casper.protocol.BlockQuery\x1a/.coop.rchain.casper.protocol.BlockQueryResponse\"\x00\x12S\n\nshowBlocks\x12\x16.google.protobuf.Empty\x1a+.coop.rchain.casper.protocol.BlocksResponse\"\x00\x62\x06proto3')
   ,
   dependencies=[google_dot_protobuf_dot_empty__pb2.DESCRIPTOR,])
 
@@ -420,7 +420,7 @@ _BLOCKMESSAGE = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='reservedForFuture', full_name='coop.rchain.casper.protocol.BlockMessage.reservedForFuture', index=7,
+      name='extraBytes', full_name='coop.rchain.casper.protocol.BlockMessage.extraBytes', index=7,
       number=8, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -439,7 +439,7 @@ _BLOCKMESSAGE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=774,
-  serialized_end=1055,
+  serialized_end=1048,
 )
 
 
@@ -500,7 +500,7 @@ _HEADER = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='reservedForFuture', full_name='coop.rchain.casper.protocol.Header.reservedForFuture', index=7,
+      name='extraBytes', full_name='coop.rchain.casper.protocol.Header.extraBytes', index=7,
       number=8, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -518,8 +518,8 @@ _HEADER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1058,
-  serialized_end=1247,
+  serialized_start=1051,
+  serialized_end=1233,
 )
 
 
@@ -552,7 +552,7 @@ _BODY = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='reservedForFuture', full_name='coop.rchain.casper.protocol.Body.reservedForFuture', index=3,
+      name='extraBytes', full_name='coop.rchain.casper.protocol.Body.extraBytes', index=3,
       number=4, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
@@ -570,8 +570,8 @@ _BODY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1250,
-  serialized_end=1457,
+  serialized_start=1236,
+  serialized_end=1436,
 )
 
 
@@ -608,8 +608,8 @@ _JUSTIFICATION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1459,
-  serialized_end=1518,
+  serialized_start=1438,
+  serialized_end=1497,
 )
 
 
@@ -653,8 +653,8 @@ _RCHAINSTATE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1520,
-  serialized_end=1624,
+  serialized_start=1499,
+  serialized_end=1603,
 )
 
 
@@ -681,7 +681,7 @@ _DEPLOY = _descriptor.Descriptor(
       options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='sig', full_name='coop.rchain.casper.protocol.Deploy.sig', index=2,
-      number=3, type=12, cpp_type=9, label=1,
+      number=4, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -698,8 +698,8 @@ _DEPLOY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1626,
-  serialized_end=1676,
+  serialized_start=1605,
+  serialized_end=1655,
 )
 
 
@@ -746,8 +746,8 @@ _DIFF = _descriptor.Descriptor(
       name='diffClass', full_name='coop.rchain.casper.protocol.Diff.diffClass',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=1679,
-  serialized_end=1867,
+  serialized_start=1658,
+  serialized_end=1846,
 )
 
 
@@ -770,8 +770,8 @@ _NEWTERM = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1869,
-  serialized_end=1878,
+  serialized_start=1848,
+  serialized_end=1857,
 )
 
 
@@ -801,8 +801,8 @@ _BONDDIFF = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1880,
-  serialized_end=1940,
+  serialized_start=1859,
+  serialized_end=1919,
 )
 
 
@@ -832,8 +832,8 @@ _UNBONDDIFF = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1942,
-  serialized_end=1980,
+  serialized_start=1921,
+  serialized_end=1959,
 )
 
 
@@ -870,8 +870,8 @@ _BOND = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1982,
-  serialized_end=2022,
+  serialized_start=1961,
+  serialized_end=2001,
 )
 
 _MAYBEBLOCKMESSAGE.fields_by_name['block'].message_type = _BLOCKMESSAGE
@@ -1051,8 +1051,8 @@ _DEPLOYSERVICE = _descriptor.ServiceDescriptor(
   file=DESCRIPTOR,
   index=0,
   options=None,
-  serialized_start=2025,
-  serialized_end=2509,
+  serialized_start=2004,
+  serialized_end=2488,
   methods=[
   _descriptor.MethodDescriptor(
     name='DoDeploy',
