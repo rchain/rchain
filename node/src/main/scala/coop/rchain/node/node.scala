@@ -1,7 +1,6 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.net.SocketAddress
 import java.util.UUID
 import io.grpc.Server
 
@@ -22,6 +21,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
+import coop.rchain.node.effects.TLNodeDiscovery
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -58,16 +58,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]           = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                         = effects.log
-  implicit val timeEffect: Time[Task]                       = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]           = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]                 = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]     = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]      = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                   = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Effect]   = effects.nodeDiscovery[Effect](net)
-  implicit val transportLayerEffect: TransportLayer[Effect] = effects.transportLayer[Effect](net)
+  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                       = effects.log
+  implicit val timeEffect: Time[Task]                     = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]         = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
+  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(src)
+  implicit val pingEffect: Ping[Task]                     = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
@@ -81,7 +81,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
           None
         }
       })
-
   val genesisBonds: Map[Array[Byte], Int] = bondsFile match {
     case Some(file) =>
       Try {
@@ -99,11 +98,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         )
         newValidators
       })
-
     case None => newValidators
-
   }
-
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
@@ -121,8 +117,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      grpcServer <- {
+        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        GrpcServer
+          .acquireServer[Effect](conf.grpcPort(), runtime)
+      }
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
@@ -138,8 +137,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+
+    (for {
+      peers <- nodeDiscoveryEffect.peers
+      loc   <- transportLayerEffect.local
+      ts    <- timeEffect.currentMillis
+      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      _     <- transportLayerEffect.broadcast(msg, peers)
+    } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
     println("Shutting down HTTP server....")
@@ -154,6 +159,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
+  def startReportStoreMetrics(resources: Resources): Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      implicit val storeMetrics: StoreMetrics[Task] =
+        diagnostics.storeMetrics[Task](resources.runtime.store)
+      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
@@ -194,10 +207,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     bonds
   }
 
-  private def receiveAndDispatch: Effect[Unit] =
-    TransportLayer[Effect].receive >>= {
-      case None      => ().pure[Effect]
-      case Some(msg) => p2p.Network.dispatch[Effect](msg)
+  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+    pm =>
+      NodeDiscovery[Effect].handleCommunications(pm) >>= {
+        case None     => p2p.Network.dispatch[Effect](pm)
+        case resultPM => resultPM.pure[Effect]
     }
 
   private def nodeName: String = {
@@ -225,9 +239,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
-      // TODO handle errors on receive (currently ignored)
-      _ <- receiveAndDispatch.value.void.forever.executeAsync.start.toEffect
-      _ <- Log[Effect].info(s"Listening for traffic on $address.")
+      _         <- startReportStoreMetrics(resources).toEffect
+      _         <- TransportLayer[Effect].receive(handleCommunications)
+      _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
               if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else

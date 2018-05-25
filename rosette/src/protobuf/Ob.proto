@@ -48,30 +48,58 @@ message ObjectStore {
 // TODO: These messages need to be filled out with the required fields. Also if there are objects that
 // contain other objects, they will need to be added to this list.
 
-message Actor {}
-message BlockExpr {}
+message Actor {
+    Object extension = 1;
+}
+message BlockExpr {
+    Object subExprs = 1;
+    Object implicit = 2;
+}
 message Char {
     uint32 value = 1;
 }
 message Code {
+    // Handle by reference. ID in parent Object.
 }
-message ExpandedLocation {}
+message ExpandedLocation {
+}
 message Fixnum {
     int32 value = 1;
 }
 message Float {
     double value = 1;
 }
-message FreeExpr {}
-message GotoExpr {}
-message IfExpr {}
-message LabelExpr {}
-message LetExpr {}
+message FreeExpr {
+    Object freeids = 1;
+    Object body = 2;
+}
+message GotoExpr {
+    Object label = 1;
+}
+message IfExpr {
+    Object condition = 1;
+    Object truebranch = 2;
+    Object falsebranch = 3;
+}
+message LabelExpr {
+    Object label = 1;
+    Object body = 2;
+}
+message LetExpr {
+    Object bindings = 1;
+    Object body = 2;
+}
 message LetrecExpr {}
 message MethodExpr {}
+message Niv {}
+message NullExpr {}
 message Proc {}
 message ProcExpr {}
 message QuoteExpr {}
+message RblAtom {}
+message RblBool {
+    bool value = 1;
+}
 message RBLstring {
     string value = 1;
 }
@@ -80,14 +108,19 @@ message RequestExpr {}
 message SendExpr {}
 message SeqExpr {}
 message SetExpr {}
+message StdExtension {}
 message StdMthd {}
 message Symbol {
     string name = 1;
 }
 message TblObject {}
 message Template {}
-message Tuple {}
-message TupleExpr {}
+message Tuple {
+    repeated Object elements = 1;
+}
+message TupleExpr {
+    Object rest = 1;
+}
 
 enum ObType {
     OT_Actor = 0;
@@ -119,6 +152,11 @@ enum ObType {
     OT_Template = 26;
     OT_Tuple = 27;
     OT_TupleExpr = 28;
+    OT_RblBool = 29;
+    OT_Niv = 30;
+    OT_StdExtension = 31;
+    OT_RblAtom = 32;
+    OT_NullExpr = 33;
     OT_unknown = 999;
 }
 
@@ -127,8 +165,10 @@ message Object {
     uint64 id = 2;
     uint64 metaId = 3;
     uint64 parentId = 4;
+    bool reference = 5;;
 
-    // One and only one of these should be populated
+    // One and only one of these should be populated. These contain information specific to the
+    // Object type.
     oneof object {
         Actor actor = 10;
         BlockExpr blockexpr = 11;
@@ -159,5 +199,10 @@ message Object {
         Template template = 36;
         Tuple tuple = 37;
         TupleExpr tupleexpr = 38;
+        RblBool rblbool = 39;
+        Niv niv = 40;
+        StdExtension stdextension = 41;
+        RblAtom rblatom = 42;
+        NullExpr nullexpr = 43;
     }
 }

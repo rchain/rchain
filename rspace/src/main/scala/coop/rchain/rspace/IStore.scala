@@ -63,4 +63,6 @@ trait IStore[C, P, A, K] {
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   def close(): Unit
+
+  def getStoreSize: StoreSize
 }

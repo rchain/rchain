@@ -6,6 +6,7 @@ import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header
 import coop.rchain.comm._, CommError._
+import coop.rchain.comm.protocol.routing.{Protocol => RoutingProtocol}
 import com.netaporter.uri.Uri
 import coop.rchain.comm.protocol.rchain._
 import coop.rchain.metrics.Metrics
@@ -121,7 +122,7 @@ object Network {
         ts1          <- Time[F].currentMillis
         local        <- TransportLayer[F].local
         ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
-        remote       = ProtocolNode(peer, local, unsafeRoundTrip[F])
+        remote       = ProtocolNode(peer)
         ehsrespmsg   <- TransportLayer[F].roundTrip(ehs, remote, timeout) >>= (errorHandler[F].fromEither _)
         ehsresp      <- errorHandler[F].fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
         remotePubKey = ehsresp.publicKey.toByteArray
@@ -133,7 +134,7 @@ object Network {
       for {
         _       <- Log[F].info(s"Initialize second phase handshake (protocol handshake) to $peer")
         local   <- TransportLayer[F].local
-        remote  = ProtocolNode(peer, local, unsafeRoundTrip[F])
+        remote  = ProtocolNode(peer)
         fm      <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
         phsresp <- TransportLayer[F].roundTrip(fm, remote, timeout) >>= errorHandler[F].fromEither
         _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
@@ -160,9 +161,9 @@ object Network {
   }
 
   def handleEncryptionHandshake[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Encryption: KeysStore](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Encryption: ErrorHandler: KeysStore](
       sender: PeerNode,
-      msg: EncryptionHandshakeMessage): F[Unit] =
+      msg: EncryptionHandshakeMessage): F[Option[ProtocolMessage]] =
     for {
       _            <- Metrics[F].incrementCounter("p2p-encryption-handshake-recv-count")
       local        <- TransportLayer[F].local
@@ -171,38 +172,40 @@ object Network {
       _ <- handshakeErr.fold(kp(Log[F].error("could not fetch proto message")),
                              hs => keysStore[F].put(sender, hs.publicKey.toByteArray))
       responseErr <- msg.response[F](local, keys)
-      result      <- responseErr.traverse(resp => TransportLayer[F].commSend(resp, sender))
-      _ <- result.traverse {
-            case Right(_) => Log[F].info(s"Responded to encryption handshake request from $sender.")
-            case Left(ex) => Log[F].error(s"handleEncryptionHandshake(): $ex")
-          }
-    } yield ()
+      response    <- errorHandler[F].fromEither(responseErr)
+      _           <- Log[F].info(s"Responded to encryption handshake request from $sender.")
+    } yield response.some
 
-  def handlePacket[F[_]: FlatMap: ErrorHandler: Log: PacketHandler](
-      maybePacket: Option[Packet]): F[String] = {
+  def handlePacket[
+      F[_]: Monad: Time: TransportLayer: Encryption: KeysStore: ErrorHandler: Log: PacketHandler](
+      remote: PeerNode,
+      maybePacket: Option[Packet]): F[Option[ProtocolMessage]] = {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
-    val handleNone: F[String] = for {
+    val handleNone: F[Option[ProtocolMessage]] = for {
       _ <- Log[F].error(errorMsg)
       _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
-    } yield errorMsg
+    } yield none[ProtocolMessage]
 
-    maybePacket.fold(handleNone)(p => PacketHandler[F].handlePacket(p))
+    maybePacket.fold(handleNone)(p =>
+      for {
+        maybeResponsePacket <- PacketHandler[F].handlePacket(p)
+        maybeResponsePacketMessage <- maybeResponsePacket.traverse(rp =>
+                                       frameMessage[F](remote, kp(framePacket(remote, rp))))
+      } yield maybeResponsePacketMessage)
   }
 
   def handleFrame[
-      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: PacketHandler](
+      F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: PacketHandler: ErrorHandler: KeysStore](
       remote: PeerNode,
-      msg: FrameMessage)(implicit
-                         err: ApplicativeError_[F, CommError],
-                         keysStore: KeysStore[F]): F[String] =
+      msg: FrameMessage): F[Option[ProtocolMessage]] =
     for {
       _                 <- Metrics[F].incrementCounter("p2p-protocol-handshake-recv-count")
-      maybeRemotePubKey <- keysStore.get(remote)
+      maybeRemotePubKey <- keysStore[F].get(remote)
       keys              <- Encryption[F].fetchKeys
       remotePubKey <- maybeRemotePubKey
                        .map(_.pure[F])
-                       .getOrElse(err.raiseError(peerNodeNotFound(remote)))
-      frame          <- err.fromEither(NetworkProtocol.toFrame(msg.proto))
+                       .getOrElse(errorHandler[F].raiseError(peerNodeNotFound(remote)))
+      frame          <- errorHandler[F].fromEither(NetworkProtocol.toFrame(msg.proto))
       nonce          = frame.nonce.toByteArray
       encryptedBytes = frame.framed.toByteArray
       decryptedBytes <- Encryption[F].decrypt(remotePubKey, keys.priv, nonce, encryptedBytes)
@@ -210,67 +213,71 @@ object Network {
       res <- if (unframed.isProtocolHandshake) {
               handleProtocolHandshake[F](remote, msg.header, unframed.protocolHandshake)
             } else if (unframed.isPacket) {
-              handlePacket[F](unframed.packet)
+              handlePacket[F](remote, unframed.packet)
             } else
-              err.fromEither(
-                Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
+              errorHandler[F]
+                .fromEither(
+                  Left(unknownProtocol(s"Received unhandable message in frame: $unframed")))
+                .as(none[ProtocolMessage])
     } yield res
 
   private def handleProtocolHandshake[
-      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption: Log](
+      F[_]: Monad: Time: TransportLayer: NodeDiscovery: Encryption: Log: ErrorHandler: KeysStore](
       remote: PeerNode,
       maybeHeader: Option[Header],
-      maybePh: Option[ProtocolHandshake])(implicit
-                                          keysStore: KeysStore[F],
-                                          err: ApplicativeError_[F, CommError]): F[String] =
+      maybePh: Option[ProtocolHandshake]): F[Option[ProtocolMessage]] =
     for {
       local <- TransportLayer[F].local
       _     <- getOrError[F, ProtocolHandshake](maybePh, parseError("ProtocolHandshake"))
       h     <- getOrError[F, Header](maybeHeader, headerNotAvailable)
       fm    <- frameResponseMessage[F](remote, h, nonce => protocolHandshakeResponse(local, nonce))
-      _     <- TransportLayer[F].commSend(fm, remote)
       _     <- NodeDiscovery[F].addNode(remote)
-    } yield s"Responded to protocol handshake request from $remote"
+      _     <- Log[F].info(s"Responded to protocol handshake request from $remote")
+    } yield fm.some
 
   // TODO F is tooooo rich
   def dispatch[
       F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler: PacketHandler](
-      msg: ProtocolMessage): F[Unit] = {
+      msg: ProtocolMessage): F[Option[ProtocolMessage]] = {
 
-    val dispatchForSender: Option[F[Unit]] = msg.sender.map { sender =>
-      msg match {
-        case UpstreamMessage(proto, _) =>
-          proto.message.upstream.traverse { msg =>
-            msg.typeUrl match {
-              // TODO interpolate this string to check if class exists
-              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
-                handleEncryptionHandshake[F](sender,
-                                             EncryptionHandshakeMessage(proto,
-                                                                        System.currentTimeMillis))
-              // TODO interpolate this string to check if class exists
-              case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Frame" =>
-                val err     = ApplicativeError_[F, CommError]
-                val handled = handleFrame[F](sender, FrameMessage(proto, System.currentTimeMillis))
-                err.attempt(handled) >>= {
-                  case Right(res) =>
-                    Log[F].info(res) // TODO this should not do anytihin g (retuyrn F[Unit]), log in handlers
-                  case Left(e) => Log[F].error(s"error while handling frame message: $e")
-                }
-              case _ => Log[F].warn(s"Unexpected message type ${msg.typeUrl}")
-            }
-          }.void
-        /*
-         * We do not expect to get any responses to the protocol out
-         * of the blue; rather, they'll all be done through
-         * synchronous, request-response messaging.
-         */
-        case upstream @ UpstreamResponse(_, _) =>
-          Log[F].debug(s"Out-of-sequence message: $upstream")
-        case _ => Log[F].error(s"Unrecognized msg $msg")
-      }
+    def dispatchForUpstream(proto: RoutingProtocol, sender: PeerNode): F[Option[ProtocolMessage]] =
+      proto.message.upstream
+        .fold(Log[F].error("Upstream not available").as(none[ProtocolMessage])) { usmsg =>
+          usmsg.typeUrl match {
+            // TODO interpolate this string to check if class exists
+            case "type.googleapis.com/coop.rchain.comm.protocol.rchain.EncryptionHandshake" =>
+              handleEncryptionHandshake[F](
+                sender,
+                EncryptionHandshakeMessage(proto, System.currentTimeMillis))
+            // TODO interpolate this string to check if class exists
+            case "type.googleapis.com/coop.rchain.comm.protocol.rchain.Frame" =>
+              val handled = handleFrame[F](sender, FrameMessage(proto, System.currentTimeMillis))
+              errorHandler[F].attempt(handled) >>= {
+                case Right(maybeProtocolMessage) => maybeProtocolMessage.pure[F]
+                case Left(error) =>
+                  Log[F]
+                    .error(s"Error occured while handling frame message, error: $error")
+                    .as(none[ProtocolMessage])
+              }
+
+            case _ =>
+              Log[F].error(s"Unexpected message type ${usmsg.typeUrl}") *> none[ProtocolMessage]
+                .pure[F]
+          }
+        }
+
+    msg match {
+      case UpstreamMessage(proto, _) =>
+        msg.sender.fold(
+          Log[F].error(s"Sender not present, DROPPING msg $msg").as(none[ProtocolMessage])) {
+          sender =>
+            dispatchForUpstream(proto, sender)
+        }
+      case upstream @ UpstreamResponse(_, _) =>
+        Log[F].debug(s"Out-of-sequence message: $upstream") *> none[ProtocolMessage].pure[F]
+      case _ => Log[F].error(s"Unrecognized msg $msg") *> none[ProtocolMessage].pure[F]
     }
 
-    dispatchForSender.getOrElse(Log[F].error(s"received message with empty sender, msg = $msg"))
   }
 
   private def getOrError[F[_]: Applicative, A](oa: Option[A], error: CommError)(
