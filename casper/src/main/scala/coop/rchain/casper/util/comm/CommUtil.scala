@@ -22,7 +22,7 @@ object CommUtil {
       peers <- NodeDiscovery[F].peers
       sends <- peers.toList.traverse { peer =>
                 frameMessage[F](peer, nonce => NetworkProtocol.framePacket(peer, serializedBlock))
-                  .flatMap(msg => TransportLayer[F].commSend(msg, peer).map(_ -> peer))
+                  .flatMap(msg => TransportLayer[F].send(msg, peer).map(_ -> peer))
               }
       _ <- sends.traverse {
             case (Left(err), _) => Log[F].error(s"$err")

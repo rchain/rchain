@@ -60,5 +60,23 @@ message Protocol {
 }
 
 service TransportLayer {
-  rpc Run (Protocol) returns (Protocol) {}
+  rpc Send (TLRequest) returns (TLResponse) {}
+}
+
+message TLRequest {
+  Protocol protocol = 1;
+}
+
+message InternalServerError {
+}
+
+message NoResponse {
+}
+
+message TLResponse {
+  oneof payload {
+    Protocol protocol                       = 1;
+    NoResponse noResponse                   = 2;
+    InternalServerError internalServerError = 3;
+  }
 }

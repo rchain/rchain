@@ -70,7 +70,7 @@ object EffectsTestInstances {
       }
 
     def local: F[ProtocolNode] = src.pure[F]
-    def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+    def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
