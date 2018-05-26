@@ -34,12 +34,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       && !conf.certificatePath.toFile.exists()) {
     println(s"No certificate found at path ${conf.certificatePath}")
     println("Generating a X.509 certificate for the node")
-    val keyPair     = CertificateHelper.generateKeyPair()
-    val certificate = CertificateHelper.generate(keyPair)
-    val pem         = CertificatePrinter.print(certificate)
-    val pemPk       = CertificatePrinter.printPrivateKey(keyPair.getPrivate)
-    withResource(new PrintWriter(conf.certificatePath.toFile))(pw => pw.write(pem))
-    withResource(new PrintWriter(conf.keyPath.toFile))(pw => pw.write(pemPk))
+    CertificateHelper.generate(conf.data_dir().toString)
   }
 
   implicit class ThrowableOps(th: Throwable) {
