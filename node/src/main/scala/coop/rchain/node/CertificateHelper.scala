@@ -50,6 +50,10 @@ object CertificateHelper {
   }
 
   def generateKeyPair(): KeyPair = {
+    val p = Security.getProvider("SunEC")
+    val s = p.get("AlgorithmParameters.EC SupportedCurves")
+    println(System.getProperty("java.version"))
+    println(s)
     val kpg = KeyPairGenerator.getInstance("EC", "SunEC")
     kpg.initialize(new ECGenParameterSpec("secp256k1"), new SecureRandom())
     kpg.generateKeyPair
