@@ -65,13 +65,6 @@ WuMwCgYIKoZIzj0EAwIDSQAwRgIhAMQsYq8J9V26Tarr1nfUfL0/aVoOetYDZ+c4
 QoU6g+xvAiEA1oTwyu+HHWCF8znOc6LpLaQvsqvfqgYc8s0qTi/p/5o=
 -----END CERTIFICATE-----
 EOF
-    else
-      openssl req -newkey ec:<(openssl ecparam -name secp256k1) -nodes \
-        -keyout ${var_lib_rnode_dir}/node.key.pem -x509 -days 365 \
-        -out ${var_lib_rnode_dir}/node.certificate.pem -subj "/CN=local"
-
-      cat ${var_lib_rnode_dir}/node.key.pem
-      cat ${var_lib_rnode_dir}/node.certificate.pem
    fi
 
     if [[ $i == 0 ]]; then
