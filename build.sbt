@@ -157,7 +157,10 @@ lazy val node = (project in file("node"))
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
     },
     /* Debian */
-    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "openssl", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+   debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
+                                                "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)" ,  //ubuntu & debian
+                                                "bash (>= 2.05a-11)", 
+                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
@@ -166,7 +169,9 @@ lazy val node = (project in file("node"))
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
-    rpmPrerequisites := Seq("libsodium >= 1.0.14-1", "java-1.8.0-openjdk-headless", "openssl")
+rpmPrerequisites := Seq("java-1.8.0-openjdk-headless (>= 1.8.0.171)", 
+                        "openssl(>= 1.0.2k)" | "openssl(>= 1.1.0h)", //centos & fedora
+                        "libsodium >= 1.0.14-1") 
   )
   .dependsOn(casper, comm, crypto, rholang)
 
