@@ -1,7 +1,7 @@
 package coop.rchain.node
 
 import java.net.{InetAddress, NetworkInterface}
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.comm.UPnP
@@ -14,10 +14,17 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
 
-  val name =
-    opt[String](default = None,
-                short = 'n',
-                descr = "Node name or key (deprecated, will be removed in next release).")
+  val certificate =
+    opt[Path](
+      required = false,
+      short = 'c',
+      descr = "Path to node's X.509 certificate file, that is being used for identification")
+
+  val key =
+    opt[Path](required = false,
+              short = 'k',
+              descr =
+                "Path to node's private key PEM file, that is being used for TLS communication")
 
   val port =
     opt[Int](default = Some(30304),
@@ -113,6 +120,14 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       case Some(host) => host
       case None       => whoami(port()).fold("localhost")(_.getHostAddress)
     }
+
+  def certificatePath: Path =
+    certificate.toOption
+      .getOrElse(Paths.get(data_dir().toString, "node.certificate.pem"))
+
+  def keyPath: Path =
+    certificate.toOption
+      .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
   private def whoami(port: Int): Option[InetAddress] = {
 

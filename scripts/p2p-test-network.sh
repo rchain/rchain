@@ -38,7 +38,7 @@ create_test_network_resources() {
     --ip-range=169.254.1.0/24 \
     --gateway=169.254.1.1 \
     ${network_name}
-  
+
   echo "Creating docker test containers"
   for i in {0..2}; do
     container_name="node${i}.${network_name}"
@@ -46,10 +46,31 @@ create_test_network_resources() {
 
     var_lib_rnode_dir=$(mktemp -d /tmp/var_lib_rnode.XXXXXXXX)
 
+    echo "Creating node certificate"
     if [[ $i == 0 ]]; then
-      rnode_cmd="--port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352"
+      sudo tee -a ${var_lib_rnode_dir}/node.key.pem > /dev/null <<EOF
+-----BEGIN EC PRIVATE KEY-----
+MHQCAQEEII+ACRjC3sAf28o77SI3UvWtlw1V+9W4bKFRTfTiYKsgoAcGBSuBBAAK
+oUQDQgAEWyVYdp/rhANxVx4kdIMCSRVvGzWFQDsHQlxIfixNKM4AKWWIlBiMOblK
+OndPMKy8BwJz4X1HlxDES8XWqnRa4w==
+-----END EC PRIVATE KEY-----
+EOF
+      sudo tee -a ${var_lib_rnode_dir}/node.certificate.pem > /dev/null <<EOF
+-----BEGIN CERTIFICATE-----
+MIIBFTCBuwIJAN3H89VyG22uMAoGCCqGSM49BAMCMBQxEjAQBgNVBAMMCWxvY2Fs
+aG9zdDAeFw0xODA1MDExNDEwMDBaFw0xOTA1MDExNDEwMDBaMBQxEjAQBgNVBAMM
+CWxvY2FsaG9zdDBWMBAGByqGSM49AgEGBSuBBAAKA0IABFslWHaf64QDcVceJHSD
+AkkVbxs1hUA7B0JcSH4sTSjOAClliJQYjDm5Sjp3TzCsvAcCc+F9R5cQxEvF1qp0
+WuMwCgYIKoZIzj0EAwIDSQAwRgIhAMQsYq8J9V26Tarr1nfUfL0/aVoOetYDZ+c4
+QoU6g+xvAiEA1oTwyu+HHWCF8znOc6LpLaQvsqvfqgYc8s0qTi/p/5o=
+-----END CERTIFICATE-----
+EOF
+   fi
+
+    if [[ $i == 0 ]]; then
+      rnode_cmd="--port 30304 --standalone"
     else
-      rnode_cmd="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@169.254.1.2:30304"
+      rnode_cmd="--bootstrap rnode://4e7c3811cc1a16b7dd1d672db3e025c797484573@169.254.1.2:30304"
     fi
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \

@@ -3,11 +3,14 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 
 import coop.rchain.rspace.LMDBStore
+import coop.rchain.rspace.util.withResource
 import coop.rchain.shared.AttemptOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
-import org.lmdbjava.{Dbi, Env, Txn}
+import org.lmdbjava._
 import scodec.Codec
 import scodec.bits.BitVector
+
+import scala.collection.JavaConverters._
 
 class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer], _dbTrie: Dbi[ByteBuffer])(
     implicit
@@ -48,6 +51,21 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer], _dbTrie: Dbi[ByteBu
       Codec[Trie[K, V]].decode(BitVector(buffer)).map(_.value).get
     }
   }
+
+  private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]] =
+    withTxn(createTxnRead()) { txn =>
+      withResource(_dbTrie.iterate(txn)) { (it: CursorIterator[ByteBuffer]) =>
+        it.asScala.foldLeft(Map.empty[Blake2b256Hash, Trie[K, V]]) {
+          (map: Map[Blake2b256Hash, Trie[K, V]], x: CursorIterator.KeyVal[ByteBuffer]) =>
+            val key   = Codec[Blake2b256Hash].decode(BitVector(x.key())).map(_.value).get
+            val value = Codec[Trie[K, V]].decode(BitVector(x.`val`())).map(_.value).get
+            map + ((key, value))
+        }
+      }
+    }
+
+  def close(): Unit =
+    _dbTrie.close()
 }
 
 object LMDBTrieStore {

@@ -1,7 +1,6 @@
 package coop.rchain.node.effects
 
 import scala.concurrent.duration._
-import java.net.SocketAddress
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.p2p.effects._
