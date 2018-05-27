@@ -1,7 +1,6 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.util.UUID
 import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
@@ -18,6 +17,7 @@ import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.shared.Resources._
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
@@ -27,6 +27,15 @@ import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
+
+  // Generate certificate if not provided as option or in the data dir
+  if (conf.certificate.toOption.isEmpty
+      && conf.key.toOption.isEmpty
+      && !conf.certificatePath.toFile.exists()) {
+    println(s"No certificate found at path ${conf.certificatePath}")
+    println("Generating a X.509 certificate for the node")
+    CertificateHelper.generate(conf.data_dir().toString)
+  }
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =

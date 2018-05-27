@@ -2,10 +2,11 @@ package coop.rchain.node
 
 import java.io.{File, FileInputStream}
 import java.math.BigInteger
-import java.security.AlgorithmParameters
-import java.security.cert.{CertificateFactory, X509Certificate}
-import java.security.interfaces.ECPublicKey
+import java.security._
+import java.security.cert._
+import java.security.interfaces._
 import java.security.spec._
+import java.util.Base64
 
 import coop.rchain.crypto.hash.Keccak256
 
@@ -46,6 +47,15 @@ object CertificateHelper {
     val cf = CertificateFactory.getInstance("X.509")
     val is = new FileInputStream(certFile)
     cf.generateCertificate(is).asInstanceOf[X509Certificate]
+  }
+
+  def generate(path: String): Unit = {
+    import sys.process._
+    Process(s"openssl ecparam -name secp256k1 -out $path/secp256k1.pem").!
+    Process(
+      s"openssl req -newkey ec:$path/secp256k1.pem -nodes " +
+        s"-keyout $path/node.key.pem -x509 -days 365 " +
+        s"-out $path/node.certificate.pem -subj /CN=local").!
   }
 
 }
