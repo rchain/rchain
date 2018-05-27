@@ -12,7 +12,10 @@ import scala.collection.JavaConverters._
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
 
-  val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
+  val diagnostics = new Subcommand("diagnostics", "d") {
+    descr("Node diagnostics")
+  }
+  addSubcommand(diagnostics)
 
   val certificate =
     opt[Path](
@@ -66,15 +69,17 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val host = opt[String](default = None, descr = "Hostname or IP of this node.")
 
-  val repl = opt[Boolean](
-    default = Some(false),
-    short = 'r',
-    descr = "Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
+  val repl = new Subcommand("repl") {
+    descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
+  }
+  addSubcommand(repl)
 
-  val eval = opt[String](
-    default = None,
-    descr =
+  val eval = new Subcommand("eval") {
+    descr(
       "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.")
+    val fileName = trailArg[String](required = true)
+  }
+  addSubcommand(eval)
 
   val data_dir = opt[Path](required = false,
                            descr = "Path to data directory. Defaults to /var/lib/rnode",

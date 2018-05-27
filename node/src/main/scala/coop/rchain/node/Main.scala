@@ -29,16 +29,16 @@ object Main {
     implicit val deployService: DeployService[Task] =
       new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
 
-    val exec: Task[Unit] = conf.eval.toOption match {
-      case Some(fileName) => {
+    val exec: Task[Unit] = conf.subcommand match {
+      case Some(conf.eval) => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
-        new ReplRuntime(conf).evalProgram[Task](fileName)
+        new ReplRuntime(conf).evalProgram[Task](conf.eval.fileName.toOption.get)
       }
-      case None if conf.repl() => {
+      case Some(conf.repl) => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime(conf).replProgram[Task].as(())
       }
-      case None if conf.diagnostics() => {
+      case Some(conf.diagnostics) => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         diagnostics.client.Runtime.diagnosticsProgram[Task]
       }
