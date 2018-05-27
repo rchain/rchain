@@ -135,14 +135,14 @@ lazy val node = (project in file("node"))
       val entryTargetPath    = "/bin"
       val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
-        from("openjdk:8u171-jre-alpine")
+        from("openjdk:8u171-jre-slim-stretch")
         add(artifact, artifactTargetPath)
         copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
-        run("apk", "update")
-        run("apk", "add", "libsodium")
-        run("apk", "add", "openssl")
+        run("apt", "update")
+        run("apt", "install", "-yq", "libsodium18")
+        run("apt", "install", "-yq", "openssl")
         entryPoint("/bin/main.sh")
       }
     },
