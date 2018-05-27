@@ -135,7 +135,7 @@ lazy val node = (project in file("node"))
       val entryTargetPath    = "/bin"
       val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
-        from("openjdk:8u151-jre-alpine")
+        from("openjdk:8u171-jre-alpine")
         add(artifact, artifactTargetPath)
         copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
