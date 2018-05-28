@@ -292,32 +292,36 @@ def test_network_sockets(container):
 
 def test_repl_load(container):
     """Load REPL with commands."""
+
+    # Remove any existing repl containers if they exist
     for repl_container in client.containers.list(all=True, filters={"name":f"repl\d.{args.network}"}):
         print(f"removing {repl_container.name}")
         repl_container.remove(force=True, v=True)
-    i = 0
-    try:
-        repl_node = {}
-        repl_node[i] = {}
-        repl_node[i]['name'] = f"repl{i}.{args.network}"
-        repl_node[i]['volume'] = client.volumes.create()
 
-        cmd = (f"sudo docker run --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
-               f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
-               f"--network {args.network} {args.image} "
-               f"--grpc-host {container.name} -r")
-        print(f"docker repl cmd: {cmd}")
-        repl_cmds = args.repl_cmds
-        conn = replwrap.REPLWrapper(cmd, args.prompt, None)
-        for i in range(args.repl_load_repetitions):
-            for repl_cmd in repl_cmds:
-                result = conn.run_command(repl_cmd)
-                print(f"repetition: {i} output: {result}")
-            i += 1 
-        return 0 
-    except Exception as e:
-        print(e)
-        return 1 
+    # Run repl loader with repetitions and repl commands defined in args
+    for i in [0]: # Add more later by var in args if wanted to increase load diversity
+        try:
+            repl_node = {}
+            repl_node[i] = {}
+            repl_node[i]['name'] = f"repl{i}.{args.network}"
+            repl_node[i]['volume'] = client.volumes.create()
+
+            cmd = (f"sudo docker run --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
+                   f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
+                   f"--network {args.network} {args.image} "
+                   f"--grpc-host {container.name} -r")
+            print(f"docker repl cmd: {cmd}")
+            repl_cmds = args.repl_cmds
+            conn = replwrap.REPLWrapper(cmd, args.prompt, None)
+            for i in range(args.repl_load_repetitions):
+                for repl_cmd in repl_cmds:
+                    result = conn.run_command(repl_cmd)
+                    print(f"repetition: {i} output: {result}")
+                i += 1 
+            return 0 
+        except Exception as e:
+            print(e)
+            return 1 
 
 
 def test_node_logs_for_errors(container):
