@@ -220,8 +220,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key2) shouldBe None
 
       // Aaannnd rollback...
-      store.workingRootHash.take()
-      store.workingRootHash.put(root2)
+      store.reset(root2)
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
@@ -267,8 +266,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key2) shouldBe None
 
       // Aaannnd rollback...
-      store.workingRootHash.take()
-      store.workingRootHash.put(root2)
+      store.reset(root2)
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
@@ -292,8 +290,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key4).value shouldBe val4
 
       // rollback again
-      store.workingRootHash.take()
-      store.workingRootHash.put(root3)
+      store.reset(root3)
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
@@ -347,8 +344,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
         ret4f shouldBe empty
         ret4s shouldBe empty
 
-        store.workingRootHash.take()
-        store.workingRootHash.put(root2)
+        store.reset(root2)
 
         HistoryActionsTests.deleteAll(store, second)
         val root5 = store.workingRootHash.get
