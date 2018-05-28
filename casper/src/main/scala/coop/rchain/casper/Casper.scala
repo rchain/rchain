@@ -101,7 +101,8 @@ sealed abstract class MultiParentCasperInstances {
 
       def contains(b: BlockMessage): F[Boolean] =
         Capture[F].capture {
-          _blockDag.get.blockLookup.contains(b.blockHash)
+          _blockDag.get.blockLookup.contains(b.blockHash) ||
+          blockBuffer.contains(b)
         }
 
       def deploy(d: Deploy): F[Unit] =
