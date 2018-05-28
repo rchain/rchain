@@ -142,7 +142,7 @@ lazy val node = (project in file("node"))
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
         run("apt-get", "update")
-        run("apt-get", "install -y", "libsodium")
+        run("apt-get", "install -y", "libsodium18")
         run("apt-get", "install -y", "openssl")
         entryPoint("/bin/main.sh")
       }
