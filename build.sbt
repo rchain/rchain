@@ -141,9 +141,9 @@ lazy val node = (project in file("node"))
         copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
-        run("apt", "update")
-        run("apt", "install", "-yq", "libsodium18")
-        run("apt", "install", "-yq", "openssl")
+        run("apt-get", "update")
+        run("apt-get", "install", "-yq", "libsodium18")
+        run("apt-get", "install", "-yq", "openssl")
         entryPoint("/bin/main.sh")
       }
     },
