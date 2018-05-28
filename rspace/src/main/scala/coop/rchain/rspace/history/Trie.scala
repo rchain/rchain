@@ -1,6 +1,8 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.shared.AttemptOps._
 import scodec.Codec
+import scodec.bits.BitVector
 import scodec.codecs._
 
 sealed trait Trie[+K, +V]                         extends Product with Serializable
@@ -22,4 +24,10 @@ object Trie {
         case (node: Node) => Some(node)
         case _            => None
       }(PointerBlock.codecPointerBlock.as[Node])
+
+  def hash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): Blake2b256Hash =
+    codecTrie[K, V]
+      .encode(trie)
+      .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
+      .get
 }

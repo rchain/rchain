@@ -1,7 +1,6 @@
 package coop.rchain.node.effects
 
 import scala.concurrent.duration._
-import java.net.SocketAddress
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.p2p.effects._
@@ -56,7 +55,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, 
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
     peers.toList.traverse(peer => send(msg, peer)).map(_.toSeq)
 
-  def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] =
+  def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
@@ -68,7 +67,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, 
 }
 
 class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
-    dispatch: ProtocolMessage => F[Option[ProtocolMessage]])
+    dispatch: ProtocolMessage => F[CommunicationResponse])
     extends TransportLayerGrpc.TransportLayer {
 
   def send(request: TLRequest): Future[TLResponse] =
@@ -78,8 +77,9 @@ class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
           case Left(error) => internalServerError(error.toString).pure[F]
           case Right(pm) =>
             dispatch(pm) >>= {
-              case None     => noResponse.pure[F]
-              case Some(pm) => returnProtocol(pm.proto).pure[F]
+              case NotHandled             => internalServerError(s"Message $pm was not handled!").pure[F]
+              case HandledWitoutMessage   => noResponse.pure[F]
+              case HandledWithMessage(pm) => returnProtocol(pm.proto).pure[F]
             }
         }
       })

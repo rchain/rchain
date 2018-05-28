@@ -21,6 +21,7 @@ package object effects {
   private def createDirectoryIfNotExists(path: Path): Path =
     if (Files.notExists(path)) Files.createDirectory(path) else path
 
+  /** DEPRECATED - will be removed once TLS is working */
   def encryption(keysPath: Path): Encryption[Task] = new Encryption[Task] {
     import Encryption._
     import coop.rchain.crypto.encryption.Curve25519
@@ -150,72 +151,9 @@ package object effects {
                                        ev1: Log[Task],
                                        ev2: Time[Task],
                                        ev3: Metrics[Task]): TransportLayer[Task] =
-    new TransportLayer[Task] {
+    new UdpTransportLayer(src)
 
-      val net = new UnicastNetwork(src)
-      import scala.concurrent.duration._
-
-      def roundTrip(msg: ProtocolMessage,
-                    remote: ProtocolNode,
-                    timeout: Duration): Task[CommErr[ProtocolMessage]] =
-        net.roundTrip[Task](msg, remote, timeout)
-
-      def local: Task[ProtocolNode] = net.local.pure[Task]
-
-      def send(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
-        Task.delay(net.comm.send(msg.toByteSeq, peer))
-
-      def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): Task[Seq[CommErr[Unit]]] =
-        peers.toList.traverse(peer => send(msg, peer)).map(_.toSeq)
-
-      private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
-        : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
-        for {
-          ti <- Time[Task].nanoTime
-          r1 <- dispatch(pm)
-          r2 <- r1.fold(().pure[Task]) { response =>
-                 pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
-                   send(response, sender) >>= {
-                     case Left(error) =>
-                       Log[Task].warn(
-                         s"Was unable to send response $response for request: $pm, error: $error")
-                     case _ => ().pure[Task]
-                   }
-                 }
-               }
-          tf <- Time[Task].nanoTime
-          _  <- Metrics[Task].record("network-roundtrip-micros", (tf - ti) / 1000)
-        } yield r2
-      }
-
-      def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
-        net
-          .receiver[Task]
-          .flatMap(handle(dispatch))
-          .forever
-          .executeAsync
-          .start
-          .void
-    }
-
-  class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
-    def readLine: Task[String] = Task.delay {
-      console.readLine
-    }
-    def println(str: String): Task[Unit] = Task.delay {
-      console.println(str)
-      console.flush()
-    }
-    def updateCompletion(history: Set[String]): Task[Unit] = Task.delay {
-      console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
-      console.addCompleter(new StringsCompleter(history.asJava))
-    }
-
-    def close: Task[Unit] = Task.delay {
-      TerminalFactory.get().restore()
-    }
-
-  }
+  def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
   def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
       implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =

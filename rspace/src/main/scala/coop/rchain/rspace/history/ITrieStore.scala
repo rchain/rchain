@@ -15,4 +15,8 @@ trait ITrieStore[T, K, V] {
   private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit
 
   private[rspace] def get(txn: T, key: Blake2b256Hash): Option[Trie[K, V]]
+
+  private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]]
+
+  def close(): Unit
 }

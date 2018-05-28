@@ -40,7 +40,6 @@ class ReplRuntime(conf: Conf) {
       _   <- ConsoleIO[F].println(res)
       _   <- ConsoleIO[F].close
     } yield ()
-
 }
 
 object ReplRuntime {
