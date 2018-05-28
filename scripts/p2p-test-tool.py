@@ -248,7 +248,6 @@ def var_to_docker_file(var, container_name, file_path):
     return 0
 
 
-
 def check_network_convergence(container):
     peers_metric = ''
     peers_metric_expected = args.peers_amount
