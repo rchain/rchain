@@ -18,6 +18,7 @@ import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 
+// TODO Add State Monad to reuse channels to known peers
 class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
     host: String,
     port: Int,

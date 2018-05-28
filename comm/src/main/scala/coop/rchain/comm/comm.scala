@@ -7,6 +7,7 @@ trait Comm[A] {
   def recv: Either[CommError, (A, Seq[Byte])]
 }
 
+// TODO: Add Show instance
 final case class NodeIdentifier(key: Seq[Byte]) {
   override def toString: String = key.map("%02x".format(_)).mkString
 }
