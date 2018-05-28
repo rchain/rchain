@@ -1,12 +1,9 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
-
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.extended._
 import coop.rchain.rspace.test.{ImmutableInMemStore, InMemoryStore}
-import org.scalatest.BeforeAndAfterAll
 
 trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
 
@@ -268,49 +265,22 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 }
 
-class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
-
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    testStore.clear()
-    try {
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
+class InMemoryStoreStorageExamplesTests
+    extends StorageExamplesTests
+    with InMemStorageTestBase[Channel, Pattern, Entry, EntriesCaptor] {
+  override def createTestStore
+    : IStore[Channel, Pattern, Entry, EntriesCaptor] with ITestableStore[Channel, Pattern] =
+    InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
 }
 
-class ImmutableInMemoryStoreStorageExamplesTests extends StorageExamplesTests {
-
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = ImmutableInMemStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    testStore.clear()
-    try {
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
+class ImmutableInMemoryStoreStorageExamplesTests
+    extends StorageExamplesTests
+    with InMemStorageTestBase[Channel, Pattern, Entry, EntriesCaptor] {
+  override def createTestStore
+    : IStore[Channel, Pattern, Entry, EntriesCaptor] with ITestableStore[Channel, Pattern] =
+    ImmutableInMemStore.create[Channel, Pattern, Entry, EntriesCaptor]
 }
 
-class LMDBStoreStorageExamplesTest extends StorageExamplesTests with BeforeAndAfterAll {
-
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 1024L
-
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
-    try {
-      testStore.clear()
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
-
-  override def afterAll(): Unit = {
-    test.recursivelyDeletePath(dbDir)
-    super.afterAll()
-  }
-}
+class LMDBStoreStorageExamplesTest
+    extends LMDBStoreTestsBase[Channel, Pattern, Entry, EntriesCaptor]
+    with StorageExamplesTests {}

@@ -876,7 +876,7 @@ class InMemoryStoreStorageActionsTests
     with JoinOperationsTests
 
 class LMDBStoreActionsTests
-    extends LMDBStoreTestsBase
+    extends StringLMDBStoreTestsBase
     with StorageActionsTests
     with JoinOperationsTests
     with BeforeAndAfterAll

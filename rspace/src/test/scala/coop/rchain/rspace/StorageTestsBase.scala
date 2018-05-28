@@ -3,9 +3,6 @@ package coop.rchain.rspace
 import java.nio.file.{Files, Path}
 
 import com.typesafe.scalalogging.Logger
-import coop.rchain.rspace.examples.StringExamples._
-import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.test._
 import org.scalatest._
 
 trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
@@ -24,10 +21,11 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
   def withTestStore(f: T => Unit): Unit
 }
 
-class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
+trait InMemStorageTestBase[C, P, A, K] extends StorageTestsBase[C, P, A, K] {
+  def createTestStore: IStore[C, P, A, K] with ITestableStore[C, P]
 
   override def withTestStore(f: T => Unit): Unit = {
-    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
+    val testStore = createTestStore
     testStore.clear()
     try {
       f(testStore)
@@ -37,29 +35,15 @@ class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, S
   }
 }
 
-class ImmutableInMemoryStoreTestsBase
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
-
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = ImmutableInMemStore.create[String, Pattern, String, StringsCaptor]
-    testStore.clear()
-    try {
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
-}
-
-class LMDBStoreTestsBase
-    extends StorageTestsBase[String, Pattern, String, StringsCaptor]
+class LMDBStoreTestsBase[C: Serialize, P: Serialize, A: Serialize, K: Serialize]
+    extends StorageTestsBase[C, P, A, K]
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
   override def withTestStore(f: T => Unit): Unit = {
-    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
+    val testStore = LMDBStore.create[C, P, A, K](dbDir, mapSize)
     testStore.clear()
     try {
       f(testStore)
@@ -69,5 +53,5 @@ class LMDBStoreTestsBase
   }
 
   override def afterAll(): Unit =
-    recursivelyDeletePath(dbDir)
+    test.recursivelyDeletePath(dbDir)
 }
