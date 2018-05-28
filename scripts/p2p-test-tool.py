@@ -76,7 +76,6 @@ def run_tests():
     notices ={} 
     notices['fail'] = []
     notices['pass'] = []
-    # all_pass = True 
     if not client.containers.list(all=True, filters={"name":f".{args.network}"}): # return if empty
         return 
 
@@ -149,7 +148,6 @@ def test_node_eval_of_rholang_files(container):
     for file_path in r.output.decode('utf-8').splitlines():
         print(file_path)
         eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} --eval {file_path}'])
-        #print(eval_r)
         for line in eval_r.output.decode('utf-8').splitlines():
             if 'ERROR' in line.upper():
                 print(line)
@@ -201,7 +199,6 @@ def check_network_convergence(container):
         r = container.exec_run(cmd=cmd).output.decode('utf-8')
         print(r)
         print(f"checking {count} of {timeout} seconds")
-        # peers_metric = int(float(re.search(r'^peers (.*)$', r, re.MULTILINE).group().rsplit(' ', 1)[1]))
         for line in r.splitlines():
             if line == f"peers {args.peers_amount}.0":
                 print("Network converged.")
@@ -210,58 +207,6 @@ def check_network_convergence(container):
         count += 10
     print("Timeout of {timeout} seconds reached ... exiting network convergence pre tests probe.")
     return 1 
-
-
-def check_network_convergence_alternate(peers_metric_expected):
-    """Alternate check for network convergence before running tests."""
-    # Currently unused but is left in code example purposes
-    print("Checking for network convergence. This could take a while. Max is 200 seconds.")
-    for container in client.containers.list(all=True, filters={"name":f"scan.{args.network}"}):
-        container.remove(force=True, v=True)
-
-    scan_node = {}
-    scan_node['name'] = f"scan.{args.network}"
-    scan_node['volume'] = client.volumes.create()
-    container = client.containers.run('alpine:latest', \
-        name=scan_node['name'], \
-        detach=True, \
-        network=args.network, \
-        volumes={scan_node['volume'].name: {'bind': '/app', 'mode': 'rw'}}, \
-        hostname=scan_node['name'], tty=True)
-    r = container.exec_run(cmd='apk update')
-    r = container.exec_run(cmd='apk add python3')
-    r = container.exec_run(cmd='pip3 install requests')
-
-    # Generating a file out in code to run on docker container. An alternative way.
-    var =("import tempfile\n"
-          "import os\n"
-          "import re\n"
-          "import requests\n"
-          "import time\n"
-          "import subprocess\n"
-          "peers_metric = ''\n"
-          f"peers_metric_expected = {peers_metric_expected}\n"
-          "timeout = 200\n"
-          "count = 0\n"
-
-          "while peers_metric != peers_metric_expected:\n"
-          '    print(f"checking {count} of {timeout} seconds")\n'
-          f"    metrics = requests.get('http://bootstrap.{args.network}:9095').content.decode('utf-8')\n"
-              # peers_metric = float(re.findall(r'^peers (.*)$', metrics, re.MULTILINE)[0]) # alt get peers
-          "    try:\n"
-          "        peers_metric = int(float(re.search(r'^peers (.*)$', metrics, re.MULTILINE).group().rsplit(' ', 1)[1]))\n"
-          "    except Exception as e:\n"
-          "        pass\n"
-          "    if count >= timeout:\n"
-          '        print("timeout of {timeout} seconds reached ... exiting pre tests probe")\n'
-          "        break\n"
-          "    time.sleep(10)\n"
-          "    count += 10\n")
-    var_to_docker_file(var, f'scan.{args.network}', '/app/scan.py')
-    r = container.exec_run(cmd='python3 /app/scan.py')
-    print(r.output.decode("utf-8"))
-    print("Network has converged.")
-    return 0 
 
 
 def remove_resources_by_network(args_network):
