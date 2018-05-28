@@ -32,18 +32,22 @@ class UdpTransportLayer(src: PeerNode)(implicit
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): Task[Seq[CommErr[Unit]]] =
     peers.toList.traverse(peer => send(msg, peer)).map(_.toSeq)
 
-  private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
+  private def handle(dispatch: ProtocolMessage => Task[CommunicationResponse])
     : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
     for {
       ti <- Time[Task].nanoTime
       r1 <- dispatch(pm)
-      r2 <- r1.fold(().pure[Task]) { response =>
-             pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
-               send(response, sender) >>= {
-                 case Left(error) =>
-                   Log[Task].warn(
-                     s"Was unable to send response $response for request: $pm, error: $error")
-                 case _ => ().pure[Task]
+      r2 <- r1 match {
+             case NotHandled | HandledWitoutMessage => ().pure[Task]
+             case HandledWithMessage(response) => {
+
+               pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
+                 send(response, sender) >>= {
+                   case Left(error) =>
+                     Log[Task].warn(
+                       s"Was unable to send response $response for request: $pm, error: $error")
+                   case _ => ().pure[Task]
+                 }
                }
              }
            }
@@ -52,7 +56,7 @@ class UdpTransportLayer(src: PeerNode)(implicit
     } yield r2
   }
 
-  def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
+  def receive(dispatch: ProtocolMessage => Task[CommunicationResponse]): Task[Unit] =
     net
       .receiver[Task]
       .flatMap(handle(dispatch))
