@@ -396,6 +396,9 @@ object ProcNormalizeMatcher {
       case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
       case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
 
+      case p: PExprs =>
+        normalizeMatch[M](p.proc_, input)
+
       case p: PSend => {
         import scala.collection.JavaConverters._
         for {

@@ -479,6 +479,11 @@ object Reduce {
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
         }
+        case ETupleBody(el) =>
+          for {
+            evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr))
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(ETuple(updatedPs, el.locallyFree, el.connectiveUsed))
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
@@ -584,9 +589,9 @@ object Reduce {
               evaled <- evalExprToExpr(e)
               result <- evaled.exprInstance match {
                          case GInt(v) => Applicative[M].pure(v)
-                         case _ =>
+                         case expr =>
                            interpreterErrorM[M].raiseError(
-                             ReduceError("Error: expression didn't evaluate to integer."))
+                             ReduceError(s"Error: expression ${expr} didn't evaluate to integer."))
                        }
             } yield result
           case _ =>
@@ -632,6 +637,11 @@ object Reduce {
     }
 
     def updateLocallyFree(elist: EList): EList = {
+      val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
+      elist.copy(locallyFree = resultLocallyFree)
+    }
+
+    def updateLocallyFree(elist: ETuple): ETuple = {
       val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
       elist.copy(locallyFree = resultLocallyFree)
     }

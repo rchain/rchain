@@ -521,7 +521,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value.par)
-    result shouldBe "match 47 == 47 { true => new x0 in { x0!(47) } ; false => new x0 in { x0!(47) } }"
+    result shouldBe "match (47 == 47) { true => new x0 in { x0!(47) } ; false => new x0 in { x0!(47) } }"
   }
 
   "PMatch" should "Print" in {
