@@ -4,6 +4,7 @@ class Extension extends Ob
 
 class Actor extends Ob {
   val extension = new Extension()
+  meta = Meta.empty
 
   /**
     * In Rosette `value` gets appended to the `extension` field and
