@@ -47,6 +47,15 @@ object CertificateHelper {
     cf.generateCertificate(is).asInstanceOf[X509Certificate]
   }
 
+  def generate(path: String): Unit = {
+    import sys.process._
+    Process(s"openssl ecparam -name secp256k1 -out $path/secp256k1.pem").!
+    Process(
+      s"openssl req -newkey ec:$path/secp256k1.pem -nodes " +
+        s"-keyout $path/node.key.pem -x509 -days 365 " +
+        s"-out $path/node.certificate.pem -subj /CN=local").!
+  }
+
 }
 
 case class ParameterSpec(
