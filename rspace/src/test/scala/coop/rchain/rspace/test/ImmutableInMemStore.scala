@@ -120,14 +120,10 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
   //how volatile is this?
   private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
     val key = hashChannels(channels)
-    waitingContinuationsRef.update { wc =>
-      dataRef.update {
-        _ + (key -> Seq.empty)
-      }
-      val res = wc + (key -> Seq.empty)
-      for (c <- channels) removeJoin(txn, c, channels)
-      res
+    RichSyncVar.update2(waitingContinuationsRef, dataRef) { (waitingContinuations, data) =>
+      (waitingContinuations + (key -> Seq.empty), data + (key -> Seq.empty))
     }
+    for (c <- channels) removeJoin(txn, c, channels)
   }
 
   private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
@@ -140,18 +136,20 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
     val joinKey = hashChannels(Seq(c))
     val csKey   = hashChannels(cs)
     RichSyncVar.update2(waitingContinuationsRef, joinRef) { (waitingContinuations, joins) =>
-      val result = if (waitingContinuations.get(csKey).forall(_.isEmpty)) {
-        joins.get(c) match {
-          case Some(value) =>
-            value - csKey match {
-              case r if r.isEmpty => joins - c
-              case removed        => joins + (c -> removed)
-            }
-          case None => joins
+      val hasContinuationValues = waitingContinuations.get(csKey).forall(_.isEmpty)
+      def dropKey =
+        (value: Set[String]) =>
+          value - csKey match {
+            case r if r.isEmpty => joins - c
+            case removed        => joins + (c -> removed)
         }
-      } else {
-        joins
-      }
+      val result =
+        Option(joins).filter(_ => !hasContinuationValues).getOrElse {
+          joins
+            .get(c)
+            .map(dropKey)
+            .getOrElse(joins)
+        }
       (waitingContinuations, result)
     }
     collectGarbage(joinKey)
@@ -196,7 +194,7 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
 }
 
 object ImmutableInMemStore {
-  val DEFAULT_TIMEOUT_MS = 100
+  val DEFAULT_TIMEOUT_MS: Long = 100
 
   def roundTrip[K: Serialize](k: K): K =
     Serialize[K].decode(Serialize[K].encode(k)) match {
