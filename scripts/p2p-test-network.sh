@@ -5,9 +5,9 @@
 # "delete testnet" removes all testnet resources 
 
 if [[ "${TRAVIS}" == "true" ]]; then
-  set -eo pipefail # x enables verbosity on CI environment for debugging
+  set -eox pipefail # x enables verbosity on CI environment for debugging
 else
-  set -eo pipefail
+  set -eox pipefail
 fi
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
@@ -72,12 +72,15 @@ EOF
     else
       rnode_cmd="--bootstrap rnode://4e7c3811cc1a16b7dd1d672db3e025c797484573@169.254.1.2:30304"
     fi
+    echo "Starting ${container_name}"
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \
       --network=${network_name} \
       coop.rchain/rnode ${rnode_cmd}
-  
+
+    echo "Installing curl in container"
     sudo docker exec ${container_name} sh -c "apt install -yq curl"
+    echo "Going to sleep"
     sleep 3 # slow down 
   done
   
