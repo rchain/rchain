@@ -27,10 +27,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                 "Path to node's private key PEM file, that is being used for TLS communication")
 
   val port =
-    opt[Int](default = Some(30304),
-             short = 'p',
-             descr =
-               "Network port to use. Currently UDP port, will become TCP port in next release.")
+    opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
   val httpPort =
     opt[Int](default = Some(8080),
