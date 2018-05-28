@@ -11,7 +11,7 @@ trait NodeDiscovery[F[_]] {
   def addNode(node: PeerNode): F[Unit]
   def findMorePeers(limit: Int): F[Seq[PeerNode]]
   def peers: F[Seq[PeerNode]]
-  def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]]
+  def handleCommunications: ProtocolMessage => F[CommunicationResponse]
 }
 
 object NodeDiscovery extends NodeDiscoveryInstances {
@@ -23,7 +23,7 @@ object NodeDiscovery extends NodeDiscoveryInstances {
       def addNode(node: PeerNode): T[F, Unit]            = C.addNode(node).liftM[T]
       def findMorePeers(limit: Int): T[F, Seq[PeerNode]] = C.findMorePeers(limit).liftM[T]
       def peers: T[F, Seq[PeerNode]]                     = C.peers.liftM[T]
-      def handleCommunications: ProtocolMessage => T[F, Option[ProtocolMessage]] =
+      def handleCommunications: ProtocolMessage => T[F, CommunicationResponse] =
         pm => C.handleCommunications(pm).liftM[T]
     }
 }
