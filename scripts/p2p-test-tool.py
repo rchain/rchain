@@ -19,7 +19,7 @@ import sys
 parser = argparse.ArgumentParser()
 # parser.add_argument("-g", "--grpc-host", dest='grpc_host', default="peer0.rchain.coop", help="set grpc host")
 parser.add_argument("-b", "--boot", action='store_true' , help="boot network by creating resources and starting services by network name")
-parser.add_argument("-B", "--bootstrap-command", dest='bootstrap_command', type=str, default="--port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352", help="bootstrap container run command")
+parser.add_argument("-B", "--bootstrap-command", dest='bootstrap_command', type=str, default="--port 30304 --standalone ", help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus", dest='cpuset_cpus', type=str, default="0", help="set docker cpuset-cpus for nodes. Allows limiting execution in specific CPUs")
 parser.add_argument("-D", "--deploy-demo", dest='deploy_demo', action='store_true', help="deploy casper demo")
 parser.add_argument("-i", "--image", dest='image', type=str, default="coop.rchain/rnode:latest", help="source repo for docker image")
@@ -293,11 +293,16 @@ def create_bootstrap_node():
         hostname=bootstrap_node['name'])
 
     # Add additional packages.
-    container.exec_run(cmd='apk update')
-    container.exec_run(cmd='apk add curl')
-    container.exec_run(cmd='apk add nmap')
-    container.exec_run(cmd='apk add python3')
-    container.exec_run(cmd='pip3 install requests')
+    r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
+    print(r)
+    r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
+    print(r)
+    r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
+    print(r)
+    r = container.exec_run(cmd='apt-get -yq install python3.5-minimal').output.decode("utf-8")
+    print(r)
+    r = container.exec_run(cmd='python3.5 -m pip install requests').output.decode("utf-8")
+    print(r)
     return 0
 
 
@@ -320,11 +325,16 @@ def create_peer_nodes():
             hostname=peer_node[i]['name'])
 
         # Add additional packages.
-        container.exec_run(cmd='apk update')
-        container.exec_run(cmd='apk add curl')
-        container.exec_run(cmd='apk add nmap')
-        container.exec_run(cmd='apk add python3')
-        container.exec_run(cmd='pip3 install requests')
+        r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
+        print(r)
+        r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
+        print(r)
+        r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
+        print(r)
+        r = container.exec_run(cmd='apt-get -yq install python3.5-minimal').output.decode("utf-8")
+        print(r)
+        r = container.exec_run(cmd='python3.5 -m pip install requests').output.decode("utf-8")
+        print(r)
     return 0
       
 
