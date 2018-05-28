@@ -42,19 +42,20 @@ object Main {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         diagnostics.client.Runtime.diagnosticsProgram[Task]
       }
-      case None if conf.deploy.toOption.isDefined =>
-        DeployRuntime.deployFileProgram[Task](conf.deploy.toOption.get)
-      case None if conf.deployDemo() => DeployRuntime.deployDemoProgram[Task]
-      case None if conf.propose() =>
-        conf.secretKey.toOption match {
-          case Some(sk) => DeployRuntime.propose[Task](Base16.decode(sk))
-          case None =>
-            Task.delay {
-              println("Error: value of --secret-key must be specified to propose a block")
-            }
-        }
-      case None if conf.showBlock.toOption.isDefined =>
-        DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
+      case Some(conf.deploy) =>
+        DeployRuntime.deployFileProgram[Task](conf.deploy.location.toOption.get)
+
+//      case None if conf.deployDemo() => DeployRuntime.deployDemoProgram[Task]
+//      case None if conf.propose() =>
+//        conf.secretKey.toOption match {
+//          case Some(sk) => DeployRuntime.propose[Task](Base16.decode(sk))
+//          case None =>
+//            Task.delay {
+//              println("Error: value of --secret-key must be specified to propose a block")
+//            }
+//        }
+//      case None if conf.showBlock.toOption.isDefined =>
+//        DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
       case None =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()

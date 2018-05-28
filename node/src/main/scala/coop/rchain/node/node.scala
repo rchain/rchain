@@ -29,12 +29,12 @@ import scala.util.{Failure, Success, Try}
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   // Generate certificate if not provided as option or in the data dir
-  if (conf.certificate.toOption.isEmpty
-      && conf.key.toOption.isEmpty
-      && !conf.certificatePath.toFile.exists()) {
-    println(s"No certificate found at path ${conf.certificatePath}")
+  if (conf.run.certificate.toOption.isEmpty
+      && conf.run.key.toOption.isEmpty
+      && !conf.run.certificatePath.toFile.exists()) {
+    println(s"No certificate found at path ${conf.run.certificatePath}")
     println("Generating a X.509 certificate for the node")
-    CertificateHelper.generate(conf.data_dir().toString)
+    CertificateHelper.generate(conf.run.data_dir().toString)
   }
 
   implicit class ThrowableOps(th: Throwable) {
@@ -46,14 +46,15 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val name           = nodeName
-  private val host           = conf.fetchHost()
-  private val address        = s"rnode://$name@$host:${conf.port()}"
-  private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
-  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
-  private val storagePath    = conf.data_dir().resolve("rspace")
-  private val storageSize    = conf.map_size()
+  private val name    = nodeName
+  private val host    = conf.run.fetchHost()
+  private val address = s"rnode://$name@$host:${conf.run.port()}"
+  private val src     = p2p.NetworkAddress.parse(address).right.get
+  private val remoteKeysPath =
+    conf.run.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
+  private val keysPath    = conf.run.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
+  private val storagePath = conf.run.data_dir().resolve("rspace")
+  private val storageSize = conf.run.map_size()
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]
@@ -62,6 +63,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit class EitherEffectOps[A](e: Either[CommError, A]) {
     def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
   }
+
   implicit class TaskEffectOps[A](t: Task[A]) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
@@ -75,12 +77,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer[Task](host, conf.port())(src)
+    effects.tcpTranposrtLayer[Task](host, conf.run.port())(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 
   val bondsFile: Option[File] =
-    conf.bondsFile.toOption
+    conf.run.bondsFile.toOption
       .flatMap(path => {
         val f = new File(path)
         if (f.exists) Some(f)
@@ -132,8 +134,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
-      metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
-      httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
+      metricsServer <- MetricsServer.create[Effect](conf.run.metricsPort())
+      httpServer    <- HttpServer(conf.run.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
 
   def startResources(resources: Resources): Effect[Unit] =
@@ -185,10 +187,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private def exit0: Task[Unit] = Task.delay(System.exit(0))
 
   private def newValidators: Map[Array[Byte], Int] = {
-    val numValidators  = conf.numValidators.toOption.getOrElse(5)
+    val numValidators  = conf.run.numValidators.toOption.get
     val keys           = Vector.fill(numValidators)(Ed25519.newKeyPair)
     val (_, pubKeys)   = keys.unzip
-    val validatorsPath = conf.data_dir().resolve("validators")
+    val validatorsPath = conf.run.data_dir().resolve("validators")
     validatorsPath.toFile.mkdir()
 
     keys.foreach { //create files showing the secret key for each public key
@@ -225,8 +227,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     }
 
   private def nodeName: String = {
-    val certPath = conf.certificate.toOption
-      .getOrElse(java.nio.file.Paths.get(conf.data_dir().toString, "node.certificate.pem"))
+    val certPath = conf.run.certificate.toOption
+      .getOrElse(java.nio.file.Paths.get(conf.run.data_dir().toString, "node.certificate.pem"))
 
     val certificate = Try(CertificateHelper.fromFile(certPath.toFile)) match {
       case Success(c) => Some(c)
@@ -256,9 +258,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(
-              if (conf.standalone()) Log[Effect].info(s"Starting stand-alone node.")
+              if (conf.run.standalone()) Log[Effect].info(s"Starting stand-alone node.")
               else
-                conf.bootstrap.toOption
+                conf.run.bootstrap.toOption
                   .fold[Either[CommError, String]](Left(BootstrapNotProvided))(Right(_))
                   .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
       _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
