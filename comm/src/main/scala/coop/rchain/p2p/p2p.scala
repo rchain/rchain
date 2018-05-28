@@ -188,7 +188,7 @@ object Network {
 
     maybePacket.fold(handleNone)(p =>
       for {
-        maybeResponsePacket <- PacketHandler[F].handlePacket(p)
+        maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
         maybeResponsePacketMessage <- maybeResponsePacket.traverse(rp =>
                                        frameMessage[F](remote, kp(framePacket(remote, rp))))
       } yield maybeResponsePacketMessage.fold(notHandled)(m => handledWithMessage(m)))

@@ -59,8 +59,8 @@ object CommUtil {
     } yield successes.flatten
 
   def casperPacketHandler[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler]
-    : PartialFunction[Packet, F[Option[Packet]]] =
+      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+      peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
         (p: Packet) => { packetToBlockMessage(p) orElse packetToBlockRequest(p) }
@@ -78,11 +78,24 @@ object CommUtil {
           } yield none[Packet]
 
         case r: BlockRequest =>
-          MultiParentCasper[F].blockDag.map(
-            _.blockLookup
-              .get(r.hash)
-              .map(b => Packet(b.toByteString))
-          )
+          for {
+            dag   <- MultiParentCasper[F].blockDag
+            block = dag.blockLookup.get(r.hash).map(_.toByteString)
+            frame <- block.traverse(
+                      serializedMessage =>
+                        frameMessage[F](peer,
+                                        nonce =>
+                                          NetworkProtocol.framePacket(peer, serializedMessage)))
+            send     <- frame.traverse(msg => TransportLayer[F].send(msg, peer))
+            logIntro = s"Received request for block ${r.hash} from $peer. "
+            _ <- send match {
+                  case None => Log[F].info(logIntro + "No response given since block not found.")
+                  case Some(Left(err)) =>
+                    Log[F].info(logIntro) *> Log[F].error(
+                      s"Error sending block ${r.hash} to $peer: $err")
+                  case Some(Right(_)) => Log[F].info(logIntro + "Response sent.")
+                }
+          } yield none[Packet]
       }
 
   private def handleNewBlock[
