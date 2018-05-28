@@ -66,10 +66,8 @@ def main():
         if not args.skip_convergence_test == True:
             for container in client.containers.list(all=True, filters={"name":f'bootstrap.{args.network}'}):
                 check_network_convergence(container)
-        time.sleep(10)
         deploy_demo()
         if args.tests:
-            time.sleep(10)
             run_tests()
             return
 
@@ -117,6 +115,9 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: REPL loader failure!")
 
+    print("=======================SHOW LOGS===========================")
+    show_logs()
+    print("====================END OF SHOW LOGS=======================")
     print("===========================================================")
     print("=================TEST SUMMARY RESULTS======================")
     if notices['pass']:
@@ -299,10 +300,6 @@ def create_bootstrap_node():
     print(r)
     r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
     print(r)
-    r = container.exec_run(cmd='apt-get -yq install python3.5-minimal').output.decode("utf-8")
-    print(r)
-    r = container.exec_run(cmd='python3.5 -m pip install requests').output.decode("utf-8")
-    print(r)
     return 0
 
 
@@ -330,10 +327,6 @@ def create_peer_nodes():
         r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
         print(r)
         r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
-        print(r)
-        r = container.exec_run(cmd='apt-get -yq install python3.5-minimal').output.decode("utf-8")
-        print(r)
-        r = container.exec_run(cmd='python3.5 -m pip install requests').output.decode("utf-8")
         print(r)
     return 0
       
