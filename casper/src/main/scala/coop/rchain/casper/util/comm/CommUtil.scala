@@ -8,6 +8,7 @@ import coop.rchain.casper.{MultiParentCasper, PrettyPrinter, Validate}
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.rchain.Packet
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
 import coop.rchain.p2p.Network.{frameMessage, ErrorHandler, KeysStore}
 import coop.rchain.p2p.NetworkProtocol
@@ -63,7 +64,7 @@ object CommUtil {
       peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
-        (p: Packet) => { packetToBlockMessage(p) orElse packetToBlockRequest(p) }
+        (p: Packet) => { packetToBlockRequest(p) orElse packetToBlockMessage(p) }
       )
       .andThen {
         case b: BlockMessage =>
@@ -111,4 +112,5 @@ object CommUtil {
 
   private def packetToBlockRequest(msg: Packet): Option[BlockRequest] =
     Try(BlockRequest.parseFrom(msg.content.toByteArray)).toOption
+      .filter(r => r.base16Hash == Base16.encode(r.hash.toByteArray))
 }

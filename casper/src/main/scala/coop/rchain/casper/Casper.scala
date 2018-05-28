@@ -9,6 +9,7 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
 import coop.rchain.catscontrib.{Capture, IOUtil}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared.AtomicSyncVar
@@ -236,7 +237,7 @@ sealed abstract class MultiParentCasperInstances {
               .filterNot(dag.blockLookup.contains)
               .toList
             _ <- (missingParents ::: missingJustifictions).traverse(hash =>
-                  CommUtil.sendBlockRequest[F](BlockRequest(hash)))
+                  CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash)))
           } yield ()
 
         case None =>
