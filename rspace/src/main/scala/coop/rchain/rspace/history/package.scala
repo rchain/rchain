@@ -55,7 +55,7 @@ package object history {
   }
 
   @tailrec
-  private[rspace] def getParents[T, K, V](
+  private[this] def getParents[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
       path: Seq[Byte],
@@ -81,10 +81,10 @@ package object history {
     }
 
   // TODO(ht): make this more efficient
-  private[rspace] def commonPrefix[A](a: Seq[A], b: Seq[A]): Seq[A] =
+  private[this] def commonPrefix[A](a: Seq[A], b: Seq[A]): Seq[A] =
     a.zip(b).takeWhile { case (l, r) => l == r }.map(_._1)
 
-  private[rspace] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
+  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
@@ -94,7 +94,7 @@ package object history {
         (Trie.hash[K, V](node), node)
     }
 
-  private[rspace] def insertTries[T, K, V](
+  private[this] def insertTries[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
       rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
@@ -190,7 +190,7 @@ package object history {
   }
 
   @tailrec
-  private[rspace] def propagateLeafUpward[T, K, V](
+  private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
       parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
     parents match {
@@ -215,9 +215,9 @@ package object history {
     }
 
   @tailrec
-  private[rspace] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
-                                          txn: T,
-                                          parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
+                                        txn: T,
+                                        parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `None`
