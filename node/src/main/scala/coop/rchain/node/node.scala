@@ -63,7 +63,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     publicKey
       .flatMap(CertificateHelper.publicAddress)
       .getOrElse {
-        println("Certificate must contain a secp256k1 EC Public Key")
+        println("Certificate must contain a secp256r1 EC Public Key")
         System.exit(1)
         Array[Byte]()
       }
