@@ -44,11 +44,18 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R = f(txn)
 
-  private[rspace] def collectGarbage(key: H): Unit =
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit =
+    collectGarbage(channelsHash)
+
+  private[this] def collectGarbage(key: H): Unit =
     RichSyncVar.update3(waitingContinuationsRef, keysRef, dataRef) {
       (waitingContinuations, keys, data) =>
-        val psks  = waitingContinuations.get(key).exists(_.nonEmpty)
         val as    = data.get(key).exists(_.nonEmpty)
+        val psks  = waitingContinuations.get(key).exists(_.nonEmpty)
         val cs    = keys.getOrElse(key, Seq.empty[C])
         val joins = cs.size == 1 && joinRef.get.contains(cs.head)
         (
@@ -74,16 +81,14 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
 
   private[rspace] def putWaitingContinuation(txn: T,
                                              channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
+                                             continuation: WaitingContinuation[P, K]): Unit =
     waitingContinuationsRef.update { waitingContinuations =>
-      waitingContinuations + (key -> (waitingContinuations.get(key) match {
-        case Some(list) => list :+ continuation
-        case None       => Seq(continuation)
-      }))
+      val key = hashChannels(channels)
+      putCs(txn, channels)
+      val forKey: Seq[WaitingContinuation[P, K]] =
+        waitingContinuations.getOrElse(key, Seq.empty[WaitingContinuation[P, K]])
+      waitingContinuations + (key -> (continuation +: forKey))
     }
-  }
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
     dataRef.get.getOrElse(hashChannels(channels), Seq.empty[Datum[A]])
@@ -112,18 +117,21 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
     collectGarbage(key)
   }
 
+  //how volatile is this?
   private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
     val key = hashChannels(channels)
-    waitingContinuationsRef.update(_ + (key -> Seq.empty))
-    for (c <- channels) removeJoin(txn, c, channels)
+    waitingContinuationsRef.update { wc =>
+      dataRef.update {
+        _ + (key -> Seq.empty)
+      }
+      val res = wc + (key -> Seq.empty)
+      for (c <- channels) removeJoin(txn, c, channels)
+      res
+    }
   }
 
   private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
-    joinRef.update(joins =>
-      joins.get(c) match {
-        case Some(value) => joins + (c -> (value + hashChannels(cs)))
-        case None        => joins + (c -> (Set.empty + hashChannels(cs)))
-    })
+    joinRef.update(joins => joins + (c -> (joins.getOrElse(c, Set.empty) + hashChannels(cs))))
 
   private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
     joinRef.get.getOrElse(c, Set.empty[String]).toList.map(getChannels(txn, _))
@@ -131,19 +139,20 @@ class ImmutableInMemStore[C, P, A, K <: Serializable] private (
   private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
     val joinKey = hashChannels(Seq(c))
     val csKey   = hashChannels(cs)
-    waitingContinuationsRef.update { waitingContinuations =>
-      if (waitingContinuations.get(csKey).forall(_.isEmpty)) {
-        joinRef.update(joins =>
-          joins.get(c) match {
-            case Some(value) =>
-              value - csKey match {
-                case r if r.isEmpty => joins - c
-                case removed        => joins + (c -> removed)
-              }
-            case None => joins
-        })
+    RichSyncVar.update2(waitingContinuationsRef, joinRef) { (waitingContinuations, joins) =>
+      val result = if (waitingContinuations.get(csKey).forall(_.isEmpty)) {
+        joins.get(c) match {
+          case Some(value) =>
+            value - csKey match {
+              case r if r.isEmpty => joins - c
+              case removed        => joins + (c -> removed)
+            }
+          case None => joins
+        }
+      } else {
+        joins
       }
-      waitingContinuations
+      (waitingContinuations, result)
     }
     collectGarbage(joinKey)
   }
@@ -205,7 +214,6 @@ object ImmutableInMemStore {
     )
 
   object RichSyncVar {
-    // not convinced this is good enough...
     def update3[R1, R2, R3](ref1: SyncVar[R1], ref2: SyncVar[R2], ref3: SyncVar[R3])(
         f: (R1, R2, R3) => (R1, R2, R3)): Unit = {
       val prev1 = ref1.take(DEFAULT_TIMEOUT_MS)
@@ -219,16 +227,39 @@ object ImmutableInMemStore {
             ref2.put(next2)
             ref3.put(next3)
           } catch {
-            case NonFatal(_) =>
+            case ex: Throwable =>
               ref3.put(prev3)
+              throw ex
           }
         } catch {
-          case NonFatal(_) =>
+          case ex: Throwable =>
             ref2.put(prev2)
+            throw ex
         }
       } catch {
-        case NonFatal(_) =>
+        case ex: Throwable =>
           ref1.put(prev1)
+          throw ex
+      }
+    }
+
+    def update2[R1, R2](ref1: SyncVar[R1], ref2: SyncVar[R2])(f: (R1, R2) => (R1, R2)): Unit = {
+      val prev1 = ref1.take(DEFAULT_TIMEOUT_MS)
+      try {
+        val prev2 = ref2.take(DEFAULT_TIMEOUT_MS)
+        try {
+          val (next1, next2) = f(prev1, prev2)
+          ref1.put(next1)
+          ref2.put(next2)
+        } catch {
+          case ex: Throwable =>
+            ref2.put(prev2)
+            throw ex
+        }
+      } catch {
+        case ex: Throwable =>
+          ref1.put(prev1)
+          throw ex
       }
     }
   }
@@ -241,8 +272,10 @@ object ImmutableInMemStore {
         val next = f(prev)
         ref.put(next)
       } catch {
-        // simulate rollback, @reviewer I'm not convinced by NonFatal
-        case NonFatal(_) => ref.put(prev)
+        // simulate rollback
+        case ex: Throwable =>
+          ref.put(prev)
+          throw ex
       }
       ref
     }

@@ -1,12 +1,9 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
-
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import org.scalatest._
 
 trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
@@ -869,51 +866,17 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 }
 
 class ImmutableInMemoryStoreStorageActionsTests
-    extends StorageActionsTests
-    with JoinOperationsTests {
+    extends ImmutableInMemoryStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
 
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = ImmutableInMemStore.create[String, Pattern, String, StringsCaptor]
-    testStore.clear()
-    try {
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
-}
-
-class InMemoryStoreStorageActionsTests extends StorageActionsTests with JoinOperationsTests {
-
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
-    testStore.clear()
-    try {
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
-}
+class InMemoryStoreStorageActionsTests
+    extends InMemoryStoreTestsBase
+    with StorageActionsTests
+    with JoinOperationsTests
 
 class LMDBStoreActionsTests
-    extends StorageActionsTests
+    extends LMDBStoreTestsBase
+    with StorageActionsTests
     with JoinOperationsTests
-    with BeforeAndAfterAll {
-
-  val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 1024L
-
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    testStore.clear()
-    try {
-      f(testStore)
-    } finally {
-      testStore.close()
-    }
-  }
-
-  override def afterAll(): Unit =
-    recursivelyDeletePath(dbDir)
-}
+    with BeforeAndAfterAll
