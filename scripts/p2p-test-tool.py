@@ -169,8 +169,6 @@ def run_tests():
                 else:
                     notices['fail'].append(f"{container.name}: Rholang evaluation of files failed.")
         if test == "repl":
-            # for container in client.containers.list(all=True, filters={"name":"peer\d\.rchain.coop"}): # this will enable all peers to be checked
-            # for container in client.containers.list(all=True, filters={"name":f"{args.grpc_host}"}):
             for container in client.containers.list(all=True, filters={"name":f"peer0.{args.network}"}):
                 if test_repl_load(container) == 0:
                     notices['pass'].append(f"{container.name}: REPL loader success!")
