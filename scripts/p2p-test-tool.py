@@ -13,31 +13,94 @@ import requests
 import re
 import time
 import sys
-# from prometheus_client.parser import text_string_to_metric_families # optional for future
 
 
 parser = argparse.ArgumentParser()
-# parser.add_argument("-g", "--grpc-host", dest='grpc_host', default="peer0.rchain.coop", help="set grpc host")
-parser.add_argument("-b", "--boot", action='store_true' , help="boot network by creating resources and starting services by network name")
-parser.add_argument("-B", "--bootstrap-command", dest='bootstrap_command', type=str, default="--port 30304 --standalone ", help="bootstrap container run command")
-parser.add_argument("-c", "--cpuset-cpus", dest='cpuset_cpus', type=str, default="0", help="set docker cpuset-cpus for nodes. Allows limiting execution in specific CPUs")
-parser.add_argument("-D", "--deploy-demo", dest='deploy_demo', action='store_true', help="deploy casper demo")
-parser.add_argument("-i", "--image", dest='image', type=str, default="coop.rchain/rnode:latest", help="source repo for docker image")
-# parser.add_argument("-c", "--cpus", dest='cpus', type=int, default=1, help=".5 set docker cpus for repl client node")
-parser.add_argument("-l", "--logs", action='store_true' , help="show all node logs")
-parser.add_argument("-m", "--memory", dest='memory', type=str, default="1024m", help="1024m set docker memory for repl client node")
-parser.add_argument("-n", "--network", dest='network', type=str, default="rchain.coop", help="set docker network name")
-parser.add_argument("-t", "--run-tests", dest='run_tests', action='store_true' , help="only run tests")
-parser.add_argument("-X", "--peer-command", dest='peer_command', type=str, default="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@bootstrap.rchain.coop:30304", help="peer container run command")
-parser.add_argument("-a", "--peers-amount", dest='peers_amount', type=int, default="2", help="set total amount of peers for network")
-parser.add_argument("-p", "--prompt", dest='prompt', type=str, default="rholang $ ", help="set REPL prompt")
-# parser.add_argument("-t", "--type", dest='type', type=str, default="docker", help="set vm/container type - docker/virtualbox")
-parser.add_argument("-E", "--repl-commands", dest='repl_cmds', type=str, nargs='+', default=['5', '@"stdout"!("foo")', '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { @"stdout"!(a) } } }'], help="set repl commands to run as a list")
-parser.add_argument("-L", "--repl-load-repetitions", dest='repl_load_repetitions', type=int, default=50, help="set repl load repetition peers_amount for loops")
-parser.add_argument("-R", "--rnode-directory", dest='rnode_directory', type=str, default="/var/lib/rnode", help="container rnode mount point directory")
-parser.add_argument("-r", "--remove", action='store_true' , help="forcibly remove all container resources associated to network name")
-parser.add_argument("-s", "--skip-convergence_test", dest="skip_convergence_test", action='store_true' , help="skip network convergence test")
-parser.add_argument("-T", "--tests", dest='tests', type=str, nargs='+', default=['eval', 'network_sockets', 'count', 'errors', 'repl'], help="run these tests")
+parser.add_argument("-b", "--boot",
+                    action='store_true',
+                    help="boot network by creating resources and starting services by network name")
+parser.add_argument("-B", "--bootstrap-command",
+                    dest='bootstrap_command',
+                    type=str,
+                    default="--port 30304 --standalone ",
+                    help="bootstrap container run command")
+parser.add_argument("-c", "--cpuset-cpus",
+                    dest='cpuset_cpus',
+                    type=str,
+                    default="0",
+                    help="set docker cpuset-cpus for nodes. Allows limiting execution in specific CPUs")
+parser.add_argument("-D", "--deploy-demo",
+                    dest='deploy_demo',
+                    action='store_true',
+                    help="deploy casper demo")
+parser.add_argument("-i", "--image",
+                    dest='image',
+                    type=str,
+                    default="coop.rchain/rnode:latest",
+                    help="source repo for docker image")
+parser.add_argument("-l", "--logs",
+                    action='store_true',
+                    help="show all node logs")
+parser.add_argument("-m", "--memory",
+                    dest='memory',
+                    type=str,
+                    default="1024m",
+                    help="1024m set docker memory for repl client node")
+parser.add_argument("-n", "--network",
+                    dest='network',
+                    type=str,
+                    default="rchain.coop",
+                    help="set docker network name")
+parser.add_argument("-t", "--run-tests",
+                    dest='run_tests',
+                    action='store_true',
+                    help="only run tests")
+parser.add_argument("-X", "--peer-command",
+                    dest='peer_command',
+                    type=str,
+                    default="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@bootstrap.rchain.coop:30304",
+                    help="peer container run command")
+parser.add_argument("-a", "--peers-amount",
+                    dest='peers_amount',
+                    type=int,
+                    default="2",
+                    help="set total amount of peers for network")
+parser.add_argument("-p", "--prompt",
+                    dest='prompt',
+                    type=str,
+                    default="rholang $ ",
+                    help="set REPL prompt")
+parser.add_argument("-E", "--repl-commands",
+                    dest='repl_cmds',
+                    type=str,
+                    nargs='+',
+                    default=['5', '@"stdout"!("foo")', '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { @"stdout"!(a) } } }'],
+                        #'@"stdout"!("foo")',
+                        #'@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { @"stdout"!(a) } } }'],
+                    help="set repl commands to run as a list")
+parser.add_argument("-L", "--repl-load-repetitions",
+                    dest='repl_load_repetitions',
+                    type=int,
+                    default=50,
+                    help="set repl load repetition peers_amount for loops")
+parser.add_argument("-R", "--rnode-directory",
+                    dest='rnode_directory',
+                    type=str,
+                    default="/var/lib/rnode",
+                    help="container rnode mount point directory")
+parser.add_argument("-r", "--remove",
+                    action='store_true',
+                    help="forcibly remove all container resources associated to network name")
+parser.add_argument("-s", "--skip-convergence_test",
+                    dest="skip_convergence_test",
+                    action='store_true',
+                    help="skip network convergence test")
+parser.add_argument("-T", "--tests",
+                    dest='tests',
+                    type=str,
+                    nargs='+',
+                    default=['eval', 'network_sockets', 'count', 'errors', 'repl'],
+                    help="run these tests")
 
 
 # Define globals
