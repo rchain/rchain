@@ -156,11 +156,13 @@ package object effects {
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
+  def packetHandler[F[_]: Applicative: Log](
+      pfForPeer: (PeerNode) => PartialFunction[Packet, F[Option[Packet]]])(
       implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[Option[Packet]] = {
+      def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"
+        val pf       = pfForPeer(peer)
         if (pf.isDefinedAt(packet)) pf(packet)
         else
           Log[F].error(errorMsg) *> errorHandler

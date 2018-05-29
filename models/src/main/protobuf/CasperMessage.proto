@@ -26,6 +26,14 @@ message DeployString {
   bytes  sig   = 4; //signature of (hash(resource) + nonce) using private key
 }
 
+message BlockRequest {
+  //Fields are redundant to allow for validity check.
+  //Such a check can definitively distinguish this
+  //from other message types with similar serializations.
+  string base16Hash = 1;
+  bytes  hash       = 2;
+}
+
 message BlockQuery {
   string hash = 1;
 }
