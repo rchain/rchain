@@ -143,10 +143,10 @@ package object effects {
 
   def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
       implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.fetchHost(),
-                             conf.port(),
-                             conf.certificatePath.toFile,
-                             conf.keyPath.toFile)(src)
+    new TcpTransportLayer[F](conf.run.fetchHost(),
+                             conf.run.port(),
+                             conf.run.certificatePath.toFile,
+                             conf.run.keyPath.toFile)(src)
 
   def udpTransportLayer(src: PeerNode)(implicit
                                        ev1: Log[Task],
