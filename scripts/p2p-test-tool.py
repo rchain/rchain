@@ -15,11 +15,13 @@ import time
 import sys
 
 
-parser = argparse.ArgumentParser()
+#parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(
+                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("-b", "--boot",
                     action='store_true',
                     help="boot network by creating resources and starting services by network name")
-parser.add_argument("-B", "--bootstrap-command",
+parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
                     default="--port 30304 --standalone ",
@@ -29,7 +31,7 @@ parser.add_argument("-c", "--cpuset-cpus",
                     type=str,
                     default="0",
                     help="set docker cpuset-cpus for nodes. Allows limiting execution in specific CPUs")
-parser.add_argument("-D", "--deploy-demo",
+parser.add_argument("-d", "--deploy-demo",
                     dest='deploy_demo',
                     action='store_true',
                     help="deploy casper demo")
@@ -51,26 +53,22 @@ parser.add_argument("-n", "--network",
                     type=str,
                     default="rchain.coop",
                     help="set docker network name")
-parser.add_argument("-t", "--run-tests",
-                    dest='run_tests',
-                    action='store_true',
-                    help="only run tests")
-parser.add_argument("-X", "--peer-command",
+parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
                     default="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@bootstrap.rchain.coop:30304",
                     help="peer container run command")
-parser.add_argument("-a", "--peers-amount",
+parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
                     type=int,
                     default="2",
                     help="set total amount of peers for network")
-parser.add_argument("-p", "--prompt",
+parser.add_argument("--prompt",
                     dest='prompt',
                     type=str,
                     default="rholang $ ",
                     help="set REPL prompt")
-parser.add_argument("-E", "--repl-commands",
+parser.add_argument("--repl-commands",
                     dest='repl_cmds',
                     type=str,
                     nargs='+',
@@ -78,24 +76,28 @@ parser.add_argument("-E", "--repl-commands",
                         '@"stdout"!("foo")',
                         '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { @"stdout"!(a) } } }'],
                     help="set repl commands to run as a list")
-parser.add_argument("-L", "--repl-load-repetitions",
+parser.add_argument("--repl-load-repetitions",
                     dest='repl_load_repetitions',
                     type=int,
                     default=50,
                     help="set repl load repetition peers_amount for loops")
-parser.add_argument("-R", "--rnode-directory",
+parser.add_argument("--rnode-directory",
                     dest='rnode_directory',
                     type=str,
                     default="/var/lib/rnode",
-                    help="container rnode mount point directory")
+                    help="rnode container root directory on each container")
 parser.add_argument("-r", "--remove",
                     action='store_true',
                     help="forcibly remove all container resources associated to network name")
-parser.add_argument("-s", "--skip-convergence_test",
+parser.add_argument("-s", "--skip-convergence-test",
                     dest="skip_convergence_test",
                     action='store_true',
                     help="skip network convergence test")
-parser.add_argument("-T", "--tests",
+parser.add_argument("-t", "--tests",
+                    dest='run_tests',
+                    action='store_true',
+                    help="only run tests")
+parser.add_argument("-T", "--tests-to-run",
                     dest='tests',
                     type=str,
                     nargs='+',
@@ -104,6 +106,9 @@ parser.add_argument("-T", "--tests",
 
 
 # Define globals
+if len(sys.argv)==1:
+    parser.print_help(sys.stderr)
+    sys.exit(1)
 args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-0.3.1.jar'
@@ -202,8 +207,9 @@ def deploy_demo():
         except Exception as e:
             print(e)
 
+
 def test_node_eval_of_rholang_files(container):
-    print(container.name)
+    print(f"Running eval rho file tests of /usr/share/rnode/examples/ on container {container.name}.")
     cmd = f"ls /usr/share/rnode/examples/*.rho"
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
@@ -215,9 +221,10 @@ def test_node_eval_of_rholang_files(container):
                 return 1 
     return 0 
 
+
 def show_logs():
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-        print(f"Showing logs for {container.name}")
+        print(f"Showing logs for {container.name}.")
         r = container.logs().decode('utf-8')
         print(r)
 
@@ -249,6 +256,7 @@ def var_to_docker_file(var, container_name, file_path):
 
 
 def check_network_convergence(container):
+    print("Check for network convergence via prometheus metrics api before running tests.")
     peers_metric = ''
     peers_metric_expected = args.peers_amount
     timeout = 200
@@ -271,6 +279,7 @@ def check_network_convergence(container):
 
 def remove_resources_by_network(args_network):
     """Remove resources by network name."""
+    print(f"Removing resources for docker network {args_network}")
     for container in client.containers.list(all=True, filters={"name":f".{args_network}"}):
             container.remove(force=True, v=True)
 
@@ -284,6 +293,7 @@ def remove_resources_by_network(args_network):
 
 def create_bootstrap_node():
     """Create bootstrap node."""
+    print("Starting bootstrap node.")
     bootstrap_node = {}
     bootstrap_node['name'] = f"bootstrap.{args.network}"
     bootstrap_node['volume'] = client.volumes.create()
@@ -298,18 +308,16 @@ def create_bootstrap_node():
         command=args.bootstrap_command, \
         hostname=bootstrap_node['name'])
 
-    # Add additional packages.
+    print("Installing additonal packages on container.")
     r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
-    print(r)
     r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
-    print(r)
     r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
-    print(r)
     return 0
 
 
 def create_peer_nodes():
     """Create peer nodes."""
+    print("Start peer nodes to connect via bootstrap.")
     for i in range(args.peers_amount):
         peer_node = {}
         peer_node[i] = {}
@@ -326,13 +334,10 @@ def create_peer_nodes():
             command=args.peer_command, \
             hostname=peer_node[i]['name'])
 
-        # Add additional packages.
+        print("Installing additonal packages on container.")
         r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
-        print(r)
         r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
-        print(r)
         r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
-        print(r)
     return 0
       
 
@@ -352,7 +357,7 @@ def test_network_sockets(container):
 
 def test_repl_load(container):
     """Load REPL with commands."""
-
+    print(f"Testing REPL on {container.name} via repl container and Python pexpect.")
     # Remove any existing repl containers if they exist
     for repl_container in client.containers.list(all=True, filters={"name":f"repl\d.{args.network}"}):
         print(f"removing {repl_container.name}")
