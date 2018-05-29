@@ -195,7 +195,7 @@ def run_tests():
 
 
 def deploy_demo():
-    cmd = f"{RNODE_CMD} --deploy-demo"
+    cmd = f"{RNODE_CMD} deploy-demo"
     for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
         try:
             r = container.exec_run(cmd=cmd, detach=True)
@@ -208,7 +208,7 @@ def test_node_eval_of_rholang_files(container):
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
         print(file_path)
-        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} --eval {file_path}'])
+        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} eval {file_path}'])
         for line in eval_r.output.decode('utf-8').splitlines():
             if 'ERROR' in line.upper():
                 print(line)

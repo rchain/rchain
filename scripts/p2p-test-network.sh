@@ -68,9 +68,9 @@ EOF
    fi
 
     if [[ $i == 0 ]]; then
-      rnode_cmd="--port 30304 --standalone"
+      rnode_cmd="run --port 30304 --standalone"
     else
-      rnode_cmd="--bootstrap rnode://4e7c3811cc1a16b7dd1d672db3e025c797484573@169.254.1.2:30304"
+      rnode_cmd="run --bootstrap rnode://4e7c3811cc1a16b7dd1d672db3e025c797484573@169.254.1.2:30304"
     fi
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \
