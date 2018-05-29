@@ -69,11 +69,20 @@ You can run node with the following flags:
   -b, --bootstrap  <arg>        Bootstrap rnode address for initial seed.
   -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
                                 being used for identification
-  -d, --data_dir  <arg>         Path to data directory. Defaults to
+      --data_dir  <arg>         Path to data directory. Defaults to
                                 /var/lib/rnode
+      --deploy  <arg>           Deploy a Rholang source file to Casper on an
+                                existing running node. The deploy will be
+                                packaged and sent as a block to the network
+                                depending on the configuration of the Casper
+                                instance.
       --deploy-demo             Demo sending some placeholder Deploy operations
                                 to Casper on an existing running node at regular
                                 intervals
+  -d, --diagnostics             Node diagnostics
+  -e, --eval  <arg>             Starts a thin client that will evaluate rholang
+                                in file on a existing running node. See grpcHost
+                                and grpcPort.
       --grpc-host  <arg>        Hostname or IP of node on which gRPC service is
                                 running.
   -g, --grpc-port  <arg>        Port used for gRPC API.
@@ -85,47 +94,21 @@ You can run node with the following flags:
       --map_size  <arg>         Map size (in bytes)
   -m, --metrics-port  <arg>     Port used by metrics API.
   -n, --num-validators  <arg>   Number of validators at genesis.
-  -p, --port  <arg>             Network port to use. Currently UDP port, will
-                                become TCP port in next release.
+  -p, --port  <arg>             Network port to use.
+      --propose                 Force Casper (on an existing running node) to
+                                propose a block based on its accumulated
+                                deploys. Requires a value of --secret-key to be
+                                set.
+  -r, --repl                    Starts a thin client, that will connect to
+                                existing node. See grpcHost and grpcPort.
+      --secret-key  <arg>       Base16 encoding of the Ed25519 private key to
+                                use for signing a proposed block.
       --show-block  <arg>       View properties of a block known by Casper on an
                                 existing running node.Output includes: parent
                                 hashes, storage contents of the tuplespace.
   -s, --standalone              Start a stand-alone node (no bootstrapping).
       --help                    Show help message
       --version                 Show version of this program
-
-Subcommand: diagnostics (alias: d) - Node diagnostics
-      --help   Show help message
-      
-Subcommand: repl - Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.
-      --help   Show help message
-      
-Subcommand: eval - Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.
-      --help   Show help message
-
- trailing arguments:
-  file-name (required)
-  
-Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys. Requires a value of --secret-key to be set.
-  -s, --secret-key  <arg>   Base16 encoding of the Ed25519 private key to use
-                            for signing a proposed block.
-      --help                Show help message    
-```
-
-One thing to remember is that sub command and its option must be placed in the end. For example, you should write 
-
-```shell
-docker run -ti rchain/rnode -g 4040 -p 1080 eval test.rbl  
-```
-
-rather than 
-
-```shell
-docker run -ti rchain/rnode eval test.rbl -g 4040 -p 1080 
-```
-which will raise error like
-```shell
-[scallop] Error: Excess arguments provided: '-g 4040 -p 1080'
 ```
 
 ### 2.1 The Node

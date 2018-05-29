@@ -160,8 +160,8 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         val receivedMessage =
           EncryptionHandshakeMessage(encryptionHandshake(src, remoteKeys), 1)
         // when
-        val EncryptionHandshakeResponseMessage(proto, _) =
-          Network.handleEncryptionHandshake[Effect](remote, receivedMessage).value.right.get.get
+        val HandledWithMessage(EncryptionHandshakeResponseMessage(proto, _)) =
+          Network.handleEncryptionHandshake[Effect](remote, receivedMessage).value.right.get
         // then
         val Right(EncryptionHandshakeResponse(pk)) =
           NetworkProtocol.toEncryptionHandshakeResponse(proto)
@@ -214,8 +214,8 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         val receivedMessage =
           FrameMessage(frame(src, nonce, protocolHandshake(src, nonce).toByteArray), 1)
         // when
-        val FrameMessage(proto, _) =
-          Network.handleFrame[Effect](remote, receivedMessage).value.right.get.get
+        val HandledWithMessage(FrameMessage(proto, _)) =
+          Network.handleFrame[Effect](remote, receivedMessage).value.right.get
         // then
         val Right(Frame(n, _)) = toFrame(proto)
         n.toByteArray should equal(nonce)

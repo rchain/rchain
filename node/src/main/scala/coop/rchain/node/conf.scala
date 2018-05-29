@@ -12,6 +12,13 @@ import scala.collection.JavaConverters._
 final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   version(s"RChain Node ${BuildInfo.version}")
 
+  val grpcPort =
+    opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
+
+  val grpcHost =
+    opt[String](default = Some("localhost"),
+      descr = "Hostname or IP of node on which gRPC service is running.")
+
   val diagnostics = new Subcommand("diagnostics", "d") {
     descr("Node diagnostics")
   }
@@ -32,10 +39,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                   "Path to node's private key PEM file, that is being used for TLS communication")
 
     val port =
-      opt[Int](default = Some(30304),
-               short = 'p',
-               descr =
-                 "Network port to use. Currently UDP port, will become TCP port in next release.")
+      opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
     val httpPort =
       opt[Int](default = Some(8080),
@@ -45,7 +49,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
       opt[Int](default = Some(9095), descr = "Port used by metrics API.")
 
     val numValidators = opt[Int](default = Some(5), descr = "Number of validators at genesis.")
-
     val bondsFile = opt[String](
       default = None,
       descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
@@ -100,13 +103,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     val fileName = trailArg[String](required = true)
   }
   addSubcommand(eval)
-
-  val grpcPort =
-    opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
-
-  val grpcHost =
-    opt[String](default = Some("localhost"),
-                descr = "Hostname or IP of node on which gRPC service is running.")
 
   val deployDemo = new Subcommand("deploy-demo") {
     descr(

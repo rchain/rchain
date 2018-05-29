@@ -23,11 +23,12 @@ object implicits {
   implicit def fromVar[T](v: T)(implicit toVar: T => Var): Option[Var] = Some(v)
 
   // Expr Related
-  def apply(e: ExprInstance)                 = new Expr(exprInstance = e)
-  implicit def fromGBool(g: GBool): Expr     = apply(g)
-  implicit def fromGInt(g: GInt): Expr       = apply(g)
-  implicit def fromGString(g: GString): Expr = apply(g)
-  implicit def fromGUri(g: GUri): Expr       = apply(g)
+  def apply(e: ExprInstance)                      = new Expr(exprInstance = e)
+  implicit def fromGBool(g: GBool): Expr          = apply(g)
+  implicit def fromGInt(g: GInt): Expr            = apply(g)
+  implicit def fromGString(g: GString): Expr      = apply(g)
+  implicit def fromGUri(g: GUri): Expr            = apply(g)
+  implicit def fromByteArray(g: GByteArray): Expr = apply(g)
 
   def apply(e: EList): Expr =
     new Expr(exprInstance = EListBody(e))
@@ -221,6 +222,16 @@ object implicits {
         p.evals match {
           case Seq(single) => Some(single)
           case _           => None
+        }
+      } else {
+        None
+      }
+
+    def singleExpr(): Option[Expr] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
+        p.exprs match {
+          case List(single) => Some(single)
+          case _            => None
         }
       } else {
         None

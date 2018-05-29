@@ -135,14 +135,14 @@ lazy val node = (project in file("node"))
       val entryTargetPath    = "/bin"
       val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
-        from("openjdk:8u151-jre-alpine")
+        from("openjdk:8u171-jre-slim-stretch")
         add(artifact, artifactTargetPath)
         copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
-        run("apk", "update")
-        run("apk", "add", "libsodium")
-        run("apk", "add", "openssl")
+        run("apt", "update")
+        run("apt", "install", "-yq", "libsodium18")
+        run("apt", "install", "-yq", "openssl")
         entryPoint("/bin/main.sh")
       }
     },
@@ -157,7 +157,10 @@ lazy val node = (project in file("node"))
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
     },
     /* Debian */
-    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "openssl", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+   debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
+                                                "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
+                                                "bash (>= 2.05a-11)", 
+                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
@@ -166,7 +169,10 @@ lazy val node = (project in file("node"))
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
-    rpmPrerequisites := Seq("libsodium >= 1.0.14-1", "java-1.8.0-openjdk-headless", "openssl")
+rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171", 
+                        //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
+                        "openssl",
+                        "libsodium >= 1.0.14-1") 
   )
   .dependsOn(casper, comm, crypto, rholang)
 
@@ -194,7 +200,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, rspace)
+  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test")
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)

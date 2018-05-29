@@ -219,11 +219,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     bonds
   }
 
-  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+  def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case None     => p2p.Network.dispatch[Effect](pm)
-        case resultPM => resultPM.pure[Effect]
+        case NotHandled => p2p.Network.dispatch[Effect](pm)
+        case handled    => handled.pure[Effect]
     }
 
   private def nodeName: String = {

@@ -33,7 +33,7 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
     val file = new File(fileName)
     if (file.exists()) {
       withResource(Source.fromFile(file)) { source =>
-        blockingStub.eval(EvalRequest(source.getLines.mkString)).output
+        blockingStub.eval(EvalRequest(source.getLines.mkString("\n"))).output
       }
     } else {
       s"File $fileName not found"
