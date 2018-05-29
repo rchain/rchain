@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import java.nio.ByteBuffer
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
@@ -14,6 +14,7 @@ import scodec.bits._
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
+import coop.rchain.shared.PathOps.RichPath
 
 /**
   * The main store class.
@@ -268,19 +269,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     env.close()
   }
 
-  def getStoreSize: StoreSize = {
-    val sizeOnDisk = Files
-      .walk(databasePath)
-      .mapToLong(p => {
-        val f = p.toFile
-        if (f.isFile)
-          f.length
-        else
-          0
-      })
-      .sum()
-    StoreSize(sizeOnDisk, env.stat().entries)
-  }
+  def getStoreSize: StoreSize =
+    StoreSize(databasePath.folderSize, env.stat().entries)
 
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
