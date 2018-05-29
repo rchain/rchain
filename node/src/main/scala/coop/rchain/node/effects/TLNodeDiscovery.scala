@@ -8,6 +8,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.kademlia.PeerTable
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
+import CommunicationResponse._
 
 class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
     extends NodeDiscovery[F] {
@@ -68,47 +69,48 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   def peers: F[Seq[PeerNode]] = Capture[F].capture(table.peers)
 
-  def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] =
+  def handleCommunications: ProtocolMessage => F[CommunicationResponse] =
     pm =>
-      pm.sender.fold(none[ProtocolMessage].pure[F]) { sender =>
+      pm.sender.fold(notHandled.pure[F]) { sender =>
         updateLastSeen(sender) >>= kp(pm match {
           case ping @ PingMessage(_, _)             => handlePing(sender, ping)
           case lookup @ LookupMessage(_, _)         => handleLookup(sender, lookup)
           case disconnect @ DisconnectMessage(_, _) => handleDisconnect(sender, disconnect)
-          case _                                    => none[ProtocolMessage].pure[F]
+          case _                                    => notHandled.pure[F]
         })
     }
 
-  private def handlePing(sender: PeerNode, ping: PingMessage): F[Option[ProtocolMessage]] =
+  private def handlePing(sender: PeerNode, ping: PingMessage): F[CommunicationResponse] =
     ping
       .response(local)
       .traverse { pong =>
         Metrics[F].incrementCounter("ping-recv-count").as(pong)
       }
+      .map(_.fold(notHandled)(m => handledWithMessage(m)))
 
   /**
     * Validate incoming LOOKUP message and return an answering
     * LOOKUP_RESPONSE.
     */
-  private def handleLookup(sender: PeerNode, lookup: LookupMessage): F[Option[ProtocolMessage]] =
+  private def handleLookup(sender: PeerNode, lookup: LookupMessage): F[CommunicationResponse] =
     (for {
       id   <- lookup.lookupId
       resp <- lookup.response(local, table.lookup(id))
     } yield {
       Metrics[F].incrementCounter("lookup-recv-count").as(resp)
-    }).sequence
+    }).sequence.map(_.fold(notHandled)(m => handledWithMessage(m)))
 
   /**
     * Remove sending peer from table.
     */
   private def handleDisconnect(sender: PeerNode,
-                               disconnect: DisconnectMessage): F[Option[ProtocolMessage]] =
+                               disconnect: DisconnectMessage): F[CommunicationResponse] =
     for {
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
       _ <- Metrics[F].decrementGauge("peers")
-    } yield none[ProtocolMessage]
+    } yield handledWitoutMessage
 
   private def lookup(key: Seq[Byte], remoteNode: ProtocolNode): F[Seq[PeerNode]] =
     for {

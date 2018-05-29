@@ -49,20 +49,20 @@ create_test_network_resources() {
     echo "Creating node certificate"
     if [[ $i == 0 ]]; then
       sudo tee -a ${var_lib_rnode_dir}/node.key.pem > /dev/null <<EOF
------BEGIN EC PRIVATE KEY-----
-MHQCAQEEII+ACRjC3sAf28o77SI3UvWtlw1V+9W4bKFRTfTiYKsgoAcGBSuBBAAK
-oUQDQgAEWyVYdp/rhANxVx4kdIMCSRVvGzWFQDsHQlxIfixNKM4AKWWIlBiMOblK
-OndPMKy8BwJz4X1HlxDES8XWqnRa4w==
------END EC PRIVATE KEY-----
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+
+g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf
+qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q
+-----END PRIVATE KEY-----
 EOF
       sudo tee -a ${var_lib_rnode_dir}/node.certificate.pem > /dev/null <<EOF
 -----BEGIN CERTIFICATE-----
-MIIBFTCBuwIJAN3H89VyG22uMAoGCCqGSM49BAMCMBQxEjAQBgNVBAMMCWxvY2Fs
-aG9zdDAeFw0xODA1MDExNDEwMDBaFw0xOTA1MDExNDEwMDBaMBQxEjAQBgNVBAMM
-CWxvY2FsaG9zdDBWMBAGByqGSM49AgEGBSuBBAAKA0IABFslWHaf64QDcVceJHSD
-AkkVbxs1hUA7B0JcSH4sTSjOAClliJQYjDm5Sjp3TzCsvAcCc+F9R5cQxEvF1qp0
-WuMwCgYIKoZIzj0EAwIDSQAwRgIhAMQsYq8J9V26Tarr1nfUfL0/aVoOetYDZ+c4
-QoU6g+xvAiEA1oTwyu+HHWCF8znOc6LpLaQvsqvfqgYc8s0qTi/p/5o=
+MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs
+MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j
+YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq
+5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG
+CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J
+NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=
 -----END CERTIFICATE-----
 EOF
    fi
@@ -70,14 +70,14 @@ EOF
     if [[ $i == 0 ]]; then
       rnode_cmd="--port 30304 --standalone"
     else
-      rnode_cmd="--bootstrap rnode://4e7c3811cc1a16b7dd1d672db3e025c797484573@169.254.1.2:30304"
+      rnode_cmd="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@169.254.1.2:30304"
     fi
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \
       --network=${network_name} \
       coop.rchain/rnode ${rnode_cmd}
-  
-    sudo docker exec ${container_name} sh -c "apk add curl"
+
+    sudo docker exec ${container_name} sh -c "apt install -yq curl"
     sleep 3 # slow down 
   done
   
