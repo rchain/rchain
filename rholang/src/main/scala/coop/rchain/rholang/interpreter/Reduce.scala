@@ -590,9 +590,9 @@ object Reduce {
               evaled <- evalExprToExpr(e)
               result <- evaled.exprInstance match {
                          case GInt(v) => Applicative[M].pure(v)
-                         case expr =>
+                         case _ =>
                            interpreterErrorM[M].raiseError(
-                             ReduceError(s"Error: expression ${expr} didn't evaluate to integer."))
+                             ReduceError("Error: expression didn't evaluate to integer."))
                        }
             } yield result
           case _ =>
