@@ -103,12 +103,13 @@ parser.add_argument("-T", "--tests-to-run",
                     nargs='+',
                     default=['network_sockets', 'count', 'eval', 'repl', 'errors', 'RuntimeException'],
                     help="run these tests in this order")
-
-
-# Define globals
+# Print -h/help if no args
 if len(sys.argv)==1:
     parser.print_help(sys.stderr)
     sys.exit(1)
+
+
+# Define globals
 args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-0.3.1.jar'
