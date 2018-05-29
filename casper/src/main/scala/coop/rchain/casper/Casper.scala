@@ -9,6 +9,7 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
 import coop.rchain.catscontrib.{Capture, IOUtil}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared.AtomicSyncVar
@@ -91,8 +92,12 @@ sealed abstract class MultiParentCasperInstances {
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           validSig <- Validate.blockSignature[F](b)
-          _ <- if (validSig) attemptAdd(b).void
-              else ().pure[F]
+          attempt <- if (validSig) attemptAdd(b)
+                    else none[Boolean].pure[F]
+          _ <- attempt match {
+                case Some(true) => reAttemptBuffer
+                case _          => ().pure[F]
+              }
           forkchoice <- estimator.map(_.head)
           _ <- Log[F].info(
                 s"CASPER: New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
@@ -100,7 +105,8 @@ sealed abstract class MultiParentCasperInstances {
 
       def contains(b: BlockMessage): F[Boolean] =
         Capture[F].capture {
-          _blockDag.get.blockLookup.contains(b.blockHash)
+          _blockDag.get.blockLookup.contains(b.blockHash) ||
+          blockBuffer.contains(b)
         }
 
       def deploy(d: Deploy): F[Unit] =
@@ -224,10 +230,20 @@ sealed abstract class MultiParentCasperInstances {
         //Add successful! Send block to peers, log success, try to add other blocks
         case Some(true) =>
           addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-            s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}") *> reAttemptBuffer
+            s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
 
-        //TODO: Ask peers for missing parents/justifications of blocks
-        case Some(false) => Capture[F].capture { blockBuffer += block }
+        case Some(false) =>
+          for {
+            _              <- Capture[F].capture { blockBuffer += block }
+            dag            <- blockDag
+            missingParents = parents(block).filterNot(dag.blockLookup.contains).toList
+            missingJustifictions = block.justifications
+              .map(_.latestBlockHash)
+              .filterNot(dag.blockLookup.contains)
+              .toList
+            _ <- (missingParents ::: missingJustifictions).traverse(hash =>
+                  CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash)))
+          } yield ()
 
         case None =>
           Log[F].info(
