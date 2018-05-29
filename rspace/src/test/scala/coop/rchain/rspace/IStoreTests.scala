@@ -153,7 +153,7 @@ trait IStoreTests
       }
   }
 
-  "addJoin" should "add join for a channel" ignore withTestStore { store =>
+  "addJoin" should "add join for a channel" in withTestStore { store =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
@@ -174,7 +174,7 @@ trait IStoreTests
     }
   }
 
-  it should "remove only passed in joins for a channel" ignore withTestStore { store =>
+  it should "remove only passed in joins for a channel" in withTestStore { store =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)

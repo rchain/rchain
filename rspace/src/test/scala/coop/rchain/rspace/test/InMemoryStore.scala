@@ -17,7 +17,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _keys: mutable.HashMap[String, Seq[C]],
     _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.MultiMap[C, String],
+    _joinMap: mutable.HashMap[C, Seq[Seq[C]]],
 )(implicit sc: Serialize[C])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
@@ -123,17 +123,25 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
-    _joinMap.addBinding(c, hashChannels(cs))
+  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
+    val existing: Seq[Seq[C]] = _joinMap.remove(c).getOrElse(Seq.empty)
+    if (!existing.exists(_.equals(cs)))
+      _joinMap.put(c, cs +: existing)
+    else
+      _joinMap.put(c, existing)
+  }
 
   private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getChannels(txn, _))
+    _joinMap.getOrElse(c, Seq.empty[Seq[C]])
 
   private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
     val joinKey = hashChannels(Seq(c))
     val csKey   = hashChannels(cs)
     if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
-      _joinMap.removeBinding(c, csKey)
+      val existing: Seq[Seq[C]] = _joinMap.remove(c).getOrElse(Seq.empty)
+      val filtered              = existing.filter(!_.equals(cs))
+      if (filtered.nonEmpty)
+        _joinMap.put(c, filtered)
     }
     collectGarbage(joinKey)
   }
@@ -189,6 +197,6 @@ object InMemoryStore {
       _keys = mutable.HashMap.empty[String, Seq[C]],
       _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
       _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
+      _joinMap = mutable.HashMap.empty[C, Seq[Seq[C]]]
     )
 }
