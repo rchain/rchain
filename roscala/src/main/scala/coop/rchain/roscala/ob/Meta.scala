@@ -15,7 +15,7 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
 
   /** Add key-value pair for a given meta-client pair
     *
-    * This creates a key-location pair in `this.map`. The location is a `LexVar` that points to
+    * This creates a key-location pair in `this.map`. The location is a `LexVariable` that points to
     * a `slot` offset in `client` which then contains the `value` object.
     *
     * TODO: Check if `client` is extensible
@@ -41,7 +41,7 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
         }
 
         // Add mapping of `key` to location that describes where `value` lives
-        map ++= Map(key -> LexVar(level = 0, offset = offset, indirect = true))
+        map(key) = LexVariable(level = 0, offset = offset, indirect = true)
     }
 
     client
@@ -56,7 +56,7 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
     map.get(key) match {
       case Some(location) =>
         location match {
-          case LexVar(_, offset, indirect) =>
+          case LexVariable(_, offset, indirect) =>
             if (indirect) {
               container = client.asInstanceOf[Actor].extension
             }
@@ -70,15 +70,15 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
     }
   }
 
-  def lookupObo(client: Ob, key: Ob, ctxt: Ctxt): Ob = {
-    val result: Ob = Niv
+  def lookupObo(client: Ob, key: Ob)(globalEnv: GlobalEnv): Ob = {
+    val result = get(client, key)(globalEnv)
 
     if (result == Absent)
-      // TODO: parent lookup
-      Niv
+      client.parent.lookup(key)(globalEnv)
     else
       result
   }
+
 }
 
 object Meta {
