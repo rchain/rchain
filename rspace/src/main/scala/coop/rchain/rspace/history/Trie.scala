@@ -16,13 +16,11 @@ object Trie {
   implicit def codecTrie[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Trie[K, V]] =
     discriminated[Trie[K, V]]
       .by(uint8)
-      .subcaseO(0) {
-        case (leaf: Leaf[K, V]) => Some(leaf)
-        case _                  => None
+      .subcaseP(0) {
+        case (leaf: Leaf[K, V]) => leaf
       }((codecK :: codecV).as[Leaf[K, V]])
-      .subcaseO(1) {
-        case (node: Node) => Some(node)
-        case _            => None
+      .subcaseP(1) {
+        case (node: Node) => node
       }(PointerBlock.codecPointerBlock.as[Node])
 
   def hash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): Blake2b256Hash =
