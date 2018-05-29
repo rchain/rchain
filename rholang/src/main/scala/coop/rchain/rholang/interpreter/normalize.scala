@@ -179,8 +179,8 @@ object NameNormalizeMatcher {
       case n: NameQuote => {
         def collapseQuoteEval(p: Par): Channel =
           p.singleEval() match {
-            case Some(Eval(chanNew)) => chanNew.get
-            case _                   => Quote(p)
+            case Some(chanNew) => chanNew.get
+            case _             => Quote(p)
           }
 
         ProcNormalizeMatcher
@@ -257,7 +257,7 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, leftResult.knownFree))
           lp = leftResult.par
-          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
             lp.connectives match {
               case List(Connective(ConnAndBody(ConnectiveBody(ps)))) =>
                 Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
@@ -277,7 +277,7 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
           lp = leftResult.par
-          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
             lp.connectives match {
               case List(Connective(ConnOrBody(ConnectiveBody(ps)))) =>
                 Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
@@ -337,7 +337,7 @@ object ProcNormalizeMatcher {
         def collapseEvalQuote(chan: Channel): Par =
           chan.channelInstance match {
             case Quote(q) => q
-            case _        => Eval(chan)
+            case _        => Expr(EEvalBody(chan))
           }
 
         NameNormalizeMatcher

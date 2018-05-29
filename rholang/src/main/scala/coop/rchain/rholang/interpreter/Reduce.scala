@@ -139,12 +139,12 @@ object Reduce {
         Parallel.parTraverse(par.sends.toList)(send => eval(send)),
         Parallel.parTraverse(par.receives.toList)(recv => eval(recv)),
         Parallel.parTraverse(par.news.toList)(neu => eval(neu)),
-        Parallel.parTraverse(par.evals.toList)(deref => eval(deref)),
         Parallel.parTraverse(par.matches.toList)(mat => eval(mat)),
         Parallel.parTraverse(par.bundles.toList)(bundle => eval(bundle)),
         Parallel.parTraverse(par.exprs.filter { expr =>
           expr.exprInstance match {
             case _: EVarBody    => true
+            case _: EEvalBody   => true
             case _: EMethodBody => true
             case _              => false
           }
@@ -154,6 +154,11 @@ object Reduce {
               for {
                 varref <- eval(v.get)
                 _      <- eval(varref)
+              } yield ()
+            case e: EEvalBody =>
+              for {
+                p <- evalExprToPar(Expr(e))
+                _ <- eval(p)
               } yield ()
             case e: EMethodBody =>
               for {
@@ -344,17 +349,6 @@ object Reduce {
                  }
       } yield unbndl
 
-    /**
-      * Eval is well-defined on channel variables provided
-      * a binding exists for the variable. It simply gets the
-      * quoted process and calls eval.
-      */
-    def eval(drop: Eval)(implicit env: Env[Par]): M[Unit] =
-      for {
-        quote <- eval(drop.channel.get)
-        _     <- eval(quote.value)
-      } yield ()
-
     def eval(bundle: Bundle)(implicit env: Env[Par]): M[Unit] =
       eval(bundle.body.get)
 
@@ -384,7 +378,8 @@ object Reduce {
                         }
           } yield resultPar
         }
-        case _ => evalExprToExpr(expr).map(e => (fromExpr(e)(identity)))
+        case EEvalBody(chan) => eval(chan).map(q => q.value)
+        case _               => evalExprToExpr(expr).map(e => (fromExpr(e)(identity)))
       }
 
     def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = {
@@ -494,6 +489,11 @@ object Reduce {
             resultExpr <- evalSingleExpr(resultPar)
           } yield resultExpr
         }
+        case EEvalBody(chan) =>
+          for {
+            q      <- eval(chan)
+            result <- evalSingleExpr(q.value)
+          } yield result
         case _ => interpreterErrorM[M].raiseError(ReduceError("Unimplemented expression: " + expr))
       }
     }
@@ -558,7 +558,7 @@ object Reduce {
       }
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
-      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
         interpreterErrorM[M].raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
@@ -569,7 +569,7 @@ object Reduce {
         }
 
     def evalToInt(p: Par)(implicit env: Env[Par]): M[Int] =
-      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
         interpreterErrorM[M].raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
@@ -596,7 +596,7 @@ object Reduce {
         }
 
     def evalToBool(p: Par)(implicit env: Env[Par]): M[Boolean] =
-      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.evals.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
+      if (!p.sends.isEmpty || !p.receives.isEmpty || !p.news.isEmpty || !p.matches.isEmpty || !p.ids.isEmpty)
         interpreterErrorM[M].raiseError(
           ReduceError("Error: parallel or non expression found where expression expected."))
       else
@@ -625,7 +625,6 @@ object Reduce {
       val resultLocallyFree =
         par.sends.foldLeft(BitSet())((acc, send) => acc | send.locallyFree) |
           par.receives.foldLeft(BitSet())((acc, receive) => acc | receive.locallyFree) |
-          par.evals.foldLeft(BitSet())((acc, eval) => acc | EvalLocallyFree.locallyFree(eval)) |
           par.news.foldLeft(BitSet())((acc, newProc) => acc | newProc.locallyFree) |
           par.exprs.foldLeft(BitSet())((acc, expr) => acc | ExprLocallyFree.locallyFree(expr)) |
           par.matches.foldLeft(BitSet())((acc, matchProc) => acc | matchProc.locallyFree)

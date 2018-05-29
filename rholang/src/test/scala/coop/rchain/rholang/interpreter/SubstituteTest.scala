@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.models.Channel.ChannelInstance._
-import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
+import coop.rchain.models.Expr.ExprInstance.{EEvalBody, EVarBody, GString}
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
@@ -175,7 +175,7 @@ class NewSubSpec extends FlatSpec with Matchers {
 class EvalSubSpec extends FlatSpec with Matchers {
   "Eval" should "remove Eval/Quote pairs." in {
     implicit val env: Env[Par] = Env.makeEnv(GPrivate("one"), GPrivate("zero"))
-    val target: Par            = Eval(ChanVar(BoundVar(1)))
+    val target: Par            = EEvalBody(ChanVar(BoundVar(1)))
     val result                 = substitutePar[Coeval].substitute(target).value
     val expected: Par          = GPrivate("one")
 

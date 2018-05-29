@@ -23,7 +23,9 @@ object implicits {
   implicit def fromVar[T](v: T)(implicit toVar: T => Var): Option[Var] = Some(v)
 
   // Expr Related
-  def apply(e: ExprInstance)                      = new Expr(exprInstance = e)
+  def apply(e: ExprInstance)                     = new Expr(exprInstance = e)
+  implicit def fromExprInstance(e: ExprInstance) = apply(e)
+
   implicit def fromGBool(g: GBool): Expr          = apply(g)
   implicit def fromGInt(g: GInt): Expr            = apply(g)
   implicit def fromGString(g: GString): Expr      = apply(g)
@@ -116,10 +118,6 @@ object implicits {
     new Par(sends = Vector(s), locallyFree = s.locallyFree, connectiveUsed = s.connectiveUsed)
   def apply(r: Receive): Par =
     new Par(receives = Vector(r), locallyFree = r.locallyFree, connectiveUsed = r.connectiveUsed)
-  def apply(e: Eval): Par =
-    new Par(evals = Vector(e),
-            locallyFree = EvalLocallyFree.locallyFree(e),
-            connectiveUsed = EvalLocallyFree.connectiveUsed(e))
   def apply(n: New): Par =
     new Par(news = Vector(n),
             locallyFree = NewLocallyFree.locallyFree(n),
@@ -145,7 +143,6 @@ object implicits {
 
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
-  implicit def fromEval[T](e: T)(implicit toEval: T => Eval): Par = apply(e)
   implicit def fromNew(n: New): Par                               = apply(n)
   implicit def fromExpr[T](e: T)(implicit toExpr: T => Expr): Par = apply(e)
   implicit def fromMatch(m: Match): Par                           = apply(m)
@@ -157,7 +154,6 @@ object implicits {
     def apply(): Par = new Par(
       sends = Vector.empty[Send],
       receives = Vector.empty[Receive],
-      evals = Vector.empty[Eval],
       news = Vector.empty[New],
       exprs = Vector.empty[Expr],
       matches = Vector.empty[Match],
@@ -183,12 +179,6 @@ object implicits {
         receives = r +: p.receives,
         locallyFree = p.locallyFree | r.locallyFree,
         connectiveUsed = p.connectiveUsed || r.connectiveUsed
-      )
-    def prepend(e: Eval): Par =
-      p.copy(
-        evals = e +: p.evals,
-        locallyFree = p.locallyFree | EvalLocallyFree.locallyFree(e),
-        connectiveUsed = p.connectiveUsed || EvalLocallyFree.connectiveUsed(e)
       )
     def prepend(n: New): Par =
       p.copy(
@@ -217,18 +207,18 @@ object implicits {
         connectiveUsed = true
       )
 
-    def singleEval(): Option[Eval] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.evals match {
-          case Seq(single) => Some(single)
-          case _           => None
+    def singleEval(): Option[Channel] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
+        p.exprs match {
+          case Seq(Expr(EEvalBody(c))) => Some(c)
+          case _                       => None
         }
       } else {
         None
       }
 
     def singleExpr(): Option[Expr] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
         p.exprs match {
           case List(single) => Some(single)
           case _            => None
@@ -238,7 +228,7 @@ object implicits {
       }
 
     def singleNew(): Option[New] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
         p.news match {
           case Seq(single) => Some(single)
           case _           => None
@@ -248,7 +238,7 @@ object implicits {
       }
 
     def singleBundle(): Option[Bundle] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.evals.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.connectives.isEmpty) {
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.ids.isEmpty && p.connectives.isEmpty) {
         p.bundles.toList match {
           case Seq(single) => Some(single)
           case _           => None
@@ -261,7 +251,6 @@ object implicits {
       Par(
         that.sends ++ p.sends,
         that.receives ++ p.receives,
-        that.evals ++ p.evals,
         that.news ++ p.news,
         that.exprs ++ p.exprs,
         that.matches ++ p.matches,
@@ -302,6 +291,7 @@ object implicits {
         case ESetBody(e)                => e.connectiveUsed
         case EMapBody(e)                => e.connectiveUsed
         case EVarBody(EVar(v))          => VarLocallyFree.connectiveUsed(v.get)
+        case EEvalBody(chan)            => ChannelLocallyFree.connectiveUsed(chan)
         case ENotBody(ENot(p))          => p.get.connectiveUsed
         case ENegBody(ENeg(p))          => p.get.connectiveUsed
         case EMultBody(EMult(p1, p2))   => p1.get.connectiveUsed || p2.get.connectiveUsed
@@ -321,18 +311,17 @@ object implicits {
 
     def locallyFree(e: Expr) =
       e.exprInstance match {
-        case GBool(_)      => BitSet()
-        case GInt(_)       => BitSet()
-        case GString(_)    => BitSet()
-        case GUri(_)       => BitSet()
-        case GByteArray(_) => BitSet()
-        case EListBody(e)  => e.locallyFree
-        case ETupleBody(e) => e.locallyFree
-        case ESetBody(e)   => e.locallyFree
-        case EMapBody(e)   => e.locallyFree
-        case EVarBody(EVar(v)) => {
-          VarLocallyFree.locallyFree(v.get)
-        }
+        case GBool(_)                   => BitSet()
+        case GInt(_)                    => BitSet()
+        case GString(_)                 => BitSet()
+        case GUri(_)                    => BitSet()
+        case GByteArray(_)              => BitSet()
+        case EListBody(e)               => e.locallyFree
+        case ETupleBody(e)              => e.locallyFree
+        case ESetBody(e)                => e.locallyFree
+        case EMapBody(e)                => e.locallyFree
+        case EVarBody(EVar(v))          => VarLocallyFree.locallyFree(v.get)
+        case EEvalBody(chan)            => ChannelLocallyFree.locallyFree(chan)
         case ENotBody(ENot(p))          => p.get.locallyFree
         case ENegBody(ENeg(p))          => p.get.locallyFree
         case EMultBody(EMult(p1, p2))   => p1.get.locallyFree | p2.get.locallyFree
@@ -373,11 +362,6 @@ object implicits {
   implicit val NewLocallyFree: HasLocallyFree[New] = new HasLocallyFree[New] {
     def connectiveUsed(n: New) = n.p.get.connectiveUsed
     def locallyFree(n: New)    = n.locallyFree
-  }
-
-  implicit val EvalLocallyFree: HasLocallyFree[Eval] = new HasLocallyFree[Eval] {
-    def connectiveUsed(e: Eval) = ChannelLocallyFree.connectiveUsed(e.channel.get)
-    def locallyFree(e: Eval)    = ChannelLocallyFree.locallyFree(e.channel.get)
   }
 
   implicit val VarInstanceLocallyFree: HasLocallyFree[VarInstance] =

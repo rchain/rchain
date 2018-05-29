@@ -379,7 +379,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Send(Quote(GInt(1)), Seq[Par](simpleReceive), false, BitSet())
     val receive = Receive(
       Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GInt(1)), freeCount = 1)),
-      Eval(ChanVar(BoundVar(0))),
+      EEvalBody(ChanVar(BoundVar(0))),
       false,
       1,
       BitSet()
@@ -449,7 +449,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           MatchCase(
             pattern,
             Send(Quote(GString("result")),
-                 List(Eval(ChanVar(BoundVar(1))), EVar(BoundVar(0))),
+                 List(EEvalBody(ChanVar(BoundVar(1))), EVar(BoundVar(0))),
                  false,
                  BitSet(0, 1)),
             freeCount = 2
