@@ -89,13 +89,6 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   }
   addSubcommand(run)
 
-  //  val grpcPort =
-  //    opt[Int](default = Some(50000), descr = "Port used for gRPC API.")
-
-  //  val grpcHost =
-  //    opt[String](default = Some("localhost"),
-  //      descr = "Hostname or IP of node on which gRPC service is running.")
-
   val repl = new Subcommand("repl") {
     descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
   }
@@ -134,6 +127,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     descr(
       "View properties of a block known by Casper on an existing running node." +
         "Output includes: parent hashes, storage contents of the tuplespace.")
+    val hash =
+      trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
   }
   addSubcommand(showBlock)
 

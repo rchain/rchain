@@ -45,23 +45,27 @@ object Main {
       case Some(conf.deploy) =>
         DeployRuntime.deployFileProgram[Task](conf.deploy.location.toOption.get)
 
-//      case None if conf.deployDemo() => DeployRuntime.deployDemoProgram[Task]
-//      case None if conf.propose() =>
-//        conf.secretKey.toOption match {
-//          case Some(sk) => DeployRuntime.propose[Task](Base16.decode(sk))
-//          case None =>
-//            Task.delay {
-//              println("Error: value of --secret-key must be specified to propose a block")
-//            }
-//        }
-//      case None if conf.showBlock.toOption.isDefined =>
-//        DeployRuntime.showBlock[Task](conf.showBlock.toOption.get)
-      case None =>
+      case Some(conf.deployDemo) => DeployRuntime.deployDemoProgram[Task]
+      case Some(conf.propose) =>
+        conf.propose.secretKey.toOption match {
+          case Some(sk) => DeployRuntime.propose[Task](Base16.decode(sk))
+          case None =>
+            Task.delay {
+              println("Error: value of --secret-key must be specified to propose a block")
+            }
+        }
+      case Some(conf.showBlock) =>
+        DeployRuntime.showBlock[Task](conf.showBlock.hash.toOption.get)
+      case Some(conf.run) =>
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
           case Left(CouldNotConnectToBootstrap) =>
             println("Node could not connect to bootstrap node.")
           case Left(error) => println(s"Failed! Reason: '$error")
+        }
+      case None =>
+        Task.delay {
+          conf.printHelp()
         }
     }
     exec.unsafeRunSync
