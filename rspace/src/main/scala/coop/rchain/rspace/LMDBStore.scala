@@ -7,6 +7,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
+import coop.rchain.shared.ByteVectorOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
@@ -348,20 +349,10 @@ object LMDBStore {
     }
 
   private[rspace] def toByteBuffer[T](value: T, codec: Codec[T]): ByteBuffer =
-    toByteBuffer(toBitVector(value, codec))
+    toBitVector(value, codec).bytes.toDirectByteBuffer
 
   private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
-    toByteBuffer(toBitVector(toByteVectorSeq(values), byteVectorsCodec))
-
-  private[rspace] def toByteBuffer(byteVector: ByteVector): ByteBuffer = {
-    val buffer: ByteBuffer = ByteBuffer.allocateDirect(byteVector.size.toInt)
-    byteVector.copyToBuffer(buffer)
-    buffer.flip()
-    buffer
-  }
-
-  private[rspace] def toByteBuffer(bitVector: BitVector): ByteBuffer =
-    toByteBuffer(bitVector.bytes)
+    toBitVector(toByteVectorSeq(values), byteVectorsCodec).bytes.toDirectByteBuffer
 
   private[rspace] def toByteVectorSeq[T](values: Seq[T])(
       implicit st: Serialize[T]): Seq[ByteVector] =
