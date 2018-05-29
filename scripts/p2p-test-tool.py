@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.6
 # This is a simple script to help with p2p network boot/testing.
-# This requires Python 3.6 to be installed for fstring. Install dependencies via pip
+# This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
 # Return code of 0 is success on test and 1 is fail.
 from pexpect import replwrap
@@ -30,7 +30,7 @@ parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
                     type=str,
                     default="0",
-                    help="set docker cpuset-cpus for nodes. Allows limiting execution in specific CPUs")
+                    help="set docker cpuset-cpus for all nodes. Allows limiting execution in specific CPUs")
 parser.add_argument("-d", "--deploy-demo",
                     dest='deploy_demo',
                     action='store_true',
@@ -47,7 +47,7 @@ parser.add_argument("-m", "--memory",
                     dest='memory',
                     type=str,
                     default="1024m",
-                    help="1024m set docker memory for repl client node")
+                    help="set docker memory limit for all nodes")
 parser.add_argument("-n", "--network",
                     dest='network',
                     type=str,
@@ -101,8 +101,8 @@ parser.add_argument("-T", "--tests-to-run",
                     dest='tests',
                     type=str,
                     nargs='+',
-                    default=['eval', 'network_sockets', 'count', 'errors', 'repl'],
-                    help="run these tests")
+                    default=['network_sockets', 'count', 'eval', 'repl', 'errors', 'RuntimeException'],
+                    help="run these tests in this order")
 
 
 # Define globals
@@ -153,14 +153,21 @@ def run_tests():
                 if test_network_sockets(container) == 0:
                     notices['pass'].append(f"{container.name}: Metrics API http/tcp/9095 is available.")
                 else:
-                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/9095 is not available..")
+                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/9095 is not available.")
         if test == "errors":
             for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
                 print(container.name)
                 if test_node_logs_for_errors(container) == 0:
                     notices['pass'].append(f"{container.name}: No errors defined by \"ERROR\" in logs.")
                 else:
-                    notices['fail'].append(f"{container.name}: Errors found in node logs.")
+                    notices['fail'].append(f"{container.name}: Errors defined by \"ERROR\" found in logs.")
+        if test == "RuntimeException":
+            for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
+                print(container.name)
+                if test_node_logs_for_RuntimeException(container) == 0:
+                    notices['pass'].append(f"{container.name}: No text of \"RuntimeException\" in logs.")
+                else:
+                    notices['fail'].append(f"{container.name}: Text of \"RuntimeException\" in logs.")
         if test == "count":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_node_logs_for_correct_peers_count(container) == 0:
@@ -390,15 +397,29 @@ def test_repl_load(container):
 
 
 def test_node_logs_for_errors(container):
+    retval = 1 
     print(f"Testing {container.name} node logs for errors.")
     r = container.logs().decode('utf-8')
     if not "ERROR" in r:
-        print("PASS: No errors found in logs")
+        print("PASS: No errors found in logs.")
         retval = 0 
     else:
-        print("FAIL: Errors matching ERROR found in logs")
+        print("FAIL: Errors matching ERROR found in logs.")
         for line in r.splitlines():
             if "ERROR" in line:
+                print(line)
+                retval = 1 
+    return retval 
+
+def test_node_logs_for_RuntimeException(container):
+    retval = 1 
+    print(f"Testing {container.name} node logs for \"java RuntimeException\".")
+    r = container.logs().decode('utf-8')
+    if not "RuntimeException" in r:
+        retval = 0 
+    else:
+        for line in r.splitlines():
+            if "RuntimeException" in line:
                 print(line)
                 retval = 1 
     return retval 
