@@ -2,6 +2,9 @@ package coop.rchain.rspace
 
 import java.lang.{Byte => JByte}
 
+import cats.Eq
+import cats.instances.byte._
+import cats.syntax.eq._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
@@ -81,8 +84,8 @@ package object history {
     }
 
   // TODO(ht): make this more efficient
-  private[this] def commonPrefix[A](a: Seq[A], b: Seq[A]): Seq[A] =
-    a.zip(b).takeWhile { case (l, r) => l == r }.map(_._1)
+  private[this] def commonPrefix[A: Eq](a: Seq[A], b: Seq[A]): Seq[A] =
+    a.zip(b).takeWhile { case (l, r) => l === r }.map(_._1)
 
   private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
       implicit
