@@ -21,18 +21,18 @@ abstract class Ob {
     * `ctxt.trgt` contains the key.
     */
   def lookupAndInvoke(state: State, globalEnv: GlobalEnv): Ob = {
-    val fn = meta.lookupObo(this, state.ctxt.trgt, state.ctxt)(globalEnv)
+    val fn = meta.lookupObo(this, state.ctxt.trgt)(globalEnv)
     logger.debug(s"Lookup and invoke $fn")
     fn.invoke(state, globalEnv)
   }
 
-  def lookup(key: Ob)(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
+  def lookup(key: Ob)(globalEnv: GlobalEnv): Ob = {
     logger.debug(s"Lookup for $key in $this")
     val me     = this
     val result = meta.get(me, key)(globalEnv)
 
     if (result == Absent)
-      parent.lookup(key)(ctxt, globalEnv)
+      parent.lookup(key)(globalEnv)
     else
       result
   }

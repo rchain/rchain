@@ -70,11 +70,11 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
     }
   }
 
-  def lookupObo(client: Ob, key: Ob, ctxt: Ctxt)(globalEnv: GlobalEnv): Ob = {
+  def lookupObo(client: Ob, key: Ob)(globalEnv: GlobalEnv): Ob = {
     val result = get(client, key)(globalEnv)
 
     if (result == Absent)
-      client.parent.lookup(key)(ctxt, globalEnv)
+      client.parent.lookup(key)(globalEnv)
     else
       result
   }
