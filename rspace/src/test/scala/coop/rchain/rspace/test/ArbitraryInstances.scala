@@ -44,4 +44,21 @@ object ArbitraryInstances {
 
     Arbitrary(genTrie)
   }
+
+  implicit val arbitraryTestKey: Arbitrary[TestKey] =
+    Arbitrary(Gen.sized { _ =>
+      Gen
+        .listOfN(4, Arbitrary.arbitrary[Int])
+        .map(ints => TestKey.create(ints))
+    })
+
+  implicit val arbitraryNonEmptyMapTestKeyByteVector: Arbitrary[Map[TestKey, ByteVector]] = {
+    Arbitrary(
+      Gen
+        .sized { size =>
+          Gen.containerOfN[Seq, (TestKey, ByteVector)](if (size > 2) size else 2,
+                                                       Arbitrary.arbitrary[(TestKey, ByteVector)])
+        }
+        .map(_.toMap))
+  }
 }

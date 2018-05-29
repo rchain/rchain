@@ -2,6 +2,9 @@ package coop.rchain.rspace
 
 import java.lang.{Byte => JByte}
 
+import cats.Eq
+import cats.instances.byte._
+import cats.syntax.eq._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
@@ -55,7 +58,7 @@ package object history {
   }
 
   @tailrec
-  private[rspace] def getParents[T, K, V](
+  private[this] def getParents[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
       path: Seq[Byte],
@@ -81,10 +84,10 @@ package object history {
     }
 
   // TODO(ht): make this more efficient
-  private[rspace] def commonPrefix[A](a: Seq[A], b: Seq[A]): Seq[A] =
-    a.zip(b).takeWhile { case (l, r) => l == r }.map(_._1)
+  private[this] def commonPrefix[A: Eq](a: Seq[A], b: Seq[A]): Seq[A] =
+    a.zip(b).takeWhile { case (l, r) => l === r }.map(_._1)
 
-  private[rspace] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
+  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
@@ -94,7 +97,7 @@ package object history {
         (Trie.hash[K, V](node), node)
     }
 
-  private[rspace] def insertTries[T, K, V](
+  private[this] def insertTries[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
       rehashedNodes: Seq[(Blake2b256Hash, Trie[K, V])]): Option[Blake2b256Hash] =
@@ -178,6 +181,119 @@ package object history {
                 val newRootHash   = insertTries(store, txn, rehashedNodes).get
                 store.workingRootHash.put(newRootHash)
                 logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+            }
+        }
+      }
+    } catch {
+      case ex: Throwable =>
+        store.workingRootHash.put(currentRootHash)
+        logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+        throw ex
+    }
+  }
+
+  @tailrec
+  private[this] def propagateLeafUpward[T, K, V](
+      hash: Blake2b256Hash,
+      parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+    parents match {
+      // If the list parents only contains a single Node, we know we are at the root, and we
+      // can update the Vector at the given index to point to the Leaf.
+      case Seq((byte, Node(pointerBlock))) =>
+        (Node(pointerBlock.updated(List((byte, Some(hash))))), Seq.empty[(Int, Node)])
+      // Otherwise,
+      case (byte, Node(pointerBlock)) +: tail =>
+        // Get the children of the immediate parent
+        pointerBlock.children match {
+          // If there are no children, then something is wrong, because one of the children
+          // should point down to the leaf we are trying to propagate up the trie.
+          case Vector() => throw new DeleteException("PointerBlock has no children")
+          // If there are is only one child, then we know that it is the thing we are trying to
+          // propagate upwards, and we can go ahead and do that.
+          case Vector(_) => propagateLeafUpward(hash, tail)
+          // Otherwise, if there are > 2 children, we can update the parent node's Vector
+          // at the given index to point to the leaf.
+          case _ => (Node(pointerBlock.updated(List((byte, Some(hash))))), tail)
+        }
+    }
+
+  @tailrec
+  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
+                                        txn: T,
+                                        parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+    parents match {
+      // If the list parents only contains a single Node, we know we are at the root, and we
+      // can update the Vector at the given index to `None`
+      case Seq((index, Node(pointerBlock))) =>
+        (Node(pointerBlock.updated(List((index, None)))), Seq.empty[(Int, Node)])
+      // Otherwise,
+      case (byte, Node(pointerBlock)) +: tail =>
+        val updated = (Node(pointerBlock.updated(List((byte, None)))), tail)
+        // Get the children of the immediate parent
+        pointerBlock.children match {
+          // If there are no children, then something is wrong, because one of the children
+          // should point down to the thing we are trying to delete.
+          case Vector() =>
+            throw new DeleteException("PointerBlock has no children")
+          // If there are is only one child, then we know that it is the thing we are trying to
+          // delete, and we can go ahead and move up the trie.
+          case Vector(_) =>
+            deleteLeaf(store, txn, tail)
+          // If there are two children, then we know that one of them points down to the thing
+          // we are trying to delete.  We then decide how to handle the other child based on
+          // whether or not it is a Node or a Leaf
+          case c @ Vector(_, _) =>
+            val otherHash = c.collect { case (childByte, child) if childByte != byte => child }.head
+            store.get(txn, otherHash) match {
+              // If the other child is a Node, then we leave it intact, and update the parent node's
+              // Vector at the given index to `None`.
+              case Some(Node(_)) => updated
+              // If the other child is a Leaf, then we must propagate it up the trie.
+              case Some(Leaf(_, _)) => propagateLeafUpward(otherHash, tail)
+              // If there is nothing there, something has gone wrong
+              case None => throw new DeleteException(s"No value at $otherHash")
+            }
+          // Otherwise if there are > 2 children, update the parent node's Vector at the given
+          // index to `None`.
+          case _ =>
+            updated
+        }
+    }
+
+  def delete[T, K, V](store: ITrieStore[T, K, V], key: K, value: V)(implicit
+                                                                    codecK: Codec[K],
+                                                                    codecV: Codec[V]): Boolean = {
+    // We take the current root hash, preventing other threads from operating on the Trie
+    val currentRootHash: Blake2b256Hash = store.workingRootHash.take()
+    try {
+      store.withTxn(store.createTxnWrite()) { (txn: T) =>
+        // Get the current root node
+        store.get(txn, currentRootHash) match {
+          case None =>
+            throw new LookupException(s"No node at $currentRootHash")
+          case Some(currentRoot) =>
+            // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
+            val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
+            // Using this path, get the parents of the given leaf.
+            val (tip, parents) = getParents(store, txn, encodedKey, 0, currentRoot)
+            tip match {
+              // If the "tip" is a node, a leaf with a given key and value does not exist
+              // so we put the current root hash back and return false.
+              case Node(_) =>
+                store.workingRootHash.put(currentRootHash)
+                logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+                false
+              // If the "tip" is equal to a leaf containing the given key and value, commence
+              // with the deletion process.
+              case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
+                val (hd, nodesToRehash) = deleteLeaf(store, txn, parents)
+                val rehashedNodes       = rehash[K, V](hd, nodesToRehash)
+                val newRootHash         = insertTries[T, K, V](store, txn, rehashedNodes).get
+                store.workingRootHash.put(newRootHash)
+                logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
+                true
+              case Leaf(_, _) =>
+                throw new DeleteException("Something terrible happened")
             }
         }
       }
