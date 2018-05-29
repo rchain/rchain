@@ -41,7 +41,7 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
         }
 
         // Add mapping of `key` to location that describes where `value` lives
-        map ++= Map(key -> LexVariable(level = 0, offset = offset, indirect = true))
+        map(key) = LexVariable(level = 0, offset = offset, indirect = true)
     }
 
     client
