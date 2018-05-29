@@ -59,6 +59,16 @@ The node module comes with single executable (jar, docker image, debian or fedor
 You can run node with the following flags:
 
 ```
+RChain Node 0.4.1
+      --grpc-host  <arg>   Hostname or IP of node on which gRPC service is
+                           running.
+  -g, --grpc-port  <arg>   Port used for gRPC API.
+      --help               Show help message
+      --version            Show version of this program
+
+Subcommand: diagnostics (alias: d) - Node diagnostics
+      --help   Show help message
+Subcommand: run
       --bonds-file  <arg>       Plain text file consisting of lines of the form
                                 `<pk> <stake>`, which defines the bond amounts
                                 for each validator at genesis. <pk> is the
@@ -69,23 +79,8 @@ You can run node with the following flags:
   -b, --bootstrap  <arg>        Bootstrap rnode address for initial seed.
   -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
                                 being used for identification
-      --data_dir  <arg>         Path to data directory. Defaults to
+  -d, --data_dir  <arg>         Path to data directory. Defaults to
                                 /var/lib/rnode
-      --deploy  <arg>           Deploy a Rholang source file to Casper on an
-                                existing running node. The deploy will be
-                                packaged and sent as a block to the network
-                                depending on the configuration of the Casper
-                                instance.
-      --deploy-demo             Demo sending some placeholder Deploy operations
-                                to Casper on an existing running node at regular
-                                intervals
-  -d, --diagnostics             Node diagnostics
-  -e, --eval  <arg>             Starts a thin client that will evaluate rholang
-                                in file on a existing running node. See grpcHost
-                                and grpcPort.
-      --grpc-host  <arg>        Hostname or IP of node on which gRPC service is
-                                running.
-  -g, --grpc-port  <arg>        Port used for gRPC API.
       --host  <arg>             Hostname or IP of this node.
   -h, --http-port  <arg>        HTTP port (deprecated - all API features will be
                                 ported to gRPC API).
@@ -95,20 +90,31 @@ You can run node with the following flags:
   -m, --metrics-port  <arg>     Port used by metrics API.
   -n, --num-validators  <arg>   Number of validators at genesis.
   -p, --port  <arg>             Network port to use.
-      --propose                 Force Casper (on an existing running node) to
-                                propose a block based on its accumulated
-                                deploys. Requires a value of --secret-key to be
-                                set.
-  -r, --repl                    Starts a thin client, that will connect to
-                                existing node. See grpcHost and grpcPort.
-      --secret-key  <arg>       Base16 encoding of the Ed25519 private key to
-                                use for signing a proposed block.
-      --show-block  <arg>       View properties of a block known by Casper on an
-                                existing running node.Output includes: parent
-                                hashes, storage contents of the tuplespace.
   -s, --standalone              Start a stand-alone node (no bootstrapping).
       --help                    Show help message
-      --version                 Show version of this program
+Subcommand: repl - Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.
+      --help   Show help message
+Subcommand: eval - Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.
+      --help   Show help message
+
+ trailing arguments:
+  file-name (required)
+Subcommand: deploy-demo - Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals
+      --help   Show help message
+Subcommand: deploy - Deploy a Rholang source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
+      --help   Show help message
+
+ trailing arguments:
+  location (required)
+Subcommand: show-block - View properties of a block known by Casper on an existing running node.Output includes: parent hashes, storage contents of the tuplespace.
+      --help   Show help message
+
+ trailing arguments:
+  hash (required)   the hash value of the block
+Subcommand: propose - Force Casper (on an existing running node) to propose a block based on its accumulated deploys. Requires a value of --secret-key to be set.
+  -s, --secret-key  <arg>   Base16 encoding of the Ed25519 private key to use
+                            for signing a proposed block.
+      --help                Show help message
 ```
 
 ### 2.1 The Node

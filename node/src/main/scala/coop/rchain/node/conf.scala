@@ -17,7 +17,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val grpcHost =
     opt[String](default = Some("localhost"),
-      descr = "Hostname or IP of node on which gRPC service is running.")
+                descr = "Hostname or IP of node on which gRPC service is running.")
 
   val diagnostics = new Subcommand("diagnostics", "d") {
     descr("Node diagnostics")
