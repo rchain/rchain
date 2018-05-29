@@ -269,10 +269,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     env.close()
   }
 
-  def getStoreSize: StoreSize = {
-    val sizeOnDisk = databasePath.folderSize
-    StoreSize(sizeOnDisk, env.stat().entries)
-  }
+  def getStoreSize: StoreSize =
+    StoreSize(databasePath.folderSize, env.stat().entries)
 
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
