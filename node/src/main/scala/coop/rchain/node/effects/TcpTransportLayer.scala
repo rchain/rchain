@@ -17,6 +17,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
+import coop.rchain.comm.protocol.routing.TLResponse.Payload
 
 // TODO Add State Monad to reuse channels to known peers
 class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
@@ -75,7 +76,23 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
-                    case p if p.isProtocol => ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                    case p if p.isProtocol =>
+                      p match {
+                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _, _)) =>
+                          if (sender.id.toByteArray
+                                .map("%02x".format(_))
+                                .mkString == remote.id.toString) {
+                            ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                          } else {
+                            Left(
+                              internalCommunicationError(
+                                "The sender id is different from the remote id"))
+                          }
+
+                        case _ =>
+                          Left(
+                            internalCommunicationError("Was expecting a sender, nothing arrived"))
+                      }
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
                     case p if p.isInternalServerError =>
