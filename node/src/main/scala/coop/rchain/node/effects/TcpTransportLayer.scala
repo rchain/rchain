@@ -1,27 +1,66 @@
 package coop.rchain.node.effects
 
-import scala.concurrent.duration._
+import java.io.File
+
 import coop.rchain.comm._, CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
-import io.grpc.{ManagedChannel, ManagedChannelBuilder, Server, ServerBuilder}
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 
-import scala.concurrent.duration.{Duration, MILLISECONDS}
+import scala.concurrent.duration._
 import scala.util.Try
-import scala.concurrent.{Await, Promise}
+import scala.concurrent.Await
 import scala.concurrent.{ExecutionContext, Future}
+import io.grpc.netty._
+import io.netty.handler.ssl.{ClientAuth, SslContext}
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 
-class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, port: Int)(
-    src: PeerNode)(implicit executionContext: ExecutionContext)
+// TODO Add State Monad to reuse channels to known peers
+class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
+    host: String,
+    port: Int,
+    cert: File,
+    key: File)(src: PeerNode)(implicit executionContext: ExecutionContext)
     extends TransportLayer[F] {
 
-  private def client(endpoint: Endpoint) =
-    TransportLayerGrpc.stub(
-      ManagedChannelBuilder.forAddress(endpoint.host, endpoint.tcpPort).usePlaintext(true).build)
+  private lazy val serverSslContext: SslContext =
+    try {
+      GrpcSslContexts
+        .forServer(cert, key)
+        .trustManager(InsecureTrustManagerFactory.INSTANCE)
+        .clientAuth(ClientAuth.OPTIONAL)
+        .build()
+    } catch {
+      case e: Throwable =>
+        println(e.getMessage)
+        throw e
+    }
+
+  private lazy val clientSslContext: SslContext =
+    try {
+      val builder = GrpcSslContexts.forClient
+      builder.trustManager(InsecureTrustManagerFactory.INSTANCE)
+      builder.keyManager(cert, key)
+      builder.build
+    } catch {
+      case e: Throwable =>
+        println(e.getMessage)
+        throw e
+    }
+
+  private def client(endpoint: Endpoint) = {
+    val channel = NettyChannelBuilder
+      .forAddress(endpoint.host, endpoint.tcpPort)
+      .negotiationType(NegotiationType.TLS)
+      .sslContext(clientSslContext)
+      .intercept(new SslSessionClientInterceptor())
+      .build()
+
+    TransportLayerGrpc.stub(channel)
+  }
 
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
@@ -57,10 +96,12 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, 
 
   def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] =
     Capture[F].capture {
-      ServerBuilder
+      NettyServerBuilder
         .forPort(port)
+        .sslContext(serverSslContext)
         .addService(
           TransportLayerGrpc.bindService(new TranportLayerImpl[F](dispatch), executionContext))
+        .intercept(new SslSessionServerInterceptor())
         .build
         .start
     }
@@ -71,18 +112,18 @@ class TranportLayerImpl[F[_]: Monad: Capture: Metrics: Futurable](
     extends TransportLayerGrpc.TransportLayer {
 
   def send(request: TLRequest): Future[TLResponse] =
-    (request.protocol
+    request.protocol
       .fold(internalServerError("protocol not available in request").pure[F]) { protocol =>
         ProtocolMessage.toProtocolMessage(protocol) match {
           case Left(error) => internalServerError(error.toString).pure[F]
           case Right(pm) =>
             dispatch(pm) >>= {
-              case NotHandled             => internalServerError(s"Message $pm was not handled!").pure[F]
-              case HandledWitoutMessage   => noResponse.pure[F]
-              case HandledWithMessage(pm) => returnProtocol(pm.proto).pure[F]
+              case NotHandled                   => internalServerError(s"Message $pm was not handled!").pure[F]
+              case HandledWitoutMessage         => noResponse.pure[F]
+              case HandledWithMessage(response) => returnProtocol(response.proto).pure[F]
             }
         }
-      })
+      }
       .toFuture
 
   private def returnProtocol(protocol: Protocol): TLResponse =

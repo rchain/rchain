@@ -37,6 +37,40 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     CertificateHelper.generate(conf.run.data_dir().toString)
   }
 
+  if (!conf.run.certificatePath.toFile.exists()) {
+    println(s"Certificate file ${conf.run.certificatePath} not found")
+    System.exit(-1)
+  }
+
+  if (!conf.run.keyPath.toFile.exists()) {
+    println(s"Secret key file ${conf.run.keyPath} not found")
+    System.exit(-1)
+  }
+
+  private val name: String = {
+    val certPath = conf.run.certificate.toOption
+      .getOrElse(java.nio.file.Paths.get(conf.run.data_dir().toString, "node.certificate.pem"))
+
+    val publicKey = Try(CertificateHelper.fromFile(certPath.toFile)) match {
+      case Success(c) => Some(c.getPublicKey)
+      case Failure(e) =>
+        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
+        System.exit(1)
+        None
+      case _ => None
+    }
+
+    publicKey
+      .flatMap(CertificateHelper.publicAddress)
+      .getOrElse {
+        println("Certificate must contain a secp256r1 EC Public Key")
+        System.exit(1)
+        Array[Byte]()
+      }
+      .map("%02x".format(_))
+      .mkString
+  }
+
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
       if (th.getCause == null) th.getMessage.contains(str)
@@ -46,7 +80,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val name    = nodeName
   private val host    = conf.run.fetchHost()
   private val address = s"rnode://$name@$host:${conf.run.port()}"
   private val src     = p2p.NetworkAddress.parse(address).right.get
@@ -63,7 +96,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit class EitherEffectOps[A](e: Either[CommError, A]) {
     def toEffect: Effect[A] = EitherT[Task, CommError, A](e.pure[Task])
   }
-
   implicit class TaskEffectOps[A](t: Task[A]) {
     def toEffect: Effect[A] = t.liftM[CommErrT]
   }
@@ -77,7 +109,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
   implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
-    effects.tcpTranposrtLayer[Task](host, conf.run.port())(src)
+    effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
   implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
 
@@ -225,28 +257,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         case NotHandled => p2p.Network.dispatch[Effect](pm)
         case handled    => handled.pure[Effect]
     }
-
-  private def nodeName: String = {
-    val certPath = conf.run.certificate.toOption
-      .getOrElse(java.nio.file.Paths.get(conf.run.data_dir().toString, "node.certificate.pem"))
-
-    val certificate = Try(CertificateHelper.fromFile(certPath.toFile)) match {
-      case Success(c) => Some(c)
-      case Failure(e) =>
-        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
-        System.exit(1)
-        None
-      case _ => None
-    }
-
-    certificate
-      .flatMap(CertificateHelper.publicAddress)
-      .getOrElse {
-        println("Certificate must contain a secp256k1 EC Public Key")
-        System.exit(1)
-        ""
-      }
-  }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
