@@ -38,7 +38,7 @@ create_test_network_resources() {
     --ip-range=169.254.1.0/24 \
     --gateway=169.254.1.1 \
     ${network_name}
-  
+
   echo "Creating docker test containers"
   for i in {0..2}; do
     container_name="node${i}.${network_name}"
@@ -46,17 +46,38 @@ create_test_network_resources() {
 
     var_lib_rnode_dir=$(mktemp -d /tmp/var_lib_rnode.XXXXXXXX)
 
+    echo "Creating node certificate"
     if [[ $i == 0 ]]; then
-      rnode_cmd="--port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352"
+      sudo tee -a ${var_lib_rnode_dir}/node.key.pem > /dev/null <<EOF
+-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+
+g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf
+qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q
+-----END PRIVATE KEY-----
+EOF
+      sudo tee -a ${var_lib_rnode_dir}/node.certificate.pem > /dev/null <<EOF
+-----BEGIN CERTIFICATE-----
+MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs
+MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j
+YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq
+5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG
+CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J
+NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=
+-----END CERTIFICATE-----
+EOF
+   fi
+
+    if [[ $i == 0 ]]; then
+      rnode_cmd="--port 30304 --standalone"
     else
-      rnode_cmd="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@169.254.1.2:30304"
+      rnode_cmd="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@169.254.1.2:30304"
     fi
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \
       --network=${network_name} \
       coop.rchain/rnode ${rnode_cmd}
-  
-    sudo docker exec ${container_name} sh -c "apk add curl"
+
+    sudo docker exec ${container_name} sh -c "apt install -yq curl"
     sleep 3 # slow down 
   done
   

@@ -59,30 +59,56 @@ The node module comes with single executable (jar, docker image, debian or fedor
 You can run node with the following flags:
 
 ```
-  -b, --bootstrap  <arg>   Bootstrap rnode address for initial seed.
-      --data_dir  <arg>    Path to data directory. Defaults to /var/lib/rnode
-      --deploy-demo        Demo sending some placeholder Deploy operations to
-                           Casper at regular intervals
-  -d, --diagnostics        Node diagnostics
-  -e, --eval  <arg>        Starts a thin client that will evaluate rholang in
-                           file on a existing running node. See grpcHost and
-                           grpcPort.
-      --grpc-host  <arg>   Hostname or IP of node on which gRPC service is
-                           running.
-  -g, --grpc-port  <arg>   Port used for gRPC API.
-  -h, --host  <arg>        Hostname or IP of this node.
-  -x, --http-port  <arg>   HTTP port (deprecated - all API features will be
-                           ported to gRPC API).
-  -m, --map_size  <arg>    Map size (in bytes)
-  -n, --name  <arg>        Node name or key (deprecated, will be removed in next
-                           release).
-  -p, --port  <arg>        Network port to use. Currently UDP port, will become
-                           TCP port in next release.
-  -r, --repl               Starts a thin client, that will connect to existing
-                           node. See grpcHost and grpcPort.
-  -s, --standalone         Start a stand-alone node (no bootstrapping).
-      --help               Show help message
-      --version            Show version of this program	  
+      --bonds-file  <arg>       Plain text file consisting of lines of the form
+                                `<pk> <stake>`, which defines the bond amounts
+                                for each validator at genesis. <pk> is the
+                                public key (in base-16 encoding) identifying the
+                                validator and <stake>is the amount of Rev they
+                                have bonded (an integer). Note: this overrides
+                                the --num-validators option.
+  -b, --bootstrap  <arg>        Bootstrap rnode address for initial seed.
+  -c, --certificate  <arg>      Path to node's X.509 certificate file, that is
+                                being used for identification
+      --data_dir  <arg>         Path to data directory. Defaults to
+                                /var/lib/rnode
+      --deploy  <arg>           Deploy a Rholang source file to Casper on an
+                                existing running node. The deploy will be
+                                packaged and sent as a block to the network
+                                depending on the configuration of the Casper
+                                instance.
+      --deploy-demo             Demo sending some placeholder Deploy operations
+                                to Casper on an existing running node at regular
+                                intervals
+  -d, --diagnostics             Node diagnostics
+  -e, --eval  <arg>             Starts a thin client that will evaluate rholang
+                                in file on a existing running node. See grpcHost
+                                and grpcPort.
+      --grpc-host  <arg>        Hostname or IP of node on which gRPC service is
+                                running.
+  -g, --grpc-port  <arg>        Port used for gRPC API.
+      --host  <arg>             Hostname or IP of this node.
+  -h, --http-port  <arg>        HTTP port (deprecated - all API features will be
+                                ported to gRPC API).
+  -k, --key  <arg>              Path to node's private key PEM file, that is
+                                being used for TLS communication
+      --map_size  <arg>         Map size (in bytes)
+  -m, --metrics-port  <arg>     Port used by metrics API.
+  -n, --num-validators  <arg>   Number of validators at genesis.
+  -p, --port  <arg>             Network port to use.
+      --propose                 Force Casper (on an existing running node) to
+                                propose a block based on its accumulated
+                                deploys. Requires a value of --secret-key to be
+                                set.
+  -r, --repl                    Starts a thin client, that will connect to
+                                existing node. See grpcHost and grpcPort.
+      --secret-key  <arg>       Base16 encoding of the Ed25519 private key to
+                                use for signing a proposed block.
+      --show-block  <arg>       View properties of a block known by Casper on an
+                                existing running node.Output includes: parent
+                                hashes, storage contents of the tuplespace.
+  -s, --standalone              Start a stand-alone node (no bootstrapping).
+      --help                    Show help message
+      --version                 Show version of this program
 ```
 
 ### 2.1 The Node

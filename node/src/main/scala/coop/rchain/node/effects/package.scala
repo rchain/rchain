@@ -8,18 +8,18 @@ import coop.rchain.metrics.Metrics
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
-import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
-import scala.collection.JavaConverters._
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
+import scala.concurrent.ExecutionContext
 
 package object effects {
   private def createDirectoryIfNotExists(path: Path): Path =
     if (Files.notExists(path)) Files.createDirectory(path) else path
 
+  /** DEPRECATED - will be removed once TLS is working */
   def encryption(keysPath: Path): Encryption[Task] = new Encryption[Task] {
     import Encryption._
     import coop.rchain.crypto.encryption.Curve25519
@@ -141,82 +141,28 @@ package object effects {
         } yield res.isDefined
     }
 
-  def transportLayer(src: PeerNode)(implicit
-                                    ev1: Log[Task],
-                                    ev2: Time[Task],
-                                    ev3: Metrics[Task]): TransportLayer[Task] =
-    new TransportLayer[Task] {
+  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
+      implicit executionContext: ExecutionContext) =
+    new TcpTransportLayer[F](conf.fetchHost(),
+                             conf.port(),
+                             conf.certificatePath.toFile,
+                             conf.keyPath.toFile)(src)
 
-      val net = new UnicastNetwork(src)
-      import scala.concurrent.duration._
+  def udpTransportLayer(src: PeerNode)(implicit
+                                       ev1: Log[Task],
+                                       ev2: Time[Task],
+                                       ev3: Metrics[Task]): TransportLayer[Task] =
+    new UdpTransportLayer(src)
 
-      def roundTrip(msg: ProtocolMessage,
-                    remote: ProtocolNode,
-                    timeout: Duration): Task[CommErr[ProtocolMessage]] =
-        net.roundTrip[Task](msg, remote, timeout)
+  def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 
-      def local: Task[ProtocolNode] = net.local.pure[Task]
-
-      def commSend(msg: ProtocolMessage, peer: PeerNode): Task[CommErr[Unit]] =
-        Task.delay(net.comm.send(msg.toByteSeq, peer))
-
-      def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): Task[Seq[CommErr[Unit]]] =
-        peers.toList.traverse(peer => commSend(msg, peer)).map(_.toSeq)
-
-      private def handle(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]])
-        : Option[ProtocolMessage] => Task[Unit] = _.fold(().pure[Task]) { pm =>
-        for {
-          ti <- Time[Task].nanoTime
-          r1 <- dispatch(pm)
-          r2 <- r1.fold(().pure[Task]) { response =>
-                 pm.sender.fold(Log[Task].error(s"Sender not available for $pm")) { sender =>
-                   commSend(response, sender) >>= {
-                     case Left(error) =>
-                       Log[Task].warn(
-                         s"Was unable to send response $response for request: $pm, error: $error")
-                     case _ => ().pure[Task]
-                   }
-                 }
-               }
-          tf <- Time[Task].nanoTime
-          _  <- Metrics[Task].record("network-roundtrip-micros", (tf - ti) / 1000)
-        } yield r2
-      }
-
-      def receive(dispatch: ProtocolMessage => Task[Option[ProtocolMessage]]): Task[Unit] =
-        net
-          .receiver[Task]
-          .flatMap(handle(dispatch))
-          .forever
-          .executeAsync
-          .start
-          .void
-    }
-
-  class JLineConsoleIO(console: ConsoleReader) extends ConsoleIO[Task] {
-    def readLine: Task[String] = Task.delay {
-      console.readLine
-    }
-    def println(str: String): Task[Unit] = Task.delay {
-      console.println(str)
-      console.flush()
-    }
-    def updateCompletion(history: Set[String]): Task[Unit] = Task.delay {
-      console.getCompleters.asScala.foreach(c => console.removeCompleter(c))
-      console.addCompleter(new StringsCompleter(history.asJava))
-    }
-
-    def close: Task[Unit] = Task.delay {
-      TerminalFactory.get().restore()
-    }
-
-  }
-
-  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
+  def packetHandler[F[_]: Applicative: Log](
+      pfForPeer: (PeerNode) => PartialFunction[Packet, F[Option[Packet]]])(
       implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
     new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[Option[Packet]] = {
+      def handlePacket(peer: PeerNode, packet: Packet): F[Option[Packet]] = {
         val errorMsg = s"Unable to handle packet $packet"
+        val pf       = pfForPeer(peer)
         if (pf.isDefinedAt(packet)) pf(packet)
         else
           Log[F].error(errorMsg) *> errorHandler

@@ -199,19 +199,17 @@ In the code below, we show an example of iterating through a list.
     35         
     36         get!(*ret) | for(@r <- ret) {
     37           //r is equal to 0
-    38           for(_ <- ret){
-    39             set!(1, *ret) | for(_ <- ret) {
-    40               get!(*ret) | for(@r <- ret) {
-    41                 //r is equal to 1
-    42                 Nil
-    43               }
-    44             }
-    45           }
-    46         }
-    47       }
-    48     }
-    49   }
-    50 }
+    38           set!(1, *ret) | for(_ <- ret) {
+    39             get!(*ret) | for(@r <- ret) {
+    40               //r is equal to 1
+    41               Nil
+    42             }
+    43           }
+    44         }
+    45       }
+    46     }
+    47   }
+    48 }
 
 2) One design pattern, used in the MakeCell contract above, is to receive from the caller a channel for each different piece of functionality that a process provides.  An object-oriented programmer might say that MakeCell requires the caller to provide a channel for each method. MakeCoatCheck uses a more object-oriented approach, as we'll see.
 

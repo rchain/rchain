@@ -7,6 +7,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.models.Par
 
 import scala.annotation.tailrec
@@ -105,6 +106,20 @@ object ProtoUtil {
     }
   }
 
+  def chooseNonConflicting(blocks: Seq[BlockMessage],
+                           genesis: BlockMessage,
+                           dag: BlockDag): Seq[BlockMessage] =
+    blocks
+      .foldLeft(List.empty[BlockMessage]) {
+        case (acc, b) =>
+          if (acc.forall(!conflicts(_, b, genesis, dag))) {
+            b :: acc
+          } else {
+            acc
+          }
+      }
+      .reverse
+
   def justificationProto(
       latestMessages: collection.Map[ByteString, ByteString]): Seq[Justification] =
     latestMessages.toSeq.map {
@@ -124,12 +139,18 @@ object ProtoUtil {
     ByteString.copyFrom(Blake2b256.hash(bytes))
   }
 
-  def blockHeader(body: Body, parentHashes: Seq[ByteString]): Header =
+  def blockHeader(body: Body,
+                  parentHashes: Seq[ByteString],
+                  version: Long,
+                  timestamp: Long): Header =
     Header()
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
       .withNewCodeHash(protoSeqHash(body.newCode))
       .withCommReductionsHash(protoSeqHash(body.commReductions))
+      .withDeployCount(body.newCode.length)
+      .withVersion(version)
+      .withTimestamp(timestamp)
 
   def unsignedBlockProto(body: Body,
                          header: Header,
@@ -140,8 +161,21 @@ object ProtoUtil {
       .withBody(body)
       .withJustifications(justifications)
 
+  def signBlock(block: BlockMessage, sk: Array[Byte]): BlockMessage = {
+    val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
+    val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
+    val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
+    val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
+    val signedBlock       = block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
+
+    signedBlock
+  }
+
+  // TODO: Extract hard-coded version and timestamp
   def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
-    val bondsProto = bonds.toSeq.map {
+    import Sorting.byteArrayOrdering
+    //sort to have deterministic order (to get reproducible hash)
+    val bondsProto = bonds.toIndexedSeq.sorted.map {
       case (pk, stake) =>
         val validator = ByteString.copyFrom(pk)
         Bond(validator, stake)
@@ -151,12 +185,15 @@ object ProtoUtil {
       .withBonds(bondsProto)
     val body = Body()
       .withPostState(state)
-    val header = blockHeader(body, List.empty[ByteString])
+    val header = blockHeader(body, List.empty[ByteString], 0L, 0L)
 
     unsignedBlockProto(body, header, List.empty[Justification])
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
+
+  def stringToByteString(string: String): ByteString =
+    ByteString.copyFrom(Base16.decode(string))
 
   def basicDeployString(id: Int): DeployString = {
     val nonce = scala.util.Random.nextInt(10000)
