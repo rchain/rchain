@@ -1,33 +1,31 @@
 package coop.rchain.node
 
 import java.io.{File, FileInputStream}
-import java.math.BigInteger
-import java.security._
-import java.security.cert._
-import java.security.interfaces._
+import java.security.{AlgorithmParameters, PublicKey}
+import java.security.cert.{CertificateFactory, X509Certificate}
+import java.security.interfaces.ECPublicKey
 import java.security.spec._
-import java.util.Base64
 
 import coop.rchain.crypto.hash.Keccak256
 
 object CertificateHelper {
 
-  lazy val Secp256k1: ParameterSpec = {
+  lazy val Secp256r1: ParameterSpec = {
     val ap = AlgorithmParameters.getInstance("EC", "SunEC")
-    ap.init(new ECGenParameterSpec("secp256k1"))
+    ap.init(new ECGenParameterSpec("secp256r1"))
     ParameterSpec(ap.getParameterSpec(classOf[ECParameterSpec]))
   }
 
-  def isSecp256k1(certificate: X509Certificate): Boolean =
-    certificate.getPublicKey match {
+  def isSecp256r1(publicKey: PublicKey): Boolean =
+    publicKey match {
       case p: ECPublicKey =>
-        ParameterSpec(p.getParams) == Secp256k1
+        ParameterSpec(p.getParams) == Secp256r1
       case _ => false
     }
 
-  def publicAddress(certificate: X509Certificate): Option[String] =
-    certificate.getPublicKey match {
-      case p: ECPublicKey if isSecp256k1(certificate) =>
+  def publicAddress(publicKey: PublicKey): Option[Array[Byte]] =
+    publicKey match {
+      case p: ECPublicKey if isSecp256r1(publicKey) =>
         val publicKey = Array.ofDim[Byte](64)
         val x         = p.getW.getAffineX.toByteArray.takeRight(32)
         val y         = p.getW.getAffineY.toByteArray.takeRight(32)
@@ -37,8 +35,8 @@ object CertificateHelper {
       case _ => None
     }
 
-  private def publicAddress(input: Array[Byte]): String =
-    Keccak256.hash(input).drop(12).map("%02x".format(_)).mkString
+  def publicAddress(input: Array[Byte]): Array[Byte] =
+    Keccak256.hash(input).drop(12)
 
   def from(certFilePath: String): X509Certificate =
     fromFile(new File(certFilePath))
@@ -51,9 +49,9 @@ object CertificateHelper {
 
   def generate(path: String): Unit = {
     import sys.process._
-    Process(s"openssl ecparam -name secp256k1 -out $path/secp256k1.pem").!
+    Process(s"openssl ecparam -name secp256r1 -out $path/secp256r1.pem").!
     Process(
-      s"openssl req -newkey ec:$path/secp256k1.pem -nodes " +
+      s"openssl req -newkey ec:$path/secp256r1.pem -nodes " +
         s"-keyout $path/node.key.pem -x509 -days 365 " +
         s"-out $path/node.certificate.pem -subj /CN=local").!
   }
