@@ -13,6 +13,8 @@ class TrieStructureTests
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
+  import TestData._
+
   def withTrie[R](f: Trie[TestKey, ByteVector] => R): R =
     withTestTrieStore { store =>
       store.withTxn(store.createTxnRead()) { txn =>
@@ -36,8 +38,6 @@ class TrieStructureTests
 
   "insert's effect" should "be visible in the outer read transaction" ignore {
     withTrieTxnAndStore { (store, txn, trie) =>
-      val key1 = TestKey.create(Seq(1, 0, 0, 0))
-      val val1 = ByteVector("value1".getBytes)
       insert(store, key1, val1)
       // Insert was made in a nested transaction, so it's effect should be visible
       store.get(txn, store.workingRootHash.get) should not be None
@@ -55,8 +55,6 @@ class TrieStructureTests
 
   it should "have two levels after inserting one element" in {
     withTestTrieStore { store =>
-      val key1 = TestKey.create(Seq(1, 0, 0, 0))
-      val val1 = ByteVector("value1".getBytes)
       // Root before: 0xc575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe
       insert(store, key1, val1)
       // Root after: 0x538b82b41d4360492c17a112864ffb989571504b73b1281677a692e9fd2ee4cc
