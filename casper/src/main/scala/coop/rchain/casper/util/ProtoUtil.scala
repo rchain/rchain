@@ -2,10 +2,13 @@ package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
 
+import coop.rchain.casper.BlockDag
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.protocol.Resource.ResourceClass.ProduceResource
+import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.hash.Sha256
+import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.crypto.signatures.Ed25519
+import coop.rchain.models.Par
 
 import scala.annotation.tailrec
 
@@ -65,6 +68,58 @@ object ProtoUtil {
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 
+  def deploys(b: BlockMessage): Seq[Deploy] =
+    b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+
+  def bonds(b: BlockMessage): Seq[Bond] =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.bonds).getOrElse(List.empty[Bond])
+
+  def blockNumber(b: BlockMessage): Long =
+    (for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.blockNumber).getOrElse(0L)
+
+  //Two blocks conflict if they both use the same deploy in different histories
+  def conflicts(b1: BlockMessage,
+                b2: BlockMessage,
+                genesis: BlockMessage,
+                dag: BlockDag): Boolean = {
+    val gca = DagOperations.greatestCommonAncestor(b1, b2, genesis, dag)
+    if (gca == b1 || gca == b2) {
+      //blocks which already exist in each other's chains do not conflict
+      false
+    } else {
+      def getDeploys(b: BlockMessage) =
+        DagOperations
+          .bfTraverse[BlockMessage](Some(b))(parents(_).iterator.map(dag.blockLookup))
+          .takeWhile(_ != gca)
+          .flatMap(b => {
+            b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+          })
+          .toSet
+
+      getDeploys(b1).intersect(getDeploys(b2)).nonEmpty
+    }
+  }
+
+  def chooseNonConflicting(blocks: Seq[BlockMessage],
+                           genesis: BlockMessage,
+                           dag: BlockDag): Seq[BlockMessage] =
+    blocks
+      .foldLeft(List.empty[BlockMessage]) {
+        case (acc, b) =>
+          if (acc.forall(!conflicts(_, b, genesis, dag))) {
+            b :: acc
+          } else {
+            acc
+          }
+      }
+      .reverse
+
   def justificationProto(
       latestMessages: collection.Map[ByteString, ByteString]): Seq[Justification] =
     latestMessages.toSeq.map {
@@ -75,59 +130,99 @@ object ProtoUtil {
     }
 
   def protoHash[A <: { def toByteArray: Array[Byte] }](proto: A): ByteString =
-    ByteString.copyFrom(Sha256.hash(proto.toByteArray))
+    ByteString.copyFrom(Blake2b256.hash(proto.toByteArray))
 
   def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString = {
     val bytes = protoSeq.foldLeft(Array.empty[Byte]) {
       case (acc, proto) => acc ++ proto.toByteArray
     }
-    ByteString.copyFrom(Sha256.hash(bytes))
+    ByteString.copyFrom(Blake2b256.hash(bytes))
   }
 
-  def blockHeader(body: Body, parentHashes: Seq[ByteString]): Header =
+  def blockHeader(body: Body,
+                  parentHashes: Seq[ByteString],
+                  version: Long,
+                  timestamp: Long): Header =
     Header()
       .withParentsHashList(parentHashes)
       .withPostStateHash(protoHash(body.postState.get))
       .withNewCodeHash(protoSeqHash(body.newCode))
       .withCommReductionsHash(protoSeqHash(body.commReductions))
+      .withDeployCount(body.newCode.length)
+      .withVersion(version)
+      .withTimestamp(timestamp)
 
-  //TODO: add signature
-  def blockProto(body: Body,
-                 header: Header,
-                 justifications: Seq[Justification],
-                 sender: ByteString): BlockMessage =
+  def unsignedBlockProto(body: Body,
+                         header: Header,
+                         justifications: Seq[Justification]): BlockMessage =
     BlockMessage()
       .withBlockHash(protoHash(header))
       .withHeader(header)
       .withBody(body)
       .withJustifications(justifications)
-      .withSender(sender)
 
-  def genesisBlock: BlockMessage = {
-    val bonds = (1 to 10).map(i => {
-      val validator = ByteString.copyFrom(Array(i.toByte))
-      val stake     = i
-      Bond(validator, stake)
-    })
+  def signBlock(block: BlockMessage, sk: Array[Byte]): BlockMessage = {
+    val justificationHash = ProtoUtil.protoSeqHash(block.justifications)
+    val sigData           = Blake2b256.hash(justificationHash.toByteArray ++ block.blockHash.toByteArray)
+    val sender            = ByteString.copyFrom(Ed25519.toPublic(sk))
+    val sig               = ByteString.copyFrom(Ed25519.sign(sigData, sk))
+    val signedBlock       = block.withSender(sender).withSig(sig).withSigAlgorithm("ed25519")
+
+    signedBlock
+  }
+
+  // TODO: Extract hard-coded version and timestamp
+  def genesisBlock(bonds: Map[Array[Byte], Int]): BlockMessage = {
+    import Sorting.byteArrayOrdering
+    //sort to have deterministic order (to get reproducible hash)
+    val bondsProto = bonds.toIndexedSeq.sorted.map {
+      case (pk, stake) =>
+        val validator = ByteString.copyFrom(pk)
+        Bond(validator, stake)
+    }
     val state = RChainState()
       .withBlockNumber(0)
-      .withBonds(bonds)
+      .withBonds(bondsProto)
     val body = Body()
       .withPostState(state)
-    val header = blockHeader(body, List.empty[ByteString])
+    val header = blockHeader(body, List.empty[ByteString], 0L, 0L)
 
-    blockProto(body, header, List.empty[Justification], ByteString.copyFrom(Array.empty[Byte]))
+    unsignedBlockProto(body, header, List.empty[Justification])
   }
 
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
-  def basicDeploy(id: Int): Deploy = {
-    val nonce = scala.util.Random.nextInt(10000)
-    val r     = Resource(ProduceResource(Produce(id)))
+  def stringToByteString(string: String): ByteString =
+    ByteString.copyFrom(Base16.decode(string))
 
-    Deploy()
+  def basicDeployString(id: Int): DeployString = {
+    val nonce = scala.util.Random.nextInt(10000)
+    val term  = s"@${id}!($id)"
+
+    DeployString()
       .withUser(ByteString.EMPTY)
       .withNonce(nonce)
-      .withResource(r)
+      .withTerm(term)
+  }
+
+  def basicDeploy(id: Int): Deploy = {
+    val d    = basicDeployString(id)
+    val term = InterpreterUtil.mkTerm(d.term).right.get
+    Deploy(
+      user = d.user,
+      nonce = d.nonce,
+      term = Some(term),
+      sig = d.sig
+    )
+  }
+
+  def termDeploy(term: Par): Deploy = {
+    val d = basicDeployString(0)
+    Deploy(
+      user = d.user,
+      nonce = d.nonce,
+      term = Some(term),
+      sig = d.sig
+    )
   }
 }

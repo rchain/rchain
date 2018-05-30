@@ -35,6 +35,7 @@ extern int RestoringImage;
 extern bool ForceEnableRepl;
 extern int VerboseFlag;
 extern int DeferLookupFlag;
+extern char ExportFile[];
 
 extern int ParseCommandLine(int, char**);
 

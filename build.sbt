@@ -31,7 +31,9 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       catsCore,
-      monix
+      monix,
+      scodecCore,
+      scodecBits
     )
   )
 
@@ -41,20 +43,18 @@ lazy val casper = (project in file("casper"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       catsMtl,
-      monix,
-      scalapbRuntimegGrpc
-    ),
-    PB.targets in Compile := Seq(
-      scalapb.gen() -> (sourceManaged in Compile).value
+      monix
     )
   )
-  .dependsOn(comm % "compile->compile;test->test", shared, crypto) // TODO: Add models, rspace
+  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      grpcNetty,
+      scalapbRuntimegGrpc,
       scalaUri,
       weupnp,
       hasher,
@@ -90,7 +90,8 @@ lazy val models = (project in file("models"))
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       scalacheck,
-      scalacheckShapeless
+      scalacheckShapeless,
+      scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
       scalapb.gen(flatPackage = true) -> (sourceManaged in Compile).value
@@ -102,13 +103,14 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.3.1",
+    version := "0.4.1",
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
-        jline, 
+        nettyBoringSsl,
+        jline,
         scallop,
         scalaUri,
         scalapbRuntimegGrpc
@@ -134,13 +136,14 @@ lazy val node = (project in file("node"))
       val entryTargetPath    = "/bin"
       val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
-        from("openjdk:8u151-jre-alpine")
+        from("openjdk:8u171-jre-slim-stretch")
         add(artifact, artifactTargetPath)
         copy(rholangExamples, "/usr/share/rnode/examples")
         env("RCHAIN_TARGET_JAR", artifactTargetPath)
         add(entry, entryTargetPath)
-        run("apk", "update")
-        run("apk", "add", "libsodium")
+        run("apt", "update")
+        run("apt", "install", "-yq", "libsodium18")
+        run("apt", "install", "-yq", "openssl")
         entryPoint("/bin/main.sh")
       }
     },
@@ -155,7 +158,10 @@ lazy val node = (project in file("node"))
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
     },
     /* Debian */
-    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless", "bash (>= 2.05a-11)", "libsodium18 (>= 1.0.8-5)"),
+   debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
+                                                "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
+                                                "bash (>= 2.05a-11)",
+                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
     /* Redhat */
     rpmVendor := "rchain.coop",
     rpmUrl := Some("https://rchain.coop"),
@@ -163,8 +169,11 @@ lazy val node = (project in file("node"))
     packageArchitecture in Rpm := "noarch",
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
-    ),    
-    rpmPrerequisites := Seq("libsodium >= 1.0.14-1")
+    ),
+rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
+                        //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
+                        "openssl",
+                        "libsodium >= 1.0.14-1")
   )
   .dependsOn(casper, comm, crypto, rholang)
 
@@ -192,7 +201,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models, rspace)
+  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test", crypto)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
@@ -200,14 +209,6 @@ lazy val rholangCLI = (project in file("rholang-cli"))
     mainClass in assembly := Some("coop.rchain.rholang.interpreter.RholangCLI")
   )
   .dependsOn(rholang)
-
-lazy val roscala_macros = (project in file("roscala/macros"))
-  .settings(commonSettings: _*)
-  .settings(
-    libraryDependencies ++= commonDependencies ++ Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    )
-  )
 
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
@@ -217,20 +218,20 @@ lazy val roscala = (project in file("roscala"))
     assemblyJarName in assembly := "rosette.jar",
     inThisBuild(
       List(addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full))),
-    libraryDependencies ++= commonDependencies ++ Seq(catsCore, shapeless, scalacheck)
+    libraryDependencies ++= commonDependencies
   )
-  .dependsOn(roscala_macros)
 
 lazy val rspace = (project in file("rspace"))
   .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
   .settings(commonSettings: _*)
   .settings(
     name := "rspace",
-    version := "0.1.1",
+    version := "0.2.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ Seq(
       lmdbjava,
       catsCore,
       scodecCore,
+      scodecCats,
       scodecBits
     ),
     /* Tutorial */
@@ -278,7 +279,7 @@ lazy val rspace = (project in file("rspace"))
       )
     )
   )
-  .dependsOn(shared)
+  .dependsOn(shared, crypto)
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(commonSettings, libraryDependencies ++= commonDependencies)

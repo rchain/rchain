@@ -165,42 +165,128 @@ Everything that can be stitched together can be done so with the `node` project.
 ```
 <computer:~/src/rchain (dev)> sbt clean bnfc:clean bnfc:generate compile docker
 [... tons of output snipped ...]
-[info] Step 5/5 : ENTRYPOINT ["\/bin\/main.sh"]
-[info]  ---> Running in 015ae98a7ea7
-[info] Removing intermediate container 015ae98a7ea7
-[info]  ---> 33341b27ac61
-[info] Successfully built 33341b27ac61
-[info] Tagging image 33341b27ac61 with name: coop.rchain/coop.rchain-node:latest
-[info] Tagging image 33341b27ac61 with name: coop.rchain/coop.rchain-node:v0.1
-[success] Total time: 9 s, completed Feb 14, 2018 7:47:59 AM
+[info] Step 8/8 : ENTRYPOINT ["\/bin\/main.sh"]
+[info]  ---> Running in 2ac7f835192d
+[info] Removing intermediate container 2ac7f835192d
+[info]  ---> 5e79e6d92528
+[info] Successfully built 5e79e6d92528
+[info] Tagging image 5e79e6d92528 with name: coop.rchain/rnode
+[success] Total time: 35 s, completed May 24, 2018 10:19:14 AM
+```
+
+```
+<computer:~/src/rchain (dev)> docker images
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+coop.rchain/rnode   latest              5e79e6d92528        7 minutes ago       143MB
+<none>              <none>              e9b49f497dd7        47 hours ago        143MB
+openjdk             8u151-jre-alpine    b1bd879ca9b3        4 months ago        82MB
 ```
 
 ### Running
 
-Invoking the above Docker image is simple enough:
+Invoking the above Docker image is simple enough (exit with `C-c`):
 ```
-<computer:~/src/rchain (dev)> docker run -ti coop.rchain/coop.rchain-node:latest
-15:49:21.363 [main] INFO main - uPnP: Some(/10.0.0.9) -> Some(192.168.0.101)
-15:49:21.497 [main] INFO main - Listening for traffic on #{Network rnode://facff6c005814a669b2063b38f8fc6c4@10.0.0.9:30304}.
-15:49:21.500 [main] INFO main - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
-15:49:21.500 [main] DEBUG p2p - connect(): Connecting to #{PeerNode 0f365f1016a54747b384b386b8e85352}
-15:49:21.826 [main] DEBUG p2p - connect(): Received encryption handshake response from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
-15:49:21.868 [main] DEBUG p2p - connect(): Received protocol handshake response from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
-15:49:25.715 [Thread-2] INFO p2p - Responded to encryption handshake request from #{PeerNode bfa3c0b9d9ce4f30adc2e17979f93285}.
-15:49:25.882 [Thread-2] INFO p2p - Responded to protocol handshake request from #{PeerNode bfa3c0b9d9ce4f30adc2e17979f93285}.
-15:49:26.974 [main] INFO main - Possibly new peer: #{PeerNode c12882b563fa47c9af297ce952ef7d94}.
-15:49:26.974 [main] DEBUG p2p - connect(): Connecting to #{PeerNode c12882b563fa47c9af297ce952ef7d94}
+<computer:~/src/rchain (dev)> docker run -v $HOME/tmp:/var/lib/rnode -ti coop.rchain/rnode:latest
+08:30:30.894 [main] INFO  conf - uPnP: None -> None
+08:30:32.599 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
+08:30:32.600 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
+08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
+08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
+08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
+08:30:32.601 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
+08:30:32.647 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
+08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+08:30:32.799 [main] INFO  logger - gRPC server started, listening on
+08:30:32.827 [main] INFO  logger - Listening for traffic on rnode://3afa77d09eb24a6caa25c0cb6a3e969f@172.17.0.2:30304.
+08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}.
+08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}
 [...]
 ```
-In order to use both the peer-to-peer network and REPL cabailities of the node, you must run more than one Docker Rnode on the same host, the containers need to be connected to one user-defined network bridge:
+
+In order to use both the peer-to-peer network and REPL capabilities of the node, you must run more than one Docker Rnode on the same host, the containers need to be connected to one user-defined network bridge:
 
 ```bash
 > docker network create rnode-net
 
-> docker run -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
+> docker run -v $HOME/tmp:/var/lib/rnode -dit --name rnode0 --network rnode-net coop.rchain/rnode:latest -s
 
-> docker run -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+> docker ps
+CONTAINER ID        IMAGE                      COMMAND             CREATED             STATUS              PORTS               NAMES
+15aa78b45da4        coop.rchain/rnode:latest   "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
 ```
+
+In a new terminal:
+```bash
+> docker logs -f rnode0
+08:38:09.738 [main] INFO  conf - uPnP: None -> None
+08:38:11.252 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
+08:38:11.253 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
+08:38:11.253 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
+08:38:11.253 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
+08:38:11.254 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
+08:38:11.254 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
+08:38:11.298 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
+08:38:11.358 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+08:38:11.436 [main] INFO  logger - gRPC server started, listening on
+08:38:11.460 [main] INFO  logger - Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:30304.
+08:38:11.463 [main] INFO  logger - Starting stand-alone node.
+```
+
+Note this line (listening address):
+```bash
+Listening for traffic on rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:30304.
+```
+
+A repl instance can be invoked this way:
+```bash
+> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-repl --network rnode-net coop.rchain/rnode:latest --grpc-host rnode0 -r
+
+  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦
+  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║
+  ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
+
+rholang $ 5
+Storage Contents:
+ for( x0 <= @{"stdout"} ) { Nil } | for( x0, x1 <= @{"stderrAck"} ) { Nil } | for( x0 <= @{"stderr"} ) { Nil } | for( x0, x1 <= @{"stdoutAck"} ) { Nil }
+```
+
+The above command should result in (`rnode0` output):
+```bash
+[...]
+08:38:11.463 [main] INFO  logger - Starting stand-alone node.
+
+Evaluating:
+5
+```
+
+A peer node can be started with the following command (note that `--bootstrap` takes the listening address of `rnode0`):
+```bash
+> docker run -v $HOME/tmp:/var/lib/rnode -it --name rnode-client --network rnode-net coop.rchain/rnode:latest --bootstrap rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2:30304
+08:58:34.595 [main] INFO  conf - uPnP: None -> None
+08:58:36.053 [main] INFO  o.h.b.c.nio1.NIO1SocketServerGroup - Service bound to address /127.0.0.1:8080
+08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -   _   _   _        _ _
+08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | |_| |_| |_ _ __| | | ___
+08:58:36.054 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  | ' \  _|  _| '_ \_  _(_-<
+08:58:36.055 [main] INFO  org.http4s.server.blaze.BlazeBuilder -  |_||_\__|\__| .__/ |_|/__/
+08:58:36.055 [main] INFO  org.http4s.server.blaze.BlazeBuilder -              |_|
+08:58:36.098 [main] INFO  org.http4s.server.blaze.BlazeBuilder - http4s v0.18.0 on blaze v0.12.11 started at http://127.0.0.1:8080/
+08:58:36.139 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
+08:58:36.241 [main] INFO  logger - gRPC server started, listening on
+08:58:36.267 [main] INFO  logger - Listening for traffic on rnode://29d77e8cfd924db49e715d4cf4eeb28d@172.18.0.4:30304.
+08:58:36.279 [main] INFO  logger - Bootstrapping from #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.
+08:58:36.294 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
+08:58:36.816 [repl-io-29] INFO  logger - Initialize second phase handshake (protocol handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
+08:58:36.890 [repl-io-30] INFO  logger - Connected #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.
+08:58:41.939 [repl-io-30] INFO  logger - Peers: 1.
+```
+
+The above command should result in (`rnode0` output):
+```bash
+08:58:36.769 [repl-io-29] INFO  logger - Responded to encryption handshake request from #{PeerNode 29d77e8cfd924db49e715d4cf4eeb28d}.
+08:58:36.882 [repl-io-29] INFO  logger - Responded to protocol handshake request from #{PeerNode 29d77e8cfd924db49e715d4cf4eeb28d}
+08:58:37.211 [repl-io-35] INFO  logger - Peers: 1.
+```
+
 
 Each scoped build is as similar to the original, per-project build process as possible, so assemblies should be produced in the same way as before:
 ```

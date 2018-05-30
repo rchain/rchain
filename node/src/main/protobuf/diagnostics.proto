@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package coop.rchain.node.model;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+message ProcessCpu {
+  // amount of CPU load, as a value between 0.0 and 1.0
+  google.protobuf.DoubleValue load = 1;
+  // CPU time used by the process on which the JVM is running in nanoseconds
+  google.protobuf.Int64Value time = 2;
+}
+
+message MemoryUsage {
+  // memory currently used by the Java heap for object allocation
+  Memory heap = 1;
+  // current non-heap memory usage of the JVM
+  Memory nonHeap = 2;
+}
+
+message Memory {
+  // amount of memory committed in bytes
+  int64 committed = 1;
+  // amount of memory that the JVM initially requested in bytes
+  int64 init = 2;
+  // maximum amount of memory possible in bytes
+  google.protobuf.Int64Value max = 3;
+  // amount of used memory in bytes
+  int64 used = 4;
+}
+
+message GarbageCollector {
+  // name representing this memory manager
+  string name = 1;
+  // total number of collections that have occurred
+  int64 totalCollections = 2;
+  // accumulated collection time in ms
+  int64 totalCollectionTime = 3;
+  // start time of last GC since the JVM was started in ms
+  google.protobuf.Int64Value startTime = 4;
+  // end time of last GC since the JVM was started
+  google.protobuf.Int64Value endTime = 5;
+  // elapsed time of last GC in ms
+  google.protobuf.Int64Value duration = 6;
+}
+
+message MemoryPool {
+  // name representing this memory pool
+  string name = 1;
+  // type of this memory pool
+  string poolType = 2;
+  // memory pool usage
+  Memory usage = 3;
+  // peak memory usage
+  Memory peakUsage = 4;
+}
+
+message Threads {
+  // current number of live threads including both daemon and non-daemon threads
+  int32 threadCount = 1;
+  // current number of live daemon threads.
+  int32 daemonThreadCount = 2;
+  // peak live thread count since the JVM started
+  int32 peakThreadCount = 3;
+  // total number of threads created and also started since the JVM started
+  int64 totalStartedThreadCount = 4;
+}
+
+message NodeCoreMetrics {
+  int64 pingReceiverCount = 1;
+  int64 lookupReceiverCount = 2;
+  int64 disconnectReceiverCount = 3;
+  int64 connects = 4;
+  int64 p2pEncryptionHandshakeReceiverCount = 5;
+  int64 p2pProtocolHandshakeReceiverCount = 6;
+  int64 peers = 7;
+}
+
+message StoreUsage {
+  int64 totalSizeOnDisk = 1;
+  int64 rspaceSizeOnDisk = 2;
+  int64 rspaceDataEntries = 3;
+
+  int64 rspaceConsumesCount = 4;
+  double rspaceConsumeAvgMilliseconds = 5;
+
+  int64 rspaceProducesCount = 6;
+  double rspaceProduceAvgMilliseconds = 7;
+}
+
+service Diagnostics {
+  rpc ListPeers (google.protobuf.Empty) returns (Peers);
+  rpc GetProcessCpu (google.protobuf.Empty) returns (ProcessCpu);
+  rpc GetMemoryUsage (google.protobuf.Empty) returns (MemoryUsage);
+  rpc GetGarbageCollectors (google.protobuf.Empty) returns (GarbageCollectors);
+  rpc GetMemoryPools (google.protobuf.Empty) returns (MemoryPools);
+  rpc GetThreads (google.protobuf.Empty) returns (Threads);
+  rpc GetNodeCoreMetrics (google.protobuf.Empty) returns (NodeCoreMetrics);
+  rpc GetStoreUsage (google.protobuf.Empty) returns (StoreUsage);
+}
+
+message GarbageCollectors {
+  repeated GarbageCollector garbageCollectors = 1;
+}
+
+message MemoryPools {
+  repeated MemoryPool memoryPools = 1;
+}
+
+message Peers {
+  repeated Peer peers = 1;
+}
+
+message Peer {
+  string host = 1;
+  int32  port = 2;
+  bytes  key  = 3;
+}

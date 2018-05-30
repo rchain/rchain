@@ -13,7 +13,7 @@ case "$SUBPROJECT" in "rosette")
 
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate coverage test coverageReport
 
-    for sub in crypto comm rholang roscala storage node
+    for sub in casper crypto comm rholang roscala node rspace
     do
         (bash <(curl -s https://codecov.io/bash) -X gcov -s ./$sub -c -F $sub)
     done
@@ -34,6 +34,8 @@ case "$SUBPROJECT" in "rosette")
 
 "p2p-test-network")
 
+    sudo apt-get -yq install python3-minimal python3-pip
+    sudo pip3 install pexpect argparse docker
     ./scripts/p2p-test-network.sh
     ;;
 
