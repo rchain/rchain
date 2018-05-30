@@ -5,7 +5,6 @@ import java.nio.file.Path
 
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.ByteVectorOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
@@ -77,11 +76,11 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
 
   private[this] def readDatumByteses(txn: T, channelsHash: H): Option[Seq[DatumBytes]] =
-    Option(_dbData.get(txn, channelsHash)).map(fromByteBuffer(_, datumBytesesCodec))
+    Option(_dbData.get(txn, channelsHash)).map(fromByteBuffer(_, codecSeqDatumBytes))
 
   private[this] def writeDatumByteses(txn: T, channelsHash: H, values: Seq[DatumBytes]): Unit =
     if (values.nonEmpty) {
-      _dbData.put(txn, channelsHash, toByteBuffer(values, datumBytesesCodec))
+      _dbData.put(txn, channelsHash, toByteBuffer(values, codecSeqDatumBytes))
     } else {
       _dbData.delete(txn, channelsHash)
       collectGarbage(txn, channelsHash, waitingContinuationsCollected = true)
@@ -135,7 +134,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
       txn: T,
       channelsHash: H): Option[Seq[WaitingContinuationBytes]] =
     Option(_dbWaitingContinuations.get(txn, channelsHash))
-      .map(fromByteBuffer(_, waitingContinuationsSeqCodec))
+      .map(fromByteBuffer(_, codecSeqWaitingContinuationBytes))
 
   private[this] def writeWaitingContinuationByteses(txn: T,
                                                     channelsHash: H,
@@ -143,7 +142,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     if (values.nonEmpty) {
       _dbWaitingContinuations.put(txn,
                                   channelsHash,
-                                  toByteBuffer(values, waitingContinuationsSeqCodec))
+                                  toByteBuffer(values, codecSeqWaitingContinuationBytes))
     } else {
       _dbWaitingContinuations.delete(txn, channelsHash)
       collectGarbage(txn, channelsHash, waitingContinuationsCollected = true)
@@ -352,7 +351,7 @@ object LMDBStore {
     toBitVector(value, codec).bytes.toDirectByteBuffer
 
   private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
-    toBitVector(toByteVectorSeq(values), byteVectorsCodec).bytes.toDirectByteBuffer
+    toBitVector(toByteVectorSeq(values), codecSeqByteVector).bytes.toDirectByteBuffer
 
   private[rspace] def toByteVectorSeq[T](values: Seq[T])(
       implicit st: Serialize[T]): Seq[ByteVector] =
@@ -369,16 +368,16 @@ object LMDBStore {
       }
 
   private[rspace] def toByteVectors(byteBuffer: ByteBuffer): Seq[Seq[ByteVector]] =
-    fromBitVector(BitVector(byteBuffer), byteVectorsCodec)
-      .map(x => fromBitVector(x.bits, byteVectorsCodec))
+    fromBitVector(BitVector(byteBuffer), codecSeqByteVector)
+      .map(x => fromBitVector(x.bits, codecSeqByteVector))
 
   private[rspace] def toByteBuffer(vectors: Seq[Seq[ByteVector]]): ByteBuffer = {
-    val bl = vectors.map(toBitVector(_, byteVectorsCodec).toByteVector)
-    toByteBuffer(bl, byteVectorsCodec)
+    val bl = vectors.map(toBitVector(_, codecSeqByteVector).toByteVector)
+    toByteBuffer(bl, codecSeqByteVector)
   }
 
   private[rspace] def fromByteBuffer[T](byteBuffer: ByteBuffer)(implicit st: Serialize[T]): Seq[T] =
-    fromBitVector(BitVector(byteBuffer), byteVectorsCodec)
+    fromBitVector(BitVector(byteBuffer), codecSeqByteVector)
       .map(_.toArray)
       .map(st.decode)
       .map {

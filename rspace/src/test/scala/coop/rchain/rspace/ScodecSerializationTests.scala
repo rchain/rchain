@@ -1,7 +1,6 @@
 package coop.rchain.rspace
 
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.internal.scodecs._
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
@@ -12,8 +11,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
       List(DatumBytes(ByteVector(Array[Byte](1, 2, 3)), false),
            DatumBytes(ByteVector(Array[Byte](4, 5, 6)), true))
 
-    val arr = toBitVector(bll, scodecs.datumBytesesCodec)
-    val res = fromBitVector(arr, scodecs.datumBytesesCodec)
+    val arr = toBitVector(bll, codecSeqDatumBytes)
+    val res = fromBitVector(arr, codecSeqDatumBytes)
 
     res shouldBe bll
   }
@@ -21,8 +20,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
   "DatumBytes" should "round-trip" in {
     val asd = DatumBytes(ByteVector(Array[Byte](4, 5, 6)), true)
 
-    val arr = toBitVector(asd, scodecs.datumBytesCodec)
-    val res = fromBitVector(arr, scodecs.datumBytesCodec)
+    val arr = toBitVector(asd, codecDatumBytes)
+    val res = fromBitVector(arr, codecDatumBytes)
 
     res shouldBe asd
   }
@@ -33,8 +32,8 @@ class ScodecSerializationTests extends FlatSpec with Matchers {
                                ByteVector(Array[Byte](4, 5, 6)),
                                true))
 
-    val arr = toBitVector(psks, scodecs.waitingContinuationsSeqCodec)
-    val res = fromBitVector(arr, scodecs.waitingContinuationsSeqCodec)
+    val arr = toBitVector(psks, codecSeqWaitingContinuationBytes)
+    val res = fromBitVector(arr, codecSeqWaitingContinuationBytes)
 
     res shouldBe psks
   }
