@@ -1,25 +1,25 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.{Applicative, Monad, MonadError, Parallel, Eval => _}
+import cats.{Applicative, Parallel, Eval => _}
+import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
+import coop.rchain.models.implicits._
 import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{IStore, Serialize}
 import coop.rchain.rspace.pure.{consume => internalConsume, produce => internalProduce}
-import scalapb.descriptors.ScalaType.ByteString
+import coop.rchain.rspace.{IStore, Serialize}
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
-import coop.rchain.models.implicits._
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -545,16 +545,40 @@ object Reduce {
             evalExpr(p)(env)
               .map(serialize(_))
               .flatMap(interpreterErrorM[M].fromEither)
-              .map(b => Expr(GByteArray(com.google.protobuf.ByteString.copyFrom(b))))
+              .map(b => Expr(GByteArray(ByteString.copyFrom(b))))
+          }
+        }
+    }
+
+    private[this] def encodedToBytes: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+      (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+        {
+          if (args.nonEmpty) {
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: encodedToBytes does not take arguments"))
+          } else {
+            p.singleExpr() match {
+              case Some(Expr(GString(encoded))) =>
+                def decodingError(th: Throwable) =
+                  ReduceError(
+                    s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}")
+                Try(Expr(GByteArray(ByteString.copyFrom(Base16.decode(encoded)))))
+                  .fold(th => interpreterErrorM[M].raiseError[Par](decodingError(th)),
+                        x => interpreterErrorM[M].pure[Par](x))
+              case _ =>
+                interpreterErrorM[M].raiseError(
+                  ReduceError("Error: encodedToBytes can be called only on single strings."))
+            }
           }
         }
     }
 
     def methodTable(method: String): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
       method match {
-        case "nth"         => Some(nth)
-        case "toByteArray" => Some(toByteArray)
-        case _             => None
+        case "nth"            => Some(nth)
+        case "toByteArray"    => Some(toByteArray)
+        case "encodedToBytes" => Some(encodedToBytes)
+        case _                => None
       }
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
