@@ -198,8 +198,8 @@ Invoking the above Docker image is simple enough (exit with `C-c`):
 08:30:32.710 [kamon.prometheus.PrometheusReporter] INFO  kamon.prometheus.PrometheusReporter - Started the embedded HTTP server on http://0.0.0.0:9095
 08:30:32.799 [main] INFO  logger - gRPC server started, listening on
 08:30:32.827 [main] INFO  logger - Listening for traffic on rnode://3afa77d09eb24a6caa25c0cb6a3e969f@172.17.0.2:30304.
-08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode 0f365f1016a54747b384b386b8e85352}.
-08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode 0f365f1016a54747b384b386b8e85352}
+08:30:32.841 [main] INFO  logger - Bootstrapping from #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}.
+08:30:32.857 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode acd0b05a971c243817a0cfd469f5d1a238c60294}
 [...]
 ```
 
