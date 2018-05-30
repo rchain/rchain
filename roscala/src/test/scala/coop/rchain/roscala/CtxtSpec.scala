@@ -5,7 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class CtxtSpec extends FlatSpec with Matchers {
 
-  "copy()" should "should not reference the old program counter" in {
+  "copy()" should "not reference the old program counter" in {
     val ctxt = Ctxt.empty
     ctxt.pc = 1
 
