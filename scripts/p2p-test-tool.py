@@ -15,16 +15,15 @@ import time
 import sys
 
 
-#parser = argparse.ArgumentParser()
 parser = argparse.ArgumentParser(
-                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("-b", "--boot",
                     action='store_true',
                     help="boot network by creating resources and starting services by network name")
 parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="--port 30304 --standalone ",
+                    default="--port 30304 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
@@ -56,7 +55,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@bootstrap.rchain.coop:30304",
+                    default="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@bootstrap.rchain.coop:30304",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
@@ -113,6 +112,7 @@ if len(sys.argv)==1:
 args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-0.3.1.jar'
+
 
 
 def main():
@@ -301,6 +301,32 @@ def remove_resources_by_network(args_network):
 
 def create_bootstrap_node():
     """Create bootstrap node."""
+
+    # Create key/cert pem files to be loaded into rnode volume
+    bootstrap_node_demo_key=(
+        "-----BEGIN PRIVATE KEY-----\n"
+        "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+\n"
+        "g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf\n"
+        "qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q\n"
+        "-----END PRIVATE KEY-----\n"
+    )
+    bootstrap_node_demo_cert=(
+        "-----BEGIN CERTIFICATE-----\n"
+        "MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs\n"
+        "MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j\n"
+        "YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq\n"
+        "5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG\n"
+        "CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J\n"
+        "NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=\n"
+        "-----END CERTIFICATE-----\n"
+    )
+    tmp_file_key = '/tmp/node.key.pem'
+    tmp_file_cert = '/tmp/node.certificate.pem'
+    with open(tmp_file_key, 'w') as f:
+        f.write(bootstrap_node_demo_key)
+    with open(tmp_file_cert, 'w') as f:
+        f.write(bootstrap_node_demo_cert)
+ 
     print("Starting bootstrap node.")
     bootstrap_node = {}
     bootstrap_node['name'] = f"bootstrap.{args.network}"
@@ -312,10 +338,13 @@ def create_bootstrap_node():
         cpuset_cpus=args.cpuset_cpus, \
         mem_limit=args.memory, \
         network=args.network, \
-        volumes={bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'}}, \
+        volumes={
+                tmp_file_cert: {'bind': f'{args.rnode_directory}/node.certificate.pem', 'mode': 'rw'}, \
+                tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
+                bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
+        }, \
         command=args.bootstrap_command, \
         hostname=bootstrap_node['name'])
-
     print("Installing additonal packages on container.")
     r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
     r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
