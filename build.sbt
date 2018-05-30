@@ -101,15 +101,16 @@ lazy val models = (project in file("models"))
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
-  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
+  .enablePlugins(BuildInfoPlugin)
   .settings(
     version := "0.3.1",
     name := "rnode",
+    localJar := assembly.value,
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
-        nettyBoringSsl,
+        nettyTcnative,
         jline,
         scallop,
         scalaUri,
@@ -128,54 +129,11 @@ lazy val node = (project in file("node"))
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
     },
-    /* Dockerization */
-    dockerfile in docker := {
-      val artifact: File     = assembly.value
-      val artifactTargetPath = s"/${artifact.name}"
-      val entry: File        = baseDirectory(_ / "main.sh").value
-      val entryTargetPath    = "/bin"
-      val rholangExamples = (baseDirectory in rholang).value / "examples"
-      new Dockerfile {
-        from("openjdk:8u171-jre-slim-stretch")
-        add(artifact, artifactTargetPath)
-        copy(rholangExamples, "/usr/share/rnode/examples")
-        env("RCHAIN_TARGET_JAR", artifactTargetPath)
-        add(entry, entryTargetPath)
-        run("apt", "update")
-        run("apt", "install", "-yq", "libsodium18")
-        run("apt", "install", "-yq", "openssl")
-        entryPoint("/bin/main.sh")
-      }
-    },
-    /* Packaging */
-    maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
-    packageSummary in Linux := "RChain Node",
-    packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
-    linuxPackageMappings ++= {
-      val file = baseDirectory.value / "rnode.service"
-      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
-        .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
-      Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
-    },
-    /* Debian */
-   debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
-                                                "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
-                                                "bash (>= 2.05a-11)",
-                                                "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
-    /* Redhat */
-    rpmVendor := "rchain.coop",
-    rpmUrl := Some("https://rchain.coop"),
-    rpmLicense := Some("Apache 2.0"),
-    packageArchitecture in Rpm := "noarch",
-    maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
-      RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
-    ),
-rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
-                        //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
-                        "openssl",
-                        "libsodium >= 1.0.14-1")
-  )
-  .dependsOn(casper, comm, crypto, rholang)
+    assembly / assemblyExcludedJars := {
+      val cp = (fullClasspath in assembly).value
+      cp.filter(a => nettyTcnativeAssemblyExclusions.contains(a.data.getName))
+    }
+  ).dependsOn(casper, comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
@@ -286,6 +244,86 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .enablePlugins(JmhPlugin)
   .dependsOn(rspace)
 
+lazy val deployment = (project in file("deployment"))
+  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging)
+  .settings(
+    version := (node / version).value,
+    name := (node / name).value,
+    deployJar := assembly.value,
+    deployDeb := (Debian / packageBin).value,
+    deployRpm := (Rpm / packageBin).value,
+    mainClass in assembly := (node / assembly / mainClass).value,
+    assemblyMergeStrategy in assembly := (node / assembly / assemblyMergeStrategy).value,
+    assemblyExcludedJars in assembly := {
+      val cp = (fullClasspath in assembly).value
+      cp.filter(a => nettyTcnativeDebianExclusions.contains(a.data.getName))
+    },
+    docker := (docker dependsOn assembly).value,
+    /* Dockerization */
+    dockerfile in docker := {
+      val artifact: File     = assembly.value
+      val artifactTargetPath = s"/${artifact.name}"
+      val entry: File        = (baseDirectory in node)(_ / "main.sh").value
+      val entryTargetPath    = "/bin"
+      val rholangExamples = (baseDirectory in rholang).value / "examples"
+      new Dockerfile {
+        from("openjdk:8u171-jre-slim-stretch")
+        add(artifact, artifactTargetPath)
+        copy(rholangExamples, "/usr/share/rnode/examples")
+        env("RCHAIN_TARGET_JAR", artifactTargetPath)
+        add(entry, entryTargetPath)
+        run("apt", "update")
+        run("apt", "install", "-yq", "libsodium18")
+        run("apt", "install", "-yq", "openssl")
+        entryPoint("/bin/main.sh")
+      }
+    },
+    /* Packaging */
+    maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
+    packageSummary in Linux := "RChain Node",
+    packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
+    linuxPackageMappings ++= {
+      val file = baseDirectory.value / "rnode.service"
+      val rholangExamples = directory((baseDirectory in rholang).value / "examples")
+        .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
+      Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
+    },
+    /* Debian */
+    linuxPackageMappings in Debian := linuxPackageMappings.value.map { mapping =>
+      val filtered = mapping.mappings filter {
+        case (file, _) => !nettyTcnativeDebianExclusions.contains(file.getName)
+      }
+      mapping.copy(mappings = filtered)
+    }.filter(_.mappings.nonEmpty),
+    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
+      "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
+      "bash (>= 2.05a-11)",
+      "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
+    /* Redhat */
+    rpmVendor := "rchain.coop",
+    rpmUrl := Some("https://rchain.coop"),
+    rpmLicense := Some("Apache 2.0"),
+    packageArchitecture in Rpm := "noarch",
+    maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
+      RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
+    ),
+    rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
+      //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
+      "openssl",
+      "libsodium >= 1.0.14-1"),
+    linuxPackageMappings in Rpm := linuxPackageMappings.value.map { mapping =>
+      val filtered = mapping.mappings filter {
+        case (file, _) => !nettyTcnativeFedoraExclusions.contains(file.getName)
+      }
+      mapping.copy(mappings = filtered)
+    }.filter(_.mappings.nonEmpty),
+  ).dependsOn(node)
+
+lazy val deployJar = taskKey[File]("Deploy RChain as fat jar for Linux (non-Fedora)")
+lazy val deployDeb = taskKey[File]("Deploy RChain as deb package")
+lazy val deployRpm = taskKey[File]("Deploy RChain as rpm package")
+lazy val localJar = taskKey[File]("Deploy RChain as fat jar for local OS")
+
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
-  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
+  .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala, deployment)
