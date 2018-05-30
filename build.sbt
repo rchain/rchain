@@ -104,7 +104,7 @@ lazy val node = (project in file("node"))
   .enablePlugins(BuildInfoPlugin)
   .settings(
     version := "0.3.1",
-    name := "rnode",
+    name := "node",
     localJar := assembly.value,
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
@@ -123,6 +123,7 @@ lazy val node = (project in file("node"))
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion),
     buildInfoPackage := "coop.rchain.node",
     mainClass in assembly := Some("coop.rchain.node.Main"),
+    assemblyJarName in assembly := s"rnode-assembly-${version.value}.jar",
     assemblyMergeStrategy in assembly := {
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
       case x =>
@@ -246,9 +247,10 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 
 lazy val deployment = (project in file("deployment"))
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging)
+  .settings(commonSettings: _*)
   .settings(
     version := (node / version).value,
-    name := (node / name).value,
+    name := "rnode",
     deployJar := assembly.value,
     deployDeb := (Debian / packageBin).value,
     deployRpm := (Rpm / packageBin).value,
