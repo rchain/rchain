@@ -81,6 +81,12 @@ message StoreUsage {
   int64 totalSizeOnDisk = 1;
   int64 rspaceSizeOnDisk = 2;
   int64 rspaceDataEntries = 3;
+
+  int64 rspaceConsumesCount = 4;
+  double rspaceConsumeAvgMilliseconds = 5;
+
+  int64 rspaceProducesCount = 6;
+  double rspaceProduceAvgMilliseconds = 7;
 }
 
 service Diagnostics {

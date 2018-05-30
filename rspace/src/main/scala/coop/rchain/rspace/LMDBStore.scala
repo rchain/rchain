@@ -45,6 +45,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] type T = Txn[ByteBuffer]
 
+  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
+
   private[rspace] def hashChannels(channels: Seq[C])(implicit st: Serialize[C]): H =
     hashBytes(toByteBuffer(channels)(st))
 
@@ -253,13 +255,15 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     collectGarbage(txn, joinKey)
   }
 
-  private[rspace] def clear(): Unit =
+  private[rspace] def clear(): Unit = {
     withTxn(createTxnWrite()) { txn =>
       _dbKeys.drop(txn)
       _dbData.drop(txn)
       _dbWaitingContinuations.drop(txn)
       _dbJoins.drop(txn)
     }
+    eventsCounter.reset()
+  }
 
   def close(): Unit = {
     _dbKeys.close()
@@ -269,8 +273,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     env.close()
   }
 
-  def getStoreSize: StoreSize =
-    StoreSize(databasePath.folderSize, env.stat().entries)
+  def getStoreCounters: StoreCounters =
+    eventsCounter.createCounters(databasePath.folderSize, env.stat().entries)
 
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
