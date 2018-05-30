@@ -58,26 +58,11 @@ trait IStoreTests
           data.foreach { d =>
             store.putDatum(txn, key, d)
           }
-          store.removeDatum(txn, key(0), index - 1)
+          store.removeDatum(txn, key, index - 1)
           store.getData(txn, key) should contain theSameElementsAs (data.filterNot(
             _.a == datumValue + (size - index)))
         }
         store.clear()
-    }
-  }
-
-  "collectGarbage" should "not remove used channels" in withTestStore { store =>
-    forAll("channel", "datum") { (channel: String, datum: String) =>
-      val key  = List(channel)
-      val hash = store.hashChannels(key)
-
-      store.withTxn(store.createTxnWrite()) { txn =>
-        store.putDatum(txn, key, Datum(datum, persist = false))
-
-        store.collectGarbage(txn, store.hashChannels(key))
-        store.getChannels(txn, hash) should contain theSameElementsAs (key)
-      }
-      store.clear()
     }
   }
 

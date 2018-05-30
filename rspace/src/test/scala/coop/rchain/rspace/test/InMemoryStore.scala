@@ -26,7 +26,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   private[rspace] type T = Unit
 
-  private[rspace] def hashChannels(cs: Seq[C])(implicit sc: Serialize[C]): H =
+  private[rspace] def hashChannels(cs: Seq[C]): H =
     printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
 
   private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
