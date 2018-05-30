@@ -94,11 +94,11 @@ class Code : public Ob {
     CodeVec* codevec;
     Tuple* litvec;
 
-    static Code* create(CodeVec*, Tuple*);
     static Code* create(CodeBuf*, Tuple*);
 
     Instr* dumpInstr(Instr*, char*);
     void dumpOn(FILE*);
+    void ExportCode();
 
     int relativize(Instr* pc) { return codevec->relativize(pc); }
     Instr* absolutize(int pc) { return codevec->absolutize(pc); }

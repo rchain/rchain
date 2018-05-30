@@ -58,3 +58,25 @@ message Protocol {
         Disconnect          disconnect      = 8;
     }
 }
+
+service TransportLayer {
+  rpc Send (TLRequest) returns (TLResponse) {}
+}
+
+message TLRequest {
+  Protocol protocol = 1;
+}
+
+message InternalServerError {
+}
+
+message NoResponse {
+}
+
+message TLResponse {
+  oneof payload {
+    Protocol protocol                       = 1;
+    NoResponse noResponse                   = 2;
+    InternalServerError internalServerError = 3;
+  }
+}

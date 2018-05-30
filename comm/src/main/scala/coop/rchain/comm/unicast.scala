@@ -24,9 +24,7 @@ class UnicastComm(local: PeerNode) extends Comm[SocketAddress] {
   val socket = new DatagramSocket(local.endpoint.udpPort)
 
   /*
-   * Timeout for recv() calls; might need to be adjusted lower. This
-   * is unrelated to timeout configurable for round-trip messages in a
-   * ProtocolHandler.
+   * Timeout for recv() calls; might need to be adjusted lower.
    */
   socket.setSoTimeout(500) // 500 ms
 
