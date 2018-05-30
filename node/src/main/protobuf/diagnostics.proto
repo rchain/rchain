@@ -78,8 +78,9 @@ message NodeCoreMetrics {
 }
 
 message StoreUsage {
-  int64 sizeOnDisk = 1;
-  int64 dataEntries = 2;
+  int64 totalSizeOnDisk = 1;
+  int64 rspaceSizeOnDisk = 2;
+  int64 rspaceDataEntries = 3;
 }
 
 service Diagnostics {

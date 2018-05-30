@@ -115,7 +115,8 @@ object Runtime {
 
   def showStoreUsage(storeUsage: StoreUsage): String =
     s"""Store metrics:
-       | - Size On Disk: ${storeUsage.sizeOnDisk.toHumanReadableSize}
-       | - Data Entries: ${storeUsage.dataEntries}
+       | - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
+       | - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
+       | - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
        |""".stripMargin
 }

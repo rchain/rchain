@@ -161,7 +161,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- {
-        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        implicit val storeMetrics =
+          diagnostics.storeMetrics[Effect](runtime.store, conf.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -208,7 +209,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.store)
+        diagnostics.storeMetrics[Task](resources.runtime.store, conf.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
