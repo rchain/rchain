@@ -35,10 +35,9 @@ private[rspace] class StoreEventsCounter {
     consumesSumTime.set(0)
   }
 
-  /**
-    * @return a tuple (producesCount, consumesCount) just for unit-tests
-    */
-  private[rspace] def getCounts: (Long, Long) = (producesCount.get, consumesCount.get)
+  private[rspace] def getConsumesCount: Long = consumesCount.get
+
+  private[rspace] def getProducesCount: Long = producesCount.get
 
   // for nano-time pitfalls please read
   // https://shipilev.net/blog/2014/nanotrusting-nanotime/
