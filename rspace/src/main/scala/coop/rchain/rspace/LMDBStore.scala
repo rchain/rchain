@@ -351,7 +351,7 @@ object LMDBStore {
     toBitVector(value, codec).bytes.toDirectByteBuffer
 
   private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
-    toBitVector(toByteVectorSeq(values), byteVectorsCodec).bytes.toDirectByteBuffer
+    toBitVector(toByteVectorSeq(values), codecSeqByteVector).bytes.toDirectByteBuffer
 
   private[rspace] def toByteVectorSeq[T](values: Seq[T])(
       implicit st: Serialize[T]): Seq[ByteVector] =
