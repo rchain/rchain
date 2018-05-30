@@ -27,6 +27,19 @@ private[rspace] class StoreEventsCounter {
   private[this] val consumesCount   = new AtomicLong
   private[this] val consumesSumTime = new AtomicReference[BigInt](BigInt(0))
 
+  private[rspace] def reset(): Unit = {
+    producesCount.set(0)
+    producesSumTime.set(0)
+
+    consumesCount.set(0)
+    consumesSumTime.set(0)
+  }
+
+  /**
+    * @return a tuple (producesCount, consumesCount) just for unit-tests
+    */
+  private[rspace] def getCounts: (Long, Long) = (producesCount.get, consumesCount.get)
+
   // for nano-time pitfalls please read
   // https://shipilev.net/blog/2014/nanotrusting-nanotime/
   def registerProduce[T](f: => T): T = {

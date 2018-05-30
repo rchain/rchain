@@ -155,6 +155,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _waitingContinuations.clear()
     _data.clear()
     _joinMap.clear()
+    eventsCounter.reset()
   }
 
   def getStoreCounters: StoreCounters =

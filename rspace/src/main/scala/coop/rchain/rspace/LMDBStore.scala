@@ -255,13 +255,15 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     collectGarbage(txn, joinKey)
   }
 
-  private[rspace] def clear(): Unit =
+  private[rspace] def clear(): Unit = {
     withTxn(createTxnWrite()) { txn =>
       _dbKeys.drop(txn)
       _dbData.drop(txn)
       _dbWaitingContinuations.drop(txn)
       _dbJoins.drop(txn)
     }
+    eventsCounter.reset()
+  }
 
   def close(): Unit = {
     _dbKeys.close()
