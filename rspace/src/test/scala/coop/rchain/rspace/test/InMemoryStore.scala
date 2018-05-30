@@ -18,7 +18,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, Seq[Datum[A]]],
     _joinMap: mutable.HashMap[C, Seq[Seq[C]]],
-)(implicit sc: Serialize[C])
+)(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
@@ -180,11 +180,11 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
 object InMemoryStore {
 
-  /* UGLY HACK FOR TESTING */
-  def roundTrip[A <: Serializable](a: A): A = {
-    val ser = makeSerializeFromSerializable[A]
-    ser.decode(ser.encode(a)).fold(throw _, identity)
-  }
+  def roundTrip[K: Serialize](k: K): K =
+    Serialize[K].decode(Serialize[K].encode(k)) match {
+      case Left(ex)     => throw ex
+      case Right(value) => value
+    }
 
   def hashBytes(bs: Array[Byte]): Array[Byte] =
     Blake2b256.hash(bs)
@@ -192,7 +192,8 @@ object InMemoryStore {
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
 
-  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
+                                         sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _keys = mutable.HashMap.empty[String, Seq[C]],
       _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
