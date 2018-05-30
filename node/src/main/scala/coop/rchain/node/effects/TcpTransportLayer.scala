@@ -18,6 +18,7 @@ import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
+import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 
 // TODO Add State Monad to reuse channels to known peers
 class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
@@ -52,27 +53,30 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
         throw e
     }
 
-  private def client(endpoint: Endpoint) = {
-    val channel = NettyChannelBuilder
+  private def withClient[A](endpoint: Endpoint)(f: TransportLayerStub => Future[A]): Future[A] = {
+    val channel = clientChannel(endpoint)
+    val stub    = TransportLayerGrpc.stub(channel)
+    f(stub).andThen { case _ => channel.shutdown() }
+  }
+
+  private def clientChannel(endpoint: Endpoint) =
+    NettyChannelBuilder
       .forAddress(endpoint.host, endpoint.tcpPort)
       .negotiationType(NegotiationType.TLS)
       .sslContext(clientSslContext)
       .intercept(new SslSessionClientInterceptor())
       .build()
 
-    TransportLayerGrpc.stub(channel)
-  }
-
   def roundTrip(msg: ProtocolMessage,
                 remote: ProtocolNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]] =
     for {
-      tlResponseErr <- Capture[F].capture {
+      tlResponseErr <- Capture[F].capture(
                         Try(
-                          Await.result(client(remote.endpoint).send(TLRequest(msg.proto.some)),
-                                       timeout)).toEither
-                          .leftMap(protocolException)
-                      }
+                          Await.result(
+                            withClient(remote.endpoint)(_.send(TLRequest(msg.proto.some))),
+                            timeout)
+                        ).toEither.leftMap(protocolException))
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
@@ -105,7 +109,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
 
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
     Capture[F]
-      .capture(client(peer.endpoint).send(TLRequest(msg.proto.some)))
+      .capture(withClient(peer.endpoint)(_.send(TLRequest(msg.proto.some))))
       .as(Right(()))
 
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =
