@@ -121,7 +121,6 @@ package object rspace {
          * Put another way, this allows us to speculatively remove matching data without
          * affecting the actual store contents.
          */
-
         val channelToIndexedData = channels.map { (c: C) =>
           c -> Random.shuffle(store.getData(txn, Seq(c)).zipWithIndex)
         }.toMap
@@ -145,7 +144,7 @@ package object rspace {
               .foreach {
                 case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                     if !persistData =>
-                  store.removeDatum(txn, candidateChannel, dataIndex)
+                  store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                 case _ =>
                   ()
               }
@@ -198,7 +197,7 @@ package object rspace {
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                 if !persistData =>
-              store.removeDatum(txn, candidateChannel, dataIndex)
+              store.removeDatum(txn, Seq(candidateChannel), dataIndex)
             case _ =>
               ()
           }
@@ -315,7 +314,7 @@ package object rspace {
               .foreach {
                 case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
                   if (!persistData && dataIndex >= 0) {
-                    store.removeDatum(txn, candidateChannel, dataIndex)
+                    store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                   }
                   store.removeJoin(txn, candidateChannel, channels)
                 case _ =>
