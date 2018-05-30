@@ -6,20 +6,20 @@ import coop.rchain.roscala.Location._
 import coop.rchain.roscala.Vm.State
 import Ctxt.logger
 
-case class Ctxt(var tag: Location,
-                var nargs: Int,
-                var outstanding: Int,
-                var pc: Int,
-                var rslt: Ob,
-                var trgt: Ob,
-                var argvec: Tuple,
-                var env: Ob,
-                var code: Code,
-                var ctxt: Ctxt,
-                var self2: Ob,
-                var selfEnv: Ob,
-                var rcvr: Ob,
-                var monitor: Monitor)
+class Ctxt(var tag: Location,
+           var nargs: Int,
+           var outstanding: Int,
+           var pc: Int,
+           var rslt: Ob,
+           var trgt: Ob,
+           var argvec: Tuple,
+           var env: Ob,
+           var code: Code,
+           var ctxt: Ctxt,
+           var self2: Ob,
+           var selfEnv: Ob,
+           var rcvr: Ob,
+           var monitor: Monitor)
     extends Ob {
 
   def applyK(result: Ob, loc: Location, state: State): Boolean =
@@ -27,6 +27,24 @@ case class Ctxt(var tag: Location,
     ctxt.rcv(result, loc, state)
 
   def arg(n: Int): Ob = argvec.value(n)
+
+  def copy(): Ctxt =
+    new Ctxt(
+      tag = this.tag,
+      nargs = this.nargs,
+      outstanding = this.outstanding,
+      pc = this.pc,
+      rslt = this.rslt,
+      trgt = this.trgt,
+      argvec = new Tuple(this.argvec.value.clone()),
+      env = this.env,
+      code = this.code,
+      ctxt = this.ctxt,
+      self2 = this.self2,
+      selfEnv = this.selfEnv,
+      rcvr = this.rcvr,
+      monitor = this.monitor
+    )
 
   def rcv(result: Ob, loc: Location, state: State): Boolean =
     if (store(loc, this, result)) {
@@ -83,7 +101,7 @@ object Ctxt {
       pc = 0,
       rslt = Niv,
       trgt = Niv,
-      argvec = Tuple(null),
+      argvec = new Tuple(new Array[Ob](0)),
       env = Niv,
       code = code,
       ctxt = continuation,
@@ -121,7 +139,27 @@ object Ctxt {
     pc = 0,
     rslt = Niv,
     trgt = Niv,
-    argvec = Tuple(new Array[Ob](i)),
+    argvec = new Tuple(new Array[Ob](i)),
+    env = Niv,
+    code = Code(litvec = Seq.empty, codevec = Seq.empty),
+    ctxt = null,
+    self2 = Niv,
+    selfEnv = Niv,
+    rcvr = Niv,
+    monitor = null
+  )
+
+  /**
+    * Useful for testing.
+    */
+  def empty: Ctxt = new Ctxt(
+    tag = LocLimbo,
+    nargs = 0,
+    outstanding = 0,
+    pc = 0,
+    rslt = Niv,
+    trgt = Niv,
+    argvec = new Tuple(new Array[Ob](0)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
     ctxt = null,
@@ -141,7 +179,7 @@ object Ctxt {
     pc = 0,
     rslt = Niv,
     trgt = Niv,
-    argvec = Tuple(null),
+    argvec = new Tuple(new Array[Ob](0)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
     ctxt = null,

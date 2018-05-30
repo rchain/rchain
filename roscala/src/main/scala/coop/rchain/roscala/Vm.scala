@@ -53,11 +53,11 @@ object Vm {
   def execute(opcode: Opcode, globalEnv: GlobalEnv, state: State): Unit =
     opcode match {
       case OpAlloc(n) =>
-        state.ctxt.argvec = Tuple(new Array[Ob](n))
+        state.ctxt.argvec = new Tuple(new Array[Ob](n))
         state.nextOpFlag = true
 
       case OpPushAlloc(n) =>
-        val t = Tuple(new Array[Ob](n))
+        val t = new Tuple(new Array[Ob](n))
         state.ctxt = Ctxt(t, state.ctxt)
         state.nextOpFlag = true
 
@@ -101,6 +101,12 @@ object Vm {
       case OpXferGlobalToArg(global, arg) =>
         val ob = globalEnv.values(global)
         state.ctxt.argvec.update(arg, ob)
+        state.nextOpFlag = true
+
+      case OpFork(pc) =>
+        val newCtxt = state.ctxt.copy()
+        newCtxt.pc = pc
+        state.strandPool.prepend(newCtxt)
         state.nextOpFlag = true
 
       case OpXmit(unwind, next, nargs) =>
