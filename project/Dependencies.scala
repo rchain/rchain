@@ -2,6 +2,8 @@ import sbt._
 
 object Dependencies {
 
+  val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
+
   val circeVersion  = "0.9.1"
   val http4sVersion = "0.18.0"
   val kamonVersion  = "1.0.0"
@@ -33,14 +35,19 @@ object Dependencies {
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.7.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "0.5.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.4" % "test"
-  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.6" % "test"
+  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.1" % "test"
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.8.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.6.0"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.5"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.2"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"

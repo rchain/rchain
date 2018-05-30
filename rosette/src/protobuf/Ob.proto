@@ -1,0 +1,243 @@
+// This describes the Interface for Export / Import of Rosette object code. This is used
+// between Rosette and Roscala for interchanging compiled object code.
+
+
+syntax = "proto3";
+
+package ObjectCodePB;
+
+
+
+message ObjectCode {
+    repeated CodeBlock codeblock = 1;
+    ObjectStore objectstore = 2;
+}
+
+// A single code block contains a litvec with objects on which the code operates,
+// and the codevec with the actual opCodes that are executed by the VM.
+message CodeBlock {
+    uint64 objectId = 1;
+    LitVec litvec = 2;
+    CodeVec codevec = 3;
+}
+
+// This message contains the actual executable opCodes
+message CodeVec {
+    // Opcodes are serialized in binary
+    bytes opcodes = 1;
+}
+
+message LitVec {
+    // Items within a Litvec are accessed by index and must be stored in the same order as
+    // they originally existed at compile time.
+
+    repeated Object ob = 1;
+}
+
+message ObjectReference {
+    uint64 objectId = 1;
+}
+
+message ObjectStore {
+    repeated Object objects = 1;
+}
+
+// Rather than implement all 100+ object types existing in Rosette, We will only implement those
+// used in loading boot.rbl, plus any deemed necessary by the Roscala compiler guys.
+
+// TODO: These messages need to be filled out with the required fields. Also if there are objects that
+// contain other objects, they will need to be added to this list.
+
+message Actor {
+    Object extension = 1;
+}
+message BlockExpr {
+    Object subExprs = 1;
+    Object implicit = 2;
+}
+message Char {
+    uint32 value = 1;
+}
+message Code {
+    // Handle by reference. ID in parent Object.
+}
+message ExpandedLocation {
+}
+message Fixnum {
+    int32 value = 1;
+}
+message Float {
+    double value = 1;
+}
+message FreeExpr {
+    Object freeids = 1;
+    Object body = 2;
+}
+message GotoExpr {
+    Object label = 1;
+}
+message IfExpr {
+    Object condition = 1;
+    Object truebranch = 2;
+    Object falsebranch = 3;
+}
+message LabelExpr {
+    Object label = 1;
+    Object body = 2;
+}
+message LetExpr {
+    Object bindings = 1;
+    Object body = 2;
+}
+message LetrecExpr {
+}
+message MethodExpr {
+    Object identity = 1;
+    Object formals = 2;
+    Object body = 3;
+}
+message Niv {
+}
+message NullExpr {
+}
+message Proc {
+    Object env = 1;
+    Object code = 2;
+    Object id = 3;
+    Object source = 4;
+}
+message ProcExpr {
+}
+message QuoteExpr {
+    Object expr = 1;
+}
+message RblAtom {
+}
+message RblBool {
+    bool value = 1;
+}
+message RBLstring {
+    string value = 1;
+}
+message ReflectiveMethodExpr {
+}
+message RequestExpr {
+    Object target = 1;
+    Object msg = 2;
+}
+message SendExpr {
+}
+message SeqExpr {
+    Object subexprs = 1;
+}
+message SetExpr {
+    Object trgt = 1;
+    Object val = 2;
+}
+message StdExtension {
+}
+message StdMthd {
+    Object code = 1;
+    Object id = 2;
+    Object source = 3;
+}
+message Symbol {
+    string name = 1;
+}
+message TblObject {
+    Object validextent = 1;
+    Object keyvec = 2;
+}
+message Template {
+}
+message Tuple {
+    repeated Object elements = 1;
+}
+message TupleExpr {
+    Object rest = 1;
+}
+
+enum ObType {
+    OT_Actor = 0;
+    OT_BlockExpr = 1;
+    OT_Char = 2;
+    OT_Code = 3;
+    OT_ExpandedLocation = 4;
+    OT_Fixnum = 5;
+    OT_Float = 6;
+    OT_FreeExpr = 7;
+    OT_GotoExpr = 8;
+    OT_IfExpr = 9;
+    OT_LabelExpr = 10;
+    OT_LetExpr = 11;
+    OT_LetrecExpr = 12;
+    OT_MethodExpr = 13;
+    OT_Proc = 14;
+    OT_ProcExpr = 15;
+    OT_QuoteExpr = 16;
+    OT_RBLstring = 17;
+    OT_ReflectiveMethodExpr = 18;
+    OT_RequestExpr = 19;
+    OT_SendExpr = 20;
+    OT_SeqExpr = 21;
+    OT_SetExpr = 22;
+    OT_StdMthd = 23;
+    OT_Symbol = 24;
+    OT_TblObject = 25;
+    OT_Template = 26;
+    OT_Tuple = 27;
+    OT_TupleExpr = 28;
+    OT_RblBool = 29;
+    OT_Niv = 30;
+    OT_StdExtension = 31;
+    OT_RblAtom = 32;
+    OT_NullExpr = 33;
+    OT_unknown = 999;
+}
+
+message Object {
+    ObType type = 1;
+    uint64 objectId = 2;
+    uint64 metaId = 3;
+    uint64 parentId = 4;
+    bool reference = 5;;
+
+    // One and only one of these should be populated. These contain information specific to the
+    // Object type.
+    oneof object {
+        Actor actor = 10;
+        BlockExpr blockexpr = 11;
+        Char char = 12;
+        Code code = 13;
+        ExpandedLocation expandedlocation = 14;
+        Fixnum fixnum = 15;
+        Float float = 16;
+        FreeExpr freeexpr = 17;
+        GotoExpr gotoexpr = 18;
+        IfExpr ifexpr = 19;
+        LabelExpr labelexpr = 20;
+        LetExpr letexpr = 21;
+        LetrecExpr letrecexpr = 22;
+        MethodExpr methodexpr = 23;
+        Proc proc = 24;
+        ProcExpr procexpr = 25;
+        QuoteExpr quoteexpr = 26;
+        RBLstring rblstring = 27;
+        ReflectiveMethodExpr reflectivemethodexpr = 28;
+        RequestExpr requestexpr = 29;
+        SendExpr sendexpr = 30;
+        SeqExpr seqexpr = 31;
+        SetExpr setexpr = 32;
+        StdMthd stdmthd = 33;
+        Symbol symbol = 34;
+        TblObject tblobject = 35;
+        Template template = 36;
+        Tuple tuple = 37;
+        TupleExpr tupleexpr = 38;
+        RblBool rblbool = 39;
+        Niv niv = 40;
+        StdExtension stdextension = 41;
+        RblAtom rblatom = 42;
+        NullExpr nullexpr = 43;
+    }
+}

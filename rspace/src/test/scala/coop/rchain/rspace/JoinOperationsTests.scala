@@ -39,8 +39,8 @@ trait JoinOperationsTests extends StorageTestsBase[String, Pattern, String, Stri
     //now ensure that garbage-collection works and all joins
     //are removed when we remove As
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.removeDatum(txn, "ch1", 0)
-      store.removeDatum(txn, "ch2", 0)
+      store.removeDatum(txn, List("ch1"), 0)
+      store.removeDatum(txn, List("ch2"), 0)
       store.removeDatum(txn, List("ch1", "ch2"), 0)
     }
 

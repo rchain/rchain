@@ -144,7 +144,7 @@ package object rspace {
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                   if !persistData =>
-                store.removeDatum(txn, candidateChannel, dataIndex)
+                store.removeDatum(txn, Seq(candidateChannel), dataIndex)
               case _ =>
                 ()
             }
@@ -197,7 +197,7 @@ package object rspace {
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                 if !persistData =>
-              store.removeDatum(txn, candidateChannel, dataIndex)
+              store.removeDatum(txn, Seq(candidateChannel), dataIndex)
             case _ =>
               ()
           }
@@ -311,7 +311,7 @@ package object rspace {
             .foreach {
               case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
                 if (!persistData && dataIndex >= 0) {
-                  store.removeDatum(txn, candidateChannel, dataIndex)
+                  store.removeDatum(txn, Seq(candidateChannel), dataIndex)
                 }
                 store.removeJoin(txn, candidateChannel, channels)
               case _ =>

@@ -24,12 +24,15 @@
 #include "Location.h"
 #include "Prim.h"
 #include "RBLstring.h"
+#include "Ob.h"
+#include "Number.h"
 
 #include "BuiltinClass.h"
 #include "ModuleInit.h"
 
-#include <memory.h>
+#include "CommandLine.h"
 
+#include <memory.h>
 
 BUILTIN_CLASS(CodeBuf) {
     OB_FIELD("codevec", CodeBuf, codevec);
@@ -529,7 +532,7 @@ Instr* CodeVec::dumpInstr(Instr* pc, char* buf, Code* code) {
         index = OP_f2_op1(insn);
         defer = ((index & CompilationUnit::LookupDeferMask) != 0);
         index &= ~CompilationUnit::LookupDeferMask; 
-        sprintf(buf, "lookup%s %d,", defer ? "(defer)" : "", (int)OP_f2_op1(insn));
+        sprintf(buf, "lookup%s %d,", defer ? "(defer)" : "", index);
         dest = CtxtReg((CtxtRegName)OP_f2_op0(insn));
         goto formatDest;
 
@@ -718,13 +721,6 @@ Code::Code(CodeVec* codevec, Tuple* litvec)
     Code::updateCnt();
 }
 
-
-Code* Code::create(CodeVec* codevec, Tuple* litvec) {
-    void* loc = PALLOC2(sizeof(Code), codevec, litvec);
-    return new (loc) Code(codevec, litvec);
-}
-
-
 Code* Code::create(CodeBuf* codebuf, Tuple* litvec) {
     PROTECT(litvec);
     CodeVec* codevec = codebuf->finish();
@@ -745,7 +741,7 @@ void Code::dumpOn(FILE* f) {
         for (int i = 0; i < litvec->numberOfElements(); i++) {
             fprintf(f, "%4d:\t", i);
             BASE(litvec->elem(i))->printQuotedOn(f);
-            putc('\n', f);
+            fprintf(f, " (%llu)\n", BASE(litvec->elem(i))->objectId);
         }
     }
     fprintf(f, "codevec:\n");
@@ -761,9 +757,7 @@ Ob* Code::associatedSource() {
     return lit(0);
 }
 
-
 char* opcodeStrings[MaxOpcodes];
-
 
 MODULE_INIT(Code) {
     extern int RestoringImage;

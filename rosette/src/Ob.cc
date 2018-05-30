@@ -39,6 +39,8 @@
 #include "ModuleInit.h"
 #include "config.h"
 
+#include "Export.h"
+
 #include <cstdlib>
 #include <ctime>
 
@@ -112,7 +114,7 @@ char* Base::typestring() { return "unknown type"; }
 
 void Base::updateCnt() { suicide("suicide in Base::updateCnt()"); }
 
-
+IdType nextId = 1;
 Ob::Ob(InPlace_Constructor*, int sz) : header(sz) {}
 
 
@@ -869,13 +871,10 @@ pOb Ob::unquote() { return self(); }
 Code* Ob::compileWrt(pOb env, pOb info) {
     PROTECT(env);
     pOb me = self();
-    if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
     CompilationUnit* cu = CompilationUnit::create(me, info, me);
     cu->atTopLevel();
 
     Code * cp = cu->compileExpr(env, TopEnv);
-    if (VerboseFlag) cp->dumpOn(stderr);
-
     return cp;
 }
 

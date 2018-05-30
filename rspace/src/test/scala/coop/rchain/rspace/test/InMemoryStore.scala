@@ -1,23 +1,24 @@
 package coop.rchain.rspace.test
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 
+import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.examples._
+import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize}
+import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K <: Serializable] private (
+class InMemoryStore[C, P, A, K] private (
     _keys: mutable.HashMap[String, Seq[C]],
     _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.MultiMap[C, String]
-)(implicit sc: Serialize[C])
+    _joinMap: mutable.HashMap[C, Seq[Seq[C]]],
+)(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
@@ -25,7 +26,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   private[rspace] type T = Unit
 
-  private[rspace] def hashChannels(cs: Seq[C])(implicit sc: Serialize[C]): H =
+  private[rspace] def hashChannels(cs: Seq[C]): H =
     printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
 
   private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
@@ -41,7 +42,14 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  def collectGarbage(key: H): Unit = {
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit =
+    collectGarbage(channelsHash)
+
+  private[this] def collectGarbage(key: H): Unit = {
     val as = _data.get(key).exists(_.nonEmpty)
     if (!as) {
       //we still may have empty list, remove it as well
@@ -76,7 +84,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     putCs(txn, channels)
     val waitingContinuations =
       _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
-    _waitingContinuations.update(key, waitingContinuations :+ continuation)
+    _waitingContinuations.update(key, continuation +: waitingContinuations)
   }
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -115,17 +123,25 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
-    _joinMap.addBinding(c, hashChannels(cs))
+  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
+    val existing: Seq[Seq[C]] = _joinMap.remove(c).getOrElse(Seq.empty)
+    if (!existing.exists(_.equals(cs)))
+      _joinMap.put(c, cs +: existing)
+    else
+      _joinMap.put(c, existing)
+  }
 
   private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getChannels(txn, _))
+    _joinMap.getOrElse(c, Seq.empty[Seq[C]])
 
   private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
     val joinKey = hashChannels(Seq(c))
     val csKey   = hashChannels(cs)
     if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
-      _joinMap.removeBinding(c, csKey)
+      val existing: Seq[Seq[C]] = _joinMap.remove(c).getOrElse(Seq.empty)
+      val filtered              = existing.filter(!_.equals(cs))
+      if (filtered.nonEmpty)
+        _joinMap.put(c, filtered)
     }
     collectGarbage(joinKey)
   }
@@ -147,6 +163,9 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _joinMap.clear()
   }
 
+  def getStoreSize: StoreSize =
+    StoreSize(0, (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
+
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
 
@@ -161,23 +180,24 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
 object InMemoryStore {
 
-  /* UGLY HACK FOR TESTING */
-  def roundTrip[A <: Serializable](a: A): A = {
-    val ser = makeSerializeFromSerializable[A]
-    ser.decode(ser.encode(a)).fold(throw _, identity)
-  }
+  def roundTrip[K: Serialize](k: K): K =
+    Serialize[K].decode(Serialize[K].encode(k)) match {
+      case Left(ex)     => throw ex
+      case Right(value) => value
+    }
 
   def hashBytes(bs: Array[Byte]): Array[Byte] =
-    MessageDigest.getInstance("SHA-256").digest(bs)
+    Blake2b256.hash(bs)
 
   def hashString(s: String): Array[Byte] =
     hashBytes(s.getBytes(StandardCharsets.UTF_8))
 
-  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
+                                         sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _keys = mutable.HashMap.empty[String, Seq[C]],
       _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
       _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
+      _joinMap = mutable.HashMap.empty[C, Seq[Seq[C]]]
     )
 }

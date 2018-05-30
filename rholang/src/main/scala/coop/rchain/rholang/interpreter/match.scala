@@ -3,11 +3,14 @@ package coop.rchain.rholang.interpreter
 import cats.data._
 import cats.implicits._
 import cats.{Eval => _}
+import cats.Foldable
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.SpatialMatcher.OptionalFreeMap
+import coop.rchain.rholang.interpreter.SpatialMatcher.NonDetFreeMap
 import coop.rchain.rholang.interpreter.implicits.{
   fromEList,
   fromExpr,
@@ -15,8 +18,11 @@ import coop.rchain.rholang.interpreter.implicits.{
   ExprLocallyFree,
   GPrivateLocallyFree,
   MatchCaseLocallyFree,
+  MatchLocallyFree,
+  NewLocallyFree,
   ParLocallyFree,
   ReceiveBindLocallyFree,
+  ReceiveLocallyFree,
   SendLocallyFree,
   VectorPar
 }
@@ -32,20 +38,46 @@ import scala.collection.immutable.Stream
 // In a few places we use StateT[Stream, FreeMap, A] for backtracking. In order
 // to help cut down on backtracking, wherever one of several possible matches
 // will do, we just take one.
-trait SpatialMatcher[T] {
-  def spatialMatch(target: T, pattern: T): OptionalFreeMap[Unit]
+trait SpatialMatcher[T, P] {
+  def spatialMatch(target: T, pattern: P): OptionalFreeMap[Unit]
+  def nonDetMatch(target: T, pattern: P): NonDetFreeMap[Unit]
 }
 
 object SpatialMatcher {
-  def apply[T](implicit sm: SpatialMatcher[T]) = sm
+  def apply[T, P](implicit sm: SpatialMatcher[T, P]) = sm
 
-  def spatialMatch[T: SpatialMatcher](target: T, pattern: T): OptionalFreeMap[Unit] =
-    SpatialMatcher[T].spatialMatch(target, pattern)
+  def spatialMatch[T, P](target: T, pattern: P)(
+      implicit sm: SpatialMatcher[T, P]): OptionalFreeMap[Unit] =
+    SpatialMatcher[T, P].spatialMatch(target, pattern)
 
-  def fromFunction[T](fn: (T, T) => OptionalFreeMap[Unit]): SpatialMatcher[T] =
-    new SpatialMatcher[T] {
-      override def spatialMatch(target: T, pattern: T): OptionalFreeMap[Unit] =
+  def nonDetMatch[T, P](target: T, pattern: P)(
+      implicit sm: SpatialMatcher[T, P]): NonDetFreeMap[Unit] =
+    SpatialMatcher[T, P].nonDetMatch(target, pattern)
+
+  def fromFunction[T, P](fn: (T, P) => OptionalFreeMap[Unit]): SpatialMatcher[T, P] =
+    new SpatialMatcher[T, P] {
+      override def spatialMatch(target: T, pattern: P): OptionalFreeMap[Unit] =
         fn(target, pattern)
+      override def nonDetMatch(target: T, pattern: P): NonDetFreeMap[Unit] =
+        StateT((s: FreeMap) => {
+          fn(target, pattern).run(s) match {
+            case None         => Stream.empty
+            case Some(single) => Stream(single)
+          }
+        })
+    }
+
+  def fromNonDetFunction[T, P](fn: (T, P) => NonDetFreeMap[Unit]): SpatialMatcher[T, P] =
+    new SpatialMatcher[T, P] {
+      override def nonDetMatch(target: T, pattern: P): NonDetFreeMap[Unit] =
+        fn(target, pattern)
+      override def spatialMatch(target: T, pattern: P): OptionalFreeMap[Unit] =
+        StateT((s: FreeMap) => {
+          fn(target, pattern).run(s) match {
+            case Stream.Empty => None
+            case single #:: _ => Some(single)
+          }
+        })
     }
 
   type FreeMap            = Map[Int, Par]
@@ -65,9 +97,208 @@ object SpatialMatcher {
 
   def emptyMap: FreeMap = Map.empty[Int, Par]
 
+  case class ParCount(sends: Int = 0,
+                      receives: Int = 0,
+                      news: Int = 0,
+                      exprs: Int = 0,
+                      matches: Int = 0,
+                      ids: Int = 0,
+                      bundles: Int = 0) {
+    def binOp(op: (Int, Int) => Int, other: ParCount): ParCount =
+      ParCount(
+        sends = op(sends, other.sends),
+        receives = op(receives, other.receives),
+        news = op(news, other.news),
+        exprs = op(exprs, other.exprs),
+        matches = op(matches, other.matches),
+        ids = op(ids, other.ids),
+        bundles = op(bundles, other.bundles)
+      )
+    def min(other: ParCount): ParCount = binOp(math.min, other)
+    def max(other: ParCount): ParCount = binOp(math.max, other)
+    def +(other: ParCount): ParCount   = binOp(saturatingAdd, other)
+    // Only saturates going from positive to negative
+    def saturatingAdd(l: Int, r: Int): Int = {
+      val res = l + r
+      (res | -(if (res < l) 1 else 0)) & ~Int.MinValue
+    }
+  }
+
+  private[this] def noFrees(exprs: Seq[Expr]): Seq[Expr] =
+    exprs.filter({ (expr) =>
+      expr.exprInstance match {
+        case EVarBody(EVar(Some((v)))) =>
+          v.varInstance match {
+            case FreeVar(_)  => false
+            case Wildcard(_) => false
+            case _           => true
+          }
+        case _ => true
+      }
+    })
+
+  private[this] def noFrees(par: Par): Par =
+    par.withExprs(noFrees(par.exprs))
+
+  object ParCount {
+    def apply(par: Par): ParCount =
+      ParCount(
+        sends = par.sends.size,
+        receives = par.receives.size,
+        news = par.news.size,
+        matches = par.matches.size,
+        exprs = par.exprs.size,
+        ids = par.ids.size,
+        bundles = par.bundles.size
+      )
+    def max: ParCount =
+      ParCount(
+        sends = Int.MaxValue,
+        receives = Int.MaxValue,
+        news = Int.MaxValue,
+        matches = Int.MaxValue,
+        exprs = Int.MaxValue,
+        ids = Int.MaxValue,
+        bundles = Int.MaxValue
+      )
+
+    def minMax(par: Par): (ParCount, ParCount) = {
+      val pc = ParCount(noFrees(par))
+      val wildcard: Boolean = par.exprs.exists { expr =>
+        expr.exprInstance match {
+          case EVarBody(EVar(Some(v))) =>
+            v.varInstance match {
+              case Wildcard(_) => true
+              case FreeVar(_)  => true
+              case _           => false
+            }
+          case _ => false
+        }
+      }
+      val minInit = pc
+      val maxInit = if (wildcard) ParCount.max else pc
+
+      par.connectives.foldLeft((minInit, maxInit)) {
+        case ((min, max), con) =>
+          val (cmin, cmax) = minMax(con)
+          (min + cmin, max + cmax)
+      }
+    }
+
+    def minMax(con: Connective): (ParCount, ParCount) =
+      con.connectiveInstance match {
+        case ConnAndBody(ConnectiveBody(ps)) =>
+          val pMinMax = ps.map(minMax)
+          (pMinMax.foldLeft(ParCount())(_ max _._1), pMinMax.foldLeft(ParCount.max)(_ min _._2))
+        case ConnOrBody(ConnectiveBody(ps)) =>
+          val pMinMax = ps.map(minMax)
+          (pMinMax.foldLeft(ParCount.max)(_ min _._1), pMinMax.foldLeft(ParCount())(_ max _._2))
+        case ConnNotBody(_) =>
+          (ParCount(), ParCount.max)
+      }
+  }
+
+  def subPars(par: Par,
+              min: ParCount,
+              max: ParCount,
+              minPrune: ParCount,
+              maxPrune: ParCount): Stream[(Par, Par)] = {
+
+    val sendMax    = math.min(max.sends, par.sends.size - minPrune.sends)
+    val receiveMax = math.min(max.receives, par.receives.size - minPrune.receives)
+    val newMax     = math.min(max.news, par.news.size - minPrune.news)
+    val exprMax    = math.min(max.exprs, par.exprs.size - minPrune.exprs)
+    val matchMax   = math.min(max.matches, par.matches.size - minPrune.matches)
+    val idMax      = math.min(max.ids, par.ids.size - minPrune.ids)
+    val bundleMax  = math.min(max.bundles, par.bundles.size - minPrune.bundles)
+
+    val sendMin    = math.max(min.sends, par.sends.size - maxPrune.sends)
+    val receiveMin = math.max(min.receives, par.receives.size - maxPrune.receives)
+    val newMin     = math.max(min.news, par.news.size - maxPrune.news)
+    val exprMin    = math.max(min.exprs, par.exprs.size - maxPrune.exprs)
+    val matchMin   = math.max(min.matches, par.matches.size - maxPrune.matches)
+    val idMin      = math.max(min.ids, par.ids.size - maxPrune.ids)
+    val bundleMin  = math.max(min.bundles, par.bundles.size - maxPrune.bundles)
+
+    for {
+      subSends    <- minMaxSubsets(par.sends, sendMin, sendMax)
+      subReceives <- minMaxSubsets(par.receives, receiveMin, receiveMax)
+      subNews     <- minMaxSubsets(par.news, newMin, newMax)
+      subExprs    <- minMaxSubsets(par.exprs, exprMin, exprMax)
+      subMatches  <- minMaxSubsets(par.matches, matchMin, matchMax)
+      subIds      <- minMaxSubsets(par.ids, idMin, idMax)
+      subBundles  <- minMaxSubsets(par.bundles, bundleMin, bundleMax)
+    } yield
+      (Par(subSends._1,
+           subReceives._1,
+           subNews._1,
+           subExprs._1,
+           subMatches._1,
+           subIds._1,
+           subBundles._1),
+       Par(subSends._2,
+           subReceives._2,
+           subNews._2,
+           subExprs._2,
+           subMatches._2,
+           subIds._2,
+           subBundles._2))
+  }
+
+  def minMaxSubsets[A](as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A])] = {
+    def countedMaxSubsets(as: Seq[A], maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
+      as match {
+        case Nil => Stream((as, as, 0))
+        case head +: rem =>
+          (as.slice(0, 0), as, 0) #::
+            (for {
+            countedTail               <- countedMaxSubsets(rem, maxSize)
+            (tail, complement, count) = countedTail
+            result <- {
+              if (count == maxSize)
+                Stream((tail, head +: complement, count))
+              else if (tail.isEmpty)
+                Stream((head +: tail, complement, 1))
+              else
+                Stream((tail, head +: complement, count), (head +: tail, complement, count + 1))
+            }
+          } yield result)
+      }
+    def worker(as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
+      if (maxSize < 0)
+        Stream.empty
+      else if (minSize > maxSize)
+        Stream.empty
+      else if (minSize <= 0)
+        if (maxSize == 0)
+          Stream((as.slice(0, 0), as, 0))
+        else
+          countedMaxSubsets(as, maxSize)
+      else
+        as match {
+          case Nil => Stream.empty
+          case hd +: rem =>
+            val decr = minSize - 1
+            for {
+              countedTail               <- worker(rem, decr, maxSize)
+              (tail, complement, count) = countedTail
+              result <- {
+                if (count == maxSize)
+                  Stream((tail, hd +: complement, count))
+                else if (count == decr)
+                  Stream((hd +: tail, complement, minSize))
+                else
+                  Stream((tail, hd +: complement, count), (hd +: tail, complement, count + 1))
+              }
+            } yield result
+        }
+    worker(as, minSize, maxSize).map(x => (x._1, x._2))
+  }
+
   // This helper function is useful in several productions
-  def foldMatch[T: SpatialMatcher](tlist: Seq[T], plist: Seq[T], remainder: Option[Var] = None)(
-      implicit lf: HasLocallyFree[T]): OptionalFreeMap[Seq[T]] =
+  def foldMatch[T, P](tlist: Seq[T], plist: Seq[P], remainder: Option[Var] = None)(
+      implicit lft: HasLocallyFree[T],
+      sm: SpatialMatcher[T, P]): OptionalFreeMap[Seq[T]] =
     (tlist, plist) match {
       case (Nil, Nil) => StateT.pure(Nil)
       case (Nil, _)   => StateT.liftF[Option, FreeMap, Seq[T]](None)
@@ -79,7 +310,7 @@ object SpatialMatcher {
               trem match {
                 case Nil => StateT.pure(acc)
                 case item +: rem =>
-                  if (lf.locallyFree(item).isEmpty)
+                  if (lft.locallyFree(item).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
                     StateT.liftF(None)
@@ -106,12 +337,13 @@ object SpatialMatcher {
   // varLevel: if non-empty, the free variable level where to put the remaining
   //   T's
   // wildcard: if true, there is a wildcard in parallel with the pattern list.
-  private[this] def listMatchSingle[T: SpatialMatcher](
-      tlist: Seq[T],
-      plist: Seq[T],
-      merger: (Par, T) => Par,
-      varLevel: Option[Int],
-      wildcard: Boolean)(implicit lf: HasLocallyFree[T]): OptionalFreeMap[Unit] = {
+  private[this] def listMatchSingleNonDet[T](tlist: Seq[T],
+                                             plist: Seq[T],
+                                             merger: (Par, T) => Par,
+                                             varLevel: Option[Int],
+                                             wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): NonDetFreeMap[Unit] = {
     val exactMatch = !wildcard && varLevel.isEmpty
     val plen       = plist.length
     val tlen       = tlist.length
@@ -122,13 +354,25 @@ object SpatialMatcher {
     // This boundary is very similar to Oleg's once.
     StateT((s: FreeMap) => {
       listMatch(tlist, plist, merger, varLevel, wildcard).run(s) match {
-        case Stream.Empty =>
-          None
-        case head #:: _ =>
-          Some(head)
+        case Stream.Empty => Stream.Empty
+        case head #:: _   => Stream(head)
       }
     })
   }
+
+  private[this] def listMatchSingle[T](tlist: Seq[T],
+                                       plist: Seq[T],
+                                       merger: (Par, T) => Par,
+                                       varLevel: Option[Int],
+                                       wildcard: Boolean)(
+      implicit lf: HasLocallyFree[T],
+      sm: SpatialMatcher[T, T]): OptionalFreeMap[Unit] =
+    StateT((s: FreeMap) => {
+      listMatchSingleNonDet(tlist, plist, merger, varLevel, wildcard).run(s) match {
+        case Stream.Empty => None
+        case head #:: _   => Some(head)
+      }
+    })
 
   private[this] def possiblyRemove[T](needle: T, haystack: Seq[T]): Option[Seq[T]] = {
     val (before, after) = haystack.span(x => x != needle)
@@ -138,12 +382,12 @@ object SpatialMatcher {
     }
   }
 
-  private[this] def listMatch[T: SpatialMatcher](
-      tlist: Seq[T],
-      plist: Seq[T],
-      merger: (Par, T) => Par,
-      varLevel: Option[Int],
-      wildcard: Boolean)(implicit lf: HasLocallyFree[T]): NonDetFreeMap[Unit] =
+  private[this] def listMatch[T](tlist: Seq[T],
+                                 plist: Seq[T],
+                                 merger: (Par, T) => Par,
+                                 varLevel: Option[Int],
+                                 wildcard: Boolean)(implicit lf: HasLocallyFree[T],
+                                                    sm: SpatialMatcher[T, T]): NonDetFreeMap[Unit] =
     (tlist, plist) match {
       // Handle the remainder.
       case (rem, Nil) =>
@@ -190,7 +434,7 @@ object SpatialMatcher {
           }
         } else {
           for {
-            trem        <- listMatchItem(targets, pattern, spatialMatch[T])
+            trem        <- listMatchItem(targets, pattern, spatialMatch[T, T])
             forcedYield <- listMatch(trem, prem, merger, varLevel, wildcard)
           } yield forcedYield
         }
@@ -226,13 +470,13 @@ object SpatialMatcher {
                     })
     } yield forcedYield
 
-  implicit val parSpatialMatcherInstance: SpatialMatcher[Par] = fromFunction[Par] {
+  implicit val parSpatialMatcherInstance: SpatialMatcher[Par, Par] = fromNonDetFunction[Par, Par] {
     (target, pattern) =>
       if (!pattern.connectiveUsed) {
         if (pattern == target)
           StateT.pure(Unit)
         else {
-          StateT.liftF(None)
+          StateT.liftF(Stream.Empty)
         }
       } else {
         val varLevel: Option[Int] = possiblyFind[Expr, Int](
@@ -261,66 +505,94 @@ object SpatialMatcher {
           }
         }
 
-        def NoFrees(exprs: Seq[Expr]): Seq[Expr] =
-          exprs.filter({ (expr) =>
-            expr.exprInstance match {
-              case EVarBody(EVar(Some((v)))) =>
-                v.varInstance match {
-                  case FreeVar(_)  => false
-                  case Wildcard(_) => false
-                  case _           => true
-                }
-              case _ => true
-            }
-          })
+        val filteredPattern  = pattern.withExprs(noFrees(pattern.exprs))
+        val pc               = ParCount(filteredPattern)
+        val minRem           = pc
+        val maxRem           = if (wildcard || !varLevel.isEmpty) ParCount.max else pc
+        val individualBounds = filteredPattern.connectives.map(ParCount.minMax)
+        val remainderBounds = individualBounds
+          .scanRight((minRem, maxRem)) { (bounds, acc) =>
+            val result = (bounds._1 + acc._1, bounds._2 + acc._2)
+            result
+          }
+          .tail
+        val connectivesWithBounds =
+          (filteredPattern.connectives, individualBounds, remainderBounds).zipped.toList
 
+        def matchConnectiveWithBounds(
+            target: Par,
+            labeledConnective: (Connective, (ParCount, ParCount), (ParCount, ParCount)))
+          : NonDetFreeMap[Par] = {
+          val (con, bounds, remainders) = labeledConnective
+          for {
+            sp <- StateT.liftF(subPars(target, bounds._1, bounds._2, remainders._1, remainders._2))
+            _  <- nonDetMatch(sp._1, con)
+          } yield sp._2
+        }
         for {
-          _ <- listMatchSingle[Send](target.sends,
-                                     pattern.sends,
-                                     (p, s) => p.withSends(s +: p.sends),
-                                     varLevel,
-                                     wildcard)
-          _ <- listMatchSingle[Expr](target.exprs,
-                                     NoFrees(pattern.exprs),
-                                     (p, e) => p.withExprs(e +: p.exprs),
-                                     varLevel,
-                                     wildcard)
-          _ <- listMatchSingle[GPrivate](target.ids,
-                                         pattern.ids,
-                                         (p, i) => p.withIds(i +: p.ids),
-                                         varLevel,
-                                         wildcard)
-          _ <- listMatchSingle[Bundle](target.bundles,
-                                       pattern.bundles,
-                                       (p, b) => p.withBundles(b +: p.bundles),
-                                       varLevel,
-                                       wildcard)
+          remainder <- Foldable[List].foldM(connectivesWithBounds, target)(
+                        matchConnectiveWithBounds)
+          _ <- listMatchSingleNonDet[Send](remainder.sends,
+                                           pattern.sends,
+                                           (p, s) => p.withSends(s +: p.sends),
+                                           varLevel,
+                                           wildcard)
+          _ <- listMatchSingleNonDet[Receive](remainder.receives,
+                                              pattern.receives,
+                                              (p, s) => p.withReceives(s +: p.receives),
+                                              varLevel,
+                                              wildcard)
+          _ <- listMatchSingleNonDet[New](remainder.news,
+                                          pattern.news,
+                                          (p, s) => p.withNews(s +: p.news),
+                                          varLevel,
+                                          wildcard)
+          _ <- listMatchSingleNonDet[Expr](remainder.exprs,
+                                           noFrees(pattern.exprs),
+                                           (p, e) => p.withExprs(e +: p.exprs),
+                                           varLevel,
+                                           wildcard)
+          _ <- listMatchSingleNonDet[Match](remainder.matches,
+                                            pattern.matches,
+                                            (p, e) => p.withMatches(e +: p.matches),
+                                            varLevel,
+                                            wildcard)
+          _ <- listMatchSingleNonDet[Bundle](remainder.bundles,
+                                             pattern.bundles,
+                                             (p, b) => p.withBundles(b +: p.bundles),
+                                             varLevel,
+                                             wildcard)
+          _ <- listMatchSingleNonDet[GPrivate](remainder.ids,
+                                               pattern.ids,
+                                               (p, i) => p.withIds(i +: p.ids),
+                                               varLevel,
+                                               wildcard)
         } yield Unit
       }
   }
 
-  implicit val bundleSpatialMatcherInstance: SpatialMatcher[Bundle] = fromFunction[Bundle] {
-    (target, pattern) =>
+  implicit val bundleSpatialMatcherInstance: SpatialMatcher[Bundle, Bundle] =
+    fromFunction[Bundle, Bundle] { (target, pattern) =>
       if (pattern == target)
         StateT.pure(Unit)
       else {
         StateT.liftF(None)
       }
-  }
+    }
 
-  implicit val sendSpatialMatcherInstance: SpatialMatcher[Send] = fromFunction[Send] {
+  implicit val sendSpatialMatcherInstance: SpatialMatcher[Send, Send] = fromFunction[Send, Send] {
     (target, pattern) =>
       if (target.persistent != pattern.persistent)
         StateT.liftF(None)
       else
         for {
-          _           <- spatialMatch(target.chan.get, pattern.chan.get)
-          forcedYield <- foldMatch(target.data, pattern.data)
-        } yield forcedYield
+          _ <- spatialMatch(target.chan.get, pattern.chan.get)
+          _ <- foldMatch(target.data, pattern.data)
+        } yield Unit
   }
 
-  implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive] = fromFunction[Receive] {
-    (target, pattern) =>
+  implicit val receiveSpatialMatcherInstance: SpatialMatcher[Receive, Receive] =
+    fromFunction[Receive, Receive] { (target, pattern) =>
       if (target.persistent != pattern.persistent)
         StateT.liftF(None)
       else
@@ -328,14 +600,9 @@ object SpatialMatcher {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds, (p, rb) => p, None, false)
           _ <- spatialMatch(target.body.get, pattern.body.get)
         } yield Unit
-  }
+    }
 
-  implicit val evalSpatialMatcherInstance: SpatialMatcher[Eval] = fromFunction[Eval] {
-    (target, pattern) =>
-      spatialMatch(target.channel.get, pattern.channel.get)
-  }
-
-  implicit val newSpatialMatcherInstance: SpatialMatcher[New] = fromFunction[New] {
+  implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
         spatialMatch(target.p.get, pattern.p.get)
@@ -343,7 +610,7 @@ object SpatialMatcher {
         StateT.liftF(None)
   }
 
-  implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr] = fromFunction[Expr] {
+  implicit val exprSpatialMatcherInstance: SpatialMatcher[Expr, Expr] = fromFunction[Expr, Expr] {
     (target, pattern) =>
       (target.exprInstance, pattern.exprInstance) match {
         case (EListBody(EList(tlist, _, _, _)), EListBody(EList(plist, _, _, rem))) => {
@@ -378,33 +645,35 @@ object SpatialMatcher {
             _ <- spatialMatch(t1.get, p1.get)
             _ <- spatialMatch(t2.get, p2.get)
           } yield Unit
+        case (EEvalBody(chan1), EEvalBody(chan2)) =>
+          spatialMatch(chan1, chan2)
         case _ => StateT.liftF(None)
       }
   }
 
-  implicit val matchSpatialMatcherInstance: SpatialMatcher[Match] = fromFunction[Match] {
-    (target, pattern) =>
+  implicit val matchSpatialMatcherInstance: SpatialMatcher[Match, Match] =
+    fromFunction[Match, Match] { (target, pattern) =>
       for {
         _ <- spatialMatch(target.target.get, pattern.target.get)
         _ <- foldMatch(target.cases, pattern.cases)
       } yield Unit
-  }
+    }
 
   /**
     * Note that currently there should be no way to put a GPrivate in a pattern
     * because patterns start with an empty environment.
     * We're going to write the obvious definition anyway.
     */
-  implicit val gprivateSpatialMatcherInstance: SpatialMatcher[GPrivate] = fromFunction[GPrivate] {
-    (target, pattern) =>
+  implicit val gprivateSpatialMatcherInstance: SpatialMatcher[GPrivate, GPrivate] =
+    fromFunction[GPrivate, GPrivate] { (target, pattern) =>
       if (target == pattern)
         StateT.pure(Unit)
       else
         StateT.liftF(None)
-  }
+    }
 
-  implicit val channelSpatialMatcherInstance: SpatialMatcher[Channel] = fromFunction[Channel] {
-    (target, pattern) =>
+  implicit val channelSpatialMatcherInstance: SpatialMatcher[Channel, Channel] =
+    fromFunction[Channel, Channel] { (target, pattern) =>
       (target.channelInstance, pattern.channelInstance) match {
         case (_, ChanVar(v)) if v.varInstance.isWildcard => StateT.pure(Unit)
         case (Quote(p), ChanVar(v)) => {
@@ -426,22 +695,54 @@ object SpatialMatcher {
         case (Quote(tproc), Quote(pproc)) => spatialMatch(tproc, pproc)
         case _                            => StateT.liftF(None)
       }
-  }
+    }
 
-  implicit val receiveBindSpatialMatcherInstance: SpatialMatcher[ReceiveBind] =
-    fromFunction[ReceiveBind] { (target, pattern) =>
+  implicit val receiveBindSpatialMatcherInstance: SpatialMatcher[ReceiveBind, ReceiveBind] =
+    fromFunction[ReceiveBind, ReceiveBind] { (target, pattern) =>
       if (target.patterns != pattern.patterns)
         StateT.liftF[Option, FreeMap, Unit](None)
       else
         spatialMatch(target.source.get, pattern.source.get)
     }
 
-  implicit val matchCaseSpatialMatcherInstance: SpatialMatcher[MatchCase] =
-    fromFunction[MatchCase] { (target, pattern) =>
+  implicit val matchCaseSpatialMatcherInstance: SpatialMatcher[MatchCase, MatchCase] =
+    fromFunction[MatchCase, MatchCase] { (target, pattern) =>
       if (target.pattern != pattern.pattern)
         StateT.liftF(None)
       else
         spatialMatch(target.source.get, pattern.source.get)
     }
 
+  // This matches a single logical connective against a Par. If it can match
+  // more ways than one, we don't care, as we care about what went into the
+  // match, and not about how it matched inside. The tricky part goes into
+  // the par/par matcher.
+  implicit val connectiveMatcher: SpatialMatcher[Par, Connective] =
+    fromFunction[Par, Connective] { (target, pattern) =>
+      pattern.connectiveInstance match {
+        case ConnAndBody(ConnectiveBody(ps)) =>
+          ps.toList.traverse_(p => spatialMatch(target, p))
+        case ConnOrBody(ConnectiveBody(ps)) => {
+          def firstMatch(target: Par, patterns: Seq[Par]): OptionalFreeMap[Unit] =
+            patterns match {
+              case Nil => StateT.liftF(None)
+              case p +: rem =>
+                StateT[Option, FreeMap, Unit]((s: FreeMap) => {
+                  spatialMatch(target, p).run(s) match {
+                    case None               => firstMatch(target, rem).run(s)
+                    case Some((_, _: Unit)) => Some((s, Unit))
+                  }
+                })
+            }
+          firstMatch(target, ps)
+        }
+        case ConnNotBody(p) =>
+          StateT[Option, FreeMap, Unit]((s: FreeMap) => {
+            spatialMatch(target, p).run(s) match {
+              case None         => Some((s, Unit))
+              case Some((_, _)) => None
+            }
+          })
+      }
+    }
 }

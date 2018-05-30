@@ -1,7 +1,7 @@
 package coop.rchain.node
 
 import java.net.{InetAddress, NetworkInterface}
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.comm.UPnP
@@ -14,16 +14,20 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val diagnostics = opt[Boolean](default = Some(false), short = 'd', descr = "Node diagnostics")
 
-  val name =
-    opt[String](default = None,
-                short = 'n',
-                descr = "Node name or key (deprecated, will be removed in next release).")
+  val certificate =
+    opt[Path](
+      required = false,
+      short = 'c',
+      descr = "Path to node's X.509 certificate file, that is being used for identification")
+
+  val key =
+    opt[Path](required = false,
+              short = 'k',
+              descr =
+                "Path to node's private key PEM file, that is being used for TLS communication")
 
   val port =
-    opt[Int](default = Some(30304),
-             short = 'p',
-             descr =
-               "Network port to use. Currently UDP port, will become TCP port in next release.")
+    opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
 
   val httpPort =
     opt[Int](default = Some(8080),
@@ -38,6 +42,15 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   val grpcHost =
     opt[String](default = Some("localhost"),
                 descr = "Hostname or IP of node on which gRPC service is running.")
+
+  val numValidators = opt[Int](default = Some(5), descr = "Number of validators at genesis.")
+  val bondsFile = opt[String](
+    default = None,
+    descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
+      "which defines the bond amounts for each validator at genesis. " +
+      "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
+      "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
+  )
 
   val bootstrap =
     opt[String](default = Some("rnode://0f365f1016a54747b384b386b8e85352@216.83.154.106:30012"),
@@ -54,6 +67,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     default = Some(false),
     short = 'r',
     descr = "Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
+
   val eval = opt[String](
     default = None,
     descr =
@@ -69,13 +83,48 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   val deployDemo = opt[Boolean](
     default = Some(false),
-    descr = "Demo sending some placeholder Deploy operations to Casper at regular intervals")
+    descr =
+      "Demo sending some placeholder Deploy operations to Casper on an existing running node at regular intervals")
+
+  val deploy = opt[String](
+    default = None,
+    descr =
+      "Deploy a Rholang source file to Casper on an existing running node. " +
+        "The deploy will be packaged and sent as a block to the network depending " +
+        "on the configuration of the Casper instance."
+  )
+
+  val showBlock = opt[String](
+    default = None,
+    descr =
+      "View properties of a block known by Casper on an existing running node." +
+        "Output includes: parent hashes, storage contents of the tuplespace."
+  )
+
+  val propose = opt[Boolean](
+    default = Some(false),
+    descr =
+      "Force Casper (on an existing running node) to propose a block based on its accumulated deploys. " +
+        "Requires a value of --secret-key to be set."
+  )
+
+  val secretKey = opt[String](
+    default = None,
+    descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
 
   def fetchHost(): String =
     host.toOption match {
       case Some(host) => host
       case None       => whoami(port()).fold("localhost")(_.getHostAddress)
     }
+
+  def certificatePath: Path =
+    certificate.toOption
+      .getOrElse(Paths.get(data_dir().toString, "node.certificate.pem"))
+
+  def keyPath: Path =
+    certificate.toOption
+      .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
   private def whoami(port: Int): Option[InetAddress] = {
 
