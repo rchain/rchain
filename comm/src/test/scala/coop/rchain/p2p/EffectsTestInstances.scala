@@ -38,9 +38,13 @@ object EffectsTestInstances {
     def addNode(node: PeerNode): F[Unit] = Capture[F].capture {
       nodes = node :: nodes
     }
-    def findMorePeers(limit: Int): F[Seq[PeerNode]]                         = ???
-    def peers: F[Seq[PeerNode]]                                             = ???
-    def handleCommunications: ProtocolMessage => F[Option[ProtocolMessage]] = ???
+
+    def peers: F[Seq[PeerNode]] = Capture[F].capture {
+      nodes
+    }
+
+    def findMorePeers(limit: Int): F[Seq[PeerNode]]                       = ???
+    def handleCommunications: ProtocolMessage => F[CommunicationResponse] = ???
   }
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: ProtocolNode)
@@ -66,14 +70,14 @@ object EffectsTestInstances {
       }
 
     def local: F[ProtocolNode] = src.pure[F]
-    def commSend(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
+    def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ msg
         Right(())
       }
-    def broadcast(msg: ProtocolMessage): F[Seq[CommErr[Unit]]] = ???
+    def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
 
-    def receive(dispatch: ProtocolMessage => F[Option[ProtocolMessage]]): F[Unit] = ???
+    def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
   }
 
   import Encryption._

@@ -160,8 +160,8 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         val receivedMessage =
           EncryptionHandshakeMessage(encryptionHandshake(src, remoteKeys), 1)
         // when
-        val EncryptionHandshakeResponseMessage(proto, _) =
-          Network.handleEncryptionHandshake[Effect](remote, receivedMessage).value.right.get.get
+        val HandledWithMessage(EncryptionHandshakeResponseMessage(proto, _)) =
+          Network.handleEncryptionHandshake[Effect](remote, receivedMessage).value.right.get
         // then
         val Right(EncryptionHandshakeResponse(pk)) =
           NetworkProtocol.toEncryptionHandshakeResponse(proto)
@@ -214,8 +214,8 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
         val receivedMessage =
           FrameMessage(frame(src, nonce, protocolHandshake(src, nonce).toByteArray), 1)
         // when
-        val FrameMessage(proto, _) =
-          Network.handleFrame[Effect](remote, receivedMessage).value.right.get.get
+        val HandledWithMessage(FrameMessage(proto, _)) =
+          Network.handleFrame[Effect](remote, receivedMessage).value.right.get
         // then
         val Right(Frame(n, _)) = toFrame(proto)
         n.toByteArray should equal(nonce)
@@ -227,24 +227,19 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
 
   }
 
-  private val roundTripNOP =
-    kp2[ProtocolMessage, ProtocolNode, CommErr[ProtocolMessage]](Left(unknownProtocol("unknown")))
-
   private def value[A](ea: Effect[A]): A = ea.value.right.get
 
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ EncryptionHandshakeMessage(_, _) =>
-      hs.response[Effect](ProtocolNode(remote, roundTripNOP), remoteKeys).value.right.get
+      hs.response[Effect](ProtocolNode(remote), remoteKeys).value.right.get
   }
 
   private val sndPhaseSucc: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ FrameMessage(_, _) =>
       Right(
-        FrameMessage(frameResponse(ProtocolNode(remote, roundTripNOP),
-                                   hs.header.get,
-                                   Array.empty[Byte],
-                                   Array.empty[Byte]),
-                     1))
+        FrameMessage(
+          frameResponse(ProtocolNode(remote), hs.header.get, Array.empty[Byte], Array.empty[Byte]),
+          1))
   }
 
   private val sndPhaseFailure: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
@@ -263,5 +258,5 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(peerNode(name, port), roundTripNOP)
+    ProtocolNode(peerNode(name, port))
 }

@@ -3,6 +3,9 @@
 #include "Prim.h"
 #include "Number.h"
 #include "Expr.h"
+#include "RblAtom.h"
+#include "Proc.h"
+#include "Method.h"
 
 #include "CommandLine.h"
 
@@ -32,20 +35,36 @@ void defaultObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::Ob
 
 // This function looks up an object in the handlers table based on its type string
 // and then calls the appropriate handler to populate it.
+std::set<IdType> exportedIds;
 void populateObjectByType(pOb ob, ObjectCodePB::Object *exOb) {
-    std::string type = BASE(ob)->typestring();
-    auto oh = handlers.find(type);
-    if (oh != handlers.end()) {
-        ExportObjectHandler handler = oh->second.first;
-        ExportObjectType obType = oh->second.second;
 
-        exOb->set_type(obType);
-        handler(exOb, ob, obType);
+    exOb->set_objectid(BASE(ob)->objectId);
+
+    auto id = exportedIds.find(BASE(ob)->objectId);
+    if (id != exportedIds.end()) {
+        // Don't export an object more than once. This effectively eliminates problems
+        // with self referential objects and loops in the object tree.
+
+        // Already exported. just reference the id.
+        exOb->set_reference(true);
     } else {
-        warning("Exporting object type %s not yet implemented!", type.c_str());
+        std::string type = BASE(ob)->typestring();
+        auto oh = handlers.find(type);
+        if (oh != handlers.end()) {
+            ExportObjectHandler handler = oh->second.first;
+            ExportObjectType obType = oh->second.second;
 
-        exOb->set_type(ObjectCodePB::OT_unknown);
-        defaultObjectHandler(exOb, ob, ObjectCodePB::OT_unknown);
+            exOb->set_type(obType);
+            exOb->set_metaid(BASE(ob)->meta()->objectId);
+            exOb->set_parentid(BASE(ob)->parent()->objectId);
+
+            exportedIds.insert(BASE(ob)->objectId);
+            handler(exOb, ob, obType);
+        } else {
+            warning("Exporting object type %s not yet implemented!", type.c_str());
+            exOb->set_type(ObjectCodePB::OT_unknown);
+            defaultObjectHandler(exOb, ob, ObjectCodePB::OT_unknown);
+        }
     }
 }
 
@@ -90,15 +109,11 @@ void tupleObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObTy
         pOb ob = tup->elem(i);
         std::string type = BASE(tup->elem(i))->typestring();
         ObjectCodePB::Object *elOb = pbTup->add_elements();
-        elOb->set_id(BASE(ob)->id);
-        elOb->set_metaid(BASE(ob)->meta()->id);
-        elOb->set_parentid(BASE(ob)->parent()->id);
-
         populateObjectByType(ob, elOb);
     }
 }
 
-void blockexprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+void blockExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
     ObjectCodePB::BlockExpr *blob = lvob->mutable_blockexpr();
     BlockExpr * be = (BlockExpr *)ob;
 
@@ -125,52 +140,249 @@ void stdExtensionObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodeP
     ObjectCodePB::StdExtension *sextob = lvob->mutable_stdextension();
 }
 
+void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::ExpandedLocation *exlocob = lvob->mutable_expandedlocation();
+}
+
+void freeExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::FreeExpr *feob = lvob->mutable_freeexpr();
+    FreeExpr * fe = (FreeExpr *)ob;
+
+    ObjectCodePB::Object *freeids = feob->mutable_freeids();
+    populateObjectByType(fe->freeIds, freeids);
+
+    ObjectCodePB::Object *body = feob->mutable_body();
+    populateObjectByType(fe->body, body);
+}
+
+void gotoExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::GotoExpr *gtob = lvob->mutable_gotoexpr();
+    GotoExpr * ge = (GotoExpr *)ob;
+
+    ObjectCodePB::Object *label = gtob->mutable_label();
+    populateObjectByType(ge->label, label);
+}
+
+void ifExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::IfExpr *ifob = lvob->mutable_ifexpr();
+    IfExpr * ie = (IfExpr *)ob;
+
+    ObjectCodePB::Object *condition = ifob->mutable_condition();
+    populateObjectByType(ie->condition, condition);
+
+    ObjectCodePB::Object *trueBranch = ifob->mutable_truebranch();
+    populateObjectByType(ie->trueBranch, trueBranch);
+
+    ObjectCodePB::Object *falseBranch = ifob->mutable_falsebranch();
+    populateObjectByType(ie->falseBranch, falseBranch);
+}
+
+void labelExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::LabelExpr *leob = lvob->mutable_labelexpr();
+    LabelExpr * le = (LabelExpr *)ob;
+
+    ObjectCodePB::Object *label = leob->mutable_label();
+    populateObjectByType(le->label, label);
+
+    ObjectCodePB::Object *body = leob->mutable_body();
+    populateObjectByType(le->body, body);
+}
+
+void letExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::LetExpr *leob = lvob->mutable_letexpr();
+    LetExpr * le = (LetExpr *)ob;
+
+    ObjectCodePB::Object *bindings = leob->mutable_bindings();
+    populateObjectByType(le->bindings, bindings);
+
+    ObjectCodePB::Object *body = leob->mutable_body();
+    populateObjectByType(le->body, body);
+}
+
+void tupleExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::TupleExpr *teob = lvob->mutable_tupleexpr();
+    TupleExpr * te = (TupleExpr *)ob;
+
+    ObjectCodePB::Object *rest = teob->mutable_rest();
+    populateObjectByType(te->rest, rest);
+}
+
+void letRecExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::LetrecExpr *lreob = lvob->mutable_letrecexpr();
+}
+
+void methodExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::MethodExpr *meob = lvob->mutable_methodexpr();
+    MethodExpr * me = (MethodExpr *)ob;
+
+    ObjectCodePB::Object *identity = meob->mutable_identity();
+    populateObjectByType(me->identity, identity);
+
+    ObjectCodePB::Object *formals = meob->mutable_formals();
+    populateObjectByType(me->formals, formals);
+
+    ObjectCodePB::Object *body = meob->mutable_body();
+    populateObjectByType(me->body, body);
+}
+
+void nullExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::NullExpr *neob = lvob->mutable_nullexpr();
+}
+
+void procObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::Proc *pob = lvob->mutable_proc();
+    Proc * p = (Proc *)ob;
+
+    ObjectCodePB::Object *env = pob->mutable_env();
+    populateObjectByType(p->env, env);
+
+    ObjectCodePB::Object *code = pob->mutable_code();
+    populateObjectByType(p->code, code);
+
+    ObjectCodePB::Object *id = pob->mutable_id();
+    populateObjectByType(p->id, id);
+
+    ObjectCodePB::Object *source = pob->mutable_source();
+    populateObjectByType(p->source, source);
+
+}
+
+void procExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::ProcExpr *peob = lvob->mutable_procexpr();
+}
+
+void quoteExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::QuoteExpr *qeob = lvob->mutable_quoteexpr();
+    QuoteExpr * qe = (QuoteExpr *)ob;
+
+    ObjectCodePB::Object *expr = qeob->mutable_expr();
+    populateObjectByType(qe->expr, expr);
+}
+
+void rblAtomExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::RblAtom *raob = lvob->mutable_rblatom();
+}
+
+void reflectiveMethodExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::ReflectiveMethodExpr *rmeob = lvob->mutable_reflectivemethodexpr();
+}
+
+void requestExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::RequestExpr *reob = lvob->mutable_requestexpr();
+    RequestExpr * re = (RequestExpr *)ob;
+
+    ObjectCodePB::Object *target = reob->mutable_target();
+    populateObjectByType(re->target, target);
+
+    ObjectCodePB::Object *msg = reob->mutable_msg();
+    populateObjectByType(re->msg, msg);
+}
+
+void sendExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::SendExpr *seob = lvob->mutable_sendexpr();
+}
+
+void seqExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::SeqExpr *seob = lvob->mutable_seqexpr();
+    SeqExpr * se = (SeqExpr *)ob;
+
+    ObjectCodePB::Object *subexprs = seob->mutable_subexprs();
+    populateObjectByType(se->subExprs, subexprs);
+}
+
+void setExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::SetExpr *seob = lvob->mutable_setexpr();
+    SetExpr * se = (SetExpr *)ob;
+
+    ObjectCodePB::Object *trgt = seob->mutable_trgt();
+    populateObjectByType(se->trgt, trgt);
+
+    ObjectCodePB::Object *val = seob->mutable_val();
+    populateObjectByType(se->val, val);
+}
+
+void stdMthdObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::StdMthd *smob = lvob->mutable_stdmthd();
+    StdMthd * sm = (StdMthd *)ob;
+
+    ObjectCodePB::Object *code = smob->mutable_code();
+    populateObjectByType(sm->code, code);
+
+    ObjectCodePB::Object *id = smob->mutable_id();
+    populateObjectByType(sm->id, id);
+
+    ObjectCodePB::Object *source = smob->mutable_source();
+    populateObjectByType(sm->source, source);
+
+}
+
+void tblObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::TblObject *tblob = lvob->mutable_tblobject();
+    TblObject * to = (TblObject *)ob;
+
+    ObjectCodePB::Object *validextent = tblob->mutable_validextent();
+    populateObjectByType(to->validExtent, validextent);
+
+    ObjectCodePB::Object *keyvec = tblob->mutable_keyvec();
+    populateObjectByType(to->keyVec, keyvec);
+}
+
+void templateExprObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
+    ObjectCodePB::Template *tob = lvob->mutable_template_();
+}
+
+
+
+
 // The handler table that defines which objects are supported, and how they are handled.
 
 std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  handlers = {
     {"Actor",               {actorObjectHandler,     ObjectCodePB::OT_Actor} },
-    {"BlockExpr",           {blockexprObjectHandler, ObjectCodePB::OT_BlockExpr} },
+    {"BlockExpr",           {blockExprObjectHandler, ObjectCodePB::OT_BlockExpr} },
     {"Char",                {charObjectHandler,      ObjectCodePB::OT_Char} },
     {"Code",                {codeObjectHandler,      ObjectCodePB::OT_Code} },
-    {"ExpandedLocation",    {defaultObjectHandler,   ObjectCodePB::OT_ExpandedLocation} },
+    {"ExpandedLocation",    {expandedLocationObjectHandler, ObjectCodePB::OT_ExpandedLocation} },
     {"Fixnum",              {fixnumObjectHandler,    ObjectCodePB::OT_Fixnum} },
     {"Float",               {floatObjectHandler,     ObjectCodePB::OT_Float} },
-    {"FreeExpr",            {defaultObjectHandler,   ObjectCodePB::OT_FreeExpr} },
-    {"GotoExpr",            {defaultObjectHandler,   ObjectCodePB::OT_GotoExpr} },
-    {"IfExpr",              {defaultObjectHandler,   ObjectCodePB::OT_IfExpr} },
-    {"LabelExpr",           {defaultObjectHandler,   ObjectCodePB::OT_LabelExpr} },
-    {"LetExpr",             {defaultObjectHandler,   ObjectCodePB::OT_LetExpr} },
-    {"LetrecExpr",          {defaultObjectHandler,   ObjectCodePB::OT_LetrecExpr} },
-    {"MethodExpr",          {defaultObjectHandler,   ObjectCodePB::OT_MethodExpr} },
+    {"FreeExpr",            {freeExprObjectHandler,  ObjectCodePB::OT_FreeExpr} },
+    {"GotoExpr",            {gotoExprObjectHandler,  ObjectCodePB::OT_GotoExpr} },
+    {"IfExpr",              {ifExprObjectHandler,    ObjectCodePB::OT_IfExpr} },
+    {"LabelExpr",           {labelExprObjectHandler, ObjectCodePB::OT_LabelExpr} },
+    {"LetExpr",             {letExprObjectHandler,   ObjectCodePB::OT_LetExpr} },
+    {"LetrecExpr",          {letRecExprObjectHandler, ObjectCodePB::OT_LetrecExpr} },
+    {"MethodExpr",          {methodExprObjectHandler, ObjectCodePB::OT_MethodExpr} },
     {"Niv",                 {nivObjectHandler,       ObjectCodePB::OT_Niv}},
-    {"Proc",                {defaultObjectHandler,   ObjectCodePB::OT_Proc} },
-    {"ProcExpr",            {defaultObjectHandler,   ObjectCodePB::OT_ProcExpr} },
-    {"QuoteExpr",           {defaultObjectHandler,   ObjectCodePB::OT_QuoteExpr} },
+    {"NullExpr",            {nullExprObjectHandler,  ObjectCodePB::OT_NullExpr}},
+    {"Proc",                {procObjectHandler,      ObjectCodePB::OT_Proc} },
+    {"ProcExpr",            {procExprObjectHandler,  ObjectCodePB::OT_ProcExpr} },
+    {"QuoteExpr",           {quoteExprObjectHandler, ObjectCodePB::OT_QuoteExpr} },
+    {"RblAtom",             {rblAtomExprObjectHandler, ObjectCodePB::OT_RblAtom}},
     {"RblBool",             {rblboolObjectHandler,   ObjectCodePB::OT_RblBool}},
     {"RBLstring",           {rblstringObjectHandler, ObjectCodePB::OT_RBLstring} },
-    {"ReflectiveMethodExpr",{defaultObjectHandler,   ObjectCodePB::OT_ReflectiveMethodExpr} },
-    {"RequestExpr",         {defaultObjectHandler,   ObjectCodePB::OT_RequestExpr} },
-    {"SendExpr",            {defaultObjectHandler,   ObjectCodePB::OT_SendExpr} },
-    {"SeqExpr",             {defaultObjectHandler,   ObjectCodePB::OT_SeqExpr} },
-    {"SetExpr",             {defaultObjectHandler,   ObjectCodePB::OT_SetExpr} },
+    {"ReflectiveMethodExpr",{reflectiveMethodExprObjectHandler, ObjectCodePB::OT_ReflectiveMethodExpr} },
+    {"RequestExpr",         {requestExprObjectHandler, ObjectCodePB::OT_RequestExpr} },
+    {"SendExpr",            {sendExprObjectHandler,  ObjectCodePB::OT_SendExpr} },
+    {"SeqExpr",             {seqExprObjectHandler,   ObjectCodePB::OT_SeqExpr} },
+    {"SetExpr",             {setExprObjectHandler,   ObjectCodePB::OT_SetExpr} },
     {"StdExtension",        {stdExtensionObjectHandler, ObjectCodePB::OT_StdExtension} },
-    {"StdMthd",             {defaultObjectHandler,   ObjectCodePB::OT_StdMthd} },
+    {"StdMthd",             {stdMthdObjectHandler,   ObjectCodePB::OT_StdMthd} },
     {"Symbol",              {symbolObjectHandler,    ObjectCodePB::OT_Symbol} },
-    {"TblObject",           {defaultObjectHandler,   ObjectCodePB::OT_TblObject} },
-    {"Template",            {defaultObjectHandler,   ObjectCodePB::OT_Template} },
+    {"TblObject",           {tblObjectHandler,       ObjectCodePB::OT_TblObject} },
+    {"Template",            {templateExprObjectHandler, ObjectCodePB::OT_Template} },
     {"Tuple",               {tupleObjectHandler,     ObjectCodePB::OT_Tuple} },
-    {"TupleExpr",           {defaultObjectHandler,   ObjectCodePB::OT_TupleExpr} },
+    {"TupleExpr",           {tupleExprObjectHandler, ObjectCodePB::OT_TupleExpr} },
 };
 
-uint64_t createObjectId(Code * code) {
-    // Rosette internally, uses the object pointer but for export, this results in
-    // duplicate ids due to objects being garbage collected, and then the memory
-    // being reused.
+IdType createObjectId(Code * code) {
+    // Rosette internally uses the object pointer. We can't just use the pointer
+    // to the object as a unique id when exporting, because when an object goes
+    // out of scope its memory is reused. Therefore we create a unique id for each
+    // object as it's constructed.
 
     // Here we will use the newly invented object ID that is generated when the
     // object is created by Rosette
 
-    return BASE(code)->id;
+    return BASE(code)->objectId;
 }
 
 
@@ -183,7 +395,8 @@ ObjectCodePB::ObjectCode objectCode;
 void collectExportCode(Code *code) {
     if (VerboseFlag) fprintf(stderr, "\n%s\n", __PRETTY_FUNCTION__);
 
-    uint64_t codeId = createObjectId( code );
+    IdType codeId = createObjectId( code );
+    exportedIds.insert(codeId);
 
     if (VerboseFlag) {
         fprintf(stderr, "CodeId=%llu\n", codeId);
@@ -197,7 +410,7 @@ void collectExportCode(Code *code) {
     ObjectCodePB::CodeBlock * cb = objectCode.add_codeblock();
 
     // Save the code id
-    cb->set_id( codeId );
+    cb->set_objectid( codeId );
 
     // Get access to the codevec and litvec to be exported.
     CodeVec * codevec = code->codevec;
@@ -216,10 +429,6 @@ void collectExportCode(Code *code) {
     for (int i = 0; i < litvec->numberOfElements(); i++) {
         pOb ob = litvec->elem(i);
         ObjectCodePB::Object *lvob = lv->add_ob();
-        lvob->set_id(BASE(ob)->id);
-        lvob->set_metaid(BASE(ob)->meta()->id);
-        lvob->set_parentid(BASE(ob)->parent()->id);
-
         populateObjectByType(ob, lvob);
     }
 }

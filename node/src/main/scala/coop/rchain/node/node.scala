@@ -1,8 +1,6 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import java.net.SocketAddress
-import java.util.UUID
 import io.grpc.Server
 
 import cats._, cats.data._, cats.implicits._
@@ -10,7 +8,7 @@ import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
-import coop.rchain.comm._, CommError._
+import coop.rchain.comm._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
@@ -19,14 +17,59 @@ import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
+
+import coop.rchain.shared.Resources._
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
-
+import coop.rchain.node.effects.TLNodeDiscovery
 import scala.io.Source
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
+
+  // Generate certificate if not provided as option or in the data dir
+  if (conf.certificate.toOption.isEmpty
+      && conf.key.toOption.isEmpty
+      && !conf.certificatePath.toFile.exists()) {
+    println(s"No certificate found at path ${conf.certificatePath}")
+    println("Generating a X.509 certificate for the node")
+    CertificateHelper.generate(conf.data_dir().toString)
+  }
+
+  if (!conf.certificatePath.toFile.exists()) {
+    println(s"Certificate file ${conf.certificatePath} not found")
+    System.exit(-1)
+  }
+
+  if (!conf.keyPath.toFile.exists()) {
+    println(s"Secret key file ${conf.keyPath} not found")
+    System.exit(-1)
+  }
+
+  private val name: String = {
+    val certPath = conf.certificate.toOption
+      .getOrElse(java.nio.file.Paths.get(conf.data_dir().toString, "node.certificate.pem"))
+
+    val publicKey = Try(CertificateHelper.fromFile(certPath.toFile)) match {
+      case Success(c) => Some(c.getPublicKey)
+      case Failure(e) =>
+        println(s"Failed to read the X.509 certificate: ${e.getMessage}")
+        System.exit(1)
+        None
+      case _ => None
+    }
+
+    publicKey
+      .flatMap(CertificateHelper.publicAddress)
+      .getOrElse {
+        println("Certificate must contain a secp256r1 EC Public Key")
+        System.exit(1)
+        Array[Byte]()
+      }
+      .map("%02x".format(_))
+      .mkString
+  }
 
   implicit class ThrowableOps(th: Throwable) {
     def containsMessageWith(str: String): Boolean =
@@ -38,11 +81,10 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   /** Configuration */
   private val host           = conf.fetchHost()
-  private val name           = conf.name.toOption.fold(UUID.randomUUID.toString.replaceAll("-", ""))(id)
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"${name}-rnode-remote.keys")
-  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"${name}-rnode.keys")
+  private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
+  private val keysPath       = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
   private val storagePath    = conf.data_dir().resolve("rspace")
   private val storageSize    = conf.map_size()
 
@@ -58,16 +100,18 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]         = effects.encryption(keysPath)
-  implicit val logEffect: Log[Task]                       = effects.log
-  implicit val timeEffect: Time[Task]                     = effects.time
-  implicit val jvmMetricsEffect: JvmMetrics[Task]         = diagnostics.jvmMetrics
-  implicit val metricsEffect: Metrics[Task]               = diagnostics.metrics
-  implicit val nodeCoreMetricsEffect: NodeMetrics[Task]   = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]    = effects.remoteKeysKvs(remoteKeysPath)
-  val net                                                 = new UnicastNetwork(src)
-  implicit val nodeDiscoveryEffect: NodeDiscovery[Task]   = effects.nodeDiscovery[Task](net)
-  implicit val transportLayerEffect: TransportLayer[Task] = effects.transportLayer(net)
+  implicit val encryptionEffect: Encryption[Task]       = effects.encryption(keysPath)
+  implicit val logEffect: Log[Task]                     = effects.log
+  implicit val timeEffect: Time[Task]                   = effects.time
+  implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
+  implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
+  implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
+  implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
+  implicit val transportLayerEffect: TransportLayer[Task] =
+    effects.tcpTranposrtLayer[Task](conf)(src)
+  implicit val pingEffect: Ping[Task]                   = effects.ping(src)
+  implicit val nodeDiscoveryEffect: NodeDiscovery[Task] = new TLNodeDiscovery[Task](src)
+
   val bondsFile: Option[File] =
     conf.bondsFile.toOption
       .flatMap(path => {
@@ -116,8 +160,12 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   def acquireResources: Effect[Resources] =
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
-      grpcServer <- GrpcServer
-                     .acquireServer[Effect](conf.grpcPort(), runtime)
+      grpcServer <- {
+        implicit val storeMetrics =
+          diagnostics.storeMetrics[Effect](runtime.store, conf.data_dir().normalize)
+        GrpcServer
+          .acquireServer[Effect](conf.grpcPort(), runtime)
+      }
       metricsServer <- MetricsServer.create[Effect](conf.metricsPort())
       httpServer    <- HttpServer(conf.httpPort()).pure[Effect]
     } yield Resources(grpcServer, metricsServer, httpServer, runtime)
@@ -133,8 +181,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down gRPC server...")
     resources.grpcServer.shutdown()
     println("Shutting down transport layer, broadcasting DISCONNECT")
-    net.broadcast(
-      DisconnectMessage(ProtocolMessage.disconnect(net.local), System.currentTimeMillis))
+
+    (for {
+      peers <- nodeDiscoveryEffect.peers
+      loc   <- transportLayerEffect.local
+      ts    <- timeEffect.currentMillis
+      msg   = DisconnectMessage(ProtocolMessage.disconnect(loc), ts)
+      _     <- transportLayerEffect.broadcast(msg, peers)
+    } yield ()).unsafeRunSync
     println("Shutting down metrics server...")
     resources.metricsServer.stop()
     println("Shutting down HTTP server....")
@@ -149,6 +203,14 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       scheduler.scheduleAtFixedRate(3.seconds, 3.second)(JvmMetrics.report[Task].unsafeRunSync)
+    }
+
+  def startReportStoreMetrics(resources: Resources): Task[Unit] =
+    Task.delay {
+      import scala.concurrent.duration._
+      implicit val storeMetrics: StoreMetrics[Task] =
+        diagnostics.storeMetrics[Task](resources.runtime.store, conf.data_dir().normalize)
+      scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
   def addShutdownHook(resources: Resources): Task[Unit] =
@@ -184,16 +246,16 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
         Log[Task].info(s"Created validator $pk with bond $stake")
         printer.println(s"$pk $stake")
     }
-    printer.close
+    printer.close()
 
     bonds
   }
 
-  def handleCommunications: ProtocolMessage => Effect[Option[ProtocolMessage]] =
+  def handleCommunications: ProtocolMessage => Effect[CommunicationResponse] =
     pm =>
       NodeDiscovery[Effect].handleCommunications(pm) >>= {
-        case None     => p2p.Network.dispatch[Effect](pm)
-        case resultPM => resultPM.pure[Effect]
+        case NotHandled => p2p.Network.dispatch[Effect](pm)
+        case handled    => handled.pure[Effect]
     }
 
   private def unrecoverableNodeProgram: Effect[Unit] =
@@ -203,6 +265,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect
       _         <- startReportJvmMetrics.toEffect
+      _         <- startReportStoreMetrics(resources).toEffect
       _         <- TransportLayer[Effect].receive(handleCommunications)
       _         <- Log[Effect].info(s"Listening for traffic on $address.")
       res <- ApplicativeError_[Effect, CommError].attempt(

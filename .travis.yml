@@ -98,6 +98,8 @@ matrix:
           - fakeroot
   - language: nix 
     env: SUBPROJECT=rholang_more_tests
+    install:
+      - ./scripts/install_sodium.sh
 
 script:
   - ./scripts/build-subprojects.sh

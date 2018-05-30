@@ -7,6 +7,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.internal.scodecs._
 import coop.rchain.rspace.util._
+import coop.rchain.shared.ByteVectorOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
 import scodec.Codec
@@ -14,13 +15,15 @@ import scodec.bits._
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
+import coop.rchain.shared.PathOps.RichPath
 
 /**
   * The main store class.
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-class LMDBStore[C, P, A, K] private (val env: Env[ByteBuffer],
+class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
+                                     databasePath: Path,
                                      _dbKeys: Dbi[ByteBuffer],
                                      _dbWaitingContinuations: Dbi[ByteBuffer],
                                      _dbData: Dbi[ByteBuffer],
@@ -98,11 +101,11 @@ class LMDBStore[C, P, A, K] private (val env: Env[ByteBuffer],
       .getOrElse(Seq.empty[Datum[A]])
   }
 
-  def collectGarbage(txn: T,
-                     channelsHash: H,
-                     dataCollected: Boolean = false,
-                     waitingContinuationsCollected: Boolean = false,
-                     joinsCollected: Boolean = false): Unit = {
+  private[rspace] def collectGarbage(txn: T,
+                                     channelsHash: H,
+                                     dataCollected: Boolean = false,
+                                     waitingContinuationsCollected: Boolean = false,
+                                     joinsCollected: Boolean = false): Unit = {
 
     def isEmpty(dbi: Dbi[ByteBuffer]): Boolean =
       dbi.get(txn, channelsHash) == null
@@ -267,6 +270,9 @@ class LMDBStore[C, P, A, K] private (val env: Env[ByteBuffer],
     env.close()
   }
 
+  def getStoreSize: StoreSize =
+    StoreSize(databasePath.folderSize, env.stat().entries)
+
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
       !_dbKeys.iterate(txn).hasNext &&
@@ -327,7 +333,10 @@ object LMDBStore {
     val dbData: Dbi[ByteBuffer]  = env.openDbi(dataTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](env, dbKeys, dbWaitingContinuations, dbData, dbJoins)(sc, sp, sa, sk)
+    new LMDBStore[C, P, A, K](env, path, dbKeys, dbWaitingContinuations, dbData, dbJoins)(sc,
+                                                                                          sp,
+                                                                                          sa,
+                                                                                          sk)
   }
 
   private[rspace] def toByteVector[T](value: T)(implicit st: Serialize[T]): ByteVector =
@@ -340,20 +349,10 @@ object LMDBStore {
     }
 
   private[rspace] def toByteBuffer[T](value: T, codec: Codec[T]): ByteBuffer =
-    toByteBuffer(toBitVector(value, codec))
+    toBitVector(value, codec).bytes.toDirectByteBuffer
 
   private[rspace] def toByteBuffer[T](values: Seq[T])(implicit st: Serialize[T]): ByteBuffer =
-    toByteBuffer(toBitVector(toByteVectorSeq(values), byteVectorsCodec))
-
-  private[rspace] def toByteBuffer(byteVector: ByteVector): ByteBuffer = {
-    val buffer: ByteBuffer = ByteBuffer.allocateDirect(byteVector.size.toInt)
-    byteVector.copyToBuffer(buffer)
-    buffer.flip()
-    buffer
-  }
-
-  private[rspace] def toByteBuffer(bitVector: BitVector): ByteBuffer =
-    toByteBuffer(bitVector.bytes)
+    toBitVector(toByteVectorSeq(values), byteVectorsCodec).bytes.toDirectByteBuffer
 
   private[rspace] def toByteVectorSeq[T](values: Seq[T])(
       implicit st: Serialize[T]): Seq[ByteVector] =

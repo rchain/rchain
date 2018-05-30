@@ -22,13 +22,13 @@ _. Proc16 ::= "{" Proc "}" ;
 -- In general the expression style processes are higher precedence.
 -- Expression style is anything that necessary resolves to a single ground value
 -- or a collection.
-PNegation.    Proc16 ::= "~" Proc16 ;
-PConjunction. Proc15 ::= Proc15 "/\\" Proc16 ;
-PDisjunction. Proc14 ::= Proc14 "\\/" Proc15 ;
-PGround.      Proc13 ::= Ground ;
-PCollect.     Proc13 ::= Collection ;
-PVar.         Proc13 ::= ProcVar ;
-PNil.         Proc13 ::= "Nil" ;
+PGround.      Proc16 ::= Ground ;
+PCollect.     Proc16 ::= Collection ;
+PVar.         Proc16 ::= ProcVar ;
+PNil.         Proc16 ::= "Nil" ;
+PNegation.    Proc15 ::= "~" Proc15 ;
+PConjunction. Proc14 ::= Proc14 "/\\" Proc15 ;
+PDisjunction. Proc13 ::= Proc13 "\\/" Proc14 ;
 PEval.        Proc12 ::= "*" Name ;
 PMethod.      Proc11 ::= Proc11 "." Var "(" [Proc] ")" ;
 PNot.         Proc10 ::= "not" Proc10 ;

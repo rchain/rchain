@@ -13,6 +13,7 @@ import coop.rchain.crypto.codec.Base16
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
+import scala.util.{Failure, Success, Try}
 
 object Main {
 
@@ -30,15 +31,15 @@ object Main {
 
     val exec: Task[Unit] = conf.eval.toOption match {
       case Some(fileName) => {
-        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime(conf).evalProgram[Task](fileName)
       }
       case None if conf.repl() => {
-        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         new ReplRuntime(conf).replProgram[Task].as(())
       }
       case None if conf.diagnostics() => {
-        implicit val consoleIO: ConsoleIO[Task] = new effects.JLineConsoleIO(createConsole)
+        implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
         diagnostics.client.Runtime.diagnosticsProgram[Task]
       }
       case None if conf.deploy.toOption.isDefined =>
@@ -58,8 +59,8 @@ object Main {
         new NodeRuntime(conf).nodeProgram.value.map {
           case Right(_) => ()
           case Left(CouldNotConnectToBootstrap) =>
-            Task.delay(println("Node could not connect to bootstrap node."))
-          case Left(error) => Task.delay(println(s"Failed! Reason: '$error"))
+            println("Node could not connect to bootstrap node.")
+          case Left(error) => println(s"Failed! Reason: '$error")
         }
     }
     exec.unsafeRunSync

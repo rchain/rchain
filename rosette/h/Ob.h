@@ -535,9 +535,9 @@ class Base {
     static char** classNames;
     static uint32_t* obCounts;
     static int nClasses;
-    IdType id;
+    IdType objectId;
 
-    Base() : id(nextId++) {
+    Base() : objectId(nextId++) {
     }
 
     virtual char* typestring();
