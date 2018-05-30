@@ -164,12 +164,17 @@ package object diagnostics {
     new StoreMetrics[F] {
       def storeUsage: F[StoreUsage] =
         Capture[F].capture {
-          val storeSize = store.getStoreSize
-          val totalSize = data_dir.folderSize
-          StoreUsage()
-            .withTotalSizeOnDisk(totalSize)
-            .withRspaceSizeOnDisk(storeSize.sizeOnDisk)
-            .withRspaceDataEntries(storeSize.dataEntries)
+          val storeCounters = store.getStoreCounters
+          val totalSize     = data_dir.folderSize
+          StoreUsage(
+            totalSizeOnDisk = totalSize,
+            rspaceSizeOnDisk = storeCounters.sizeOnDisk,
+            rspaceDataEntries = storeCounters.dataEntries,
+            rspaceConsumesCount = storeCounters.consumesCount,
+            rspaceConsumeAvgMilliseconds = storeCounters.consumeAvgMilliseconds,
+            rspaceProducesCount = storeCounters.producesCount,
+            rspaceProduceAvgMilliseconds = storeCounters.produceAvgMilliseconds
+          )
         }
     }
 
