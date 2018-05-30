@@ -40,6 +40,9 @@ object Blake2b256Hash {
   def create(bytes: Array[Byte]): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Blake2b256.hash(bytes)))
 
+  private[history] def fromHex(string: String): Option[Blake2b256Hash] =
+    ByteVector.fromHex(string).map(new Blake2b256Hash(_))
+
   implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 }
