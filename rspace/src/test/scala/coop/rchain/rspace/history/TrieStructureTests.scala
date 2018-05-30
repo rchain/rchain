@@ -12,7 +12,6 @@ class TrieStructureTests
     with WithLMDBStore {
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
-  behavior of "A trie"
 
   def withTrie[R](f: Trie[TestKey, ByteVector] => R): R =
     withTestTrieStore { store =>
@@ -36,15 +35,7 @@ class TrieStructureTests
       }
     }
 
-  it should "be created as an empty pointer block" in
-    withTrie {
-      case Node(PointerBlock(vector)) =>
-        vector should have size 256
-        vector should contain only None
-      case _ => fail("expected a node")
-    }
-
-  it should "have two levels after inserting one element" ignore {
+  "insert's effect" should "be visible in the outer read transaction" ignore {
     withTrieTxnAndStore { (store, txn, trie) =>
       val key1 = TestKey.create(Seq(1, 0, 0, 0))
       val val1 = ByteVector("value1".getBytes)
@@ -54,4 +45,12 @@ class TrieStructureTests
     }
   }
 
+  behavior of "A trie"
+  it should "be created as an empty pointer block" in
+    withTrie {
+      case Node(PointerBlock(vector)) =>
+        vector should have size 256
+        vector should contain only None
+      case _ => fail("expected a node")
+    }
 }
