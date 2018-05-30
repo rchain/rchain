@@ -13,7 +13,7 @@ import javax.xml.bind.DatatypeConverter.printHexBinary
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K <: Serializable] private (
+class InMemoryStore[C, P, A, K] private (
     _keys: mutable.HashMap[String, Seq[C]],
     _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
     _data: mutable.HashMap[String, Seq[Datum[A]]],
