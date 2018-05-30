@@ -53,7 +53,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
   )
 
   val bootstrap =
-    opt[String](default = Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@216.83.154.106:30304"),
+    opt[String](default =
+                  Some("rnode://acd0b05a971c243817a0cfd469f5d1a238c60294@216.83.154.106:30304"),
                 short = 'b',
                 descr = "Bootstrap rnode address for initial seed.")
 
@@ -112,7 +113,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     default = None,
     descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
 
-  def fetchHost(): String =
+  lazy val localhost: String =
     host.toOption match {
       case Some(host) => host
       case None       => whoami(port()).fold("localhost")(_.getHostAddress)
