@@ -7,7 +7,7 @@ import coop.rchain.rspace.examples._
 import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
+import coop.rchain.rspace._
 import javax.xml.bind.DatatypeConverter.printHexBinary
 
 import scala.collection.immutable.Seq
@@ -25,6 +25,8 @@ class InMemoryStore[C, P, A, K] private (
   private[rspace] type H = String
 
   private[rspace] type T = Unit
+
+  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
   private[rspace] def hashChannels(cs: Seq[C]): H =
     printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
@@ -163,8 +165,10 @@ class InMemoryStore[C, P, A, K] private (
     _joinMap.clear()
   }
 
-  def getStoreSize: StoreSize =
-    StoreSize(0, (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
+  def getStoreCounters: StoreCounters =
+    eventsCounter.createCounters(
+      0,
+      (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
 
   def isEmpty: Boolean =
     _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
