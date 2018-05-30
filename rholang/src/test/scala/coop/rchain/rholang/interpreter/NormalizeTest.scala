@@ -56,7 +56,7 @@ class GroundMatcherSpec extends FlatSpec with Matchers {
 class CollectMatcherSpec extends FlatSpec with Matchers {
   val inputs = ProcVisitInputs(
     Par(),
-    DebruijnIndexMap[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
+    IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]())
 
   "List" should "delegate" in {
@@ -143,7 +143,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 }
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
-  val inputs = ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
@@ -859,7 +859,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs = NameVisitInputs(DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                      = new NameWildcard()
