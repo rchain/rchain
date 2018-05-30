@@ -550,12 +550,12 @@ object Reduce {
         }
     }
 
-    private[this] def encodedToBytes: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+    private[this] def hexToBytes: (Par, Seq[Par]) => Env[Par] => M[Par] = {
       (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
         {
           if (args.nonEmpty) {
             interpreterErrorM[M].raiseError(
-              ReduceError("Error: encodedToBytes does not take arguments"))
+              ReduceError("Error: hexToBytes does not take arguments"))
           } else {
             p.singleExpr() match {
               case Some(Expr(GString(encoded))) =>
@@ -567,7 +567,7 @@ object Reduce {
                         x => interpreterErrorM[M].pure[Par](x))
               case _ =>
                 interpreterErrorM[M].raiseError(
-                  ReduceError("Error: encodedToBytes can be called only on single strings."))
+                  ReduceError("Error: hexToBytes can be called only on single strings."))
             }
           }
         }
@@ -575,10 +575,10 @@ object Reduce {
 
     def methodTable(method: String): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
       method match {
-        case "nth"            => Some(nth)
-        case "toByteArray"    => Some(toByteArray)
-        case "encodedToBytes" => Some(encodedToBytes)
-        case _                => None
+        case "nth"         => Some(nth)
+        case "toByteArray" => Some(toByteArray)
+        case "hexToBytes"  => Some(hexToBytes)
+        case _             => None
       }
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
