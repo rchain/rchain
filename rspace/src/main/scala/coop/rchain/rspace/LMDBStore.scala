@@ -45,6 +45,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] type T = Txn[ByteBuffer]
 
+  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
+
   private[rspace] def createTxnRead(): T = env.txnRead
 
   private[rspace] def createTxnWrite(): T = env.txnWrite
@@ -235,11 +237,13 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     }
   }
 
-  private[rspace] def clear(): Unit =
+  private[rspace] def clear(): Unit = {
     withTxn(createTxnWrite()) { txn =>
       _dbGNATs.drop(txn)
       _dbJoins.drop(txn)
     }
+    eventsCounter.reset()
+  }
 
   def close(): Unit = {
     _dbGNATs.close()
@@ -247,8 +251,8 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
     env.close()
   }
 
-  def getStoreSize: StoreSize =
-    StoreSize(databasePath.folderSize, env.stat().entries)
+  def getStoreCounters: StoreCounters =
+    eventsCounter.createCounters(databasePath.folderSize, env.stat().entries)
 
   def isEmpty: Boolean =
     withTxn(createTxnRead()) { txn =>
