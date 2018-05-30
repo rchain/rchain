@@ -143,7 +143,7 @@ package object effects {
 
   def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
       implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.fetchHost(),
+    new TcpTransportLayer[F](conf.localhost,
                              conf.port(),
                              conf.certificatePath.toFile,
                              conf.keyPath.toFile)(src)
