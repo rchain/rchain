@@ -25,6 +25,7 @@ _. Proc16 ::= "{" Proc "}" ;
 PGround.      Proc16 ::= Ground ;
 PCollect.     Proc16 ::= Collection ;
 PVar.         Proc16 ::= ProcVar ;
+PVarRef.      Proc13 ::= "=" Var ;
 PNil.         Proc16 ::= "Nil" ;
 PNegation.    Proc15 ::= "~" Proc15 ;
 PConjunction. Proc14 ::= Proc14 "/\\" Proc15 ;

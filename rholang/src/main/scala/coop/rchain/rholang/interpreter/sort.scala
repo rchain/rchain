@@ -149,9 +149,10 @@ object Score {
   final val BUNDLE_WRITE      = 307
   final val BUNDLE_READ_WRITE = 308
 
-  final val CONNECTIVE_NOT = 400
-  final val CONNECTIVE_AND = 401
-  final val CONNECTIVE_OR  = 402
+  final val CONNECTIVE_NOT    = 400
+  final val CONNECTIVE_AND    = 401
+  final val CONNECTIVE_OR     = 402
+  final val CONNECTIVE_VARREF = 403
 
   final val PAR = 999
 }
@@ -552,6 +553,8 @@ object ConnectiveSortMatcher {
           .map(scoredPar =>
             ScoredTerm(Connective(ConnNotBody(scoredPar.term.get)),
                        Node(Score.CONNECTIVE_NOT, scoredPar.score)))
+      case v @ VarRefBody(VarRef(index, depth)) =>
+        ScoredTerm(Connective(v), Leaves(Score.CONNECTIVE_VARREF, index, depth)).pure[M]
     }
 }
 

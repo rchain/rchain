@@ -275,7 +275,13 @@ message Connective {
     ConnectiveBody conn_and_body = 1;
     ConnectiveBody conn_or_body = 2;
     Par conn_not_body = 3;
+    VarRef var_ref_body = 4;
   }
+}
+
+message VarRef {
+  sint32 index = 1;
+  sint32 depth = 2;
 }
 
 message ConnectiveBody {
