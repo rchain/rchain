@@ -1,12 +1,9 @@
 package coop.rchain.rspace
 
-import coop.rchain.shared.AttemptOps._
-import scodec.{Attempt, Codec, DecodeResult, SizeBound}
-import scodec.bits.BitVector
-import scodec.{Attempt, Codec, DecodeResult}
-import scodec.bits.{BitVector, ByteVector}
-import scodec.codecs.{bool, bytes, int32, variableSizeBytes}
 import coop.rchain.scodec.codecs.seqOfN
+import scodec.Codec
+import scodec.bits.ByteVector
+import scodec.codecs.{bool, bytes, int32, int64, variableSizeBytesLong}
 
 import scala.collection.immutable.Seq
 
@@ -23,53 +20,21 @@ object internal {
                                                 continuationIndex: Int,
                                                 dataCandidates: Seq[DataCandidate[C, A]])
 
-  case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
+  final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
   /** [[GNAT]] is not a `Tuple3`
     */
-  case class GNAT[C, P, A, K](
+  final case class GNAT[C, P, A, K](
       channels: Seq[C],
       data: Seq[Datum[A]],
       wks: Seq[WaitingContinuation[P, K]]
   )
 
-  private[rspace] case class WaitingContinuationBytes(patterns: Seq[ByteVector],
-                                                      kvalue: ByteVector,
-                                                      persist: Boolean)
+  implicit val codecByteVector: Codec[ByteVector] =
+    variableSizeBytesLong(int64, bytes)
 
-  private[rspace] case class DatumBytes(datumBytes: ByteVector, persist: Boolean)
-
-  private def fromAttempt[T](attempt: Attempt[DecodeResult[T]]): T =
-    attempt.get.value
-
-  def toBitVector[T](value: T, codec: Codec[T]): BitVector =
-    codec.encode(value).toEither match {
-      case Right(res) => res
-      case Left(err)  => throw new Exception(err.toString)
-    }
-
-  def fromBitVector[T](vector: BitVector, codec: Codec[T]): T =
-    fromAttempt(codec.decode(vector))
-
-  lazy val codecByteVector: Codec[ByteVector] =
-    variableSizeBytes(int32, bytes.xmap(x => x, x => x))
-
-  lazy val codecSeqByteVector: Codec[Seq[ByteVector]] =
-    seqOfN(int32, codecByteVector).as[Seq[ByteVector]]
-
-  lazy val codecDatumBytes: Codec[DatumBytes] =
-    (codecByteVector :: bool).as[DatumBytes]
-
-  lazy val codecSeqDatumBytes: Codec[Seq[DatumBytes]] =
-    seqOfN(int32, codecDatumBytes).as[Seq[DatumBytes]]
-
-  lazy val codecWaitingContinuationBytes: Codec[WaitingContinuationBytes] =
-    (codecSeqByteVector :: codecByteVector :: bool).as[WaitingContinuationBytes]
-
-  lazy val codecSeqWaitingContinuationBytes: Codec[Seq[WaitingContinuationBytes]] =
-    seqOfN(int32, codecWaitingContinuationBytes).as[Seq[WaitingContinuationBytes]]
-
-  /* A new approach */
+  implicit def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
+    seqOfN(int32, codecA)
 
   implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
     (codecA :: bool).as[Datum[A]]
@@ -77,14 +42,14 @@ object internal {
   implicit def codecWaitingContinuation[P, K](implicit
                                               codecP: Codec[P],
                                               codecK: Codec[K]): Codec[WaitingContinuation[P, K]] =
-    (seqOfN(int32, codecP) :: codecK :: bool).as[WaitingContinuation[P, K]]
+    (codecSeq(codecP) :: codecK :: bool).as[WaitingContinuation[P, K]]
 
   implicit def codecGNAT[C, P, A, K](implicit
                                      codecC: Codec[C],
                                      codecP: Codec[P],
                                      codecA: Codec[A],
                                      codecK: Codec[K]): Codec[GNAT[C, P, A, K]] =
-    (seqOfN(int32, codecC) ::
-      seqOfN(int32, codecDatum(codecA)) ::
-      seqOfN(int32, codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
+    (codecSeq(codecC) ::
+      codecSeq(codecDatum(codecA)) ::
+      codecSeq(codecWaitingContinuation(codecP, codecK))).as[GNAT[C, P, A, K]]
 }
