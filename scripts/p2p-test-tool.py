@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.6
 # This is a simple script to help with p2p network boot/testing.
-# This requires Python 3.6 to be installed for fstring. Install dependencies via pip
+# This requires Python 3.6 to be installed for f-string. Install dependencies via pip
 # python3.6 -m pip install docker argparse pexpect requests
 # Return code of 0 is success on test and 1 is fail.
 from pexpect import replwrap
@@ -15,21 +15,22 @@ import time
 import sys
 
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(
+             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("-b", "--boot",
                     action='store_true',
                     help="boot network by creating resources and starting services by network name")
-parser.add_argument("-B", "--bootstrap-command",
+parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="--port 30304 --standalone ",
+                    default="--port 30304 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
                     type=str,
                     default="0",
-                    help="set docker cpuset-cpus for nodes. Allows limiting execution in specific CPUs")
-parser.add_argument("-D", "--deploy-demo",
+                    help="set docker cpuset-cpus for all nodes. Allows limiting execution in specific CPUs")
+parser.add_argument("-d", "--deploy-demo",
                     dest='deploy_demo',
                     action='store_true',
                     help="deploy casper demo")
@@ -45,32 +46,28 @@ parser.add_argument("-m", "--memory",
                     dest='memory',
                     type=str,
                     default="1024m",
-                    help="1024m set docker memory for repl client node")
+                    help="set docker memory limit for all nodes")
 parser.add_argument("-n", "--network",
                     dest='network',
                     type=str,
                     default="rchain.coop",
                     help="set docker network name")
-parser.add_argument("-t", "--run-tests",
-                    dest='run_tests',
-                    action='store_true',
-                    help="only run tests")
-parser.add_argument("-X", "--peer-command",
+parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="--bootstrap rnode://0f365f1016a54747b384b386b8e85352@bootstrap.rchain.coop:30304",
+                    default="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@bootstrap.rchain.coop:30304",
                     help="peer container run command")
-parser.add_argument("-a", "--peers-amount",
+parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
                     type=int,
                     default="2",
                     help="set total amount of peers for network")
-parser.add_argument("-p", "--prompt",
+parser.add_argument("--prompt",
                     dest='prompt',
                     type=str,
                     default="rholang $ ",
                     help="set REPL prompt")
-parser.add_argument("-E", "--repl-commands",
+parser.add_argument("--repl-commands",
                     dest='repl_cmds',
                     type=str,
                     nargs='+',
@@ -78,35 +75,44 @@ parser.add_argument("-E", "--repl-commands",
                         '@"stdout"!("foo")',
                         '@"listCh"!([1, 2, 3]) | for(@list <- @"listCh"){ match list { [a, b, c] => { @"stdout"!(a) } } }'],
                     help="set repl commands to run as a list")
-parser.add_argument("-L", "--repl-load-repetitions",
+parser.add_argument("--repl-load-repetitions",
                     dest='repl_load_repetitions',
                     type=int,
                     default=50,
                     help="set repl load repetition peers_amount for loops")
-parser.add_argument("-R", "--rnode-directory",
+parser.add_argument("--rnode-directory",
                     dest='rnode_directory',
                     type=str,
                     default="/var/lib/rnode",
-                    help="container rnode mount point directory")
+                    help="rnode container root directory on each container")
 parser.add_argument("-r", "--remove",
                     action='store_true',
                     help="forcibly remove all container resources associated to network name")
-parser.add_argument("-s", "--skip-convergence_test",
+parser.add_argument("-s", "--skip-convergence-test",
                     dest="skip_convergence_test",
                     action='store_true',
                     help="skip network convergence test")
-parser.add_argument("-T", "--tests",
+parser.add_argument("-t", "--tests",
+                    dest='run_tests',
+                    action='store_true',
+                    help="only run tests")
+parser.add_argument("-T", "--tests-to-run",
                     dest='tests',
                     type=str,
                     nargs='+',
-                    default=['eval', 'network_sockets', 'count', 'errors', 'repl'],
-                    help="run these tests")
+                    default=['network_sockets', 'count', 'eval', 'repl', 'errors', 'RuntimeException'],
+                    help="run these tests in this order")
+# Print -h/help if no args
+if len(sys.argv)==1:
+    parser.print_help(sys.stderr)
+    sys.exit(1)
 
 
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
 RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-0.3.1.jar'
+
 
 
 def main():
@@ -148,14 +154,21 @@ def run_tests():
                 if test_network_sockets(container) == 0:
                     notices['pass'].append(f"{container.name}: Metrics API http/tcp/9095 is available.")
                 else:
-                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/9095 is not available..")
+                    notices['fail'].append(f"{container.name}: Metrics API http/tcp/9095 is not available.")
         if test == "errors":
             for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
                 print(container.name)
                 if test_node_logs_for_errors(container) == 0:
                     notices['pass'].append(f"{container.name}: No errors defined by \"ERROR\" in logs.")
                 else:
-                    notices['fail'].append(f"{container.name}: Errors found in node logs.")
+                    notices['fail'].append(f"{container.name}: Errors defined by \"ERROR\" found in logs.")
+        if test == "RuntimeException":
+            for container in client.containers.list(all=True, filters={"name":f'peer\d.{args.network}'}):
+                print(container.name)
+                if test_node_logs_for_RuntimeException(container) == 0:
+                    notices['pass'].append(f"{container.name}: No text of \"RuntimeException\" in logs.")
+                else:
+                    notices['fail'].append(f"{container.name}: Text of \"RuntimeException\" in logs.")
         if test == "count":
             for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
                 if test_node_logs_for_correct_peers_count(container) == 0:
@@ -202,8 +215,9 @@ def deploy_demo():
         except Exception as e:
             print(e)
 
+
 def test_node_eval_of_rholang_files(container):
-    print(container.name)
+    print(f"Running eval rho file tests of /usr/share/rnode/examples/ on container {container.name}.")
     cmd = f"ls /usr/share/rnode/examples/*.rho"
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
@@ -215,9 +229,10 @@ def test_node_eval_of_rholang_files(container):
                 return 1 
     return 0 
 
+
 def show_logs():
     for container in client.containers.list(all=True, filters={"name":f".{args.network}"}):
-        print(f"Showing logs for {container.name}")
+        print(f"Showing logs for {container.name}.")
         r = container.logs().decode('utf-8')
         print(r)
 
@@ -249,6 +264,7 @@ def var_to_docker_file(var, container_name, file_path):
 
 
 def check_network_convergence(container):
+    print("Check for network convergence via prometheus metrics api before running tests.")
     peers_metric = ''
     peers_metric_expected = args.peers_amount
     timeout = 200
@@ -271,6 +287,7 @@ def check_network_convergence(container):
 
 def remove_resources_by_network(args_network):
     """Remove resources by network name."""
+    print(f"Removing resources for docker network {args_network}")
     for container in client.containers.list(all=True, filters={"name":f".{args_network}"}):
             container.remove(force=True, v=True)
 
@@ -284,6 +301,33 @@ def remove_resources_by_network(args_network):
 
 def create_bootstrap_node():
     """Create bootstrap node."""
+
+    # Create key/cert pem files to be loaded into rnode volume
+    bootstrap_node_demo_key=(
+        "-----BEGIN PRIVATE KEY-----\n"
+        "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+\n"
+        "g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf\n"
+        "qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q\n"
+        "-----END PRIVATE KEY-----\n"
+    )
+    bootstrap_node_demo_cert=(
+        "-----BEGIN CERTIFICATE-----\n"
+        "MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs\n"
+        "MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j\n"
+        "YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq\n"
+        "5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG\n"
+        "CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J\n"
+        "NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=\n"
+        "-----END CERTIFICATE-----\n"
+    )
+    tmp_file_key = '/tmp/node.key.pem'
+    tmp_file_cert = '/tmp/node.certificate.pem'
+    with open(tmp_file_key, 'w') as f:
+        f.write(bootstrap_node_demo_key)
+    with open(tmp_file_cert, 'w') as f:
+        f.write(bootstrap_node_demo_cert)
+ 
+    print("Starting bootstrap node.")
     bootstrap_node = {}
     bootstrap_node['name'] = f"bootstrap.{args.network}"
     bootstrap_node['volume'] = client.volumes.create()
@@ -294,22 +338,23 @@ def create_bootstrap_node():
         cpuset_cpus=args.cpuset_cpus, \
         mem_limit=args.memory, \
         network=args.network, \
-        volumes={bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'}}, \
+        volumes={
+                tmp_file_cert: {'bind': f'{args.rnode_directory}/node.certificate.pem', 'mode': 'rw'}, \
+                tmp_file_key: {'bind': f'{args.rnode_directory}/node.key.pem', 'mode': 'rw'}, \
+                bootstrap_node['volume'].name: {'bind': args.rnode_directory, 'mode': 'rw'} \
+        }, \
         command=args.bootstrap_command, \
         hostname=bootstrap_node['name'])
-
-    # Add additional packages.
+    print("Installing additonal packages on container.")
     r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
-    print(r)
     r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
-    print(r)
     r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
-    print(r)
     return 0
 
 
 def create_peer_nodes():
     """Create peer nodes."""
+    print("Start peer nodes to connect via bootstrap.")
     for i in range(args.peers_amount):
         peer_node = {}
         peer_node[i] = {}
@@ -326,13 +371,10 @@ def create_peer_nodes():
             command=args.peer_command, \
             hostname=peer_node[i]['name'])
 
-        # Add additional packages.
+        print("Installing additonal packages on container.")
         r = container.exec_run(cmd='apt-get update').output.decode("utf-8")
-        print(r)
         r = container.exec_run(cmd='apt-get -yq install curl').output.decode("utf-8")
-        print(r)
         r = container.exec_run(cmd='apt-get -yq install nmap').output.decode("utf-8")
-        print(r)
     return 0
       
 
@@ -352,7 +394,7 @@ def test_network_sockets(container):
 
 def test_repl_load(container):
     """Load REPL with commands."""
-
+    print(f"Testing REPL on {container.name} via repl container and Python pexpect.")
     # Remove any existing repl containers if they exist
     for repl_container in client.containers.list(all=True, filters={"name":f"repl\d.{args.network}"}):
         print(f"removing {repl_container.name}")
@@ -385,15 +427,29 @@ def test_repl_load(container):
 
 
 def test_node_logs_for_errors(container):
+    retval = 1 
     print(f"Testing {container.name} node logs for errors.")
     r = container.logs().decode('utf-8')
     if not "ERROR" in r:
-        print("PASS: No errors found in logs")
+        print("PASS: No errors found in logs.")
         retval = 0 
     else:
-        print("FAIL: Errors matching ERROR found in logs")
+        print("FAIL: Errors matching ERROR found in logs.")
         for line in r.splitlines():
             if "ERROR" in line:
+                print(line)
+                retval = 1 
+    return retval 
+
+def test_node_logs_for_RuntimeException(container):
+    retval = 1 
+    print(f"Testing {container.name} node logs for \"java RuntimeException\".")
+    r = container.logs().decode('utf-8')
+    if not "RuntimeException" in r:
+        retval = 0 
+    else:
+        for line in r.splitlines():
+            if "RuntimeException" in line:
                 print(line)
                 retval = 1 
     return retval 
