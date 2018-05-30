@@ -2,7 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
+import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
@@ -660,8 +662,8 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val result = withTestStore { store =>
       val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](store).reducer
       val env         = Env[Par]()
-      val nthTask     = reducer.eval(wrapWithSend(toByteArrayCall))(env)
-      val inspectTask = for { _ <- nthTask } yield store.toMap
+      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env)
+      val inspectTask = for { _ <- task } yield store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
@@ -693,5 +695,33 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
         runAndRethrowBoxedErrors(inspectTask)
       }
     }
+  }
+
+  "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
+    import coop.rchain.models.implicits._
+    val testString                = "testing testing"
+    val base16Repr                = Base16.encode(testString.getBytes)
+    val proc: Par                 = GString(base16Repr)
+    val serializedProcess         = com.google.protobuf.ByteString.copyFrom(Serialize[Par].encode(proc))
+    val toByteArrayCall           = EMethod("hexToBytes", proc, List[Par]())
+    def wrapWithSend(p: Par): Par = Send(Quote(GString("result")), List[Par](p), false, BitSet())
+    val result = withTestStore { store =>
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](store).reducer
+      val env         = Env[Par]()
+      val task        = reducer.eval(wrapWithSend(toByteArrayCall))(env)
+      val inspectTask = for { _ <- task } yield store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(
+                Datum[List[Channel]](
+                  List[Channel](Quote(Expr(GByteArray(ByteString.copyFrom(testString.getBytes))))),
+                  persist = false)),
+              List())
+      )
+    )
   }
 }
