@@ -114,39 +114,6 @@ class CryptoChannelsSpec
   type Nonce      = Array[Byte]
   type Data       = Array[Byte]
 
-  "curve25519Encrypt channel" should "encrypt data and send result on ack channel" in { fixture =>
-    val (reduce, store) = fixture
-
-    val curve25519EncryptChannel = Quote(GString("curve25519Encrypt"))
-    val ackChannel               = GString("x")
-
-    val (secKey, pubKey) = Curve25519.newKeyPair
-
-    implicit val emptyEnv                             = Env[Par]()
-    val storeContainsTest: List[Channel] => Assertion = assertStoreContains(store)(ackChannel) _
-
-    forAll { (par: Par) =>
-      val parByteArray: Array[Byte] = serialize(par)
-      val nonce                     = Curve25519.newNonce
-      val encrypted                 = Curve25519.encrypt(pubKey, secKey, nonce, parByteArray)
-
-      val nonceExpr     = byteArrayToExpr(nonce)
-      val pubKeyExpr    = byteArrayToExpr(pubKey)
-      val secKeyExpr    = byteArrayToExpr(secKey)
-      val serializedPar = byteArrayToExpr(parByteArray)
-
-      val expecting = byteArrayToExpr(encrypted)
-
-      val send = Send(curve25519EncryptChannel,
-                      List(pubKeyExpr, secKeyExpr, nonceExpr, serializedPar, ackChannel),
-                      persistent = false,
-                      BitSet())
-      Await.result(reduce.eval(send).runAsync, 3.seconds)
-      storeContainsTest(List[Channel](Quote(expecting)))
-      clearStore(store, reduce, ackChannel)
-    }
-  }
-
   "secp256k1Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
       pending

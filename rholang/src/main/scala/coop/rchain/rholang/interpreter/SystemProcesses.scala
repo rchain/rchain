@@ -87,23 +87,6 @@ object SystemProcesses {
         "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments")
   }
 
-  def curve25519Encrypt(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                        dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
-    : Seq[Seq[Channel]] => Task[Unit] = {
-    case Seq(
-        Seq(IsByteArray(pub), IsByteArray(sec), IsByteArray(nonce), IsByteArray(message), ack)) =>
-      Task.fromTry(Try(Curve25519.encrypt(pub, sec, nonce, message))).flatMap { encrypted =>
-        produce(store,
-                ack,
-                Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(encrypted)))))),
-                false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
-      }
-    case _ =>
-      illegalArgumentException(
-        "curve25519Encrypt expects public key, private key, nonce, message (all as byte arrays) and ack channel as arguments")
-  }
-
   def sha256Hash(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                  dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
     : Seq[Seq[Channel]] => Task[Unit] = {
