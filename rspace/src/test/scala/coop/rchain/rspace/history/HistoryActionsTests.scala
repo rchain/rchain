@@ -6,7 +6,7 @@ import java.nio.file.{Files, Path}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test._
 import org.lmdbjava.{Env, Txn}
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.{BeforeAndAfterAll, Suite}
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
@@ -386,12 +386,13 @@ object HistoryActionsTests {
     pairs.flatMap { case (k, _) => lookup(store, k).map((v: V) => (k, v)).toList }
 }
 
-class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with BeforeAndAfterAll {
-
+trait WithLMDBStore extends BeforeAndAfterAll { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
   def withTestTrieStore[R](f: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector] => R): R = {
+    // @todo deliver better
+    implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
     val env: Env[ByteBuffer] =
       Env
         .create()
@@ -412,3 +413,5 @@ class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with 
   override def afterAll(): Unit =
     recursivelyDeletePath(dbDir)
 }
+
+class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with WithLMDBStore {}

@@ -1,15 +1,17 @@
 package coop.rchain.rspace.history
 
-import org.scalatest.prop.{Checkers, Configuration}
-import org.scalatest.{FlatSpecLike, Matchers}
+import java.nio.ByteBuffer
+
+import org.lmdbjava.Txn
+import scodec.Codec
 import scodec.bits.ByteVector
+import scodec.codecs._
 
 class TrieStructureTests
-    extends LMDBHistoryActionsTests
-    with FlatSpecLike
-    with Matchers
-    with Checkers
-    with Configuration {
+    extends HistoryTestsBase[Txn[ByteBuffer], TestKey, ByteVector]
+    with WithLMDBStore {
+
+  implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
   behavior of "A trie"
 
   def withTrie[R](f: Trie[TestKey, ByteVector] => R): R =
