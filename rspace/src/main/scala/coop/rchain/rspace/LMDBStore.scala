@@ -189,13 +189,10 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
 
   private[rspace] def removeAll(txn: Txn[ByteBuffer], channels: Seq[C]): Unit = {
     val channelsHash = hashChannels(channels)
-    fetchGNAT(txn, channelsHash) match {
-      case Some(gnat) =>
-        insertGNAT(txn, channelsHash, gnat.copy(data = Seq.empty, wks = Seq.empty))
-        for (c <- channels) removeJoin(txn, c, channels)
-      case None =>
-        throw new Exception("Attempted to remove all from a value that doesn't exist")
+    fetchGNAT(txn, channelsHash).foreach { gnat =>
+      insertGNAT(txn, channelsHash, gnat.copy(data = Seq.empty, wks = Seq.empty))
     }
+    for (c <- channels) removeJoin(txn, c, channels)
   }
 
   /* Joins */
