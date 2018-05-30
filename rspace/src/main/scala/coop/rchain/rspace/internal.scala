@@ -34,7 +34,7 @@ object internal {
     import scodec.{Attempt, Codec, DecodeResult}
     import scodec.bits.{BitVector, ByteVector}
     import scodec.codecs.{bool, bytes, int32, variableSizeBytes}
-    import coop.rchain.rspace.SeqCodec.seqOfN
+    import coop.rchain.scodec.codecs.seqOfN
 
     private[rspace] case class WaitingContinuationBytes(patterns: Seq[ByteVector],
                                                         kvalue: ByteVector,
