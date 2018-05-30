@@ -23,6 +23,19 @@ class TrieStructureTests
       }
     }
 
+  def withTrieTxnAndStore[R](
+      f: (ITrieStore[Txn[ByteBuffer], TestKey, ByteVector],
+          Txn[ByteBuffer],
+          Trie[TestKey, ByteVector]) => R): R =
+    withTestTrieStore { store =>
+      store.withTxn(store.createTxnRead()) { txn =>
+        val trieOpt = store.get(txn, store.workingRootHash.get)
+        println(store.workingRootHash.get)
+        trieOpt should not be empty
+        f(store, txn, trieOpt.get)
+      }
+    }
+
   it should "be created as an empty pointer block" in
     withTrie {
       case Node(PointerBlock(vector)) =>
@@ -31,8 +44,14 @@ class TrieStructureTests
       case _ => fail("expected a node")
     }
 
-  it should "have two levels after inserting one element" in {
-
-    //    insert(store, key1, val1)
+  it should "have two levels after inserting one element" ignore {
+    withTrieTxnAndStore { (store, txn, trie) =>
+      val key1 = TestKey.create(Seq(1, 0, 0, 0))
+      val val1 = ByteVector("value1".getBytes)
+      insert(store, key1, val1)
+      // Insert was made in a nested transaction, so it's effect should be visible
+      store.get(txn, store.workingRootHash.get) should not be None
+    }
   }
+
 }
