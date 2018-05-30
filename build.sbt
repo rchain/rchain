@@ -201,7 +201,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test")
+  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test", crypto)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)
