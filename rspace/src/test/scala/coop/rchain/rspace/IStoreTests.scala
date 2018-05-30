@@ -199,5 +199,6 @@ trait IStoreTests
   }
 }
 
-class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
-class LMDBStoreTests     extends LMDBStoreTestsBase with IStoreTests
+class InMemoryStoreTests          extends InMemoryStoreTestsBase with IStoreTests
+class ImmutableInMemoryStoreTests extends ImmutableInMemoryStoreTestsBase with IStoreTests
+class LMDBStoreTests              extends StringLMDBStoreTestsBase with IStoreTests
