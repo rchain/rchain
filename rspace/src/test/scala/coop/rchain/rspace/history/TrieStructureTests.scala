@@ -54,25 +54,20 @@ class TrieStructureTests
     }
 
   it should "have two levels after inserting one element" in {
-    withTestTrieStore { store =>
+    withTestTrieStore { implicit store =>
       insert(store, key1, val1)
 
-      store.withTxn(store.createTxnRead()) { txn =>
-        val trie = store.get(txn, store.workingRootHash.get)
-        trie match {
-          case Some(Node(PointerBlock(vector))) =>
-            vector should have size 256
-            val expectedHash = Blake2b256Hash
-              .fromHex("0x8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c")
-              .get
-            val maybeExpectedHash = Some(expectedHash)
-            vector(1) shouldBe maybeExpectedHash
-            vector.filterNot(_ == maybeExpectedHash) should contain only None
+      store.withTxn(store.createTxnRead()) { implicit txn =>
+        val rootHex = "0x538b82b41d4360492c17a112864ffb989571504b73b1281677a692e9fd2ee4cc"
+        val leafHex = "0x8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
 
-            store.get(txn, expectedHash) shouldBe Some(Leaf(key1, val1))
+        expectNode(rootHex, Seq((1, leafHex)))
 
-          case _ => fail("expected a node")
-        }
+        val expectedLeafHash = Blake2b256Hash
+          .fromHex(leafHex)
+          .get
+
+        store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
       }
     }
   }
@@ -115,11 +110,8 @@ class TrieStructureTests
 
       store.withTxn(store.createTxnRead()) { implicit txn =>
         expectNode(rootHex, Seq((1, level1Hex)))
-
         expectNode(level1Hex, Seq((0, level2Hex)))
-
         expectNode(level2Hex, Seq((0, level3Hex)))
-
         expectNode(level3Hex, Seq((0, leaf1Hex), (1, leaf2Hex)))
 
         val expectedLeaf1Hash = Blake2b256Hash
