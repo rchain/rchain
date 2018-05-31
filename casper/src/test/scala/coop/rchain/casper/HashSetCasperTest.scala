@@ -148,6 +148,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).casperEff.contains(signedBlock1) should be(true)
     nodes(2).casperEff.contains(signedBlock2) should be(true)
 
+    nodes(2).logEff.infos
+      .count(_ startsWith "CASPER: Beginning request of missing block") should be(1)
+    nodes(1).logEff.infos.count(s =>
+      (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
   }
 
   private def blockTuplespaceContents(block: BlockMessage)(
