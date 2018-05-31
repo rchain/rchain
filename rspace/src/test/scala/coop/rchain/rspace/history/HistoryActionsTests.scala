@@ -145,6 +145,17 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key1) shouldBe None
     }
 
+  "Delete" should "fail for a missing (key, value)" in {
+    withTestTrieStore { implicit store =>
+      insert(store, key1, val1)
+      insert(store, key2, val2)
+      delete(store, key2, val2)
+
+      val thrown = the[DeleteException] thrownBy delete(store, key2, val2)
+      thrown.getMessage shouldBe "Something terrible happened"
+    }
+  }
+
   "Insert, insert, delete, delete" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
       val root0 = store.workingRootHash.get
