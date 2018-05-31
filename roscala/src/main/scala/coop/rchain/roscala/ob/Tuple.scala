@@ -5,7 +5,7 @@ case class Tuple(value: Array[Ob]) extends Ob {
 
   def update(arg: Int, ob: Ob): Unit = value.update(arg, ob)
 
-  def numberOfElements(): Int = value.size
+  def numberOfElements(): Int = value.length
 }
 
 case object Nil extends Ob

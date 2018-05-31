@@ -103,12 +103,12 @@ object Vm {
         state.ctxt.argvec.update(arg, ob)
         state.nextOpFlag = true
 
-      case OpXmit(unwind, next, nargs) =>
+      case OpXmit(_, next, nargs) =>
         logger.debug(s"doXmit${if (next) "/nxt"} $nargs")
         state.ctxt.nargs = nargs
         doXmit(next, state, globalEnv)
 
-      case OpXmitArg(unwind, next, nargs, arg) =>
+      case OpXmitArg(_, next, nargs, arg) =>
         logger.debug(s"doXmit${if (next) "/nxt"} $nargs,arg[$arg]")
         state.ctxt.nargs = nargs
         state.ctxt.tag = ArgRegister(arg)

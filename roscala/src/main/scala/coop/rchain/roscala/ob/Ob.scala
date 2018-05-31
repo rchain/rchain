@@ -6,11 +6,14 @@ import scala.collection.mutable
 import Ob.logger
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
+import java.util.concurrent.ConcurrentHashMap
+
+import coop.rchain.roscala.util.{LockedMap, Slot}
 
 abstract class Ob {
-  val slot: mutable.ArrayBuffer[Ob] = mutable.ArrayBuffer[Ob]()
-  var meta: Meta                    = _
-  var parent: Ob                    = _
+  val slot       = Slot()
+  var meta: Meta = _
+  var parent: Ob = _
 
   def dispatch(state: State, globalEnv: GlobalEnv): Ob = Niv
 
@@ -46,7 +49,7 @@ abstract class Ob {
       p = p.asInstanceOf[Actor].extension
     }
 
-    p.slot.lift(offset).getOrElse(Invalid)
+    p.slot(offset).getOrElse(Invalid)
   }
 
   def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob = {
@@ -58,9 +61,11 @@ abstract class Ob {
       p = p.asInstanceOf[Actor].extension
     }
 
-    p.slot.update(offset, value)
+    p.slot(offset) = value
     value
   }
+
+  def numberOfSlots = slot.size
 }
 
 object Ob {
