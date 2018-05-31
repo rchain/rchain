@@ -15,11 +15,10 @@ import scodec.bits.BitVector
 import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
-import scala.collection.mutable
 
 class InMemoryStore[C, P, A, K] private (
-    _dbGNATs: mutable.Map[Blake2b256Hash, GNAT[C, P, A, K]],
-    _dbJoins: mutable.HashMap[C, Seq[Seq[C]]]
+    dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
+    dbJoins: Map[C, Seq[Seq[C]]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
@@ -28,6 +27,9 @@ class InMemoryStore[C, P, A, K] private (
   private implicit val codecK: Codec[K] = sk.toCodec
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
+
+  var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = dbGNATs
+  var _dbJoins: Map[C, Seq[Seq[C]]]                   = dbJoins
 
   private[rspace] type H = Blake2b256Hash
 
@@ -103,11 +105,11 @@ class InMemoryStore[C, P, A, K] private (
     }
 
   private[rspace] override def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val existing: Seq[Seq[C]] = _dbJoins.remove(c).getOrElse(Seq.empty)
+    val existing: Seq[Seq[C]] = _dbJoins.getOrElse(c, Seq.empty)
     if (!existing.exists(_.equals(cs)))
-      _dbJoins.put(c, cs +: existing)
+      _dbJoins += c -> (cs +: existing)
     else
-      _dbJoins.put(c, existing)
+      _dbJoins += c -> existing
   }
 
   private[rspace] override def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
@@ -134,9 +136,11 @@ class InMemoryStore[C, P, A, K] private (
   private[rspace] override def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
     withGNAT(txn, hashChannels(cs)) { (_, csKey, gnatOpt) =>
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
-        val existing: Seq[Seq[C]] = _dbJoins.remove(c).getOrElse(Seq.empty)
+        val existing: Seq[Seq[C]] = _dbJoins.getOrElse(c, Seq.empty)
         val filtered              = existing.filter(!_.equals(cs))
-        if (filtered.nonEmpty) _dbJoins.put(c, filtered)
+        _dbJoins -= c
+        if (filtered.nonEmpty) _dbJoins += c -> filtered
+
       }
       gnatOpt
     }
@@ -144,15 +148,15 @@ class InMemoryStore[C, P, A, K] private (
   }
 
   private[rspace] override def removeAllJoins(txn: T, c: C): Unit = {
-    _dbJoins.remove(c)
+    _dbJoins -= c
     collectGarbage(txn, hashChannels(Seq(c)))
   }
 
   override def close(): Unit = ()
 
   override def clear(): Unit = withTxn(createTxnWrite()) { txn =>
-    _dbGNATs.clear()
-    _dbJoins.clear()
+    _dbGNATs = Map.empty
+    _dbJoins = Map.empty
     eventsCounter.reset()
   }
 
@@ -201,7 +205,7 @@ object InMemoryStore {
   def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
-      _dbGNATs = mutable.HashMap.empty[Blake2b256Hash, GNAT[C, P, A, K]],
-      _dbJoins = mutable.HashMap.empty[C, Seq[Seq[C]]]
+      dbGNATs = Map.empty[Blake2b256Hash, GNAT[C, P, A, K]],
+      dbJoins = Map.empty[C, Seq[Seq[C]]]
     )
 }
