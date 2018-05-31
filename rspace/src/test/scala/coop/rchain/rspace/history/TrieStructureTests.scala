@@ -72,30 +72,6 @@ class TrieStructureTests
     }
   }
 
-  private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, String)])(
-      implicit txn: Txn[ByteBuffer],
-      store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
-    store.get(txn,
-              Blake2b256Hash
-                .fromHex(currentHex)
-                .get) match {
-      case Some(Node(PointerBlock(vector))) =>
-        vector should have size 256
-        val expectedHashes = childHexes.map {
-          case (expectedHexPosition, expectedHexString) =>
-            val expectedHash = Blake2b256Hash
-              .fromHex(expectedHexString)
-              .get
-            val maybeExpectedHash = Some(expectedHash)
-            vector(expectedHexPosition) shouldBe maybeExpectedHash
-            maybeExpectedHash
-        }
-
-        vector.filterNot(expectedHashes.contains) should contain only None
-
-      case _ => fail("expected a node")
-    }
-
   it should "have four levels after inserting second element with same hash prefix" in {
     withTestTrieStore { implicit store =>
       insert(store, key1, val1)
@@ -127,4 +103,29 @@ class TrieStructureTests
 
     }
   }
+
+  private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, String)])(
+      implicit txn: Txn[ByteBuffer],
+      store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
+    store.get(txn,
+              Blake2b256Hash
+                .fromHex(currentHex)
+                .get) match {
+      case Some(Node(PointerBlock(vector))) =>
+        vector should have size 256
+        val expectedHashes = childHexes.map {
+          case (expectedHexPosition, expectedHexString) =>
+            val expectedHash = Blake2b256Hash
+              .fromHex(expectedHexString)
+              .get
+            val maybeExpectedHash = Some(expectedHash)
+            vector(expectedHexPosition) shouldBe maybeExpectedHash
+            maybeExpectedHash
+        }
+
+        vector.filterNot(expectedHashes.contains) should contain only None
+
+      case _ => fail("expected a node")
+    }
+
 }
