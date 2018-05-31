@@ -1,12 +1,9 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
-
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import org.scalatest._
 
 trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {

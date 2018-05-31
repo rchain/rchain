@@ -2,6 +2,7 @@ package coop.rchain.rspace.test
 
 import java.nio.charset.StandardCharsets
 
+import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.examples._
 import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
@@ -9,173 +10,175 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
 import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
 import javax.xml.bind.DatatypeConverter.printHexBinary
+import scodec.Codec
+import scodec.bits.BitVector
+import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
 class InMemoryStore[C, P, A, K <: Serializable] private (
-    _keys: mutable.HashMap[String, Seq[C]],
-    _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
-    _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.HashMap[C, Seq[Seq[C]]],
+    _dbGNATs: mutable.Map[Blake2b256Hash, GNAT[C, P, A, K]],
+    _dbJoins: mutable.HashMap[C, Seq[Seq[C]]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
-  private[rspace] type H = String
+  private implicit val codecC: Codec[C] = sc.toCodec
+  private implicit val codecK: Codec[K] = sk.toCodec
+
+  private[rspace] type H = Blake2b256Hash
 
   private[rspace] type T = Unit
 
-  private[rspace] def hashChannels(cs: Seq[C]): H =
-    printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
+  private[rspace] override def hashChannels(channels: Seq[C]): H =
+    Codec[Seq[C]]
+      .encode(channels)
+      .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
+      .get
 
-  private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
-    _keys.update(hashChannels(channels), channels)
+  private[rspace] override def createTxnRead(): Unit = ()
 
-  private[rspace] def getChannels(txn: T, s: H) =
-    _keys.getOrElse(s, Seq.empty[C])
+  private[rspace] override def createTxnWrite(): Unit = ()
 
-  private[rspace] def createTxnRead(): Unit = ()
-
-  private[rspace] def createTxnWrite(): Unit = ()
-
-  private[rspace] def withTxn[R](txn: T)(f: T => R): R =
+  private[rspace] override def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  private[rspace] def collectGarbage(txn: T,
-                                     channelsHash: H,
-                                     dataCollected: Boolean = false,
-                                     waitingContinuationsCollected: Boolean = false,
-                                     joinsCollected: Boolean = false): Unit =
-    collectGarbage(channelsHash)
+  private[rspace] override def getChannels(txn: T, s: H) =
+    _dbGNATs.get(s).map(_.channels).getOrElse(Seq.empty)
 
-  private[this] def collectGarbage(key: H): Unit = {
-    val as = _data.get(key).exists(_.nonEmpty)
-    if (!as) {
-      //we still may have empty list, remove it as well
-      _data.remove(key)
-    }
+  private[rspace] override def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
+    _dbGNATs.get(hashChannels(channels)).map(_.data).getOrElse(Seq.empty[Datum[A]])
 
-    val psks = _waitingContinuations.get(key).exists(_.nonEmpty)
-    if (!psks) {
-      //we still may have empty list, remove it as well
-      _waitingContinuations.remove(key)
-    }
+  private[this] def getWK(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
+    _dbGNATs
+      .get(hashChannels(curr))
+      .map(_.wks)
+      .getOrElse(Seq.empty[WaitingContinuation[P, K]])
 
-    val cs    = _keys.getOrElse(key, Seq.empty[C])
-    val joins = cs.size == 1 && _joinMap.contains(cs.head)
-
-    if (!as && !psks && !joins) {
-      _keys.remove(key)
-    }
-  }
-
-  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
-    val datums = _data.getOrElseUpdate(key, Seq.empty[Datum[A]])
-    _data.update(key, datum +: datums)
-  }
-
-  private[rspace] def putWaitingContinuation(txn: T,
-                                             channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
-    val waitingContinuations =
-      _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
-    _waitingContinuations.update(key, continuation +: waitingContinuations)
-  }
-
-  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
-    _data.getOrElse(hashChannels(channels), Seq.empty[Datum[A]])
-
-  private[rspace] def getWaitingContinuation(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
-    _waitingContinuations
-      .getOrElse(hashChannels(curr), Seq.empty[WaitingContinuation[P, K]])
+  private[rspace] override def getWaitingContinuation(
+      txn: T,
+      curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
+    getWK(txn, curr)
       .map { (wk: WaitingContinuation[P, K]) =>
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
       }
 
-  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit =
-    removeDatum(txn, Seq(channel), index)
+  private[rspace] override def getJoin(txn: T, c: C): Seq[Seq[C]] =
+    _dbJoins.getOrElse(c, Seq.empty[Seq[C]])
 
-  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    for (as <- _data.get(key)) {
-      _data.update(key, dropIndex(as, index))
+  override def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
+    getWK(txn, channels)
+      .map(_.patterns)
+
+  private[this] def withGNAT(key: H)(
+      f: (H, Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
+    val gnatOpt = _dbGNATs.get(key)
+    val rOpt    = f(key, gnatOpt)
+    rOpt match {
+      case Some(gnat) if isGNATOrphaned(gnat) => _dbGNATs -= key
+      case Some(gnat)                         => _dbGNATs += key -> gnat
+      case None                               => _dbGNATs -= key
     }
-    collectGarbage(key)
   }
 
-  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    for (psks <- _waitingContinuations.get(key)) {
-      _waitingContinuations.update(key, dropIndex(psks, index))
+  private[rspace] override def putDatum(txn: T, chs: Seq[C], datum: Datum[A]): Unit =
+    withGNAT(hashChannels(chs)) { (key, gnatOpt) =>
+      gnatOpt
+        .map(gnat => gnat.copy(data = datum +: gnat.data))
+        .orElse(GNAT(channels = chs, data = Seq(datum), wks = Seq.empty).some)
     }
-    collectGarbage(key)
+
+  private[rspace] override def putWaitingContinuation(
+      txn: T,
+      chs: Seq[C],
+      continuation: WaitingContinuation[P, K]): Unit =
+    withGNAT(hashChannels(chs)) { (key, gnatOpt) =>
+      gnatOpt
+        .map(gnat => gnat.copy(wks = continuation +: gnat.wks))
+        .orElse(GNAT(channels = chs, data = Seq.empty[Datum[A]], wks = Seq(continuation)).some)
+    }
+
+  private[rspace] override def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
+    val existing: Seq[Seq[C]] = _dbJoins.remove(c).getOrElse(Seq.empty)
+    if (!existing.exists(_.equals(cs)))
+      _dbJoins.put(c, cs +: existing)
+    else
+      _dbJoins.put(c, existing)
   }
 
-  private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
+  private[rspace] override def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
     val key = hashChannels(channels)
-    _data.put(key, Seq.empty)
-    _waitingContinuations.put(key, Seq.empty)
+    withGNAT(key) { (_, gnatOpt) =>
+      gnatOpt.map(gnat => gnat.copy(data = dropIndex(gnat.data, index)))
+    }
+  }
+
+  private[rspace] override def removeWaitingContinuation(txn: T,
+                                                         channels: Seq[C],
+                                                         index: Int): Unit = {
+    val key = hashChannels(channels)
+    withGNAT(key) { (_, gnatOpt) =>
+      gnatOpt.map(gnat => gnat.copy(wks = dropIndex(gnat.wks, index)))
+    }
+  }
+
+  private[rspace] override def removeAll(txn: Unit, channels: Seq[C]): Unit = {
+    withGNAT(hashChannels(channels)) { (key, gnatOpt) =>
+      gnatOpt.map(_.copy(wks = Seq.empty, channels = Seq.empty))
+    }
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val existing: Seq[Seq[C]] = _joinMap.remove(c).getOrElse(Seq.empty)
-    if (!existing.exists(_.equals(cs)))
-      _joinMap.put(c, cs +: existing)
-    else
-      _joinMap.put(c, existing)
-  }
-
-  private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _joinMap.getOrElse(c, Seq.empty[Seq[C]])
-
-  private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashChannels(Seq(c))
-    val csKey   = hashChannels(cs)
-    if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
-      val existing: Seq[Seq[C]] = _joinMap.remove(c).getOrElse(Seq.empty)
-      val filtered              = existing.filter(!_.equals(cs))
-      if (filtered.nonEmpty)
-        _joinMap.put(c, filtered)
+  private[rspace] override def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
+    withGNAT(hashChannels(cs)) { (csKey, gnatOpt) =>
+      if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
+        val existing: Seq[Seq[C]] = _dbJoins.remove(c).getOrElse(Seq.empty)
+        val filtered              = existing.filter(!_.equals(cs))
+        if (filtered.nonEmpty)
+          _dbJoins.put(c, filtered)
+      }
+      gnatOpt
     }
-    collectGarbage(joinKey)
-  }
-
-  private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
-    _joinMap.remove(c)
     collectGarbage(hashChannels(Seq(c)))
   }
 
-  def close(): Unit = ()
-
-  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
-    _waitingContinuations.getOrElse(hashChannels(channels), Nil).map(_.patterns)
-
-  def clear(): Unit = {
-    _keys.clear()
-    _waitingContinuations.clear()
-    _data.clear()
-    _joinMap.clear()
+  private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
+    _dbJoins.remove(c)
+    collectGarbage(hashChannels(Seq(c)))
   }
 
-  def getStoreSize: StoreSize =
-    StoreSize(0, (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
+  override def close(): Unit = ()
 
-  def isEmpty: Boolean =
-    _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
+  override def clear(): Unit = {
+    _dbGNATs.clear()
+    _dbJoins.clear()
+  }
 
-  def toMap: Map[Seq[C], Row[P, A, K]] =
-    _keys.map {
-      case (hash, cs) =>
-        val data = _data.getOrElse(hash, Seq.empty[Datum[A]])
-        val wks  = _waitingContinuations.getOrElse(hash, Seq.empty[WaitingContinuation[P, K]])
+  override def getStoreSize: StoreSize = {
+    val gnatsSize = _dbGNATs.foldLeft(0) {
+      case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
+    }
+    StoreSize(0, (gnatsSize + _dbJoins.size).toLong)
+  }
+
+  override def isEmpty: Boolean =
+    _dbGNATs.isEmpty && _dbJoins.isEmpty
+
+  override def toMap: Map[Seq[C], Row[P, A, K]] =
+    _dbGNATs.map {
+      case (_, GNAT(cs, data, wks)) =>
         (cs, Row(data, wks))
     }.toMap
+
+  def isGNATOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
+    gnat.data.isEmpty && gnat.wks.isEmpty && !(gnat.channels.size == 1 && _dbJoins
+      .contains(gnat.channels.head))
+
+  private[this] def collectGarbage(key: H): Unit =
+    withGNAT(key) { (_, gnatOpt) =>
+      gnatOpt
+    }
 }
 
 object InMemoryStore {
@@ -195,9 +198,7 @@ object InMemoryStore {
   def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
-      _keys = mutable.HashMap.empty[String, Seq[C]],
-      _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
-      _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = mutable.HashMap.empty[C, Seq[Seq[C]]]
+      _dbGNATs = mutable.HashMap.empty[Blake2b256Hash, GNAT[C, P, A, K]],
+      _dbJoins = mutable.HashMap.empty[C, Seq[Seq[C]]]
     )
 }
