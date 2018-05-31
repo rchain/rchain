@@ -1,70 +1,28 @@
 package coop.rchain.casper
 
-import cats._
-import cats.data.State
+import cats.Id
 import cats.implicits._
-import cats.mtl.implicits._
 
-import com.google.protobuf.ByteString
-
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
-
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Ed25519
-
-import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.comm._, CommError._
-import coop.rchain.p2p.effects._
-import coop.rchain.catscontrib._, ski._, Encryption._
-
-import java.nio.file.Files
 
 import monix.execution.Scheduler.Implicits.global
 
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers}
 
-class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
-
-  val src     = protocolNode("src", 30300)
-  val srcKeys = PublicPrivateKeys(Base16.decode("ff00ff00"), Base16.decode("cc00cc00"))
-  val nonce   = Base16.decode("00112233")
+class HashSetCasperTest extends FlatSpec with Matchers {
 
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
   val genesis                     = ProtoUtil.genesisBlock(bonds)
-  val storageSize                 = 1024L * 1024
-  val storageDirectory            = Files.createTempDirectory("hash-set-casper-test")
-
-  private val appErrId = new ApplicativeError[Id, CommError] {
-    def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B]                    = Applicative[Id].ap[A, B](ff)(fa)
-    def pure[A](x: A): Id[A]                                          = Applicative[Id].pure[A](x)
-    def raiseError[A](e: CommError): Id[A]                            = throw new Exception(CommError.toString)
-    def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
-  }
-
-  implicit val logEff            = new LogStub[Id]
-  implicit val timeEff           = new LogicalTime[Id]
-  implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
-  implicit val transportLayerEff = new TransportLayerStub[Id](src)
-  implicit val encryptionEff     = new EncryptionStub[Id](srcKeys, nonce)
-  implicit val keysStoreEff      = new Kvs.InMemoryKvs[Id, PeerNode, Key]
-  implicit val errorHandler      = ApplicativeError_.applicativeError[Id, CommError](appErrId)
-
-  override def beforeEach(): Unit = {
-    logEff.reset()
-    nodeDiscoveryEff.reset()
-    transportLayerEff.reset()
-    encryptionEff.reset()
-    keysStoreEff.keys.map(k => keysStoreEff.delete(k))
-  }
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "HashSetCasper" should "accept deploys" in {
-    implicit val casperEff =
-      MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
+    val node = HashSetCasperTestNode.standalone(genesis)
+    import node._
 
     val deploy = ProtoUtil.basicDeploy(0)
     MultiParentCasper[Id].deploy(deploy)
@@ -74,8 +32,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   }
 
   it should "create blocks based on deploys" in {
-    implicit val casperEff =
-      MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
+    val node = HashSetCasperTestNode.standalone(genesis)
+    import node._
 
     val deploy = ProtoUtil.basicDeploy(0)
     MultiParentCasper[Id].deploy(deploy)
@@ -93,8 +51,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   }
 
   it should "accept signed blocks" in {
-    implicit val casperEff =
-      MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
+    val node = HashSetCasperTestNode.standalone(genesis)
+    import node._
 
     val deploy = ProtoUtil.basicDeploy(0)
     MultiParentCasper[Id].deploy(deploy)
@@ -117,8 +75,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   }
 
   it should "be able to create a chain of blocks from different deploys" in {
-    implicit val casperEff =
-      MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
+    val node = HashSetCasperTestNode.standalone(genesis)
+    import node._
 
     val deploys = Vector(
       "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
@@ -141,8 +99,8 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
   }
 
   it should "reject unsigned blocks" in {
-    implicit val casperEff =
-      MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
+    val node = HashSetCasperTestNode.standalone(genesis)
+    import node._
 
     val Some(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeploy(0)) *> MultiParentCasper[
       Id].createBlock
@@ -150,6 +108,46 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     MultiParentCasper[Id].addBlock(block)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+  }
+
+  it should "propose blocks it adds to peers" in {
+    val nodes  = HashSetCasperTestNode.network(2, genesis)
+    val deploy = ProtoUtil.basicDeploy(0)
+
+    val Some(block) = nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
+    val signedBlock = ProtoUtil.signBlock(block, validatorKeys.head)
+
+    nodes(0).casperEff.addBlock(signedBlock)
+    nodes(1).receive()
+
+    val received = nodes(1).casperEff.contains(signedBlock)
+
+    received should be(true)
+  }
+
+  it should "ask peers for blocks it is missing" in {
+    val nodes   = HashSetCasperTestNode.network(3, genesis)
+    val deploys = (0 until 3).map(i => ProtoUtil.basicDeploy(i))
+
+    val Some(block1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val signedBlock1 = ProtoUtil.signBlock(block1, validatorKeys.head)
+
+    nodes(0).casperEff.addBlock(signedBlock1)
+    nodes(1).receive()
+    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
+
+    val Some(block2) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
+    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+
+    nodes(0).casperEff.addBlock(signedBlock2)
+    nodes(1).receive() //receives block2
+    nodes(2).receive() //receives block2; asks for block1
+    nodes(1).receive() //receives request for block1; sends block1
+    nodes(2).receive() //receives block1; adds both block1 and block2
+
+    nodes(2).casperEff.contains(signedBlock1) should be(true)
+    nodes(2).casperEff.contains(signedBlock2) should be(true)
+
   }
 
   private def blockTuplespaceContents(block: BlockMessage)(
@@ -164,13 +162,5 @@ class HashSetCasperTest extends FlatSpec with Matchers with BeforeAndAfterEach {
     }
     storage
   }
-
-  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-
-  private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
-
-  private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(peerNode(name, port))
 
 }

@@ -148,7 +148,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     storageSize,
     genesisBlock(genesisBonds)
   )
-  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+  implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
   )
 
