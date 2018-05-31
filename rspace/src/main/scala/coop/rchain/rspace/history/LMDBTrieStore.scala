@@ -66,6 +66,11 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer], _dbTrie: Dbi[ByteBu
 
   def close(): Unit =
     _dbTrie.close()
+
+  private[rspace] def clear(): Unit =
+    withTxn(createTxnWrite()) { txn =>
+      _dbTrie.drop(txn)
+    }
 }
 
 object LMDBTrieStore {

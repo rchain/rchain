@@ -386,6 +386,7 @@ trait WithLMDBStore extends BeforeAndAfterAll { this: Suite =>
         .setMaxReaders(126)
         .open(dbDir.toFile)
     val testStore = LMDBTrieStore.create[TestKey, ByteVector](env)
+    testStore.clear()
     try {
       initialize(testStore)
       f(testStore)
