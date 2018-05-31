@@ -26,7 +26,7 @@ class Ctxt(var tag: Location,
     // Make continuation receive `result` at `tag`
     ctxt.rcv(result, loc, state)
 
-  def arg(n: Int): Ob = argvec.value(n)
+  def arg(n: Int): Ob = this.argvec.value(n)
 
   def copy(): Ctxt =
     new Ctxt(
@@ -36,7 +36,7 @@ class Ctxt(var tag: Location,
       pc = this.pc,
       rslt = this.rslt,
       trgt = this.trgt,
-      argvec = new Tuple(this.argvec.value.clone()),
+      argvec = Tuple(this.argvec.value.clone()),
       env = this.env,
       code = this.code,
       ctxt = this.ctxt,
@@ -101,7 +101,7 @@ object Ctxt {
       pc = 0,
       rslt = Niv,
       trgt = Niv,
-      argvec = new Tuple(new Array[Ob](0)),
+      argvec = Tuple(new Array[Ob](0)),
       env = Niv,
       code = code,
       ctxt = continuation,
@@ -139,7 +139,7 @@ object Ctxt {
     pc = 0,
     rslt = Niv,
     trgt = Niv,
-    argvec = new Tuple(new Array[Ob](i)),
+    argvec = Tuple(new Array[Ob](i)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
     ctxt = null,
@@ -159,7 +159,7 @@ object Ctxt {
     pc = 0,
     rslt = Niv,
     trgt = Niv,
-    argvec = new Tuple(new Array[Ob](0)),
+    argvec = Tuple(new Array[Ob](0)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
     ctxt = null,
@@ -179,7 +179,7 @@ object Ctxt {
     pc = 0,
     rslt = Niv,
     trgt = Niv,
-    argvec = new Tuple(new Array[Ob](0)),
+    argvec = Tuple(new Array[Ob](0)),
     env = Niv,
     code = Code(litvec = Seq.empty, codevec = Seq.empty),
     ctxt = null,

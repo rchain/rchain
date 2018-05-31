@@ -20,7 +20,7 @@ class CtxtSpec extends FlatSpec with Matchers {
     val ob2 = Fixnum(2)
 
     val ctxt = Ctxt.empty
-    ctxt.argvec = new Tuple(new Array[Ob](1))
+    ctxt.argvec = Tuple(new Array[Ob](1))
     ctxt.argvec.update(0, ob)
 
     val copy = ctxt.copy()
