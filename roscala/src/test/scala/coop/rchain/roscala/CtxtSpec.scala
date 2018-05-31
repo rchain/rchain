@@ -5,17 +5,17 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class CtxtSpec extends FlatSpec with Matchers {
 
-  "copy()" should "not reference the old program counter" in {
+  "clone()" should "not reference the old program counter" in {
     val ctxt = Ctxt.empty
     ctxt.pc = 1
 
-    val copy = ctxt.copy()
-    copy.pc = 2
+    val clone = ctxt.clone()
+    clone.pc = 2
 
-    ctxt.pc shouldNot be(copy.pc)
+    ctxt.pc shouldNot be(clone.pc)
   }
 
-  "copy()" should "not reference the old argvec" in {
+  "clone()" should "not reference the old argvec" in {
     val ob  = Fixnum(1)
     val ob2 = Fixnum(2)
 
@@ -23,9 +23,9 @@ class CtxtSpec extends FlatSpec with Matchers {
     ctxt.argvec = Tuple(new Array[Ob](1))
     ctxt.argvec.update(0, ob)
 
-    val copy = ctxt.copy()
+    val clone = ctxt.clone()
     ctxt.argvec.update(0, ob2)
 
-    ctxt.arg(0) shouldNot be(copy.arg(0))
+    ctxt.arg(0) shouldNot be(clone.arg(0))
   }
 }

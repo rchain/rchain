@@ -20,7 +20,8 @@ class Ctxt(var tag: Location,
            var selfEnv: Ob,
            var rcvr: Ob,
            var monitor: Monitor)
-    extends Ob {
+    extends Ob
+    with Cloneable {
 
   def applyK(result: Ob, loc: Location, state: State): Boolean =
     // Make continuation receive `result` at `tag`
@@ -28,7 +29,7 @@ class Ctxt(var tag: Location,
 
   def arg(n: Int): Ob = this.argvec.value(n)
 
-  def copy(): Ctxt =
+  override def clone(): Ctxt =
     new Ctxt(
       tag = this.tag,
       nargs = this.nargs,

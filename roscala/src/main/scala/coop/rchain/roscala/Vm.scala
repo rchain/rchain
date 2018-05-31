@@ -104,7 +104,7 @@ object Vm {
         state.nextOpFlag = true
 
       case OpFork(pc) =>
-        val newCtxt = state.ctxt.copy()
+        val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
         state.strandPool.prepend(newCtxt)
         state.nextOpFlag = true
