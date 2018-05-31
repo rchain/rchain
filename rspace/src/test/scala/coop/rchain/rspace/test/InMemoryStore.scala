@@ -66,25 +66,27 @@ class InMemoryStore[C, P, A, K] private (
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
       }
 
-  private[rspace] override def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _dbJoins.getOrElse(c, Seq.empty[Seq[C]])
-
   override def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
     getWK(txn, channels).map(_.patterns)
 
-  private[this] def withGNAT(key: H)(
-      f: (H, Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
+  private[rspace] override def getJoin(txn: T, c: C): Seq[Seq[C]] =
+    _dbJoins.getOrElse(c, Seq.empty[Seq[C]])
+
+  private[this] def withGNAT(txn: T, key: H)(
+      f: (T, H, Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
     val gnatOpt = _dbGNATs.get(key)
-    val rOpt    = f(key, gnatOpt)
-    rOpt match {
-      case Some(gnat) if isGNATOrphaned(gnat) => _dbGNATs -= key
-      case Some(gnat)                         => _dbGNATs += key -> gnat
-      case None                               => _dbGNATs -= key
-    }
+    val rOpt    = f(txn, key, gnatOpt)
+    handleChange(key)(rOpt)
+  }
+
+  private[this] def handleChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
+    case Some(gnat) if isOrphaned(gnat) => _dbGNATs -= key
+    case Some(gnat)                     => _dbGNATs += key -> gnat
+    case None                           => _dbGNATs -= key
   }
 
   private[rspace] override def putDatum(txn: T, chs: Seq[C], datum: Datum[A]): Unit =
-    withGNAT(hashChannels(chs)) { (key, gnatOpt) =>
+    withGNAT(txn, hashChannels(chs)) { (_, key, gnatOpt) =>
       gnatOpt
         .map(gnat => gnat.copy(data = datum +: gnat.data))
         .orElse(GNAT(channels = chs, data = Seq(datum), wks = Seq.empty).some)
@@ -94,7 +96,7 @@ class InMemoryStore[C, P, A, K] private (
       txn: T,
       chs: Seq[C],
       continuation: WaitingContinuation[P, K]): Unit =
-    withGNAT(hashChannels(chs)) { (key, gnatOpt) =>
+    withGNAT(txn, hashChannels(chs)) { (_, key, gnatOpt) =>
       gnatOpt
         .map(gnat => gnat.copy(wks = continuation +: gnat.wks))
         .orElse(GNAT(channels = chs, data = Seq.empty[Datum[A]], wks = Seq(continuation)).some)
@@ -108,77 +110,76 @@ class InMemoryStore[C, P, A, K] private (
       _dbJoins.put(c, existing)
   }
 
-  private[rspace] override def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    withGNAT(key) { (_, gnatOpt) =>
+  private[rspace] override def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
+    withGNAT(txn, hashChannels(channels)) { (_, _, gnatOpt) =>
       gnatOpt.map(gnat => gnat.copy(data = dropIndex(gnat.data, index)))
     }
-  }
 
   private[rspace] override def removeWaitingContinuation(txn: T,
                                                          channels: Seq[C],
                                                          index: Int): Unit = {
     val key = hashChannels(channels)
-    withGNAT(key) { (_, gnatOpt) =>
+    withGNAT(txn, key) { (_, _, gnatOpt) =>
       gnatOpt.map(gnat => gnat.copy(wks = dropIndex(gnat.wks, index)))
     }
   }
 
   private[rspace] override def removeAll(txn: Unit, channels: Seq[C]): Unit = {
-    withGNAT(hashChannels(channels)) { (key, gnatOpt) =>
+    withGNAT(txn, hashChannels(channels)) { (_, key, gnatOpt) =>
       gnatOpt.map(_.copy(wks = Seq.empty, channels = Seq.empty))
     }
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
   private[rspace] override def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    withGNAT(hashChannels(cs)) { (csKey, gnatOpt) =>
+    withGNAT(txn, hashChannels(cs)) { (_, csKey, gnatOpt) =>
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
         val existing: Seq[Seq[C]] = _dbJoins.remove(c).getOrElse(Seq.empty)
         val filtered              = existing.filter(!_.equals(cs))
-        if (filtered.nonEmpty)
-          _dbJoins.put(c, filtered)
+        if (filtered.nonEmpty) _dbJoins.put(c, filtered)
       }
       gnatOpt
     }
-    collectGarbage(hashChannels(Seq(c)))
+    collectGarbage(txn, hashChannels(Seq(c)))
   }
 
-  private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
+  private[rspace] override def removeAllJoins(txn: T, c: C): Unit = {
     _dbJoins.remove(c)
-    collectGarbage(hashChannels(Seq(c)))
+    collectGarbage(txn, hashChannels(Seq(c)))
   }
 
   override def close(): Unit = ()
 
-  override def clear(): Unit = {
+  override def clear(): Unit = withTxn(createTxnWrite()) { txn =>
     _dbGNATs.clear()
     _dbJoins.clear()
     eventsCounter.reset()
   }
 
-  def getStoreCounters: StoreCounters = {
+  override def getStoreCounters: StoreCounters = withTxn(createTxnRead()) { txn =>
     val gnatsSize = _dbGNATs.foldLeft(0) {
       case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
     }
     eventsCounter.createCounters(0, (gnatsSize + _dbJoins.size).toLong)
   }
 
-  override def isEmpty: Boolean =
+  override def isEmpty: Boolean = withTxn(createTxnRead()) { txn =>
     _dbGNATs.isEmpty && _dbJoins.isEmpty
+  }
 
-  override def toMap: Map[Seq[C], Row[P, A, K]] =
+  override def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     _dbGNATs.map {
       case (_, GNAT(cs, data, wks)) =>
         (cs, Row(data, wks))
     }.toMap
+  }
 
-  def isGNATOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
+  private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty && !(gnat.channels.size == 1 && _dbJoins
       .contains(gnat.channels.head))
 
-  private[this] def collectGarbage(key: H): Unit =
-    withGNAT(key) { (_, gnatOpt) =>
+  private[this] def collectGarbage(txn: T, key: H): Unit =
+    withGNAT(txn, key) { (_, _, gnatOpt) =>
       gnatOpt
     }
 }
