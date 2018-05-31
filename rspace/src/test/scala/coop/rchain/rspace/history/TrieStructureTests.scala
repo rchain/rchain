@@ -77,10 +77,9 @@ class TrieStructureTests
     }
   }
 
-  private[this] def expectNode(txn: Txn[ByteBuffer],
-                               store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector],
-                               currentHex: String,
-                               childHexes: Seq[(Int, String)]) =
+  private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, String)])(
+      implicit txn: Txn[ByteBuffer],
+      store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
     store.get(txn,
               Blake2b256Hash
                 .fromHex(currentHex)
@@ -103,7 +102,7 @@ class TrieStructureTests
     }
 
   it should "have four levels after inserting second element with same hash prefix" in {
-    withTestTrieStore { store =>
+    withTestTrieStore { implicit store =>
       insert(store, key1, val1)
       insert(store, key2, val2)
 
@@ -114,34 +113,14 @@ class TrieStructureTests
       val leaf1Hex  = "0x8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
       val leaf2Hex  = "0xf22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625"
 
-      store.withTxn(store.createTxnRead()) { txn =>
-        expectNode(
-          txn,
-          store,
-          rootHex,
-          Seq((1, level1Hex))
-        )
+      store.withTxn(store.createTxnRead()) { implicit txn =>
+        expectNode(rootHex, Seq((1, level1Hex)))
 
-        expectNode(
-          txn,
-          store,
-          level1Hex,
-          Seq((0, level2Hex))
-        )
+        expectNode(level1Hex, Seq((0, level2Hex)))
 
-        expectNode(
-          txn,
-          store,
-          level2Hex,
-          Seq((0, level3Hex))
-        )
+        expectNode(level2Hex, Seq((0, level3Hex)))
 
-        expectNode(
-          txn,
-          store,
-          level3Hex,
-          Seq((0, leaf1Hex), (1, leaf2Hex))
-        )
+        expectNode(level3Hex, Seq((0, leaf1Hex), (1, leaf2Hex)))
 
         val expectedLeaf1Hash = Blake2b256Hash
           .fromHex(leaf1Hex)
