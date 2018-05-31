@@ -77,78 +77,81 @@ class TrieStructureTests
     }
   }
 
+  private[this] def expectNode(txn: Txn[ByteBuffer],
+                               store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector],
+                               currentHex: String,
+                               childHexes: Seq[(Int, String)]) =
+    store.get(txn,
+              Blake2b256Hash
+                .fromHex(currentHex)
+                .get) match {
+      case Some(Node(PointerBlock(vector))) =>
+        vector should have size 256
+        val expectedHashes = childHexes.map {
+          case (expectedHexPosition, expectedHexString) =>
+            val expectedHash = Blake2b256Hash
+              .fromHex(expectedHexString)
+              .get
+            val maybeExpectedHash = Some(expectedHash)
+            vector(expectedHexPosition) shouldBe maybeExpectedHash
+            maybeExpectedHash
+        }
+
+        vector.filterNot(expectedHashes.contains) should contain only None
+
+      case _ => fail("expected a node")
+    }
+
   it should "have four levels after inserting second element with same hash prefix" in {
     withTestTrieStore { store =>
       insert(store, key1, val1)
       insert(store, key2, val2)
 
+      val rootHex   = "0xae608338e532497ea0844d9efd6008251451538497d30d3d4dbfb9a032fc8feb"
+      val level1Hex = "0xc67f3d92de6f9e75b9561274fbcc4c8efe8d1161554e3b0f66307a111ddd11ce"
+      val level2Hex = "0xdb61c95e4ea234de4fe154861f86d090af2029da3cfca83cf210c71c539f1942"
+      val level3Hex = "0x681aff745729ccec1d5e3f23f5b56796416a6604a8a07b646fc16f1b0e8c70c8"
+      val leaf1Hex  = "0x8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
+      val leaf2Hex  = "0xf22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625"
+
       store.withTxn(store.createTxnRead()) { txn =>
-        val trie = store.get(txn, store.workingRootHash.get)
-        trie match {
-          case Some(Node(PointerBlock(vector))) =>
-            vector should have size 256
-            val expectedHash = Blake2b256Hash
-              .fromHex("0xc67f3d92de6f9e75b9561274fbcc4c8efe8d1161554e3b0f66307a111ddd11ce")
-              .get
+        expectNode(
+          txn,
+          store,
+          rootHex,
+          Seq((1, level1Hex))
+        )
 
-            val maybeExpectedHash = Some(expectedHash)
-            vector(1) shouldBe maybeExpectedHash
-            vector.filterNot(_ == maybeExpectedHash) should contain only None
+        expectNode(
+          txn,
+          store,
+          level1Hex,
+          Seq((0, level2Hex))
+        )
 
-            store.get(txn, expectedHash) match {
-              case Some(Node(PointerBlock(vector))) =>
-                vector should have size 256
-                val expectedHash = Blake2b256Hash
-                  .fromHex("0xdb61c95e4ea234de4fe154861f86d090af2029da3cfca83cf210c71c539f1942")
-                  .get
+        expectNode(
+          txn,
+          store,
+          level2Hex,
+          Seq((0, level3Hex))
+        )
 
-                val maybeExpectedHash = Some(expectedHash)
-                vector(0) shouldBe maybeExpectedHash
-                vector.filterNot(_ == maybeExpectedHash) should contain only None
+        expectNode(
+          txn,
+          store,
+          level3Hex,
+          Seq((0, leaf1Hex), (1, leaf2Hex))
+        )
 
-                store.get(txn, expectedHash) match {
+        val expectedLeaf1Hash = Blake2b256Hash
+          .fromHex(leaf1Hex)
+          .get
+        val expectedLeaf2Hash = Blake2b256Hash
+          .fromHex(leaf2Hex)
+          .get
 
-                  case Some(Node(PointerBlock(vector))) =>
-                    vector should have size 256
-                    val expectedHash = Blake2b256Hash
-                      .fromHex("0x681aff745729ccec1d5e3f23f5b56796416a6604a8a07b646fc16f1b0e8c70c8")
-                      .get
-
-                    val maybeExpectedHash = Some(expectedHash)
-                    vector(0) shouldBe maybeExpectedHash
-                    vector.filterNot(_ == maybeExpectedHash) should contain only None
-                    store.get(txn, expectedHash) match {
-
-                      case Some(Node(PointerBlock(vector))) =>
-                        vector should have size 256
-                        val expectedHash1 = Blake2b256Hash
-                          .fromHex(
-                            "0x8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c")
-                          .get
-                        val expectedHash2 = Blake2b256Hash
-                          .fromHex(
-                            "0xf22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625")
-                          .get
-
-                        val maybeExpectedHash1 = Some(expectedHash1)
-                        val maybeExpectedHash2 = Some(expectedHash2)
-
-                        vector(0) shouldBe maybeExpectedHash1
-                        vector(1) shouldBe maybeExpectedHash2
-                        vector
-                          .filterNot(_ == maybeExpectedHash1)
-                          .filterNot(_ == maybeExpectedHash2) should contain only None
-
-                        store.get(txn, expectedHash1) shouldBe Some(Leaf(key1, val1))
-                        store.get(txn, expectedHash2) shouldBe Some(Leaf(key2, val2))
-                    }
-                }
-
-              case _ =>
-            }
-
-          case _ => fail("expected a node")
-        }
+        store.get(txn, expectedLeaf1Hash) shouldBe Some(Leaf(key1, val1))
+        store.get(txn, expectedLeaf2Hash) shouldBe Some(Leaf(key2, val2))
       }
 
     }
