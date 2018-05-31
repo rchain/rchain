@@ -3,6 +3,7 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.rspace.history.Blake2b256Hash
 import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec
@@ -331,4 +332,6 @@ package object rspace {
         }
       }
     }
+
+  def getCheckpoint[C, P, A, K](store: IStore[C, P, A, K]): Blake2b256Hash = store.getCheckpoint()
 }

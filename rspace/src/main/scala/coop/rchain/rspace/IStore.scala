@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.history.Blake2b256Hash
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -66,4 +67,6 @@ trait IStore[C, P, A, K] {
   def getStoreCounters: StoreCounters
 
   private[rspace] val eventsCounter: StoreEventsCounter
+
+  def getCheckpoint(): Blake2b256Hash
 }

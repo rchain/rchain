@@ -2,8 +2,9 @@ package coop.rchain.rspace
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.Blake2b256Hash
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
@@ -16,27 +17,28 @@ import scodec.bits._
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
+import scala.concurrent.SyncVar
 
 /**
   * The main store class.
   *
   * To create an instance, use [[LMDBStore.create]].
   */
-class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
-                                     databasePath: Path,
-                                     _dbGNATs: Dbi[ByteBuffer],
-                                     _dbJoins: Dbi[ByteBuffer])(implicit
-                                                                sc: Serialize[C],
-                                                                sp: Serialize[P],
-                                                                sa: Serialize[A],
-                                                                sk: Serialize[K])
+class LMDBStore[C, P, A, K] private (
+    env: Env[ByteBuffer],
+    databasePath: Path,
+    _dbGNATs: Dbi[ByteBuffer],
+    _dbJoins: Dbi[ByteBuffer],
+    _trieUpdateCount: AtomicLong,
+    _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
+    _trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]]
+)(implicit
+  codecC: Codec[C],
+  codecP: Codec[P],
+  codecA: Codec[A],
+  codecK: Codec[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
-
-  private implicit val codecC: Codec[C] = sc.toCodec
-  private implicit val codecP: Codec[P] = sp.toCodec
-  private implicit val codecA: Codec[A] = sa.toCodec
-  private implicit val codecK: Codec[K] = sk.toCodec
 
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
@@ -76,14 +78,24 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
   private[this] def insertGNAT(txn: T, channelsHash: H, gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     val gnatBuff         = Codec[GNAT[C, P, A, K]].encode(gnat).map(_.bytes.toDirectByteBuffer).get
-    if (!_dbGNATs.put(txn, channelsHashBuff, gnatBuff)) {
+    if (_dbGNATs.put(txn, channelsHashBuff, gnatBuff)) {
+      val count   = _trieUpdateCount.getAndIncrement()
+      val currLog = _trieUpdates.take()
+      _trieUpdates.put(currLog :+ TrieUpdate(count, Insert, channelsHash, gnat))
+    } else {
       throw new Exception(s"could not persist: $gnat")
     }
   }
 
-  private[this] def deleteGNAT(txn: T, channelsHash: H): Unit = {
+  private def deleteGNAT(txn: Txn[ByteBuffer],
+                         channelsHash: Blake2b256Hash,
+                         gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
-    if (!_dbGNATs.delete(txn, channelsHashBuff)) {
+    if (_dbGNATs.delete(txn, channelsHashBuff)) {
+      val count   = _trieUpdateCount.getAndIncrement()
+      val currLog = _trieUpdates.take()
+      _trieUpdates.put(currLog :+ TrieUpdate(count, Delete, channelsHash, gnat))
+    } else {
       throw new Exception(s"could not delete: $channelsHash")
     }
   }
@@ -140,7 +152,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
         if (newData.nonEmpty)
           insertGNAT(txn, channelsHash, gnat.copy(data = newData))
         else
-          deleteGNAT(txn, channelsHash)
+          deleteGNAT(txn, channelsHash, gnat)
       case Some(gnat @ GNAT(_, currData, _)) =>
         val newData = dropIndex(currData, index)
         insertGNAT(txn, channelsHash, gnat.copy(data = newData))
@@ -180,7 +192,7 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
         if (newContinuations.nonEmpty)
           insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
         else
-          deleteGNAT(txn, channelsHash)
+          deleteGNAT(txn, channelsHash, gnat)
       case Some(gnat @ GNAT(_, _, currContinuations)) =>
         val newContinuations = dropIndex(currContinuations, index)
         insertGNAT(txn, channelsHash, gnat.copy(wks = newContinuations))
@@ -273,6 +285,19 @@ class LMDBStore[C, P, A, K] private (env: Env[ByteBuffer],
         }.toMap
       }
     }
+
+  def getCheckpoint(): Blake2b256Hash = {
+    val trieUpdates = _trieUpdates.take
+    _trieUpdates.put(Seq.empty)
+    _trieUpdateCount.set(0L)
+    trieUpdates.foreach {
+      case TrieUpdate(_, Insert, channelsHash, gnat) =>
+        history.insert(_trieStore, channelsHash, gnat)
+      case TrieUpdate(_, Delete, channelsHash, gnat) =>
+        history.delete(_trieStore, channelsHash, gnat)
+    }
+    _trieStore.workingRootHash.get
+  }
 }
 
 object LMDBStore {
@@ -294,6 +319,11 @@ object LMDBStore {
                                                     sa: Serialize[A],
                                                     sk: Serialize[K]): LMDBStore[C, P, A, K] = {
 
+    implicit val codecC: Codec[C] = sc.toCodec
+    implicit val codecP: Codec[P] = sp.toCodec
+    implicit val codecA: Codec[A] = sa.toCodec
+    implicit val codecK: Codec[K] = sk.toCodec
+
     val env: Env[ByteBuffer] =
       Env
         .create()
@@ -305,6 +335,12 @@ object LMDBStore {
     val dbGNATs: Dbi[ByteBuffer] = env.openDbi(dataTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
 
-    new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins)(sc, sp, sa, sk)
+    val trieUpdateCount = new AtomicLong(0L)
+    val trieUpdates     = new SyncVar[Seq[TrieUpdate[C, P, A, K]]]()
+    trieUpdates.put(Seq.empty)
+
+    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+
+    new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
   }
 }

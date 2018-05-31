@@ -181,6 +181,8 @@ class InMemoryStore[C, P, A, K] private (
         val wks  = _waitingContinuations.getOrElse(hash, Seq.empty[WaitingContinuation[P, K]])
         (cs, Row(data, wks))
     }.toMap
+
+  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 }
 
 object InMemoryStore {

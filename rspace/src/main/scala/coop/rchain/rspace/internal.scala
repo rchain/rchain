@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.history.Blake2b256Hash
 import coop.rchain.scodec.codecs.seqOfN
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -29,6 +30,15 @@ object internal {
       data: Seq[Datum[A]],
       wks: Seq[WaitingContinuation[P, K]]
   )
+
+  sealed trait Operation extends Product with Serializable
+  case object Insert     extends Operation
+  case object Delete     extends Operation
+
+  final case class TrieUpdate[C, P, A, K](count: Long,
+                                          operation: Operation,
+                                          channelsHash: Blake2b256Hash,
+                                          gnat: GNAT[C, P, A, K])
 
   implicit val codecByteVector: Codec[ByteVector] =
     variableSizeBytesLong(int64, bytes)
