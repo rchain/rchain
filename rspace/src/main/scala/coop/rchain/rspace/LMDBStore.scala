@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, Blake2b256Hash, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
@@ -296,7 +296,9 @@ class LMDBStore[C, P, A, K] private (
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
         history.delete(_trieStore, channelsHash, gnat)
     }
-    _trieStore.workingRootHash.get
+    withTxn(createTxnRead()) { txn =>
+      _trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
+    }
   }
 }
 
@@ -340,6 +342,10 @@ object LMDBStore {
     trieUpdates.put(Seq.empty)
 
     val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+
+    if (history.getRoot(trieStore).isEmpty) {
+      initialize(trieStore)
+    }
 
     new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
   }
