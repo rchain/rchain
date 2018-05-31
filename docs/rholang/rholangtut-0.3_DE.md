@@ -1,10 +1,10 @@
-#Ein Rholang-Tutorial 
+# Ein Rholang-Tutorial 
 
 Rholang ist eine neue Programmiersprache, die für den Einsatz in verteilten Systemen entwickelt wurde. Wie alle neugeborenen Dinge wächst und verändert es sich schnell; Dieses Dokument beschreibt die Syntax, die in der RNode-0.3-Version verwendet wird. 
 
 Rholang ist "prozessorientiert": Alle Berechnungen werden mittels Message Passing durchgeführt. Nachrichten werden über "Kanäle" weitergeleitet, die eher wie Nachrichtenwarteschlangen sind, sich aber wie Sets statt Warteschlangen verhalten. Rholang ist völlig asynchron, in dem Sinne, dass Sie zwar eine Nachricht von einem Kanal lesen und dann etwas damit tun können, aber keine Nachricht senden und dann etwas tun können, sobald sie empfangen wurde - zumindest nicht ohne explizit Warten auf eine Bestätigungsnachricht vom Empfänger. Beachten Sie, dass in diesem Dokument die Wörter "Name" und "Kanal" austauschbar verwendet werden. Dies liegt daran, dass im Rho-Calculus (auf dem Rholang basiert) der Begrif Name verwendet wird, da Sie jedoch Informationen über Namen senden und empfangen können, semantisch sind sie wie Kanäle.
 
-##Anfangen 
+## Anfangen 
 
 Es gibt keine IDE für Rholang. Beginnen Sie mit Rholang, indem Sie eine der folgenden Optionen auswählen. 
 * __Führen Sie Rholand auf RNode aus__ - Schreiben Sie Rholang-Verträge in einem Editor Ihrer Wahl und führen Sie sie auf RNode mit den REPL- oder EVAL-Modi aus. [Beginnen Sie](https://github.com/rchain/rchain/releases) mit der neuesten Version von RNode.
