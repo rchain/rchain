@@ -8,7 +8,7 @@ import coop.rchain.rspace.examples._
 import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
+import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreCounters, StoreEventsCounter}
 import javax.xml.bind.DatatypeConverter.printHexBinary
 import scodec.Codec
 import scodec.bits.BitVector
@@ -17,7 +17,7 @@ import coop.rchain.shared.AttemptOps._
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K <: Serializable] private (
+class InMemoryStore[C, P, A, K] private (
     _dbGNATs: mutable.Map[Blake2b256Hash, GNAT[C, P, A, K]],
     _dbJoins: mutable.HashMap[C, Seq[Seq[C]]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
@@ -26,6 +26,8 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
 
   private implicit val codecC: Codec[C] = sc.toCodec
   private implicit val codecK: Codec[K] = sk.toCodec
+
+  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
   private[rspace] type H = Blake2b256Hash
 
@@ -68,8 +70,7 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
     _dbJoins.getOrElse(c, Seq.empty[Seq[C]])
 
   override def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
-    getWK(txn, channels)
-      .map(_.patterns)
+    getWK(txn, channels).map(_.patterns)
 
   private[this] def withGNAT(key: H)(
       f: (H, Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
@@ -153,13 +154,14 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   override def clear(): Unit = {
     _dbGNATs.clear()
     _dbJoins.clear()
+    eventsCounter.reset()
   }
 
-  override def getStoreSize: StoreSize = {
+  def getStoreCounters: StoreCounters = {
     val gnatsSize = _dbGNATs.foldLeft(0) {
       case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
     }
-    StoreSize(0, (gnatsSize + _dbJoins.size).toLong)
+    eventsCounter.createCounters(0, (gnatsSize + _dbJoins.size).toLong)
   }
 
   override def isEmpty: Boolean =

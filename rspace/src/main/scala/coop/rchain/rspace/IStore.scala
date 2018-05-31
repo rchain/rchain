@@ -63,5 +63,7 @@ trait IStore[C, P, A, K] {
 
   def close(): Unit
 
-  def getStoreSize: StoreSize
+  def getStoreCounters: StoreCounters
+
+  private[rspace] val eventsCounter: StoreEventsCounter
 }
