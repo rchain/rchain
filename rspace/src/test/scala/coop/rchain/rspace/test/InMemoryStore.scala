@@ -12,10 +12,7 @@ import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
 
-class InMemoryStore[C, P, A, K] private (
-    dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
-    dbJoins: Map[C, Seq[Seq[C]]]
-)(implicit sc: Serialize[C], sk: Serialize[K])
+class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
@@ -23,8 +20,8 @@ class InMemoryStore[C, P, A, K] private (
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = dbGNATs
-  var _dbJoins: Map[C, Seq[Seq[C]]]                   = dbJoins
+  private[this] var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = Map.empty
+  private[this] var _dbJoins: Map[C, Seq[Seq[C]]]                   = Map.empty
 
   private[rspace] type H = Blake2b256Hash
 
@@ -186,10 +183,7 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
-                                         sk: Serialize[K]): InMemoryStore[C, P, A, K] =
-    new InMemoryStore[C, P, A, K](
-      dbGNATs = Map.empty[Blake2b256Hash, GNAT[C, P, A, K]],
-      dbJoins = Map.empty[C, Seq[Seq[C]]]
-    )
+  def apply[C, P, A, K <: Serializable](implicit sc: Serialize[C],
+                                        sk: Serialize[K]): InMemoryStore[C, P, A, K] =
+    new InMemoryStore[C, P, A, K]()
 }
