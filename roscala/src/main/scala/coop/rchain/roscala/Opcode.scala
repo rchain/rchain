@@ -2,6 +2,7 @@ package coop.rchain.roscala
 
 sealed trait Opcode
 case class OpAlloc(n: Int)                                                 extends Opcode
+case class OpFork(pc: Int)                                                 extends Opcode
 case class OpImmediateLitToArg(literal: Int, arg: Int)                     extends Opcode
 case class OpImmediateLitToReg(literal: Int, reg: Int)                     extends Opcode
 case class OpIndLitToArg(lit: Int, arg: Int)                               extends Opcode
