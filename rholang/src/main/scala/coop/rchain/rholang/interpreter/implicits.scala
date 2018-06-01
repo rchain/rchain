@@ -220,8 +220,8 @@ object implicits {
     def singleExpr(): Option[Expr] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
         p.exprs match {
-          case List(single) => Some(single)
-          case _            => None
+          case Seq(single) => Some(single)
+          case _           => None
         }
       } else {
         None

@@ -237,15 +237,14 @@ sealed abstract class MultiParentCasperInstances {
           for {
             _              <- Capture[F].capture { blockBuffer += block }
             dag            <- blockDag
-            missingParents = parents(block).filterNot(dag.blockLookup.contains).toList
-            missingJustifications = block.justifications
+            missingParents = parents(block).filterNot(dag.blockLookup.contains).toSet
+            missingJustifictions = block.justifications
               .map(_.latestBlockHash)
               .filterNot(dag.blockLookup.contains)
-              .toList
-            _ <- (missingParents ::: missingJustifications).traverse(hash => {
-                    Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
-                    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
-                  })
+              .toSet
+            _ <- (missingParents union missingJustifictions).toList.traverse(hash =>
+                  Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
+                  CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash)))
           } yield ()
 
         case None =>

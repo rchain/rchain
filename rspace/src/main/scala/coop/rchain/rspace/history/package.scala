@@ -292,8 +292,8 @@ package object history {
                 store.workingRootHash.put(newRootHash)
                 logger.debug(s"workingRootHash: ${store.workingRootHash.get}")
                 true
-              case Leaf(_, _) =>
-                throw new DeleteException("Something terrible happened")
+              // The entry is not in the trie
+              case Leaf(_, _) => false
             }
         }
       }

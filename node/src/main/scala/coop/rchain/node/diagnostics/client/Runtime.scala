@@ -115,8 +115,12 @@ object Runtime {
 
   def showStoreUsage(storeUsage: StoreUsage): String =
     s"""Store metrics:
-       | - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
-       | - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
-       | - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
+       |  - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
+       |  - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
+       |  - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
+       |  - RSpace Consumes Count: ${storeUsage.rspaceConsumesCount}
+       |  - RSpace Avg Consume(ms): ${storeUsage.rspaceConsumeAvgMilliseconds.formatted("%.2f")}
+       |  - RSpace Produces Count: ${storeUsage.rspaceProducesCount}
+       |  - RSpace Avg Produce(ms): ${storeUsage.rspaceProduceAvgMilliseconds.formatted("%.2f")}
        |""".stripMargin
 }
