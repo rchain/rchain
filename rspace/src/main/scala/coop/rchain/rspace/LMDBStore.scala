@@ -31,7 +31,7 @@ class LMDBStore[C, P, A, K] private (
     _dbJoins: Dbi[ByteBuffer],
     _trieUpdateCount: AtomicLong,
     _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
-    _trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]]
+    val trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit
   codecC: Codec[C],
   codecP: Codec[P],
@@ -42,8 +42,6 @@ class LMDBStore[C, P, A, K] private (
 
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
-
-  private[rspace] type H = Blake2b256Hash
 
   private[rspace] type T = Txn[ByteBuffer]
 
@@ -68,14 +66,16 @@ class LMDBStore[C, P, A, K] private (
 
   /* Basic operations */
 
-  private[this] def fetchGNAT(txn: T, channelsHash: H): Option[GNAT[C, P, A, K]] = {
+  private[this] def fetchGNAT(txn: T, channelsHash: Blake2b256Hash): Option[GNAT[C, P, A, K]] = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     Option(_dbGNATs.get(txn, channelsHashBuff)).map { bytes =>
       Codec[GNAT[C, P, A, K]].decode(BitVector(bytes)).map(_.value).get
     }
   }
 
-  private[this] def insertGNAT(txn: T, channelsHash: H, gnat: GNAT[C, P, A, K]): Unit = {
+  private[this] def insertGNAT(txn: T,
+                               channelsHash: Blake2b256Hash,
+                               gnat: GNAT[C, P, A, K]): Unit = {
     val channelsHashBuff = channelsHash.bytes.toDirectByteBuffer
     val gnatBuff         = Codec[GNAT[C, P, A, K]].encode(gnat).map(_.bytes.toDirectByteBuffer).get
     if (_dbGNATs.put(txn, channelsHashBuff, gnatBuff)) {
@@ -100,7 +100,7 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[this] def fetchJoin(txn: T, joinedChannelHash: H): Option[Seq[Seq[C]]] = {
+  private[this] def fetchJoin(txn: T, joinedChannelHash: Blake2b256Hash): Option[Seq[Seq[C]]] = {
     val joinedChannelHashBuff = joinedChannelHash.bytes.toDirectByteBuffer
     Option(_dbJoins.get(txn, joinedChannelHashBuff))
       .map { bytes =>
@@ -108,7 +108,9 @@ class LMDBStore[C, P, A, K] private (
       }
   }
 
-  private[this] def insertJoin(txn: T, joinedChannelHash: H, joins: Seq[Seq[C]]): Unit = {
+  private[this] def insertJoin(txn: T,
+                               joinedChannelHash: Blake2b256Hash,
+                               joins: Seq[Seq[C]]): Unit = {
     val channelsHashBuff   = joinedChannelHash.bytes.toDirectByteBuffer
     val joinedChannelsBuff = joinCodec.encode(joins).map(_.bytes.toDirectByteBuffer).get
     if (!_dbJoins.put(txn, channelsHashBuff, joinedChannelsBuff)) {
@@ -116,7 +118,7 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def hashChannels(channels: Seq[C]): H =
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     Codec[Seq[C]]
       .encode(channels)
       .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
@@ -124,7 +126,7 @@ class LMDBStore[C, P, A, K] private (
 
   /* Channels */
 
-  private[rspace] def getChannels(txn: T, channelsHash: H): Seq[C] =
+  private[rspace] def getChannels(txn: T, channelsHash: Blake2b256Hash): Seq[C] =
     fetchGNAT(txn, channelsHash).map(_.channels).getOrElse(Seq.empty)
 
   /* Data */
@@ -292,12 +294,12 @@ class LMDBStore[C, P, A, K] private (
     _trieUpdateCount.set(0L)
     trieUpdates.foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(_trieStore, channelsHash, gnat)
+        history.insert(trieStore, channelsHash, gnat)
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(_trieStore, channelsHash, gnat)
+        history.delete(trieStore, channelsHash, gnat)
     }
     withTxn(createTxnRead()) { txn =>
-      _trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
+      trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
     }
   }
 }

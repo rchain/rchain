@@ -3,38 +3,44 @@ package coop.rchain.rspace.test
 import java.nio.charset.StandardCharsets
 
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.examples._
-import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
+import coop.rchain.rspace.Serialize._
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreCounters, StoreEventsCounter}
-import javax.xml.bind.DatatypeConverter.printHexBinary
+import coop.rchain.rspace._
+import coop.rchain.shared.AttemptOps._
+import scodec.Codec
+import scodec.bits.BitVector
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
 class InMemoryStore[C, P, A, K] private (
-    _keys: mutable.HashMap[String, Seq[C]],
-    _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
-    _data: mutable.HashMap[String, Seq[Datum[A]]],
+    _keys: mutable.HashMap[Blake2b256Hash, Seq[C]],
+    _waitingContinuations: mutable.HashMap[Blake2b256Hash, Seq[WaitingContinuation[P, K]]],
+    _data: mutable.HashMap[Blake2b256Hash, Seq[Datum[A]]],
     _joinMap: mutable.HashMap[C, Seq[Seq[C]]],
+    val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
-  private[rspace] type H = String
+  implicit val codecC: Codec[C] = sc.toCodec
 
   private[rspace] type T = Unit
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  private[rspace] def hashChannels(cs: Seq[C]): H =
-    printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
+    Codec[Seq[C]]
+      .encode(channels)
+      .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
+      .get
 
   private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
     _keys.update(hashChannels(channels), channels)
 
-  private[rspace] def getChannels(txn: T, s: H) =
+  private[rspace] def getChannels(txn: T, s: Blake2b256Hash) =
     _keys.getOrElse(s, Seq.empty[C])
 
   private[rspace] def createTxnRead(): Unit = ()
@@ -45,13 +51,13 @@ class InMemoryStore[C, P, A, K] private (
     f(txn)
 
   private[rspace] def collectGarbage(txn: T,
-                                     channelsHash: H,
+                                     channelsHash: Blake2b256Hash,
                                      dataCollected: Boolean = false,
                                      waitingContinuationsCollected: Boolean = false,
                                      joinsCollected: Boolean = false): Unit =
     collectGarbage(channelsHash)
 
-  private[this] def collectGarbage(key: H): Unit = {
+  private[this] def collectGarbage(key: Blake2b256Hash): Unit = {
     val as = _data.get(key).exists(_.nonEmpty)
     if (!as) {
       //we still may have empty list, remove it as well
@@ -183,6 +189,7 @@ class InMemoryStore[C, P, A, K] private (
     }.toMap
 
   def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+
 }
 
 object InMemoryStore {
@@ -202,9 +209,10 @@ object InMemoryStore {
   def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
-      _keys = mutable.HashMap.empty[String, Seq[C]],
-      _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
-      _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = mutable.HashMap.empty[C, Seq[Seq[C]]]
+      _keys = mutable.HashMap.empty[Blake2b256Hash, Seq[C]],
+      _waitingContinuations = mutable.HashMap.empty[Blake2b256Hash, Seq[WaitingContinuation[P, K]]],
+      _data = mutable.HashMap.empty[Blake2b256Hash, Seq[Datum[A]]],
+      _joinMap = mutable.HashMap.empty[C, Seq[Seq[C]]],
+      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
     )
 }

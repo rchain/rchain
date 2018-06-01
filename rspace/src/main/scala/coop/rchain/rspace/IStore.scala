@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.Blake2b256Hash
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -15,11 +15,6 @@ import scala.collection.immutable.Seq
 trait IStore[C, P, A, K] {
 
   /**
-    * The type of hashes
-    */
-  private[rspace] type H
-
-  /**
     * The type of transactions
     */
   private[rspace] type T
@@ -30,9 +25,9 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R
 
-  private[rspace] def hashChannels(channels: Seq[C]): H
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
 
-  private[rspace] def getChannels(txn: T, channelsHash: H): Seq[C]
+  private[rspace] def getChannels(txn: T, channelsHash: Blake2b256Hash): Seq[C]
 
   private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit
 
@@ -69,4 +64,6 @@ trait IStore[C, P, A, K] {
   private[rspace] val eventsCounter: StoreEventsCounter
 
   def getCheckpoint(): Blake2b256Hash
+
+  val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
 }
