@@ -3,6 +3,9 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.Eq
+import cats.syntax.traverse._
+import cats.instances.option._
+import cats.instances.vector._
 import cats.instances.byte._
 import cats.syntax.eq._
 import com.typesafe.scalalogging.Logger
@@ -37,6 +40,43 @@ package object history {
         case _             => throw new Exception(s"no node at $hash")
       }
     }
+
+  def getLeaves[T, K, V](store: ITrieStore[T, K, V]): Seq[Leaf[K, V]] = {
+    @tailrec
+    def loop(txn: T, ts: Seq[Trie[K, V]], ls: Seq[Leaf[K, V]]): Seq[Leaf[K, V]] =
+      ts match {
+        case Seq() =>
+          ls
+        case tries =>
+          val (next, acc) =
+            tries.foldLeft((Seq.empty[Trie[K, V]], ls)) {
+              case ((nexts, leaves), Node(pointerBlock)) =>
+                val children =
+                  pointerBlock.children
+                    .map(_._2)
+                    .traverse[Option, Trie[K, V]](hash => store.get(txn, hash))
+                    .getOrElse(throw new Exception("something went wrong"))
+                (nexts ++ children, leaves)
+              case ((nexts, leaves), leaf: Leaf[K, V]) =>
+                (nexts, leaves :+ leaf)
+            }
+          loop(txn, next, acc)
+      }
+    store.withTxn(store.createTxnRead()) { (txn: T) =>
+      val currentRoot =
+        store
+          .getRoot(txn)
+          .toRight(new Exception("could not get root hash"))
+          .flatMap { currentRootHash =>
+            store
+              .get(txn, currentRootHash)
+              .toRight(new Exception(s"could not get root at $currentRootHash "))
+          }
+          .toTry
+          .get
+      loop(txn, Seq(currentRoot), Seq.empty[Leaf[K, V]])
+    }
+  }
 
   def lookup[T, K, V](store: ITrieStore[T, K, V], key: K)(implicit codecK: Codec[K]): Option[V] = {
     val path = codecK.encode(key).map(_.bytes.toSeq).get
