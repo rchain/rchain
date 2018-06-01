@@ -188,16 +188,16 @@ object GroundSortMatcher {
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case ESetBody(gs) =>
-        def deduplicate(scoredTerms: Seq[ScoredTerm[Option[Par]]]) =
+        def deduplicate(scoredTerms: Seq[ScoredTerm[Option[Par]]]) = {
+          var set = Set[Par]()
           scoredTerms.filterNot {
-            var set = Set[Par]()
-            scoredTerm =>
-              {
-                val exists = set(scoredTerm.term.get)
-                set += scoredTerm.term.get
-                exists
-              }
+            scoredTerm => {
+              val exists = set(scoredTerm.term.get)
+              set += scoredTerm.term.get
+              exists
+            }
           }
+        }
         gs.ps.toList
           .traverse(par => ParSortMatcher.sortMatch[M](par))
           .map(_.sorted)
@@ -212,20 +212,20 @@ object GroundSortMatcher {
             sortedValue <- ParSortMatcher.sortMatch[M](kv.value)
           } yield ScoredTerm(KeyValuePair(sortedKey.term, sortedValue.term), sortedKey.score)
 
-        def deduplicateLastWriteWins(scoredTerms: Seq[ScoredTerm[KeyValuePair]]) =
+        def deduplicateLastWins(scoredTerms: Seq[ScoredTerm[KeyValuePair]]) = {
+          var set = Set[Par]()
           scoredTerms.reverse.filterNot {
-            var set = Set[Par]()
-            scoredTerm =>
-              {
-                val exists = set(scoredTerm.term.key.get)
-                set += scoredTerm.term.key.get
-                exists
-              }
+            scoredTerm => {
+              val exists = set(scoredTerm.term.key.get)
+              set += scoredTerm.term.key.get
+              exists
+            }
           }.reverse
+        }
         gm.kvs.toList
           .traverse(kv => sortKeyValuePair(kv))
           .map(_.sorted)
-          .map(sortedPars => deduplicateLastWriteWins(sortedPars))
+          .map(sortedPars => deduplicateLastWins(sortedPars))
           .map(deduplicatedPars =>
             ScoredTerm(EMapBody(gm.withKvs(deduplicatedPars.map(_.term))),
                        Node(Score.EMAP, deduplicatedPars.map(_.score): _*)))
