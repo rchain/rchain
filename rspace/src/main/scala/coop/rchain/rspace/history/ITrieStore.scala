@@ -19,4 +19,6 @@ trait ITrieStore[T, K, V] {
   private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]]
 
   def close(): Unit
+
+  private[rspace] def clear(): Unit
 }
