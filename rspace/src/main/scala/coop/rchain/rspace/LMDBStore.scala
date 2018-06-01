@@ -346,9 +346,7 @@ object LMDBStore {
 
     val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
 
-    if (history.getRoot(trieStore).isEmpty) {
-      initialize(trieStore)
-    }
+    initialize(trieStore)
 
     new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
   }

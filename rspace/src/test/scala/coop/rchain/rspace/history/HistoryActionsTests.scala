@@ -377,7 +377,8 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
 
   "getLeaves on an empty store" should "return an empty sequence" in
     withTestTrieStore { store =>
-      getLeaves(store) shouldBe empty
+      val leaves = getRoot(store).map(getLeaves(store, _))
+      leaves.value shouldBe empty
     }
 
   "insert 6 things and getLeaves" should "return all of the leaves" in
@@ -398,9 +399,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       insert(store, key5, val5)
       insert(store, key6, val6)
 
-      val leaves = getLeaves(store)
+      val leaves = getRoot(store).map(getLeaves(store, _))
 
-      leaves should contain allElementsOf expected
+      leaves.value should contain allElementsOf expected
     }
 
   "insert a bunch of things and getLeaves" should "return all of the leaves" in
@@ -408,8 +409,8 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       withTestTrieStore { store =>
         val expected = kvs.map { case (k, v) => Leaf(k, v) }
         kvs.foreach { case (k, v) => insert(store, k, v) }
-        val leaves = getLeaves(store)
-        leaves should contain allElementsOf expected
+        val leaves = getRoot(store).map(getLeaves(store, _))
+        leaves.value should contain allElementsOf expected
       }
     }
 }
@@ -445,6 +446,7 @@ class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with 
         .setMaxReaders(126)
         .open(dbDir.toFile)
     val testStore = LMDBTrieStore.create[TestKey, ByteVector](env)
+    testStore.clear()
     try {
       initialize(testStore)
       f(testStore)
