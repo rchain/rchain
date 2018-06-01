@@ -181,10 +181,11 @@ object Network {
       remote: PeerNode,
       maybePacket: Option[Packet]): F[CommunicationResponse] = {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
-    val handleNone: F[CommunicationResponse] = for {
-      _ <- Log[F].error(errorMsg)
-      _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
-    } yield notHandled
+    def handleNone: F[CommunicationResponse] =
+      for {
+        _ <- Log[F].error(errorMsg)
+        _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
+      } yield notHandled
 
     maybePacket.fold(handleNone)(p =>
       for {

@@ -197,6 +197,7 @@ package object history {
           }
       }
     }
+
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
@@ -296,10 +297,9 @@ package object history {
               store.putRoot(txn, newRootHash)
               logger.debug(s"workingRootHash: $newRootHash")
               true
-            case Leaf(_, _) =>
-              throw new DeleteException("Something terrible happened")
+            // The entry is not in the trie
+            case Leaf(_, _) => false
           }
       }
     }
-
 }
