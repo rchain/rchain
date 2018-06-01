@@ -82,15 +82,7 @@ class TrieStructureTests
       import f._
       insert(store, key1, val1)
 
-      store.withTxn(store.createTxnRead()) { implicit txn =>
-        expectNode(rootHex, Seq((1, f.leafHex)))
-
-        val expectedLeafHash = Blake2b256Hash
-          .fromHex(leafHex)
-          .get
-
-        store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
-      }
+      assertSingleElementTrie
     }
   }
 
@@ -101,23 +93,7 @@ class TrieStructureTests
       insert(store, key1, val1)
       insert(store, key2, val2)
 
-      store.withTxn(store.createTxnRead()) { implicit txn =>
-        expectNode(rootHex, Seq((1, level1Hex)))
-        expectNode(level1Hex, Seq((0, level2Hex)))
-        expectNode(level2Hex, Seq((0, level3Hex)))
-        expectNode(level3Hex, Seq((0, leaf1Hex), (1, leaf2Hex)))
-
-        val expectedLeaf1Hash = Blake2b256Hash
-          .fromHex(leaf1Hex)
-          .get
-        val expectedLeaf2Hash = Blake2b256Hash
-          .fromHex(leaf2Hex)
-          .get
-
-        store.get(txn, expectedLeaf1Hash) shouldBe Some(Leaf(key1, val1))
-        store.get(txn, expectedLeaf2Hash) shouldBe Some(Leaf(key2, val2))
-      }
-
+      assertCommonPrefixTrie
     }
   }
 
@@ -128,37 +104,66 @@ class TrieStructureTests
 
       insert(store, key1, val1)
       insert(store, key2, val2)
-
       delete(store, key2, val2)
+      delete(store, key1, val1)
 
-      store.withTxn(store.createTxnRead()) { implicit txn =>
-        val f = singleElementFixture
-        import f._
-        expectNode(rootHex, Seq((1, leafHex)))
-        val expectedLeafHash = Blake2b256Hash
-          .fromHex(leafHex)
-          .get
+      assertSingleElementTrie
+      assertCommonPrefixTrie
+    }
+  }
 
-        store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
-      }
+  it should "retain previous structure after rollback" in {
+    withTestTrieStore { implicit store =>
+      val f1 = commonPrefixFixture
+      import f1._
 
-      store.withTxn(store.createTxnRead()) { implicit txn =>
-        expectNode(rootHex, Seq((1, level1Hex)))
-        expectNode(level1Hex, Seq((0, level2Hex)))
-        expectNode(level2Hex, Seq((0, level3Hex)))
-        expectNode(level3Hex, Seq((0, leaf1Hex), (1, leaf2Hex)))
+      insert(store, key1, val1)
+      insert(store, key2, val2)
 
-        val expectedLeaf1Hash = Blake2b256Hash
-          .fromHex(leaf1Hex)
-          .get
-        val expectedLeaf2Hash = Blake2b256Hash
-          .fromHex(leaf2Hex)
-          .get
+      store.reset(
+        Blake2b256Hash
+          .fromHex(singleElementFixture.rootHex)
+          .get)
 
-        store.get(txn, expectedLeaf1Hash) shouldBe Some(Leaf(key1, val1))
-        store.get(txn, expectedLeaf2Hash) shouldBe Some(Leaf(key2, val2))
-      }
+      assertSingleElementTrie
+      assertCommonPrefixTrie
+    }
+  }
 
+  private[this] def assertSingleElementTrie(
+      implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
+    val f = singleElementFixture
+    import f._
+    store.withTxn(store.createTxnRead()) { implicit txn =>
+      expectNode(rootHex, Seq((1, leafHex)))
+      val expectedLeafHash = Blake2b256Hash
+        .fromHex(leafHex)
+        .get
+
+      store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
+    }
+
+  }
+
+  private[this] def assertCommonPrefixTrie(
+      implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
+    val f = commonPrefixFixture
+    import f._
+    store.withTxn(store.createTxnRead()) { implicit txn =>
+      expectNode(rootHex, Seq((1, level1Hex)))
+      expectNode(level1Hex, Seq((0, level2Hex)))
+      expectNode(level2Hex, Seq((0, level3Hex)))
+      expectNode(level3Hex, Seq((0, leaf1Hex), (1, leaf2Hex)))
+
+      val expectedLeaf1Hash = Blake2b256Hash
+        .fromHex(leaf1Hex)
+        .get
+      val expectedLeaf2Hash = Blake2b256Hash
+        .fromHex(leaf2Hex)
+        .get
+
+      store.get(txn, expectedLeaf1Hash) shouldBe Some(Leaf(key1, val1))
+      store.get(txn, expectedLeaf2Hash) shouldBe Some(Leaf(key2, val2))
     }
   }
 
