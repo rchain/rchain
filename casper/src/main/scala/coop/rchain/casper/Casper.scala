@@ -88,6 +88,7 @@ sealed abstract class MultiParentCasperInstances {
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
+      private val expectedBlockRequests: mutable.HashSet[BlockHash] = new mutable.HashSet[BlockHash]()
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -241,8 +242,10 @@ sealed abstract class MultiParentCasperInstances {
               .map(_.latestBlockHash)
               .filterNot(dag.blockLookup.contains)
               .toList
-            _ <- (missingParents ::: missingJustifications).traverse(hash =>
-                  CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash)))
+            _ <- (missingParents ::: missingJustifications).traverse(hash => {
+                    Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
+                    CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash))
+                  })
           } yield ()
 
         case None =>
@@ -250,16 +253,29 @@ sealed abstract class MultiParentCasperInstances {
             s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
       }
 
+      // TODO: Handle slashing
       private def canAdd(block: BlockMessage): Boolean = {
         val dag = _blockDag.get
-        parents(block).forall(p => dag.blockLookup.contains(p)) && //all parents present
-        block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash)) //all justifications present
+        val parentsPresent = parents(block).forall(p => dag.blockLookup.contains(p))
+        val justificationsPresent = block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
+        if (parentsPresent && justificationsPresent) {
+          val justificationOfCreator = block.justifications.find {
+            case Justification(validator: Validator, _) => validator == block.sender
+          }.getOrElse(ByteString.EMPTY)
+          val latestMessageOfCreator = _blockDag.get.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
+          val isNotEquivocation = justificationOfCreator == latestMessageOfCreator
+          isNotEquivocation || expectedBlockRequests.contains(block.blockHash)
+        } else {
+          false
+        }
       }
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
+          expectedBlockRequests -= block.blockHash
           _blockDag.update(bd => {
             val hash = block.blockHash
+
             //add current block as new child to each of its parents
             val newChildMap = parents(block).foldLeft(bd.childMap) {
               case (acc, p) =>
@@ -272,12 +288,14 @@ sealed abstract class MultiParentCasperInstances {
               //Assume that a non-equivocating validator must include
               //its own latest message in the justification. Therefore,
               //for a given validator the blocks are guaranteed to arrive in causal order.
+              // Even for a equivocating validator, we just update its latest message
+              // to whatever block we have fetched latest among the blocks that
+              // constitute the equivocation.
               latestMessages = bd.latestMessages.updated(block.sender, hash),
               childMap = newChildMap
             )
           })
-
-        }.void
+        }
 
       private def attemptAdd(b: BlockMessage): F[Option[Boolean]] =
         if (canAdd(b)) {
