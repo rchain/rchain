@@ -333,5 +333,14 @@ package object rspace {
       }
     }
 
+  /** Gets a checkpoint.  Yes, this is a handwave.
+    *
+    * @param store A store which satisfies the [[IStore]] interface.
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
+    * @return A BLAKE2b256 representing the checkpoint
+    */
   def getCheckpoint[C, P, A, K](store: IStore[C, P, A, K]): Blake2b256Hash = store.getCheckpoint()
 }
