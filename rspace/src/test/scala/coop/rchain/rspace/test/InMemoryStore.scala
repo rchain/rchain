@@ -1,21 +1,21 @@
 package coop.rchain.rspace.test
 
 import cats.implicits._
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.history.Blake2b256Hash
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.{dropIndex, removeFirst}
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreCounters, StoreEventsCounter}
+import coop.rchain.rspace._
+import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.BitVector
-import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
 
 class InMemoryStore[C, P, A, K] private (
     _dbGNATs: mutable.Map[Blake2b256Hash, GNAT[C, P, A, K]],
-    _dbJoins: mutable.HashMap[C, Seq[Seq[C]]]
+    _dbJoins: mutable.HashMap[C, Seq[Seq[C]]],
+    val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
@@ -24,11 +24,9 @@ class InMemoryStore[C, P, A, K] private (
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  private[rspace] type H = Blake2b256Hash
-
   private[rspace] type T = Unit
 
-  private[rspace] def hashChannels(channels: Seq[C]): H =
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     Codec[Seq[C]]
       .encode(channels)
       .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
@@ -41,7 +39,7 @@ class InMemoryStore[C, P, A, K] private (
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  private[rspace] def getChannels(txn: T, key: H) =
+  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
     _dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -68,14 +66,15 @@ class InMemoryStore[C, P, A, K] private (
   private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]] =
     _dbJoins.getOrElse(channel, Seq.empty)
 
-  private[this] def withGNAT(txn: T, key: H)(
+  private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
       f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
     val gnatOpt = _dbGNATs.get(key)
     val rOpt    = f(gnatOpt)
     handleChange(key)(rOpt)
   }
 
-  private[this] def handleChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
+  private[this] def handleChange(
+      key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
     case Some(gnat) if isOrphaned(gnat) => _dbGNATs -= key
     case Some(gnat)                     => _dbGNATs += key -> gnat
     case None                           => _dbGNATs -= key
@@ -168,10 +167,12 @@ class InMemoryStore[C, P, A, K] private (
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  private[this] def collectGarbage(txn: T, key: H): Unit =
+  private[this] def collectGarbage(txn: T, key: Blake2b256Hash): Unit =
     withGNAT(txn, key) { (gnatOpt) =>
       gnatOpt
     }
+
+  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 }
 
 object InMemoryStore {
@@ -186,6 +187,7 @@ object InMemoryStore {
                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       _dbGNATs = mutable.HashMap.empty[Blake2b256Hash, GNAT[C, P, A, K]],
-      _dbJoins = mutable.HashMap.empty[C, Seq[Seq[C]]]
+      _dbJoins = mutable.HashMap.empty[C, Seq[Seq[C]]],
+      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
     )
 }
