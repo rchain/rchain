@@ -272,7 +272,7 @@ class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
 
   override def withTestStore(f: T => Unit): Unit = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    testStore.clear()
+    testStore.clear(())
     try {
       f(testStore)
     } finally {
@@ -289,7 +289,7 @@ class LMDBStoreStorageExamplesTest extends StorageExamplesTests with BeforeAndAf
   override def withTestStore(f: T => Unit): Unit = {
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
     try {
-      testStore.clear()
+      testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testStore)
     } finally {
       testStore.close()

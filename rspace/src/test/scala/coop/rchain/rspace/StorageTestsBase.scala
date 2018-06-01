@@ -12,7 +12,7 @@ import scodec.Codec
 
 trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionValues {
 
-  type T = IStore[C, P, A, K] with ITestableStore[C, P]
+  type T = IStore[C, P, A, K]
 
   val logger: Logger = Logger(this.getClass.getName.stripSuffix("$"))
 
@@ -30,7 +30,7 @@ class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, S
 
   override def withTestStore(f: T => Unit): Unit = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
-    testStore.clear()
+    testStore.clear(())
     try {
       f(testStore)
     } finally {
@@ -52,7 +52,7 @@ class LMDBStoreTestsBase
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    testStore.clear()
+    testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
     testStore.trieStore.clear()
     history.initialize(testStore.trieStore)
     try {

@@ -37,8 +37,7 @@ class LMDBStore[C, P, A, K] private (
   codecP: Codec[P],
   codecA: Codec[A],
   codecK: Codec[K])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+    extends IStore[C, P, A, K] {
 
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
@@ -251,11 +250,9 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def clear(): Unit = {
-    withTxn(createTxnWrite()) { txn =>
-      _dbGNATs.drop(txn)
-      _dbJoins.drop(txn)
-    }
+  private[rspace] def clear(txn: T): Unit = {
+    _dbGNATs.drop(txn)
+    _dbJoins.drop(txn)
     eventsCounter.reset()
   }
 

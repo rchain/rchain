@@ -17,8 +17,7 @@ class InMemoryStore[C, P, A, K] private (
     _dbJoins: mutable.HashMap[C, Seq[Seq[C]]],
     val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+    extends IStore[C, P, A, K] {
 
   private implicit val codecC: Codec[C] = sc.toCodec
 
@@ -140,7 +139,7 @@ class InMemoryStore[C, P, A, K] private (
 
   def close(): Unit = ()
 
-  def clear(): Unit = withTxn(createTxnWrite()) { txn =>
+  def clear(t: T): Unit = {
     _dbGNATs.clear()
     _dbJoins.clear()
     eventsCounter.reset()
