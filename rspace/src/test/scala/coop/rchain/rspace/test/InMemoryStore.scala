@@ -35,6 +35,9 @@ class InMemoryStore[C, P, A, K] private (
 
   private[rspace] type T = Unit
 
+  private[this] type IGnat = GNAT[C, P, A, K]
+  private[this] type Join  = Seq[Seq[C]]
+
   private[rspace] override def hashChannels(channels: Seq[C]): H =
     Codec[Seq[C]]
       .encode(channels)
@@ -81,10 +84,23 @@ class InMemoryStore[C, P, A, K] private (
     handleChange(key)(rOpt)
   }
 
+  private[this] def withGNATJoin(txn: T, key: H, jKey: C)(
+      f: (T, H, C, Option[IGnat], Option[Join]) => Option[Join]): Unit = {
+    val gnatOpt = _dbGNATs.get(key)
+    val joinOpt = _dbJoins.get(jKey)
+    val rJoin   = f(txn, key, jKey, gnatOpt, joinOpt)
+//    handleChange(key)(rGnat)
+    handleChangeJoin(jKey)(rJoin)
+  }
+
   private[this] def handleChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
-    case Some(gnat) if isOrphaned(gnat) => _dbGNATs -= key
-    case Some(gnat)                     => _dbGNATs += key -> gnat
-    case None                           => _dbGNATs -= key
+    case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
+    case _                               => _dbGNATs -= key
+  }
+
+  private[this] def handleChangeJoin(key: C): PartialFunction[Option[Join], Unit] = {
+    case Some(join) => _dbJoins += key -> join
+    case None       => _dbJoins -= key
   }
 
   private[rspace] override def putDatum(txn: T, chs: Seq[C], datum: Datum[A]): Unit =
@@ -104,13 +120,14 @@ class InMemoryStore[C, P, A, K] private (
         .orElse(GNAT(channels = chs, data = Seq.empty[Datum[A]], wks = Seq(continuation)).some)
     }
 
-  private[rspace] override def addJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val existing: Seq[Seq[C]] = _dbJoins.getOrElse(c, Seq.empty)
-    if (!existing.exists(_.equals(cs)))
-      _dbJoins += c -> (cs +: existing)
-    else
-      _dbJoins += c -> existing
-  }
+  private[rspace] override def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
+    withGNATJoin(txn, hashChannels(cs), c) { (txn, key, jKey, gnatOpt, joinOpt) =>
+      val existing: Seq[Seq[C]] = joinOpt.getOrElse(Seq.empty)
+      if (!existing.exists(_.equals(cs)))
+        Some(cs +: existing)
+      else
+        Some(existing)
+    }
 
   private[rspace] override def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
     withGNAT(txn, hashChannels(channels)) { (_, _, gnatOpt) =>
@@ -138,9 +155,10 @@ class InMemoryStore[C, P, A, K] private (
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
         val existing: Seq[Seq[C]] = _dbJoins.getOrElse(c, Seq.empty)
         val filtered              = existing.filter(!_.equals(cs))
-        _dbJoins -= c
-        if (filtered.nonEmpty) _dbJoins += c -> filtered
-
+        if (filtered.nonEmpty)
+          Some(filtered)
+        else
+          None
       }
       gnatOpt
     }
