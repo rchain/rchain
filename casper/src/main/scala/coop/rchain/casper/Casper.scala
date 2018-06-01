@@ -246,7 +246,7 @@ sealed abstract class MultiParentCasperInstances {
                 .toSet
               _ <- (missingParents union missingJustifictions).toList.traverse(
                     hash =>
-                      Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
+                      Capture[F].capture { expectedBlockRequests += hash } *>
                         CommUtil.sendBlockRequest[F](
                           BlockRequest(Base16.encode(hash.toByteArray), hash)))
             } yield ()
