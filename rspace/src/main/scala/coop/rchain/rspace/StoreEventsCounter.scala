@@ -1,5 +1,5 @@
 package coop.rchain.rspace
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.tailrec
 
 case class StoreCounters(sizeOnDisk: Long,
@@ -21,23 +21,31 @@ case class StoreCounters(sizeOnDisk: Long,
   * memory: http://www.cs.wustl.edu/~jain/papers/ftp/psqr.pdf,
   */
 private[rspace] class StoreEventsCounter {
-  private[this] val producesCount   = new AtomicLong
-  private[this] val producesSumTime = new AtomicReference[BigInt](BigInt(0))
 
-  private[this] val consumesCount   = new AtomicLong
-  private[this] val consumesSumTime = new AtomicReference[BigInt](BigInt(0))
+  final case class Counter(count: Long, sumTimeNanoseconds: BigInt) {
+    def add(add: BigInt) =
+      Counter(count + 1, sumTimeNanoseconds + add)
 
-  private[rspace] def reset(): Unit = {
-    producesCount.set(0)
-    producesSumTime.set(0)
-
-    consumesCount.set(0)
-    consumesSumTime.set(0)
+    def avgTimeMiliiseconds: Double =
+      if (count > 0)
+        (BigDecimal(sumTimeNanoseconds) / (count * 1000000)).toDouble
+      else
+        0
   }
 
-  private[rspace] def getConsumesCount: Long = consumesCount.get
+  val zeroCounter = Counter(0, 0)
 
-  private[rspace] def getProducesCount: Long = producesCount.get
+  private[this] val producesCounter = new AtomicReference[Counter](zeroCounter)
+  private[this] val consumesCounter = new AtomicReference[Counter](zeroCounter)
+
+  private[rspace] def reset(): Unit = {
+    producesCounter.set(zeroCounter)
+    consumesCounter.set(zeroCounter)
+  }
+
+  private[rspace] def getConsumesCount: Long = consumesCounter.get.count
+
+  private[rspace] def getProducesCount: Long = producesCounter.get.count
 
   // for nano-time pitfalls please read
   // https://shipilev.net/blog/2014/nanotrusting-nanotime/
@@ -48,10 +56,7 @@ private[rspace] class StoreEventsCounter {
     } finally {
       val end  = System.nanoTime()
       val diff = Math.max(end - start, 0)
-      //addAtomic can is times slower than incrementAndGet
-      //run it first to minimize possible avg error
-      addAtomic(producesSumTime, diff)
-      producesCount.getAndIncrement()
+      addAtomic(producesCounter, diff)
     }
   }
 
@@ -62,44 +67,26 @@ private[rspace] class StoreEventsCounter {
     } finally {
       val end  = System.nanoTime()
       val diff = Math.max(end - start, 0)
-      //addAtomic can is times slower than incrementAndGet
-      //run it first to minimize possible avg error
-      addAtomic(consumesSumTime, diff)
-      consumesCount.getAndIncrement()
+      addAtomic(consumesCounter, diff)
     }
   }
 
   @tailrec
-  private[this] def addAtomic(value: AtomicReference[BigInt], add: BigInt): Unit = {
-    val exInt = value.get
-    if (!value.compareAndSet(exInt, exInt + add))
-      addAtomic(value, add)
+  private[this] def addAtomic(counter: AtomicReference[Counter], value: BigInt): Unit = {
+    val exInt = counter.get
+    if (!counter.compareAndSet(exInt, exInt.add(value)))
+      addAtomic(counter, value)
   }
 
   def createCounters(sizeOnDisk: Long, dataEntries: Long): StoreCounters = {
-    //since producesCount and producesSumTime updated separately
-    //we may have average a bit non-precise (lower) sometimes,
-    //anyway that's better then waste speed on synchronization or locking
-    val producesTotal = producesCount.get
-    val produceAvgTime =
-      if (producesTotal > 0)
-        (BigDecimal(producesSumTime.get) / (producesTotal * 1000000)).toDouble
-      else
-        0
-
-    val consumesTotal = consumesCount.get
-    val consumeAvgTime =
-      if (consumesTotal > 0)
-        (BigDecimal(consumesSumTime.get) / (consumesTotal * 1000000)).toDouble
-      else
-        0
+    val consumesSnapshot = consumesCounter.get
+    val producesSnapshot = producesCounter.get
 
     StoreCounters(sizeOnDisk,
                   dataEntries,
-                  consumesTotal,
-                  consumeAvgTime,
-                  producesTotal,
-                  produceAvgTime)
+                  consumesSnapshot.count,
+                  consumesSnapshot.avgTimeMiliiseconds,
+                  producesSnapshot.count,
+                  producesSnapshot.avgTimeMiliiseconds)
   }
-
 }
