@@ -30,8 +30,7 @@ class InMemoryStore[C, P, A, K] private (
 
   private[rspace] type T = Unit
 
-  private[this] type IGnat = GNAT[C, P, A, K]
-  private[this] type Join  = Seq[Seq[C]]
+  private[this] type Join = Seq[Seq[C]]
 
   private[rspace] def hashChannels(channels: Seq[C]): H =
     Codec[Seq[C]]
@@ -70,31 +69,28 @@ class InMemoryStore[C, P, A, K] private (
   def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
     getMutableWaitingContinuation(txn, channels).map(_.patterns)
 
-  private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]] =
+  private[rspace] def getJoin(txn: T, channel: C): Join =
     _dbJoins.getOrElse(channel, Seq.empty)
 
   private[this] def withGNAT(txn: T, key: H)(
       f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
-    val gnatOpt = _dbGNATs.get(key)
-    val rOpt    = f(gnatOpt)
-    handleChange(key)(rOpt)
+    val gnatOpt   = _dbGNATs.get(key)
+    val resultOpt = f(gnatOpt)
+    handleGNATChange(key)(resultOpt)
   }
 
-  private[this] def withGNATJoin(txn: T, key: H, jKey: C)(
-      f: (T, H, C, Option[IGnat], Option[Join]) => Option[Join]): Unit = {
-    val gnatOpt = _dbGNATs.get(key)
-    val joinOpt = _dbJoins.get(jKey)
-    val rJoin   = f(txn, key, jKey, gnatOpt, joinOpt)
-//    handleChange(key)(rGnat)
-    handleChangeJoin(jKey)(rJoin)
+  private[this] def withJoin(txn: T, jKey: C)(f: (Option[Join]) => Option[Join]): Unit = {
+    val joinOpt   = _dbJoins.get(jKey)
+    val resultOpt = f(joinOpt)
+    handleJoinChange(jKey)(resultOpt)
   }
 
-  private[this] def handleChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
+  private[this] def handleGNATChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
     case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
     case _                               => _dbGNATs -= key
   }
 
-  private[this] def handleChangeJoin(key: C): PartialFunction[Option[Join], Unit] = {
+  private[this] def handleJoinChange(key: C): PartialFunction[Option[Join], Unit] = {
     case Some(join) => _dbJoins += key -> join
     case None       => _dbJoins -= key
   }
@@ -116,12 +112,11 @@ class InMemoryStore[C, P, A, K] private (
     }
 
   private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit =
-    withGNATJoin(txn, hashChannels(cs), c) { (txn, key, jKey, gnatOpt, joinOpt) =>
-      val existing: Seq[Seq[C]] = joinOpt.getOrElse(Seq.empty)
-      if (!existing.exists(_.equals(cs)))
-        Some(cs +: existing)
-      else
-        Some(existing)
+    withJoin(txn, channel) { (joinOpt) =>
+      joinOpt
+        .filter(!_.exists(_.equals(channels)))
+        .map(channels +: _)
+        .orElse(Seq(channels).some)
     }
 
   private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
@@ -141,25 +136,20 @@ class InMemoryStore[C, P, A, K] private (
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit =
     withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
-        val existing: Seq[Seq[C]] = _dbJoins.getOrElse(c, Seq.empty)
-        val filtered              = removeFirst(existing)(_ == channels)
-        if (filtered.nonEmpty)
-          Some(filtered)
-        else
-          None
+        withJoin(txn, channel) { joinOpt =>
+          joinOpt
+            .map(removeFirst(_)(_ == channels))
+            .filter(_.nonEmpty)
+        }
       }
       gnatOpt
     }
-    collectGarbage(txn, hashChannels(Seq(channel)))
-  }
 
-  private[rspace] override def removeAllJoins(txn: T, channel: C): Unit = {
-    _dbJoins -= c
-    collectGarbage(txn, hashChannels(Seq(c)))
-  }
+  private[rspace] override def removeAllJoins(txn: T, channel: C): Unit =
+    withJoin(txn, channel)(_ => none)
 
   def close(): Unit = ()
 
@@ -176,24 +166,16 @@ class InMemoryStore[C, P, A, K] private (
     eventsCounter.createCounters(0, (gnatsSize + _dbJoins.size).toLong)
   }
 
-  def isEmpty: Boolean = withTxn(createTxnRead()) { txn =>
-    _dbGNATs.isEmpty && _dbJoins.isEmpty
-  }
+  def isEmpty: Boolean = withTxn(createTxnRead())(_ => _dbGNATs.isEmpty && _dbJoins.isEmpty)
 
   def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     _dbGNATs.map {
-      case (_, GNAT(cs, data, wks)) =>
-        (cs, Row(data, wks))
+      case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
     }.toMap
   }
 
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
-
-  private[this] def collectGarbage(txn: T, key: H): Unit =
-    withGNAT(txn, key) { (gnatOpt) =>
-      gnatOpt
-    }
 }
 
 object InMemoryStore {
