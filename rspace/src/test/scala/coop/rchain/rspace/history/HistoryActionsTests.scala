@@ -446,7 +446,7 @@ class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with 
         .setMaxReaders(126)
         .open(dbDir.toFile)
     val testStore = LMDBTrieStore.create[TestKey, ByteVector](env)
-    testStore.clear()
+    testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
     try {
       initialize(testStore)
       f(testStore)

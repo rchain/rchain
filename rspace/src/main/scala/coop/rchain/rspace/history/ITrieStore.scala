@@ -53,7 +53,7 @@ trait ITrieStore[T, K, V] {
     }
   }
 
-  private[rspace] def clear(): Unit
+  private[rspace] def clear(txn: T): Unit
 
   def close(): Unit
 }

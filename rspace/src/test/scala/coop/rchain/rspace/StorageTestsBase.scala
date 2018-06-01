@@ -52,8 +52,10 @@ class LMDBStoreTestsBase
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
 
     val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
-    testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
-    testStore.trieStore.clear()
+    testStore.withTxn(testStore.createTxnWrite()) { txn =>
+      testStore.clear(txn)
+      testStore.trieStore.clear(txn)
+    }
     history.initialize(testStore.trieStore)
     try {
       f(testStore)
