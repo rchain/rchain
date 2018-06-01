@@ -12,6 +12,21 @@ import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
 
+trait Transaction {
+  def commit()
+  def abort()
+  def close()
+}
+
+case class State[C, P, A, K](dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
+                             dbJoins: Map[C, Seq[Seq[C]]]) {
+  def isEmpty: Boolean = dbGNATs.isEmpty && dbJoins.isEmpty
+}
+
+object State {
+  def empty[C, P, A, K]: State[C, P, A, K] = State[C, P, A, K](Map.empty, Map.empty)
+}
+
 class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
@@ -20,14 +35,14 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
-  private[this] var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = Map.empty
-  private[this] var _dbJoins: Map[C, Seq[Seq[C]]]                   = Map.empty
+  private[this] val stateX: State[C, P, A, K] = State.empty
 
   private[rspace] type H = Blake2b256Hash
 
-  private[rspace] type T = Unit
+  private[rspace] type T = Transaction with StateAccess
 
-  private[this] type Join = Seq[Seq[C]]
+  private[this] type Join      = Seq[Seq[C]]
+  private[this] type StateType = State[C, P, A, K]
 
   private[rspace] def hashChannels(channels: Seq[C]): H =
     Codec[Seq[C]]
@@ -35,23 +50,49 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
       .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
       .get
 
-  private[rspace] def createTxnRead(): Unit = ()
+  trait StateAccess {
+    def state: StateType = stateX
+  }
 
-  private[rspace] def createTxnWrite(): Unit = ()
+  private[rspace] def createTxnRead(): T = new Transaction with StateAccess {
+    override def commit(): Unit = {}
+
+    override def abort(): Unit = {}
+
+    override def close(): Unit = {}
+  }
+
+  private[rspace] def createTxnWrite(): T = new Transaction with StateAccess {
+    override def commit(): Unit = {}
+
+    override def abort(): Unit = {}
+
+    override def close(): Unit = {}
+  }
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
-    f(txn)
+    try {
+      val ret: R = f(txn)
+      txn.commit()
+      ret
+    } catch {
+      case ex: Throwable =>
+        txn.abort()
+        throw ex
+    } finally {
+      txn.close()
+    }
 
   private[rspace] def getChannels(txn: T, key: H) =
-    _dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
+    txn.state.dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
-    _dbGNATs.get(hashChannels(channels)).map(_.data).getOrElse(Seq.empty)
+    txn.state.dbGNATs.get(hashChannels(channels)).map(_.data).getOrElse(Seq.empty)
 
   private[this] def getMutableWaitingContinuation(
       txn: T,
       channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
-    _dbGNATs
+    txn.state.dbGNATs
       .get(hashChannels(channels))
       .map(_.wks)
       .getOrElse(Seq.empty)
@@ -67,33 +108,38 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
     getMutableWaitingContinuation(txn, channels).map(_.patterns)
 
   private[rspace] def getJoin(txn: T, channel: C): Join =
-    _dbJoins.getOrElse(channel, Seq.empty)
+    txn.state.dbJoins.getOrElse(channel, Seq.empty)
 
   private[this] def withGNAT(txn: T, key: H)(
-      f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
-    val gnatOpt   = _dbGNATs.get(key)
+      f: Option[GNAT[C, P, A, K]] => Option[GNAT[C, P, A, K]]): Unit = {
+    val state     = txn.state
+    val gnatOpt   = state.dbGNATs.get(key)
     val resultOpt = f(gnatOpt)
-    handleGNATChange(key)(resultOpt)
+    handleGNATChange(state, key)(resultOpt)
   }
 
-  private[this] def withJoin(txn: T, jKey: C)(f: (Option[Join]) => Option[Join]): Unit = {
-    val joinOpt   = _dbJoins.get(jKey)
+  private[this] def withJoin(txn: T, jKey: C)(f: Option[Join] => Option[Join]): Unit = {
+    val state     = txn.state
+    val joinOpt   = state.dbJoins.get(jKey)
     val resultOpt = f(joinOpt)
-    handleJoinChange(jKey)(resultOpt)
+    handleJoinChange(state, jKey)(resultOpt)
   }
 
-  private[this] def handleGNATChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
+  private[this] def handleGNATChange(
+      state: StateType,
+      key: H): PartialFunction[Option[GNAT[C, P, A, K]], StateType] = {
     case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
     case _                               => _dbGNATs -= key
   }
 
-  private[this] def handleJoinChange(key: C): PartialFunction[Option[Join], Unit] = {
+  private[this] def handleJoinChange(state: StateType,
+                                     key: C): PartialFunction[Option[Join], StateType] = {
     case Some(join) => _dbJoins += key -> join
     case None       => _dbJoins -= key
   }
 
   private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit =
-    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt
         .map(gnat => gnat.copy(data = datum +: gnat.data))
         .orElse(GNAT(channels = channels, data = Seq(datum), wks = Seq.empty).some)
@@ -102,14 +148,14 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
   private[rspace] def putWaitingContinuation(txn: T,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit =
-    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt
         .map(gnat => gnat.copy(wks = continuation +: gnat.wks))
         .orElse(GNAT(channels = channels, data = Seq.empty, wks = Seq(continuation)).some)
     }
 
   private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit =
-    withJoin(txn, channel) { (joinOpt) =>
+    withJoin(txn, channel) { joinOpt =>
       joinOpt
         .filter(!_.exists(_.equals(channels)))
         .map(channels +: _)
@@ -117,24 +163,24 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
     }
 
   private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
-    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt.map(gnat => gnat.copy(data = dropIndex(gnat.data, index)))
     }
 
   private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit =
-    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt.map(gnat => gnat.copy(wks = dropIndex(gnat.wks, index)))
     }
 
-  private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
-    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+  private[rspace] def removeAll(txn: T, channels: Seq[C]): Unit = {
+    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       gnatOpt.map(_.copy(wks = Seq.empty, channels = Seq.empty))
     }
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit =
-    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
         withJoin(txn, channel) { joinOpt =>
           joinOpt
@@ -157,13 +203,13 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
   }
 
   def getStoreCounters: StoreCounters = withTxn(createTxnRead()) { txn =>
-    val gnatsSize = _dbGNATs.foldLeft(0) {
+    val gnatsSize = txn.state.dbGNATs.foldLeft(0) {
       case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
     }
-    eventsCounter.createCounters(0, (gnatsSize + _dbJoins.size).toLong)
+    eventsCounter.createCounters(0, txn.state.size.toLong)
   }
 
-  def isEmpty: Boolean = withTxn(createTxnRead())(_ => _dbGNATs.isEmpty && _dbJoins.isEmpty)
+  def isEmpty: Boolean = withTxn(createTxnRead())(txn => txn.isEmpty)
 
   def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     _dbGNATs.map {
