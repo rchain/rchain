@@ -11,3 +11,4 @@ test:p2p-test-network-ubuntu-preloaded:
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
     - sudo python3.6 -m pip install argparse docker pexpect requests
     - sudo ./scripts/p2p-test-tool.py -b -p 1
+# test 3
