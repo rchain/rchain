@@ -1,18 +1,19 @@
 package coop.rchain.rspace.test
 
 import cats.implicits._
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.history.Blake2b256Hash
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.{dropIndex, removeFirst}
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreCounters, StoreEventsCounter}
+import coop.rchain.rspace._
+import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.BitVector
-import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
 
-class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
+class InMemoryStore[C, P, A, K](
+    val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
+)(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
@@ -42,7 +43,7 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  private[rspace] def getChannels(txn: T, key: H) =
+  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
     _dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -69,7 +70,7 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
   private[rspace] def getJoin(txn: T, channel: C): Join =
     _dbJoins.getOrElse(channel, Seq.empty)
 
-  private[this] def withGNAT(txn: T, key: H)(
+  private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
       f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
     val gnatOpt   = _dbGNATs.get(key)
     val resultOpt = f(gnatOpt)
@@ -168,11 +169,13 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
   def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     _dbGNATs.map {
       case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
-    }.toMap
+    }
   }
 
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
+
+  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 }
 
 object InMemoryStore {
@@ -185,5 +188,6 @@ object InMemoryStore {
 
   def apply[C, P, A, K <: Serializable]()(implicit sc: Serialize[C],
                                           sk: Serialize[K]): InMemoryStore[C, P, A, K] =
-    new InMemoryStore[C, P, A, K]()
+    new InMemoryStore[C, P, A, K](
+      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]])
 }
