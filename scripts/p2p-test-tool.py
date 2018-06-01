@@ -111,8 +111,7 @@ if len(sys.argv)==1:
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
-RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-*.jar'
-
+RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-0.4.1.jar'
 
 
 def main():
@@ -212,6 +211,8 @@ def deploy_demo():
     for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
         try:
             r = container.exec_run(cmd=cmd, detach=True)
+            if r.exit_code:
+                raise Exception(f"ERROR: There was an issue executing --demo-deploy command on {container.name}")
         except Exception as e:
             print(e)
 
