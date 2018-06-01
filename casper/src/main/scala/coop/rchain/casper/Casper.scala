@@ -97,8 +97,8 @@ sealed abstract class MultiParentCasperInstances {
           attempt <- if (validSig) attemptAdd(b)
                     else none[Boolean].pure[F]
           _ <- attempt match {
-                case Some(true) => reAttemptBuffer
-                case _          => ().pure[F]
+                case Valid => reAttemptBuffer
+                case _     => ().pure[F]
               }
           forkchoice <- estimator.map(_.head)
           _ <- Log[F].info(
@@ -228,35 +228,37 @@ sealed abstract class MultiParentCasperInstances {
           maybeCheckPoint
         }
 
-      private def addEffects(added: Option[Boolean], block: BlockMessage): F[Unit] = added match {
-        //Add successful! Send block to peers, log success, try to add other blocks
-        case Some(true) =>
-          addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
-            s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
-
-        case Some(false) =>
-          for {
-            _              <- Capture[F].capture { blockBuffer += block }
-            dag            <- blockDag
-            missingParents = parents(block).filterNot(dag.blockLookup.contains).toSet
-            missingJustifictions = block.justifications
-              .map(_.latestBlockHash)
-              .filterNot(dag.blockLookup.contains)
-              .toSet
-            _ <- (missingParents union missingJustifictions).toList.traverse(
-                  hash =>
-                    Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
-                      CommUtil.sendBlockRequest[F](
-                        BlockRequest(Base16.encode(hash.toByteArray), hash)))
-          } yield ()
-
-        case None =>
-          Log[F].info(
-            s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
-      }
-
       // TODO: Handle slashing
-      private def canAdd(block: BlockMessage): Boolean = {
+      private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
+        status match {
+          //Add successful! Send block to peers, log success, try to add other blocks
+          case Valid =>
+            addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+              s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
+          case MissingBlocks =>
+            for {
+              _              <- Capture[F].capture { blockBuffer += block }
+              dag            <- blockDag
+              missingParents = parents(block).filterNot(dag.blockLookup.contains).toSet
+              missingJustifictions = block.justifications
+                .map(_.latestBlockHash)
+                .filterNot(dag.blockLookup.contains)
+                .toSet
+              _ <- (missingParents union missingJustifictions).toList.traverse(
+                    hash =>
+                      Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
+                        CommUtil.sendBlockRequest[F](
+                          BlockRequest(Base16.encode(hash.toByteArray), hash)))
+            } yield ()
+          case Equivocation =>
+            Log[F].info(
+              s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
+          case InvalidBlock =>
+            Log[F].info(
+              s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+        }
+
+      private def canAdd(block: BlockMessage): BlockStatus = {
         val dag            = _blockDag.get
         val parentsPresent = parents(block).forall(p => dag.blockLookup.contains(p))
         val justificationsPresent =
@@ -271,9 +273,13 @@ sealed abstract class MultiParentCasperInstances {
           val latestMessageOfCreator =
             _blockDag.get.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
           val isNotEquivocation = justificationOfCreator == latestMessageOfCreator
-          isNotEquivocation || expectedBlockRequests.contains(block.blockHash)
+          if (isNotEquivocation || expectedBlockRequests.contains(block.blockHash)) {
+            Undecided
+          } else {
+            Equivocation
+          }
         } else {
-          false
+          MissingBlocks
         }
       }
 
@@ -304,34 +310,41 @@ sealed abstract class MultiParentCasperInstances {
           })
         }
 
-      private def attemptAdd(b: BlockMessage): F[Option[Boolean]] =
-        if (canAdd(b)) {
-          for {
-            valid <- isValid(b)
-            result = if (valid) Some(true)
-            else None
-            _ <- addEffects(result, b)
-          } yield result
-        } else {
-          val result: Option[Boolean] = Some(false)
-          addEffects(result, b) *> result.pure[F]
+      private def attemptAdd(b: BlockMessage): F[BlockStatus] =
+        canAdd(b) match {
+          case MissingBlocks =>
+            for {
+              _ <- addEffects(MissingBlocks, b)
+            } yield MissingBlocks
+          case Equivocation =>
+            for {
+              _ <- addEffects(Equivocation, b)
+            } yield Equivocation
+          case Undecided =>
+            for {
+              valid  <- isValid(b)
+              result = if (valid) Valid else InvalidBlock
+              _      <- addEffects(result, b)
+            } yield result
+          case _ => throw new Error("Should never reach")
         }
 
       private def reAttemptBuffer: F[Unit] = {
-        def findAddedBlockMessages(attempts: List[(BlockMessage, Boolean)]): List[BlockMessage] =
-          attempts.filter(_._2).map(_._1)
+        def findAddedBlockMessages(
+            attempts: List[(BlockMessage, BlockStatus)]): List[BlockMessage] =
+          attempts.filter(_._2 == Valid).map(_._1)
 
-        def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, Option[Boolean])]) =
+        def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, BlockStatus)]) =
           attempts.flatMap {
-            case (b, None) =>
+            case (b, InvalidBlock) =>
               blockBuffer -= b
               None
-            case (b, Some(success)) =>
-              Some(b -> success)
+            case (b, status) =>
+              Some(b -> status)
           }
 
         for {
-          attempts      <- blockBuffer.toList.traverse(b => attemptAdd(b).map(succ => b -> succ))
+          attempts      <- blockBuffer.toList.traverse(b => attemptAdd(b).map(status => b -> status))
           validAttempts = removeInvalidBlocksFromBuffer(attempts)
           _ <- findAddedBlockMessages(validAttempts) match {
                 case Nil => ().pure[F]

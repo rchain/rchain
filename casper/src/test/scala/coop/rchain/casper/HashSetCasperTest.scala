@@ -154,6 +154,22 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
   }
 
+  it should "ignore adding equivocation blocks" in {
+    val node = HashSetCasperTestNode.standalone(genesis)
+
+    // Creates a pair that constitutes equivocation blocks
+    val Some(block1) = node.casperEff.deploy(ProtoUtil.basicDeploy(0)) *> node.casperEff.createBlock
+    val signedBlock1 = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val Some(block2) = node.casperEff.deploy(ProtoUtil.basicDeploy(1)) *> node.casperEff.createBlock
+    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+
+    node.casperEff.addBlock(signedBlock1)
+    node.casperEff.addBlock(signedBlock2)
+
+    node.casperEff.contains(signedBlock1) should be(true)
+    node.casperEff.contains(signedBlock2) should be(false) // Ignores addition of equivocation pair
+  }
+
   private def blockTuplespaceContents(block: BlockMessage)(
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash           = block.body.get.postState.get.tuplespace
