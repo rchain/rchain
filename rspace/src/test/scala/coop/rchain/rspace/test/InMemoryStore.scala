@@ -183,7 +183,7 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def apply[C, P, A, K <: Serializable](implicit sc: Serialize[C],
-                                        sk: Serialize[K]): InMemoryStore[C, P, A, K] =
+  def apply[C, P, A, K <: Serializable]()(implicit sc: Serialize[C],
+                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K]()
 }
