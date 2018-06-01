@@ -88,7 +88,8 @@ sealed abstract class MultiParentCasperInstances {
       private val blockBuffer: mutable.HashSet[BlockMessage] =
         new mutable.HashSet[BlockMessage]()
       private val deployHist: mutable.HashSet[Deploy] = new mutable.HashSet[Deploy]()
-      private val expectedBlockRequests: mutable.HashSet[BlockHash] = new mutable.HashSet[BlockHash]()
+      private val expectedBlockRequests: mutable.HashSet[BlockHash] =
+        new mutable.HashSet[BlockHash]()
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
@@ -242,9 +243,11 @@ sealed abstract class MultiParentCasperInstances {
               .map(_.latestBlockHash)
               .filterNot(dag.blockLookup.contains)
               .toSet
-            _ <- (missingParents union missingJustifictions).toList.traverse(hash =>
-                  Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
-                  CommUtil.sendBlockRequest[F](BlockRequest(Base16.encode(hash.toByteArray), hash)))
+            _ <- (missingParents union missingJustifictions).toList.traverse(
+                  hash =>
+                    Capture[F].capture { expectedBlockRequests += hash } *> // TODO: Will this fail without Capture?
+                      CommUtil.sendBlockRequest[F](
+                        BlockRequest(Base16.encode(hash.toByteArray), hash)))
           } yield ()
 
         case None =>
@@ -254,14 +257,19 @@ sealed abstract class MultiParentCasperInstances {
 
       // TODO: Handle slashing
       private def canAdd(block: BlockMessage): Boolean = {
-        val dag = _blockDag.get
+        val dag            = _blockDag.get
         val parentsPresent = parents(block).forall(p => dag.blockLookup.contains(p))
-        val justificationsPresent = block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
+        val justificationsPresent =
+          block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
         if (parentsPresent && justificationsPresent) {
-          val justificationOfCreator = block.justifications.find {
-            case Justification(validator: Validator, _) => validator == block.sender
-          }.getOrElse(ByteString.EMPTY)
-          val latestMessageOfCreator = _blockDag.get.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
+          val justificationOfCreator = block.justifications
+            .find {
+              case Justification(validator: Validator, _) => validator == block.sender
+            }
+            .getOrElse(Justification.defaultInstance)
+            .latestBlockHash
+          val latestMessageOfCreator =
+            _blockDag.get.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
           val isNotEquivocation = justificationOfCreator == latestMessageOfCreator
           isNotEquivocation || expectedBlockRequests.contains(block.blockHash)
         } else {
