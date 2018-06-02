@@ -290,9 +290,9 @@ trait HistoryActionsTests
 
         val tests = states.map {
           case (State(checkpoint, expectedContents), chunkNo) =>
-            val num = "%02d".format(chunkNo)
             reset(store, checkpoint)
             val test = store.toMap == expectedContents
+            val num  = "%02d".format(chunkNo)
             if (test) {
               logger.debug(s"$num: store had expected contents")
             } else {
@@ -353,9 +353,6 @@ trait HistoryActionsTests
 
         val states = data.zipWithIndex.map {
           case ((consumes, produces), chunkNo) =>
-            val num          = "%02d".format(chunkNo)
-            val consumesSize = "%02d".format(consumes.size)
-            val producesSize = "%02d".format(produces.size)
             consumes.foreach {
               case (channels, wk) =>
                 consume(store, channels, wk.patterns, wk.continuation, wk.persist)
@@ -364,15 +361,18 @@ trait HistoryActionsTests
               case (channel, datum) =>
                 produce(store, channel, datum.a, datum.persist)
             }
+            val num          = "%02d".format(chunkNo)
+            val consumesSize = "%02d".format(consumes.size)
+            val producesSize = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
             (State(getCheckpoint(store), store.toMap), chunkNo)
         }
 
         val tests = states.map {
           case (State(checkpoint, expectedContents), chunkNo) =>
-            val num = "%02d".format(chunkNo)
             reset(store, checkpoint)
             val test = store.toMap == expectedContents
+            val num  = "%02d".format(chunkNo)
             if (test) {
               logger.debug(s"$num: store had expected contents")
             } else {
