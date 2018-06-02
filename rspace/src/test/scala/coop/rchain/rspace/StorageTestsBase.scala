@@ -23,12 +23,12 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestStore(f: T => Unit): Unit
+  def withTestStore[R](f: T => R): R
 }
 
 class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
 
-  override def withTestStore(f: T => Unit): Unit = {
+  override def withTestStore[R](f: T => R): R = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
     testStore.clear(())
     try {
@@ -46,7 +46,7 @@ class LMDBStoreTestsBase
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  override def withTestStore(f: T => Unit): Unit = {
+  override def withTestStore[R](f: T => R): R = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
     implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
     implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
