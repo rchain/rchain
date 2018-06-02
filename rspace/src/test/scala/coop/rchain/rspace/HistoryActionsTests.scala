@@ -276,24 +276,15 @@ trait HistoryActionsTests
       withTestStore { store =>
         logger.debug(s"Test: ${data.length} stages")
 
-        val stages = data.map { tm: TestProduceMap =>
-          tm.map {
-            case (channel, datum) =>
-              GNAT(List(channel),
-                   List(datum),
-                   List.empty[WaitingContinuation[Pattern, StringsCaptor]])
-          }.toList
-        }.zipWithIndex
-
-        val states = stages.map {
-          case (stage, chunkNo) =>
-            val num = "%02d".format(chunkNo)
-            val len = "%02d".format(stage.length)
-            stage.foreach {
-              case GNAT(List(channel), List(datum), _) =>
+        val states = data.zipWithIndex.map {
+          case (produces, chunkNo) =>
+            produces.foreach {
+              case (channel, datum) =>
                 produce(store, channel, datum.a, datum.persist)
             }
-            logger.debug(s"$num: checkpointing $len produces")
+            val num  = "%02d".format(chunkNo)
+            val size = "%02d".format(produces.size)
+            logger.debug(s"$num: checkpointing $size produces")
             (State(getCheckpoint(store), store.toMap), chunkNo)
         }
 
@@ -322,22 +313,58 @@ trait HistoryActionsTests
       withTestStore { store =>
         logger.debug(s"Test: ${data.length} stages")
 
-        val stages = data.map { tm: TestConsumeMap =>
-          tm.map {
-            case (channels, wk) =>
-              GNAT(channels, List.empty[Datum[String]], List(wk))
-          }.toList
-        }.zipWithIndex
-
-        val states = stages.map {
-          case (stage, chunkNo) =>
-            val num = "%02d".format(chunkNo)
-            val len = "%02d".format(stage.length)
-            stage.foreach {
-              case GNAT(channels, _, List(wk)) =>
+        val states = data.zipWithIndex.map {
+          case (consumes, chunkNo) =>
+            consumes.foreach {
+              case (channels, wk) =>
                 consume(store, channels, wk.patterns, wk.continuation, wk.persist)
             }
-            logger.debug(s"$num: checkpointing $len consumes")
+            val num  = "%02d".format(chunkNo)
+            val size = "%02d".format(consumes.size)
+            logger.debug(s"$num: checkpointing $size consumes")
+            (State(getCheckpoint(store), store.toMap), chunkNo)
+        }
+
+        val tests = states.map {
+          case (State(checkpoint, expectedContents), chunkNo) =>
+            reset(store, checkpoint)
+            val test = store.toMap == expectedContents
+            val num  = "%02d".format(chunkNo)
+            if (test) {
+              logger.debug(s"$num: store had expected contents")
+            } else {
+              logger.error(s"$num: store had unexpected contents")
+            }
+            test
+        }
+
+        !tests.contains(false)
+      }
+    }
+    check(prop)
+  }
+
+  // TODO: get the join map in the mix
+  "when resetting to a bunch of checkpoints made with consumes and produces, the store" should
+    "have the expected contents" in {
+    val prop = Prop.forAllNoShrink { (data: Seq[(TestConsumeMap, TestProduceMap)]) =>
+      withTestStore { store =>
+        logger.debug(s"Test: ${data.length} stages")
+
+        val states = data.zipWithIndex.map {
+          case ((consumes, produces), chunkNo) =>
+            val num          = "%02d".format(chunkNo)
+            val consumesSize = "%02d".format(consumes.size)
+            val producesSize = "%02d".format(produces.size)
+            consumes.foreach {
+              case (channels, wk) =>
+                consume(store, channels, wk.patterns, wk.continuation, wk.persist)
+            }
+            produces.foreach {
+              case (channel, datum) =>
+                produce(store, channel, datum.a, datum.persist)
+            }
+            logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
             (State(getCheckpoint(store), store.toMap), chunkNo)
         }
 
@@ -359,7 +386,6 @@ trait HistoryActionsTests
     }
     check(prop)
   }
-
 }
 
 class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryActionsTests
