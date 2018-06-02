@@ -69,6 +69,7 @@ trait IStore[C, P, A, K] {
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
 
+  private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
 
   private[rspace] def clear(txn: T): Unit
 

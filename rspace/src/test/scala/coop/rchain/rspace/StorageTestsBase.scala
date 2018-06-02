@@ -44,7 +44,7 @@ class LMDBStoreTestsBase
     with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-  val mapSize: Long = 1024L * 1024L * 1024L
+  val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withTestStore[R](f: T => R): R = {
     implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec

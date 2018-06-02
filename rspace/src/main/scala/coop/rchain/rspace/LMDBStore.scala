@@ -300,6 +300,20 @@ class LMDBStore[C, P, A, K] private (
       trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
     }
   }
+
+  // TODO: Does using a cursor improve performance for bulk operations?
+  private[rspace] def bulkInsert(txn: Txn[ByteBuffer],
+                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    gnats.foreach {
+      case (hash, gnat @ GNAT(channels, _, wks)) =>
+        insertGNAT(txn, hash, gnat)
+        for {
+          wk      <- wks
+          channel <- channels
+        } {
+          addJoin(txn, channel, channels)
+        }
+    }
 }
 
 object LMDBStore {
