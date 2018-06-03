@@ -34,7 +34,7 @@ trait SafetyOracle[F[_]] {
 
   /**
     * @param estimate Block to detect safety on
-    * @return normalizedFaultTolerance float between -1 and 1, where -1 means orphaned
+    * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
     */
   def normalizedFaultTolerance(estimate: BlockMessage): F[Float]
 }
