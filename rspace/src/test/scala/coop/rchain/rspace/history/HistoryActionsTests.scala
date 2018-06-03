@@ -37,9 +37,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
   "Duplicate inserts, lookup" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
       insert(store, key1, val1)
-      val root1 = store.workingRootHash.get
+      val root1 = getRoot(store)
       insert(store, key1, val1)
-      val root2 = store.workingRootHash.get
+      val root2 = getRoot(store)
       root2 shouldBe root1
       lookup(store, key1).value shouldBe val1
     }
@@ -47,9 +47,9 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
   "Two inserts at same key with different values, lookup" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
       insert(store, key1, val1)
-      val root1 = store.workingRootHash.get
+      val root1 = getRoot(store)
       insert(store, key1, val2)
-      val root2 = store.workingRootHash.get
+      val root2 = getRoot(store)
       root2 should not be root1
       lookup(store, key1).value shouldBe val2
     }
@@ -130,30 +130,38 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key1) shouldBe None
     }
 
+  "Delete" should "return false for a missing (key, value)" in {
+    withTestTrieStore { implicit store =>
+      insert(store, key2, val2)
+      delete(store, key2, val2) shouldBe true
+      delete(store, key2, val2) shouldBe false
+    }
+  }
+
   "Insert, insert, delete, delete" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
-      val root0 = store.workingRootHash.get
+      val root0 = getRoot(store)
 
       insert(store, key1, val1)
-      val root1 = store.workingRootHash.get
+      val root1 = getRoot(store)
       root1 should not be root0
 
       insert(store, key2, val2)
-      val root2 = store.workingRootHash.get
+      val root2 = getRoot(store)
       root2 should not be root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
 
       delete(store, key2, val2) shouldBe true
-      val root3 = store.workingRootHash.get
+      val root3 = getRoot(store)
       root3 shouldBe root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2) shouldBe None
 
       delete(store, key1, val1) shouldBe true
-      val root4 = store.workingRootHash.get
+      val root4 = getRoot(store)
       root4 shouldBe root0
 
       lookup(store, key1) shouldBe None
@@ -162,62 +170,62 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
 
   "Insert, delete, delete again" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
-      val root0 = store.workingRootHash.get
+      val root0 = getRoot(store)
 
       insert(store, key1, val1)
       lookup(store, key1).value shouldBe val1
-      store.workingRootHash.get should not be root0
+      getRoot(store) should not be root0
 
       delete(store, key1, val1) shouldBe true
       lookup(store, key1) shouldBe None
-      store.workingRootHash.get shouldBe root0
+      getRoot(store) shouldBe root0
 
       delete(store, key1, val1) shouldBe false
       lookup(store, key1) shouldBe None
-      store.workingRootHash.get shouldBe root0
+      getRoot(store) shouldBe root0
     }
 
   "Insert, Insert, Delete, Delete, Rollback, Delete, Delete" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
-      val root0 = store.workingRootHash.get
+      val root0 = getRoot(store)
 
       insert(store, key1, val1)
-      val root1 = store.workingRootHash.get
+      val root1 = getRoot(store)
       root1 should not be root0
 
       insert(store, key2, val2)
-      val root2 = store.workingRootHash.get
+      val root2 = getRoot(store)
       root2 should not be root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
 
       delete(store, key2, val2) shouldBe true
-      store.workingRootHash.get shouldBe root1
+      getRoot(store) shouldBe root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2) shouldBe None
 
       delete(store, key1, val1) shouldBe true
-      store.workingRootHash.get shouldBe root0
+      getRoot(store) shouldBe root0
 
       lookup(store, key1) shouldBe None
       lookup(store, key2) shouldBe None
 
       // Aaannnd rollback...
-      store.reset(root2)
+      root2.foreach(setRoot(store, _))
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
 
       delete(store, key2, val2) shouldBe true
-      store.workingRootHash.get shouldBe root1
+      getRoot(store) shouldBe root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2) shouldBe None
 
       delete(store, key1, val1) shouldBe true
-      store.workingRootHash.get shouldBe root0
+      getRoot(store) shouldBe root0
 
       lookup(store, key1) shouldBe None
       lookup(store, key2) shouldBe None
@@ -225,40 +233,40 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
 
   "Rollback twice" should "work" in
     withTestTrieStore { (store: ITrieStore[T, TestKey, ByteVector]) =>
-      val root0 = store.workingRootHash.get
+      val root0 = getRoot(store)
 
       insert(store, key1, val1)
-      val root1 = store.workingRootHash.get
+      val root1 = getRoot(store)
       root1 should not be root0
 
       insert(store, key2, val2)
-      val root2 = store.workingRootHash.get
+      val root2 = getRoot(store)
       root2 should not be root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
 
       delete(store, key2, val2) shouldBe true
-      store.workingRootHash.get shouldBe root1
+      getRoot(store) shouldBe root1
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2) shouldBe None
 
       delete(store, key1, val1) shouldBe true
-      store.workingRootHash.get shouldBe root0
+      getRoot(store) shouldBe root0
 
       lookup(store, key1) shouldBe None
       lookup(store, key2) shouldBe None
 
       // Aaannnd rollback...
-      store.reset(root2)
+      root2.foreach(setRoot(store, _))
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
       lookup(store, key3) shouldBe None
 
       insert(store, key3, val3)
-      val root3 = store.workingRootHash.get
+      val root3 = getRoot(store)
       root3 should not be root2
 
       lookup(store, key1).value shouldBe val1
@@ -266,7 +274,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key3).value shouldBe val3
 
       insert(store, key4, val4)
-      val root4 = store.workingRootHash.get
+      val root4 = getRoot(store)
       root4 should not be root3
 
       lookup(store, key1).value shouldBe val1
@@ -275,7 +283,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key4).value shouldBe val4
 
       // rollback again
-      store.reset(root3)
+      root3.foreach(setRoot(store, _))
 
       lookup(store, key1).value shouldBe val1
       lookup(store, key2).value shouldBe val2
@@ -283,7 +291,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
       lookup(store, key4) shouldBe None
 
       insert(store, key4, val4)
-      val root5 = store.workingRootHash.get
+      val root5 = getRoot(store)
       root5 shouldBe root4
     }
 
@@ -294,16 +302,16 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
 
         val (first, second) = pairs.splitAt(pairs.length / 2)
 
-        val root0 = store.workingRootHash.get
+        val root0 = getRoot(store)
 
         HistoryActionsTests.insertAll(store, first)
-        val root1 = store.workingRootHash.get
+        val root1 = getRoot(store)
         val ret1  = HistoryActionsTests.lookupAll(store, first)
 
         ret1 shouldBe first
 
         HistoryActionsTests.insertAll(store, second)
-        val root2 = store.workingRootHash.get
+        val root2 = getRoot(store)
         val ret2f = HistoryActionsTests.lookupAll(store, first)
         val ret2s = HistoryActionsTests.lookupAll(store, second)
 
@@ -312,7 +320,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
         ret2s shouldBe second
 
         HistoryActionsTests.deleteAll(store, second)
-        val root3 = store.workingRootHash.get
+        val root3 = getRoot(store)
         val ret3f = HistoryActionsTests.lookupAll(store, first)
         val ret3s = HistoryActionsTests.lookupAll(store, second)
 
@@ -321,7 +329,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
         ret3s shouldBe empty
 
         HistoryActionsTests.deleteAll(store, first)
-        val root4 = store.workingRootHash.get
+        val root4 = getRoot(store)
         val ret4f = HistoryActionsTests.lookupAll(store, first)
         val ret4s = HistoryActionsTests.lookupAll(store, second)
 
@@ -329,10 +337,10 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
         ret4f shouldBe empty
         ret4s shouldBe empty
 
-        store.reset(root2)
+        root2.foreach(setRoot(store, _))
 
         HistoryActionsTests.deleteAll(store, second)
-        val root5 = store.workingRootHash.get
+        val root5 = getRoot(store)
         val ret5f = HistoryActionsTests.lookupAll(store, first)
         val ret5s = HistoryActionsTests.lookupAll(store, second)
 
@@ -341,7 +349,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
         ret5s shouldBe empty
 
         HistoryActionsTests.deleteAll(store, first)
-        val root6 = store.workingRootHash.get
+        val root6 = getRoot(store)
         val ret6f = HistoryActionsTests.lookupAll(store, first)
         val ret6s = HistoryActionsTests.lookupAll(store, second)
 
@@ -352,6 +360,43 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
     }
   }
 
+  "getLeaves on an empty store" should "return an empty sequence" in
+    withTestTrieStore { store =>
+      getLeaves(store) shouldBe empty
+    }
+
+  "insert 6 things and getLeaves" should "return all of the leaves" in
+    withTestTrieStore { store =>
+      val expected: Vector[Leaf[TestKey, ByteVector]] = Vector(
+        Leaf(key1, val1),
+        Leaf(key2, val2),
+        Leaf(key3, val3),
+        Leaf(key4, val4),
+        Leaf(key5, val5),
+        Leaf(key6, val6)
+      )
+
+      insert(store, key1, val1)
+      insert(store, key2, val2)
+      insert(store, key3, val3)
+      insert(store, key4, val4)
+      insert(store, key5, val5)
+      insert(store, key6, val6)
+
+      val leaves = getLeaves(store)
+
+      leaves should contain allElementsOf expected
+    }
+
+  "insert a bunch of things and getLeaves" should "return all of the leaves" in
+    forAll { (kvs: Map[TestKey, ByteVector]) =>
+      withTestTrieStore { store =>
+        val expected = kvs.map { case (k, v) => Leaf(k, v) }
+        kvs.foreach { case (k, v) => insert(store, k, v) }
+        val leaves = getLeaves(store)
+        leaves should contain allElementsOf expected
+      }
+    }
 }
 
 object HistoryActionsTests {
@@ -382,7 +427,7 @@ trait WithLMDBStore extends BeforeAndAfterAll { this: Suite =>
       Env
         .create()
         .setMapSize(mapSize)
-        .setMaxDbs(1)
+        .setMaxDbs(2)
         .setMaxReaders(126)
         .open(dbDir.toFile)
     val testStore = LMDBTrieStore.create[TestKey, ByteVector](env)

@@ -80,7 +80,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host           = conf.fetchHost()
+  private val host           = conf.localhost
   private val address        = s"rnode://$name@$host:${conf.port()}"
   private val src            = p2p.NetworkAddress.parse(address).right.get
   private val remoteKeysPath = conf.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
@@ -148,7 +148,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     storageSize,
     genesisBlock(genesisBonds)
   )
-  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+  implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
   )
 
@@ -260,6 +260,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
+      _         <- Log[Effect].info(s"RChain Node ${BuildInfo.version}")
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect

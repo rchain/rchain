@@ -1,5 +1,6 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -14,20 +15,9 @@ import scala.collection.immutable.Seq
 trait IStore[C, P, A, K] {
 
   /**
-    * The type of hashes
-    */
-  private[rspace] type H
-
-  /**
     * The type of transactions
     */
   private[rspace] type T
-
-  private[rspace] def hashChannels(channels: Seq[C])(implicit sc: Serialize[C]): H
-
-  private[rspace] def getChannels(txn: T, channelsHash: H): Seq[C]
-
-  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit
 
   private[rspace] def createTxnRead(): T
 
@@ -35,18 +25,22 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R
 
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash
+
+  private[rspace] def getChannels(txn: T, channelsHash: Blake2b256Hash): Seq[C]
+
   private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit
+
+  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]]
+
+  private[rspace] def removeDatum(txn: T, channel: Seq[C], index: Int): Unit
 
   private[rspace] def putWaitingContinuation(txn: T,
                                              channels: Seq[C],
                                              continuation: WaitingContinuation[P, K]): Unit
 
-  private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]]
-
   private[rspace] def getWaitingContinuation(txn: T,
                                              channels: Seq[C]): Seq[WaitingContinuation[P, K]]
-
-  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit
 
   private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit
 
@@ -58,17 +52,18 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit
 
+  // Delete?
   private[rspace] def removeAllJoins(txn: T, channel: C): Unit
-
-  private[rspace] def collectGarbage(txn: T,
-                                     channelsHash: H,
-                                     dataCollected: Boolean = false,
-                                     waitingContinuationsCollected: Boolean = false,
-                                     joinsCollected: Boolean = false): Unit
 
   def toMap: Map[Seq[C], Row[P, A, K]]
 
   def close(): Unit
 
-  def getStoreSize: StoreSize
+  def getStoreCounters: StoreCounters
+
+  private[rspace] val eventsCounter: StoreEventsCounter
+
+  def getCheckpoint(): Blake2b256Hash
+
+  val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
 }

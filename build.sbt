@@ -103,7 +103,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
-    version := "0.3.1",
+    version := "0.4.1",
     name := "rnode",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
@@ -201,7 +201,7 @@ lazy val rholang = (project in file("rholang"))
     ).map(_.getPath ++ "/.*").mkString(";"),
     fork in Test := true
   )
-  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test")
+  .dependsOn(models % "compile->compile;test->test", rspace  % "compile->compile;test->test", crypto)
 
 lazy val rholangCLI = (project in file("rholang-cli"))
   .settings(commonSettings: _*)

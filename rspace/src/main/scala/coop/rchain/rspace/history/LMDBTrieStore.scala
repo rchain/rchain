@@ -1,6 +1,7 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 
 import coop.rchain.rspace.util.withResource
 import coop.rchain.shared.AttemptOps._
@@ -12,10 +13,11 @@ import scodec.bits.BitVector
 
 import scala.collection.JavaConverters._
 
-class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer], _dbTrie: Dbi[ByteBuffer])(
-    implicit
-    codecK: Codec[K],
-    codecV: Codec[V])
+class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
+                                   _dbTrie: Dbi[ByteBuffer],
+                                   _dbRoot: Dbi[ByteBuffer])(implicit
+                                                             codecK: Codec[K],
+                                                             codecV: Codec[V])
     extends ITrieStore[Txn[ByteBuffer], K, V] {
 
   private[rspace] def createTxnRead(): Txn[ByteBuffer] = env.txnRead
@@ -70,17 +72,38 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer], _dbTrie: Dbi[ByteBu
   private[rspace] def clear(): Unit =
     withTxn(createTxnWrite()) { txn =>
       _dbTrie.drop(txn)
+      _dbRoot.drop(txn)
     }
+
+  private val ROOT_KEY: ByteBuffer = {
+    val rootName = "CURRENT_ROOT".getBytes(StandardCharsets.UTF_8)
+    val buffer   = ByteBuffer.allocateDirect(rootName.length)
+    buffer.put(rootName)
+    buffer.flip()
+    buffer
+  }
+
+  private[rspace] def getRoot(txn: Txn[ByteBuffer]): Option[Blake2b256Hash] =
+    Option(_dbRoot.get(txn, ROOT_KEY)).map { (buffer: ByteBuffer) =>
+      Codec[Blake2b256Hash].decode(BitVector(buffer)).map(_.value).get
+    }
+
+  private[rspace] def putRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit = {
+    val encodedHash     = Codec[Blake2b256Hash].encode(hash).get
+    val encodedHashBuff = encodedHash.bytes.toDirectByteBuffer
+    if (!_dbRoot.put(txn, ROOT_KEY, encodedHashBuff)) {
+      throw new Exception(s"could not persist: $hash")
+    }
+  }
 }
 
 object LMDBTrieStore {
 
-  private[this] val trieTableName: String = "Trie"
-
   def create[K, V](env: Env[ByteBuffer])(implicit
                                          codecK: Codec[K],
                                          codecV: Codec[V]): LMDBTrieStore[K, V] = {
-    val dbTrie: Dbi[ByteBuffer] = env.openDbi(trieTableName, MDB_CREATE)
-    new LMDBTrieStore[K, V](env, dbTrie)
+    val dbTrie: Dbi[ByteBuffer] = env.openDbi("Trie", MDB_CREATE)
+    val dbRoot: Dbi[ByteBuffer] = env.openDbi("Root", MDB_CREATE)
+    new LMDBTrieStore[K, V](env, dbTrie, dbRoot)
   }
 }

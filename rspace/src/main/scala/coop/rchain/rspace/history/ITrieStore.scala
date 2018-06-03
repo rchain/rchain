@@ -1,9 +1,5 @@
 package coop.rchain.rspace.history
 
-import coop.rchain.rspace.util.ignore
-
-import scala.concurrent.SyncVar
-
 trait ITrieStore[T, K, V] {
 
   private[rspace] def createTxnRead(): T
@@ -12,12 +8,9 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R
 
-  private[rspace] val workingRootHash: SyncVar[Blake2b256Hash] = new SyncVar[Blake2b256Hash]()
+  private[rspace] def getRoot(txn: T): Option[Blake2b256Hash]
 
-  private[rspace] def reset(hash: Blake2b256Hash): Unit = {
-    ignore { workingRootHash.take() }
-    workingRootHash.put(hash)
-  }
+  private[rspace] def putRoot(txn: T, hash: Blake2b256Hash): Unit
 
   private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit
 
@@ -25,7 +18,7 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def toMap: Map[Blake2b256Hash, Trie[K, V]]
 
-  private[rspace] def clear(): Unit
-
   def close(): Unit
+
+  private[rspace] def clear(): Unit
 }
