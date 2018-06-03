@@ -1,6 +1,7 @@
 package coop.rchain.casper
 
 import com.google.protobuf.ByteString
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, Justification}
 import coop.rchain.casper.util.ProtoUtil._
 import monix.eval.Task
@@ -37,8 +38,8 @@ object SafetyOracle {
   def apply[F[_]](implicit ev: SafetyOracle[F]): SafetyOracle[F] = ev
 }
 
-class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
-                  latestBlocks: collection.Map[ByteString, BlockMessage])
+class TuranOracle(blocks: collection.Map[BlockHash, BlockMessage],
+                  latestMessages: collection.Map[Validator, BlockMessage])
     extends SafetyOracle[Task] {
   def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): Task[Boolean] = Task.delay {
     val faultTolerance = 2 * minMaxCliqueWeight(estimate) - totalWeight(estimate)
@@ -59,11 +60,11 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
   private def totalWeight(estimate: BlockMessage): Int =
     weightMapTotal(mainParentWeightMap(estimate))
 
-  private def candidateWeights(estimate: BlockMessage): Map[ByteString, Int] = {
-    val weights: Map[ByteString, Int] = mainParentWeightMap(estimate)
+  private def candidateWeights(estimate: BlockMessage): Map[Validator, Int] = {
+    val weights: Map[Validator, Int] = mainParentWeightMap(estimate)
     for {
       (validator, stake) <- weights
-      latestBlock        <- latestBlocks.get(validator) if compatible(estimate, latestBlock)
+      latestMessage      <- latestMessages.get(validator) if compatible(estimate, latestMessage)
     } yield (validator, stake)
   }
 
@@ -76,12 +77,12 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
   }
 
   private def agreementGraphEdgeCount(estimate: BlockMessage,
-                                      candidates: Map[ByteString, Int]): Int = {
-    def seesAgreement(first: ByteString, second: ByteString): Boolean =
+                                      candidates: Map[Validator, Int]): Int = {
+    def seesAgreement(first: Validator, second: Validator): Boolean =
       (for {
-        firstLatest <- latestBlocks.get(first).toList
+        firstLatest <- latestMessages.get(first).toList
         justification <- firstLatest.justifications.map {
-                          case Justification(_, latestBlock: ByteString) => latestBlock
+                          case Justification(_, latestBlock: BlockHash) => latestBlock
                         }
         justificationBlock <- blocks.get(justification)
         if justificationBlock.sender == second && compatible(estimate, justificationBlock)
@@ -89,17 +90,17 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
 
     // TODO: Potentially replace with isInBlockDAG
     def filterChildren(candidate: BlockMessage,
-                       blocks: collection.Map[ByteString, BlockMessage]): List[BlockMessage] =
+                       blocks: collection.Map[BlockHash, BlockMessage]): List[BlockMessage] =
       blocks.values.filter { potentialChild =>
         isInMainChain(blocks, candidate, potentialChild)
       }.toList
 
-    def neverEventuallySeeDisagreement(first: ByteString, second: ByteString): Boolean = {
+    def neverEventuallySeeDisagreement(first: Validator, second: Validator): Boolean = {
       val potentialDisagreements: List[BlockMessage] =
         for {
-          firstLatest <- latestBlocks.get(first).toList
+          firstLatest <- latestMessages.get(first).toList
           justification <- firstLatest.justifications.map {
-                            case Justification(_, latestBlock: ByteString) => latestBlock
+                            case Justification(_, latestBlock: BlockHash) => latestBlock
                           }
           justificationBlock <- blocks.get(justification).toList
           child              <- filterChildren(justificationBlock, blocks)
@@ -115,11 +116,10 @@ class TuranOracle(blocks: collection.Map[ByteString, BlockMessage],
       y <- candidates.keys
       if x.toString > y.toString // TODO: Order ByteString
     } yield (x, y)) filter {
-      case (validatorOne: ByteString, validatorTwo: ByteString) =>
-        seesAgreement(validatorOne, validatorTwo) && seesAgreement(validatorTwo, validatorOne) &&
-          neverEventuallySeeDisagreement(validatorOne, validatorTwo) && neverEventuallySeeDisagreement(
-          validatorTwo,
-          validatorOne)
+      case (first: Validator, second: Validator) =>
+        seesAgreement(first, second) && seesAgreement(second, first) &&
+          neverEventuallySeeDisagreement(first, second) && neverEventuallySeeDisagreement(second,
+                                                                                          first)
     }
     edges.size
   }
