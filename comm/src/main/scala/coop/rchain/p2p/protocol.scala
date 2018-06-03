@@ -29,7 +29,7 @@ object NetworkProtocol {
                     nonce: Nonce,
                     framed: Array[Byte]): routing.Protocol = {
     val msg = Frame(ByteString.copyFrom(nonce), ByteString.copyFrom(framed))
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
+    ProtocolMessage.upstreamResponse(src, AnyProto.pack(msg))
   }
 
   def encryptionHandshakeResponse(src: ProtocolNode,
@@ -37,7 +37,7 @@ object NetworkProtocol {
                                   keys: PublicPrivateKeys): routing.Protocol = {
     val msg = EncryptionHandshakeResponse(publicKey = ByteString.copyFrom(keys.pub))
 
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
+    ProtocolMessage.upstreamResponse(src, AnyProto.pack(msg))
   }
 
   def toEncryptionHandshakeResponse(
@@ -94,9 +94,9 @@ final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: 
 }
 
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse
+    extends ProtocolMessage
 
 final case class FrameMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage
 
 final case class FrameResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse
+    extends ProtocolMessage

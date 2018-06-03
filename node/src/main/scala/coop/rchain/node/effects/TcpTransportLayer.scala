@@ -82,7 +82,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
                   tlr.payload match {
                     case p if p.isProtocol =>
                       p match {
-                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _, _)) =>
+                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _)) =>
                           if (sender.id.toByteArray
                                 .map("%02x".format(_))
                                 .mkString == remote.id.toString) {

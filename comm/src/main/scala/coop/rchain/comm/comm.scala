@@ -39,8 +39,6 @@ case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
   def toAddress: String =
     s"rnode://$sKey@${endpoint.host}:${endpoint.udpPort}"
 
-  def withUdpSocket(udp: java.net.InetSocketAddress): PeerNode =
-    new PeerNode(id, endpoint.withUdp(udp))
 }
 
 trait Notary {
