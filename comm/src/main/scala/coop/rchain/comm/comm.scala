@@ -20,9 +20,6 @@ object NodeIdentifier {
 final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
   val tcpSocketAddress = new InetSocketAddress(host, tcpPort)
   val udpSocketAddress = new InetSocketAddress(host, udpPort)
-
-  def withUdp(udp: java.net.InetSocketAddress): Endpoint =
-    Endpoint(udp.getHostString, tcpPort, udp.getPort)
 }
 
 /**
