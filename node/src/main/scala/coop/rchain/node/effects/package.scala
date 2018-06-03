@@ -148,11 +148,5 @@ package object effects {
                              conf.certificatePath.toFile,
                              conf.keyPath.toFile)(src)
 
-  def udpTransportLayer(src: PeerNode)(implicit
-                                       ev1: Log[Task],
-                                       ev2: Time[Task],
-                                       ev3: Metrics[Task]): TransportLayer[Task] =
-    new UdpTransportLayer(src)
-
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 }
