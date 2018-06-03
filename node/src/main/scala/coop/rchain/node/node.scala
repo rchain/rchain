@@ -1,11 +1,16 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import io.grpc.Server
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.casper.MultiParentCasper
+import io.grpc.Server
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
@@ -17,12 +22,12 @@ import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-
 import coop.rchain.shared.Resources._
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.node.effects.TLNodeDiscovery
+
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 
@@ -143,6 +148,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       })
     case None => newValidators
   }
+  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,

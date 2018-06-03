@@ -55,7 +55,7 @@ sealed abstract class MultiParentCasperInstances {
 
   //TODO: figure out Casper key management for validators
   def hashSetCasper[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler: SafetyOracle](
       storageLocation: Path,
       storageSize: Long,
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
@@ -95,14 +95,25 @@ sealed abstract class MultiParentCasperInstances {
         for {
           validSig <- Validate.blockSignature[F](b)
           attempt <- if (validSig) attemptAdd(b)
-                     else InvalidBlockSignature.pure[F]
+                    else InvalidBlockSignature.pure[F]
           _ <- attempt match {
                 case Valid => reAttemptBuffer
                 case _     => ().pure[F]
               }
-          forkchoice <- estimator.map(_.head)
+          estimates <- estimator
+          tip       = estimates.head
           _ <- Log[F].info(
-                s"CASPER: New fork-choice is block ${PrettyPrinter.buildString(forkchoice.blockHash)}.")
+                s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
+          dag <- blockDag
+          // TODO: Replace with getMainChainUntilLastFinalizedBlock
+          forkchoice = getMainChain(dag, tip, IndexedSeq.empty[BlockMessage])
+          forkchoiceSafety <- forkchoice.toList.traverse(block =>
+                               SafetyOracle[F].normalizedFaultTolerance(dag, block))
+          _ <- forkchoice.zip(forkchoiceSafety).toList.traverse {
+                case (block, faultTolerance) =>
+                  Log[F].info(s"CASPER: Block ${PrettyPrinter
+                    .buildString(block.blockHash)} has a fault tolerance of ${faultTolerance}.")
+              }
         } yield ()
 
       def contains(b: BlockMessage): F[Boolean] =
