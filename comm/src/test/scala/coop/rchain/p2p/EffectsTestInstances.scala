@@ -49,7 +49,7 @@ object EffectsTestInstances {
 
   class TransportLayerStub[F[_]: Capture: Applicative](src: ProtocolNode)
       extends TransportLayer[F] {
-    type Responses = ProtocolNode => (ProtocolMessage => CommErr[ProtocolMessage])
+    type Responses = PeerNode => (ProtocolMessage => CommErr[ProtocolMessage])
     var reqresp: Option[Responses]      = None
     var requests: List[ProtocolMessage] = List.empty[ProtocolMessage]
 
@@ -62,7 +62,7 @@ object EffectsTestInstances {
     }
 
     def roundTrip(msg: ProtocolMessage,
-                  remote: ProtocolNode,
+                  remote: PeerNode,
                   timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
       Capture[F].capture {
         requests = requests :+ msg

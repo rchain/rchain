@@ -12,9 +12,9 @@ import coop.rchain.comm.{PeerNode, ProtocolMessage, ProtocolNode}
 trait TransportLayer[F[_]] {
 
   def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
+                remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]]
-  // TODO return PeerNode
+  // TODO return PeerNode, do we still neeed it?
   def local: F[ProtocolNode]
   // TODO remove ProtocolMessage, use raw messages from protocol
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
@@ -35,7 +35,7 @@ sealed abstract class TransportLayerInstances {
       implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, E, ?]] =
     new TransportLayer[EitherT[F, E, ?]] {
       def roundTrip(msg: ProtocolMessage,
-                    remote: ProtocolNode,
+                    remote: PeerNode,
                     timeout: Duration): EitherT[F, E, CommErr[ProtocolMessage]] =
         EitherT.liftF(evF.roundTrip(msg, remote, timeout))
 

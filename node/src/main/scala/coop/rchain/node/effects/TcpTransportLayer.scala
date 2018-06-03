@@ -68,7 +68,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
       .build()
 
   def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
+                remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]] =
     for {
       tlResponseErr <- Capture[F].capture(
