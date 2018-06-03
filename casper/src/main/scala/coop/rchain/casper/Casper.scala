@@ -95,7 +95,7 @@ sealed abstract class MultiParentCasperInstances {
         for {
           validSig <- Validate.blockSignature[F](b)
           attempt <- if (validSig) attemptAdd(b)
-                    else none[Boolean].pure[F]
+                     else InvalidBlockSignature.pure[F]
           _ <- attempt match {
                 case Valid => reAttemptBuffer
                 case _     => ().pure[F]
