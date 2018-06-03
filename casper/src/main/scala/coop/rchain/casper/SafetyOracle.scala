@@ -31,7 +31,12 @@ import scala.collection
  * and is_safe will reduce to total_weight >= total_weight and evaluate to true.
  */
 trait SafetyOracle[F[_]] {
-  def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): F[Boolean]
+
+  /**
+    * @param estimate Block to detect safety on
+    * @return normalizedFaultTolerance float between -1 and 1, where -1 means orphaned
+    */
+  def normalizedFaultTolerance(estimate: BlockMessage): F[Float]
 }
 
 object SafetyOracle {
@@ -41,9 +46,9 @@ object SafetyOracle {
 class TuranOracle(blocks: collection.Map[BlockHash, BlockMessage],
                   latestMessages: collection.Map[Validator, BlockMessage])
     extends SafetyOracle[Task] {
-  def isSafe(estimate: BlockMessage, faultToleranceThreshold: Float): Task[Boolean] = Task.delay {
+  def normalizedFaultTolerance(estimate: BlockMessage): Task[Float] = Task.delay {
     val faultTolerance = 2 * minMaxCliqueWeight(estimate) - totalWeight(estimate)
-    faultTolerance >= faultToleranceThreshold * totalWeight(estimate)
+    faultTolerance.toFloat / totalWeight(estimate)
   }
 
   private def minMaxCliqueWeight(estimate: BlockMessage): Int =

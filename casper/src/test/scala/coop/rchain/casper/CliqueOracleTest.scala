@@ -84,17 +84,14 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
-        isGenesisSafe          <- SafetyOracle[F].isSafe(genesis, 1)
-        _                      = assert(isGenesisSafe)
-        isB2Safe               <- SafetyOracle[F].isSafe(b2, 1)
-        _                      = assert(isB2Safe)
-        isB3Safe               <- SafetyOracle[F].isSafe(b3, 1)
-        _                      = assert(!isB3Safe)
-        isB4SafeConservatively <- SafetyOracle[F].isSafe(b4, 1)
-        _                      = assert(!isB4SafeConservatively)
-        isB4SafeLessConservatively <- SafetyOracle[F]
-                                       .isSafe(b4, 0.2f) // Clique oracle would be safe
-        _ = assert(!isB4SafeLessConservatively)
+        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(genesis)
+        _                     = assert(genesisFaultTolerance == 1)
+        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b2)
+        _                     = assert(b2FaultTolerance == 1)
+        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b3)
+        _                     = assert(b3FaultTolerance == -1)
+        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b4)
+        _                     = assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
       } yield ()
     runSafetyOracle[Task].unsafeRunSync
   }
@@ -165,14 +162,14 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
-        isGenesisSafe <- SafetyOracle[F].isSafe(genesis, 0)
-        _             = assert(isGenesisSafe)
-        isB2Safe      <- SafetyOracle[F].isSafe(b2, 0)
-        _             = assert(!isB2Safe)
-        isB3Safe      <- SafetyOracle[F].isSafe(b3, 0)
-        _             = assert(!isB3Safe)
-        isB4Safe      <- SafetyOracle[F].isSafe(b4, 0)
-        _             = assert(!isB4Safe)
+        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(genesis)
+        _                     = assert(genesisFaultTolerance == 1)
+        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b2)
+        _                     = assert(b2FaultTolerance == -0.5f)
+        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b3)
+        _                     = assert(b3FaultTolerance == -1f)
+        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b4)
+        _                     = assert(b4FaultTolerance == -0.5f)
       } yield ()
     runSafetyOracle[Task].unsafeRunSync
   }
