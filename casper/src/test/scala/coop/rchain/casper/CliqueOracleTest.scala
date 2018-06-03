@@ -79,21 +79,20 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b8, v2 -> b6)
 
-    implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.blockLookup, latestBlocks)
+    implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
-        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(genesis)
+        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(chain, genesis)
         _                     = assert(genesisFaultTolerance == 1)
-        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b2)
+        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b2)
         _                     = assert(b2FaultTolerance == 1)
-        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b3)
+        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b3)
         _                     = assert(b3FaultTolerance == -1)
-        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b4)
+        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b4)
         _                     = assert(b4FaultTolerance == -0.2f) // Clique oracle would be 0.2f
       } yield ()
-    runSafetyOracle[Task].unsafeRunSync
+    runSafetyOracle[Id]
   }
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
@@ -154,20 +153,19 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
 
     val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
 
-    implicit def turanOracleEffect: SafetyOracle[Task] =
-      new TuranOracle(chain.blockLookup, latestBlocks)
+    implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
       for {
-        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(genesis)
+        genesisFaultTolerance <- SafetyOracle[F].normalizedFaultTolerance(chain, genesis)
         _                     = assert(genesisFaultTolerance == 1)
-        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b2)
+        b2FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b2)
         _                     = assert(b2FaultTolerance == -0.5f)
-        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b3)
+        b3FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b3)
         _                     = assert(b3FaultTolerance == -1f)
-        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(b4)
+        b4FaultTolerance      <- SafetyOracle[F].normalizedFaultTolerance(chain, b4)
         _                     = assert(b4FaultTolerance == -0.5f)
       } yield ()
-    runSafetyOracle[Task].unsafeRunSync
+    runSafetyOracle[Id]
   }
 }
