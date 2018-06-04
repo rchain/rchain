@@ -1,14 +1,12 @@
-package coop.rchain.rspace.test
+package coop.rchain.rspace
 
 import cats.implicits._
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.history.Blake2b256Hash
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.{dropIndex, removeFirst}
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreCounters, StoreEventsCounter}
+import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 import scodec.bits.BitVector
-import coop.rchain.shared.AttemptOps._
 
 import scala.collection.immutable.Seq
 
@@ -27,7 +25,9 @@ object State {
   def empty[C, P, A, K]: State[C, P, A, K] = State[C, P, A, K](Map.empty, Map.empty)
 }
 
-class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
+class InMemoryStore[C, P, A, K](
+    val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
+)(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K]
     with ITestableStore[C, P] {
 
@@ -214,11 +214,13 @@ class InMemoryStore[C, P, A, K](implicit sc: Serialize[C], sk: Serialize[K])
   def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     _dbGNATs.map {
       case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
-    }.toMap
+    }
   }
 
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
+
+  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 }
 
 object InMemoryStore {
@@ -231,5 +233,6 @@ object InMemoryStore {
 
   def apply[C, P, A, K <: Serializable]()(implicit sc: Serialize[C],
                                           sk: Serialize[K]): InMemoryStore[C, P, A, K] =
-    new InMemoryStore[C, P, A, K]()
+    new InMemoryStore[C, P, A, K](
+      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]])
 }

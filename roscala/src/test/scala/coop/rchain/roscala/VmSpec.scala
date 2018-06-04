@@ -53,6 +53,48 @@ class VmSpec extends FlatSpec with Matchers {
     rtnCtxt.rslt shouldBe Fixnum(1)
   }
 
+  "(block (+ 1 2) (+ 3 4))" should "return 3 or 7" in {
+
+    /**
+      * litvec:
+      *  0:   {BlockExpr}
+      * codevec:
+      *  0:   fork 7
+      *  1:   alloc 2
+      *  2:   lit 1,arg[0]
+      *  3:   lit 2,arg[1]
+      *  4:   xfer global[+],trgt
+      *  6:   xmit/nxt 2
+      *  7:   alloc 2
+      *  8:   lit 3,arg[0]
+      *  9:   lit 4,arg[1]
+      *  10:  xfer global[+],trgt
+      *  12:  xmit/nxt 2
+      */
+    val codevec = Seq(
+      OpFork(6),
+      OpAlloc(2),
+      OpImmediateLitToArg(literal = `1`, arg = 0),
+      OpImmediateLitToArg(literal = `2`, arg = 1),
+      OpXferGlobalToReg(reg = trgt, global = 0),
+      OpXmit(unwind = false, next = true, 2),
+      OpAlloc(2),
+      OpImmediateLitToArg(literal = `3`, arg = 0),
+      OpImmediateLitToArg(literal = `4`, arg = 1),
+      OpXferGlobalToReg(reg = trgt, global = 0),
+      OpXmit(unwind = false, next = true, 2)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt should (be(Fixnum(3)) or be(Fixnum(7)))
+  }
+
   "(+ 1 (+ 2 3))" should "return 6" in {
 
     /**
