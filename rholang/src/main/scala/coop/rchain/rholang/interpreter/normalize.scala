@@ -6,7 +6,7 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -17,9 +17,10 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
 import cats.implicits._
 import coop.rchain.rholang.interpreter.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.errors._
-import implicits._
+import coop.rchain.models.rholang.implicits._
 
 import scala.collection.immutable.{BitSet, Vector}
+import coop.rchain.models.rholang.sort.ordering._
 
 sealed trait VarSort
 case object ProcSort extends VarSort
@@ -142,8 +143,12 @@ object CollectionNormalizeMatcher {
                         EList.apply(ps, lf, wc).update(_.optionalRemainder := remainderResult._1)))
 
       case ct: CollectTuple => foldMatch(input.knownFree, ct.listproc_.asScala.toList, ETuple.apply)
-      case cs: CollectSet   => foldMatch(input.knownFree, cs.listproc_.asScala.toList, ESet.apply)
-      case cm: CollectMap   => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
+      case cs: CollectSet =>
+        val constructor: (Seq[Par], BitSet, Boolean) => ESet =
+          (pars, locallyFree, connectiveUsed) =>
+            ESet(SortedHashSet(pars), locallyFree, connectiveUsed)
+        foldMatch(input.knownFree, cs.listproc_.asScala.toList, constructor)
+      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
     }
   }
 }
@@ -197,13 +202,13 @@ object ProcNormalizeMatcher {
       implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] = {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Option[Par] => T)(
         implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
-      for {
-        subResult <- normalizeMatch[M](subProc, input.copy(par = VectorPar()))
-      } yield
-        ProcVisitOutputs(
-          input.par.prepend(constructor(subResult.par)),
-          subResult.knownFree
-        )
+      normalizeMatch[M](subProc, input.copy(par = VectorPar()))
+        .map(
+          subResult =>
+            ProcVisitOutputs(
+              input.par.prepend(constructor(subResult.par)),
+              subResult.knownFree
+          ))
 
     def binaryExp[T](subProcLeft: Proc,
                      subProcRight: Proc,
@@ -257,14 +262,11 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, leftResult.knownFree))
           lp = leftResult.par
-          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
-            lp.connectives match {
-              case List(Connective(ConnAndBody(ConnectiveBody(ps)))) =>
-                Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
-              case _ => Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
-            }
-          } else {
-            Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
+          resultConnective = lp.onlyConnectives() match {
+            case Some(List(Connective(ConnAndBody(ConnectiveBody(ps))))) =>
+              Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
+            case _ =>
+              Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
           }
         } yield ProcVisitOutputs(input.par.prepend(resultConnective), rightResult.knownFree)
 
@@ -277,14 +279,11 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
           lp = leftResult.par
-          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
-            lp.connectives match {
-              case List(Connective(ConnOrBody(ConnectiveBody(ps)))) =>
-                Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
-              case _ => Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
-            }
-          } else {
-            Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
+          resultConnective = lp.onlyConnectives() match {
+            case Some(List(Connective(ConnOrBody(ConnectiveBody(ps))))) =>
+              Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
+            case _ =>
+              Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
           }
         } yield ProcVisitOutputs(input.par.prepend(resultConnective), input.knownFree)
 
@@ -571,7 +570,7 @@ object ProcNormalizeMatcher {
           sourcesP                                                         <- processSources(bindings)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
           bindingsSources                                                  <- processBindings(sources)
-          receipts <- ReceiveSortMatcher
+          receipts <- ReceiveBindsSortMatcher
                        .preSortBinds[M, VarSort](bindingsSources)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>

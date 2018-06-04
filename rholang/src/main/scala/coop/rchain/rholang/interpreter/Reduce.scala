@@ -9,17 +9,18 @@ import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models.implicits._
+import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.{consume => internalConsume, produce => internalProduce}
 import coop.rchain.rspace.{IStore, Serialize}
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
+import coop.rchain.models.rholang.sort.ordering._
 
 // Notes: Caution, a type annotation is often needed for Env.
 
@@ -475,6 +476,13 @@ object Reduce {
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
         }
+
+        case ESetBody(set) =>
+          for {
+            evaledPs  <- set.ps.sortedPars.traverse(expr => evalExpr(expr))
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(set.copy(ps = SortedHashSet(evaledPs)))
+
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
@@ -658,6 +666,11 @@ object Reduce {
     def updateLocallyFree(elist: EList): EList = {
       val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
       elist.copy(locallyFree = resultLocallyFree)
+    }
+
+    def updateLocallyFree(eset: ESet): ESet = {
+      val resultLocallyFree = eset.ps.sortedPars.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
+      eset.copy(locallyFree = resultLocallyFree)
     }
 
     /**

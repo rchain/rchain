@@ -8,7 +8,6 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
-import implicits._
 import scalapb.GeneratedMessage
 
 object PrettyPrinter {
@@ -60,7 +59,7 @@ case class PrettyPrinter(freeShift: Int,
       case ETupleBody(ETuple(s, _, _)) =>
         "[" + buildSeq(s) + "]"
       case ESetBody(ESet(s, _, _)) =>
-        "(" + buildSeq(s) + ")"
+        "(" + buildSeq(s.sortedPars.toSeq) + ")"
       case EMapBody(EMap(kvs, _, _)) =>
         "{" + ("" /: kvs.zipWithIndex) {
           case (string, (kv, i)) =>

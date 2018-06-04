@@ -1,9 +1,11 @@
 package coop.rchain.models
 
 import com.google.protobuf.ByteString
+import coop.rchain.models.Expr.ExprInstance
 import org.scalacheck.Arbitrary
 import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.Gen.{const, frequency, resize, sized}
+import coop.rchain.models.rholang.sort.ordering._
 
 import scala.collection.immutable.BitSet
 
@@ -22,4 +24,10 @@ object testImplicits {
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(ba => ByteString.copyFrom(ba)))
 
   implicit val arbPar = implicitly[Arbitrary[Par]]
+
+  implicit val arbParTreeset: Arbitrary[SortedHashSet[Par]] =
+    Arbitrary(
+      Arbitrary
+        .arbitrary[Seq[Par]]
+        .map(pars => SortedHashSet(pars)))
 }

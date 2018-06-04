@@ -6,9 +6,11 @@ import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import coop.rchain.models.rholang.sort._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, SubstituteError}
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import errors._
+import coop.rchain.models.rholang.sort.ordering._
 
 trait Substitute[M[_], A] {
   def substitute(term: A)(implicit env: Env[Par]): M[A]
@@ -16,6 +18,11 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
+  private def asSortMatchError(th: Throwable): InterpreterError =
+    SortMatchError(th.getMessage)
+
+  private def fromEither[M[_]: InterpreterErrorsM, A](either: Either[Throwable, A]): M[A] =
+    interpreterErrorM[M].fromEither(either.leftMap(asSortMatchError))
 
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C)(implicit evA: Substitute[M, A], evB: Substitute[M, B], env: Env[Par]): M[C] =
@@ -102,7 +109,8 @@ object Substitute {
       override def substitute(term: Channel)(implicit env: Env[Par]): M[Channel] =
         for {
           channelSubst <- substituteNoSort(term)
-          sortedChan   <- ChannelSortMatcher.sortMatch[M](channelSubst)
+          sortedChan <- fromEither[M, ScoredTerm[Channel]](
+                         ChannelSortMatcher.sortMatch(channelSubst))
         } yield sortedChan.term
     }
 
@@ -149,7 +157,7 @@ object Substitute {
       override def substitute(term: Par)(implicit env: Env[Par]): M[Par] =
         for {
           par       <- substituteNoSort(term)
-          sortedPar <- ParSortMatcher.sortMatch[M](par)
+          sortedPar <- fromEither[M, ScoredTerm[Par]](ParSortMatcher.sortMatch(par))
         } yield sortedPar.term.get
     }
 
@@ -170,7 +178,7 @@ object Substitute {
       override def substitute(term: Send)(implicit env: Env[Par]): M[Send] =
         for {
           send       <- substituteNoSort(term)
-          sortedSend <- SendSortMatcher.sortMatch[M](send)
+          sortedSend <- fromEither[M, ScoredTerm[Send]](SendSortMatcher.sortMatch(send))
         } yield sortedSend.term
     }
 
@@ -197,7 +205,7 @@ object Substitute {
       override def substitute(term: Receive)(implicit env: Env[Par]): M[Receive] =
         for {
           rec           <- substituteNoSort(term)
-          sortedReceive <- ReceiveSortMatcher.sortMatch[M](rec)
+          sortedReceive <- fromEither[M, ScoredTerm[Receive]](ReceiveSortMatcher.sortMatch(rec))
         } yield sortedReceive.term
 
     }
@@ -212,7 +220,7 @@ object Substitute {
       override def substitute(term: New)(implicit env: Env[Par]): M[New] =
         for {
           newSub      <- substituteNoSort(term)
-          sortedMatch <- NewSortMatcher.sortMatch[M](newSub)
+          sortedMatch <- fromEither[M, ScoredTerm[New]](NewSortMatcher.sortMatch(newSub))
         } yield sortedMatch.term
     }
 
@@ -232,7 +240,7 @@ object Substitute {
       override def substitute(term: Match)(implicit env: Env[Par]): M[Match] =
         for {
           mat         <- substituteNoSort(term)
-          sortedMatch <- MatchSortMatcher.sortMatch[M](mat)
+          sortedMatch <- fromEither[M, ScoredTerm[Match]](MatchSortMatcher.sortMatch(mat))
         } yield sortedMatch.term
     }
 
@@ -283,12 +291,15 @@ object Substitute {
               newLocallyFree = locallyFree.until(env.shift)
             } yield Expr(exprInstance = ETupleBody(ETuple(pss, newLocallyFree, connectiveUsed)))
 
-          case ESetBody(ESet(ps, locallyFree, connectiveUsed)) =>
+          case ESetBody(ESet(SortedHashSet(ps), locallyFree, connectiveUsed)) =>
             for {
               pss <- ps.toList
                       .traverse(p => s1(p))
               newLocallyFree = locallyFree.until(env.shift)
-            } yield Expr(exprInstance = ESetBody(ESet(pss, newLocallyFree, connectiveUsed)))
+            } yield
+              Expr(
+                exprInstance =
+                  ESetBody(ESet(SortedHashSet(pss.toSeq), newLocallyFree, connectiveUsed)))
 
           case EMapBody(EMap(kvs, locallyFree, connectiveUsed)) =>
             for {

@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.models.rholang
 
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
@@ -243,6 +243,13 @@ object implicits {
           case Seq(single) => Some(single)
           case _           => None
         }
+      } else {
+        None
+      }
+
+    def onlyConnectives(): Option[Seq[Connective]] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
+        Some(p.connectives)
       } else {
         None
       }

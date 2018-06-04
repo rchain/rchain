@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.{Send, _}
-import coop.rchain.rholang.interpreter.implicits.{GPrivate, _}
+import coop.rchain.models.rholang.implicits.{GPrivate, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
