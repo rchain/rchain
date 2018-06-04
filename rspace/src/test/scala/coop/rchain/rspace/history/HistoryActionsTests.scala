@@ -401,7 +401,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
 
       val leaves = getRoot(store).map(getLeaves(store, _))
 
-      leaves.value should contain allElementsOf expected
+      leaves.value should contain theSameElementsAs expected
     }
 
   "insert a bunch of things and getLeaves" should "return all of the leaves" in
@@ -410,7 +410,7 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
         val expected = kvs.map { case (k, v) => Leaf(k, v) }
         kvs.foreach { case (k, v) => insert(store, k, v) }
         val leaves = getRoot(store).map(getLeaves(store, _))
-        leaves.value should contain allElementsOf expected
+        leaves.value should contain theSameElementsAs expected
       }
     }
 }
