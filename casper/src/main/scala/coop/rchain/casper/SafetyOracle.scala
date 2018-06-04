@@ -50,17 +50,18 @@ sealed abstract class SafetyOracleInstances {
   def turanOracle[F[_]: Applicative]: SafetyOracle[F] = new SafetyOracle[F] {
     def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): F[Float] = {
       val blocks                   = blockDag.blockLookup
-      val tw                       = totalWeight(blocks, estimate)
-      val faultTolerance           = 2 * minMaxCliqueWeight(blockDag, estimate) - tw
-      val normalizedFaultTolerance = faultTolerance.toFloat / tw
+      val totalWeight              = computeTotalWeight(blocks, estimate)
+      val faultTolerance           = 2 * minMaxCliqueWeight(blockDag, estimate) - totalWeight
+      val normalizedFaultTolerance = faultTolerance.toFloat / totalWeight
       normalizedFaultTolerance.pure[F]
     }
 
     private def minMaxCliqueWeight(blockDag: BlockDag, estimate: BlockMessage): Int =
       // To have a maximum clique of half the total weight,
       // you need at least twice the weight of the candidateWeights to be greater than the total weight
-      if (2 * candidateWeights(blockDag, estimate).values.sum < totalWeight(blockDag.blockLookup,
-                                                                            estimate)) {
+      if (2 * candidateWeights(blockDag, estimate).values.sum < computeTotalWeight(
+            blockDag.blockLookup,
+            estimate)) {
         0
       } else {
         val vertexCount = candidateWeights(blockDag, estimate).keys.size
@@ -69,8 +70,8 @@ sealed abstract class SafetyOracleInstances {
         minTotalValidatorWeight(estimate, maxCliqueMinSize(vertexCount, edgeCount))
       }
 
-    private def totalWeight(blocks: collection.Map[BlockHash, BlockMessage],
-                            estimate: BlockMessage): Int =
+    private def computeTotalWeight(blocks: collection.Map[BlockHash, BlockMessage],
+                                   estimate: BlockMessage): Int =
       weightMapTotal(mainParentWeightMap(blocks, estimate))
 
     private def candidateWeights(blockDag: BlockDag,
