@@ -3,7 +3,7 @@ package coop.rchain.rspace.test
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.internal.{Datum, GNAT, WaitingContinuation}
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits.ByteVector
 
@@ -84,6 +84,24 @@ object ArbitraryInstances {
         .map(_.toMap))
   }
 
+  implicit val arbitraryWaitingContinuation
+    : Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] = {
+    Arbitrary(for {
+      chans   <- Gen.containerOf[List, String](Arbitrary.arbitrary[String])
+      pats    <- Gen.containerOf[List, Pattern](Arbitrary.arbitrary[Pattern])
+      boolean <- Arbitrary.arbitrary[Boolean]
+    } yield (WaitingContinuation(pats, new StringsCaptor, boolean)))
+  }
+
+  implicit val arbitraryGnat: Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] = {
+    Arbitrary(for {
+      chans <- Gen.containerOf[List, String](Arbitrary.arbitrary[String])
+      data  <- Gen.containerOf[List, Datum[String]](Arbitrary.arbitrary[Datum[String]])
+      wks <- Gen.containerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
+              Arbitrary.arbitrary[WaitingContinuation[Pattern, StringsCaptor]])
+    } yield GNAT(chans, data, wks))
+  }
+
   implicit val arbitraryNonEmptyMapListStringWaitingContinuation
     : Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] = {
     Arbitrary(Gen
@@ -101,4 +119,5 @@ object ArbitraryInstances {
       }
       .map(_.toMap))
   }
+
 }

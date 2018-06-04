@@ -3,6 +3,7 @@ package coop.rchain.rspace
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -188,47 +189,47 @@ trait IStoreTests
   }
 
   it should "return unmodified history when nothing to prune" in withTestStore { store =>
-    val gnat = GNAT(List("ch1"),
-                    List.empty[Datum[String]],
-                    List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
-
-    val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
-    store.pruneHistory(history) shouldBe history
+    forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
+      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
+      store.pruneHistory(history) shouldBe history
+    }
   }
 
+  // TODO: Does this requirement make sense?
   it should "remove all operations from history with the same hash when last operation is delete" in withTestStore {
     store =>
-      val gnat = GNAT(List("ch1"),
-                      List.empty[Datum[String]],
-                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
-
-      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
-                         TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
-      store.pruneHistory(history) shouldBe List.empty
+      forAll("gnat1", "gnat2") {
+        (gnat1: GNAT[String, Pattern, String, StringsCaptor],
+         gnat2: GNAT[String, Pattern, String, StringsCaptor]) =>
+          val gnat1Ops = List(TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
+                              TrieUpdate(1, Delete, store.hashChannels(gnat1.channels), gnat1))
+          val gnat2Ops = List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
+          val history  = gnat1Ops ++ gnat2Ops
+          store.pruneHistory(history) shouldBe gnat2Ops
+      }
   }
 
   it should "remove all but the last operation from history with the same hash when last operation is insert" in withTestStore {
     store =>
-      val gnat = GNAT(List("ch1"),
-                      List.empty[Datum[String]],
-                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
-      val lastInsert = TrieUpdate(1, Insert, store.hashChannels(gnat.channels), gnat)
+      forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
+        val lastInsert = TrieUpdate(1, Insert, store.hashChannels(gnat.channels), gnat)
 
-      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat), lastInsert)
-      store.pruneHistory(history) shouldBe List(lastInsert)
+        val history =
+          List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat), lastInsert)
+        store.pruneHistory(history) shouldBe List(lastInsert)
+      }
   }
 
   it should "remove all but the last operation from history with the same hash when operation with largest count is insert" in withTestStore {
     store =>
-      val gnat = GNAT(List("ch1"),
-                      List.empty[Datum[String]],
-                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
-      val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
+      forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
+        val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
 
-      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
-                         lastInsert,
-                         TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
-      store.pruneHistory(history) shouldBe List(lastInsert)
+        val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
+                           lastInsert,
+                           TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
+        store.pruneHistory(history) shouldBe List(lastInsert)
+      }
   }
 }
 
