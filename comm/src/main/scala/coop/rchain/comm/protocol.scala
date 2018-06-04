@@ -94,7 +94,7 @@ object ProtocolMessage {
   implicit def toProtocolBytes(x: Seq[Byte]): ByteString =
     com.google.protobuf.ByteString.copyFrom(x.toArray)
 
-  def header(src: ProtocolNode): Header =
+  def header(src: PeerNode): Header =
     Header()
       .withSender(node(src))
       .withTimestamp(System.currentTimeMillis)
@@ -136,7 +136,7 @@ object ProtocolMessage {
       .withHeader(header(src))
       .withDisconnect(Disconnect())
 
-  def upstreamMessage(src: ProtocolNode, upstream: AnyProto): Protocol =
+  def upstreamMessage(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))
       .withUpstream(upstream)
