@@ -24,13 +24,11 @@ class InMemoryStore[C, P, A, K](
   private[this] var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = Map.empty
   private[this] var _dbJoins: Map[C, Seq[Seq[C]]]                   = Map.empty
 
-  private[rspace] type H = Blake2b256Hash
-
   private[rspace] type T = Unit
 
   private[this] type Join = Seq[Seq[C]]
 
-  private[rspace] def hashChannels(channels: Seq[C]): H =
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     Codec[Seq[C]]
       .encode(channels)
       .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
@@ -43,7 +41,7 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  private[rspace] def getChannels(txn: T, key: H) =
+  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
     _dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -70,7 +68,7 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def getJoin(txn: T, channel: C): Join =
     _dbJoins.getOrElse(channel, Seq.empty)
 
-  private[this] def withGNAT(txn: T, key: H)(
+  private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
       f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
     val gnatOpt   = _dbGNATs.get(key)
     val resultOpt = f(gnatOpt)
@@ -83,7 +81,8 @@ class InMemoryStore[C, P, A, K](
     handleJoinChange(jKey)(resultOpt)
   }
 
-  private[this] def handleGNATChange(key: H): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
+  private[this] def handleGNATChange(
+      key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
     case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
     case _                               => _dbGNATs -= key
   }
@@ -186,8 +185,7 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def apply[C, P, A, K <: Serializable]()(implicit sc: Serialize[C],
-                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]])
 }

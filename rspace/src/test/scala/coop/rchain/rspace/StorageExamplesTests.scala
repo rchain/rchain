@@ -271,7 +271,7 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
 
   override def withTestStore(f: T => Unit): Unit = {
-    val testStore = InMemoryStore[Channel, Pattern, Entry, EntriesCaptor]()
+    val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]()
     testStore.clear()
     try {
       f(testStore)

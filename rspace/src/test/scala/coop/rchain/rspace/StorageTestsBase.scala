@@ -29,7 +29,7 @@ trait StorageTestsBase[C, P, A, K] extends FlatSpec with Matchers with OptionVal
 class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
 
   override def withTestStore(f: T => Unit): Unit = {
-    val testStore = InMemoryStore[String, Pattern, String, StringsCaptor]()
+    val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]()
     testStore.clear()
     try {
       f(testStore)
