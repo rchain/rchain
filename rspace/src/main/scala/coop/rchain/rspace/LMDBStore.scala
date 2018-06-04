@@ -293,7 +293,7 @@ class LMDBStore[C, P, A, K] private (
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
     // TODO: Prune TrieUpdate log here
-    trieUpdates.foreach {
+    pruneHistory(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
         history.insert(trieStore, channelsHash, gnat)
       case TrieUpdate(_, Delete, channelsHash, gnat) =>

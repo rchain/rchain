@@ -66,4 +66,18 @@ trait IStore[C, P, A, K] {
   def getCheckpoint(): Blake2b256Hash
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
+
+  private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
+    in.groupBy(_.channelsHash)
+      .mapValues { value =>
+        value.sortBy(_.count).reverse.headOption match {
+          case Some(TrieUpdate(_, Delete, _, _))          => Nil
+          case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
+          case _                                          => value
+        }
+      }
+      .values
+      .flatten
+      .toList
+
 }

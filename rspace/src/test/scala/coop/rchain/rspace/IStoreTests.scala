@@ -182,6 +182,54 @@ trait IStoreTests
       store.clear()
     }
   }
+
+  "pruneHistory" should "work on empty history" in withTestStore { store =>
+    store.pruneHistory(List.empty) shouldBe List.empty
+  }
+
+  it should "return unmodified history when nothing to prune" in withTestStore { store =>
+    val gnat = GNAT(List("ch1"),
+                    List.empty[Datum[String]],
+                    List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+
+    val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
+    store.pruneHistory(history) shouldBe history
+  }
+
+  it should "remove all operations from history with the same hash when last operation is delete" in withTestStore {
+    store =>
+      val gnat = GNAT(List("ch1"),
+                      List.empty[Datum[String]],
+                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+
+      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
+                         TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
+      store.pruneHistory(history) shouldBe List.empty
+  }
+
+  it should "remove all but the last operation from history with the same hash when last operation is insert" in withTestStore {
+    store =>
+      val gnat = GNAT(List("ch1"),
+                      List.empty[Datum[String]],
+                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+      val lastInsert = TrieUpdate(1, Insert, store.hashChannels(gnat.channels), gnat)
+
+      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat), lastInsert)
+      store.pruneHistory(history) shouldBe List(lastInsert)
+  }
+
+  it should "remove all but the last operation from history with the same hash when operation with largest count is insert" in withTestStore {
+    store =>
+      val gnat = GNAT(List("ch1"),
+                      List.empty[Datum[String]],
+                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+      val lastInsert = TrieUpdate(2, Insert, store.hashChannels(gnat.channels), gnat)
+
+      val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat),
+                         lastInsert,
+                         TrieUpdate(1, Delete, store.hashChannels(gnat.channels), gnat))
+      store.pruneHistory(history) shouldBe List(lastInsert)
+  }
 }
 
 class InMemoryStoreTests extends InMemoryStoreTestsBase with IStoreTests
