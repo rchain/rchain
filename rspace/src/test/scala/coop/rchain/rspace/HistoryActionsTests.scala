@@ -38,6 +38,24 @@ trait HistoryActionsTests
       contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]]
   )
 
+  def validateIndexedStates(store: IStore[String, Pattern, String, StringsCaptor],
+                            indexedStates: Seq[(State, Int)]): Boolean = {
+    val tests: Seq[Any] = indexedStates
+      .map {
+        case (State(checkpoint, expectedContents), chunkNo) =>
+          reset(store, checkpoint)
+          val test = store.toMap == expectedContents
+          val num  = "%02d".format(chunkNo)
+          if (test) {
+            logger.debug(s"$num: store had expected contents")
+          } else {
+            logger.error(s"$num: store had unexpected contents")
+          }
+          test
+      }
+    !tests.contains(false)
+  }
+
   "getCheckpoint on an empty store" should "return the expected hash" in withTestStore { store =>
     getCheckpoint(store) shouldBe Blake2b256Hash.fromHex(
       "c575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe")
@@ -272,20 +290,7 @@ trait HistoryActionsTests
             (State(getCheckpoint(store), store.toMap), chunkNo)
         }
 
-        val tests = states.map {
-          case (State(checkpoint, expectedContents), chunkNo) =>
-            reset(store, checkpoint)
-            val test = store.toMap == expectedContents
-            val num  = "%02d".format(chunkNo)
-            if (test) {
-              logger.debug(s"$num: store had expected contents")
-            } else {
-              logger.error(s"$num: store had unexpected contents")
-            }
-            test
-        }
-
-        !tests.contains(false)
+        validateIndexedStates(store, states)
       }
     }
     check(prop)
@@ -309,20 +314,7 @@ trait HistoryActionsTests
             (State(getCheckpoint(store), store.toMap), chunkNo)
         }
 
-        val tests = states.map {
-          case (State(checkpoint, expectedContents), chunkNo) =>
-            reset(store, checkpoint)
-            val test = store.toMap == expectedContents
-            val num  = "%02d".format(chunkNo)
-            if (test) {
-              logger.debug(s"$num: store had expected contents")
-            } else {
-              logger.error(s"$num: store had unexpected contents")
-            }
-            test
-        }
-
-        !tests.contains(false)
+        validateIndexedStates(store, states)
       }
     }
     check(prop)
@@ -352,20 +344,7 @@ trait HistoryActionsTests
             (State(getCheckpoint(store), store.toMap), chunkNo)
         }
 
-        val tests = states.map {
-          case (State(checkpoint, expectedContents), chunkNo) =>
-            reset(store, checkpoint)
-            val test = store.toMap == expectedContents
-            val num  = "%02d".format(chunkNo)
-            if (test) {
-              logger.debug(s"$num: store had expected contents")
-            } else {
-              logger.error(s"$num: store had unexpected contents")
-            }
-            test
-        }
-
-        !tests.contains(false)
+        validateIndexedStates(store, states)
       }
     }
     check(prop)
