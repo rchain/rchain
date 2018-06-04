@@ -2,14 +2,11 @@ package coop.rchain.casper
 
 import cats.Id
 import cats.implicits._
-
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.InterpreterUtil
 import coop.rchain.crypto.signatures.Ed25519
-
 import monix.execution.Scheduler.Implicits.global
-
 import org.scalatest.{FlatSpec, Matchers}
 
 class HashSetCasperTest extends FlatSpec with Matchers {
@@ -152,6 +149,69 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       .count(_ startsWith "CASPER: Beginning request of missing block") should be(1)
     nodes(1).logEff.infos.count(s =>
       (s startsWith "Received request for block") && (s endsWith "Response sent.")) should be(1)
+  }
+
+  it should "ignore adding equivocation blocks" in {
+    val node = HashSetCasperTestNode.standalone(genesis)
+
+    // Creates a pair that constitutes equivocation blocks
+    val Some(block1)      = node.casperEff.deploy(ProtoUtil.basicDeploy(0)) *> node.casperEff.createBlock
+    val signedBlock1      = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val Some(block1Prime) = node.casperEff.deploy(ProtoUtil.basicDeploy(1)) *> node.casperEff.createBlock
+    val signedBlock1Prime = ProtoUtil.signBlock(block1Prime, validatorKeys.head)
+
+    node.casperEff.addBlock(signedBlock1)
+    node.casperEff.addBlock(signedBlock1Prime)
+
+    node.casperEff.contains(signedBlock1) should be(true)
+    node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
+  }
+  it should "not ignore equivocation blocks that are missing parents of proper nodes" in {
+    val nodes   = HashSetCasperTestNode.network(3, genesis)
+    val deploys = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
+
+    // Creates a pair that constitutes equivocation blocks
+    val Some(block1)      = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
+    val signedBlock1      = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val Some(block1Prime) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
+    val signedBlock1Prime = ProtoUtil.signBlock(block1Prime, validatorKeys.head)
+
+    nodes(1).casperEff.addBlock(signedBlock1)
+    nodes(0).transportLayerEff.msgQueues(nodes(0).local).clear //nodes(0) misses this block
+    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
+
+    nodes(0).casperEff.addBlock(signedBlock1Prime)
+    nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block
+    nodes(2).receive()
+
+    nodes(1).casperEff.contains(signedBlock1) should be(true)
+    nodes(2).casperEff.contains(signedBlock1) should be(false)
+    nodes(1).casperEff.contains(signedBlock1Prime) should be(false)
+    nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
+
+    val Some(block2) = nodes(1).casperEff.deploy(deploys(2)) *> nodes(1).casperEff.createBlock
+    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+    val Some(block3) = nodes(2).casperEff.deploy(deploys(3)) *> nodes(2).casperEff.createBlock
+    val signedBlock3 = ProtoUtil.signBlock(block3, validatorKeys.head)
+
+    nodes(2).casperEff.addBlock(signedBlock3)
+    nodes(1).casperEff.addBlock(signedBlock2)
+    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) ignores block2
+    nodes(1).receive() // receives block3; asks for block1'
+    nodes(2).receive() // receives request for block1'; sends block1'
+    nodes(1).receive() // receives block1'; adds both block3 and block1'
+
+    nodes(1).casperEff.contains(signedBlock3) should be(true)
+    nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
+
+    val Some(block4) = nodes(1).casperEff.deploy(deploys(4)) *> nodes(1).casperEff.createBlock
+    val signedBlock4 = ProtoUtil.signBlock(block4, validatorKeys.head)
+
+    nodes(1).casperEff.addBlock(signedBlock4)
+
+    // Node 1 should contain both blocks constituting the equivocation
+    nodes(1).casperEff.contains(signedBlock1) should be(true)
+    nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
   }
 
   private def blockTuplespaceContents(block: BlockMessage)(

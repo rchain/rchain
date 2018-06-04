@@ -6,29 +6,14 @@ import java.nio.file.{Files, Path}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test._
 import org.lmdbjava.{Env, Txn}
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.{BeforeAndAfterAll, Suite}
 import scodec.Codec
-import scodec.bits.ByteVector
 import scodec.codecs._
+import scodec.bits.ByteVector
 
 abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteVector] {
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
-
-  object TestData {
-    val key1 = TestKey.create(Seq(1, 0, 0, 0))
-    val val1 = ByteVector("value1".getBytes)
-    val key2 = TestKey.create(Seq(1, 0, 0, 1))
-    val val2 = ByteVector("value2".getBytes)
-    val key3 = TestKey.create(Seq(1, 0, 1, 0))
-    val val3 = ByteVector("value3".getBytes)
-    val key4 = TestKey.create(Seq(1, 0, 1, 1))
-    val val4 = ByteVector("value4".getBytes)
-    val key5 = TestKey.create(Seq(1, 0, 2, 1))
-    val val5 = ByteVector("value5".getBytes)
-    val key6 = TestKey.create(Seq(1, 0, 0, 2))
-    val val6 = ByteVector("value6".getBytes)
-  }
 
   import TestData._
 
@@ -432,12 +417,13 @@ object HistoryActionsTests {
     pairs.flatMap { case (k, _) => lookup(store, k).map((v: V) => (k, v)).toList }
 }
 
-class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with BeforeAndAfterAll {
-
+trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
   def withTestTrieStore[R](f: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector] => R): R = {
+    // @todo deliver better
+    implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
     val env: Env[ByteBuffer] =
       Env
         .create()
@@ -459,3 +445,7 @@ class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with 
   override def afterAll(): Unit =
     recursivelyDeletePath(dbDir)
 }
+
+class LMDBHistoryActionsTests
+    extends HistoryActionsTests[Txn[ByteBuffer]]
+    with LMDBTrieStoreFixtures {}
