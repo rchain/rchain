@@ -176,12 +176,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val Some(block1Prime) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
     val signedBlock1Prime = ProtoUtil.signBlock(block1Prime, validatorKeys.head)
 
-    def surreptitiouslySendBlock1FromNode0ToNode1(): Unit = {
-      nodes(1).casperEff.addBlock(signedBlock1)
-      nodes(0).transportLayerEff.msgQueues(nodes(0).local).clear //nodes(0) misses this block
-      nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
-    }
-    surreptitiouslySendBlock1FromNode0ToNode1()
+    nodes(1).casperEff.addBlock(signedBlock1)
+    nodes(0).transportLayerEff.msgQueues(nodes(0).local).clear //nodes(0) misses this block
+    nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
 
     nodes(0).casperEff.addBlock(signedBlock1Prime)
     nodes(1).transportLayerEff.msgQueues(nodes(1).local).clear //nodes(1) misses this block

@@ -281,9 +281,8 @@ sealed abstract class MultiParentCasperInstances {
             }
             .getOrElse(Justification.defaultInstance)
             .latestBlockHash
-          val latestMessageOfCreator =
-            _blockDag.get.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
-          val isNotEquivocation = justificationOfCreator == latestMessageOfCreator
+          val latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
+          val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
           if (isNotEquivocation || expectedBlockRequests.contains(block.blockHash)) {
             Undecided
           } else {
@@ -350,8 +349,8 @@ sealed abstract class MultiParentCasperInstances {
             case (b, InvalidBlock) =>
               blockBuffer -= b
               None
-            case (b, status) =>
-              Some(b -> status)
+            case pair =>
+              Some(pair)
           }
 
         for {
