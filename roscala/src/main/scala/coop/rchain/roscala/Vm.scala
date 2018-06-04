@@ -103,6 +103,12 @@ object Vm {
         state.ctxt.argvec.update(arg, ob)
         state.nextOpFlag = true
 
+      case OpFork(pc) =>
+        val newCtxt = state.ctxt.clone()
+        newCtxt.pc = pc
+        state.strandPool.prepend(newCtxt)
+        state.nextOpFlag = true
+
       case OpXmit(unwind, next, nargs) =>
         logger.debug(s"doXmit${if (next) "/nxt"} $nargs")
         state.ctxt.nargs = nargs

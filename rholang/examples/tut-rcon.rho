@@ -1,0 +1,9 @@
+new helloNameAge, getOlder in {
+  contract helloNameAge(@{@"name"!(name) | @"age"!(age) | _}) = {
+    @"stdout"!(["Hello, ", name, " aged ", age])
+  } |
+  contract getOlder(@{rest /\ {@"name"!(_) | _} | @"age"!(age) }, ret) = {
+    ret!(@"age"!(age + 1) | rest)
+  } |
+  getOlder!(@"name"!("Joe") | @"age"!(39), *helloNameAge)
+}
