@@ -63,7 +63,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       "CASPER: Received Deploy",
       "CASPER: Beginning send of Block #1",
       "CASPER: Added",
-      "CASPER: New fork-choice is block"
+      "CASPER: New fork-choice tip is block"
     )
 
     logEff.warns.isEmpty should be(true)

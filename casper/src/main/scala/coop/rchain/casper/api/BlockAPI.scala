@@ -20,26 +20,15 @@ object BlockAPI {
 
   def getBlocksResponse[F[_]: Monad: MultiParentCasper]: F[BlocksResponse] =
     for {
-      estimates                           <- MultiParentCasper[F].estimator
-      dag                                 <- MultiParentCasper[F].blockDag
-      tip                                 = estimates.head
-      mainChain: IndexedSeq[BlockMessage] = getMainChain(tip, dag, IndexedSeq.empty[BlockMessage])
-      blockInfos                          <- mainChain.toList.traverse(getBlockInfo[F])
+      estimates <- MultiParentCasper[F].estimator
+      dag       <- MultiParentCasper[F].blockDag
+      tip       = estimates.head
+      mainChain: IndexedSeq[BlockMessage] = ProtoUtil.getMainChain(dag,
+                                                                   tip,
+                                                                   IndexedSeq.empty[BlockMessage])
+      blockInfos <- mainChain.toList.traverse(getBlockInfo[F])
     } yield
       BlocksResponse(status = "Success", blocks = blockInfos, length = blockInfos.length.toLong)
-
-  @tailrec
-  private def getMainChain(estimate: BlockMessage,
-                           dag: BlockDag,
-                           acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
-    val parentsHashes       = ProtoUtil.parents(estimate)
-    val maybeMainParentHash = parentsHashes.headOption
-    maybeMainParentHash.flatMap(dag.blockLookup.get) match {
-      case Some(newEstimate) =>
-        getMainChain(newEstimate, dag, acc :+ estimate)
-      case None => acc :+ estimate
-    }
-  }
 
   def getBlockQueryResponse[F[_]: Monad: MultiParentCasper](q: BlockQuery): F[BlockQueryResponse] =
     for {

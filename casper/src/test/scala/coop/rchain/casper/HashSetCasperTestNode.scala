@@ -40,6 +40,7 @@ class HashSetCasperTestNode(name: String,
   implicit val keysStoreEff      = new Kvs.InMemoryKvs[Id, PeerNode, Encryption.Key]
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
+  implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
   implicit val casperEff =
     MultiParentCasper.hashSetCasper[Id](storageDirectory, storageSize, genesis)
