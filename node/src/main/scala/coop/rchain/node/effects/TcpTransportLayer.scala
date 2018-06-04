@@ -105,7 +105,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
                 .pure[F]
     } yield pmErr
 
-  val local: F[ProtocolNode] = ProtocolNode(src).pure[F]
+  val local: F[PeerNode] = src.pure[F]
 
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
     Capture[F]

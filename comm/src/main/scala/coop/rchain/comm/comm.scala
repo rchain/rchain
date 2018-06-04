@@ -25,10 +25,7 @@ final case class Endpoint(host: String, tcpPort: Int, udpPort: Int) {
 /**
   * A PeerNode is (at least) an identifier and a network configuration.
   */
-// FIX-ME There is a class ProtocolNode that extends this case class which can
-// break our code on runtime, equals is by definiton broken, this requires discussion
-@SuppressWarnings(Array("org.wartremover.warts.FinalCaseClass")) // TODO temporarely, see above
-case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
+final case class PeerNode(id: NodeIdentifier, endpoint: Endpoint) {
 
   def key  = id.key
   val sKey = id.toString

@@ -173,7 +173,8 @@ class InMemoryStore[C, P, A, K] private (
 
   def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 
-  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit = ???
+  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    ???
 }
 
 object InMemoryStore {

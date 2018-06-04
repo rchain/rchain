@@ -10,14 +10,6 @@ import Catscontrib._
 
 import com.google.protobuf.ByteString
 
-object ProtocolNode {
-
-  def apply(peer: PeerNode): ProtocolNode =
-    new ProtocolNode(peer.id, peer.endpoint)
-}
-
-class ProtocolNode private (id: NodeIdentifier, endpoint: Endpoint) extends PeerNode(id, endpoint)
-
 /**
   * `ProtocolMessage` insulates protocol handlers from protocol buffer
   * clutter.
@@ -44,7 +36,7 @@ trait ProtocolMessage {
   * A ping is a simple are-you-there? message.
   */
 final case class PingMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
-  def response(src: ProtocolNode): Option[ProtocolMessage] =
+  def response(src: PeerNode): Option[ProtocolMessage] =
     for {
       h <- header
     } yield PongMessage(ProtocolMessage.pong(src), System.currentTimeMillis)
@@ -62,7 +54,7 @@ final case class PongMessage(proto: Protocol, timestamp: Long) extends ProtocolM
 final case class LookupMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage {
   def lookupId: Option[Seq[Byte]] = proto.message.lookup.map(_.id.toByteArray)
 
-  def response(src: ProtocolNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
+  def response(src: PeerNode, nodes: Seq[PeerNode]): Option[ProtocolMessage] =
     header.map { h =>
       LookupResponseMessage(ProtocolMessage.lookupResponse(src, nodes), System.currentTimeMillis)
     }

@@ -60,13 +60,6 @@ object Network {
 
   val defaultTimeout: Duration = Duration(500, MILLISECONDS)
 
-  def unsafeRoundTrip[F[_]: Capture: TransportLayer]
-    : (ProtocolMessage, ProtocolNode) => CommErr[ProtocolMessage] =
-    (pm: ProtocolMessage, pn: ProtocolNode) => {
-      val result = TransportLayer[F].roundTrip(pm, pn, defaultTimeout)
-      Capture[F].unsafeUncapture(result)
-    }
-
   def findAndConnect[
       F[_]: Capture: Monad: Log: Time: Metrics: TransportLayer: NodeDiscovery: Encryption: KeysStore: ErrorHandler]
     : Int => F[Int] =
@@ -115,30 +108,28 @@ object Network {
       peer: PeerNode,
       timeout: Duration): F[Unit] = {
 
-    def firstPhase: F[ProtocolNode] =
+    def firstPhase: F[PeerNode] =
       for {
         _            <- Log[F].info(s"Initialize first phase handshake (encryption handshake) to $peer")
         keys         <- Encryption[F].fetchKeys
         ts1          <- Time[F].currentMillis
         local        <- TransportLayer[F].local
         ehs          = EncryptionHandshakeMessage(encryptionHandshake(local, keys), ts1)
-        remote       = ProtocolNode(peer)
-        ehsrespmsg   <- TransportLayer[F].roundTrip(ehs, remote, timeout) >>= (errorHandler[F].fromEither _)
+        ehsrespmsg   <- TransportLayer[F].roundTrip(ehs, peer, timeout) >>= (errorHandler[F].fromEither _)
         ehsresp      <- errorHandler[F].fromEither(toEncryptionHandshakeResponse(ehsrespmsg.proto))
         remotePubKey = ehsresp.publicKey.toByteArray
         _            <- keysStore[F].put(peer, remotePubKey)
         _            <- Log[F].debug(s"Received encryption response from ${ehsrespmsg.sender.get}.")
-      } yield remote
+      } yield peer
 
     def secondPhase: F[Unit] =
       for {
         _       <- Log[F].info(s"Initialize second phase handshake (protocol handshake) to $peer")
         local   <- TransportLayer[F].local
-        remote  = ProtocolNode(peer)
-        fm      <- frameMessage[F](remote, nonce => protocolHandshake(local, nonce))
-        phsresp <- TransportLayer[F].roundTrip(fm, remote, timeout) >>= errorHandler[F].fromEither
+        fm      <- frameMessage[F](peer, nonce => protocolHandshake(local, nonce))
+        phsresp <- TransportLayer[F].roundTrip(fm, peer, timeout) >>= errorHandler[F].fromEither
         _       <- Log[F].debug(s"Received protocol handshake response from ${phsresp.sender.get}.")
-        _       <- NodeDiscovery[F].addNode(remote)
+        _       <- NodeDiscovery[F].addNode(peer)
       } yield ()
 
     def fullHandshake: F[Unit] = firstPhase *> secondPhase
@@ -301,7 +292,7 @@ object Network {
   private def frameIt[F[_]: Monad: Time: TransportLayer: Encryption](
       remote: PeerNode,
       frameable: Nonce => Frameable,
-      proto: (ProtocolNode, Nonce, Array[Byte]) => routing.Protocol)(
+      proto: (PeerNode, Nonce, Array[Byte]) => routing.Protocol)(
       implicit keysStore: KeysStore[F],
       err: ApplicativeError_[F, CommError]): F[FrameMessage] =
     for {

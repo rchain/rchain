@@ -47,8 +47,7 @@ object EffectsTestInstances {
     def handleCommunications: ProtocolMessage => F[CommunicationResponse] = ???
   }
 
-  class TransportLayerStub[F[_]: Capture: Applicative](src: ProtocolNode)
-      extends TransportLayer[F] {
+  class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
     type Responses = PeerNode => (ProtocolMessage => CommErr[ProtocolMessage])
     var reqresp: Option[Responses]      = None
     var requests: List[ProtocolMessage] = List.empty[ProtocolMessage]
@@ -69,7 +68,7 @@ object EffectsTestInstances {
         reqresp.get.apply(remote).apply(msg)
       }
 
-    def local: F[ProtocolNode] = src.pure[F]
+    def local: F[PeerNode] = src.pure[F]
     def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ msg

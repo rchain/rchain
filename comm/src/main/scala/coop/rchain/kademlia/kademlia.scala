@@ -8,7 +8,6 @@ import scala.annotation.tailrec
 import cats._, cats.data._, cats.implicits._
 
 import coop.rchain.catscontrib.Capture
-import coop.rchain.comm.ProtocolNode
 import coop.rchain.p2p.effects.Ping
 
 trait Keyed {
