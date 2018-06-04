@@ -126,19 +126,11 @@ trait HistoryActionsTests
 
         val channelHashes = gnats.map(gnat => store.hashChannels(gnat.channels))
 
-        val preActuals = channelHashes.traverse[Option, TestGNAT] { hash =>
-          history.lookup(store.trieStore, hash)
-        }
-
-        preActuals shouldBe None
+        history.lookup(store.trieStore, channelHashes) shouldBe None
 
         val _ = getCheckpoint(store)
 
-        val actuals = channelHashes.traverse[Option, TestGNAT] { hash =>
-          history.lookup(store.trieStore, hash)
-        }
-
-        actuals.value should contain theSameElementsAs gnats
+        history.lookup(store.trieStore, channelHashes).value should contain theSameElementsAs gnats
       }
   }
 
@@ -158,19 +150,11 @@ trait HistoryActionsTests
 
         val channelHashes = gnats.map(gnat => store.hashChannels(gnat.channels))
 
-        val preActuals = channelHashes.traverse[Option, TestGNAT] { hash =>
-          history.lookup(store.trieStore, hash)
-        }
-
-        preActuals shouldBe None
+        history.lookup(store.trieStore, channelHashes) shouldBe None
 
         val _ = getCheckpoint(store)
 
-        val actuals = channelHashes.traverse[Option, TestGNAT] { hash =>
-          history.lookup(store.trieStore, hash)
-        }
-
-        actuals.value should contain theSameElementsAs gnats
+        history.lookup(store.trieStore, channelHashes).value should contain theSameElementsAs gnats
       }
     }
 

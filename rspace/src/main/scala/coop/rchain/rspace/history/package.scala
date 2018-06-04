@@ -4,12 +4,16 @@ import java.lang.{Byte => JByte}
 
 import cats.Eq
 import cats.instances.byte._
+import cats.instances.option._
 import cats.syntax.eq._
+import cats.syntax.traverse._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.catscontrib.seq._
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 
 import scala.annotation.tailrec
+import scala.collection.immutable
 
 package object history {
 
@@ -62,6 +66,10 @@ package object history {
       } yield res
     }
   }
+
+  def lookup[T, K, V](store: ITrieStore[T, K, V], keys: immutable.Seq[K])(
+      implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
+    keys.traverse[Option, V]((k: K) => lookup(store, k))
 
   @tailrec
   private[this] def getParents[T, K, V](
