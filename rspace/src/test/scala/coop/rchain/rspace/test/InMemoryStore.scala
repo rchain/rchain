@@ -43,7 +43,7 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
+  private[rspace] def getChannels(txn: T, key: H) =
     _dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -70,7 +70,7 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def getJoin(txn: T, channel: C): Join =
     _dbJoins.getOrElse(channel, Seq.empty)
 
-  private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
+  private[this] def withGNAT(txn: T, key: H)(
       f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
     val gnatOpt   = _dbGNATs.get(key)
     val resultOpt = f(gnatOpt)
