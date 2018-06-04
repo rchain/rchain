@@ -375,6 +375,43 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
     }
   }
 
+  "getLeaves on an empty store" should "return an empty sequence" in
+    withTestTrieStore { store =>
+      getLeaves(store) shouldBe empty
+    }
+
+  "insert 6 things and getLeaves" should "return all of the leaves" in
+    withTestTrieStore { store =>
+      val expected: Vector[Leaf[TestKey, ByteVector]] = Vector(
+        Leaf(key1, val1),
+        Leaf(key2, val2),
+        Leaf(key3, val3),
+        Leaf(key4, val4),
+        Leaf(key5, val5),
+        Leaf(key6, val6)
+      )
+
+      insert(store, key1, val1)
+      insert(store, key2, val2)
+      insert(store, key3, val3)
+      insert(store, key4, val4)
+      insert(store, key5, val5)
+      insert(store, key6, val6)
+
+      val leaves = getLeaves(store)
+
+      leaves should contain allElementsOf expected
+    }
+
+  "insert a bunch of things and getLeaves" should "return all of the leaves" in
+    forAll { (kvs: Map[TestKey, ByteVector]) =>
+      withTestTrieStore { store =>
+        val expected = kvs.map { case (k, v) => Leaf(k, v) }
+        kvs.foreach { case (k, v) => insert(store, k, v) }
+        val leaves = getLeaves(store)
+        leaves should contain allElementsOf expected
+      }
+    }
 }
 
 object HistoryActionsTests {
