@@ -3,7 +3,6 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.implicits._
-import coop.rchain.catscontrib.seq._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
@@ -205,8 +204,6 @@ trait HistoryActionsTests
                        List.empty[Datum[String]],
                        List(WaitingContinuation(List(Wildcard), new StringsCaptor, false)))
 
-      // val channelsHash1: Blake2b256Hash = store.hashChannels(gnat1.channels)
-
       consume(store,
               gnat1.channels,
               gnat1.wks.head.patterns,
@@ -247,7 +244,7 @@ trait HistoryActionsTests
         store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
       }
 
-      // Rollback to second checkpoint
+      // Rollback to first checkpoint
 
       reset(store, checkpoint0)
 
