@@ -16,20 +16,9 @@ object ProtocolNode {
     new ProtocolNode(peer.id, peer.endpoint)
 }
 
-/**
-  * A `PeerNode` that knows how to send and receive messages. The
-  * `ping` method for Kademlia is here.
-  */
 class ProtocolNode private (id: NodeIdentifier, endpoint: Endpoint)
     extends PeerNode(id, endpoint)
-    with kademlia.Peer {
-
-  private var _seq = 0L
-  def seq: Long = _seq synchronized {
-    _seq += 1
-    _seq
-  }
-}
+    with kademlia.Peer {}
 
 /**
   * `ProtocolMessage` insulates protocol handlers from protocol buffer
@@ -111,7 +100,6 @@ object ProtocolMessage {
     Header()
       .withSender(node(src))
       .withTimestamp(System.currentTimeMillis)
-      .withSeq(src.seq)
 
   def node(n: PeerNode): Node =
     Node()
