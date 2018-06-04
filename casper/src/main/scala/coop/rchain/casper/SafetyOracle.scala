@@ -33,6 +33,9 @@ import scala.collection
 trait SafetyOracle[F[_]] {
 
   /**
+    * The normalizedFaultTolerance must be greater than the fault tolerance threshold t in order
+    * for a estimate to be safe.
+    *
     * @param estimate Block to detect safety on
     * @return normalizedFaultTolerance float between -1 and 1, where -1 means potentially orphaned
     */
@@ -46,10 +49,10 @@ object SafetyOracle extends SafetyOracleInstances {
 sealed abstract class SafetyOracleInstances {
   def turanOracle[F[_]: Applicative]: SafetyOracle[F] = new SafetyOracle[F] {
     def normalizedFaultTolerance(blockDag: BlockDag, estimate: BlockMessage): F[Float] = {
-      val blocks = blockDag.blockLookup
-      val faultTolerance = 2 * minMaxCliqueWeight(blockDag, estimate) - totalWeight(blocks,
-                                                                                    estimate)
-      val normalizedFaultTolerance = faultTolerance.toFloat / totalWeight(blocks, estimate)
+      val blocks                   = blockDag.blockLookup
+      val tw                       = totalWeight(blocks, estimate)
+      val faultTolerance           = 2 * minMaxCliqueWeight(blockDag, estimate) - tw
+      val normalizedFaultTolerance = faultTolerance.toFloat / tw
       normalizedFaultTolerance.pure[F]
     }
 

@@ -108,12 +108,11 @@ sealed abstract class MultiParentCasperInstances {
           // TODO: Replace with getMainChainUntilLastFinalizedBlock
           forkchoice = getMainChain(dag, tip, IndexedSeq.empty[BlockMessage])
           forkchoiceSafety <- forkchoice.toList.traverse(block =>
-                               SafetyOracle[F].normalizedFaultTolerance(dag, block))
-          _ <- forkchoice.zip(forkchoiceSafety).toList.traverse {
-                case (block, faultTolerance) =>
-                  Log[F].info(s"CASPER: Block ${PrettyPrinter
-                    .buildString(block.blockHash)} has a fault tolerance of ${faultTolerance}.")
-              }
+                               SafetyOracle[F]
+                                 .normalizedFaultTolerance(dag, block)
+                                 .flatMap(faultTolerance =>
+                                   Log[F].info(s"CASPER: Block ${PrettyPrinter
+                                     .buildString(block.blockHash)} has a fault tolerance of ${faultTolerance}.")))
         } yield ()
 
       def contains(b: BlockMessage): F[Boolean] =
