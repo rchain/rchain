@@ -416,7 +416,7 @@ object HistoryActionsTests {
     pairs.flatMap { case (k, _) => lookup(store, k).map((v: V) => (k, v)).toList }
 }
 
-trait WithLMDBStore extends BeforeAndAfterAll { this: Suite =>
+trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-history-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
@@ -445,4 +445,6 @@ trait WithLMDBStore extends BeforeAndAfterAll { this: Suite =>
     recursivelyDeletePath(dbDir)
 }
 
-class LMDBHistoryActionsTests extends HistoryActionsTests[Txn[ByteBuffer]] with WithLMDBStore {}
+class LMDBHistoryActionsTests
+    extends HistoryActionsTests[Txn[ByteBuffer]]
+    with LMDBTrieStoreFixtures {}

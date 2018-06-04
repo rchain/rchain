@@ -9,7 +9,7 @@ import scodec.codecs._
 
 class TrieStructureTests
     extends HistoryTestsBase[Txn[ByteBuffer], TestKey, ByteVector]
-    with WithLMDBStore {
+    with LMDBTrieStoreFixtures {
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
