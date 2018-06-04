@@ -109,29 +109,29 @@ object ProtocolMessage {
   def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
 
-  def ping(src: ProtocolNode): Protocol =
+  def ping(src: PeerNode): Protocol =
     Protocol()
       .withHeader(header(src))
       .withPing(Ping())
 
-  def pong(src: ProtocolNode): Protocol =
+  def pong(src: PeerNode): Protocol =
     Protocol()
       .withHeader(header(src))
       .withPong(Pong())
 
-  def lookup(src: ProtocolNode, id: Seq[Byte]): Protocol =
+  def lookup(src: PeerNode, id: Seq[Byte]): Protocol =
     Protocol()
       .withHeader(header(src))
       .withLookup(Lookup()
         .withId(id.toArray))
 
-  def lookupResponse(src: ProtocolNode, nodes: Seq[PeerNode]): Protocol =
+  def lookupResponse(src: PeerNode, nodes: Seq[PeerNode]): Protocol =
     Protocol()
       .withHeader(header(src))
       .withLookupResponse(LookupResponse()
         .withNodes(nodes.map(node)))
 
-  def disconnect(src: ProtocolNode): Protocol =
+  def disconnect(src: PeerNode): Protocol =
     Protocol()
       .withHeader(header(src))
       .withDisconnect(Disconnect())
@@ -141,7 +141,7 @@ object ProtocolMessage {
       .withHeader(header(src))
       .withUpstream(upstream)
 
-  def upstreamResponse(src: ProtocolNode, upstream: AnyProto): Protocol =
+  def upstreamResponse(src: PeerNode, upstream: AnyProto): Protocol =
     Protocol()
       .withHeader(header(src))
       .withUpstream(upstream)
