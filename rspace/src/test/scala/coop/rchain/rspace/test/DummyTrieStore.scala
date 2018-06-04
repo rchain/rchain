@@ -22,5 +22,5 @@ class DummyTrieStore[T, K, V] extends ITrieStore[T, K, V] {
 
   def close(): Unit = ???
 
-  private[rspace] def clear(): Unit = ???
+  private[rspace] def clear(txn: T): Unit = ???
 }

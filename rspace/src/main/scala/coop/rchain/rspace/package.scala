@@ -3,7 +3,7 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Blake2b256Hash
+import coop.rchain.rspace.history.{Blake2b256Hash, Leaf}
 import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec
@@ -343,4 +343,21 @@ package object rspace {
     * @return A BLAKE2b256 representing the checkpoint
     */
   def getCheckpoint[C, P, A, K](store: IStore[C, P, A, K]): Blake2b256Hash = store.getCheckpoint()
+
+  /** Resets the given store to the given checkpoint.
+    *
+    * @param store A store which satisfies the [[IStore]] interface.
+    * @param hash A BLAKE2b256 Hash representing the checkpoint
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
+    */
+  def reset[C, P, A, K](store: IStore[C, P, A, K], hash: Blake2b256Hash): Unit =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.trieStore.putRoot(txn, hash)
+      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, hash)
+      store.clear(txn)
+      store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
+    }
 }

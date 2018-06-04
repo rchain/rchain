@@ -13,6 +13,20 @@ trait HistoryTestsBase[T, K, V]
     with GeneratorDrivenPropertyChecks
     with Configuration {
 
+  def getRoot(store: ITrieStore[T, K, V]): Option[Blake2b256Hash] =
+    store.withTxn(store.createTxnRead())(txn => store.getRoot(txn))
+
+  def setRoot(store: ITrieStore[T, K, V], hash: Blake2b256Hash): Unit =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.get(txn, hash) match {
+        case Some(Node(_)) => store.putRoot(txn, hash)
+        case _             => throw new Exception(s"no node at $hash")
+      }
+    }
+
+  def getLeaves(store: ITrieStore[T, K, V], hash: Blake2b256Hash): Seq[Leaf[K, V]] =
+    store.withTxn(store.createTxnRead())(txn => store.getLeaves(txn, hash))
+
   object TestData {
     val key1 = TestKey.create(Seq(1, 0, 0, 0))
     val val1 = ByteVector("value1".getBytes)
