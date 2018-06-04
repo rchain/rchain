@@ -3,24 +3,57 @@ package coop.rchain.rspace
 import java.lang.{Byte => JByte}
 
 import cats.implicits._
-import coop.rchain.catscontrib.seq._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildcard}
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal.{Datum, GNAT, WaitingContinuation}
+import coop.rchain.rspace.internal.{Datum, GNAT, Row, WaitingContinuation}
 import coop.rchain.rspace.test.ArbitraryInstances._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalacheck.Prop
+import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
 import scala.collection.immutable.Seq
 
 trait HistoryActionsTests
     extends StorageTestsBase[String, Pattern, String, StringsCaptor]
-    with GeneratorDrivenPropertyChecks {
+    with GeneratorDrivenPropertyChecks
+    with Checkers {
+
+  implicit override val generatorDrivenConfig =
+    PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
 
   implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
   implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
   implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+
+  type TestProduceMap = Map[String, Datum[String]]
+
+  type TestConsumeMap = Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]
+
+  type TestGNAT = GNAT[String, Pattern, String, StringsCaptor]
+
+  case class State(
+      checkpoint: Blake2b256Hash,
+      contents: Map[Seq[String], Row[Pattern, String, StringsCaptor]]
+  )
+
+  def validateIndexedStates(store: IStore[String, Pattern, String, StringsCaptor],
+                            indexedStates: Seq[(State, Int)]): Boolean = {
+    val tests: Seq[Any] = indexedStates
+      .map {
+        case (State(checkpoint, expectedContents), chunkNo) =>
+          reset(store, checkpoint)
+          val test = store.toMap == expectedContents
+          val num  = "%02d".format(chunkNo)
+          if (test) {
+            logger.debug(s"$num: store had expected contents")
+          } else {
+            logger.error(s"$num: store had unexpected contents")
+          }
+          test
+      }
+    !tests.contains(false)
+  }
 
   "getCheckpoint on an empty store" should "return the expected hash" in withTestStore { store =>
     getCheckpoint(store) shouldBe Blake2b256Hash.fromHex(
@@ -35,14 +68,12 @@ trait HistoryActionsTests
 
       val channelsHash: Blake2b256Hash = store.hashChannels(gnat.channels)
 
-      val nodeHash = Trie.hash[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](
+      val nodeHash = Trie.hash[Blake2b256Hash, TestGNAT](
         Node(
           PointerBlock
             .create()
-            .updated(
-              List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                    Some(Trie.hash[Blake2b256Hash, GNAT[String, Pattern, String, StringsCaptor]](
-                      Leaf(channelsHash, gnat))))))))
+            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head),
+                           Some(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
 
       consume(store,
               gnat.channels,
@@ -61,7 +92,7 @@ trait HistoryActionsTests
     withTestStore { store =>
       val gnat1 = GNAT(List("ch1"),
                        List.empty[Datum[String]],
-                       List(WaitingContinuation(List(Wildcard), new StringsCaptor, false)))
+                       List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
 
       val channelsHash1: Blake2b256Hash = store.hashChannels(gnat1.channels)
 
@@ -73,7 +104,7 @@ trait HistoryActionsTests
 
       val gnat2 = GNAT(List("ch2"),
                        List.empty[Datum[String]],
-                       List(WaitingContinuation(List(Wildcard), new StringsCaptor, false)))
+                       List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
 
       val channelsHash2: Blake2b256Hash = store.hashChannels(gnat2.channels)
 
@@ -96,11 +127,13 @@ trait HistoryActionsTests
 
   "produce a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in withTestStore {
     store =>
-      forAll { (data: Map[String, Datum[String]]) =>
-        val gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]] =
+      forAll { (data: TestProduceMap) =>
+        val gnats: Seq[TestGNAT] =
           data.map {
             case (channel, datum) =>
-              GNAT[String, Pattern, String, StringsCaptor](List(channel), List(datum), List.empty)
+              GNAT(List(channel),
+                   List(datum),
+                   List.empty[WaitingContinuation[Pattern, StringsCaptor]])
           }.toList
 
         gnats.foreach {
@@ -110,31 +143,21 @@ trait HistoryActionsTests
 
         val channelHashes = gnats.map(gnat => store.hashChannels(gnat.channels))
 
-        val preActuals =
-          channelHashes.traverse[Option, GNAT[String, Pattern, String, StringsCaptor]] { hash =>
-            history.lookup(store.trieStore, hash)
-          }
-
-        preActuals shouldBe None
+        history.lookup(store.trieStore, channelHashes) shouldBe None
 
         val _ = getCheckpoint(store)
 
-        val actuals =
-          channelHashes.traverse[Option, GNAT[String, Pattern, String, StringsCaptor]] { hash =>
-            history.lookup(store.trieStore, hash)
-          }
-
-        actuals.value should contain theSameElementsAs gnats
+        history.lookup(store.trieStore, channelHashes).value should contain theSameElementsAs gnats
       }
   }
 
-  "consume a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in withTestStore {
-    store =>
-      forAll { (data: Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]) =>
-        val gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]] =
+  "consume a bunch and then getCheckpoint" should "persist the expected values in the TrieStore" in
+    withTestStore { store =>
+      forAll { (data: TestConsumeMap) =>
+        val gnats: Seq[TestGNAT] =
           data.map {
             case (channels, wk) =>
-              GNAT[String, Pattern, String, StringsCaptor](channels, List.empty, List(wk))
+              GNAT(channels, List.empty[Datum[String]], List(wk))
           }.toList
 
         gnats.foreach {
@@ -144,23 +167,13 @@ trait HistoryActionsTests
 
         val channelHashes = gnats.map(gnat => store.hashChannels(gnat.channels))
 
-        val preActuals =
-          channelHashes.traverse[Option, GNAT[String, Pattern, String, StringsCaptor]] { hash =>
-            history.lookup(store.trieStore, hash)
-          }
-
-        preActuals shouldBe None
+        history.lookup(store.trieStore, channelHashes) shouldBe None
 
         val _ = getCheckpoint(store)
 
-        val actuals =
-          channelHashes.traverse[Option, GNAT[String, Pattern, String, StringsCaptor]] { hash =>
-            history.lookup(store.trieStore, hash)
-          }
-
-        actuals.value should contain theSameElementsAs gnats
+        history.lookup(store.trieStore, channelHashes).value should contain theSameElementsAs gnats
       }
-  }
+    }
 
   "consume and produce a match and then getCheckpoint " should "result in an empty TrieStore" in
     withTestStore { store =>
@@ -182,6 +195,157 @@ trait HistoryActionsTests
 
       history.lookup(store.trieStore, channelsHash) shouldBe None
     }
+
+  "getCheckpoint, consume, reset" should "result in an empty store" in
+    withTestStore { store =>
+      val checkpoint0 = getCheckpoint(store)
+
+      val gnat1 = GNAT(List("ch1"),
+                       List.empty[Datum[String]],
+                       List(WaitingContinuation(List(Wildcard), new StringsCaptor, false)))
+
+      consume(store,
+              gnat1.channels,
+              gnat1.wks.head.patterns,
+              gnat1.wks.head.continuation,
+              gnat1.wks.head.persist)
+
+      store.isEmpty shouldBe false
+
+      reset(store, checkpoint0)
+
+      store.isEmpty shouldBe true
+    }
+
+  "getCheckpoint, consume, getCheckpoint, reset to first checkpoint, reset to second checkpoint" should
+    "result in a store that contains the consume and appropriate join map" in withTestStore {
+    store =>
+      val checkpoint0 = getCheckpoint(store)
+
+      val gnat1 =
+        GNAT(List("ch1", "ch2"),
+             List.empty[Datum[String]],
+             List(WaitingContinuation(List(Wildcard, Wildcard), new StringsCaptor, false)))
+
+      consume(store,
+              gnat1.channels,
+              gnat1.wks.head.patterns,
+              gnat1.wks.head.continuation,
+              gnat1.wks.head.persist)
+
+      val checkpoint1 = getCheckpoint(store)
+
+      val contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = store.toMap
+
+      store.isEmpty shouldBe false
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+        store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+      }
+
+      // Rollback to first checkpoint
+
+      reset(store, checkpoint0)
+
+      store.isEmpty shouldBe true
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe Nil
+        store.getJoin(txn, "ch2") shouldBe Nil
+      }
+
+      // Rollback to second checkpoint
+
+      reset(store, checkpoint1)
+
+      store.isEmpty shouldBe false
+
+      store.withTxn(store.createTxnRead()) { txn =>
+        store.getJoin(txn, "ch1") shouldBe List(List("ch1", "ch2"))
+        store.getJoin(txn, "ch2") shouldBe List(List("ch1", "ch2"))
+      }
+
+      store.toMap shouldBe contents1
+  }
+
+  "when resetting to a bunch of checkpoints made with produces, the store" should
+    "have the expected contents" in {
+    val prop = Prop.forAllNoShrink { (data: Seq[TestProduceMap]) =>
+      withTestStore { store =>
+        logger.debug(s"Test: ${data.length} stages")
+
+        val states = data.zipWithIndex.map {
+          case (produces, chunkNo) =>
+            produces.foreach {
+              case (channel, datum) =>
+                produce(store, channel, datum.a, datum.persist)
+            }
+            val num  = "%02d".format(chunkNo)
+            val size = "%02d".format(produces.size)
+            logger.debug(s"$num: checkpointing $size produces")
+            (State(getCheckpoint(store), store.toMap), chunkNo)
+        }
+
+        validateIndexedStates(store, states)
+      }
+    }
+    check(prop)
+  }
+
+  "when resetting to a bunch of checkpoints made with consumes, the store" should
+    "have the expected contents" in {
+    val prop = Prop.forAllNoShrink { (data: Seq[TestConsumeMap]) =>
+      withTestStore { store =>
+        logger.debug(s"Test: ${data.length} stages")
+
+        val states = data.zipWithIndex.map {
+          case (consumes, chunkNo) =>
+            consumes.foreach {
+              case (channels, wk) =>
+                consume(store, channels, wk.patterns, wk.continuation, wk.persist)
+            }
+            val num  = "%02d".format(chunkNo)
+            val size = "%02d".format(consumes.size)
+            logger.debug(s"$num: checkpointing $size consumes")
+            (State(getCheckpoint(store), store.toMap), chunkNo)
+        }
+
+        validateIndexedStates(store, states)
+      }
+    }
+    check(prop)
+  }
+
+  // TODO: get the join map in the mix
+  "when resetting to a bunch of checkpoints made with consumes and produces, the store" should
+    "have the expected contents" in {
+    val prop = Prop.forAllNoShrink { (data: Seq[(TestConsumeMap, TestProduceMap)]) =>
+      withTestStore { store =>
+        logger.debug(s"Test: ${data.length} stages")
+
+        val states = data.zipWithIndex.map {
+          case ((consumes, produces), chunkNo) =>
+            consumes.foreach {
+              case (channels, wk) =>
+                consume(store, channels, wk.patterns, wk.continuation, wk.persist)
+            }
+            produces.foreach {
+              case (channel, datum) =>
+                produce(store, channel, datum.a, datum.persist)
+            }
+            val num          = "%02d".format(chunkNo)
+            val consumesSize = "%02d".format(consumes.size)
+            val producesSize = "%02d".format(produces.size)
+            logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
+            (State(getCheckpoint(store), store.toMap), chunkNo)
+        }
+
+        validateIndexedStates(store, states)
+      }
+    }
+    check(prop)
+  }
 }
 
 class LMDBStoreHistoryActionsTests extends LMDBStoreTestsBase with HistoryActionsTests

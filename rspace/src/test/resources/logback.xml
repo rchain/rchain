@@ -9,8 +9,9 @@
     </encoder>
   </appender>
 
+  <logger name="coop.rchain.rspace.LMDBStoreHistoryActionsTests" level="debug" />
   <logger name="coop.rchain.rspace.history" level="warn" />
-  
+
   <root level="info">
     <appender-ref ref="STDOUT" />
   </root>
