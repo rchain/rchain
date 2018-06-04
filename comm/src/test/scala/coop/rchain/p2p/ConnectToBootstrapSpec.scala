@@ -86,7 +86,7 @@ class ConnectToBootstrapSpec
       hs.response[Effect](ProtocolNode(remote), remoteKeys).value.right.get
   }
 
-  private val failEverything = kp(Left[CommError, ProtocolResponse](unknownProtocol("unknown")))
+  private val failEverything = kp(Left[CommError, ProtocolMessage](unknownProtocol("unknown")))
 
   private val sndPhaseSucc: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ FrameMessage(_, _) =>

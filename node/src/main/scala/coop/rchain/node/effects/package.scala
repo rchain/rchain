@@ -133,7 +133,7 @@ package object effects {
   def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
-      def ping(node: ProtocolNode): F[Boolean] =
+      def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
           req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)

@@ -16,9 +16,7 @@ object ProtocolNode {
     new ProtocolNode(peer.id, peer.endpoint)
 }
 
-class ProtocolNode private (id: NodeIdentifier, endpoint: Endpoint)
-    extends PeerNode(id, endpoint)
-    with kademlia.Peer {}
+class ProtocolNode private (id: NodeIdentifier, endpoint: Endpoint) extends PeerNode(id, endpoint)
 
 /**
   * `ProtocolMessage` insulates protocol handlers from protocol buffer
