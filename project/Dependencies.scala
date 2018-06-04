@@ -40,8 +40,7 @@ object Dependencies {
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.8.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier osClassifier classifier "linux-x86_64" classifier "linux-x86_64-fedora"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "osx-x86_64"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
@@ -52,30 +51,16 @@ object Dependencies {
 
   // format: on
 
-  private def artifactName(module: ModuleID, artifact: Artifact): String = {
-    val name = module.name
-    val revision = module.revision
-    val classifier = artifact.classifier.getOrElse("")
-    val extension = artifact.extension
-    if(classifier.isEmpty)
-      s"$name-$revision.$extension"
-    else
-      s"$name-$revision-$classifier.$extension"
-  }
-
-  private def exclusionsByClassifier(module: ModuleID, classifier: String): Seq[String] =
-    module.explicitArtifacts
-      .filter(!_.classifier.exists(_ == classifier))
-      .map(artifactName(nettyTcnative, _))
-
   val nettyTcnativeAssemblyExclusions: Seq[String] =
-    exclusionsByClassifier(nettyTcnative, osClassifier)
+    if(osClassifier == "osx-x86_64")
+      Seq("netty-tcnative-openssl-static-2.0.9.Final-SNAPSHOT-linux-x86_64.jar")
+    else Seq("netty-tcnative-2.0.8.Final-osx-x86_64.jar")
 
   val nettyTcnativeDebianExclusions: Seq[String] =
-    exclusionsByClassifier(nettyTcnative, "linux-x86_64")
+    Seq("netty-tcnative-2.0.8.Final-osx-x86_64.jar")
 
   val nettyTcnativeFedoraExclusions: Seq[String] =
-    exclusionsByClassifier(nettyTcnative, "linux-x86_64-fedora")
+    Seq("netty-tcnative-2.0.8.Final-osx-x86_64.jar")
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
