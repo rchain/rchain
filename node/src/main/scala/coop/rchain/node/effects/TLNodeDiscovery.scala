@@ -24,7 +24,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- updateLastSeen(peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length)
+      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield ()
 
   /**
@@ -109,7 +109,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].setGauge("peers", table.peers.length)
+      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield handledWitoutMessage
 
   private def lookup(key: Seq[Byte], remoteNode: ProtocolNode): F[Seq[PeerNode]] =
