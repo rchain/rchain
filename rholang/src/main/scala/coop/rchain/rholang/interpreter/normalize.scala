@@ -331,6 +331,31 @@ object ProcNormalizeMatcher {
               input.knownFree.addWildcard(p.line_num, p.col_num)).pure[M]
         }
 
+      case p: PVarRef =>
+        input.env.getDeep(p.var_) match {
+          case None =>
+            err.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
+          case Some(((idx, kind, line, col), depth)) =>
+            kind match {
+              case ProcSort =>
+                p.varrefkind_ match {
+                  case _: VarRefKindProc =>
+                    ProcVisitOutputs(input.par.prepend(Connective(VarRefBody(VarRef(idx, depth)))),
+                                     input.knownFree).pure[M]
+                  case _ =>
+                    err.raiseError(UnexpectedProcContext(p.var_, line, col, p.line_num, p.col_num))
+                }
+              case NameSort =>
+                p.varrefkind_ match {
+                  case _: VarRefKindName =>
+                    ProcVisitOutputs(input.par.prepend(Connective(VarRefBody(VarRef(idx, depth)))),
+                                     input.knownFree).pure[M]
+                  case _ =>
+                    err.raiseError(UnexpectedNameContext(p.var_, line, col, p.line_num, p.col_num))
+                }
+            }
+        }
+
       case _: PNil => ProcVisitOutputs(input.par, input.knownFree).pure[M]
 
       case p: PEval =>

@@ -856,6 +856,52 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     result.par should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }
+
+  "PVarRef" should "do a deep lookup in a match case" in {
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val listCases   = new ListCase()
+    listCases.add(new CaseImpl(new PVarRef(new VarRefKindProc(), "x"), new PNil()))
+    val proc = new PMatch(new PVar(new ProcVarVar("x")), listCases)
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, boundInputs).value
+    val expectedResult = inputs.par
+      .addMatches(
+        Match(target = EVar(BoundVar(0)),
+              cases =
+                List(MatchCase(pattern = Connective(VarRefBody(VarRef(0, 1))), source = Par())),
+              locallyFree = BitSet(0)))
+      .withLocallyFree(BitSet(0))
+
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
+
+  it should "do a deep lookup in a receive case" in {
+    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
+    val listBindings = new ListName()
+    listBindings.add(new NameQuote(new PVarRef(new VarRefKindName(), "x")))
+    val listLinearBinds = new ListLinearBind()
+    listLinearBinds.add(
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil())))
+    val linearSimple = new LinearSimple(listLinearBinds)
+    val receipt      = new ReceiptLinear(linearSimple)
+
+    val proc = new PInput(receipt, new PNil())
+
+    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, boundInputs).value
+    val expectedResult = inputs.par
+      .addReceives(
+        Receive(
+          binds = List(
+            ReceiveBind(
+              patterns = List(Quote(Connective(VarRefBody(VarRef(0, 1))))),
+              source = Quote(Par()))),
+          body = Par(),
+          persistent = false,
+          bindCount = 0))
+    result.par should be(expectedResult)
+    result.knownFree should be(inputs.knownFree)
+  }
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
