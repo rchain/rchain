@@ -125,11 +125,14 @@ GroundUri.     Ground ::= Uri ;
 token Uri ('`' ((char - ["\\`"]) | ('\\' ["`\\"]))* '`') ;
 -- Collections:
 CollectList.   Collection ::= "[" [Proc] Remainder "]" ;
-CollectTuple.  Collection ::= "(" [Proc] ")" ;
+CollectTuple.  Collection ::= Tuple;
 CollectSet.    Collection ::= "Set" "(" [Proc] ")" ;
 CollectMap.    Collection ::= "{" [KeyValuePair] "}" ;
 KeyValuePairImpl.  KeyValuePair ::= Proc ":" Proc ;
 separator KeyValuePair "," ;
+
+TupleSingle.    Tuple ::= "(" Proc ",)" ;
+TupleMultiple.  Tuple ::= "(" Proc "," [Proc] ")" ;
 
 -- Remainders:
 RemainderVar.   Remainder ::= "..." ProcVar ;

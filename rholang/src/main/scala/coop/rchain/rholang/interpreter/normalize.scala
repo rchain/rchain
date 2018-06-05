@@ -141,9 +141,14 @@ object CollectionNormalizeMatcher {
                       (ps, lf, wc) =>
                         EList.apply(ps, lf, wc).update(_.optionalRemainder := remainderResult._1)))
 
-      case ct: CollectTuple => foldMatch(input.knownFree, ct.listproc_.asScala.toList, ETuple.apply)
-      case cs: CollectSet   => foldMatch(input.knownFree, cs.listproc_.asScala.toList, ESet.apply)
-      case cm: CollectMap   => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
+      case ct: CollectTuple =>
+        val ps = ct.tuple_ match {
+          case ts: TupleSingle   => Seq(ts.proc_)
+          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.asScala.toList
+        }
+        foldMatch(input.knownFree, ps.toList, ETuple.apply)
+      case cs: CollectSet => foldMatch(input.knownFree, cs.listproc_.asScala.toList, ESet.apply)
+      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
     }
   }
 }
