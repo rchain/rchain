@@ -1,7 +1,7 @@
 stages:
   - test
 
-test:p2p-test-network-ubuntu-preloaded:
+test:integration-test-for-p2p-network:
   stage: test 
   tags:
     - preloaded-ubuntu1804 
