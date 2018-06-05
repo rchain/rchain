@@ -149,7 +149,7 @@ class InMemoryStore[C, P, A, K](
 
   def close(): Unit = ()
 
-  def clear(): Unit = withTxn(createTxnWrite()) { txn =>
+  private[rspace] def clear(txn: T): Unit = {
     _dbGNATs = Map.empty
     _dbJoins = Map.empty
     eventsCounter.reset()
