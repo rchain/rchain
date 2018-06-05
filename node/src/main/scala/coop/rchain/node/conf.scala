@@ -5,6 +5,8 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.scalalogging.Logger
 import coop.rchain.comm.UPnP
+import io.netty.handler.codec.ValueConverter
+import org.rogach.scallop
 import org.rogach.scallop._
 
 import scala.collection.JavaConverters._
@@ -69,10 +71,11 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     short = 'r',
     descr = "Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
 
-  val eval = opt[String](
+  val eval = opt[List[String]](
     default = None,
     descr =
-      "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort.")
+      "Starts a thin client that will evaluate rholang in file " +
+        "on a existing running node. See grpcHost and grpcPort.")(scallop.stringListConverter)
 
   val data_dir = opt[Path](required = false,
                            descr = "Path to data directory. Defaults to /var/lib/rnode",

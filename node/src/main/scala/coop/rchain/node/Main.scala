@@ -30,9 +30,9 @@ object Main {
       new GrpcDeployService(conf.grpcHost(), conf.grpcPort())
 
     val exec: Task[Unit] = conf.eval.toOption match {
-      case Some(fileName) => {
+      case Some(fileNames) => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
-        new ReplRuntime(conf).evalProgram[Task](fileName)
+        new ReplRuntime(conf).evalProgram[Task](fileNames)
       }
       case None if conf.repl() => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)

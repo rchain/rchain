@@ -12,7 +12,7 @@ import monix.eval.Task
 
 trait ReplService[F[_]] {
   def run(line: String): F[String]
-  def eval(line: String): F[String]
+  def eval(fileNames: List[String]): F[String]
 }
 
 object ReplService {
@@ -29,14 +29,24 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
     blockingStub.run(CmdRequest(line)).output
   }
 
-  def eval(fileName: String): Task[String] = Task.delay {
-    val file = new File(fileName)
-    if (file.exists()) {
-      withResource(Source.fromFile(file)) { source =>
-        blockingStub.eval(EvalRequest(source.getLines.mkString("\n"))).output
+  def eval(fileNames: List[String]): Task[String] = Task.delay {
+    val (existing, missing) =
+      fileNames
+        .map(new File(_))
+        .partition(_.exists())
+
+    if (missing.isEmpty) {
+      val sources = existing.map(f => Source.fromFile(f))
+
+      try {
+        val content = sources.flatMap(_.getLines()).mkString("\n")
+
+        blockingStub.eval(EvalRequest(content)).output
+      } finally {
+        sources.foreach(_.close())
       }
     } else {
-      s"File $fileName not found"
+      s"Files not found: ${missing.map(_.getName)}"
     }
   }
 }
