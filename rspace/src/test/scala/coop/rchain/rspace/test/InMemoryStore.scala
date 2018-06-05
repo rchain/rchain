@@ -14,8 +14,7 @@ import scala.collection.immutable.Seq
 class InMemoryStore[C, P, A, K](
     val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+    extends IStore[C, P, A, K] {
 
   private implicit val codecC: Codec[C] = sc.toCodec
 
@@ -175,6 +174,9 @@ class InMemoryStore[C, P, A, K](
     gnat.data.isEmpty && gnat.wks.isEmpty
 
   def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+
+  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    ???
 }
 
 object InMemoryStore {
