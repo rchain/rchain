@@ -105,7 +105,6 @@ lazy val node = (project in file("node"))
   .settings(
     version := "0.4.1",
     name := "node",
-    localJar := assembly.value,
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
@@ -251,9 +250,6 @@ lazy val deployment = (project in file("deployment"))
   .settings(
     version := (node / version).value,
     name := "rnode",
-    deployJar := assembly.value,
-    deployDeb := (Debian / packageBin).value,
-    deployRpm := (Rpm / packageBin).value,
     mainClass in assembly := (node / assembly / mainClass).value,
     assemblyMergeStrategy in assembly := (node / assembly / assemblyMergeStrategy).value,
     assemblyExcludedJars in assembly := {
@@ -320,11 +316,6 @@ lazy val deployment = (project in file("deployment"))
       mapping.copy(mappings = filtered)
     }.filter(_.mappings.nonEmpty),
   ).dependsOn(node)
-
-lazy val deployJar = taskKey[File]("Deploy RChain as fat jar for Linux (non-Fedora)")
-lazy val deployDeb = taskKey[File]("Deploy RChain as deb package")
-lazy val deployRpm = taskKey[File]("Deploy RChain as rpm package")
-lazy val localJar = taskKey[File]("Deploy RChain as fat jar for local OS")
 
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)

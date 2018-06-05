@@ -139,13 +139,13 @@ delete_test_network_resources() {
 
 create_artifacts() {
   artifacts_dir=$(mktemp -d /tmp/artifacts.XXXXXXXX)
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
-  cp node/target/*.deb ${artifacts_dir}/
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/
-  cp node/target/*.deb ${artifacts_dir}/rnode.deb
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
-  cp node/target/*.deb ${artifacts_dir}/rnode_dev_all.deb
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-dev.noarch.rpm
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/rpm:packageBin deployment/debian:packageBin
+  cp deployment/target/*.deb ${artifacts_dir}/
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/
+  cp deployment/target/*.deb ${artifacts_dir}/rnode.deb
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
+  cp deployment/target/*.deb ${artifacts_dir}/rnode_dev_all.deb
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-dev.noarch.rpm
   scp -CP 10003 ${artifacts_dir}/* root@repo.rchain.space:/usr/share/nginx/html/
   #eval `ssh-agent -s`
   #ssh-add <(cat ~/.ssh/travis_id_rsa)
@@ -262,14 +262,14 @@ create_docker_rnode_image() {
   fi
   echo "Creating RChain rnode docker image coop.rchain/rnode from git src via sbt"
   if [[ "$1" == "local" ]]; then
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/docker
   elif [[ $1 && $2 ]]; then
     git_dir=$(mktemp -d /tmp/rchain-git.XXXXXXXX)
     cd ${git_dir}
     git clone $1 
     cd rchain
     git checkout $2
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/docker
   else
     echo "Unsupported"
   fi
@@ -297,7 +297,7 @@ check_network_convergence() {
 if [[ "${TRAVIS}" == "true" ]]; then
   repl_load_count=100
   echo "Running in TRAVIS CI"
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/docker
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
 
