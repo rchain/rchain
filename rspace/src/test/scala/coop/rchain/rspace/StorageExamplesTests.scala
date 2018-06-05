@@ -270,9 +270,9 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
 class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
 
-  override def withTestStore(f: T => Unit): Unit = {
-    val testStore = InMemoryStore[Channel, Pattern, Entry, EntriesCaptor]()
-    testStore.clear()
+  override def withTestStore[R](f: T => R): R = {
+    val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
+    testStore.clear(())
     try {
       f(testStore)
     } finally {
@@ -286,10 +286,10 @@ class LMDBStoreStorageExamplesTest extends StorageExamplesTests with BeforeAndAf
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  override def withTestStore(f: T => Unit): Unit = {
+  override def withTestStore[R](f: T => R): R = {
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
     try {
-      testStore.clear()
+      testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
       f(testStore)
     } finally {
       testStore.close()

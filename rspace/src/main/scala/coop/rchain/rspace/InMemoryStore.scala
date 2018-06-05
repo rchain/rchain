@@ -28,8 +28,7 @@ object State {
 class InMemoryStore[C, P, A, K](
     val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+    extends IStore[C, P, A, K] {
 
   private implicit val codecC: Codec[C] = sc.toCodec
 
@@ -37,14 +36,12 @@ class InMemoryStore[C, P, A, K](
 
   private[this] val stateX: State[C, P, A, K] = State.empty
 
-  private[rspace] type H = Blake2b256Hash
-
   private[rspace] type T = Transaction with StateAccess
 
   private[this] type Join      = Seq[Seq[C]]
   private[this] type StateType = State[C, P, A, K]
 
-  private[rspace] def hashChannels(channels: Seq[C]): H =
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     Codec[Seq[C]]
       .encode(channels)
       .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
@@ -83,7 +80,7 @@ class InMemoryStore[C, P, A, K](
       txn.close()
     }
 
-  private[rspace] def getChannels(txn: T, key: H) =
+  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
     txn.state.dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -110,7 +107,7 @@ class InMemoryStore[C, P, A, K](
   private[rspace] def getJoin(txn: T, channel: C): Join =
     txn.state.dbJoins.getOrElse(channel, Seq.empty)
 
-  private[this] def withGNAT(txn: T, key: H)(
+  private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
       f: Option[GNAT[C, P, A, K]] => Option[GNAT[C, P, A, K]]): Unit = {
     val state     = txn.state
     val gnatOpt   = state.dbGNATs.get(key)
@@ -127,7 +124,7 @@ class InMemoryStore[C, P, A, K](
 
   private[this] def handleGNATChange(
       state: StateType,
-      key: H): PartialFunction[Option[GNAT[C, P, A, K]], StateType] = {
+      key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
     case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
     case _                               => _dbGNATs -= key
   }
@@ -196,7 +193,7 @@ class InMemoryStore[C, P, A, K](
 
   def close(): Unit = ()
 
-  def clear(): Unit = withTxn(createTxnWrite()) { txn =>
+  private[rspace] def clear(txn: T): Unit = {
     _dbGNATs = Map.empty
     _dbJoins = Map.empty
     eventsCounter.reset()
@@ -221,6 +218,9 @@ class InMemoryStore[C, P, A, K](
     gnat.data.isEmpty && gnat.wks.isEmpty
 
   def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+
+  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    ???
 }
 
 object InMemoryStore {
@@ -231,8 +231,7 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def apply[C, P, A, K <: Serializable]()(implicit sc: Serialize[C],
-                                          sk: Serialize[K]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
       trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]])
 }

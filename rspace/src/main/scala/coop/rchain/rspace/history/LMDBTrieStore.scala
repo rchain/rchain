@@ -69,11 +69,10 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
   def close(): Unit =
     _dbTrie.close()
 
-  private[rspace] def clear(): Unit =
-    withTxn(createTxnWrite()) { txn =>
-      _dbTrie.drop(txn)
-      _dbRoot.drop(txn)
-    }
+  private[rspace] def clear(txn: Txn[ByteBuffer]): Unit = {
+    _dbTrie.drop(txn)
+    _dbRoot.drop(txn)
+  }
 
   private val ROOT_KEY: ByteBuffer = {
     val rootName = "CURRENT_ROOT".getBytes(StandardCharsets.UTF_8)
