@@ -195,6 +195,17 @@ trait IStoreTests
     }
   }
 
+  it should "return unmodified history when nothing to prune in multiple gnats" in withTestStore {
+    store =>
+      forAll(distinctListOf[GNAT[String, Pattern, String, StringsCaptor]], SizeRange(3)) {
+        (gnats: Seq[GNAT[String, Pattern, String, StringsCaptor]]) =>
+          val history = gnats
+            .flatMap(gnat => List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat)))
+            .toList
+          store.pruneHistory(history) should contain theSameElementsAs (history)
+      }
+  }
+
   it should "remove all operations from history with the same hash when last operation is delete" in withTestStore {
     store =>
       forAll("gnat1", "gnat2") {
