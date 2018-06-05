@@ -281,7 +281,7 @@ lazy val deployment = (project in file("deployment"))
     packageSummary in Linux := "RChain Node",
     packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
     linuxPackageMappings ++= {
-      val file = baseDirectory.value / "rnode.service"
+      val file = (baseDirectory in node).value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
         .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
