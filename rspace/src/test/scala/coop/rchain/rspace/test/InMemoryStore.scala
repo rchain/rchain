@@ -10,11 +10,8 @@ import scodec.Codec
 import scodec.bits.BitVector
 
 import scala.collection.immutable.Seq
-import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K] private (
-    _dbGNATs: mutable.Map[Blake2b256Hash, GNAT[C, P, A, K]],
-    _dbJoins: mutable.HashMap[C, Seq[Seq[C]]],
+class InMemoryStore[C, P, A, K](
     val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K] {
@@ -23,7 +20,12 @@ class InMemoryStore[C, P, A, K] private (
 
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
+  private[this] var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = Map.empty
+  private[this] var _dbJoins: Map[C, Seq[Seq[C]]]                   = Map.empty
+
   private[rspace] type T = Unit
+
+  private[this] type Join = Seq[Seq[C]]
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
     Codec[Seq[C]]
@@ -62,21 +64,31 @@ class InMemoryStore[C, P, A, K] private (
   def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
     getMutableWaitingContinuation(txn, channels).map(_.patterns)
 
-  private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]] =
+  private[rspace] def getJoin(txn: T, channel: C): Join =
     _dbJoins.getOrElse(channel, Seq.empty)
 
   private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
       f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
-    val gnatOpt = _dbGNATs.get(key)
-    val rOpt    = f(gnatOpt)
-    handleChange(key)(rOpt)
+    val gnatOpt   = _dbGNATs.get(key)
+    val resultOpt = f(gnatOpt)
+    handleGNATChange(key)(resultOpt)
   }
 
-  private[this] def handleChange(
+  private[this] def withJoin(txn: T, jKey: C)(f: (Option[Join]) => Option[Join]): Unit = {
+    val joinOpt   = _dbJoins.get(jKey)
+    val resultOpt = f(joinOpt)
+    handleJoinChange(jKey)(resultOpt)
+  }
+
+  private[this] def handleGNATChange(
       key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
-    case Some(gnat) if isOrphaned(gnat) => _dbGNATs -= key
-    case Some(gnat)                     => _dbGNATs += key -> gnat
-    case None                           => _dbGNATs -= key
+    case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
+    case _                               => _dbGNATs -= key
+  }
+
+  private[this] def handleJoinChange(key: C): PartialFunction[Option[Join], Unit] = {
+    case Some(join) => _dbJoins += key -> join
+    case None       => _dbJoins -= key
   }
 
   private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit =
@@ -95,13 +107,13 @@ class InMemoryStore[C, P, A, K] private (
         .orElse(GNAT(channels = channels, data = Seq.empty, wks = Seq(continuation)).some)
     }
 
-  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
-    val existing: Seq[Seq[C]] = _dbJoins.remove(channel).getOrElse(Seq.empty)
-    if (!existing.exists(_.equals(channels)))
-      _dbJoins.put(channel, channels +: existing)
-    else
-      _dbJoins.put(channel, existing)
-  }
+  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit =
+    withJoin(txn, channel) { (joinOpt) =>
+      joinOpt
+        .filter(!_.exists(_.equals(channels)))
+        .map(channels +: _)
+        .orElse(Seq(channels).some)
+    }
 
   private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
     withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
@@ -120,28 +132,26 @@ class InMemoryStore[C, P, A, K] private (
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit = {
+  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit =
     withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
-        val existing: Seq[Seq[C]] = _dbJoins.remove(channel).getOrElse(Seq.empty)
-        val filtered              = removeFirst(existing)(_ == channels)
-        if (filtered.nonEmpty) _dbJoins.put(channel, filtered)
+        withJoin(txn, channel) { joinOpt =>
+          joinOpt
+            .map(removeFirst(_)(_ == channels))
+            .filter(_.nonEmpty)
+        }
       }
       gnatOpt
     }
-    collectGarbage(txn, hashChannels(Seq(channel)))
-  }
 
-  private[rspace] def removeAllJoins(txn: T, channel: C): Unit = {
-    _dbJoins.remove(channel)
-    collectGarbage(txn, hashChannels(Seq(channel)))
-  }
+  private[rspace] override def removeAllJoins(txn: T, channel: C): Unit =
+    withJoin(txn, channel)(_ => none)
 
   def close(): Unit = ()
 
-  def clear(t: T): Unit = {
-    _dbGNATs.clear()
-    _dbJoins.clear()
+  private[rspace] def clear(txn: T): Unit = {
+    _dbGNATs = Map.empty
+    _dbJoins = Map.empty
     eventsCounter.reset()
   }
 
@@ -152,28 +162,21 @@ class InMemoryStore[C, P, A, K] private (
     eventsCounter.createCounters(0, (gnatsSize + _dbJoins.size).toLong)
   }
 
-  def isEmpty: Boolean = withTxn(createTxnRead()) { txn =>
-    _dbGNATs.isEmpty && _dbJoins.isEmpty
-  }
+  def isEmpty: Boolean = withTxn(createTxnRead())(_ => _dbGNATs.isEmpty && _dbJoins.isEmpty)
 
   def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     _dbGNATs.map {
-      case (_, GNAT(cs, data, wks)) =>
-        (cs, Row(data, wks))
-    }.toMap
+      case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
+    }
   }
 
   private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
     gnat.data.isEmpty && gnat.wks.isEmpty
 
-  private[this] def collectGarbage(txn: T, key: Blake2b256Hash): Unit =
-    withGNAT(txn, key) { (gnatOpt) =>
-      gnatOpt
-    }
-
   def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
 
-  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit = ???
+  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    ???
 }
 
 object InMemoryStore {
@@ -184,11 +187,7 @@ object InMemoryStore {
       case Right(value) => value
     }
 
-  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C],
-                                         sk: Serialize[K]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
-      _dbGNATs = mutable.HashMap.empty[Blake2b256Hash, GNAT[C, P, A, K]],
-      _dbJoins = mutable.HashMap.empty[C, Seq[Seq[C]]],
-      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
-    )
+      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]])
 }
