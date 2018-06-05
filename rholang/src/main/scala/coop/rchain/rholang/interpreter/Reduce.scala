@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.{Applicative, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
@@ -216,8 +216,11 @@ object Reduce {
       for {
         binds <- receive.binds.toList
                   .traverse(rb =>
-                    unbundleReceive(rb).map(q =>
-                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
+                    for {
+                      q <- unbundleReceive(rb)
+                      substPatterns <- rb.patterns.toList.traverse(pattern =>
+                                        substituteChannel[M].substitute(pattern)(1, env))
+                    } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
         substBody <- substitutePar[M].substitute(receive.body.get)(0, env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)
@@ -288,22 +291,30 @@ object Reduce {
           )
         )
 
-      @annotation.tailrec
-      def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] =
-        cases match {
-          case Nil => Applicative[M].pure(())
-          case singleCase +: caseRem =>
-            val matchResult = SpatialMatcher
-              .spatialMatch(target, singleCase.pattern.get)
-              .runS(SpatialMatcher.emptyMap)
-            matchResult match {
-              case None => firstMatch(target, caseRem)
-              case Some(freeMap) => {
-                val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                eval(singleCase.source.get)(newEnv)
+      def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] = {
+        def firstMatchM(
+            state: Tuple2[Par, Seq[MatchCase]]): M[Either[Tuple2[Par, Seq[MatchCase]], Unit]] = {
+          val (target, cases) = state
+          cases match {
+            case Nil => Applicative[M].pure(Right(()))
+            case singleCase +: caseRem =>
+              substitutePar[M].substitute(singleCase.pattern.get)(1, env).flatMap { pattern =>
+                val matchResult =
+                  SpatialMatcher
+                    .spatialMatch(target, pattern)
+                    .runS(SpatialMatcher.emptyMap)
+                matchResult match {
+                  case None => Applicative[M].pure(Left((target, caseRem)))
+                  case Some(freeMap) => {
+                    val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
+                    eval(singleCase.source.get)(newEnv).map(Right(_))
+                  }
+                }
               }
-            }
+          }
         }
+        FlatMap[M].tailRecM[Tuple2[Par, Seq[MatchCase]], Unit]((target, cases))(firstMatchM)
+      }
 
       for {
         evaledTarget <- evalExpr(mat.target.get)
