@@ -195,7 +195,6 @@ trait IStoreTests
     }
   }
 
-  // TODO: Does this requirement make sense?
   it should "remove all operations from history with the same hash when last operation is delete" in withTestStore {
     store =>
       forAll("gnat1", "gnat2") {
@@ -206,6 +205,19 @@ trait IStoreTests
           val gnat2Ops = List(TrieUpdate(2, Insert, store.hashChannels(gnat2.channels), gnat2))
           val history  = gnat1Ops ++ gnat2Ops
           store.pruneHistory(history) shouldBe gnat2Ops
+      }
+  }
+
+  it should "remove all operations from history with the same hash when last operation is delete - longer case with same hash" in withTestStore {
+    store =>
+      forAll("gnat1") { (gnat1: GNAT[String, Pattern, String, StringsCaptor]) =>
+        val gnatOps = List(
+          TrieUpdate(0, Insert, store.hashChannels(gnat1.channels), gnat1),
+          TrieUpdate(1, Insert, store.hashChannels(gnat1.channels), gnat1),
+          TrieUpdate(2, Insert, store.hashChannels(gnat1.channels), gnat1),
+          TrieUpdate(3, Delete, store.hashChannels(gnat1.channels), gnat1),
+        )
+        store.pruneHistory(gnatOps) shouldBe empty
       }
   }
 
