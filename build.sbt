@@ -261,7 +261,7 @@ lazy val deployment = (project in file("deployment"))
     dockerfile in docker := {
       val artifact: File     = assembly.value
       val artifactTargetPath = s"/${artifact.name}"
-      val entry: File        = (baseDirectory in node)(_ / "main.sh").value
+      val entry: File        = baseDirectory.value / "main.sh"
       val entryTargetPath    = "/bin"
       val rholangExamples = (baseDirectory in rholang).value / "examples"
       new Dockerfile {
@@ -281,7 +281,7 @@ lazy val deployment = (project in file("deployment"))
     packageSummary in Linux := "RChain Node",
     packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
     linuxPackageMappings ++= {
-      val file = (baseDirectory in node).value / "rnode.service"
+      val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
         .map { case (f, p) => (f, s"/usr/share/rnode/$p") }
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
