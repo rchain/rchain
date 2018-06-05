@@ -71,15 +71,16 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
     in.groupBy(_.channelsHash)
-      .mapValues { value =>
-        value.sortBy(_.count).reverse.headOption match {
-          case Some(TrieUpdate(_, Delete, _, _))          => Nil
-          case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
-          case _                                          => value
-        }
+      .flatMap {
+        case (_, value) =>
+          value
+            .sorted(Ordering.by((tu: TrieUpdate[C, P, A, K]) => tu.count).reverse)
+            .headOption match {
+            case Some(TrieUpdate(_, Delete, _, _))          => List.empty
+            case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
+            case _                                          => value
+          }
       }
-      .values
-      .flatten
       .toList
 
   private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
