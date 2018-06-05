@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import cats.instances.option._
 import cats.instances.vector._
 import cats.syntax.traverse._
+import coop.rchain.rspace.Blake2b256Hash
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq

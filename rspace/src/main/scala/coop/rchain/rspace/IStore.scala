@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
+import coop.rchain.rspace.history.ITrieStore
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq

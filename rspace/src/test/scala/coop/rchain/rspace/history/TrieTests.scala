@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.Trie.codecTrie
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
