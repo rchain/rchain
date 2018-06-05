@@ -86,11 +86,13 @@ object ArbitraryInstances {
 
   implicit val arbitraryWaitingContinuation
     : Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] = {
-    Arbitrary(for {
-      chans   <- Gen.containerOf[List, String](Arbitrary.arbitrary[String])
-      pats    <- Gen.containerOf[List, Pattern](Arbitrary.arbitrary[Pattern])
-      boolean <- Arbitrary.arbitrary[Boolean]
-    } yield (WaitingContinuation(pats, new StringsCaptor, boolean)))
+    Arbitrary(Gen.sized { size =>
+      val constrainedSize = if (size > 1) size else 1
+      for {
+        pats    <- Gen.containerOfN[List, Pattern](constrainedSize, Arbitrary.arbitrary[Pattern])
+        boolean <- Arbitrary.arbitrary[Boolean]
+      } yield (WaitingContinuation(pats, new StringsCaptor, boolean))
+    })
   }
 
   implicit val arbitraryGnat: Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] = {
@@ -110,10 +112,9 @@ object ArbitraryInstances {
           {
             val constrainedSize = if (size > 1) size else 1
             for {
-              chans   <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
-              pats    <- Gen.containerOfN[List, Pattern](constrainedSize, Arbitrary.arbitrary[Pattern])
-              boolean <- Arbitrary.arbitrary[Boolean]
-            } yield (chans, WaitingContinuation(pats, new StringsCaptor, boolean))
+              chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
+              wc    <- Arbitrary.arbitrary[WaitingContinuation[Pattern, StringsCaptor]]
+            } yield (chans, wc)
           }
         )
       }
