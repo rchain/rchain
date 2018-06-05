@@ -37,8 +37,7 @@ class LMDBStore[C, P, A, K] private (
   codecP: Codec[P],
   codecA: Codec[A],
   codecK: Codec[K])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+    extends IStore[C, P, A, K] {
 
   // Good luck trying to get this to resolve as an implicit
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
@@ -251,11 +250,9 @@ class LMDBStore[C, P, A, K] private (
     }
   }
 
-  private[rspace] def clear(): Unit = {
-    withTxn(createTxnWrite()) { txn =>
-      _dbGNATs.drop(txn)
-      _dbJoins.drop(txn)
-    }
+  private[rspace] def clear(txn: T): Unit = {
+    _dbGNATs.drop(txn)
+    _dbJoins.drop(txn)
     eventsCounter.reset()
   }
 
@@ -303,6 +300,20 @@ class LMDBStore[C, P, A, K] private (
       trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
     }
   }
+
+  // TODO: Does using a cursor improve performance for bulk operations?
+  private[rspace] def bulkInsert(txn: Txn[ByteBuffer],
+                                 gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    gnats.foreach {
+      case (hash, gnat @ GNAT(channels, _, wks)) =>
+        insertGNAT(txn, hash, gnat)
+        for {
+          wk      <- wks
+          channel <- channels
+        } {
+          addJoin(txn, channel, channels)
+        }
+    }
 }
 
 object LMDBStore {
@@ -346,9 +357,7 @@ object LMDBStore {
 
     val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
 
-    if (history.getRoot(trieStore).isEmpty) {
-      initialize(trieStore)
-    }
+    initialize(trieStore)
 
     new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
   }

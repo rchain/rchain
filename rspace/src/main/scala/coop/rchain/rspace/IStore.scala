@@ -44,6 +44,8 @@ trait IStore[C, P, A, K] {
 
   private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit
 
+  private[rspace] def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]]
+
   private[rspace] def removeAll(txn: T, channels: Seq[C]): Unit
 
   private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit
@@ -66,4 +68,10 @@ trait IStore[C, P, A, K] {
   def getCheckpoint(): Blake2b256Hash
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
+
+  private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
+
+  private[rspace] def clear(txn: T): Unit
+
+  def isEmpty: Boolean
 }

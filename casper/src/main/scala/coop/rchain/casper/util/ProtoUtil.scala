@@ -34,6 +34,19 @@ object ProtoUtil {
       }
     }
 
+  @tailrec
+  def getMainChain(blockDag: BlockDag,
+                   estimate: BlockMessage,
+                   acc: IndexedSeq[BlockMessage]): IndexedSeq[BlockMessage] = {
+    val parentsHashes       = ProtoUtil.parents(estimate)
+    val maybeMainParentHash = parentsHashes.headOption
+    maybeMainParentHash.flatMap(blockDag.blockLookup.get) match {
+      case Some(newEstimate) =>
+        getMainChain(blockDag, newEstimate, acc :+ estimate)
+      case None => acc :+ estimate
+    }
+  }
+
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Int] =
     blockMessage.body match {
       case Some(block) =>

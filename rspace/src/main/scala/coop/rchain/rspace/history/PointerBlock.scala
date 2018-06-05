@@ -39,4 +39,6 @@ object PointerBlock {
       provide(length),
       optional(ignore(size = 7) ~> bool, Blake2b256Hash.codecBlake2b256Hash)
     ).as[PointerBlock]
+
+  def unapply(arg: PointerBlock): Option[Vector[Option[Blake2b256Hash]]] = Option(arg.toVector)
 }
