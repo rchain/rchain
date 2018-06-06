@@ -45,12 +45,18 @@ package object history {
           // We use an explicit match here instead of flatMapping in order to make this function
           // tail-recursive
           pointerBlock.toVector(index) match {
-            case None =>
+            case EmptyChild =>
               None
-            case Some(hash: Blake2b256Hash) =>
+            case NodeChild(hash: Blake2b256Hash) =>
               store.get(txn, hash) match {
                 case Some(next) => loop(txn, depth + 1, next)
                 case None       => throw new LookupException(s"No node at $hash")
+              }
+
+            case LeafChild(hash: Blake2b256Hash) =>
+              store.get(txn, hash) match {
+                case Some(next) => loop(txn, depth + 1, next)
+                case _          => throw new LookupException(s"No node at $hash")
               }
           }
         case Leaf(lk, lv) if key == lk =>
@@ -58,6 +64,7 @@ package object history {
         case Leaf(_, _) =>
           None
       }
+
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       for {
         currentRootHash <- store.getRoot(txn)
@@ -83,9 +90,16 @@ package object history {
       case node @ Node(pointerBlock) =>
         val index: Int = JByte.toUnsignedInt(path(depth))
         pointerBlock.toVector(index) match {
-          case None =>
+          case EmptyChild =>
             (curr, acc)
-          case Some(nextHash) =>
+          case NodeChild(nextHash) =>
+            store.get(txn, nextHash) match {
+              case None =>
+                throw new LookupException(s"No node at $nextHash")
+              case Some(next) =>
+                getParents(store, txn, path, depth + 1, next, (index, node) +: acc)
+            }
+          case LeafChild(nextHash) =>
             store.get(txn, nextHash) match {
               case None =>
                 throw new LookupException(s"No node at $nextHash")
@@ -107,7 +121,7 @@ package object history {
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
     nodes.scanLeft((Trie.hash[K, V](trie), trie)) {
       case ((lastHash, _), (offset, Node(pb))) =>
-        val node = Node(pb.updated(List((offset, Some(lastHash)))))
+        val node = Node(pb.updated(List((offset, NodeChild(lastHash)))))
         (Trie.hash[K, V](node), node)
     }
 
@@ -159,8 +173,8 @@ package object history {
               val hd = Node(
                 PointerBlock
                   .create()
-                  .updated(List((newLeafIndex, Some(newLeafHash)),
-                                (existingLeafIndex, Some(Trie.hash[K, V](existingLeaf)))))
+                  .updated(List((newLeafIndex, LeafChild(newLeafHash)),
+                                (existingLeafIndex, LeafChild(Trie.hash[K, V](existingLeaf)))))
               )
               val emptyNode     = Node(PointerBlock.create())
               val emptyNodes    = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
@@ -177,7 +191,7 @@ package object history {
               // to point to the new leaf instead of the existing leaf
               val (hd, tl) = parents match {
                 case (idx, Node(pointerBlock)) +: remaining =>
-                  (Node(pointerBlock.updated(List((idx, Some(newLeafHash))))), remaining)
+                  (Node(pointerBlock.updated(List((idx, LeafChild(newLeafHash))))), remaining)
                 case Seq() =>
                   throw new InsertException("A leaf had no parents")
               }
@@ -190,7 +204,7 @@ package object history {
             case Node(pb) =>
               val pathLength    = parents.length
               val newLeafIndex  = JByte.toUnsignedInt(encodedKeyNew(pathLength))
-              val hd            = Node(pb.updated(List((newLeafIndex, Some(newLeafHash)))))
+              val hd            = Node(pb.updated(List((newLeafIndex, LeafChild(newLeafHash)))))
               val rehashedNodes = rehash[K, V](hd, parents)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
               store.putRoot(txn, newRootHash)
@@ -207,7 +221,7 @@ package object history {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
       case Seq((byte, Node(pointerBlock))) =>
-        (Node(pointerBlock.updated(List((byte, Some(hash))))), Seq.empty[(Int, Node)])
+        (Node(pointerBlock.updated(List((byte, LeafChild(hash))))), Seq.empty[(Int, Node)])
       // Otherwise,
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
@@ -220,7 +234,7 @@ package object history {
           case Vector(_) => propagateLeafUpward(hash, tail)
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the leaf.
-          case _ => (Node(pointerBlock.updated(List((byte, Some(hash))))), tail)
+          case _ => (Node(pointerBlock.updated(List((byte, LeafChild(hash))))), tail)
         }
     }
 
@@ -232,10 +246,10 @@ package object history {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `None`
       case Seq((index, Node(pointerBlock))) =>
-        (Node(pointerBlock.updated(List((index, None)))), Seq.empty[(Int, Node)])
+        (Node(pointerBlock.updated(List((index, EmptyChild)))), Seq.empty[(Int, Node)])
       // Otherwise,
       case (byte, Node(pointerBlock)) +: tail =>
-        val updated = (Node(pointerBlock.updated(List((byte, None)))), tail)
+        val updated = (Node(pointerBlock.updated(List((byte, EmptyChild)))), tail)
         // Get the children of the immediate parent
         pointerBlock.children match {
           // If there are no children, then something is wrong, because one of the children
@@ -303,4 +317,20 @@ package object history {
           }
       }
     }
+  import scodec.Codec
+  import scodec.bits.{BitVector, ByteVector}
+  import scodec.codecs._
+
+  implicit val codecChild: Codec[Child] =
+    discriminated[Child]
+      .by(uint8)
+      .subcaseP(0) {
+        case value: LeafChild => value
+      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafChild])
+      .subcaseP(1) {
+        case node: NodeChild => node
+      }(Blake2b256Hash.codecBlake2b256Hash.as[NodeChild])
+      .subcaseP(2) {
+        case nothing: EmptyChild.type => nothing
+      }(provide(EmptyChild))
 }

@@ -57,7 +57,7 @@ trait HistoryActionsTests
 
   "getCheckpoint on an empty store" should "return the expected hash" in withTestStore { store =>
     getCheckpoint(store) shouldBe Blake2b256Hash.fromHex(
-      "c575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe")
+      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
   }
 
   "consume then getCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -72,8 +72,9 @@ trait HistoryActionsTests
         Node(
           PointerBlock
             .create()
-            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                           Some(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
+            .updated(
+              List((JByte.toUnsignedInt(channelsHash.bytes.head),
+                    LeafChild(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
 
       consume(store,
               gnat.channels,
@@ -191,7 +192,7 @@ trait HistoryActionsTests
       history.lookup(store.trieStore, channelsHash) shouldBe None
 
       getCheckpoint(store) shouldBe Blake2b256Hash.fromHex(
-        "c575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe")
+        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
 
       history.lookup(store.trieStore, channelsHash) shouldBe None
     }
