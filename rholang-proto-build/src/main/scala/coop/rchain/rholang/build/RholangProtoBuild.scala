@@ -7,7 +7,6 @@ import java.nio.file.{Path, Paths}
 
 import scala.io.Source
 
-//should extend AutoPlugin if actually writing an SBT plugin
 object RholangProtoBuild {
   val packageAnnotation: String = "scalapackage"
 
@@ -39,8 +38,7 @@ object RholangProtoBuild {
     val body =
       s"override val term: Par = CompiledRholangSource.fromProtoFile(${escape(proto.toFile.getAbsolutePath())})"
 
-    s"""
-     |$pkgDeclaration
+    s"""$pkgDeclaration
      |
      |${imports.mkString("\n")}
      |

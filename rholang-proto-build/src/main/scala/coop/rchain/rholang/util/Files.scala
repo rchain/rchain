@@ -18,7 +18,7 @@ object Files {
     val ds = JFiles.newDirectoryStream(start)
     val it = ds.iterator.asScala
 
-    val (result, dirs) = it.foldLeft(List.empty[Path] -> List.empty[Path]) {
+    val (files, dirs) = it.foldLeft(List.empty[Path] -> List.empty[Path]) {
       case ((acc, dacc), curr) =>
         val newAcc  = if (filter(curr)) curr :: acc else acc
         val newDAcc = if (isDirectory(curr)) curr :: dacc else dacc
@@ -27,7 +27,7 @@ object Files {
     }
 
     ds.close()
-    result ++ dirs.flatMap(walk(_, filter))
+    files ++ dirs.flatMap(walk(_, filter))
   }
 
   def write[A](output: Path, content: A): Unit = {
