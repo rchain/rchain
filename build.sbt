@@ -1,5 +1,6 @@
 import Dependencies._
 import BNFC._
+import Rholang._
 import NativePackagerHelper._
 
 lazy val projectSettings = Seq(
@@ -37,16 +38,26 @@ lazy val shared = (project in file("shared"))
     )
   )
 
+lazy val rholangProtoBuildTask = Def.task(
+  constructArtifacts(
+    (rholangProtoBuild/Compile/incrementalAssembly).value,
+    (baseDirectory in Compile).value,
+    (sourceManaged in Compile).value
+  )
+)
+  
 lazy val casper = (project in file("casper"))
   .settings(commonSettings: _*)
   .settings(
+    name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
       catsMtl,
       monix
-    )
+    ),
+    sourceGenerators in Compile += rholangProtoBuildTask.taskValue
   )
-  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang)
+  .dependsOn(comm % "compile->compile;test->test", shared, crypto, models, rspace, rholang, rholangProtoBuild)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -185,6 +196,7 @@ lazy val rholang = (project in file("rholang"))
   .settings(commonSettings: _*)
   .settings(bnfcSettings: _*)
   .settings(
+    name := "rholang",
     scalacOptions ++= Seq(
       "-language:existentials",
       "-language:higherKinds",
@@ -210,6 +222,26 @@ lazy val rholangCLI = (project in file("rholang-cli"))
   )
   .dependsOn(rholang)
 
+lazy val rholangProtoBuildJar = Def.task(
+  (assemblyOutputPath in (assembly)).value
+)
+lazy val _incrementalAssembly = Def.taskDyn(
+  if (jarOutDated((rholangProtoBuildJar).value, (Compile / scalaSource).value))
+    (assembly)
+  else 
+    rholangProtoBuildJar
+)
+lazy val incrementalAssembly = taskKey[File]("Only assemble if sources are newer than jar")
+lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "rholang-proto-build",
+    incrementalAssembly in Compile := Def.sequential(
+      _incrementalAssembly
+    ).value
+  )
+  .dependsOn(rholang)
+  
 lazy val roscala = (project in file("roscala"))
   .settings(commonSettings: _*)
   .settings(
