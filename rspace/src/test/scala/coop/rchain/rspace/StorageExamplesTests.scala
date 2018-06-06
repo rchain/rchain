@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.extended._
-import coop.rchain.rspace.test.InMemoryStore
 import org.scalatest.BeforeAndAfterAll
 
 trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
@@ -272,7 +271,7 @@ class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
 
   override def withTestStore[R](f: T => R): R = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    testStore.clear(())
+    testStore.clear(testStore.createTxnWrite())
     try {
       f(testStore)
     } finally {

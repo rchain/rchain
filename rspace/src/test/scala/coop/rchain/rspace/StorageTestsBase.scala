@@ -30,7 +30,7 @@ class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, S
 
   override def withTestStore[R](f: T => R): R = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
-    testStore.clear(())
+    testStore.clear(testStore.createTxnWrite())
     try {
       f(testStore)
     } finally {
