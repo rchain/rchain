@@ -10,14 +10,13 @@ class TblObject extends Actor {
 
   def entryKey(n: Int): Ob = keyVec(n).get
 
-  def addSlot(key: Ob, value: Ob): Int = {
-    val lock = keyVec.lock
-
+  def addSlot(key: Ob, value: Ob): Int =
     //necessary because we want to update `keyVec` and `extension.slot` atomically
     //otherwise another thread could try to access an uninitialized associated value
-    lock.writeLock().withLock {
-      keyVec += key
-      super.addSlot(value)
+    keyVec.lock.writeLock().withLock {
+      extension.slot.lock.writeLock().withLock {
+        keyVec += key
+        super.addSlot(value)
+      }
     }
-  }
 }
