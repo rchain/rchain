@@ -1,7 +1,7 @@
 package coop.rchain.rspace.test
 
 import cats.implicits._
-import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
+import coop.rchain.rspace.history.ITrieStore
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.{dropIndex, removeFirst}
 import coop.rchain.rspace._
