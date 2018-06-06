@@ -2,10 +2,7 @@
 export PATH=$PATH:$(pwd -P)/scripts
 source header.sh
 
-sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate
-sbt -Dsbt.log.noformat=true rholang/compile 
-sbt -Dsbt.log.noformat=true rholang/assembly 
-sbt -Dsbt.log.noformat=true rholangCLI/assembly
+sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate rholang/assembly rholangCLI/assembly
 
 jar=$(ls -t ${RHOLANG_ROOT_DIR}/target/scala*/*.jar | head -1)
 # the above is usually file like rholang/target/scala-2.12/rholang-assembly-0.1.0-SNAPSHOT.jar
