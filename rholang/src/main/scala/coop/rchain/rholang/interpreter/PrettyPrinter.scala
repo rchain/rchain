@@ -10,6 +10,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import implicits._
 import scalapb.GeneratedMessage
+import coop.rchain.shared.StringOps._
 
 object PrettyPrinter {
   def apply(): PrettyPrinter = PrettyPrinter(0, 0, "INVALID", "a", 23, 128)
@@ -29,36 +30,36 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(e: Expr): String =
     e.exprInstance match {
-      case ENegBody(ENeg(p)) => "-" + buildString(p.get)
-      case ENotBody(ENot(p)) => "~" + buildString(p.get)
+      case ENegBody(ENeg(p)) => "-" + buildString(p.get).wrapWithBraces
+      case ENotBody(ENot(p)) => "~" + buildString(p.get).wrapWithBraces
       case EMultBody(EMult(p1, p2)) =>
-        buildString(p1.get) + " * " + buildString(p2.get)
+        (buildString(p1.get) + " * " + buildString(p2.get)).wrapWithBraces
       case EDivBody(EDiv(p1, p2)) =>
-        buildString(p1.get) + " / " + buildString(p2.get)
+        (buildString(p1.get) + " / " + buildString(p2.get)).wrapWithBraces
       case EPlusBody(EPlus(p1, p2)) =>
-        buildString(p1.get) + " + " + buildString(p2.get)
+        (buildString(p1.get) + " + " + buildString(p2.get)).wrapWithBraces
       case EMinusBody(EMinus(p1, p2)) =>
-        buildString(p1.get) + " - " + buildString(p2.get)
+        (buildString(p1.get) + " - " + buildString(p2.get)).wrapWithBraces
       case EAndBody(EAnd(p1, p2)) =>
-        buildString(p1.get) + " && " + buildString(p2.get)
+        (buildString(p1.get) + " && " + buildString(p2.get)).wrapWithBraces
       case EOrBody(EOr(p1, p2)) =>
-        buildString(p1.get) + " || " + buildString(p2.get)
+        (buildString(p1.get) + " || " + buildString(p2.get)).wrapWithBraces
       case EEqBody(EEq(p1, p2)) =>
-        buildString(p1.get) + " == " + buildString(p2.get)
+        (buildString(p1.get) + " == " + buildString(p2.get)).wrapWithBraces
       case ENeqBody(ENeq(p1, p2)) =>
-        buildString(p1.get) + " != " + buildString(p2.get)
+        (buildString(p1.get) + " != " + buildString(p2.get)).wrapWithBraces
       case EGtBody(EGt(p1, p2)) =>
-        buildString(p1.get) + " > " + buildString(p2.get)
+        (buildString(p1.get) + " > " + buildString(p2.get)).wrapWithBraces
       case EGteBody(EGte(p1, p2)) =>
-        buildString(p1.get) + " >= " + buildString(p2.get)
+        (buildString(p1.get) + " >= " + buildString(p2.get)).wrapWithBraces
       case ELtBody(ELt(p1, p2)) =>
-        buildString(p1.get) + " < " + buildString(p2.get)
+        (buildString(p1.get) + " < " + buildString(p2.get)).wrapWithBraces
       case ELteBody(ELte(p1, p2)) =>
-        buildString(p1.get) + " <= " + buildString(p2.get)
+        (buildString(p1.get) + " <= " + buildString(p2.get)).wrapWithBraces
       case EListBody(EList(s, _, _, _)) =>
         "[" + buildSeq(s) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
-        "[" + buildSeq(s) + "]"
+        "(" + buildSeq(s) + ")"
       case ESetBody(ESet(s, _, _)) =>
         "(" + buildSeq(s) + ")"
       case EMapBody(EMap(kvs, _, _)) =>
