@@ -68,7 +68,7 @@ object Vm {
 
       case OpExtend(lit) =>
         val formals    = state.code.litvec(lit).asInstanceOf[Template]
-        val optActuals = formals.`match`(state.ctxt.argvec, state.ctxt.nargs)
+        val optActuals = formals.matchPattern(state.ctxt.argvec, state.ctxt.nargs)
 
         optActuals match {
           case Some(actuals) =>
