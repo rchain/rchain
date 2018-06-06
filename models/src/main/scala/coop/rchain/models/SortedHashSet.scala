@@ -13,7 +13,7 @@ case class SortedHashSet[A: Ordering](private val ps: HashSet[A])
 
   lazy val sortedPars: List[A] = ps.toList.sorted
 
-  // -- METHODS USED BY PROTOBUFF SERIALIZATION MECHANISM, ADJUST WITH CARE! --
+  // -- METHODS USED BY PROTOBUF SERIALIZATION MECHANISM, ADJUST WITH CARE! --
   // Called inside `writeTo` when serializing instance.
   // Elements should be already sorted so `foreach` traverse them in order.
   override def foreach[U](f: A => U): Unit = sortedPars.foreach(f)
