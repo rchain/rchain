@@ -6,11 +6,13 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalacheck.Gen
 import org.scalactic.anyvals.PosInt
+import org.scalatest.AppendedClues
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 trait IStoreTests
     extends StorageTestsBase[String, Pattern, String, StringsCaptor]
-    with GeneratorDrivenPropertyChecks {
+    with GeneratorDrivenPropertyChecks
+    with AppendedClues {
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(10))
@@ -190,6 +192,10 @@ trait IStoreTests
 
   it should "return unmodified history when nothing to prune" in withTestStore { store =>
     forAll("gnat") { (gnat: GNAT[String, Pattern, String, StringsCaptor]) =>
+      gnat.wks
+        .map(_.patterns.size)
+        .distinct should contain only gnat.channels.size withClue "#patterns in each continuation should equal #channels"
+
       val history = List(TrieUpdate(0, Insert, store.hashChannels(gnat.channels), gnat))
       store.pruneHistory(history) shouldBe history
     }

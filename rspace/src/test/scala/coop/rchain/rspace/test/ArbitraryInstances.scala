@@ -99,29 +99,29 @@ object ArbitraryInstances {
   }
 
   implicit val arbitraryGnat: Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] = {
-    Arbitrary(for {
-      chans <- Gen.containerOf[List, String](Arbitrary.arbitrary[String])
-      data  <- Gen.containerOf[List, Datum[String]](Arbitrary.arbitrary[Datum[String]])
-      wks <- Gen.containerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
-              Arbitrary.arbitrary[WaitingContinuation[Pattern, StringsCaptor]])
-    } yield GNAT(chans, data, wks))
+    Arbitrary(Gen.sized { size =>
+      val constrainedSize = if (size > 1) size else 1
+      for {
+        chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
+        data  <- Gen.containerOf[List, Datum[String]](Arbitrary.arbitrary[Datum[String]])
+        wks <- Gen.containerOfN[List, WaitingContinuation[Pattern, StringsCaptor]](
+                constrainedSize,
+                Arbitrary.arbitrary[WaitingContinuation[Pattern, StringsCaptor]])
+      } yield GNAT(chans, data, wks)
+    })
   }
 
   implicit val arbitraryNonEmptyMapListStringWaitingContinuation
     : Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] = {
-    Arbitrary(Gen
-      .sized { size =>
-        Gen.nonEmptyContainerOf[List, (List[String], WaitingContinuation[Pattern, StringsCaptor])](
-          {
-            val constrainedSize = if (size > 1) size else 1
-            for {
-              chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
-              wc    <- Arbitrary.arbitrary[WaitingContinuation[Pattern, StringsCaptor]]
-            } yield (chans, wc)
-          }
+    Arbitrary(
+      Gen
+        .nonEmptyContainerOf[List, (List[String], WaitingContinuation[Pattern, StringsCaptor])](
+          for {
+            wc    <- Arbitrary.arbitrary[WaitingContinuation[Pattern, StringsCaptor]]
+            chans <- Gen.containerOfN[List, String](wc.patterns.length, Arbitrary.arbitrary[String])
+          } yield (chans, wc)
         )
-      }
-      .map(_.toMap))
+        .map(_.toMap))
   }
 
   /**
