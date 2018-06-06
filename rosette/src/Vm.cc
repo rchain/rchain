@@ -734,12 +734,12 @@ nextop:
     instr = FETCH;
     bytecodes[OP_f0_opcode(instr)]++;
 
-    if (VerboseFlag) {
-        int opcode = OP_f0_opcode(instr);
-        if (0 <= opcode && opcode < MaxOpcodes) {
-            fprintf(stderr, "  %s:\n", opcodeStrings[opcode]);
-        }
-    }
+    // if (VerboseFlag) {
+    //     int opcode = OP_f0_opcode(instr);
+    //     if (0 <= opcode && opcode < MaxOpcodes) {
+    //         fprintf(stderr, "  %s:\n", opcodeStrings[opcode]);
+    //     }
+    // }
 
     switch (OP_f0_opcode(instr)) {
     case opHalt:
