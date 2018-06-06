@@ -57,7 +57,16 @@ object Ed25519 {
       signature: Array[Byte],
       pub: Array[Byte]
   ): Boolean =
-    new VerifyKey(pub).verify(data, signature)
+    try {
+      new VerifyKey(pub).verify(data, signature)
+    } catch {
+      case ex: RuntimeException =>
+        if (ex.getMessage contains "signature was forged or corrupted") {
+          false
+        } else {
+          throw ex
+        }
+    }
 
   /**
     * Create an Ed25519 signature.

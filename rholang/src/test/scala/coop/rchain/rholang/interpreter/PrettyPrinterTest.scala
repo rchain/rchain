@@ -381,7 +381,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput1, inputs).value.par)
-    val target = "for( x0, @{for( @{y0}, y1 <- @{Nil} ) { *y1 | y0 | x1 }} <- @{Nil} ) { x0!(x1) }"
+    val target = "for( x0, @{for( @{y0}, y1 <- @{Nil} ) { y0 | x1 | *y1 }} <- @{Nil} ) { x0!(x1) }"
     result shouldBe target
   }
 

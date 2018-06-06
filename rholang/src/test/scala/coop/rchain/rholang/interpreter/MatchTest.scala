@@ -161,8 +161,8 @@ class VarMatcherSpec extends FlatSpec with Matchers {
   }
 
   "Matching an eval with no free variables" should "Succeed, but not capture anything." in {
-    val target: Eval   = Eval(ChanVar(BoundVar(0)))
-    val pattern: Eval  = Eval(ChanVar(BoundVar(0)))
+    val target: Expr   = EEvalBody(ChanVar(BoundVar(0)))
+    val pattern: Expr  = EEvalBody(ChanVar(BoundVar(0)))
     val expectedResult = Some(Map.empty[Int, Par])
     val result         = spatialMatch(target, pattern).runS(emptyMap)
     result should be(expectedResult)

@@ -59,10 +59,9 @@ object Runtime {
       2L -> SystemProcesses.stderr,
       3L -> SystemProcesses.stderrAck(store, dispatcher),
       4L -> SystemProcesses.ed25519Verify(store, dispatcher),
-      5L -> SystemProcesses.curve25519Encrypt(store, dispatcher),
-      6L -> SystemProcesses.sha256Hash(store, dispatcher),
-      7L -> SystemProcesses.keccak256Hash(store, dispatcher),
-      8L -> SystemProcesses.blake2b256Hash(store, dispatcher)
+      5L -> SystemProcesses.sha256Hash(store, dispatcher),
+      6L -> SystemProcesses.keccak256Hash(store, dispatcher),
+      7L -> SystemProcesses.blake2b256Hash(store, dispatcher)
       //TODO: once we have secp256k1 packaged as jar
 //      9L -> SystemProcesses.secp256k1Verify(store, dispatcher)
     )
@@ -73,10 +72,9 @@ object Runtime {
       ("stderr", 1, None, 2L),
       ("stderrAck", 2, None, 3L),
       ("ed25519Verify", 4, None, 4L),
-      ("curve25519Encrypt", 5, None, 5L),
-      ("sha256Hash", 2, None, 6L),
-      ("keccak256Hash", 2, None, 7L),
-      ("blake2b256Hash", 2, None, 8L)
+      ("sha256Hash", 2, None, 5L),
+      ("keccak256Hash", 2, None, 6L),
+      ("blake2b256Hash", 2, None, 7L)
       //TODO: once we have secp256k1 packaged as jar
 //      ("secp256k1Verify", 4, None, 9L)
     )

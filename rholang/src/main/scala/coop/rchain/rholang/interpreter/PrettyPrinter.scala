@@ -72,6 +72,7 @@ case class PrettyPrinter(freeShift: Int,
         } + "}"
 
       case EVarBody(EVar(v)) => buildString(v.get)
+      case EEvalBody(chan)   => "*" + buildString(chan)
       case GBool(b)          => b.toString
       case GInt(i)           => i.toString
       case GString(s)        => "\"" + s + "\""
@@ -137,8 +138,6 @@ case class PrettyPrinter(freeShift: Int,
           .copy(boundShift = boundShift + totalFree)
           .buildString(r.body.get) + " }"
 
-      case e: Eval => "*" + buildString(e.channel.get)
-
       case b: Bundle =>
         BundleOps.showInstance.show(b) + "{ " + buildString(b.body.get) + " }"
 
@@ -166,14 +165,7 @@ case class PrettyPrinter(freeShift: Int,
         if (isEmpty(par)) "Nil"
         else {
           val list =
-            List(par.bundles,
-                 par.sends,
-                 par.receives,
-                 par.evals,
-                 par.news,
-                 par.exprs,
-                 par.matches,
-                 par.ids)
+            List(par.bundles, par.sends, par.receives, par.news, par.exprs, par.matches, par.ids)
           ((false, "") /: list) {
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
@@ -244,7 +236,6 @@ case class PrettyPrinter(freeShift: Int,
   private def isEmpty(p: Par) =
     p.sends.isEmpty &
       p.receives.isEmpty &
-      p.evals.isEmpty &
       p.news.isEmpty &
       p.exprs.isEmpty &
       p.matches.isEmpty &

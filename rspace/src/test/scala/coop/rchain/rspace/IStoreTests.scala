@@ -22,8 +22,8 @@ trait IStoreTests
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putDatum(txn, key, datum)
         store.getData(txn, key) should contain theSameElementsAs (Seq(datum))
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
@@ -37,8 +37,8 @@ trait IStoreTests
         store.putDatum(txn, key, datum1)
         store.putDatum(txn, key, datum2)
         store.getData(txn, key) should contain theSameElementsAs (Seq(datum1, datum2))
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
@@ -58,26 +58,11 @@ trait IStoreTests
           data.foreach { d =>
             store.putDatum(txn, key, d)
           }
-          store.removeDatum(txn, key(0), index - 1)
+          store.removeDatum(txn, key, index - 1)
           store.getData(txn, key) should contain theSameElementsAs (data.filterNot(
             _.a == datumValue + (size - index)))
+          store.clear(txn)
         }
-        store.clear()
-    }
-  }
-
-  "collectGarbage" should "not remove used channels" in withTestStore { store =>
-    forAll("channel", "datum") { (channel: String, datum: String) =>
-      val key  = List(channel)
-      val hash = store.hashChannels(key)
-
-      store.withTxn(store.createTxnWrite()) { txn =>
-        store.putDatum(txn, key, Datum(datum, persist = false))
-
-        store.collectGarbage(txn, store.hashChannels(key))
-        store.getChannels(txn, hash) should contain theSameElementsAs (key)
-      }
-      store.clear()
     }
   }
 
@@ -90,8 +75,8 @@ trait IStoreTests
         // collectGarbage is called in removeDatum:
         store.removeDatum(txn, key, 0)
         store.getChannels(txn, hash) shouldBe empty
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
@@ -107,8 +92,8 @@ trait IStoreTests
         store.withTxn(store.createTxnWrite()) { txn =>
           store.putWaitingContinuation(txn, key, wc)
           store.getWaitingContinuation(txn, key) shouldBe List(wc)
+          store.clear(txn)
         }
-        store.clear()
       }
   }
 
@@ -127,8 +112,8 @@ trait IStoreTests
         store.putWaitingContinuation(txn, key, wc1)
         store.putWaitingContinuation(txn, key, wc2)
         store.getWaitingContinuation(txn, key) should contain theSameElementsAs List(wc1, wc2)
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
@@ -148,18 +133,18 @@ trait IStoreTests
           store.putWaitingContinuation(txn, key, wc2)
           store.removeWaitingContinuation(txn, key, 0)
           store.getWaitingContinuation(txn, key) shouldBe List(wc1)
+          store.clear(txn)
         }
-        store.clear()
       }
   }
 
-  "addJoin" should "add join for a channel" ignore withTestStore { store =>
+  "addJoin" should "add join for a channel" in withTestStore { store =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
         store.getJoin(txn, channel) shouldBe List(channels)
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
@@ -169,20 +154,20 @@ trait IStoreTests
         store.addJoin(txn, channel, channels)
         store.removeJoin(txn, channel, channels)
         store.getJoin(txn, channel) shouldBe empty
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
-  it should "remove only passed in joins for a channel" ignore withTestStore { store =>
+  it should "remove only passed in joins for a channel" in withTestStore { store =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
         store.addJoin(txn, channel, List("otherChannel"))
         store.removeJoin(txn, channel, channels)
         store.getJoin(txn, channel) shouldBe List(List("otherChannel"))
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 
@@ -193,8 +178,8 @@ trait IStoreTests
         store.addJoin(txn, channel, List("otherChannel"))
         store.removeAllJoins(txn, channel)
         store.getJoin(txn, channel) shouldBe List()
+        store.clear(txn)
       }
-      store.clear()
     }
   }
 }

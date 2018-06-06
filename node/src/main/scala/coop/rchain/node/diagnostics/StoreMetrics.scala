@@ -30,8 +30,13 @@ object StoreMetrics extends StoreMetricsInstances {
 
     def reportStoreSize(storeSize: StoreUsage): List[F[Unit]] =
       List(
-        g("size-on-disk", storeSize.sizeOnDisk),
-        g("data-entries", storeSize.dataEntries)
+        g("total-size-on-disk", storeSize.totalSizeOnDisk),
+        g("rspace-size-on-disk", storeSize.rspaceSizeOnDisk),
+        g("rspace-data-entries", storeSize.rspaceDataEntries),
+        g("rspace-consumes-count", storeSize.rspaceConsumesCount),
+        g("rspace-consume-avg-ms", storeSize.rspaceConsumeAvgMilliseconds.toLong),
+        g("rspace-produces-count", storeSize.rspaceProducesCount),
+        g("rspace-produces-avg-ms", storeSize.rspaceProduceAvgMilliseconds.toLong)
       )
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =

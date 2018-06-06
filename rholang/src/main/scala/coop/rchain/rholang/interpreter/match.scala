@@ -15,7 +15,6 @@ import coop.rchain.rholang.interpreter.implicits.{
   fromEList,
   fromExpr,
   BundleLocallyFree,
-  EvalLocallyFree,
   ExprLocallyFree,
   GPrivateLocallyFree,
   MatchCaseLocallyFree,
@@ -100,7 +99,6 @@ object SpatialMatcher {
 
   case class ParCount(sends: Int = 0,
                       receives: Int = 0,
-                      evals: Int = 0,
                       news: Int = 0,
                       exprs: Int = 0,
                       matches: Int = 0,
@@ -110,7 +108,6 @@ object SpatialMatcher {
       ParCount(
         sends = op(sends, other.sends),
         receives = op(receives, other.receives),
-        evals = op(evals, other.evals),
         news = op(news, other.news),
         exprs = op(exprs, other.exprs),
         matches = op(matches, other.matches),
@@ -148,7 +145,6 @@ object SpatialMatcher {
       ParCount(
         sends = par.sends.size,
         receives = par.receives.size,
-        evals = par.evals.size,
         news = par.news.size,
         matches = par.matches.size,
         exprs = par.exprs.size,
@@ -159,7 +155,6 @@ object SpatialMatcher {
       ParCount(
         sends = Int.MaxValue,
         receives = Int.MaxValue,
-        evals = Int.MaxValue,
         news = Int.MaxValue,
         matches = Int.MaxValue,
         exprs = Int.MaxValue,
@@ -211,7 +206,6 @@ object SpatialMatcher {
 
     val sendMax    = math.min(max.sends, par.sends.size - minPrune.sends)
     val receiveMax = math.min(max.receives, par.receives.size - minPrune.receives)
-    val evalMax    = math.min(max.evals, par.evals.size - minPrune.evals)
     val newMax     = math.min(max.news, par.news.size - minPrune.news)
     val exprMax    = math.min(max.exprs, par.exprs.size - minPrune.exprs)
     val matchMax   = math.min(max.matches, par.matches.size - minPrune.matches)
@@ -220,7 +214,6 @@ object SpatialMatcher {
 
     val sendMin    = math.max(min.sends, par.sends.size - maxPrune.sends)
     val receiveMin = math.max(min.receives, par.receives.size - maxPrune.receives)
-    val evalMin    = math.max(min.evals, par.evals.size - maxPrune.evals)
     val newMin     = math.max(min.news, par.news.size - maxPrune.news)
     val exprMin    = math.max(min.exprs, par.exprs.size - maxPrune.exprs)
     val matchMin   = math.max(min.matches, par.matches.size - maxPrune.matches)
@@ -230,7 +223,6 @@ object SpatialMatcher {
     for {
       subSends    <- minMaxSubsets(par.sends, sendMin, sendMax)
       subReceives <- minMaxSubsets(par.receives, receiveMin, receiveMax)
-      subEvals    <- minMaxSubsets(par.evals, evalMin, evalMax)
       subNews     <- minMaxSubsets(par.news, newMin, newMax)
       subExprs    <- minMaxSubsets(par.exprs, exprMin, exprMax)
       subMatches  <- minMaxSubsets(par.matches, matchMin, matchMax)
@@ -239,7 +231,6 @@ object SpatialMatcher {
     } yield
       (Par(subSends._1,
            subReceives._1,
-           subEvals._1,
            subNews._1,
            subExprs._1,
            subMatches._1,
@@ -247,7 +238,6 @@ object SpatialMatcher {
            subBundles._1),
        Par(subSends._2,
            subReceives._2,
-           subEvals._2,
            subNews._2,
            subExprs._2,
            subMatches._2,
@@ -552,11 +542,6 @@ object SpatialMatcher {
                                               (p, s) => p.withReceives(s +: p.receives),
                                               varLevel,
                                               wildcard)
-          _ <- listMatchSingleNonDet[Eval](remainder.evals,
-                                           pattern.evals,
-                                           (p, s) => p.withEvals(s +: p.evals),
-                                           varLevel,
-                                           wildcard)
           _ <- listMatchSingleNonDet[New](remainder.news,
                                           pattern.news,
                                           (p, s) => p.withNews(s +: p.news),
@@ -617,11 +602,6 @@ object SpatialMatcher {
         } yield Unit
     }
 
-  implicit val evalSpatialMatcherInstance: SpatialMatcher[Eval, Eval] = fromFunction[Eval, Eval] {
-    (target, pattern) =>
-      spatialMatch(target.channel.get, pattern.channel.get)
-  }
-
   implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
@@ -665,6 +645,8 @@ object SpatialMatcher {
             _ <- spatialMatch(t1.get, p1.get)
             _ <- spatialMatch(t2.get, p2.get)
           } yield Unit
+        case (EEvalBody(chan1), EEvalBody(chan2)) =>
+          spatialMatch(chan1, chan2)
         case _ => StateT.liftF(None)
       }
   }

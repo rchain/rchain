@@ -3,7 +3,7 @@ package coop.rchain.roscala.prim
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.ob.{Ctxt, Meta, Ob}
 
-object Meta {
+object meta {
   object addObo {
     def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob = {
       val meta   = ctxt.argvec(0).asInstanceOf[Meta]

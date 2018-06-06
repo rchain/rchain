@@ -8,14 +8,12 @@ import coop.rchain.metrics.Metrics
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 
-import scala.tools.jline._
 import scala.tools.jline.console._, completer.StringsCompleter
-import scala.collection.JavaConverters._
 
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 package object effects {
   private def createDirectoryIfNotExists(path: Path): Path =
@@ -143,9 +141,12 @@ package object effects {
         } yield res.isDefined
     }
 
-  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](host: String, port: Int)(
-      src: PeerNode)(implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](host, port)(src)
+  def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
+      implicit executionContext: ExecutionContext) =
+    new TcpTransportLayer[F](conf.localhost,
+                             conf.port(),
+                             conf.certificatePath.toFile,
+                             conf.keyPath.toFile)(src)
 
   def udpTransportLayer(src: PeerNode)(implicit
                                        ev1: Log[Task],
@@ -154,18 +155,4 @@ package object effects {
     new UdpTransportLayer(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
-
-  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
-      implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
-    new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[Option[Packet]] = {
-        val errorMsg = s"Unable to handle packet $packet"
-        if (pf.isDefinedAt(packet)) pf(packet)
-        else
-          Log[F].error(errorMsg) *> errorHandler
-            .raiseError(unknownProtocol(errorMsg))
-            .as(none[Packet])
-      }
-    }
-
 }

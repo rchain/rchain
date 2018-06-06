@@ -68,8 +68,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value
     result.par should be(
-      inputs.par.prepend(EList(List[Par](EVar(BoundVar(1)), Eval(ChanVar(BoundVar(0))), GInt(7)),
-                               locallyFree = BitSet(0, 1))))
+      inputs.par.prepend(
+        EList(List[Par](EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))), GInt(7)),
+              locallyFree = BitSet(0, 1))))
     result.knownFree should be(inputs.knownFree)
   }
 
@@ -84,7 +85,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       inputs.par.prepend(
         ETuple(List[Par](
                  EVar(FreeVar(0)),
-                 Eval(ChanVar(FreeVar(1)))
+                 EEvalBody(ChanVar(FreeVar(1)))
                ),
                locallyFree = BitSet(),
                connectiveUsed = true)))
@@ -134,7 +135,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       inputs.par.prepend(
         EMap(
           List[KeyValuePair](KeyValuePair(GInt(7), GString("Seven")),
-                             KeyValuePair(EVar(BoundVar(1)), Eval(ChanVar(BoundVar(0))))),
+                             KeyValuePair(EVar(BoundVar(1)), EEvalBody(ChanVar(BoundVar(0))))),
           locallyFree = BitSet(0, 1)
         )))
     result.knownFree should be(inputs.knownFree)
@@ -188,7 +189,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value
-    result.par should be(inputs.par.prepend(Eval(ChanVar(BoundVar(0)))))
+    result.par should be(inputs.par.prepend(EEvalBody(ChanVar(BoundVar(0)))))
     result.knownFree should be(inputs.knownFree)
   }
   "PEval" should "Collapse a quote" in {
@@ -421,7 +422,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       inputs.par.prepend(Receive(
         List(
           ReceiveBind(List(ChanVar(FreeVar(0)), ChanVar(FreeVar(1))), Quote(Par()), freeCount = 2)),
-        Send(ChanVar(BoundVar(1)), List[Par](Eval(ChanVar(BoundVar(0)))), false, BitSet(0, 1)),
+        Send(ChanVar(BoundVar(1)), List[Par](EEvalBody(ChanVar(BoundVar(0)))), false, BitSet(0, 1)),
         false, // persistent
         bindCount,
         BitSet()
@@ -941,7 +942,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
     val result      = NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value
     val expectedResult: Channel =
-      Quote(Eval(ChanVar(BoundVar(0))).prepend(Eval(ChanVar(BoundVar(0)))))
+      Quote(EEvalBody(ChanVar(BoundVar(0))).prepend(EEvalBody(ChanVar(BoundVar(0)))))
     result.chan should be(expectedResult)
     result.knownFree should be(inputs.knownFree)
   }

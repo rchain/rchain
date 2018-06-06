@@ -1,11 +1,13 @@
 package coop.rchain.node
 
 import java.lang.management.{ManagementFactory, MemoryType}
+import java.nio.file.Path
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import cats._
 import cats.implicits._
+import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.catscontrib.{Capture, Futurable}
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.model.diagnostics._
@@ -158,14 +160,21 @@ package object diagnostics {
         }
     }
 
-  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _]): StoreMetrics[F] =
+  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _], data_dir: Path): StoreMetrics[F] =
     new StoreMetrics[F] {
       def storeUsage: F[StoreUsage] =
         Capture[F].capture {
-          val sizes = store.getStoreSize
-          StoreUsage()
-            .withSizeOnDisk(sizes.sizeOnDisk)
-            .withDataEntries(sizes.dataEntries)
+          val storeCounters = store.getStoreCounters
+          val totalSize     = data_dir.folderSize
+          StoreUsage(
+            totalSizeOnDisk = totalSize,
+            rspaceSizeOnDisk = storeCounters.sizeOnDisk,
+            rspaceDataEntries = storeCounters.dataEntries,
+            rspaceConsumesCount = storeCounters.consumesCount,
+            rspaceConsumeAvgMilliseconds = storeCounters.consumeAvgMilliseconds,
+            rspaceProducesCount = storeCounters.producesCount,
+            rspaceProduceAvgMilliseconds = storeCounters.produceAvgMilliseconds
+          )
         }
     }
 

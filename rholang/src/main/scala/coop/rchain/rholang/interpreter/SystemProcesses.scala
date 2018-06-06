@@ -82,20 +82,9 @@ object SystemProcesses {
         produce(store, ack, Seq(Channel(Quote(Expr(GBool(verified))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
-  }
-
-  def curve25519Encrypt(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
-                        dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])
-    : Seq[Seq[Channel]] => Task[Unit] = {
-    case Seq(
-        Seq(IsByteArray(pub), IsByteArray(sec), IsByteArray(nonce), IsByteArray(message), ack)) =>
-      Task.fromTry(Try(Curve25519.encrypt(pub, sec, nonce, message))).flatMap { encrypted =>
-        produce(store,
-                ack,
-                Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(encrypted)))))),
-                false)
-          .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
-      }
+    case _ =>
+      illegalArgumentException(
+        "ed25519Verify expects data, signature and public key (all as byte arrays) and ack channel as arguments")
   }
 
   def sha256Hash(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
@@ -106,6 +95,8 @@ object SystemProcesses {
         produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
+    case _ =>
+      illegalArgumentException("sha256Hash expects byte array and return channel as arguments")
   }
 
   def keccak256Hash(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
@@ -116,6 +107,8 @@ object SystemProcesses {
         produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
+    case _ =>
+      illegalArgumentException("keccak256Hash expects byte array and return channel as arguments")
   }
 
   def blake2b256Hash(store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
@@ -126,10 +119,15 @@ object SystemProcesses {
         produce(store, ack, Seq(Channel(Quote(Expr(GByteArray(ByteString.copyFrom(hash)))))), false)
           .fold(Task.unit) { case (cont, channels) => _dispatch(dispatcher)(cont, channels) }
       }
+    case _ =>
+      illegalArgumentException("blake2b256Hash expects byte array and return channel as arguments")
   }
 
   private def _dispatch(dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation])(
       cont: TaggedContinuation,
       dataList: Seq[Seq[Channel]]): Task[Unit] =
     dispatcher.dispatch(cont, dataList)
+
+  private def illegalArgumentException(msg: String): Task[Unit] =
+    Task.raiseError(new IllegalArgumentException(msg))
 }

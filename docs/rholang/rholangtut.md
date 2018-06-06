@@ -1,6 +1,6 @@
 # A Rholang tutorial
 
-Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax that will be used in the RNode-0.2 release.
+Rholang is a new programming language designed for use in distributed systems.  Like all newborn things, it is growing and changing rapidly; this document describes the syntax in the latest version of RNode.
 
 Rholang is "process-oriented": all computation is done by means of message passing.  Messages are passed on "channels", which are rather like message queues but behave like sets rather than queues.  Rholang is completely asynchronous, in the sense that while you can read a message from a channel and then do something with it, you can't send a message and then do something once it has been received---at least, not without explicitly waiting for an acknowledgment message from the receiver. Note that throughout this document the words "name" and "channel" are used interchangeably. This is because in the rho-calculus (on which Rholang is based) the term name is used, however because you can send and receive information on names, semantically they are like channels.
 
@@ -13,37 +13,42 @@ There is not an IDE for Rholang. Get started with Rholang by selecting one of th
 
 ## Contracts and sending data
 
-    1 contract @"HelloWorld"(return) = {
-    2   return!("Hello, World!")
-    3 } |
-    4 new myChannel in {
-    5   @"HelloWorld"!(*myChannel)
-    6 }
+    1 new HelloWorld in {
+    2   contract HelloWorld(return) = {
+    3     return!("Hello, World!")
+    4   } |
+    5   new myChannel in {
+    6     HelloWorld!(*myChannel)
+    7   }
+    8 }
 
-1) A Rholang program is a single process with one or more concurrent compositions.  This process starts by creating a contract on the name `@"HelloWorld"`.  The `contract` production creates a process that spawns a copy of its body whenever it receives a message. Note that in Rholang all processes can be "quoted" with `@` in order to create a channel. Strings are just special processes, so we can quote any string to produce a channel.
+1-2) To create a new, private channel, we use the `new ... in` construction. No other process can send or receive messages over this channel unless we explicitly send this channel to the other process.  This process starts by creating a new name `HelloWorld` and then running a contract on it.  The `contract` production creates a process that spawns a copy of its body whenever it receives a message. 
 
-2) On the return channel we send a process, which is the string `"Hello, World!"`.
+3) On the return channel we send a process, which is the string `"Hello, World!"`.
 
-4) To create a new, private channel, we use the `new ... in` construction. No other process can send or receive messages over this channel unless we explicitly send this channel to the other process.
-
-5) We send the channel `myChannel` to the contract at `@"HelloWorld"`. The `*` operator "unquotes" a channel to get its underlying process. In Rholang you can only send processes over channels; you cannot send channels over channels directly. Therefore, we use `*` to turn the private channel into a process prior to sending.
+6) We send the channel `myChannel` to the contract at `HelloWorld`. The `*` operator "unquotes" a channel to get its underlying process. In Rholang you can only send processes over channels; you cannot send channels over channels directly. Therefore, we use `*` to turn the private channel into a process prior to sending.
 
 ## Receiving data
 
-    1 contract @"HelloAgain"(_) = {
-    2   new chan in {
-    3     chan!("Hello again, world!") |
-    4     for (@text <- chan) { Nil }
-    5   }
-    6 } | @"HelloAgain"!(Nil)
+    1 new HelloAgain in {
+    2   contract HelloAgain(_) = {
+    3     new chan in {
+    4       chan!("Hello again, world!") |
+    5       for (@text <- chan) { Nil }
+    6     }
+    7   } | HelloAgain!(Nil)
+    8 }
 
-1) Contracts take at least one parameter, but we can throw it away by binding it to the wildcard `_`.
 
-2) We create a new channel `chan`.
+2) Contracts take at least one parameter, but we can throw it away by binding it to the wildcard `_`.
 
-3) We send the string process `"Hello again, world!"` over the new channel.
+3) We create a new channel `chan`.
 
-4) We listen on the new channel for a single message.  The `for` operation blocks until there's a message available on the channel `chan`. In Rholang you can only receive names on channels (note that this differs from sending!). The binding on the left side of the `<-` in the `for` is actually a name pattern. In this example the pattern is `@text`, which means the name being received is a quoted process and we want to bind that process to the free variable `text`. The `for` operation is just like a contract except that it only reads one message and then becomes its body instead of forking a copy of its body for each message. In this case we choose to do nothing in the `for` body by simply making it the stopped process `Nil`, however in principle we would want to proceed with some further processing of the `text` contained in `chan`. 
+4) We send the string process `"Hello again, world!"` over the new channel.
+
+5) We listen on the new channel for a single message.  The `for` operation blocks until there's a message available on the channel `chan`. In Rholang you can only receive names on channels (note that this differs from sending!). The binding on the left side of the `<-` in the `for` is actually a name pattern. In this example the pattern is `@text`, which means the name being received is a quoted process and we want to bind that process to the free variable `text`. The `for` operation is just like a contract except that it only reads one message and then becomes its body instead of forking a copy of its body for each message. In this case we choose to do nothing in the `for` body by simply making it the stopped process `Nil`, however in principle we would want to proceed with some further processing of the `text` contained in `chan`. 
+
+7) We trigger the contract.
 
 ## Mutable state
 
@@ -110,44 +115,50 @@ Note the deep layers of callback. Rholang was designed to make concurrent comput
 
 ## Iteration and matching
 
-In the code below, we show an example of iterating through a linked list implemented as nested [head, tail] pairs.
+In the code below, we show an example of iterating through a list.
 
-     1 new chan, loop, iCh in {
-     2   contract loop(@list, @acc, return) = {
-     3     match list { 
-     4       [hd, tl] => {
-     5         for(@i <- iCh) {
-     6           iCh!(i + 1) |
-     7           match [hd == i, acc] {
-     8             [true, true] => { loop!(tl, true, *return) }
-     9             _ => { loop!(tl, false, *return) }
-    10           }
-    11         }
-    12       }
-    13       _ => { return!(acc) }
-    14     }
-    15   } |
-    16   iCh!(1) |
-    17   loop!([1, [2, [3, [4, []]]]], true, *chan)
-    18 }
+     1	new iterate in {
+     2	  contract iterate(@list, process, done) = {
+     3	    match list {
+     4	      [hd, ...tl] => {
+     5	        new ack in {
+     6	          process!(hd, *ack) |
+     7	          for (_ <- ack) { iterate!(tl, *process, *done) }
+     8	        }
+     9	      }
+    10	      _ => done!(Nil)
+    11	    }
+    12	  } |
+    13	  new process, done in {
+    14	    iterate!([4,5,6], *process, *done) |
+    15	    contract process(@item, ack) = {
+    16	      /* handle processing of item */
+    17	      ack!(Nil)
+    18	    } |
+    19	    for (_ <- done) {
+    20	      /* done! */
+    21	      Nil
+    22	    }
+    23	  }
+    24	}
 
 3) The `match` construction allows destructuring a variable through pattern matching.
 
-4) If `list` matches the pattern of a head/tail pair then we execute the main body of the loop.
+4) List patterns support matching the remainder of a list.  If `list` matches the pattern of a head/tail pair then we execute the main body of the loop.
 
-5) We read the current index from the channel.
+5) We create a channel for the item handler to notify us that it's done with the current item.
 
-6) We increment the index and store it back.
+6) We invoke the processor on the item and the acknowledgement channel.
 
-7) The `match` keyword also allows matching more complex expressions against patterns.
+7) When we receive acknowledgement, we reinvoke the iterator on the tail.
 
-8) Here we confirm that the head of the list is equal to the current index and that the accumulator it still equal to `true` and recursively invoke the loop again.
+10) If the list is empty, we signal that the processing is complete.
 
-13) If `list` did not match the head/tail pair pattern then the loop is over and we return the accumulated value.
+14) We invoke the iterator.
 
-16) Initialize the index channel.
+15-18) This `contract` gets invoked for each item in the list.  On line 17, we tell the iterator that we're done with this item.
 
-17) Call the loop with our initial list.
+19) This `for` contains the code that should be executed when the interation is complete.
 
 ## Maps
 
@@ -188,19 +199,17 @@ In the code below, we show an example of iterating through a linked list impleme
     35         
     36         get!(*ret) | for(@r <- ret) {
     37           //r is equal to 0
-    38           for(_ <- ret){
-    39             set!(1, *ret) | for(_ <- ret) {
-    40               get!(*ret) | for(@r <- ret) {
-    41                 //r is equal to 1
-    42                 Nil
-    43               }
-    44             }
-    45           }
-    46         }
-    47       }
-    48     }
-    49   }
-    50 }
+    38           set!(1, *ret) | for(_ <- ret) {
+    39             get!(*ret) | for(@r <- ret) {
+    40               //r is equal to 1
+    41               Nil
+    42             }
+    43           }
+    44         }
+    45       }
+    46     }
+    47   }
+    48 }
 
 2) One design pattern, used in the MakeCell contract above, is to receive from the caller a channel for each different piece of functionality that a process provides.  An object-oriented programmer might say that MakeCell requires the caller to provide a channel for each method. MakeCoatCheck uses a more object-oriented approach, as we'll see.
 
@@ -215,18 +224,18 @@ In the code below, we show an example of iterating through a linked list impleme
 ## Dining philosophers and deadlock
 
      1 new philosopher1, philosopher2, north, south, knife, spoon in {
-     2     north!(*knife) |
-     3     south(!*spoon) |
-     4     for (@knf <- north) { for (@spn <- south) {
-     5         philosopher1!("Complete!") |
-     6         north!(knf) |
-     7         south!(spn)
-     8     } } |
-     9     for (@spn <- south) { for (@knf <- north) {
-    10         philosopher2!("Complete!") |
-    11         north(knf) |
-    12         south(spn)
-    13     } }
+     2   north!(*knife) |
+     3   south!(*spoon) |
+     4   for (@knf <- north) { for (@spn <- south) {
+     5     philosopher1!("Complete!") |
+     6     north!(knf) |
+     7     south!(spn)
+     8   } } |
+     9   for (@spn <- south) { for (@knf <- north) {
+    10     philosopher2!("Complete!") |
+    11     north!(knf) |
+    12     south!(spn)
+    13   } }
     14 }
 
 The dining philosophers problem has two philosophers that share only one set of silverware.  Philosopher1 sits on the east side of the table while Philosopher2 sits on the west. Each needs both a knife and a spoon in order to eat.  Each one refuses to relinquish a utensil until he has used both to take a bite.  If both philosophers reach first for the utensil at their right, both will starve: Philosopher1 gets the knife, Philosopher2 gets the spoon, and neither ever lets go.
@@ -234,21 +243,128 @@ The dining philosophers problem has two philosophers that share only one set of 
 Here's how to solve the problem:
 
      1 new philosopher1, philosopher2, north, south, knife, spoon in {
-     2     north!(*knife) |
-     3     south!(*spoon) |
-     4     for (@knf <- north; @spn <- south) {
-     5         philosopher1!("Complete!") |
-     6         north!(knf) |
-     7         south!(spn)
-     8     } |
-     9     for (@spn <- south; @knf <- north) {
-    10         philosopher2!("Complete!") |
-    11         north!(knf) |
-    12         south!(spn)
-    13     }
+     2   north!(*knife) |
+     3   south!(*spoon) |
+     4   for (@knf <- north; @spn <- south) {
+     5     philosopher1!("Complete!") |
+     6     north!(knf) |
+     7     south!(spn)
+     8   } |
+     9   for (@spn <- south; @knf <- north) {
+    10     philosopher2!("Complete!") |
+    11     north!(knf) |
+    12     south!(spn)
+    13   }
     14 }
 
 4, 9) The join operator, denoted with a semicolon `;`, declares that the continuation should only proceed if there is a message available on each of the channels simultaneously, preventing the deadlock above.
+
+## Crypto channels
+
+### Hashing
+
+There are three hashing functions available:
+
+- keccak256
+- sha256
+- blake2b256
+
+Hashing functions are exposed as channels which expect two arguments:
+
+- byte array to hash
+- return channel for sending back the hash represented as byte array
+
+
+#### Example usage:
+
+```rholang
+new x,y in {
+    x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
+        for (@r <- x) {
+            @"keccak256Hash"!(r.toByteArray(), *y) // hash the program from (1)
+        } |
+        for (@h <- y) {
+            // The h here is the hash of the rholang term we sent to the hash channel.
+            // We can do anything we want with it, but we choose to just print it.
+            // Rholang prints byte arrays in hexadecimal.
+            @"stdout"!(h)  // print out the keccak256 hash
+        }
+}
+```
+
+
+### Verify
+
+1. Let's hash a rholang program and print out it in base16. In rholang:
+
+  ```rholang
+  new x,y in { 
+     x!(@"name"!("Joe") | @"age"!(40)) |  // (1)
+     for (@r <- x) { @"keccak256Hash"!(r.toByteArray(), *y) } |  // hash the program from (1)
+     for (@h <- y) { @"stdout"!(h) }  // print out the keccak256 hash
+  }
+  ```
+
+  This will print the hash of our program `(1)` : 
+  `a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e`
+
+2. We need a pair of keys; let's generate some with `Ed25519`, available in the project. In the scala console, we enter the following:
+
+  ```scala
+  import coop.rchain.crypto.signatures._
+  import coop.rchain.crypto.codec._
+
+  val keyPair = Ed25519.newKeyPair
+  val secKey = Base16.encode(keyPair._1)
+  // secKey: String = f6664a95992958bbfeb7e6f50bbca2aa7bfd015aec79820caf362a3c874e9247
+  val pubKey = Base16.encode(keyPair._2)
+  // pubKey: String = 288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219
+  ```
+
+3.  Now we need to sign the hash we obtained in first step. First we convert the hexadecimal strings we printed earlier back into byte arrays, then sign the result:
+
+  ```
+  val signature = Ed25519.sign(Base16.decode("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e"), Base16.decode(secKey))
+  val base16Repr = Base16.encode(signature)
+  // d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b
+  ```
+
+4.  Now we can pass the signature and public key to our rholang program to verify it using the available crypto functions. 
+
+  The `ed25519Verify` channel expects four arguments as follows:
+
+  - data to verify. In our case, this will be the keccak256 hash of our rholang program. The hash is represented in base16, so we need to call `hexToBytes` on it to turn the string into byte array
+  - signature. Again, we have hexadecimal string, so we need to turn it into a byte array with `hexToBytes`.
+  - public key. This is the public key corresponding to the private one used to issue the signature. 
+  - channel on which the result of verification will be returned.
+
+  So, in rholang we run:
+  ```
+  new x in { 
+    @"ed25519Verify"!("a6da46a1dc7ed715d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
+    for (@v <- x) { @"stdout"!(v) } 
+  } 
+
+  ```
+  and we should see: 
+  ```
+  @{true}
+  ```
+
+  which means that our signed hash is verified.
+
+  If we, for example, pass in a corrupted hash, changing the initial 'a' to a 'b':
+  ```
+  new x in { 
+     @"ed25519Verify"!("b6da46a1dc7ed615d4cd6472a736249a4d11142d160dbef9f20ae493de908c4e".hexToBytes(), "d0a909078ce8b8706a641b07a0d4fe2108064813ce42009f108f89c2a3f4864aa1a510d6dfccad3b62cd610db0bfe82bcecb08d813997fa7df14972f56017e0b".hexToBytes(),"288755c48c3951f89c5f0ffe885088dc0970fd935bc12adfdd81f81bb63d6219".hexToBytes(), *x) | 
+     for (@v <- x) { @"stdout"!(v) } 
+  } 
+  ```
+
+  we will get:
+  ```
+  @{false}
+  ```
 
 ## Secure design patterns
 
@@ -274,60 +390,66 @@ By receiving channels from the client for getting and setting, the MakeCell cont
 
 In the MakeCoatCheck contract, there's only one channel and messages are dispatched internally.  To get the same effect as a read-only facet, we can create a forwarder process that simply ignores any messages it doesn't want to forward.  The contract below only forwards the "get" method.
 
-    contract MakeGetForwarder(target, ret) = {
+    new MakeGetForwarder in {
+      contract MakeGetForwarder(target, ret) = {
         new port in {
-            ret!(*port) |
-            contract port(method, @arg, ack) = {
-                method == "get" match { true => target!("get", arg, *ack) }
-            }
+          ret!(*port) |
+          contract port(@method, @arg, ack) = {
+            match method == "get" { true => target!("get", arg, *ack) }
+          }
         }
+      }
     }
-
+    
 ### Revocation
 
 We can implement revocation by creating a forwarder with a kill switch.
 
-     1 contract MakeRevokableForwarder(target, ret) = {
-     2     new port, kill, forwardFlag in {
-     3         ret!(*port, *kill) |
-     4         forwardFlag!(true) |
-     5         contract port(msg) = {
-     6             for (@status <- forwardFlag) {
-     7                 forwardFlag!(status) |
-     8                 status match { true => target!(msg) }
-     9             }
-    10         } |
-    11         for (_ <- kill; _ <- forwardFlag) {
-    12             forwardFlag!(false)
-    13         }
-    14     }
-    15 }
+     1 new MakeRevokableForwarder in {
+     2   contract MakeRevokableForwarder(target, ret) = {
+     3     new port, kill, forwardFlag in {
+     4       ret!(*port, *kill) |
+     5       forwardFlag!(true) |
+     6       contract port(msg) = {
+     7         for (@status <- forwardFlag) {
+     8           forwardFlag!(status) |
+     9           match status { true => target!(*msg) }
+    10         }
+    11       } |
+    12       for (_ <- kill; _ <- forwardFlag) {
+    13         forwardFlag!(false)
+    14       }
+    15     }
+    16   }
+    17 }
 
-2) We create a port to listen for method calls and a channel `forwardFlag` to store whether to forward messages.
+3) We create a port to listen for method calls and a channel `forwardFlag` to store whether to forward messages.
 
-3) We return the channel on which clients send requests and the channel on which to send the kill signal.
+4) We return the channel on which clients send requests and the channel on which to send the kill signal.
 
-4) We set the initial state of `forwardFlag` to true.
+5) We set the initial state of `forwardFlag` to true.
 
-5-10) We read in an arbitrary message, get and replace the value of the flag.  If the flag is true, we forward the message to `target`.
+6-11) We read in an arbitrary message, get and replace the value of the flag.  If the flag is true, we forward the message to `target`.
 
-11-13) If a message is ever sent on the `kill` channel, we set `forwardFlag` to false.  The forwarder process then stops forwarding messages.
+12-14) If a message is ever sent on the `kill` channel, we set `forwardFlag` to false.  The forwarder process then stops forwarding messages.
 
 ### Composition
 
 By combining an attenuating forwarder with a revokable forwarder, we get both features:
 
     new ret in {
-        MakeGetForwarder(target, ret) |
-        for (@pair <- ret) {
-            pair match [getOnly, kill] => {
-                MakeRevokableForwarder!(getOnly, *ret) |
-                for (revokableGetOnly <- ret) {
-                    // give away revokableGetOnly instead of target
-                    // hang onto kill for later revocation
-                }
+      MakeGetForwarder(target, ret) |
+      for (@pair <- ret) {
+        match pair {
+          [getOnly, kill] => {
+            MakeRevokableForwarder!(getOnly, *ret) |
+            for (revokableGetOnly <- ret) {
+              // give away revokableGetOnly instead of target
+              // hang onto kill for later revocation
             }
+          }
         }
+      }
     }
 
 ### Logging forwarder
@@ -335,13 +457,13 @@ By combining an attenuating forwarder with a revokable forwarder, we get both fe
 A logging forwarder can record all messages sent on a channel by echoing them to a second channel.
 
     contract MakeLoggingForwarder(target, logger, ret) = {
-        new port in {
-            ret!(*port) |
-            contract port(msg) = {
-                target!(msg) |
-                logger!(msg)
-            }
+      new port in {
+        ret!(*port) |
+        contract port(@msg) = {
+          target!(msg) |
+          logger!(msg)
         }
+      }
     }
 
 ### Accountability
@@ -351,18 +473,18 @@ Suppose Alice has a channel and would like to log Bob's access to it.  Bob would
 ### Sealing and unsealing
 
     contract MakeSealerUnsealer(ret) =  {
-        new sealer, unsealer, ccRet in {
-            ret!(*sealer, *unsealer) |
-            MakeCoatCheck!(*ccRet) |
-            for (cc <- ccRet) {
-                contract sealer(@value, ret) = {
-                    cc!("new", value, *ret)
-                } |
-                contract unsealer(@ticket, ret) = {
-                    cc!("get", ticket, *ret)
-                }
-            }
+      new sealer, unsealer, ccRet in {
+        ret!(*sealer, *unsealer) |
+        MakeCoatCheck!(*ccRet) |
+        for (cc <- ccRet) {
+          contract sealer(@value, ret) = {
+            cc!("new", value, *ret)
+          } |
+          contract unsealer(@ticket, ret) = {
+            cc!("get", ticket, *ret)
+          }
         }
+      }
     }
 
 

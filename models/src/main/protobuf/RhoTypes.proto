@@ -11,7 +11,6 @@ option (scalapb.options) = {
 message Par {
     repeated Send sends = 1;
     repeated Receive receives = 2;
-    repeated Eval evals = 3;
     repeated New news = 4;
     repeated Expr exprs = 5;
     repeated Match matches = 6;
@@ -99,10 +98,6 @@ message Receive {
     bool connective_used = 7;
 }
 
-message Eval {
-    Channel channel = 1;
-}
-
 // Number of variables bound in the new statement.
 // For normalized form, p should not contain solely another new.
 // Also for normalized form, the first use should be level+0, next use level+1
@@ -157,6 +152,7 @@ message Expr {
         ESet e_set_body = 22;
         EMap e_map_body = 23;
         EMethod e_method_body = 24;
+        Channel e_eval_body = 26;
     }
 }
 

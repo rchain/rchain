@@ -42,7 +42,7 @@ case object NetworkAddress {
 
       addy match {
         case Some(NetworkAddress(_, key, host, port)) =>
-          Right(PeerNode(NodeIdentifier(key.getBytes), Endpoint(host, port, port)))
+          Right(PeerNode(NodeIdentifier(key), Endpoint(host, port, port)))
         case _ => Left(ParseError(s"bad address: $str"))
       }
     } catch {
@@ -181,14 +181,15 @@ object Network {
       remote: PeerNode,
       maybePacket: Option[Packet]): F[CommunicationResponse] = {
     val errorMsg = s"Expecting Packet from frame, got something else. Stopping the node."
-    val handleNone: F[CommunicationResponse] = for {
-      _ <- Log[F].error(errorMsg)
-      _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
-    } yield notHandled
+    def handleNone: F[CommunicationResponse] =
+      for {
+        _ <- Log[F].error(errorMsg)
+        _ <- errorHandler[F].raiseError[Unit](unknownCommError(errorMsg))
+      } yield notHandled
 
     maybePacket.fold(handleNone)(p =>
       for {
-        maybeResponsePacket <- PacketHandler[F].handlePacket(p)
+        maybeResponsePacket <- PacketHandler[F].handlePacket(remote, p)
         maybeResponsePacketMessage <- maybeResponsePacket.traverse(rp =>
                                        frameMessage[F](remote, kp(framePacket(remote, rp))))
       } yield maybeResponsePacketMessage.fold(notHandled)(m => handledWithMessage(m)))

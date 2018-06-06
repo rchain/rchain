@@ -1,39 +1,37 @@
 package coop.rchain.rspace.test
 
-import java.nio.charset.StandardCharsets
-
-import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.examples._
-import coop.rchain.rspace.history.{Blake2b256Hash, Trie}
+import cats.implicits._
+import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.util.dropIndex
-import coop.rchain.rspace.{IStore, ITestableStore, Serialize, StoreSize}
-import javax.xml.bind.DatatypeConverter.printHexBinary
+import coop.rchain.rspace.util.{dropIndex, removeFirst}
+import coop.rchain.rspace._
+import coop.rchain.shared.AttemptOps._
+import scodec.Codec
+import scodec.bits.BitVector
 
 import scala.collection.immutable.Seq
-import scala.collection.mutable
 
-class InMemoryStore[C, P, A, K <: Serializable] private (
-    _keys: mutable.HashMap[String, Seq[C]],
-    _waitingContinuations: mutable.HashMap[String, Seq[WaitingContinuation[P, K]]],
-    _data: mutable.HashMap[String, Seq[Datum[A]]],
-    _joinMap: mutable.MultiMap[C, String],
-)(implicit sc: Serialize[C])
-    extends IStore[C, P, A, K]
-    with ITestableStore[C, P] {
+class InMemoryStore[C, P, A, K](
+    val trieStore: ITrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]]
+)(implicit sc: Serialize[C], sk: Serialize[K])
+    extends IStore[C, P, A, K] {
 
-  private[rspace] type H = String
+  private implicit val codecC: Codec[C] = sc.toCodec
+
+  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
+
+  private[this] var _dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]] = Map.empty
+  private[this] var _dbJoins: Map[C, Seq[Seq[C]]]                   = Map.empty
 
   private[rspace] type T = Unit
 
-  private[rspace] def hashChannels(cs: Seq[C])(implicit sc: Serialize[C]): H =
-    printHexBinary(InMemoryStore.hashBytes(cs.flatMap(sc.encode).toArray))
+  private[this] type Join = Seq[Seq[C]]
 
-  private[rspace] def putCs(txn: T, channels: Seq[C]): Unit =
-    _keys.update(hashChannels(channels), channels)
-
-  private[rspace] def getChannels(txn: T, s: H) =
-    _keys.getOrElse(s, Seq.empty[C])
+  private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
+    Codec[Seq[C]]
+      .encode(channels)
+      .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
+      .get
 
   private[rspace] def createTxnRead(): Unit = ()
 
@@ -42,153 +40,154 @@ class InMemoryStore[C, P, A, K <: Serializable] private (
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     f(txn)
 
-  private[rspace] def collectGarbage(txn: T,
-                                     channelsHash: H,
-                                     dataCollected: Boolean = false,
-                                     waitingContinuationsCollected: Boolean = false,
-                                     joinsCollected: Boolean = false): Unit =
-    collectGarbage(channelsHash)
-
-  private[this] def collectGarbage(key: H): Unit = {
-    val as = _data.get(key).exists(_.nonEmpty)
-    if (!as) {
-      //we still may have empty list, remove it as well
-      _data.remove(key)
-    }
-
-    val psks = _waitingContinuations.get(key).exists(_.nonEmpty)
-    if (!psks) {
-      //we still may have empty list, remove it as well
-      _waitingContinuations.remove(key)
-    }
-
-    val cs    = _keys.getOrElse(key, Seq.empty[C])
-    val joins = cs.size == 1 && _joinMap.contains(cs.head)
-
-    if (!as && !psks && !joins) {
-      _keys.remove(key)
-    }
-  }
-
-  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
-    val datums = _data.getOrElseUpdate(key, Seq.empty[Datum[A]])
-    _data.update(key, datum +: datums)
-  }
-
-  private[rspace] def putWaitingContinuation(txn: T,
-                                             channels: Seq[C],
-                                             continuation: WaitingContinuation[P, K]): Unit = {
-    val key = hashChannels(channels)
-    putCs(txn, channels)
-    val waitingContinuations =
-      _waitingContinuations.getOrElseUpdate(key, Seq.empty[WaitingContinuation[P, K]])
-    _waitingContinuations.update(key, continuation +: waitingContinuations)
-  }
+  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
+    _dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty)
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
-    _data.getOrElse(hashChannels(channels), Seq.empty[Datum[A]])
+    _dbGNATs.get(hashChannels(channels)).map(_.data).getOrElse(Seq.empty)
 
-  private[rspace] def getWaitingContinuation(txn: T, curr: Seq[C]): Seq[WaitingContinuation[P, K]] =
-    _waitingContinuations
-      .getOrElse(hashChannels(curr), Seq.empty[WaitingContinuation[P, K]])
-      .map { (wk: WaitingContinuation[P, K]) =>
+  private[this] def getMutableWaitingContinuation(
+      txn: T,
+      channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
+    _dbGNATs
+      .get(hashChannels(channels))
+      .map(_.wks)
+      .getOrElse(Seq.empty)
+
+  private[rspace] def getWaitingContinuation(txn: T,
+                                             channels: Seq[C]): Seq[WaitingContinuation[P, K]] =
+    getMutableWaitingContinuation(txn, channels)
+      .map { wk =>
         wk.copy(continuation = InMemoryStore.roundTrip(wk.continuation))
       }
 
-  private[rspace] def removeDatum(txn: T, channel: C, index: Int): Unit =
-    removeDatum(txn, Seq(channel), index)
+  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
+    getMutableWaitingContinuation(txn, channels).map(_.patterns)
 
-  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    for (as <- _data.get(key)) {
-      _data.update(key, dropIndex(as, index))
-    }
-    collectGarbage(key)
+  private[rspace] def getJoin(txn: T, channel: C): Join =
+    _dbJoins.getOrElse(channel, Seq.empty)
+
+  private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
+      f: (Option[GNAT[C, P, A, K]]) => Option[GNAT[C, P, A, K]]): Unit = {
+    val gnatOpt   = _dbGNATs.get(key)
+    val resultOpt = f(gnatOpt)
+    handleGNATChange(key)(resultOpt)
   }
 
-  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit = {
-    val key = hashChannels(channels)
-    for (psks <- _waitingContinuations.get(key)) {
-      _waitingContinuations.update(key, dropIndex(psks, index))
-    }
-    collectGarbage(key)
+  private[this] def withJoin(txn: T, jKey: C)(f: (Option[Join]) => Option[Join]): Unit = {
+    val joinOpt   = _dbJoins.get(jKey)
+    val resultOpt = f(joinOpt)
+    handleJoinChange(jKey)(resultOpt)
   }
+
+  private[this] def handleGNATChange(
+      key: Blake2b256Hash): PartialFunction[Option[GNAT[C, P, A, K]], Unit] = {
+    case Some(gnat) if !isOrphaned(gnat) => _dbGNATs += key -> gnat
+    case _                               => _dbGNATs -= key
+  }
+
+  private[this] def handleJoinChange(key: C): PartialFunction[Option[Join], Unit] = {
+    case Some(join) => _dbJoins += key -> join
+    case None       => _dbJoins -= key
+  }
+
+  private[rspace] def putDatum(txn: T, channels: Seq[C], datum: Datum[A]): Unit =
+    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+      gnatOpt
+        .map(gnat => gnat.copy(data = datum +: gnat.data))
+        .orElse(GNAT(channels = channels, data = Seq(datum), wks = Seq.empty).some)
+    }
+
+  private[rspace] def putWaitingContinuation(txn: T,
+                                             channels: Seq[C],
+                                             continuation: WaitingContinuation[P, K]): Unit =
+    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+      gnatOpt
+        .map(gnat => gnat.copy(wks = continuation +: gnat.wks))
+        .orElse(GNAT(channels = channels, data = Seq.empty, wks = Seq(continuation)).some)
+    }
+
+  private[rspace] def addJoin(txn: T, channel: C, channels: Seq[C]): Unit =
+    withJoin(txn, channel) { (joinOpt) =>
+      joinOpt
+        .filter(!_.exists(_.equals(channels)))
+        .map(channels +: _)
+        .orElse(Seq(channels).some)
+    }
+
+  private[rspace] def removeDatum(txn: T, channels: Seq[C], index: Int): Unit =
+    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+      gnatOpt.map(gnat => gnat.copy(data = dropIndex(gnat.data, index)))
+    }
+
+  private[rspace] def removeWaitingContinuation(txn: T, channels: Seq[C], index: Int): Unit =
+    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+      gnatOpt.map(gnat => gnat.copy(wks = dropIndex(gnat.wks, index)))
+    }
 
   private[rspace] def removeAll(txn: Unit, channels: Seq[C]): Unit = {
-    val key = hashChannels(channels)
-    _data.put(key, Seq.empty)
-    _waitingContinuations.put(key, Seq.empty)
+    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+      gnatOpt.map(_.copy(wks = Seq.empty, channels = Seq.empty))
+    }
     for (c <- channels) removeJoin(txn, c, channels)
   }
 
-  private[rspace] def addJoin(txn: T, c: C, cs: Seq[C]): Unit =
-    _joinMap.addBinding(c, hashChannels(cs))
-
-  private[rspace] def getJoin(txn: T, c: C): Seq[Seq[C]] =
-    _joinMap.getOrElse(c, Set.empty[String]).toList.map(getChannels(txn, _))
-
-  private[rspace] def removeJoin(txn: T, c: C, cs: Seq[C]): Unit = {
-    val joinKey = hashChannels(Seq(c))
-    val csKey   = hashChannels(cs)
-    if (_waitingContinuations.get(csKey).forall(_.isEmpty)) {
-      _joinMap.removeBinding(c, csKey)
+  private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit =
+    withGNAT(txn, hashChannels(channels)) { (gnatOpt) =>
+      if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
+        withJoin(txn, channel) { joinOpt =>
+          joinOpt
+            .map(removeFirst(_)(_ == channels))
+            .filter(_.nonEmpty)
+        }
+      }
+      gnatOpt
     }
-    collectGarbage(joinKey)
-  }
 
-  private[rspace] def removeAllJoins(txn: T, c: C): Unit = {
-    _joinMap.remove(c)
-    collectGarbage(hashChannels(Seq(c)))
-  }
+  private[rspace] override def removeAllJoins(txn: T, channel: C): Unit =
+    withJoin(txn, channel)(_ => none)
 
   def close(): Unit = ()
 
-  def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
-    _waitingContinuations.getOrElse(hashChannels(channels), Nil).map(_.patterns)
-
-  def clear(): Unit = {
-    _keys.clear()
-    _waitingContinuations.clear()
-    _data.clear()
-    _joinMap.clear()
+  private[rspace] def clear(txn: T): Unit = {
+    _dbGNATs = Map.empty
+    _dbJoins = Map.empty
+    eventsCounter.reset()
   }
 
-  def getStoreSize: StoreSize =
-    StoreSize(0, (_keys.size + _waitingContinuations.size + _data.size + _joinMap.size).toLong)
+  def getStoreCounters: StoreCounters = withTxn(createTxnRead()) { txn =>
+    val gnatsSize = _dbGNATs.foldLeft(0) {
+      case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
+    }
+    eventsCounter.createCounters(0, (gnatsSize + _dbJoins.size).toLong)
+  }
 
-  def isEmpty: Boolean =
-    _waitingContinuations.isEmpty && _data.isEmpty && _keys.isEmpty && _joinMap.isEmpty
+  def isEmpty: Boolean = withTxn(createTxnRead())(_ => _dbGNATs.isEmpty && _dbJoins.isEmpty)
 
-  def toMap: Map[Seq[C], Row[P, A, K]] =
-    _keys.map {
-      case (hash, cs) =>
-        val data = _data.getOrElse(hash, Seq.empty[Datum[A]])
-        val wks  = _waitingContinuations.getOrElse(hash, Seq.empty[WaitingContinuation[P, K]])
-        (cs, Row(data, wks))
-    }.toMap
+  def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
+    _dbGNATs.map {
+      case (_, GNAT(cs, data, wks)) => (cs, Row(data, wks))
+    }
+  }
+
+  private[this] def isOrphaned(gnat: GNAT[C, P, A, K]): Boolean =
+    gnat.data.isEmpty && gnat.wks.isEmpty
+
+  def getCheckpoint(): Blake2b256Hash = throw new Exception("unimplemented")
+
+  private[rspace] def bulkInsert(txn: Unit, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit =
+    ???
 }
 
 object InMemoryStore {
 
-  /* UGLY HACK FOR TESTING */
-  def roundTrip[A <: Serializable](a: A): A = {
-    val ser = makeSerializeFromSerializable[A]
-    ser.decode(ser.encode(a)).fold(throw _, identity)
-  }
+  def roundTrip[K: Serialize](k: K): K =
+    Serialize[K].decode(Serialize[K].encode(k)) match {
+      case Left(ex)     => throw ex
+      case Right(value) => value
+    }
 
-  def hashBytes(bs: Array[Byte]): Array[Byte] =
-    Blake2b256.hash(bs)
-
-  def hashString(s: String): Array[Byte] =
-    hashBytes(s.getBytes(StandardCharsets.UTF_8))
-
-  def create[C, P, A, K <: Serializable](implicit sc: Serialize[C]): InMemoryStore[C, P, A, K] =
+  def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
-      _keys = mutable.HashMap.empty[String, Seq[C]],
-      _waitingContinuations = mutable.HashMap.empty[String, Seq[WaitingContinuation[P, K]]],
-      _data = mutable.HashMap.empty[String, Seq[Datum[A]]],
-      _joinMap = new mutable.HashMap[C, mutable.Set[String]] with mutable.MultiMap[C, String]
-    )
+      trieStore = new DummyTrieStore[Unit, Blake2b256Hash, GNAT[C, P, A, K]])
 }
