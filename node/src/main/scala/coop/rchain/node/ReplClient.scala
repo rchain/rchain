@@ -39,7 +39,7 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
       val sources = existing.map(f => Source.fromFile(f))
 
       try {
-        val content = sources.flatMap(_.getLines()).mkString("\n")
+        val content = sources.map(_.getLines().mkString("\n")).mkString("|\n")
 
         blockingStub.eval(EvalRequest(content)).output
       } finally {
