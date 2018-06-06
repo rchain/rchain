@@ -289,3 +289,5 @@ lazy val rspaceBench = (project in file("rspace-bench"))
 lazy val rchain = (project in file("."))
   .settings(commonSettings: _*)
   .aggregate(casper, crypto, comm, models, regex, rspace, node, rholang, rholangCLI, roscala)
+
+// THIS IS A TEST
