@@ -84,3 +84,5 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
 object Meta {
   def empty = Meta(map = mutable.Map(), 0, extensible = true)
 }
+
+object NilMeta extends Ob
