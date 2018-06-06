@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -39,6 +40,9 @@ object Blake2b256Hash {
     */
   def create(bytes: Array[Byte]): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Blake2b256.hash(bytes)))
+
+  def fromHex(string: String): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(Base16.decode(string)))
 
   implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]

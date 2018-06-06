@@ -23,6 +23,32 @@
 #include "rosette.h"
 #include "Ob.h"
 
+// The RblAtom derived objects actually store the value of the object within
+// the pointer. This allows them to be passed around as a pointer to an object,
+// but still only consume the memory of one pointer. These are in essence pseudo
+// pointers. They look like pointers to an object, but when accessed, some slight
+// of hand comes into play to get access to the value of the object without actually
+// dereferencing it as a pointer.
+//
+// During startup, Rosette instantiates one global instance of each type of RblAtom
+// derived classes. See MODULE_INIT() in RblAtom.cc. When a pOb to 
+// one of these classes is required, the BASE() function calls decodeAtom() which then
+// extracts the value from the supplied pOb pseudo pointer, assigns the value into the
+// cooresponding global instance "atom" member variable and returns the pointer to the global
+// instance. Rosette code must be careful to only use this pointer temporarily, and 
+// especially not call BASE() on any other pOb of the same type. Typical use is to call
+// a member function to do such things as print out the value.
+
+
+// To summarize, the slight of hand works like this:
+//  1. At startup, allocate a single global instance of each of the classes derived from RblAtom.
+//  2. When a pOb of one of the classes derived from RblAtom is accessed using
+//     BASE(), the pointer is passed into decodeAtom() which then determines the
+//     type of the object, and assigns the pointer into the "atom" member variable of the
+//     corresponding global instance for its type.
+//  3. The pointer to the global instance is then returned.
+//  4. When an accessor method is called, the data is retrieved from the "atom" member variable.
+
 class RblAtom : public Ob {
    protected:
     Ob* atom;
