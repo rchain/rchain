@@ -17,17 +17,19 @@ trait Transaction[S] {
   def close(): Unit
   def readState[R](f: S => R): R
   def writeState[R](f: S => (S, R)): R
+
+  def name: String
 }
 
 case class State[C, P, A, K](dbGNATs: Map[Blake2b256Hash, GNAT[C, P, A, K]],
                              dbJoins: Map[C, Seq[Seq[C]]]) {
-  def isEmpty: Boolean = dbGNATs.isEmpty && dbJoins.isEmpty
-  def size: Long = {
-    val gnatsSize = dbGNATs.foldLeft(0) {
+  def isEmpty: Boolean =
+    dbGNATs.isEmpty && dbJoins.isEmpty
+
+  def size: Long =
+    dbGNATs.foldLeft(0L) {
       case (acc, (_, GNAT(chs, data, wks))) => acc + (chs.size + data.size + wks.size)
-    }
-    gnatsSize + dbJoins.size
-  }
+    } + dbJoins.size
 }
 
 object State {
@@ -38,11 +40,9 @@ class InMemoryStore[C, P, A, K](
     val trieStore: ITrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]]
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K] {
-  val TRANSACTION_TO = 100L
+  val TRANSACTION_TIMEOUT = 100L
 
-  private implicit val codecC: Codec[C]           = sc.toCodec
-  var transaction: Option[Transaction[StateType]] = None
-
+  private implicit val codecC: Codec[C] = sc.toCodec
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
   private[this] val stateRef: SyncVar[State[C, P, A, K]] = {
@@ -53,7 +53,6 @@ class InMemoryStore[C, P, A, K](
 
   private[rspace] type T = Transaction[StateType]
 
-  private[this] type Join      = Seq[Seq[C]]
   private[this] type StateType = State[C, P, A, K]
 
   private[rspace] def hashChannels(channels: Seq[C]): Blake2b256Hash =
@@ -62,50 +61,44 @@ class InMemoryStore[C, P, A, K](
       .map((bitVec: BitVector) => Blake2b256Hash.create(bitVec.toByteArray))
       .get
 
-  private[rspace] def createTxnRead(): T = {
-    val x = new Transaction[StateType] {
+  private[rspace] def createTxnRead(): T = new Transaction[StateType] {
 
-      val state = stateRef.take(TRANSACTION_TO)
+    val name: String = "read-" + Thread.currentThread().getId
+
+    private[this] val state = stateRef.get(TRANSACTION_TIMEOUT).get
+
+    override def commit(): Unit = {}
+    override def abort(): Unit  = {}
+    override def close(): Unit  = {}
+
+    override def readState[R](f: StateType => R): R = f(state)
+
+    override def writeState[R](f: StateType => (StateType, R)): R =
+      throw new RuntimeException("read txn cannot write")
+  }
+
+  private[rspace] def createTxnWrite(): T =
+    new Transaction[StateType] {
+      val name: String = "write-" + Thread.currentThread().getId
+
+      private[this] val initial = stateRef.take(TRANSACTION_TIMEOUT)
+      private[this] var current = initial
 
       override def commit(): Unit =
-        stateRef.put(state)
+        stateRef.put(current)
 
-      override def abort(): Unit =
-        stateRef.put(state)
+      override def abort(): Unit = stateRef.put(initial)
 
       override def close(): Unit = {}
 
-      override def readState[R](f: StateType => R): R =
-        f(state)
+      override def readState[R](f: StateType => R): R = f(current)
 
-      override def writeState[R](f: StateType => (StateType, R)): R =
-        throw new RuntimeException("read txn cannot write")
+      override def writeState[R](f: StateType => (StateType, R)): R = {
+        val (newState, result) = f(current)
+        current = newState
+        result
+      }
     }
-    this.transaction = Some(x)
-    x
-  }
-
-  private[rspace] def createTxnWrite(): T = new Transaction[StateType] {
-    val initial = stateRef.take(TRANSACTION_TO)
-    var current = initial
-
-    override def commit(): Unit =
-      stateRef.put(current)
-
-    override def abort(): Unit =
-      stateRef.put(initial)
-
-    override def close(): Unit = {}
-
-    override def readState[R](f: StateType => R): R =
-      f(current)
-
-    override def writeState[R](f: StateType => (StateType, R)): R = {
-      val (newState, result) = f(current)
-      current = newState
-      result
-    }
-  }
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R =
     try {
@@ -120,7 +113,7 @@ class InMemoryStore[C, P, A, K](
       txn.close()
     }
 
-  private[rspace] def getChannels(txn: T, key: Blake2b256Hash) =
+  private[rspace] def getChannels(txn: T, key: Blake2b256Hash): Seq[C] =
     txn.readState(state => state.dbGNATs.get(key).map(_.channels).getOrElse(Seq.empty))
 
   private[rspace] def getData(txn: T, channels: Seq[C]): Seq[Datum[A]] =
@@ -146,7 +139,7 @@ class InMemoryStore[C, P, A, K](
   def getPatterns(txn: T, channels: Seq[C]): Seq[Seq[P]] =
     getMutableWaitingContinuation(txn, channels).map(_.patterns)
 
-  private[rspace] def getJoin(txn: T, channel: C): Join =
+  private[rspace] def getJoin(txn: T, channel: C): Seq[Seq[C]] =
     txn.readState(_.dbJoins.getOrElse(channel, Seq.empty))
 
   private[this] def withGNAT(txn: T, key: Blake2b256Hash)(
@@ -158,7 +151,7 @@ class InMemoryStore[C, P, A, K](
       (ns, ())
     })
 
-  private[this] def withJoin(txn: T, key: C)(f: Option[Join] => Option[Join]): Unit =
+  private[this] def withJoin(txn: T, key: C)(f: Option[Seq[Seq[C]]] => Option[Seq[Seq[C]]]): Unit =
     txn.writeState(state => {
       val joinOpt   = state.dbJoins.get(key)
       val resultOpt = f(joinOpt)
@@ -174,7 +167,7 @@ class InMemoryStore[C, P, A, K](
   }
 
   private[this] def handleJoinChange(state: StateType,
-                                     key: C): PartialFunction[Option[Join], StateType] = {
+                                     key: C): PartialFunction[Option[Seq[Seq[C]]], StateType] = {
     case Some(join) => state.copy(dbJoins = state.dbJoins + (key -> join))
     case None       => state.copy(dbJoins = state.dbJoins - key)
   }
@@ -221,7 +214,8 @@ class InMemoryStore[C, P, A, K](
   }
 
   private[rspace] def removeJoin(txn: T, channel: C, channels: Seq[C]): Unit =
-    withGNAT(txn, hashChannels(channels)) { gnatOpt =>
+    txn.readState { state =>
+      val gnatOpt = state.dbGNATs.get(hashChannels(channels))
       if (gnatOpt.isEmpty || gnatOpt.get.wks.isEmpty) {
         withJoin(txn, channel) { joinOpt =>
           joinOpt
@@ -229,7 +223,6 @@ class InMemoryStore[C, P, A, K](
             .filter(_.nonEmpty)
         }
       }
-      gnatOpt
     }
 
   private[rspace] override def removeAllJoins(txn: T, channel: C): Unit =
@@ -244,11 +237,10 @@ class InMemoryStore[C, P, A, K](
       (ns, ())
     })
 
-  def getStoreCounters: StoreCounters = withTxn(createTxnRead()) { txn =>
-    txn.readState(state => eventsCounter.createCounters(0, state.size))
-  }
+  def getStoreCounters: StoreCounters =
+    withTxn(createTxnRead())(_.readState(state => eventsCounter.createCounters(0, state.size)))
 
-  def isEmpty: Boolean = withTxn(createTxnRead())(txn => txn.readState(_.isEmpty))
+  def isEmpty: Boolean = withTxn(createTxnRead())(_.readState(_.isEmpty))
 
   def toMap: Map[Seq[C], Row[P, A, K]] = withTxn(createTxnRead()) { txn =>
     txn.readState(_.dbGNATs.map {
