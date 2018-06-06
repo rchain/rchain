@@ -1,12 +1,9 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
-
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.extended._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.test._
 import org.scalatest._
 
 trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, StringsCaptor] {
@@ -28,6 +25,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r shouldBe None
     //store is not empty - we have 'A' stored
     store.isEmpty shouldBe false
+
+    store.eventsCounter.getProducesCount shouldBe 1
+    store.eventsCounter.getConsumesCount shouldBe 0
   }
 
   "producing twice on the same channel" should
@@ -60,6 +60,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r2 shouldBe None
     //store is not empty - we have 2 As stored
     store.isEmpty shouldBe false
+
+    store.eventsCounter.getProducesCount shouldBe 2
+    store.eventsCounter.getConsumesCount shouldBe 0
   }
 
   "consuming on one channel" should
@@ -80,6 +83,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r shouldBe None
     //there is a continuation stored in the storage
     store.isEmpty shouldBe false
+
+    store.eventsCounter.getProducesCount shouldBe 0
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "consuming with a list of patterns that is a different length than the list of channels" should
@@ -88,6 +94,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       consume(store, List("ch1", "ch2"), List(Wildcard), new StringsCaptor, persist = false))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 0
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "consuming on three channels" should
@@ -108,6 +117,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     r shouldBe None
     //continuation is left in the storage
     store.isEmpty shouldBe false
+
+    store.eventsCounter.getProducesCount shouldBe 0
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "producing and then consuming on the same channel" should
@@ -144,6 +156,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r2).results should contain theSameElementsAs List(List("datum"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 1
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "producing three times then doing consuming three times" should "work" in withTestStore { store =>
@@ -174,6 +189,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r6).results should contain oneOf (List("datum1"), List("datum2"), List("datum3"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 3
+    store.eventsCounter.getConsumesCount shouldBe 3
   }
 
   "producing on channel, consuming on that channel and another, and then producing on the other channel" should
@@ -238,6 +256,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 2
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "producing on three different channels and then consuming once on all three" should
@@ -301,6 +322,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r4).results should contain theSameElementsAs List(List("datum1", "datum2", "datum3"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 3
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "producing three times on the same channel then consuming three times on the same channel" should
@@ -339,6 +363,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
                                                          List("datum1"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 3
+    store.eventsCounter.getConsumesCount shouldBe 3
   }
 
   "consuming three times on the same channel, then producing three times on that channel" should
@@ -367,6 +394,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       getK(r2).results shouldNot contain theSameElementsAs getK(r3).results
 
       store.isEmpty shouldBe true
+
+      store.eventsCounter.getProducesCount shouldBe 3
+      store.eventsCounter.getConsumesCount shouldBe 3
   }
 
   "consuming three times on the same channel with non-trivial matches, then producing three times on that channel" should
@@ -390,6 +420,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r3).results shouldBe List(List("datum3"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 3
+    store.eventsCounter.getConsumesCount shouldBe 3
   }
 
   "consuming on two channels, producing on one, then producing on the other" should
@@ -411,6 +444,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r3).results should contain theSameElementsAs List(List("datum1", "datum2"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 2
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "A joined consume with the same channel given twice followed by a produce" should
@@ -434,6 +470,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r3).results shouldBe List(List("datum1", "datum1"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 2
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "consuming twice on the same channels with different patterns, and then producing on those channels" should
@@ -469,6 +508,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r6).results should contain theSameElementsAs List(List("datum1", "datum2"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 4
+    store.eventsCounter.getConsumesCount shouldBe 2
   }
 
   "consuming and producing with non-trivial matches" should
@@ -498,6 +540,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     }
 
     store.isEmpty shouldBe false
+
+    store.eventsCounter.getProducesCount shouldBe 1
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "consuming twice and producing twice with non-trivial matches" should
@@ -520,6 +565,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     getK(r4).results should contain theSameElementsAs List(List("datum2"))
 
     store.isEmpty shouldBe true
+
+    store.eventsCounter.getProducesCount shouldBe 2
+    store.eventsCounter.getConsumesCount shouldBe 2
   }
 
   "consuming on two channels, consuming on one of those channels, and then producing on both of those channels separately" should
@@ -556,6 +604,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       }
 
       store.isEmpty shouldBe false
+
+      store.eventsCounter.getProducesCount shouldBe 2
+      store.eventsCounter.getConsumesCount shouldBe 2
     }
 
   /* Persist tests */
@@ -598,6 +649,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     }
 
     r3 shouldBe None
+
+    store.eventsCounter.getProducesCount shouldBe 1
+    store.eventsCounter.getConsumesCount shouldBe 2
   }
 
   "producing, doing a persistent consume, and producing again on the same channel" should
@@ -654,6 +708,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       runK(r4)
 
       getK(r4).results should contain theSameElementsAs List(List("datum2"))
+
+      store.eventsCounter.getProducesCount shouldBe 2
+      store.eventsCounter.getConsumesCount shouldBe 2
   }
 
   "doing a persistent consume and producing multiple times" should "work" in withTestStore {
@@ -692,6 +749,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       runK(r3)
 
       getK(r3).results should contain theSameElementsAs List(List("datum2"))
+
+      store.eventsCounter.getProducesCount shouldBe 2
+      store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "consuming and doing a persistient produce" should "work" in withTestStore { store =>
@@ -719,6 +779,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
       store.getData(txn, List("ch1")) shouldBe List(Datum("datum1", persist = true))
       store.getWaitingContinuation(txn, List("ch1")) shouldBe Nil
     }
+
+    store.eventsCounter.getProducesCount shouldBe 2
+    store.eventsCounter.getConsumesCount shouldBe 1
   }
 
   "consuming, doing a persistient produce, and consuming again" should "work" in withTestStore {
@@ -761,6 +824,8 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
 
       getK(r4).results should contain theSameElementsAs List(List("datum1"))
 
+      store.eventsCounter.getProducesCount shouldBe 2
+      store.eventsCounter.getConsumesCount shouldBe 2
   }
 
   "doing a persistent produce and consuming twice" should "work" in withTestStore { store =>
@@ -798,6 +863,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     runK(r3)
 
     getK(r3).results should contain theSameElementsAs List(List("datum1"))
+
+    store.eventsCounter.getProducesCount shouldBe 1
+    store.eventsCounter.getConsumesCount shouldBe 2
   }
 
   "producing three times and doing a persistent consume" should "work" in withTestStore { store =>
@@ -865,6 +933,9 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     }
 
     r7 shouldBe None
+
+    store.eventsCounter.getProducesCount shouldBe 3
+    store.eventsCounter.getConsumesCount shouldBe 4
   }
 }
 

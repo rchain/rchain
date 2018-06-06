@@ -17,6 +17,12 @@ abstract class Ob {
 
   def dispatch(state: State, globalEnv: GlobalEnv): Ob = Niv
 
+  def extendWith(keyMeta: Ob, argvec: Tuple): Ob =
+    if (keyMeta == NilMeta)
+      this
+    else
+      argvec.becomeExtension(keyMeta.asInstanceOf[Meta], this)
+
   def invoke(state: State, globalEnv: GlobalEnv): Ob = Niv
 
   /** Tries to lookup value for key and then invokes the value
@@ -43,7 +49,7 @@ abstract class Ob {
   def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
     var p = this
 
-    for (_ <- 0 to level) p = p.parent
+    for (_ <- 0 until level) p = p.parent
 
     if (indirect) {
       p = p.asInstanceOf[Actor].extension
@@ -55,7 +61,7 @@ abstract class Ob {
   def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob = {
     var p = this
 
-    for (_ <- 0 to level) p = p.parent
+    for (_ <- 0 until level) p = p.parent
 
     if (indirect) {
       p = p.asInstanceOf[Actor].extension

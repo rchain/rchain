@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Blake2b256Hash
 import scodec.Codec
 import scodec.Codec._
 import scodec.codecs._
@@ -39,4 +40,6 @@ object PointerBlock {
       provide(length),
       optional(ignore(size = 7) ~> bool, Blake2b256Hash.codecBlake2b256Hash)
     ).as[PointerBlock]
+
+  def unapply(arg: PointerBlock): Option[Vector[Option[Blake2b256Hash]]] = Option(arg.toVector)
 }

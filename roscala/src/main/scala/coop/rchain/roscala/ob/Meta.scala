@@ -104,3 +104,5 @@ object Meta {
   def apply(extensible: Boolean): Meta =
     new Meta(new AtomicInteger(0), extensible)
 }
+
+object NilMeta extends Ob
