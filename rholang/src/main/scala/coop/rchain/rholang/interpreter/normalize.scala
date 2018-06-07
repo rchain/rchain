@@ -142,7 +142,12 @@ object CollectionNormalizeMatcher {
                       (ps, lf, wc) =>
                         EList.apply(ps, lf, wc).update(_.optionalRemainder := remainderResult._1)))
 
-      case ct: CollectTuple => foldMatch(input.knownFree, ct.listproc_.asScala.toList, ETuple.apply)
+      case ct: CollectTuple =>
+        val ps = ct.tuple_ match {
+          case ts: TupleSingle   => Seq(ts.proc_)
+          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.asScala.toList
+        }
+        foldMatch(input.knownFree, ps.toList, ETuple.apply)
       case cs: CollectSet =>
         val constructor: (Seq[Par], BitSet, Boolean) => ESet =
           (pars, locallyFree, connectiveUsed) =>
@@ -394,6 +399,9 @@ object ProcNormalizeMatcher {
 
       case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
       case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
+
+      case p: PExprs =>
+        normalizeMatch[M](p.proc_, input)
 
       case p: PSend => {
         import scala.collection.JavaConverters._
