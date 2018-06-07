@@ -13,6 +13,13 @@ case class SortedHashSet[A: Ordering](private val ps: HashSet[A])
 
   lazy val sortedPars: List[A] = ps.toList.sorted
 
+  override def equals(that: Any): Boolean = that match {
+    case shs: SortedHashSet[A] => shs.sortedPars == this.sortedPars
+    case _                     => false
+  }
+
+  override def hashCode(): Int = sortedPars.hashCode()
+
   // -- METHODS USED BY PROTOBUF SERIALIZATION MECHANISM, ADJUST WITH CARE! --
   // Called inside `writeTo` when serializing instance.
   // Elements should be already sorted so `foreach` traverse them in order.
