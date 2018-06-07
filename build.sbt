@@ -102,7 +102,7 @@ lazy val models = (project in file("models"))
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
-  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
+  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
     version := "0.4.1",
     name := "rnode",
