@@ -331,4 +331,14 @@ package object history {
       .subcaseP(2) {
         case nothing: EmptyPointer.type => nothing
       }(provide(EmptyPointer))
+
+  implicit val codecNonEmptyPointer: Codec[NonEmptyPointer] =
+    discriminated[NonEmptyPointer]
+      .by(uint8)
+      .subcaseP(0) {
+        case value: LeafPointer => value
+      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      .subcaseP(1) {
+        case node: NodePointer => node
+      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
 }
