@@ -19,9 +19,9 @@ deploy:deploy-rnode-to-dockerhub:
   script:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
-    - docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
-    - docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
-    - docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
+    - sudo docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+    - sudo docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
+    - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
   only:
     - master
     - dev
