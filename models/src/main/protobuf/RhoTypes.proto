@@ -7,6 +7,7 @@ option java_package = "coop.rchain.models";
 option (scalapb.options) = {
   import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
   import: "coop.rchain.models.rholang.sort.ordering.parOrdering"
+  import: "coop.rchain.models.ParSetTypeMapper.parSetESetTypeMapper"
 };
 
 message Par {
@@ -150,8 +151,7 @@ message Expr {
 
         EList e_list_body = 20;
         ETuple e_tuple_body = 21;
-        ESet e_set_body = 22;
-//        bytes e_set_body = 22 [(scalapb.field).type = "coop.rchain.models.ParSet"];
+        ESet e_set_body = 22 [(scalapb.field).type = "coop.rchain.models.ParSet"];
         EMap e_map_body = 23;
         EMethod e_method_body = 24;
         Channel e_eval_body = 26;

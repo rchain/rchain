@@ -40,9 +40,9 @@ object implicits {
     new Expr(exprInstance = ETupleBody(e))
   implicit def fromEList(e: ETuple): Expr = apply(e)
 
-  def apply(e: ESet): Expr =
+  def apply(e: ParSet): Expr =
     new Expr(exprInstance = ESetBody(e))
-  implicit def fromESet(e: ESet): Expr = apply(e)
+  implicit def fromESet(e: ParSet): Expr = apply(e)
 
   def apply(e: EMap): Expr =
     new Expr(exprInstance = EMapBody(e))

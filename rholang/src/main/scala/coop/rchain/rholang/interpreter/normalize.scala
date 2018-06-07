@@ -149,9 +149,8 @@ object CollectionNormalizeMatcher {
         }
         foldMatch(input.knownFree, ps.toList, ETuple.apply)
       case cs: CollectSet =>
-        val constructor: (Seq[Par], BitSet, Boolean) => ESet =
-          (pars, locallyFree, connectiveUsed) =>
-            ESet(SortedHashSet(pars), locallyFree, connectiveUsed)
+        val constructor: (Seq[Par], BitSet, Boolean) => ParSet =
+          (pars, locallyFree, connectiveUsed) => ParSet(SortedHashSet(pars), connectiveUsed)
         foldMatch(input.knownFree, cs.listproc_.asScala.toList, constructor)
       case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
     }

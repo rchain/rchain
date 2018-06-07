@@ -486,7 +486,7 @@ object Reduce {
           for {
             evaledPs  <- set.ps.sortedPars.traverse(expr => evalExpr(expr))
             updatedPs = evaledPs.map(updateLocallyFree)
-          } yield updateLocallyFree(set.copy(ps = SortedHashSet(evaledPs)))
+          } yield set.copy(ps = SortedHashSet(updatedPs))
 
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)

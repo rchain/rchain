@@ -6,6 +6,7 @@ import coop.rchain.models.{KeyValuePair, Par, SortedHashSet}
 import cats.implicits._
 import cats.syntax._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.ParSet
 import coop.rchain.models.rholang.sort.ordering._
 
 object GroundSortMatcher {
@@ -44,8 +45,9 @@ object GroundSortMatcher {
           .map(_.sorted)
           .map(sortedPars => deduplicate(sortedPars))
           .map(deduplicatedPars =>
-            ScoredTerm(ESetBody(gs.withPs(SortedHashSet(deduplicatedPars.map(_.term.get)))),
-                       Node(Score.ESET, deduplicatedPars.map(_.score): _*)))
+            ScoredTerm(
+              ESetBody(ParSet(SortedHashSet(deduplicatedPars.map(_.term.get)), gs.connectiveUsed)),
+              Node(Score.ESET, deduplicatedPars.map(_.score): _*)))
       case EMapBody(gm) =>
         def sortKeyValuePair(kv: KeyValuePair): Either[Throwable, ScoredTerm[KeyValuePair]] =
           for {

@@ -44,7 +44,7 @@ class SortedHashSetSpec extends FlatSpec with Matchers {
     roundtripTest(sample)
   }
 
-  it should "preserve ordering during serialization" in {
+  it should "preserve ordering during serialization (required for deterministic serialization)" in {
     val referenceBytes = serializeESet(sample)
 
     // just to make sure that it's not a fluke, serialize it 1000 times

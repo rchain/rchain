@@ -91,26 +91,24 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
 
   "Par" should "Sort and deduplicate sets insides" in {
     val parGround =
-      ESet(
+      ParSet(
         SortedHashSet(
           Seq[Par](
             GInt(2),
             GInt(1),
-            ESet(SortedHashSet(Seq[Par](GInt(1), GInt(2))), locallyFree = BitSet()),
-            ESet(SortedHashSet(Seq[Par](GInt(1), GInt(1))), locallyFree = BitSet())
-          )),
-        locallyFree = BitSet()
+            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2)))),
+            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(1))))
+          ))
       )
     val sortedParGround: Option[Par] =
-      ESet(
+      ParSet(
         SortedHashSet(
           Seq[Par](
             GInt(1),
             GInt(2),
-            ESet(SortedHashSet(Seq[Par](GInt(1))), locallyFree = BitSet()),
-            ESet(SortedHashSet(Seq[Par](GInt(1), GInt(2))), locallyFree = BitSet())
-          )),
-        locallyFree = BitSet()
+            ParSet(SortedHashSet(Seq[Par](GInt(1)))),
+            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2))))
+          ))
       )
     val result = ParSortMatcher.sortMatch(parGround).right.get
     result.term should be(sortedParGround.get)
@@ -120,8 +118,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val parGround =
       EMap(
         List(
-          KeyValuePair(GInt(2),
-                       ESet(SortedHashSet(Seq[Par](GInt(2), GInt(1))), locallyFree = BitSet())),
+          KeyValuePair(GInt(2), ParSet(SortedHashSet(Seq[Par](GInt(2), GInt(1))))),
           KeyValuePair(GInt(2), GInt(1)),
           KeyValuePair(GInt(1), GInt(1))
         ),

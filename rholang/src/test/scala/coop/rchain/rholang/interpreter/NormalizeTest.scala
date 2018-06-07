@@ -113,13 +113,13 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
     result.par should be(
-      inputs.par.prepend(ESet(
-        SortedHashSet(Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
-                               GInt(7),
-                               GInt(8).prepend(EVar(FreeVar(1))))),
-        locallyFree = BitSet(1),
-        connectiveUsed = true
-      )))
+      inputs.par.prepend(
+        ParSet(
+          SortedHashSet(Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
+                                 GInt(7),
+                                 GInt(8).prepend(EVar(FreeVar(1))))),
+          connectiveUsed = true
+        )))
     result.knownFree should be(
       inputs.knownFree.newBindings(List(("R", ProcSort, 0, 0), ("Q", ProcSort, 0, 0)))._1)
   }
