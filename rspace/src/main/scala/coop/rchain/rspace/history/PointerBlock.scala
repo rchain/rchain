@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Blake2b256Hash
 import scodec.Codec
 import scodec.Codec._
 import scodec.codecs._

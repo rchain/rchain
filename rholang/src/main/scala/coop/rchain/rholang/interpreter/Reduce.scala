@@ -475,6 +475,11 @@ object Reduce {
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
         }
+        case ETupleBody(el) =>
+          for {
+            evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr))
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(ETuple(updatedPs, el.locallyFree, el.connectiveUsed))
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
@@ -656,6 +661,11 @@ object Reduce {
     }
 
     def updateLocallyFree(elist: EList): EList = {
+      val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
+      elist.copy(locallyFree = resultLocallyFree)
+    }
+
+    def updateLocallyFree(elist: ETuple): ETuple = {
       val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
       elist.copy(locallyFree = resultLocallyFree)
     }
