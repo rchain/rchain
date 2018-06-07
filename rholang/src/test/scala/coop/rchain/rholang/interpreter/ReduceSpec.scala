@@ -36,7 +36,7 @@ trait PersistentStoreTester {
     try {
       f(space)
     } finally {
-      store.close()
+      space.close()
     }
   }
 }

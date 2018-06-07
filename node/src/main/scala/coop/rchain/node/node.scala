@@ -200,7 +200,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down HTTP server....")
     resources.httpServer.stop()
     println("Shutting down interpreter runtime ...")
-    resources.runtime.space.store.close()
+    resources.runtime.close()
 
     println("Goodbye.")
   }

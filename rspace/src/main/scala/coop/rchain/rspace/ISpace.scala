@@ -81,4 +81,8 @@ trait ISpace[C, P, A, K] {
     * @param hash A BLAKE2b256 Hash representing the checkpoint
     */
   def reset(hash: Blake2b256Hash): Unit
+
+  /** Closes
+    */
+  def close(): Unit
 }

@@ -59,7 +59,7 @@ trait IStore[C, P, A, K] {
 
   def toMap: Map[Seq[C], Row[P, A, K]]
 
-  def close(): Unit
+  private[rspace] def close(): Unit
 
   def getStoreCounters: StoreCounters
 

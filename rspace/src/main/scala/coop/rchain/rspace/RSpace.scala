@@ -281,4 +281,6 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
       store.clear(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
     }
+
+  def close(): Unit = store.close()
 }

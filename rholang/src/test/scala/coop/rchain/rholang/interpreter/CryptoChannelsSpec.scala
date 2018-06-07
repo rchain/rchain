@@ -192,7 +192,7 @@ class CryptoChannelsSpec
     try {
       test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.space.store.close()
+      runtime.close()
       recursivelyDeletePath(dbDir)
     }
   }

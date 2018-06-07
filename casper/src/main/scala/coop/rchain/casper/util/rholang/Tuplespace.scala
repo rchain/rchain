@@ -39,7 +39,7 @@ class Tuplespace(val name: String, val location: Path, val size: Long) {
     StoragePrinter.prettyPrint(runtime.space.store)
 
   def delete(): Unit = {
-    runtime.space.store.close()
+    runtime.close()
     dbLocation.resolve("lock.mdb").toFile.delete()
     dbLocation.resolve("data.mdb").toFile.delete()
     dbLocation.toFile.delete()

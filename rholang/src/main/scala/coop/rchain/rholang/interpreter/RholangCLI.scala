@@ -75,7 +75,7 @@ object RholangCLI {
         repl(runtime)
       }
     } finally {
-      runtime.space.store.close()
+      runtime.close()
     }
   }
 

@@ -25,4 +25,6 @@ class PureRSpace[F[_], C, P, A, K](space: ISpace[C, P, A, K]) {
   def getCheckpoint()(c: Capture[F]): F[Blake2b256Hash] = c.capture(space.getCheckpoint())
 
   def reset(hash: Blake2b256Hash)(c: Capture[F]): F[Unit] = c.capture(space.getCheckpoint())
+
+  def close()(c: Capture[F]): F[Unit] = c.capture(space.close())
 }

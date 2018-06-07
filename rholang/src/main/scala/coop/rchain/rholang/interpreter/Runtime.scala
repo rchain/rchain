@@ -16,7 +16,10 @@ import monix.eval.Task
 import scala.collection.immutable
 
 class Runtime private (val reducer: Reduce[Task],
-                       val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation])
+                       val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation]) {
+
+  def close(): Unit = space.close()
+}
 
 object Runtime {
 
