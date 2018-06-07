@@ -1,13 +1,9 @@
 package coop.rchain.node
 
-import java.io.File
+import java.nio.file.{Files, Path, Paths}
 
 import cats.implicits._
-import scala.io.Source
-
 import coop.rchain.node.model.repl._
-import coop.rchain.shared.Resources._
-
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
@@ -35,13 +31,14 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
       .map(_.mkString("\n"))
 
   def eval(fileName: String): Task[String] = Task.delay {
-    val file = new File(fileName)
-    if (file.exists()) {
-      withResource(Source.fromFile(file)) { source =>
-        blockingStub.eval(EvalRequest(source.getLines.mkString("\n"))).output
-      }
+    val filePath = Paths.get(fileName)
+    if (Files.exists(filePath)) {
+      blockingStub.eval(EvalRequest(readContent(filePath))).output
     } else {
       s"File $fileName not found"
     }
   }
+
+  private def readContent(filePath: Path): String =
+    new String(Files.readAllBytes(filePath))
 }
