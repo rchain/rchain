@@ -5,6 +5,7 @@ import coop.rchain.roscala.VmLiteralName._
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.ob.expr.TupleExpr
 import coop.rchain.roscala.prim.fixnum.fxPlus
+import coop.rchain.roscala.prim.rblfloat.flPlus
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.mutable
@@ -17,9 +18,11 @@ class VmSpec extends FlatSpec with Matchers {
     * Add key-value pair to the parent (sbo) of all `Fixnum`s
     * where the key is the add operation and the value is the
     * primitive for addition of `Fixnum`s.
+    * And do the same for `RblFloat`.
     */
   val addOprn = Oprn()
   Fixnum.fixnumSbo.meta.add(Fixnum.fixnumSbo, addOprn, fxPlus, ctxt = null)(globalEnv)
+  RblFloat.rblFloatSbo.meta.add(RblFloat.rblFloatSbo, addOprn, flPlus, ctxt = null)(globalEnv)
 
   /* Add `addOprn` to first position in `globalEnv` */
   globalEnv.addSlot(Symbol("+"), addOprn)
@@ -51,9 +54,60 @@ class VmSpec extends FlatSpec with Matchers {
     val code = Code(litvec = Seq.empty, codevec = codevec)
     val ctxt = Ctxt(code, rtnCtxt, LocRslt)
 
-    Vm.run(ctxt, new GlobalEnv(), Vm.State())
+    Vm.run(ctxt, globalEnv, Vm.State())
 
     rtnCtxt.rslt shouldBe Fixnum(1)
+  }
+
+  "(if #f 1 2)" should "return 2" in {
+
+    /**
+      * litvec:
+      *  0:   {IfExpr}
+      * codevec:
+      *  0:   lit #f,rslt
+      *  1:   jf 4
+      *  2:   lit 1,rslt
+      *  3:   rtn/nxt
+      *  4:   lit 2,rslt
+      *  5:   rtn/nxt
+      */
+    val codevec = Seq(
+      OpImmediateLitToReg(literal = `#f`, reg = rslt),
+      OpJmpFalse(4),
+      OpImmediateLitToReg(literal = `1`, reg = rslt),
+      OpRtn(next = true),
+      OpImmediateLitToReg(literal = `2`, reg = rslt),
+      OpRtn(next = true)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt shouldBe Fixnum(2)
+  }
+
+  "(+ 1 2)" should "return 3" in {
+    val codevec = Seq(
+      OpAlloc(2),
+      OpImmediateLitToArg(literal = `1`, arg = 0),
+      OpImmediateLitToArg(literal = `2`, arg = 1),
+      OpXferGlobalToReg(reg = trgt, global = 0),
+      OpXmit(unwind = false, next = true, 2)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt shouldBe Fixnum(3)
   }
 
   "(block (+ 1 2) (+ 3 4))" should "return 3 or 7" in {
@@ -195,5 +249,71 @@ class VmSpec extends FlatSpec with Matchers {
     Vm.run(ctxt, globalEnv, Vm.State())
 
     rtnCtxt.rslt shouldBe Fixnum(5)
+  }
+
+  "(+ 1.2 2.3)" should "return 3.5" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      *   1:   1.1
+      *   2:   2.2
+      * codevec:
+      *   0:   alloc 2
+      *   1:   liti 1,arg[0]
+      *   2:   liti 2,arg[1]
+      *   3:   xfer global[+],trgt
+      *   5:   xmit/nxt 2
+      */
+    val codevec = Seq(
+      OpAlloc(2),
+      OpIndLitToArg(lit = 1, arg = 0),
+      OpIndLitToArg(lit = 2, arg = 1),
+      OpXferGlobalToReg(reg = trgt, global = 0),
+      OpXmit(unwind = false, next = true, nargs = 2)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq(Niv, RblFloat(1.2), RblFloat(2.3)), codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt shouldBe RblFloat(3.5)
+  }
+
+  "(fx+ 1 (fx+ 2 3))" should "return 6" in {
+
+    /**
+      * litvec:
+      *   0:   {RequestExpr}
+      * codevec:
+      *   0:   alloc 2
+      *   1:   lit 2,arg[0]
+      *   2:   lit 3,arg[1]
+      *   3:   fx+ 2,arg[1]
+      *   5:   lit 1,arg[0]
+      *   6:   fx+ 2,rslt
+      *   8:   rtn/nxt
+      */
+    val codevec = Seq(
+      OpAlloc(2),
+      OpImmediateLitToArg(literal = `2`, arg = 0),
+      OpImmediateLitToArg(literal = `3`, arg = 1),
+      OpApplyPrimArg(unwind = false, next = false, nargs = 2, primNum = 0, arg = 1), // fx+
+      OpImmediateLitToArg(literal = `1`, arg = 0),
+      OpApplyPrimReg(unwind = false, next = false, nargs = 2, primNum = 0, reg = rslt), // fx+
+      OpRtn(next = true)
+    )
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq.empty, codevec = codevec)
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt shouldBe Fixnum(6)
   }
 }
