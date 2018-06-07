@@ -77,7 +77,7 @@ EOF
       --network=${network_name} \
       coop.rchain/rnode ${rnode_cmd}
 
-    sudo docker exec ${container_name} sh -c "apt install -yq curl"
+    sudo docker exec -u root ${container_name} sh -c "apt install -yq curl"
     sleep 3 # slow down 
   done
   
