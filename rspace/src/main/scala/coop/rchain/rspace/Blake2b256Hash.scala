@@ -1,4 +1,4 @@
-package coop.rchain.rspace.history
+package coop.rchain.rspace
 
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
@@ -10,8 +10,6 @@ import scodec.codecs._
   * Represents a Blake2b256 Hash
   *
   * The default constructor is private to prevent construction means other than [[create]]
-  *
-  * TODO: Restrict access
   */
 class Blake2b256Hash private (val bytes: ByteVector) {
 

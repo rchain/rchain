@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.extended._
+import coop.rchain.rspace.test.InMemoryStore
 import org.scalatest.BeforeAndAfterAll
 
 trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {

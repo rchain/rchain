@@ -1,4 +1,7 @@
-package coop.rchain.rspace.history
+package coop.rchain.rspace.test
+
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.history.{ITrieStore, Trie}
 
 class DummyTrieStore[T, K, V] extends ITrieStore[T, K, V] {
 
