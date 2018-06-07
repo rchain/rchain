@@ -1,6 +1,5 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.Blake2b256Hash
 import coop.rchain.scodec.codecs.seqOfN
 import scodec.Codec
 import scodec.bits.ByteVector

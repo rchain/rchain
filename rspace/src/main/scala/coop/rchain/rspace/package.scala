@@ -3,7 +3,7 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.{Blake2b256Hash, Leaf}
+import coop.rchain.rspace.history.Leaf
 import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec

@@ -1,6 +1,7 @@
 package coop.rchain.rspace.history
 
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rspace.Blake2b256Hash
 import org.scalactic.anyvals.PosInt
 import org.scalatest.prop.{Configuration, GeneratorDrivenPropertyChecks}
 import org.scalatest.{FlatSpec, Matchers, OptionValues, Outcome}
