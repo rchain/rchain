@@ -266,8 +266,8 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, leftResult.knownFree))
           lp = leftResult.par
-          resultConnective = lp.onlyConnectives() match {
-            case Some(List(Connective(ConnAndBody(ConnectiveBody(ps))))) =>
+          resultConnective = lp.singleConnective() match {
+            case Some(Connective(ConnAndBody(ConnectiveBody(ps)))) =>
               Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
             case _ =>
               Connective(ConnAndBody(ConnectiveBody(Vector(lp, rightResult.par))))
@@ -283,8 +283,8 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
           lp = leftResult.par
-          resultConnective = lp.onlyConnectives() match {
-            case Some(List(Connective(ConnOrBody(ConnectiveBody(ps))))) =>
+          resultConnective = lp.singleConnective() match {
+            case Some(Connective(ConnOrBody(ConnectiveBody(ps)))) =>
               Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
             case _ =>
               Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))

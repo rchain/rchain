@@ -247,9 +247,9 @@ object implicits {
         None
       }
 
-    def onlyConnectives(): Option[Seq[Connective]] =
-      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty) {
-        Some(p.connectives)
+    def singleConnective(): Option[Connective] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.size == 1) {
+        Some(p.connectives.head)
       } else {
         None
       }
