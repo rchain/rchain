@@ -14,8 +14,9 @@ trait IStoreTests
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = PosInt(10))
 
-  "putDatum" should "put datum in a new channel" in withTestStore { store =>
+  "putDatum" should "put datum in a new channel" in withTestSpace { space =>
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
+      val store = space.store
       val key   = List(channel)
       val datum = Datum(datumValue, persist = false)
 
@@ -27,8 +28,9 @@ trait IStoreTests
     }
   }
 
-  it should "append datum if channel already exists" in withTestStore { store =>
+  it should "append datum if channel already exists" in withTestSpace { space =>
     forAll("channel", "datum") { (channel: String, datumValue: String) =>
+      val store  = space.store
       val key    = List(channel)
       val datum1 = Datum(datumValue, persist = false)
       val datum2 = Datum(datumValue + "2", persist = false)
@@ -45,11 +47,12 @@ trait IStoreTests
   private[this] val validIndices =
     for (n <- Gen.choose(1, 10)) yield n
 
-  "removeDatum" should s"remove datum at index" in withTestStore { store =>
+  "removeDatum" should s"remove datum at index" in withTestSpace { space =>
     val size = 11
     forAll("channel", "datum", validIndices, minSuccessful(10)) {
       (channel: String, datumValue: String, index: Int) =>
-        val key = List(channel)
+        val store = space.store
+        val key   = List(channel)
         val data = List.tabulate(size) { i =>
           Datum(datumValue + i, persist = false)
         }
@@ -66,10 +69,11 @@ trait IStoreTests
     }
   }
 
-  it should "remove obsolete channels" in withTestStore { store =>
+  it should "remove obsolete channels" in withTestSpace { space =>
     forAll("channel", "datum") { (channel: String, datum: String) =>
-      val key  = List(channel)
-      val hash = store.hashChannels(key)
+      val store = space.store
+      val key   = List(channel)
+      val hash  = store.hashChannels(key)
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putDatum(txn, key, Datum(datum, persist = false))
         // collectGarbage is called in removeDatum:
@@ -80,9 +84,10 @@ trait IStoreTests
     }
   }
 
-  "putWaitingContinuation" should "put waiting continuation in a new channel" in withTestStore {
-    store =>
+  "putWaitingContinuation" should "put waiting continuation in a new channel" in withTestSpace {
+    space =>
       forAll("channel", "continuation") { (channel: String, pattern: String) =>
+        val store        = space.store
         val key          = List(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
@@ -97,8 +102,9 @@ trait IStoreTests
       }
   }
 
-  it should "append continuation if channel already exists" in withTestStore { store =>
+  it should "append continuation if channel already exists" in withTestSpace { space =>
     forAll("channel", "continuation") { (channel: String, pattern: String) =>
+      val store        = space.store
       val key          = List(channel)
       val patterns     = List(StringMatch(pattern))
       val continuation = new StringsCaptor
@@ -117,9 +123,10 @@ trait IStoreTests
     }
   }
 
-  "removeWaitingContinuation" should "remove waiting continuation from index" in withTestStore {
-    store =>
+  "removeWaitingContinuation" should "remove waiting continuation from index" in withTestSpace {
+    space =>
       forAll("channel", "continuation") { (channel: String, pattern: String) =>
+        val store        = space.store
         val key          = List(channel)
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
@@ -138,8 +145,9 @@ trait IStoreTests
       }
   }
 
-  "addJoin" should "add join for a channel" in withTestStore { store =>
+  "addJoin" should "add join for a channel" in withTestSpace { space =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      val store = space.store
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
         store.getJoin(txn, channel) shouldBe List(channels)
@@ -148,8 +156,9 @@ trait IStoreTests
     }
   }
 
-  "removeJoin" should "remove join for a channel" in withTestStore { store =>
+  "removeJoin" should "remove join for a channel" in withTestSpace { space =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      val store = space.store
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
         store.removeJoin(txn, channel, channels)
@@ -159,8 +168,9 @@ trait IStoreTests
     }
   }
 
-  it should "remove only passed in joins for a channel" in withTestStore { store =>
+  it should "remove only passed in joins for a channel" in withTestSpace { space =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      val store = space.store
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
         store.addJoin(txn, channel, List("otherChannel"))
@@ -171,8 +181,9 @@ trait IStoreTests
     }
   }
 
-  "removeAllJoins" should "remove all joins for a channel" in withTestStore { store =>
+  "removeAllJoins" should "remove all joins for a channel" in withTestSpace { space =>
     forAll("channel", "channels") { (channel: String, channels: List[String]) =>
+      val store = space.store
       store.withTxn(store.createTxnWrite()) { txn =>
         store.addJoin(txn, channel, channels)
         store.addJoin(txn, channel, List("otherChannel"))

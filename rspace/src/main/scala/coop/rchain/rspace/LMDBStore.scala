@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{LMDBTrieStore, initialize}
+import coop.rchain.rspace.history.{initialize, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
