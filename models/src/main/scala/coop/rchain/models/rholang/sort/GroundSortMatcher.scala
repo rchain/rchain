@@ -31,23 +31,14 @@ object GroundSortMatcher {
       // Note ESet and EMap rely on the stableness of Scala's sort
       // See https://github.com/scala/scala/blob/2.11.x/src/library/scala/collection/SeqLike.scala#L627
       case ESetBody(gs) =>
-        def deduplicate(scoredTerms: Seq[ScoredTerm[Par]]) = {
-          var set = Set[Par]()
-          scoredTerms.filterNot {
-            case ScoredTerm(term, score) =>
-              val exists = set(term)
-              set += term
-              exists
-          }
-        }
         gs.ps.sortedPars
           .traverse(par => ParSortMatcher.sortMatch(par))
           .map(_.sorted)
-          .map(sortedPars => deduplicate(sortedPars))
-          .map(deduplicatedPars =>
-            ScoredTerm(
-              ESetBody(ParSet(SortedHashSet(deduplicatedPars.map(_.term.get)), gs.connectiveUsed)),
-              Node(Score.ESET, deduplicatedPars.map(_.score): _*)))
+          .map(
+            sortedPars =>
+              ScoredTerm(
+                ESetBody(ParSet(SortedHashSet(sortedPars.map(_.term.get)), gs.connectiveUsed)),
+                Node(Score.ESET, sortedPars.map(_.score): _*)))
       case EMapBody(gm) =>
         def sortKeyValuePair(kv: KeyValuePair): Either[Throwable, ScoredTerm[KeyValuePair]] =
           for {
