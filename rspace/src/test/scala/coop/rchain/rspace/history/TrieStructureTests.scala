@@ -2,6 +2,7 @@ package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
 
+import coop.rchain.rspace.Blake2b256Hash
 import org.lmdbjava.Txn
 import scodec.Codec
 import scodec.bits.ByteVector
