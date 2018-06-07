@@ -16,7 +16,7 @@ import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, 
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.Serialize
-import coop.rchain.rspace.pure.PureSpace
+import coop.rchain.rspace.pure.PureRSpace
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -49,7 +49,7 @@ trait Reduce[M[_]] {
 object Reduce {
 
   class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
-      tupleSpace: PureSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation],
+      tupleSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
       implicit parallel: cats.Parallel[M, F])
       extends Reduce[M] {
