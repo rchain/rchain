@@ -65,7 +65,7 @@ object RholangCLI {
             } else if (conf.text()) {
               writeHumanReadable(fileName, par)
             } else {
-              val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+              val evaluatorFuture = evaluate(runtime, par).runAsync
               waitThenPrintStorageContents(evaluatorFuture, runtime.store)
             }
           case Left(error) =>
@@ -97,11 +97,20 @@ object RholangCLI {
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
-  def evaluate(reducer: Reduce[Task], normalizedTerm: Par): Task[Unit] =
+  private def printErrors(errors: Vector[InterpreterError]) =
+    if (!errors.isEmpty) {
+      Console.println("Errors received during evaluation:")
+      for {
+        error <- errors
+      } Console.println(error.toString())
+    }
+
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
     for {
-      _ <- Task.now(printNormalizedTerm(normalizedTerm))
-      _ <- reducer.inj(normalizedTerm)
-    } yield ()
+      _      <- Task.now(printNormalizedTerm(normalizedTerm))
+      _      <- runtime.reducer.inj(normalizedTerm)
+      errors <- Task.now(runtime.readAndClearErrorVector)
+    } yield errors
 
   @tailrec
   def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
@@ -110,7 +119,7 @@ object RholangCLI {
       case Some(line) =>
         buildNormalizedTerm(new StringReader(line)).runAttempt match {
           case Right(par) =>
-            val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+            val evaluatorFuture = evaluate(runtime, par).runAsync
             waitThenPrintStorageContents(evaluatorFuture, runtime.store)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
@@ -160,11 +169,14 @@ object RholangCLI {
 
   @tailrec
   def waitThenPrintStorageContents(
-      evaluatorFuture: CancelableFuture[Unit],
+      evaluatorFuture: CancelableFuture[Vector[InterpreterError]],
       store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(_)) => printStorageContents(store)
+        case Some(Success(errors)) => {
+          printErrors(errors)
+          printStorageContents(store)
+        }
         case Some(Failure(e)) => throw e
         case None             => throw new Exception("Future claimed to be ready, but value was None")
       }

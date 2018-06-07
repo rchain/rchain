@@ -2,12 +2,16 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.Functor
+import cats.implicits._
+import cats.mtl.FunctorTell
 import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{install, IStore, LMDBStore}
@@ -16,7 +20,10 @@ import monix.eval.Task
 import scala.collection.immutable
 
 class Runtime private (val reducer: Reduce[Task],
-                       val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])
+                       val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+                       var errorLog: Runtime.ErrorLog) {
+  def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
+}
 
 object Runtime {
 
@@ -42,6 +49,40 @@ object Runtime {
         )
     }
 
+  class ErrorLog() extends FunctorTell[Task, InterpreterError] {
+    private var errorVector: Vector[InterpreterError] = Vector.empty
+    val functor                                       = implicitly[Functor[Task]]
+    def tell(e: InterpreterError): Task[Unit] =
+      Task.now {
+        this.synchronized {
+          errorVector = errorVector :+ e
+        }
+      }
+
+    def writer[A](a: A, e: InterpreterError): Task[A] =
+      Task.now {
+        this.synchronized {
+          errorVector = errorVector :+ e
+        }
+        a
+      }
+
+    def tuple[A](ta: (InterpreterError, A)): Task[A] =
+      Task.now {
+        this.synchronized {
+          errorVector = errorVector :+ ta._1
+        }
+        ta._2
+      }
+
+    def readAndClearErrorVector(): Vector[InterpreterError] =
+      this.synchronized {
+        val ret = errorVector
+        errorVector = Vector.empty
+        ret
+      }
+  }
+
   def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
@@ -49,6 +90,9 @@ object Runtime {
     val store =
       LMDBStore
         .create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dataDir, mapSize)
+
+    val errorLog                                         = new ErrorLog()
+    implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
 
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       RholangAndScalaDispatcher.create(store, dispatchTable)
@@ -84,6 +128,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, store)
+    new Runtime(dispatcher.reducer, store, errorLog)
   }
 }

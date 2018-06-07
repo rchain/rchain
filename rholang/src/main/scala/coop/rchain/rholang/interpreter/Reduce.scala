@@ -2,6 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import cats.implicits._
 import cats.{Applicative, Parallel, Eval => _}
+import cats.mtl.implicits._
+import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
@@ -12,7 +14,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.implicits._
 import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
-import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
+import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.pure.{consume => internalConsume, produce => internalProduce}
@@ -51,7 +53,8 @@ object Reduce {
   class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
       tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
-      implicit parallel: cats.Parallel[M, F])
+      implicit parallel: cats.Parallel[M, F],
+      fTell: FunctorTell[M, InterpreterError])
       extends Reduce[M] {
 
     type Cont[Data, Body] = (Body, Env[Data])
@@ -134,13 +137,17 @@ object Reduce {
       * @param par
       * @return
       */
-    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] =
+    override def eval(par: Par)(implicit env: Env[Par]): M[Unit] = {
+      def handle[A](eval: (A => M[Unit]))(a: A): M[Unit] =
+        eval(a).handleError((e: InterpreterError) => {
+          fTell.tell(e)
+        })
       List(
-        Parallel.parTraverse(par.sends.toList)(send => eval(send)),
-        Parallel.parTraverse(par.receives.toList)(recv => eval(recv)),
-        Parallel.parTraverse(par.news.toList)(neu => eval(neu)),
-        Parallel.parTraverse(par.matches.toList)(mat => eval(mat)),
-        Parallel.parTraverse(par.bundles.toList)(bundle => eval(bundle)),
+        Parallel.parTraverse(par.sends.toList)(handle(eval)),
+        Parallel.parTraverse(par.receives.toList)(handle(eval)),
+        Parallel.parTraverse(par.news.toList)(handle(eval)),
+        Parallel.parTraverse(par.matches.toList)(handle(eval)),
+        Parallel.parTraverse(par.bundles.toList)(handle(eval)),
         Parallel.parTraverse(par.exprs.filter { expr =>
           expr.exprInstance match {
             case _: EVarBody    => true
@@ -151,23 +158,24 @@ object Reduce {
         }.toList)(expr =>
           expr.exprInstance match {
             case EVarBody(EVar(v)) =>
-              for {
+              (for {
                 varref <- eval(v.get)
                 _      <- eval(varref)
-              } yield ()
+              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
             case e: EEvalBody =>
-              for {
+              (for {
                 p <- evalExprToPar(Expr(e))
                 _ <- eval(p)
-              } yield ()
+              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
             case e: EMethodBody =>
-              for {
+              (for {
                 p <- evalExprToPar(Expr(e))
                 _ <- eval(p)
-              } yield ()
+              } yield ()).handleError((e: InterpreterError) => fTell.tell(e))
             case _ => Applicative[M].pure(())
         })
       ).parSequence.map(_ => ())
+    }
 
     override def inj(par: Par): M[Unit] =
       for { _ <- eval(par)(Env[Par]()) } yield ()

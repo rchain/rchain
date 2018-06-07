@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
+import cats.mtl.FunctorTell
 import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.errors.InterpreterErrorsM
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, InterpreterErrorsM}
 import coop.rchain.rspace.IStore
 
 trait Dispatch[M[_], A, K] {
@@ -46,7 +47,8 @@ object RholangOnlyDispatcher {
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
-      parallel: Parallel[M, F]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+      parallel: Parallel[M, F],
+      ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
@@ -85,7 +87,8 @@ object RholangAndScalaDispatcher {
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
-      parallel: Parallel[M, F]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+      parallel: Parallel[M, F],
+      ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
