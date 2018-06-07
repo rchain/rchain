@@ -76,9 +76,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 
   "Tuple" should "delegate" in {
     val tupleData = new ListProc()
-    tupleData.add(new PVar(new ProcVarVar("Q")))
     tupleData.add(new PEval(new NameVar("y")))
-    val tuple = new PCollect(new CollectTuple(tupleData))
+    val tuple =
+      new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
     result.par should be(
@@ -94,10 +94,10 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
   }
   "Tuple" should "propagate free variables" in {
     val tupleData = new ListProc()
-    tupleData.add(new PVar(new ProcVarVar("Q")))
     tupleData.add(new PGround(new GroundInt(7)))
     tupleData.add(new PPar(new PGround(new GroundInt(7)), new PVar(new ProcVarVar("Q"))))
-    val tuple = new PCollect(new CollectTuple(tupleData))
+    val tuple =
+      new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value

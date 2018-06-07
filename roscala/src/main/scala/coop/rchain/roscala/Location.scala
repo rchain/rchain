@@ -2,7 +2,7 @@ package coop.rchain.roscala
 
 import coop.rchain.roscala.ob._
 
-sealed trait Location
+sealed trait Location                                              extends Ob
 case class ArgRegister(arg: Int)                                   extends Location
 case class GlobalVar(offset: Int)                                  extends Location
 case class LexVariable(level: Int, offset: Int, indirect: Boolean) extends Location
@@ -28,6 +28,9 @@ object Location {
           ctxt.argvec.update(arg, value)
           false
         }
+
+      case LexVariable(level, offset, indirect) =>
+        ctxt.env.setLex(indirect, level, offset, value) == Invalid
 
       case _ => true
     }

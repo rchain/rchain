@@ -1,16 +1,16 @@
-package coop.rchain
+package coop.rchain.rspace
 
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.{Blake2b256Hash, Leaf}
+import coop.rchain.rspace.history.Leaf
 import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.util.Random
 
-package object rspace {
+class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, K] {
 
   private val logger: Logger = Logger[this.type]
 
@@ -22,7 +22,7 @@ package object rspace {
     * along with the remaining unmatched data.
     */
   @tailrec
-  private[rspace] final def findMatchingDataCandidate[C, P, A](
+  private[rspace] final def findMatchingDataCandidate(
       channel: C,
       data: Seq[(Datum[A], Int)],
       pattern: P,
@@ -47,7 +47,7 @@ package object rspace {
     * remaining matches.
     */
   @tailrec
-  private[rspace] def extractDataCandidates[C, P, A](
+  private[rspace] final def extractDataCandidates(
       channelPatternPairs: Seq[(C, P)],
       channelToIndexedData: Map[C, Seq[(Datum[A], Int)]],
       acc: Seq[Option[DataCandidate[C, A]]])(
@@ -72,39 +72,8 @@ package object rspace {
         }
     }
 
-  /** Searches the store for data matching all the given patterns at the given channels.
-    *
-    * If no match is found, then the continuation and patterns are put in the store at the given
-    * channels.
-    *
-    * If a match is found, then the continuation is returned along with the matching data.
-    *
-    * Matching data stored with the `persist` flag set to `true` will not be removed when it is
-    * retrieved. See below for more information about using the `persist` flag.
-    *
-    * '''NOTE''':
-    *
-    * A call to [[consume]] that is made with the persist flag set to `true` only persists when
-    * there is no matching data.
-    *
-    * This means that in order to make a continuation "stick" in the store, the user will have to
-    * continue to call [[consume]] until a `None` is received.
-    *
-    * @param store A store which satisfies the [[IStore]] interface.
-    * @param channels A Seq of channels on which to search for matching data
-    * @param patterns A Seq of patterns with which to search for matching data
-    * @param continuation A continuation
-    * @param persist Whether or not to attempt to persist the data
-    * @tparam C A type representing a channel
-    * @tparam P A type representing a pattern
-    * @tparam A A type representing a piece of data
-    * @tparam K A type representing a continuation
-    */
-  def consume[C, P, A, K](store: IStore[C, P, A, K],
-                          channels: Seq[C],
-                          patterns: Seq[P],
-                          continuation: K,
-                          persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])] =
+  def consume(channels: Seq[C], patterns: Seq[P], continuation: K, persist: Boolean)(
+      implicit m: Match[P, A]): Option[(K, Seq[A])] =
     store.eventsCounter.registerConsume {
       if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
@@ -156,10 +125,8 @@ package object rspace {
       }
     }
 
-  def install[C, P, A, K](store: IStore[C, P, A, K],
-                          channels: Seq[C],
-                          patterns: Seq[P],
-                          continuation: K)(implicit m: Match[P, A]): Option[(K, Seq[A])] = {
+  def install(channels: Seq[C], patterns: Seq[P], continuation: K)(
+      implicit m: Match[P, A]): Option[(K, Seq[A])] = {
     if (channels.length =!= patterns.length) {
       val msg = "channels.length must equal patterns.length"
       logger.error(msg)
@@ -212,9 +179,10 @@ package object rspace {
   /* Produce */
 
   @tailrec
-  def extractFirstMatch[C, P, A, K](channels: Seq[C],
-                                    matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
-                                    channelToIndexedData: Map[C, Seq[(Datum[A], Int)]])(
+  private[rspace] final def extractFirstMatch(
+      channels: Seq[C],
+      matchCandidates: Seq[(WaitingContinuation[P, K], Int)],
+      channelToIndexedData: Map[C, Seq[(Datum[A], Int)]])(
       implicit m: Match[P, A]): Option[ProduceCandidate[C, P, A, K]] =
     matchCandidates match {
       case Nil =>
@@ -230,36 +198,7 @@ package object rspace {
         }
     }
 
-  /** Searches the store for a continuation that has patterns that match the given data at the
-    * given channel.
-    *
-    * If no match is found, then the data is put in the store at the given channel.
-    *
-    * If a match is found, then the continuation is returned along with the matching data.
-    *
-    * Matching data or continuations stored with the `persist` flag set to `true` will not be
-    * removed when they are retrieved. See below for more information about using the `persist`
-    * flag.
-    *
-    * '''NOTE''':
-    *
-    * A call to [[produce]] that is made with the persist flag set to `true` only persists when
-    * there are no matching continuations.
-    *
-    * This means that in order to make a piece of data "stick" in the store, the user will have to
-    * continue to call [[produce]] until a `None` is received.
-    *
-    * @param store A store which satisfies the [[IStore]] interface.
-    * @param channel A channel on which to search for matching continuations and/or store data
-    * @param data A piece of data
-    * @param persist Whether or not to attempt to persist the data
-    * @tparam C A type representing a channel
-    * @tparam P A type representing a pattern
-    * @tparam A A type representing a piece of data
-    * @tparam K A type representing a continuation
-    */
-  def produce[C, P, A, K](store: IStore[C, P, A, K], channel: C, data: A, persist: Boolean)(
-      implicit m: Match[P, A]): Option[(K, Seq[A])] =
+  def produce(channel: C, data: A, persist: Boolean)(implicit m: Match[P, A]): Option[(K, Seq[A])] =
     store.eventsCounter.registerProduce {
       store.withTxn(store.createTxnWrite()) { txn =>
         val groupedChannels: Seq[Seq[C]] = store.getJoin(txn, channel)
@@ -333,31 +272,15 @@ package object rspace {
       }
     }
 
-  /** Gets a checkpoint.  Yes, this is a handwave.
-    *
-    * @param store A store which satisfies the [[IStore]] interface.
-    * @tparam C A type representing a channel
-    * @tparam P A type representing a pattern
-    * @tparam A A type representing a piece of data
-    * @tparam K A type representing a continuation
-    * @return A BLAKE2b256 representing the checkpoint
-    */
-  def getCheckpoint[C, P, A, K](store: IStore[C, P, A, K]): Blake2b256Hash = store.getCheckpoint()
+  def getCheckpoint(): Blake2b256Hash = store.getCheckpoint()
 
-  /** Resets the given store to the given checkpoint.
-    *
-    * @param store A store which satisfies the [[IStore]] interface.
-    * @param hash A BLAKE2b256 Hash representing the checkpoint
-    * @tparam C A type representing a channel
-    * @tparam P A type representing a pattern
-    * @tparam A A type representing a piece of data
-    * @tparam K A type representing a continuation
-    */
-  def reset[C, P, A, K](store: IStore[C, P, A, K], hash: Blake2b256Hash): Unit =
+  def reset(hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.trieStore.putRoot(txn, hash)
       val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, hash)
       store.clear(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
     }
+
+  def close(): Unit = store.close()
 }

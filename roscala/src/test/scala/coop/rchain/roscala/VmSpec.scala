@@ -3,8 +3,11 @@ package coop.rchain.roscala
 import coop.rchain.roscala.CtxtRegName._
 import coop.rchain.roscala.VmLiteralName._
 import coop.rchain.roscala.ob._
+import coop.rchain.roscala.ob.expr.TupleExpr
 import coop.rchain.roscala.prim.fixnum.fxPlus
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.collection.mutable
 
 class VmSpec extends FlatSpec with Matchers {
 
@@ -133,5 +136,64 @@ class VmSpec extends FlatSpec with Matchers {
     Vm.run(ctxt, globalEnv, Vm.State())
 
     rtnCtxt.rslt shouldBe Fixnum(6)
+  }
+
+  "(let [[x #t]] (label l (if x (seq (set! x #f) (goto l)) 5)))" should "return 5" in {
+
+    /**
+      * litvec:
+      *    0:   {LetExpr}
+      *    1:   {Template}
+      *    2:   {Loc lex[0,0]}
+      * codevec:
+      *    0:   alloc 1
+      *    1:   lit #t,arg[0]
+      *    2:   nargs 1
+      *    3:   extend 1
+      *    4:   xfer lex[0,0],rslt
+      *    5:   jf 10
+      *    6:   lit #f,rslt
+      *    7:   xfer rslt,lex[0,0]
+      *    8:   xfer lex[0,0],rslt
+      *    9:   jmp 4
+      *   10:   lit 5,rslt
+      *   11:   rtn/nxt
+      */
+    val codevec = Seq(
+      OpAlloc(1),
+      OpImmediateLitToArg(literal = `#t`, arg = 0),
+      OpNargs(1),
+      OpExtend(1),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = rslt),
+      OpJmpFalse(10),
+      OpImmediateLitToReg(literal = `#f`, reg = rslt),
+      OpXferRsltToDest(2),
+      OpXferLexToReg(indirect = false, level = 0, offset = 0, reg = rslt),
+      OpJmp(4),
+      OpImmediateLitToReg(literal = `5`, reg = rslt),
+      OpRtn(next = true)
+    )
+
+    val keyMeta = Meta(extensible = false)
+    keyMeta.map(Symbol("x")) = LexVariable(0, 0, indirect = false)
+
+    val template = new Template(
+      keyTuple = Tuple(Symbol("x")),
+      pat = new IdVecPattern(new TupleExpr(Seq(Symbol("x")))),
+      keyMeta = keyMeta
+    )
+
+    val lexVar = LexVariable(0, 0, indirect = false)
+
+    val rtnCtxt = Ctxt.outstanding(1)
+
+    val code = Code(litvec = Seq(Niv, template, lexVar), codevec = codevec)
+
+    val ctxt = Ctxt(code, rtnCtxt, LocRslt)
+    ctxt.env = new Extension()
+
+    Vm.run(ctxt, globalEnv, Vm.State())
+
+    rtnCtxt.rslt shouldBe Fixnum(5)
   }
 }

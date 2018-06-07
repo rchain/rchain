@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.history.{Blake2b256Hash, ITrieStore}
+import coop.rchain.rspace.history.ITrieStore
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Seq
@@ -59,7 +59,7 @@ trait IStore[C, P, A, K] {
 
   def toMap: Map[Seq[C], Row[P, A, K]]
 
-  def close(): Unit
+  private[rspace] def close(): Unit
 
   def getStoreCounters: StoreCounters
 
@@ -68,6 +68,20 @@ trait IStore[C, P, A, K] {
   def getCheckpoint(): Blake2b256Hash
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
+
+  private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
+    in.groupBy(_.channelsHash)
+      .flatMap {
+        case (_, value) =>
+          value
+            .sorted(Ordering.by((tu: TrieUpdate[C, P, A, K]) => tu.count).reverse)
+            .headOption match {
+            case Some(TrieUpdate(_, Delete, _, _))          => List.empty
+            case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
+            case _                                          => value
+          }
+      }
+      .toList
 
   private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
 

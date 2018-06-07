@@ -7,7 +7,8 @@ import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, InterpreterErrorsM}
-import coop.rchain.rspace.IStore
+import coop.rchain.rspace.ISpace
+import coop.rchain.rspace.pure.PureRSpace
 
 trait Dispatch[M[_], A, K] {
 
@@ -43,16 +44,18 @@ class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit capt
 object RholangOnlyDispatcher {
 
   def create[M[_], F[_]](
-      tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])(
+      tuplespace: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation])(
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
       parallel: Parallel[M, F],
       ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+    val pureSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation] =
+      new PureRSpace(tuplespace)
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangOnlyDispatcher(reducer)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespace, dispatcher)
+      new Reduce.DebruijnInterpreter[M, F](pureSpace, dispatcher)
     dispatcher
   }
 }
@@ -82,17 +85,19 @@ class RholangAndScalaDispatcher[M[_]] private (
 
 object RholangAndScalaDispatcher {
 
-  def create[M[_], F[_]](tuplespace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+  def create[M[_], F[_]](tuplespace: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
                          dispatchTable: => Map[Long, Function1[Seq[Seq[Channel]], M[Unit]]])(
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
       parallel: Parallel[M, F],
       ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+    val pureSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation] =
+      new PureRSpace(tuplespace)
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
       new RholangAndScalaDispatcher(reducer, dispatchTable)
     lazy val reducer: Reduce[M] =
-      new Reduce.DebruijnInterpreter[M, F](tuplespace, dispatcher)
+      new Reduce.DebruijnInterpreter[M, F](pureSpace, dispatcher)
     dispatcher
   }
 }

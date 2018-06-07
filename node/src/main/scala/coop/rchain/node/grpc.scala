@@ -103,7 +103,7 @@ object GrpcServer {
                     errors
                       .map(_.toString())
                       .mkString("Errors received during evaluation:\n", "\n", "\n")
-                s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
+                s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
               }
             }
         }
