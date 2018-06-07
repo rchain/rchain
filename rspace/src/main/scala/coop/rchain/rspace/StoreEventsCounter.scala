@@ -2,12 +2,15 @@ package coop.rchain.rspace
 import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.tailrec
 
+case class StoreCount(count: Long, avgMilliseconds: Double)
+
 case class StoreCounters(sizeOnDisk: Long,
                          dataEntries: Long,
-                         consumesCount: Long,
-                         consumeAvgMilliseconds: Double,
-                         producesCount: Long,
-                         produceAvgMilliseconds: Double)
+                         consumesCount: StoreCount,
+                         producesCount: StoreCount,
+                         consumesCommCount: StoreCount,
+                         producesCommCount: StoreCount,
+                         installCommCount: StoreCount)
 
 /**
   * Conters rspace produce and consume calls.
@@ -31,43 +34,72 @@ private[rspace] class StoreEventsCounter {
         (BigDecimal(sumTimeNanoseconds) / (count * 1000000)).toDouble
       else
         0
+
+    def toStoreCount: StoreCount =
+      StoreCount(count, avgTimeMiliiseconds)
   }
 
   val zeroCounter = Counter(0, 0)
 
+  //produces
   private[this] val producesCounter = new AtomicReference[Counter](zeroCounter)
-  private[this] val consumesCounter = new AtomicReference[Counter](zeroCounter)
 
-  private[rspace] def reset(): Unit = {
-    producesCounter.set(zeroCounter)
-    consumesCounter.set(zeroCounter)
-  }
-
-  private[rspace] def getConsumesCount: Long = consumesCounter.get.count
+  def registerProduce[T](f: => T): T =
+    register(producesCounter, f)
 
   private[rspace] def getProducesCount: Long = producesCounter.get.count
 
-  // for nano-time pitfalls please read
-  // https://shipilev.net/blog/2014/nanotrusting-nanotime/
-  def registerProduce[T](f: => T): T = {
-    val start = System.nanoTime()
-    try {
-      f
-    } finally {
-      val end  = System.nanoTime()
-      val diff = Math.max(end - start, 0)
-      addAtomic(producesCounter, diff)
-    }
+  //consumes
+  private[this] val consumesCounter = new AtomicReference[Counter](zeroCounter)
+
+  def registerConsume[T](f: => T): T =
+    register(consumesCounter, f)
+
+  private[rspace] def getConsumesCount: Long = consumesCounter.get.count
+
+  //consumes Comm
+  private[this] val consumesCommCounter = new AtomicReference[Counter](zeroCounter)
+
+  def registerConsumeCommEvent[T](f: => T): T =
+    register(consumesCommCounter, f)
+
+  private[rspace] def getConsumesCommCount: Long = consumesCommCounter.get.count
+
+  //produces Comm
+  private[this] val producesCommCounter = new AtomicReference[Counter](zeroCounter)
+
+  def registerProduceCommEvent[T](f: => T): T =
+    register(producesCommCounter, f)
+
+  private[rspace] def getProducesCommCount: Long = producesCommCounter.get.count
+
+  //install Comm
+
+  private[this] val installCommCounter = new AtomicReference[Counter](zeroCounter)
+
+  def registerInstallCommEvent[T](f: => T): T =
+    register(installCommCounter, f)
+
+  private[rspace] def getInstallCommCount: Long = installCommCounter.get.count
+
+  private[rspace] def reset(): Unit = {
+    consumesCounter.set(zeroCounter)
+    producesCounter.set(zeroCounter)
+    consumesCommCounter.set(zeroCounter)
+    producesCommCounter.set(zeroCounter)
+    installCommCounter.set(zeroCounter)
   }
 
-  def registerConsume[T](f: => T): T = {
+  // for nano-time pitfalls please read
+  // https://shipilev.net/blog/2014/nanotrusting-nanotime/
+  def register[T](counter: AtomicReference[Counter], f: => T): T = {
     val start = System.nanoTime()
     try {
       f
     } finally {
       val end  = System.nanoTime()
       val diff = Math.max(end - start, 0)
-      addAtomic(consumesCounter, diff)
+      addAtomic(counter, diff)
     }
   }
 
@@ -78,15 +110,14 @@ private[rspace] class StoreEventsCounter {
       addAtomic(counter, value)
   }
 
-  def createCounters(sizeOnDisk: Long, dataEntries: Long): StoreCounters = {
-    val consumesSnapshot = consumesCounter.get
-    val producesSnapshot = producesCounter.get
-
-    StoreCounters(sizeOnDisk,
-                  dataEntries,
-                  consumesSnapshot.count,
-                  consumesSnapshot.avgTimeMiliiseconds,
-                  producesSnapshot.count,
-                  producesSnapshot.avgTimeMiliiseconds)
-  }
+  def createCounters(sizeOnDisk: Long, dataEntries: Long): StoreCounters =
+    StoreCounters(
+      sizeOnDisk,
+      dataEntries,
+      consumesCounter.get.toStoreCount,
+      producesCounter.get.toStoreCount,
+      consumesCommCounter.get.toStoreCount,
+      producesCommCounter.get.toStoreCount,
+      installCommCounter.get.toStoreCount
+    )
 }

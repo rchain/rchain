@@ -6,7 +6,7 @@ import cats.implicits._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.metrics.Metrics
-import coop.rchain.node.model.diagnostics.StoreUsage
+import coop.rchain.node.model.diagnostics.{StoreUsage, StoreUsageCount}
 
 trait StoreMetrics[F[_]] {
   def storeUsage: F[StoreUsage]
@@ -28,15 +28,22 @@ object StoreMetrics extends StoreMetricsInstances {
     def g(name: String, value: Long): F[Unit] =
       m.setGauge(name, value)
 
+    def c(name: String, value: Option[StoreUsageCount]): F[Unit] =
+      for {
+        _ <- m.setGauge(name + "-count", value.map(_.count).getOrElse(0))
+        _ <- m.setGauge(name + "-avg-ms", value.map(_.avgMilliseconds.toLong).getOrElse(0))
+      } yield ()
+
     def reportStoreSize(storeSize: StoreUsage): List[F[Unit]] =
       List(
         g("total-size-on-disk", storeSize.totalSizeOnDisk),
         g("rspace-size-on-disk", storeSize.rspaceSizeOnDisk),
         g("rspace-data-entries", storeSize.rspaceDataEntries),
-        g("rspace-consumes-count", storeSize.rspaceConsumesCount),
-        g("rspace-consume-avg-ms", storeSize.rspaceConsumeAvgMilliseconds.toLong),
-        g("rspace-produces-count", storeSize.rspaceProducesCount),
-        g("rspace-produces-avg-ms", storeSize.rspaceProduceAvgMilliseconds.toLong)
+        c("rspace-consumes", storeSize.rspaceConsumesCount),
+        c("rspace-produces", storeSize.rspaceProducesCount),
+        c("rspace-consumes-COMM", storeSize.rspaceConsumesCommCount),
+        c("rspace-produces-COMM", storeSize.rspaceProducesCommCount),
+        c("rspace-install-COMM", storeSize.rspaceInstallCommCount)
       )
 
     def join(tasks: Seq[F[Unit]]*): F[List[Unit]] =
