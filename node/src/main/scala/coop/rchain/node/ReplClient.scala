@@ -2,6 +2,7 @@ package coop.rchain.node
 
 import java.io.File
 
+import cats.implicits._
 import scala.io.Source
 
 import coop.rchain.node.model.repl._
@@ -28,25 +29,19 @@ class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
   def run(line: String): Task[String] = Task.delay {
     blockingStub.run(CmdRequest(line)).output
   }
+  def eval(fileNames: List[String]): Task[String] =
+    fileNames
+      .traverse(eval)
+      .map(_.mkString("\n"))
 
-  def eval(fileNames: List[String]): Task[String] = Task.delay {
-    val (existing, missing) =
-      fileNames
-        .map(new File(_))
-        .partition(_.exists())
-
-    if (missing.isEmpty) {
-      val sources = existing.map(f => Source.fromFile(f))
-
-      try {
-        val content = sources.map(_.getLines().mkString("\n")).mkString("|\n")
-
-        blockingStub.eval(EvalRequest(content)).output
-      } finally {
-        sources.foreach(_.close())
+  def eval(fileName: String): Task[String] = Task.delay {
+    val file = new File(fileName)
+    if (file.exists()) {
+      withResource(Source.fromFile(file)) { source =>
+        blockingStub.eval(EvalRequest(source.getLines.mkString("\n"))).output
       }
     } else {
-      s"Files not found: ${missing.map(_.getName)}"
+      s"File $fileName not found"
     }
   }
 }
