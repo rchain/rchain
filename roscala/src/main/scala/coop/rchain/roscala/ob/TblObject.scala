@@ -1,12 +1,22 @@
 package coop.rchain.roscala.ob
 
-import scala.collection.mutable
+import coop.rchain.roscala.util.Slot
+import coop.rchain.roscala.util.syntax._
 
 class TblObject extends Actor {
-  val keyVec = mutable.ArrayBuffer[Ob]()
+  val keyVec = Slot()
 
-  def addSlot(key: Ob, value: Ob): Int = {
-    keyVec.append(key)
-    super.addSlot(value)
-  }
+  def entry(n: Int): Ob = extension.slot(n).get
+
+  def entryKey(n: Int): Ob = keyVec(n).get
+
+  def addSlot(key: Ob, value: Ob): Int =
+    //necessary because we want to update `keyVec` and `extension.slot` atomically
+    //otherwise another thread could try to access an uninitialized associated value
+    keyVec.lock.writeLock().withLock {
+      extension.slot.lock.writeLock().withLock {
+        keyVec += key
+        super.addSlot(value)
+      }
+    }
 }

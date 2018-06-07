@@ -7,14 +7,14 @@ case class Fixnum(value: Int) extends Ob {
 }
 
 object Fixnum {
-  val fixnumMeta = Meta(map = mutable.Map(), 0, extensible = false)
+  val fixnumMeta = Meta(extensible = false)
   val fixnumSbo  = new Actor()
 
   def apply(value: Int): Fixnum = {
     val fixnum = new Fixnum(value)
     fixnum.parent = fixnumSbo
     fixnum.meta = fixnumMeta
-    fixnum.meta.refCount += 1
+    fixnum.meta.refCount.incrementAndGet()
     fixnum
   }
 }
