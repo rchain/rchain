@@ -20,13 +20,8 @@ class SortedHashSetSpec extends FlatSpec with Matchers {
   private[this] def serializeESet(parTreeSet: SortedHashSet[Par]): Array[Byte] =
     ESet(ps = parTreeSet).toByteArray
 
-  private[this] def roundtripTest(parTreeSet: SortedHashSet[Par]): Assertion = {
-    val output = new ByteArrayOutputStream()
-    val eset   = ESet(ps = parTreeSet)
-    eset.writeTo(output)
-    val got = ESet().mergeFrom(CodedInputStream.newInstance(output.toByteArray))
-    got should ===(eset)
-  }
+  private[this] def roundtripTest(parTreeSet: SortedHashSet[Par]): Assertion =
+    ESet.parseFrom(serializeESet(parTreeSet)) should ===(ESet(ps = parTreeSet))
 
   val pars: Seq[Par] = {
     val parGround =
