@@ -678,11 +678,6 @@ object Reduce {
       elist.copy(locallyFree = resultLocallyFree)
     }
 
-    def updateLocallyFree(eset: ESet): ESet = {
-      val resultLocallyFree = eset.ps.sortedPars.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
-      eset.copy(locallyFree = resultLocallyFree)
-    }
-
     /**
       * Evaluate any top level expressions in @param Par .
       */
