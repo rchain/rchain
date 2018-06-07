@@ -7,8 +7,12 @@ import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 
 sealed trait Pointer
-case class NodePointer(hash: Blake2b256Hash) extends Pointer
-case class LeafPointer(hash: Blake2b256Hash) extends Pointer
+sealed trait NonEmptyPointer extends Pointer {
+  def hash: Blake2b256Hash
+}
+
+case class NodePointer(hash: Blake2b256Hash) extends NonEmptyPointer
+case class LeafPointer(hash: Blake2b256Hash) extends NonEmptyPointer
 //case class Extension(affix: ByteVector, hash: Blake2b256Hash) extends Pointer
 case object EmptyPointer extends Pointer
 

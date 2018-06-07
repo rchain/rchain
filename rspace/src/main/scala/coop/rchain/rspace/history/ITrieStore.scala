@@ -37,7 +37,7 @@ trait ITrieStore[T, K, V] {
             case ((nexts, leaves), Node(pointerBlock)) =>
               val children =
                 pointerBlock.children
-                  .map(_._2)
+                  .map { _.hash }
                   .traverse[Option, Trie[K, V]](hash => get(txn, hash))
                   .getOrElse(throw new LookupException("something went wrong"))
               (nexts ++ children, leaves)

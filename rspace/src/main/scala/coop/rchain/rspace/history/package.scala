@@ -251,7 +251,7 @@ package object history {
       case (byte, Node(pointerBlock)) +: tail =>
         val updated = (Node(pointerBlock.updated(List((byte, EmptyPointer)))), tail)
         // Get the children of the immediate parent
-        pointerBlock.children match {
+        pointerBlock.childrenWithIndex match {
           // If there are no children, then something is wrong, because one of the children
           // should point down to the thing we are trying to delete.
           case Vector() =>
@@ -264,15 +264,13 @@ package object history {
           // we are trying to delete.  We then decide how to handle the other child based on
           // whether or not it is a Node or a Leaf
           case c @ Vector(_, _) =>
-            val otherHash = c.collect { case (childByte, child) if childByte != byte => child }.head
-            store.get(txn, otherHash) match {
+            val otherPointer = c.collect { case (child, childByte) if childByte != byte => child }.head
+            otherPointer match {
               // If the other child is a Node, then we leave it intact, and update the parent node's
               // Vector at the given index to `None`.
-              case Some(Node(_)) => updated
+              case NodePointer(_) => updated
               // If the other child is a Leaf, then we must propagate it up the trie.
-              case Some(Leaf(_, _)) => propagateLeafUpward(otherHash, tail)
-              // If there is nothing there, something has gone wrong
-              case None => throw new DeleteException(s"No value at $otherHash")
+              case LeafPointer(otherHash) => propagateLeafUpward(otherHash, tail)
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `None`.

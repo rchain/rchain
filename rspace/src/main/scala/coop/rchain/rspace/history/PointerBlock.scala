@@ -14,10 +14,14 @@ class PointerBlock private (val toVector: Vector[Pointer]) {
       vec.updated(curr._1, curr._2)
     })
 
-  def children: Vector[(Int, Blake2b256Hash)] =
+  def children: Vector[NonEmptyPointer] =
+    toVector.collect {
+      case p: NonEmptyPointer => p
+    }
+
+  def childrenWithIndex: Vector[(NonEmptyPointer, Int)] =
     toVector.zipWithIndex.collect {
-      case (NodePointer(hash), idx) => (idx, hash)
-      case (LeafPointer(hash), idx) => (idx, hash)
+      case (p: NonEmptyPointer, i) => (p, i)
     }
 
   override def toString: String = s"PointerBlock(toVector: ${toVector.toString})"
