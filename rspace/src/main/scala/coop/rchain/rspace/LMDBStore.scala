@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, EmptyPointer, LMDBTrieStore, NonEmptyPointer}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
@@ -297,7 +297,10 @@ class LMDBStore[C, P, A, K] private (
         history.delete(trieStore, channelsHash, gnat)
     }
     withTxn(createTxnRead()) { txn =>
-      trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
+      trieStore.getRoot(txn) match {
+        case EmptyPointer       => throw new Exception("Could not get root hash")
+        case p: NonEmptyPointer => p.hash
+      }
     }
   }
 

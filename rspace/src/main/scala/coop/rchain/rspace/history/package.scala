@@ -9,6 +9,7 @@ import cats.syntax.eq._
 import cats.syntax.traverse._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.seq._
+import coop.rchain.rspace.history._
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
 
@@ -24,13 +25,13 @@ package object history {
                                                       codecV: Codec[V]): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.getRoot(txn) match {
-        case None =>
+        case EmptyPointer =>
           val root     = Trie.create[K, V]()
           val rootHash = Trie.hash(root)
           store.put(txn, rootHash, root)
           store.putRoot(txn, rootHash)
           logger.debug(s"workingRootHash: $rootHash")
-        case Some(_) =>
+        case _: NonEmptyPointer =>
           ()
       }
     }
@@ -67,9 +68,12 @@ package object history {
 
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       for {
-        currentRootHash <- store.getRoot(txn)
-        currentRoot     <- store.get(txn, currentRootHash)
-        res             <- loop(txn, 0, currentRoot)
+        currentRootHash <- store.getRoot(txn) match {
+                            case p: NonEmptyPointer => Some(p.hash)
+                            case _                  => None
+                          }
+        currentRoot <- store.get(txn, currentRootHash)
+        res         <- loop(txn, 0, currentRoot)
       } yield res
     }
   }
@@ -141,7 +145,10 @@ package object history {
     store.withTxn(store.createTxnWrite()) { (txn: T) =>
       // Get the current root hash
       val currentRootHash: Blake2b256Hash =
-        store.getRoot(txn).getOrElse(throw new InsertException("could not get root"))
+        store.getRoot(txn) match {
+          case p: NonEmptyPointer => p.hash
+          case _                  => throw new InsertException("could not get root")
+        }
       // Get the current root node
       store.get(txn, currentRootHash) match {
         case None =>
@@ -285,7 +292,10 @@ package object history {
     store.withTxn(store.createTxnWrite()) { (txn: T) =>
       // We take the current root hash, preventing other threads from operating on the Trie
       val currentRootHash: Blake2b256Hash =
-        store.getRoot(txn).getOrElse(throw new InsertException("could not get root"))
+        store.getRoot(txn) match {
+          case p: NonEmptyPointer => p.hash
+          case _                  => throw new InsertException("could not get root")
+        }
       // Get the current root node
       store.get(txn, currentRootHash) match {
         case None =>

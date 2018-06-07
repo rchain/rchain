@@ -1,7 +1,7 @@
 package coop.rchain.rspace.test
 
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.history.{ITrieStore, Trie}
+import coop.rchain.rspace.history.{ITrieStore, Pointer, Trie}
 
 class DummyTrieStore[T, K, V] extends ITrieStore[T, K, V] {
 
@@ -11,7 +11,7 @@ class DummyTrieStore[T, K, V] extends ITrieStore[T, K, V] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R = ???
 
-  private[rspace] def getRoot(txn: T): Option[Blake2b256Hash] = ???
+  private[rspace] def getRoot(txn: T): Pointer = ???
 
   private[rspace] def putRoot(txn: T, hash: Blake2b256Hash): Unit = ???
 

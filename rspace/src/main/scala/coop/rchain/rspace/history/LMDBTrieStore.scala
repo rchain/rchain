@@ -83,10 +83,17 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
     buffer
   }
 
-  private[rspace] def getRoot(txn: Txn[ByteBuffer]): Option[Blake2b256Hash] =
-    Option(_dbRoot.get(txn, ROOT_KEY)).map { (buffer: ByteBuffer) =>
-      Codec[Blake2b256Hash].decode(BitVector(buffer)).map(_.value).get
-    }
+  private[rspace] def getRoot(txn: Txn[ByteBuffer]): Pointer =
+    Option(_dbRoot.get(txn, ROOT_KEY))
+      .map { (buffer: ByteBuffer) =>
+        val h = Codec[Blake2b256Hash].decode(BitVector(buffer)).map(_.value).get
+        get(txn, h) match {
+          case Some(Leaf(_, _)) => LeafPointer(h)
+          case None             => EmptyPointer
+          case _                => NodePointer(h)
+        }
+      }
+      .getOrElse(EmptyPointer)
 
   private[rspace] def putRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit = {
     val encodedHash     = Codec[Blake2b256Hash].encode(hash).get

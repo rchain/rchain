@@ -16,7 +16,7 @@ trait ITrieStore[T, K, V] {
 
   private[rspace] def withTxn[R](txn: T)(f: T => R): R
 
-  private[rspace] def getRoot(txn: T): Option[Blake2b256Hash]
+  private[rspace] def getRoot(txn: T): Pointer
 
   private[rspace] def putRoot(txn: T, hash: Blake2b256Hash): Unit
 
