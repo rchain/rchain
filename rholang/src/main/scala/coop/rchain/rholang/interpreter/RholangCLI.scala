@@ -66,7 +66,8 @@ object RholangCLI {
               writeHumanReadable(fileName, par)
             } else {
               val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-              waitThenPrintStorageContents(evaluatorFuture, runtime.space.store)
+              waitForSuccess(evaluatorFuture)
+              printStorageContents(runtime.space.store)
             }
           case Left(error) =>
             System.err.println(error)
@@ -111,7 +112,8 @@ object RholangCLI {
         buildNormalizedTerm(new StringReader(line)).runAttempt match {
           case Right(par) =>
             val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-            waitThenPrintStorageContents(evaluatorFuture, runtime.space.store)
+            waitForSuccess(evaluatorFuture)
+            printStorageContents(runtime.space.store)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
             Console.err.print(ie.toString)
@@ -159,19 +161,17 @@ object RholangCLI {
       }
 
   @tailrec
-  def waitThenPrintStorageContents(
-      evaluatorFuture: CancelableFuture[Unit],
-      store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[Unit]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(_)) => printStorageContents(store)
+        case Some(Success(_)) => ()
         case Some(Failure(e)) => throw e
         case None             => throw new Exception("Future claimed to be ready, but value was None")
       }
     } catch {
       case _: TimeoutException =>
         Console.println("This is taking a long time. Feel free to ^C and quit.")
-        waitThenPrintStorageContents(evaluatorFuture, store)
+        waitForSuccess(evaluatorFuture)
       case e: Exception =>
         throw e
     }
