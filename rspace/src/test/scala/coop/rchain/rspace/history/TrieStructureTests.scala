@@ -70,7 +70,7 @@ class TrieStructureTests
     withTrie {
       case Node(PointerBlock(vector)) =>
         vector should have size 256
-        vector should contain only EmptyChild
+        vector should contain only EmptyPointer
       case _ => fail("expected a node")
     }
 
@@ -129,7 +129,7 @@ class TrieStructureTests
       implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
     import SingleElementData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
-      expectNode(rootHex, Seq((1, LeafChild(leafHex))))
+      expectNode(rootHex, Seq((1, LeafPointer(leafHex))))
       val expectedLeafHash = Blake2b256Hash
         .fromHex(leafHex)
 
@@ -142,10 +142,10 @@ class TrieStructureTests
       implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
     import CommonPrefixData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
-      expectNode(rootHex, Seq((1, NodeChild(level1Hex))))
-      expectNode(level1Hex, Seq((0, NodeChild(level2Hex))))
-      expectNode(level2Hex, Seq((0, NodeChild(level3Hex))))
-      expectNode(level3Hex, Seq((0, LeafChild(leaf1Hex)), (1, LeafChild(leaf2Hex))))
+      expectNode(rootHex, Seq((1, NodePointer(level1Hex))))
+      expectNode(level1Hex, Seq((0, NodePointer(level2Hex))))
+      expectNode(level2Hex, Seq((0, NodePointer(level3Hex))))
+      expectNode(level3Hex, Seq((0, LeafPointer(leaf1Hex)), (1, LeafPointer(leaf2Hex))))
 
       val expectedLeaf1Hash = Blake2b256Hash
         .fromHex(leaf1Hex)
@@ -161,7 +161,7 @@ class TrieStructureTests
     Blake2b256Hash
       .fromHex(hex)
 
-  private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, Child)])(
+  private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, Pointer)])(
       implicit txn: Txn[ByteBuffer],
       store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
     store.get(txn,
@@ -169,13 +169,13 @@ class TrieStructureTests
                 .fromHex(currentHex)) match {
       case Some(Node(PointerBlock(vector))) =>
         vector should have size 256
-        val expectedChildren = childHexes.map {
-          case (expectedPosition, expectedChild) =>
-            vector(expectedPosition) shouldBe expectedChild
-            expectedChild
+        val expectedPointers = childHexes.map {
+          case (expectedPosition, expectedPointer) =>
+            vector(expectedPosition) shouldBe expectedPointer
+            expectedPointer
         }
 
-        vector.filterNot(expectedChildren.contains) should contain only EmptyChild
+        vector.filterNot(expectedPointers.contains) should contain only EmptyPointer
 
       case default => fail(s"Expected a node under $currentHex, got $default")
     }

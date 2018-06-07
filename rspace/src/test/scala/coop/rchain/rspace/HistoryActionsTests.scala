@@ -74,7 +74,7 @@ trait HistoryActionsTests
             .create()
             .updated(
               List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                    LeafChild(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
+                    LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
 
       consume(store,
               gnat.channels,

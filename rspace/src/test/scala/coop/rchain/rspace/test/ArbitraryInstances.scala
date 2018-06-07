@@ -31,8 +31,8 @@ object ArbitraryInstances {
   implicit val arbitraryBlake2b256Hash: Arbitrary[Blake2b256Hash] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(bytes => Blake2b256Hash.create(bytes)))
 
-  implicit val arbitraryChild: Arbitrary[Child] =
-    Arbitrary(Arbitrary.arbitrary[Blake2b256Hash].map(LeafChild))
+  implicit val arbitraryPointer: Arbitrary[Pointer] =
+    Arbitrary(Arbitrary.arbitrary[Blake2b256Hash].map(LeafPointer))
 
   implicit val arbitraryByteVector: Arbitrary[ByteVector] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(bytes => ByteVector(bytes)))
@@ -40,7 +40,7 @@ object ArbitraryInstances {
   implicit val arbitraryPointerBlock: Arbitrary[PointerBlock] =
     Arbitrary(Gen.sized { _ =>
       Gen
-        .listOfN(256, Arbitrary.arbitrary[Child])
+        .listOfN(256, Arbitrary.arbitrary[Pointer])
         .map(maybeHashes => PointerBlock.fromVector(maybeHashes.toVector))
     })
 

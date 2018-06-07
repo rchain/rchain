@@ -6,14 +6,14 @@ import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 
-sealed trait Child
-case class NodeChild(hash: Blake2b256Hash) extends Child
-case class LeafChild(hash: Blake2b256Hash) extends Child
-//case class Extension(affix: ByteVector, hash: Blake2b256Hash) extends Child
-case object EmptyChild extends Child
+sealed trait Pointer
+case class NodePointer(hash: Blake2b256Hash) extends Pointer
+case class LeafPointer(hash: Blake2b256Hash) extends Pointer
+//case class Extension(affix: ByteVector, hash: Blake2b256Hash) extends Pointer
+case object EmptyPointer extends Pointer
 
 sealed trait Trie[+K, +V] extends Product with Serializable
-//final case class Root(child: Child)               extends Trie[Nothing, Nothing]
+//final case class Root(child: Pointer)               extends Trie[Nothing, Nothing]
 final case class Leaf[K, V](key: K, value: V)     extends Trie[K, V]
 final case class Node(pointerBlock: PointerBlock) extends Trie[Nothing, Nothing]
 

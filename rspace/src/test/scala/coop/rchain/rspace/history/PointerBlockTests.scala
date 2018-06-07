@@ -37,7 +37,7 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
 
   val helloHash: Blake2b256Hash = Blake2b256Hash.create("hello".getBytes())
 
-  val fullPb: PointerBlock = PointerBlock.fromVector(Vector.fill(256)(LeafChild(helloHash)))
+  val fullPb: PointerBlock = PointerBlock.fromVector(Vector.fill(256)(LeafPointer(helloHash)))
 
   "An empty PointerBlock" should "have the expected hash" in {
 
@@ -66,7 +66,7 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
 
   "A PointerBlock with a known item at index 1" should "have the expected hash" in {
 
-    val pb = emptyPb.updated(List((1, LeafChild(helloHash))))
+    val pb = emptyPb.updated(List((1, LeafPointer(helloHash))))
 
     val attemptedActual = implicitly[Codec[PointerBlock]]
       .encode(pb)
@@ -79,7 +79,7 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
 
   "A PointerBlock with a known item at index 42" should "have the expected hash" in {
 
-    val pb = emptyPb.updated(List((42, LeafChild(helloHash))))
+    val pb = emptyPb.updated(List((42, LeafPointer(helloHash))))
 
     val attemptedActual = implicitly[Codec[PointerBlock]]
       .encode(pb)
