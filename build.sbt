@@ -236,9 +236,7 @@ lazy val rholangProtoBuild = (project in file("rholang-proto-build"))
   .settings(commonSettings: _*)
   .settings(
     name := "rholang-proto-build",
-    incrementalAssembly in Compile := Def.sequential(
-      _incrementalAssembly
-    ).value
+    incrementalAssembly in Compile := _incrementalAssembly.value
   )
   .dependsOn(rholang)
   
