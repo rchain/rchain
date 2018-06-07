@@ -10,6 +10,11 @@ class LockedMap[K, V] {
 
   val lock = new ReentrantReadWriteLock(false)
 
+  def unsafeGet(i: K): V =
+    lock.readLock().withLock {
+      map.get(i)
+    }
+
   def apply(i: K): Option[V] =
     lock.readLock().withLock {
       Option(map.get(i))
@@ -18,6 +23,11 @@ class LockedMap[K, V] {
   def update(i: K, v: V): Unit =
     lock.writeLock().withLock {
       map.put(i, v)
+    }
+
+  def useWithReadLock[R](f: ConcurrentHashMap[K, V] => R): R =
+    lock.readLock().withLock {
+      f(map)
     }
 
   def size: Int = map.size()

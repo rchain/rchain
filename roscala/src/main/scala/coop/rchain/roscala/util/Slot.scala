@@ -11,6 +11,16 @@ class Slot extends LockedMap[Int, Ob] {
       map.put(size, v)
       size
     }
+
+  def ++=(arr: Array[Ob]): Unit =
+    lock.writeLock().withLock {
+      val size = map.size()
+
+      arr.zipWithIndex.foreach {
+        case (v, i) =>
+          map.put(i + size, v)
+      }
+    }
 }
 
 object Slot {
