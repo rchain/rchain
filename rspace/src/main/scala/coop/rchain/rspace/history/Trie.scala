@@ -13,11 +13,9 @@ sealed trait NonEmptyPointer extends Pointer {
 
 case class NodePointer(hash: Blake2b256Hash) extends NonEmptyPointer
 case class LeafPointer(hash: Blake2b256Hash) extends NonEmptyPointer
-//case class Extension(affix: ByteVector, hash: Blake2b256Hash) extends Pointer
 case object EmptyPointer extends Pointer
 
 sealed trait Trie[+K, +V] extends Product with Serializable
-//final case class Root(child: Pointer)               extends Trie[Nothing, Nothing]
 final case class Leaf[K, V](key: K, value: V)     extends Trie[K, V]
 final case class Node(pointerBlock: PointerBlock) extends Trie[Nothing, Nothing]
 
