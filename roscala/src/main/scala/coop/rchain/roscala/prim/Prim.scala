@@ -8,10 +8,9 @@ abstract class Prim extends Ob {
   def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob
 
   // TODO: Add error case
-  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob = {
-    val n = state.ctxt.nargs
+  def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob =
+    //val n = state.ctxt.nargs
     fn(state.ctxt, globalEnv)
-  }
 
   override def dispatch(state: State, globalEnv: GlobalEnv): Ob = {
     val result = dispatchHelper(state, globalEnv)

@@ -69,6 +69,20 @@ trait IStore[C, P, A, K] {
 
   val trieStore: ITrieStore[T, Blake2b256Hash, GNAT[C, P, A, K]]
 
+  private[rspace] def pruneHistory(in: Seq[TrieUpdate[C, P, A, K]]): Seq[TrieUpdate[C, P, A, K]] =
+    in.groupBy(_.channelsHash)
+      .flatMap {
+        case (_, value) =>
+          value
+            .sorted(Ordering.by((tu: TrieUpdate[C, P, A, K]) => tu.count).reverse)
+            .headOption match {
+            case Some(TrieUpdate(_, Delete, _, _))          => List.empty
+            case Some(insert @ TrieUpdate(_, Insert, _, _)) => List(insert)
+            case _                                          => value
+          }
+      }
+      .toList
+
   private[rspace] def bulkInsert(txn: T, gnats: Seq[(Blake2b256Hash, GNAT[C, P, A, K])]): Unit
 
   private[rspace] def clear(txn: T): Unit
