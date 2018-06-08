@@ -111,7 +111,7 @@ if len(sys.argv)==1:
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
-RNODE_CMD = 'java -Dfile.encoding=UTF8 -Djava.net.preferIPv4Stack=true -jar /rnode-assembly-0.4.1.jar'
+RNODE_CMD = 'rnode'
 
 
 def main():
@@ -219,7 +219,7 @@ def deploy_demo():
 
 def test_node_eval_of_rholang_files(container):
     print(f"Running eval rho file tests of /usr/share/rnode/examples/ on container {container.name}.")
-    cmd = f"ls /usr/share/rnode/examples/*.rho"
+    cmd = f"ls /opt/docker/examples/*.rho"
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
         print(file_path)
