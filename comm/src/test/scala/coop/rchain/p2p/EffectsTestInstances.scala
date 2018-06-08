@@ -79,32 +79,6 @@ object EffectsTestInstances {
     def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
   }
 
-  import Encryption._
-
-  class EncryptionStub[F[_]: Applicative](keys: PublicPrivateKeys, nonce: Nonce)
-      extends Encryption[F] {
-
-    var encryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
-    var decryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
-
-    def reset(): Unit = {
-      encryptions = Nil
-      decryptions = Nil
-    }
-
-    def fetchKeys: F[PublicPrivateKeys] = keys.pure[F]
-    def generateNonce: F[Nonce]         = nonce.pure[F]
-    def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): F[Array[Byte]] = {
-      encryptions = encryptions :+ (pub, sec, nonce, message)
-      message.pure[F]
-    }
-
-    def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]] = {
-      decryptions = decryptions :+ (pub, sec, nonce, cipher)
-      cipher.pure[F]
-    }
-  }
-
   class LogStub[F[_]: Applicative] extends Log[F] {
 
     var infos: List[String]  = List.empty[String]
