@@ -123,15 +123,23 @@ object Runtime {
          |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
           """
 
+    def writeCommCounts(name: String, value: Option[StoreUsageCount]): String =
+      s"""
+         |  + RSpace $name
+         |    - Total Count: ${value.map(_.count).getOrElse(0)}
+         |    - Peak Rate (events/sec): ${value.map(_.peakRate).getOrElse(0)}
+         |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
+          """
+
     s"""Store metrics:
        |  - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
        |  - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
        |  - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
        |  ${writeCounts("Consumes", storeUsage.rspaceConsumesCount)}
        |  ${writeCounts("Produces", storeUsage.rspaceProducesCount)}
-       |  ${writeCounts("Consumes COMM", storeUsage.rspaceConsumesCommCount)}
-       |  ${writeCounts("Produces COMM", storeUsage.rspaceProducesCommCount)}
-       |  ${writeCounts("Install COMM", storeUsage.rspaceInstallCommCount)}
+       |  ${writeCommCounts("Consumes COMM", storeUsage.rspaceConsumesCommCount)}
+       |  ${writeCommCounts("Produces COMM", storeUsage.rspaceProducesCommCount)}
+       |  ${writeCommCounts("Install COMM", storeUsage.rspaceInstallCommCount)}
        |""".stripMargin
   }
 }

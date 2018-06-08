@@ -110,20 +110,18 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
                   |at <channels: $channels>""".stripMargin.replace('\n', ' '))
             None
           case Some(dataCandidates) =>
-            store.eventsCounter.registerConsumeCommEvent {
-              dataCandidates
-                .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                .foreach {
-                  case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
-                      if !persistData =>
-                    store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                  case _ =>
-                    ()
-                }
-              logger.debug(
-                s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-              Some((continuation, dataCandidates.map(_.datum.a)))
-            }
+            store.eventsCounter.registerConsumeCommEvent
+            dataCandidates
+              .sortBy(_.datumIndex)(Ordering[Int].reverse)
+              .foreach {
+                case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
+                    if !persistData =>
+                  store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                case _ =>
+                  ()
+              }
+            logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
+            Some((continuation, dataCandidates.map(_.datum.a)))
         }
       }
     }
@@ -162,21 +160,20 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
                                        WaitingContinuation(patterns, continuation, persist = true))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(s"""|consume: no data found,
-                           |storing <(patterns, continuation): ($patterns, $continuation)>
-                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                |storing <(patterns, continuation): ($patterns, $continuation)>
+                |at <channels: $channels>""".stripMargin.replace('\n', ' '))
           None
         case Some(dataCandidates) =>
-          store.eventsCounter.registerInstallCommEvent {
-            dataCandidates.foreach {
-              case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
-                  if !persistData =>
-                store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-              case _ =>
-                ()
-            }
-            logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
-            Some((continuation, dataCandidates.map(_.datum.a)))
+          store.eventsCounter.registerInstallCommEvent
+          dataCandidates.foreach {
+            case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
+                if !persistData =>
+              store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+            case _ =>
+              ()
           }
+          logger.debug(s"consume: data found for <patterns: $patterns> at <channels: $channels>")
+          Some((continuation, dataCandidates.map(_.datum.a)))
       }
     }
   }
@@ -252,24 +249,23 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
                                WaitingContinuation(_, continuation, persistK),
                                continuationIndex,
                                dataCandidates)) =>
-            store.eventsCounter.registerProduceCommEvent {
-              if (!persistK) {
-                store.removeWaitingContinuation(txn, channels, continuationIndex)
-              }
-              dataCandidates
-                .sortBy(_.datumIndex)(Ordering[Int].reverse)
-                .foreach {
-                  case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
-                    if (!persistData && dataIndex >= 0) {
-                      store.removeDatum(txn, Seq(candidateChannel), dataIndex)
-                    }
-                    store.removeJoin(txn, candidateChannel, channels)
-                  case _ =>
-                    ()
-                }
-              logger.debug(s"produce: matching continuation found at <channels: $channels>")
-              Some(continuation, dataCandidates.map(_.datum.a))
+            store.eventsCounter.registerProduceCommEvent
+            if (!persistK) {
+              store.removeWaitingContinuation(txn, channels, continuationIndex)
             }
+            dataCandidates
+              .sortBy(_.datumIndex)(Ordering[Int].reverse)
+              .foreach {
+                case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex) =>
+                  if (!persistData && dataIndex >= 0) {
+                    store.removeDatum(txn, Seq(candidateChannel), dataIndex)
+                  }
+                  store.removeJoin(txn, candidateChannel, channels)
+                case _ =>
+                  ()
+              }
+            logger.debug(s"produce: matching continuation found at <channels: $channels>")
+            Some(continuation, dataCandidates.map(_.datum.a))
           case None =>
             logger.debug(s"produce: no matching continuation found")
             store.putDatum(txn, Seq(channel), Datum(data, persist))

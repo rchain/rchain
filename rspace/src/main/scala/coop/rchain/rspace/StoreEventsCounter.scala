@@ -34,6 +34,9 @@ private[rspace] class StoreEventsCounter(
     def add(diff: BigInt, rate: Int): SumCounter =
       SumCounter(sumTimeNanoseconds + diff, math.max(rate, peakRate), count + 1)
 
+    def add(rate: Int): SumCounter =
+      SumCounter(sumTimeNanoseconds, math.max(rate, peakRate), count + 1)
+
     def avgTimeMilliseconds: Double =
       if (count > 0)
         (BigDecimal(sumTimeNanoseconds) / (count * 1000000)).toDouble
@@ -53,26 +56,42 @@ private[rspace] class StoreEventsCounter(
     }
 
     def add(start: Long, diff: BigInt): Unit = {
-      eventsQueue.add(start)
+      addEventTime(start)
+      addAtomic(diff, eventsQueue.size)
+    }
+
+    def add(eventTime: Long): Unit = {
+      addEventTime(eventTime)
+      addAtomic(eventsQueue.size)
+    }
+
+    /**
+      * when this function finished size of queue == current rate
+      */
+    def addEventTime(eventTime: Long): Unit = {
+      eventsQueue.add(eventTime)
       //no need to check for isEmpty, since: queue(0) - start === 0
       //speed over precision: due to possibility of out of order add,
       //we may sometime mistakenly include few events into current
       //second.
-      while (start - eventsQueue.peek > registrationIntervalNanoseconds) {
+      while (eventTime - eventsQueue.peek > registrationIntervalNanoseconds) {
         //remove head events outside of our interval
         eventsQueue.poll
       }
-      //size of queue now == current rate
-      addAtomic(diff, eventsQueue.size)
     }
 
     def count: Long = sumCounter.get.count
 
-    def toStoreCount: StoreCount = {
+    def toStoreCount(comm: Boolean = false): StoreCount = {
       val exSum       = sumCounter.get
       val now         = nanoTime
       val currentRate = eventsQueue.asScala.count(x => now - x <= registrationIntervalNanoseconds)
-      StoreCount(exSum.count, exSum.avgTimeMilliseconds, exSum.peakRate, currentRate)
+      val avgTimeMilliseconds = if (comm) {
+        exSum.avgTimeMilliseconds
+      } else {
+        0.0
+      }
+      StoreCount(exSum.count, avgTimeMilliseconds, exSum.peakRate, currentRate)
     }
 
     @tailrec
@@ -80,6 +99,13 @@ private[rspace] class StoreEventsCounter(
       val exSum = sumCounter.get
       if (!sumCounter.compareAndSet(exSum, exSum.add(diff, rate)))
         addAtomic(diff, rate)
+    }
+
+    @tailrec
+    private[this] def addAtomic(rate: Int): Unit = {
+      val exSum = sumCounter.get
+      if (!sumCounter.compareAndSet(exSum, exSum.add(rate)))
+        addAtomic(rate)
     }
   }
 
@@ -104,16 +130,16 @@ private[rspace] class StoreEventsCounter(
   //consumes Comm
   private[this] val consumesCommCounter = new Counter()
 
-  def registerConsumeCommEvent[T](f: => T): T =
-    register(consumesCommCounter, f)
+  def registerConsumeCommEvent: Unit =
+    registerComm(consumesCommCounter)
 
   private[rspace] def getConsumesCommCount: Long = consumesCommCounter.count
 
   //produces Comm
   private[this] val producesCommCounter = new Counter()
 
-  def registerProduceCommEvent[T](f: => T): T =
-    register(producesCommCounter, f)
+  def registerProduceCommEvent: Unit =
+    registerComm(producesCommCounter)
 
   private[rspace] def getProducesCommCount: Long = producesCommCounter.count
 
@@ -121,8 +147,8 @@ private[rspace] class StoreEventsCounter(
 
   private[this] val installCommCounter = new Counter()
 
-  def registerInstallCommEvent[T](f: => T): T =
-    register(installCommCounter, f)
+  def registerInstallCommEvent: Unit =
+    registerComm(installCommCounter)
 
   private[rspace] def getInstallCommCount: Long = installCommCounter.count
 
@@ -147,14 +173,17 @@ private[rspace] class StoreEventsCounter(
     }
   }
 
+  def registerComm(counter: Counter): Unit =
+    counter.add(nanoTime)
+
   def createCounters(sizeOnDisk: Long, dataEntries: Long): StoreCounters =
     StoreCounters(
       sizeOnDisk,
       dataEntries,
-      consumesCounter.toStoreCount,
-      producesCounter.toStoreCount,
-      consumesCommCounter.toStoreCount,
-      producesCommCounter.toStoreCount,
-      installCommCounter.toStoreCount
+      consumesCounter.toStoreCount(),
+      producesCounter.toStoreCount(),
+      consumesCommCounter.toStoreCount(true),
+      producesCommCounter.toStoreCount(true),
+      installCommCounter.toStoreCount(true)
     )
 }
