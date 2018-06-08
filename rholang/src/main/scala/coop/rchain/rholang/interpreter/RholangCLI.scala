@@ -18,7 +18,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.ScallopConf
+import org.rogach.scallop.{stringListConverter, ScallopConf}
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -42,7 +42,8 @@ object RholangCLI {
                              descr = "Map size (in bytes)",
                              default = Some(1024L * 1024L * 1024L))
 
-    val file = trailArg[String](required = false, descr = "Rholang source file")
+    val files =
+      trailArg[List[String]](required = false, descr = "Rholang source file")(stringListConverter)
 
     verify()
   }
@@ -55,17 +56,9 @@ object RholangCLI {
     val runtime = Runtime.create(conf.data_dir(), conf.map_size())
 
     try {
-      if (conf.file.supplied) {
-        val fileName = conf.file()
-
-        val processTerm : Par => Unit =
-          if (conf.binary()) writeBinary(fileName)
-          else if (conf.text()) writeHumanReadable(fileName)
-          else evaluateFile(runtime)
-
-        val source = reader(fileName)
-
-        processFile(source, processTerm)
+      if (conf.files.supplied) {
+        val fileNames = conf.files()
+        fileNames.foreach(f => processFile(conf, runtime, f))
       } else {
         repl(runtime)
       }
@@ -121,10 +114,18 @@ object RholangCLI {
     repl(runtime)
   }
 
-  def processFile(source:Reader, runner : Par => Unit) : Unit = {
+  def processFile(conf: Conf, runtime: Runtime, fileName: String)(
+      implicit scheduler: Scheduler): Unit = {
+    val processTerm: Par => Unit =
+      if (conf.binary()) writeBinary(fileName)
+      else if (conf.text()) writeHumanReadable(fileName)
+      else evaluateFile(runtime)
+
+    val source = reader(fileName)
+
     buildNormalizedTerm(source).runAttempt match {
       case Right(par) =>
-        runner(par)
+        processTerm(par)
       case Left(error) =>
         System.err.println(error)
     }
@@ -196,7 +197,7 @@ object RholangCLI {
     println(s"Compiled $fileName to $binaryFileName")
   }
 
-  def evaluateFile(runtime : Runtime) (par : Par): Unit = {
+  def evaluateFile(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
     val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
     waitForSuccess(evaluatorFuture)
     printStorageContents(runtime.space.store)
