@@ -52,25 +52,29 @@ class ConnectToBootstrapSpec
 
     it("should log on ERROR and return error when failed connecting") {
       // given
-      // transportLayerEff.setResponses(kp(failEverything))
+      transportLayerEff.setResponses(kp(failEverything))
       // when
-      // val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
-      // logEff.errors should equal(List("Failed to connect to bootstrap node, exiting..."))
-      // result.value should equal(Left(couldNotConnectToBootstrap))
+      logEff.errors should equal(List("Failed to connect to bootstrap node, exiting..."))
+      result.value should equal(Left(couldNotConnectToBootstrap))
     }
 
     it("should connect smoothly if there are no issues.") {
       // given
-      // transportLayerEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
+      transportLayerEff.setResponses(kp(alwaysSuccess))
       // when
-      // val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
+      val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
-      // logEff.infos should contain(s"Bootstrapping from $remote.")
-      // logEff.infos should contain(s"Connected $remote.")
-      // result.value should equal(Right(()))
+      logEff.infos should contain(s"Bootstrapping from $remote.")
+      logEff.infos should contain(s"Connected $remote.")
+      result.value should equal(Right(()))
     }
   }
+
+  // TODO extract common trait for comm tests
+  def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
+    kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
 
   private val failEverything = kp(Left[CommError, ProtocolMessage](unknownProtocol("unknown")))
 
