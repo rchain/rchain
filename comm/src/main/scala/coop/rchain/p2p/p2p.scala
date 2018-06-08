@@ -54,7 +54,7 @@ object Network {
 
   type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
 
-  import NetworkProtocol._
+  import CommMessages._
 
   val defaultTimeout: Duration = Duration(500, MILLISECONDS)
 
@@ -183,8 +183,6 @@ object Network {
           sender =>
             dispatchForUpstream(proto, sender)
         }
-      case upstream @ UpstreamResponse(_, _) =>
-        Log[F].debug(s"Out-of-sequence message: $upstream") *> notHandled.pure[F]
       case _ => Log[F].error(s"Unrecognized msg $msg") *> notHandled.pure[F]
     }
   }

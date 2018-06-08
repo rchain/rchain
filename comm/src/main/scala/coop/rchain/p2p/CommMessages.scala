@@ -9,7 +9,7 @@ import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._
 
-object NetworkProtocol {
+object CommMessages {
 
   final case class PacketMessage(proto: routing.Protocol)                    extends ProtocolMessage
   final case class ProtocolHandshakeMessage(proto: routing.Protocol)         extends ProtocolMessage

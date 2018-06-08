@@ -70,8 +70,7 @@ final case class DisconnectMessage(proto: Protocol, timestamp: Long) extends Pro
   */
 final case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
-final case class UpstreamMessage(proto: Protocol, timestamp: Long)  extends ProtocolMessage
-final case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolMessage
+final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
 /**
   * Utility functions for working with protocol buffers.
