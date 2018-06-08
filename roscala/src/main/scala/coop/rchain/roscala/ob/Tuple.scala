@@ -7,7 +7,7 @@ class Tuple(val value: Array[Ob]) extends Ob {
     val extension = new Extension()
     extension.meta = newMeta
     extension.parent = newParent
-    extension.slot.appendAll(value)
+    extension.slot ++= value
 
     extension
   }
