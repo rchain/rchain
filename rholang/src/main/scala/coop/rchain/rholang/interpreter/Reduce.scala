@@ -15,8 +15,8 @@ import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, ReduceError, _}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.pure.{consume => internalConsume, produce => internalProduce}
-import coop.rchain.rspace.{IStore, Serialize}
+import coop.rchain.rspace.Serialize
+import coop.rchain.rspace.pure.PureRSpace
 
 import scala.collection.immutable.BitSet
 import scala.util.Try
@@ -49,7 +49,7 @@ trait Reduce[M[_]] {
 object Reduce {
 
   class DebruijnInterpreter[M[_]: InterpreterErrorsM: Capture, F[_]](
-      tupleSpace: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+      tupleSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation],
       dispatcher: => Dispatch[M, Seq[Channel], TaggedContinuation])(
       implicit parallel: cats.Parallel[M, F])
       extends Reduce[M] {
@@ -84,7 +84,7 @@ object Reduce {
       for {
         substData <- data.toList.traverse(
                       substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
-        res <- internalProduce(tupleSpace, Channel(chan), substData, persist = persistent)
+        res <- tupleSpace.produce(Channel(chan), substData, persist = persistent)
         _   <- go(res)
       } yield ()
     }
@@ -106,21 +106,23 @@ object Reduce {
         case Nil => interpreterErrorM[M].raiseError(ReduceError("Error: empty binds"))
         case _ =>
           val (patterns: Seq[BindPattern], sources: Seq[Quote]) = binds.unzip
-          internalConsume(tupleSpace,
-                          sources.map(q => Channel(q)).toList,
-                          patterns.toList,
-                          TaggedContinuation(ParBody(body)),
-                          persist = persistent).flatMap {
-            case Some((continuation, dataList)) =>
-              dispatcher.dispatch(continuation, dataList)
-              if (persistent) {
-                List(dispatcher.dispatch(continuation, dataList), consume(binds, body, persistent)).parSequence
-                  .map(_ => ())
-              } else {
+          tupleSpace
+            .consume(sources.map(q => Channel(q)).toList,
+                     patterns.toList,
+                     TaggedContinuation(ParBody(body)),
+                     persist = persistent)
+            .flatMap {
+              case Some((continuation, dataList)) =>
                 dispatcher.dispatch(continuation, dataList)
-              }
-            case None => Applicative[M].pure(())
-          }
+                if (persistent) {
+                  List(dispatcher.dispatch(continuation, dataList),
+                       consume(binds, body, persistent)).parSequence
+                    .map(_ => ())
+                } else {
+                  dispatcher.dispatch(continuation, dataList)
+                }
+              case None => Applicative[M].pure(())
+            }
       }
 
     /** WanderUnordered is the non-deterministic analogue
@@ -475,6 +477,11 @@ object Reduce {
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
         }
+        case ETupleBody(el) =>
+          for {
+            evaledPs  <- el.ps.toList.traverse(expr => evalExpr(expr))
+            updatedPs = evaledPs.map(updateLocallyFree)
+          } yield updateLocallyFree(ETuple(updatedPs, el.locallyFree, el.connectiveUsed))
         case EMethodBody(EMethod(method, target, arguments, _, _)) => {
           val methodLookup = methodTable(method)
           for {
@@ -656,6 +663,11 @@ object Reduce {
     }
 
     def updateLocallyFree(elist: EList): EList = {
+      val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
+      elist.copy(locallyFree = resultLocallyFree)
+    }
+
+    def updateLocallyFree(elist: ETuple): ETuple = {
       val resultLocallyFree = elist.ps.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
       elist.copy(locallyFree = resultLocallyFree)
     }

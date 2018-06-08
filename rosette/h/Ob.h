@@ -538,6 +538,7 @@ class Base {
     IdType objectId;
 
     Base() : objectId(nextId++) {
+//fprintf(stderr, "%s: id=%llu\n", __PRETTY_FUNCTION__, objectId);
     }
 
     virtual char* typestring();

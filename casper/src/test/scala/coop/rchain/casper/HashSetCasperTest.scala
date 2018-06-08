@@ -11,6 +11,8 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class HashSetCasperTest extends FlatSpec with Matchers {
 
+  import HashSetCasperTest.blockTuplespaceContents
+
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
   val genesis                     = ProtoUtil.genesisBlock(bonds)
@@ -214,7 +216,10 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
   }
 
-  private def blockTuplespaceContents(block: BlockMessage)(
+}
+
+object HashSetCasperTest {
+  def blockTuplespaceContents(block: BlockMessage)(
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash           = block.body.get.postState.get.tuplespace
     val Some(checkpoint) = MultiParentCasper[Id].tsCheckpoint(tsHash)
@@ -226,5 +231,4 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     }
     storage
   }
-
 }

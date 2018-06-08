@@ -1,7 +1,8 @@
 package coop.rchain.roscala
 
-import coop.rchain.roscala.ob._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.roscala.Location._
+import coop.rchain.roscala.ob._
 
 import scala.collection.mutable
 
@@ -56,10 +57,49 @@ object Vm {
         state.ctxt.argvec = Tuple(new Array[Ob](n))
         state.nextOpFlag = true
 
+      case OpNargs(n) =>
+        state.ctxt.nargs = n
+        state.nextOpFlag = true
+
       case OpPushAlloc(n) =>
         val t = Tuple(new Array[Ob](n))
         state.ctxt = Ctxt(t, state.ctxt)
         state.nextOpFlag = true
+
+      case OpExtend(lit) =>
+        val formals    = state.code.litvec(lit).asInstanceOf[Template]
+        val optActuals = formals.matchPattern(state.ctxt.argvec, state.ctxt.nargs)
+
+        optActuals match {
+          case Some(actuals) =>
+            /**
+              * Creates an `Extension` that maps from formals (e.g. `Symbol(x)`)
+              * to actuals (e.g. `Fixnum(1)`).
+              * Formals are given in `formals.keyMeta` and `actuals` is a `Tuple`.
+              * The current `env` becomes the parent of the newly created `Extension`.
+              */
+            val map = formals.keyMeta.map
+
+            map.useWithReadLock { m =>
+              import collection.JavaConverters._
+
+              val keys = m.keys.asScala.toIterable
+
+              val pairsStr = keys
+                .zip(actuals.value)
+                .map { case (key, value) => s"$key -> $value" }
+                .mkString(", ")
+              logger.debug(s"Extend current env with: $pairsStr")
+
+              val extended = state.ctxt.env.extendWith(formals.keyMeta, actuals)
+              state.ctxt.env = extended
+              state.ctxt.nargs = 0
+              state.nextOpFlag = true
+            }
+
+          case None =>
+            state.doNextThreadFlag = true
+        }
 
       case OpOutstanding(pc, n) =>
         state.ctxt.pc = pc
@@ -77,6 +117,10 @@ object Vm {
 
       case OpImmediateLitToArg(literal, arg) =>
         state.ctxt.argvec.update(arg, vmLiterals(literal))
+        state.nextOpFlag = true
+
+      case OpJmp(pc) =>
+        state.pc = pc
         state.nextOpFlag = true
 
       case OpJmpFalse(pc) =>
@@ -103,18 +147,38 @@ object Vm {
         state.ctxt.argvec.update(arg, ob)
         state.nextOpFlag = true
 
+      case OpXferLexToReg(indirect, level, offset, reg) =>
+        var env = state.ctxt.env
+        for (_ <- 0 until level) env = env.parent
+
+        if (indirect) env = env.asInstanceOf[Actor].extension
+
+        logger.debug(s"Xfer ${env.slot(offset)} from lex[$level, $offset] to ${regName(reg)}")
+
+        state.ctxt.setReg(reg, env.slot.unsafeGet(offset))
+        state.nextOpFlag = true
+
+      case OpXferRsltToDest(lit) =>
+        val loc = state.code.litvec(lit).asInstanceOf[Location]
+        logger.debug(s"Xfer ${state.ctxt.rslt} to $loc")
+
+        if (store(loc, state.ctxt, state.ctxt.rslt))
+          state.vmErrorFlag = true
+        else
+          state.nextOpFlag = true
+
       case OpFork(pc) =>
         val newCtxt = state.ctxt.clone()
         newCtxt.pc = pc
         state.strandPool.prepend(newCtxt)
         state.nextOpFlag = true
 
-      case OpXmit(unwind, next, nargs) =>
+      case OpXmit(_, next, nargs) =>
         logger.debug(s"doXmit${if (next) "/nxt"} $nargs")
         state.ctxt.nargs = nargs
         doXmit(next, state, globalEnv)
 
-      case OpXmitArg(unwind, next, nargs, arg) =>
+      case OpXmitArg(_, next, nargs, arg) =>
         logger.debug(s"doXmit${if (next) "/nxt"} $nargs,arg[$arg]")
         state.ctxt.nargs = nargs
         state.ctxt.tag = ArgRegister(arg)

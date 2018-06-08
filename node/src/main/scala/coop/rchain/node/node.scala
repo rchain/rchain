@@ -37,8 +37,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       && conf.key.toOption.isEmpty
       && !conf.certificatePath.toFile.exists()) {
     println(s"No certificate found at path ${conf.certificatePath}")
-    println("Generating a X.509 certificate for the node")
-    CertificateHelper.generate(conf.data_dir().toString)
+    println("Generating a X.509 certificate and secret key for the node")
+
+    import coop.rchain.shared.Resources._
+    val keyPair = CertificateHelper.generateKeyPair()
+    val cert    = CertificateHelper.generate(keyPair)
+    withResource(new java.io.PrintWriter(conf.certificatePath.toFile)) { pw =>
+      pw.write(CertificatePrinter.print(cert))
+    }
+    withResource(new java.io.PrintWriter(conf.keyPath.toFile)) { pw =>
+      pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
+    }
   }
 
   if (!conf.certificatePath.toFile.exists()) {
@@ -163,7 +172,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- {
         implicit val storeMetrics =
-          diagnostics.storeMetrics[Effect](runtime.store, conf.data_dir().normalize)
+          diagnostics.storeMetrics[Effect](runtime.space.store, conf.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -195,7 +204,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down HTTP server....")
     resources.httpServer.stop()
     println("Shutting down interpreter runtime ...")
-    resources.runtime.store.close()
+    resources.runtime.close()
 
     println("Goodbye.")
   }
@@ -210,7 +219,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.store, conf.data_dir().normalize)
+        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 

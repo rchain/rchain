@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.Trie.codecTrie
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
@@ -29,7 +30,7 @@ class TrieTests extends FlatSpec with Matchers with Checkers with Configuration 
         .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
         .get
 
-    val expected = "c575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe"
+    val expected = "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
 
     emptyTrieHash.bytes.toHex shouldBe expected
   }
