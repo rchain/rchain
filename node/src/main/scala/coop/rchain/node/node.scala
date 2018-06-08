@@ -159,7 +159,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-    storagePath,
+    storagePath.resolve("casper"),
     storageSize,
     genesisBlock(genesisBonds)
   )
