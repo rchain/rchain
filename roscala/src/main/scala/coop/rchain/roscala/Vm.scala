@@ -472,7 +472,8 @@ object Vm {
         if (indirect) env = env.asInstanceOf[Actor].extension
 
         state.ctxt.argvec.update(arg, env.slot.unsafeGet(offset))
-        logger.debug(s"Xfer ${env.slot(offset)} from lex[$level, $offset] to argvec[$arg]")
+        logger.debug(
+          s"Xfer ${env.slot.unsafeGet(offset)} from lex[$level, $offset] to argvec[$arg]")
         state.nextOpFlag = true
 
       /**
@@ -487,7 +488,8 @@ object Vm {
         if (indirect) env = env.asInstanceOf[Actor].extension
 
         state.ctxt.setReg(reg, env.slot.unsafeGet(offset))
-        logger.debug(s"Xfer ${env.slot(offset)} from lex[$level, $offset] to ${regName(reg)}")
+        logger.debug(
+          s"Xfer ${env.slot.unsafeGet(offset)} from lex[$level, $offset] to ${regName(reg)}")
         state.nextOpFlag = true
 
       /**
@@ -615,8 +617,10 @@ object Vm {
     if (state.doNextThreadFlag) {
       if (getNextStrand(state))
         state.exitFlag = true
-      else
+      else {
         state.nextOpFlag = true
+        state.doNextThreadFlag = false
+      }
     }
 
   def getNextStrand(state: State): Boolean =
