@@ -13,7 +13,7 @@ class DummyTrieStore[T, K, V] extends ITrieStore[T, K, V] {
 
   private[rspace] def getRoot(txn: T): Pointer = ???
 
-  private[rspace] def putRoot(txn: T, hash: Blake2b256Hash): Unit = ???
+  private[rspace] def putRoot(txn: T, pointer: Pointer): Unit = ???
 
   private[rspace] def put(txn: T, key: Blake2b256Hash, value: Trie[K, V]): Unit = ???
 

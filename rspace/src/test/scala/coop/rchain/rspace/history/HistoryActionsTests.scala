@@ -434,7 +434,6 @@ trait LMDBTrieStoreFixtures extends BeforeAndAfterAll { this: Suite =>
     val testStore = LMDBTrieStore.create[TestKey, ByteVector](env)
     testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
     try {
-      initialize(testStore)
       f(testStore)
     } finally {
       testStore.close()

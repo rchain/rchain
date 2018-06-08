@@ -64,15 +64,6 @@ class TrieStructureTests
     val leaf2Hex  = "f22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625"
   }
 
-  "insert's effect" should "be visible in the outer read transaction" ignore {
-    withTrieTxnAndStore { (store, txn, trie) =>
-      import SingleElementData._
-      insert(store, key1, val1)
-    // Insert was made in a nested transaction, so it's effect should be visible
-    //store.get(txn, store.getRoot(txn)) should not be None
-    }
-  }
-
   behavior of "A trie"
   it should "be created as an empty pointer block" in
     withTrie {
@@ -124,8 +115,9 @@ class TrieStructureTests
 
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putRoot(txn,
-                      Blake2b256Hash
-                        .fromHex(SingleElementData.rootHex))
+                      LeafPointer(
+                        Blake2b256Hash
+                          .fromHex(SingleElementData.rootHex)))
       }
 
       assertSingleElementTrie

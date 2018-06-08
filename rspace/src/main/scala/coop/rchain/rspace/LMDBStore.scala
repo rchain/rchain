@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, EmptyPointer, LMDBTrieStore, NonEmptyPointer}
+import coop.rchain.rspace.history.{EmptyPointer, LMDBTrieStore, NonEmptyPointer}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
@@ -285,7 +285,7 @@ class LMDBStore[C, P, A, K] private (
       }
     }
 
-  def getCheckpoint(): Blake2b256Hash = {
+  def getCheckpoint(): Option[Blake2b256Hash] = {
     val trieUpdates = _trieUpdates.take
     _trieUpdates.put(Seq.empty)
     _trieUpdateCount.set(0L)
@@ -298,8 +298,8 @@ class LMDBStore[C, P, A, K] private (
     }
     withTxn(createTxnRead()) { txn =>
       trieStore.getRoot(txn) match {
-        case EmptyPointer       => throw new Exception("Could not get root hash")
-        case p: NonEmptyPointer => p.hash
+        case EmptyPointer       => None
+        case p: NonEmptyPointer => Some(p.hash)
       }
     }
   }
@@ -359,8 +359,6 @@ object LMDBStore {
     trieUpdates.put(Seq.empty)
 
     val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
-
-    initialize(trieStore)
 
     new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
   }

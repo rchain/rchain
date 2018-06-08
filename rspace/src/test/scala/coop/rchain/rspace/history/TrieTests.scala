@@ -20,21 +20,6 @@ class TrieTests extends FlatSpec with Matchers with Checkers with Configuration 
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
-  val emptyTrie: Trie[Nothing, Nothing] = Trie.create()
-
-  "An empty Trie" should "have the expected hash" in {
-
-    val emptyTrieHash =
-      implicitly[Codec[Trie[Blake2b256Hash, ByteVector]]]
-        .encode(emptyTrie)
-        .map((vector: BitVector) => Blake2b256Hash.create(vector.toByteArray))
-        .get
-
-    val expected = "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3"
-
-    emptyTrieHash.bytes.toHex shouldBe expected
-  }
-
   "A simple leaf" should "have the expected hash" in {
 
     val helloBytes: Array[Byte]                     = "hello".getBytes

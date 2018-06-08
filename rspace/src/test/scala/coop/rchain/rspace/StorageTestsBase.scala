@@ -47,16 +47,11 @@ class LMDBStoreTestsBase
   val mapSize: Long = 1024L * 1024L * 4096L
 
   override def withTestStore[R](f: T => R): R = {
-    implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-    implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-    implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
-
     val testStore = LMDBStore.create[String, Pattern, String, StringsCaptor](dbDir, mapSize)
     testStore.withTxn(testStore.createTxnWrite()) { txn =>
       testStore.clear(txn)
       testStore.trieStore.clear(txn)
     }
-    history.initialize(testStore.trieStore)
     try {
       f(testStore)
     } finally {

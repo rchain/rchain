@@ -14,7 +14,9 @@ sealed trait NonEmptyPointer extends Pointer {
 
 case class NodePointer(hash: Blake2b256Hash) extends NonEmptyPointer
 case class LeafPointer(hash: Blake2b256Hash) extends NonEmptyPointer
-case object EmptyPointer                     extends Pointer
+case object EmptyPointer extends Pointer {
+  override def toString: String = ""
+}
 
 sealed trait Trie[+K, +V]                         extends Product with Serializable
 final case class Leaf[K, V](key: K, value: V)     extends Trie[K, V]
@@ -23,8 +25,6 @@ final case class Extension(affix: ByteVector, pointer: NonEmptyPointer)
     extends Trie[Nothing, Nothing]
 
 object Trie {
-
-  def create[K, V](): Trie[K, V] = Node(PointerBlock.create())
 
   implicit def codecTrie[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Trie[K, V]] =
     discriminated[Trie[K, V]]

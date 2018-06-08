@@ -3,7 +3,7 @@ package coop.rchain
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Leaf
+import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec
@@ -342,7 +342,24 @@ package object rspace {
     * @tparam K A type representing a continuation
     * @return A BLAKE2b256 representing the checkpoint
     */
-  def getCheckpoint[C, P, A, K](store: IStore[C, P, A, K]): Blake2b256Hash = store.getCheckpoint()
+  def getCheckpoint[C, P, A, K](store: IStore[C, P, A, K]): Blake2b256Hash =
+    store
+      .getCheckpoint()
+      .getOrElse(throw new Exception("Couldn't get checkpoint hash for an empty trie"))
+
+  /** Resets the given store to an empty state
+    *
+    * @param store A store which satisfies the [[IStore]] interface.
+    * @tparam C A type representing a channel
+    * @tparam P A type representing a pattern
+    * @tparam A A type representing a piece of data
+    * @tparam K A type representing a continuation
+    */
+  def reset[C, P, A, K](store: IStore[C, P, A, K]): Unit =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.trieStore.putRoot(txn, EmptyPointer)
+      store.clear(txn)
+    }
 
   /** Resets the given store to the given checkpoint.
     *
@@ -353,10 +370,17 @@ package object rspace {
     * @tparam A A type representing a piece of data
     * @tparam K A type representing a continuation
     */
-  def reset[C, P, A, K](store: IStore[C, P, A, K], hash: Blake2b256Hash): Unit =
+  def reset[C, P, A, K](store: IStore[C, P, A, K], rootHash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.putRoot(txn, hash)
-      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, hash)
+      val pointer = store.trieStore.get(txn, rootHash) match {
+        case Some(Node(_))    => NodePointer(rootHash)
+        case Some(Leaf(_, _)) => LeafPointer(rootHash)
+        case None             => throw new Exception(s"Couldn't reset to element with hash $rootHash")
+      }
+
+      store.trieStore.putRoot(txn, pointer)
+      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] =
+        store.trieStore.getLeaves(txn, rootHash)
       store.clear(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
     }

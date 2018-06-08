@@ -56,8 +56,8 @@ trait HistoryActionsTests
   }
 
   "getCheckpoint on an empty store" should "return the expected hash" in withTestStore { store =>
-    getCheckpoint(store) shouldBe Blake2b256Hash.fromHex(
-      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
+    val ex = the[Exception] thrownBy (getCheckpoint(store) shouldBe None)
+    ex.getMessage shouldBe "Couldn't get checkpoint hash for an empty trie"
   }
 
   "consume then getCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -68,13 +68,7 @@ trait HistoryActionsTests
 
       val channelsHash: Blake2b256Hash = store.hashChannels(gnat.channels)
 
-      val nodeHash = Trie.hash[Blake2b256Hash, TestGNAT](
-        Node(
-          PointerBlock
-            .create()
-            .updated(
-              List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                    LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
+      val expectedHash = Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))
 
       consume(store,
               gnat.channels,
@@ -84,7 +78,7 @@ trait HistoryActionsTests
 
       history.lookup(store.trieStore, channelsHash) shouldBe None
 
-      getCheckpoint(store) shouldBe nodeHash
+      getCheckpoint(store) shouldBe expectedHash
 
       history.lookup(store.trieStore, channelsHash).value shouldBe gnat
     }
@@ -191,16 +185,13 @@ trait HistoryActionsTests
 
       history.lookup(store.trieStore, channelsHash) shouldBe None
 
-      getCheckpoint(store) shouldBe Blake2b256Hash.fromHex(
-        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
+      store.getCheckpoint() shouldBe None
 
       history.lookup(store.trieStore, channelsHash) shouldBe None
     }
 
   "getCheckpoint, consume, reset" should "result in an empty store" in
     withTestStore { store =>
-      val checkpoint0 = getCheckpoint(store)
-
       val gnat1 = GNAT(List("ch1"),
                        List.empty[Datum[String]],
                        List(WaitingContinuation(List(Wildcard), new StringsCaptor, false)))
@@ -213,7 +204,7 @@ trait HistoryActionsTests
 
       store.isEmpty shouldBe false
 
-      reset(store, checkpoint0)
+      reset(store)
 
       store.isEmpty shouldBe true
     }
@@ -221,8 +212,6 @@ trait HistoryActionsTests
   "getCheckpoint, consume, getCheckpoint, reset to first checkpoint, reset to second checkpoint" should
     "result in a store that contains the consume and appropriate join map" in withTestStore {
     store =>
-      val checkpoint0 = getCheckpoint(store)
-
       val gnat1 =
         GNAT(List("ch1", "ch2"),
              List.empty[Datum[String]],
@@ -247,7 +236,7 @@ trait HistoryActionsTests
 
       // Rollback to first checkpoint
 
-      reset(store, checkpoint0)
+      reset(store)
 
       store.isEmpty shouldBe true
 

@@ -95,13 +95,17 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
       }
       .getOrElse(EmptyPointer)
 
-  private[rspace] def putRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit = {
-    val encodedHash     = Codec[Blake2b256Hash].encode(hash).get
-    val encodedHashBuff = encodedHash.bytes.toDirectByteBuffer
-    if (!_dbRoot.put(txn, ROOT_KEY, encodedHashBuff)) {
-      throw new Exception(s"could not persist: $hash")
+  private[rspace] def putRoot(txn: Txn[ByteBuffer], pointer: Pointer): Unit =
+    pointer match {
+      case EmptyPointer => _dbRoot.delete(txn, ROOT_KEY)
+      case p: NonEmptyPointer =>
+        val encodedHash     = Codec[Blake2b256Hash].encode(p.hash).get
+        val encodedHashBuff = encodedHash.bytes.toDirectByteBuffer
+        if (!_dbRoot.put(txn, ROOT_KEY, encodedHashBuff)) {
+          throw new Exception(s"could not persist: ${p.hash}")
+        }
     }
-  }
+
 }
 
 object LMDBTrieStore {
