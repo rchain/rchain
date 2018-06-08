@@ -4,21 +4,19 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, Reader, Stri
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
-import cats.data.EitherT
-import cats.{Monad, _}
+import cats._
 import cats.implicits._
-import cats.syntax._
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.implicits.VectorPar
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
 import coop.rchain.rspace.IStore
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.{stringListConverter, ScallopConf}
+import org.rogach.scallop.{ScallopConf, stringListConverter}
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
