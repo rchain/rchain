@@ -10,13 +10,16 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
 import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
-import coop.rchain.rspace.{install, IStore, LMDBStore}
+import coop.rchain.rspace.{ISpace, LMDBStore, RSpace}
 import monix.eval.Task
 
 import scala.collection.immutable
 
 class Runtime private (val reducer: Reduce[Task],
-                       val store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation])
+                       val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation]) {
+
+  def close(): Unit = space.close()
+}
 
 object Runtime {
 
@@ -26,13 +29,12 @@ object Runtime {
   type Ref       = Long
 
   private def introduceSystemProcesses(
-      store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+      space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
       processes: immutable.Seq[(Name, Arity, Remainder, Ref)])
     : Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
     processes.map {
       case (name, arity, remainder, ref) =>
-        install(
-          store,
+        space.install(
           List(Channel(Quote(GString(name)))),
           List(
             BindPattern((0 until arity).map[Channel, Seq[Channel]](i => ChanVar(FreeVar(i))),
@@ -50,18 +52,20 @@ object Runtime {
       LMDBStore
         .create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dataDir, mapSize)
 
+    val space = new RSpace(store)
+
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
-      RholangAndScalaDispatcher.create(store, dispatchTable)
+      RholangAndScalaDispatcher.create(space, dispatchTable)
 
     lazy val dispatchTable: Map[Ref, Seq[Seq[Channel]] => Task[Unit]] = Map(
       0L -> SystemProcesses.stdout,
-      1L -> SystemProcesses.stdoutAck(store, dispatcher),
+      1L -> SystemProcesses.stdoutAck(space, dispatcher),
       2L -> SystemProcesses.stderr,
-      3L -> SystemProcesses.stderrAck(store, dispatcher),
-      4L -> SystemProcesses.ed25519Verify(store, dispatcher),
-      5L -> SystemProcesses.sha256Hash(store, dispatcher),
-      6L -> SystemProcesses.keccak256Hash(store, dispatcher),
-      7L -> SystemProcesses.blake2b256Hash(store, dispatcher)
+      3L -> SystemProcesses.stderrAck(space, dispatcher),
+      4L -> SystemProcesses.ed25519Verify(space, dispatcher),
+      5L -> SystemProcesses.sha256Hash(space, dispatcher),
+      6L -> SystemProcesses.keccak256Hash(space, dispatcher),
+      7L -> SystemProcesses.blake2b256Hash(space, dispatcher)
       //TODO: once we have secp256k1 packaged as jar
 //      9L -> SystemProcesses.secp256k1Verify(store, dispatcher)
     )
@@ -80,10 +84,10 @@ object Runtime {
     )
 
     val res: Seq[Option[(TaggedContinuation, Seq[Seq[Channel]])]] =
-      introduceSystemProcesses(store, procDefs)
+      introduceSystemProcesses(space, procDefs)
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, store)
+    new Runtime(dispatcher.reducer, space)
   }
 }

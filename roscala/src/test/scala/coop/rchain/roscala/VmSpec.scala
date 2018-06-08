@@ -463,9 +463,9 @@ class VmSpec extends FlatSpec with Matchers {
       OpAlloc(2),
       OpImmediateLitToArg(literal = `2`, arg = 0),
       OpImmediateLitToArg(literal = `3`, arg = 1),
-      OpApplyPrimArg(unwind = false, next = false, nargs = 2, primNum = 0, arg = 1), // fx+
+      OpApplyPrimArg(unwind = false, next = false, nargs = 2, primNum = 232, arg = 1), // fx+
       OpImmediateLitToArg(literal = `1`, arg = 0),
-      OpApplyPrimReg(unwind = false, next = false, nargs = 2, primNum = 0, reg = rslt), // fx+
+      OpApplyPrimReg(unwind = false, next = false, nargs = 2, primNum = 232, reg = rslt), // fx+
       OpRtn(next = true)
     )
 
