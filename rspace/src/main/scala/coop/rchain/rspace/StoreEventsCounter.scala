@@ -130,7 +130,7 @@ private[rspace] class StoreEventsCounter(
   //consumes Comm
   private[this] val consumesCommCounter = new Counter()
 
-  def registerConsumeCommEvent: Unit =
+  def registerConsumeCommEvent(): Unit =
     registerComm(consumesCommCounter)
 
   private[rspace] def getConsumesCommCount: Long = consumesCommCounter.count
@@ -138,7 +138,7 @@ private[rspace] class StoreEventsCounter(
   //produces Comm
   private[this] val producesCommCounter = new Counter()
 
-  def registerProduceCommEvent: Unit =
+  def registerProduceCommEvent(): Unit =
     registerComm(producesCommCounter)
 
   private[rspace] def getProducesCommCount: Long = producesCommCounter.count
@@ -147,7 +147,7 @@ private[rspace] class StoreEventsCounter(
 
   private[this] val installCommCounter = new Counter()
 
-  def registerInstallCommEvent: Unit =
+  def registerInstallCommEvent(): Unit =
     registerComm(installCommCounter)
 
   private[rspace] def getInstallCommCount: Long = installCommCounter.count
