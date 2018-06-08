@@ -14,30 +14,30 @@ object NetworkProtocol {
   val ENCRYPTION_HELLO      = "hello"
   val ENCRYPTION_HELLO_BACK = "hello_back"
 
-  def encryptionHandshake(src: ProtocolNode, keys: PublicPrivateKeys): routing.Protocol = {
+  def encryptionHandshake(src: PeerNode, keys: PublicPrivateKeys): routing.Protocol = {
     val msg = EncryptionHandshake(publicKey = ByteString.copyFrom(keys.pub))
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(msg))
   }
 
-  def frame(src: ProtocolNode, nonce: Nonce, framed: Array[Byte]): routing.Protocol = {
+  def frame(src: PeerNode, nonce: Nonce, framed: Array[Byte]): routing.Protocol = {
     val msg = Frame(ByteString.copyFrom(nonce), ByteString.copyFrom(framed))
     ProtocolMessage.upstreamMessage(src, AnyProto.pack(msg))
   }
 
-  def frameResponse(src: ProtocolNode,
+  def frameResponse(src: PeerNode,
                     h: routing.Header,
                     nonce: Nonce,
                     framed: Array[Byte]): routing.Protocol = {
     val msg = Frame(ByteString.copyFrom(nonce), ByteString.copyFrom(framed))
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
+    ProtocolMessage.upstreamResponse(src, AnyProto.pack(msg))
   }
 
-  def encryptionHandshakeResponse(src: ProtocolNode,
+  def encryptionHandshakeResponse(src: PeerNode,
                                   h: routing.Header,
                                   keys: PublicPrivateKeys): routing.Protocol = {
     val msg = EncryptionHandshakeResponse(publicKey = ByteString.copyFrom(keys.pub))
 
-    ProtocolMessage.upstreamResponse(src, h, AnyProto.pack(msg))
+    ProtocolMessage.upstreamResponse(src, AnyProto.pack(msg))
   }
 
   def toEncryptionHandshakeResponse(
@@ -62,10 +62,10 @@ object NetworkProtocol {
       case a => Left(UnknownProtocolError(s"Was expecting Frame, got $a"))
     }
 
-  def protocolHandshake(src: ProtocolNode, nonce: Nonce): Frameable =
+  def protocolHandshake(src: PeerNode, nonce: Nonce): Frameable =
     Frameable(Frameable.Message.ProtocolHandshake(ProtocolHandshake(ByteString.copyFrom(nonce))))
 
-  def protocolHandshakeResponse(src: ProtocolNode, nonce: Nonce): Frameable =
+  def protocolHandshakeResponse(src: PeerNode, nonce: Nonce): Frameable =
     Frameable(
       Frameable.Message.ProtocolHandshakeResponse(
         ProtocolHandshakeResponse(ByteString.copyFrom(nonce))))
@@ -80,7 +80,7 @@ object NetworkProtocol {
 final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: Long)
     extends ProtocolMessage {
 
-  def response[F[_]: Monad: Time](src: ProtocolNode,
+  def response[F[_]: Monad: Time](src: PeerNode,
                                   keys: PublicPrivateKeys): F[Either[CommError, ProtocolMessage]] =
     for {
       ts   <- Time[F].currentMillis
@@ -94,9 +94,9 @@ final case class EncryptionHandshakeMessage(proto: routing.Protocol, timestamp: 
 }
 
 final case class EncryptionHandshakeResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse
+    extends ProtocolMessage
 
 final case class FrameMessage(proto: routing.Protocol, timestamp: Long) extends ProtocolMessage
 
 final case class FrameResponseMessage(proto: routing.Protocol, timestamp: Long)
-    extends ProtocolResponse
+    extends ProtocolMessage

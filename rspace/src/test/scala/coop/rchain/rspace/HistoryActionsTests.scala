@@ -57,7 +57,7 @@ trait HistoryActionsTests
 
   "getCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
     space.getCheckpoint() shouldBe Blake2b256Hash.fromHex(
-      "c575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe")
+      "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
   }
 
   "consume then getCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
@@ -72,8 +72,9 @@ trait HistoryActionsTests
         Node(
           PointerBlock
             .create()
-            .updated(List((JByte.toUnsignedInt(channelsHash.bytes.head),
-                           Some(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
+            .updated(
+              List((JByte.toUnsignedInt(channelsHash.bytes.head),
+                    LeafPointer(Trie.hash[Blake2b256Hash, TestGNAT](Leaf(channelsHash, gnat))))))))
 
       space.consume(gnat.channels,
                     gnat.wks.head.patterns,
@@ -192,7 +193,7 @@ trait HistoryActionsTests
       history.lookup(space.store.trieStore, channelsHash) shouldBe None
 
       space.getCheckpoint() shouldBe Blake2b256Hash.fromHex(
-        "c575260cf13e36f179a50b0882bd64fc0466ecd25bdd7bc88766c2cc2e4c0dfe")
+        "ff3c5e70a028b7956791a6b3d8db9cd11f469e0088db22dd3afbc86997fe86a3")
 
       history.lookup(space.store.trieStore, channelsHash) shouldBe None
     }

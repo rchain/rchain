@@ -143,6 +143,17 @@ message RBLBool {
 message RBLstring {
     string value = 1;
 }
+message RblTable {
+    // The tbl is a Tuple that appears to contain the key/val pairs in consecutive elements.
+    //  Rosette internally keeps a hash of these for quick access.
+
+    // message Entry {
+    //     Object key = 1;
+    //     Object val = 2;
+    // }
+
+    Object tbl = 1;
+}
 message ReflectiveMethodExpr {
     Object identity = 1;
     Object formals = 2;
@@ -164,6 +175,7 @@ message SetExpr {
     Object val = 2;
 }
 message StdExtension {
+    repeated Object elements = 1;
 }
 message StdMeta {
     Object extension = 1;
@@ -240,6 +252,7 @@ enum ObType {
     OT_PRIM = 40;
     OT_SYSVAL = 41;
     OT_CONST_PATTERN = 42;
+    OT_RBL_TABLE = 43;
     OT_UNKNOWN = 999;
 }
 
@@ -296,5 +309,6 @@ message Object {
         Prim prim = 50;
         Sysval sysval = 51;
         ConstPattern const_pattern = 52;
+        RblTable rbl_table = 53;
     }
 }
