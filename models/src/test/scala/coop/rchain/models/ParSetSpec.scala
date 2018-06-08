@@ -15,26 +15,24 @@ class ParSetSpec extends FlatSpec with Matchers {
   "ParSet" should "serialize like raw ESet" in {
     val parGround =
       ParSet(
-        SortedHashSet(
-          Seq[Par](
-            GInt(2),
-            GInt(1),
-            EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
-            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2)))),
-            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(1))))
-          ))
+        Seq[Par](
+          GInt(2),
+          GInt(1),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+          ParSet(Seq[Par](GInt(1), GInt(2))),
+          ParSet(Seq[Par](GInt(1), GInt(1)))
+        )
       )
 
     val sortedParGround =
       ParSet(
-        SortedHashSet(
-          Seq[Par](
-            GInt(1),
-            GInt(2),
-            ParSet(SortedHashSet(Seq[Par](GInt(1)))),
-            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2)))),
-            EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
-          ))
+        Seq[Par](
+          GInt(1),
+          GInt(2),
+          ParSet(Seq[Par](GInt(1))),
+          ParSet(Seq[Par](GInt(1), GInt(2))),
+          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
+        )
       )
 
     val expr = Expr(ESetBody(sortedParGround))
@@ -48,14 +46,13 @@ class ParSetSpec extends FlatSpec with Matchers {
 
   it should "properly calculate locallyFree from enclosed `Par`s" in {
     val parSet = ParSet(
-      SortedHashSet(
-        Seq[Par](
-          GInt(2),
-          GInt(1),
-          EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
-          ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2)))),
-          ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(1))))
-        ))
+      Seq[Par](
+        GInt(2),
+        GInt(1),
+        EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+        ParSet(Seq[Par](GInt(1), GInt(2))),
+        ParSet(Seq[Par](GInt(1), GInt(1)))
+      )
     )
 
     parSet.locallyFree should ===(BitSet(2))

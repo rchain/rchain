@@ -10,5 +10,5 @@ object ParSetTypeMapper {
     ParSet(ps = eset.ps, connectiveUsed = eset.connectiveUsed)
 
   private[models] def parSetToESet(parSet: ParSet): ESet =
-    ESet(parSet.ps, parSet.locallyFree, parSet.connectiveUsed)
+    ESet(parSet.ps.sortedPars, parSet.locallyFree, parSet.connectiveUsed)
 }

@@ -1,8 +1,9 @@
 package coop.rchain.models
 
 import scala.collection.immutable.BitSet
+import coop.rchain.models.rholang.sort.ordering._
 
-case class ParSet(ps: SortedHashSet[Par], connectiveUsed: Boolean = false) {
+case class ParSet private (ps: SortedHashSet[Par], connectiveUsed: Boolean) {
   lazy val locallyFree: BitSet = ParSet.updateLocallyFree(ps)
 
   override def equals(o: scala.Any): Boolean = o match {
@@ -19,6 +20,9 @@ case class ParSet(ps: SortedHashSet[Par], connectiveUsed: Boolean = false) {
 }
 
 object ParSet {
+  def apply(ps: Seq[Par], connectiveUsed: Boolean = false): ParSet =
+    ParSet(SortedHashSet(ps), connectiveUsed)
+
   def updateLocallyFree(ps: SortedHashSet[Par]): BitSet =
     ps.sortedPars.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
 }

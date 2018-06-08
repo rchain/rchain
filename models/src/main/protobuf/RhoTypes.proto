@@ -6,7 +6,6 @@ option java_package = "coop.rchain.models";
 
 option (scalapb.options) = {
   import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
-  import: "coop.rchain.models.rholang.sort.ordering.parOrdering"
   import: "coop.rchain.models.ParSetTypeMapper.parSetESetTypeMapper"
 };
 
@@ -172,7 +171,7 @@ message ETuple {
 }
 
 message ESet {
-    repeated Par ps = 1 [(scalapb.field).collection_type = "coop.rchain.models.SortedHashSet"];
+    repeated Par ps = 1 ;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 4;
 }

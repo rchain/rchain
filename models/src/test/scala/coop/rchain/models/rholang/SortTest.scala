@@ -92,23 +92,21 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
   "Par" should "Sort and deduplicate sets insides" in {
     val parGround =
       ParSet(
-        SortedHashSet(
-          Seq[Par](
-            GInt(2),
-            GInt(1),
-            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2)))),
-            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(1))))
-          ))
+        Seq[Par](
+          GInt(2),
+          GInt(1),
+          ParSet(Seq[Par](GInt(1), GInt(2))),
+          ParSet(Seq[Par](GInt(1), GInt(1)))
+        )
       )
     val sortedParGround: Option[Par] =
       ParSet(
-        SortedHashSet(
-          Seq[Par](
-            GInt(1),
-            GInt(2),
-            ParSet(SortedHashSet(Seq[Par](GInt(1)))),
-            ParSet(SortedHashSet(Seq[Par](GInt(1), GInt(2))))
-          ))
+        Seq[Par](
+          GInt(1),
+          GInt(2),
+          ParSet(Seq[Par](GInt(1))),
+          ParSet(Seq[Par](GInt(1), GInt(2)))
+        )
       )
     val result = ParSortMatcher.sortMatch(parGround).right.get
     result.term should be(sortedParGround.get)
@@ -118,7 +116,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
     val parGround =
       EMap(
         List(
-          KeyValuePair(GInt(2), ParSet(SortedHashSet(Seq[Par](GInt(2), GInt(1))))),
+          KeyValuePair(GInt(2), ParSet(Seq[Par](GInt(2), GInt(1)))),
           KeyValuePair(GInt(2), GInt(1)),
           KeyValuePair(GInt(1), GInt(1))
         ),

@@ -18,10 +18,10 @@ class SortedHashSetSpec extends FlatSpec with Matchers {
 
   // toByteArray method is using the same method calls as real protobuf's serialization
   private[this] def serializeESet(parTreeSet: SortedHashSet[Par]): Array[Byte] =
-    ESet(ps = parTreeSet).toByteArray
+    ESet(ps = parTreeSet.sortedPars).toByteArray
 
   private[this] def roundtripTest(parTreeSet: SortedHashSet[Par]): Assertion =
-    ESet.parseFrom(serializeESet(parTreeSet)) should ===(ESet(ps = parTreeSet))
+    ESet.parseFrom(serializeESet(parTreeSet)) should ===(ESet(ps = parTreeSet.sortedPars))
 
   val pars: Seq[Par] = {
     val parGround =
@@ -38,7 +38,8 @@ class SortedHashSetSpec extends FlatSpec with Matchers {
         ))
     Seq(parGround, parExpr, parMethods)
   }
-  val sample = SortedHashSet[Par](pars)
+
+  def sample = SortedHashSet[Par](pars)
 
   "ParTreeSet" should "preserve structure during round trip protobuf serialization" in {
     roundtripTest(sample)
