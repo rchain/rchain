@@ -3,10 +3,12 @@ package coop.rchain.casper.util.rholang
 import com.google.protobuf.ByteString
 
 import InterpreterUtil._
+import coop.rchain.catscontrib.Capture._
 import coop.rchain.casper.{BlockDag, BlockGenerator}
 import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.rholang.interpreter.Runtime
 import org.scalatest.{FlatSpec, Matchers}
 
 import cats.Monad
@@ -19,16 +21,20 @@ import java.nio.file.Files
 import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
+import scala.concurrent.SyncVar
 
 class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
 
   type StateWithChain[A] = State[BlockDag, A]
-  val initState   = BlockDag().copy(currentId = -1)
-  val storageSize = 1024L * 1024
+  val initState        = BlockDag().copy(currentId = -1)
+  val storageSize      = 1024L * 1024
+  val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
+  val runtime          = new SyncVar[Runtime]()
+  runtime.put(Runtime.create(storageDirectory, storageSize))
+  val freshTS  = Checkpoint.fromRuntime(runtime)
+  val freshMap = HashMap(freshTS.hash -> freshTS)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in {
-    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-
     val genesisDeploys = Vector(
       "@1!(1)",
       "@2!(2)",
@@ -71,19 +77,15 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val b1 = chain.idToBlocks(1)
     val b3 = chain.idToBlocks(3)
 
-    val (genCh, genMap) = computeBlockCheckpoint(genesis,
-                                                 genesis,
-                                                 chain,
-                                                 storageDirectory,
-                                                 storageSize,
-                                                 Map.empty[ByteString, Checkpoint])
-    val genPostState = genCh.toTuplespace.storageRepr
+    val (genCh, genMap) = computeBlockCheckpoint(genesis, genesis, chain, freshTS, freshMap)
+    println("genCh computed")
+    val genPostState = genCh.storageRepr
     genPostState.contains("@{2}!(2)") should be(true)
     genPostState.contains("@{123}!(5)") should be(true)
 
     val (b1Ch, b1Map) =
-      computeBlockCheckpoint(b1, genesis, chain, storageDirectory, storageSize, genMap)
-    val b1PostState = b1Ch.toTuplespace.storageRepr
+      computeBlockCheckpoint(b1, genesis, chain, freshTS, genMap)
+    val b1PostState = b1Ch.storageRepr
     b1PostState.contains("@{1}!(1)") should be(true)
     b1PostState.contains("@{123}!(5)") should be(true)
     b1PostState.contains("@{456}!(10)") should be(true)
@@ -91,16 +93,14 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     //note skipping of b2 to force a test of the recursive aspect of computeBlockCheckpoint
 
     val (b3Ch, _) =
-      computeBlockCheckpoint(b3, genesis, chain, storageDirectory, storageSize, b1Map)
-    val b3PostState = b3Ch.toTuplespace.storageRepr
+      computeBlockCheckpoint(b3, genesis, chain, freshTS, b1Map)
+    val b3PostState = b3Ch.storageRepr
     b3PostState.contains("@{1}!(1)") should be(true)
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{7}!(7)") should be(true)
   }
 
-  "computeBlockCheckpoint" should "merge histories in case of multiple parents" in {
-    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-
+  it should "merge histories in case of multiple parents" in {
     val genesisDeploys = Vector(
       "@1!(1)",
       "@2!(2)",
@@ -139,22 +139,15 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val chain   = createChain[StateWithChain].runS(initState).value
     val genesis = chain.idToBlocks(0)
 
-    val b3 = chain.idToBlocks(3)
-    val (b3Ch, _) = computeBlockCheckpoint(b3,
-                                           genesis,
-                                           chain,
-                                           storageDirectory,
-                                           storageSize,
-                                           Map.empty[ByteString, Checkpoint])
-    val b3PostState = b3Ch.toTuplespace.storageRepr
+    val b3          = chain.idToBlocks(3)
+    val (b3Ch, _)   = computeBlockCheckpoint(b3, genesis, chain, freshTS, freshMap)
+    val b3PostState = b3Ch.storageRepr
     b3PostState.contains("@{1}!(15)") should be(true)
     b3PostState.contains("@{5}!(5)") should be(true)
     b3PostState.contains("@{6}!(6)") should be(true)
   }
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in {
-    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-
     val deploys     = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
     val invalidHash = ByteString.EMPTY
 
@@ -165,22 +158,15 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (checkpoint, _) =
-      validateBlockCheckpoint(block, block, chain, storageDirectory, storageSize, Map.empty)
+      validateBlockCheckpoint(block, block, chain, freshTS, freshMap)
 
     checkpoint should be(None)
   }
 
   "validateBlockCheckpoint" should "return a checkpoint with the right hash for a valid block" in {
-    val storageDirectory = Files.createTempDirectory("casper-interp-util-test")
-
     val deploys = Vector("@1!(1)").flatMap(mkTerm(_).toOption).map(ProtoUtil.termDeploy)
-    val (ch, _) = computeDeploysCheckpoint(Seq.empty,
-                                           deploys,
-                                           BlockMessage(),
-                                           initState,
-                                           storageDirectory,
-                                           storageSize,
-                                           Map.empty)
+    val (ch, _) =
+      computeDeploysCheckpoint(Seq.empty, deploys, BlockMessage(), initState, freshTS, freshMap)
 
     val chain =
       createBlock[StateWithChain](Seq.empty, deploys = deploys, tsHash = ch.hash)
@@ -189,7 +175,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val block = chain.idToBlocks(0)
 
     val (checkpoint, _) =
-      validateBlockCheckpoint(block, block, chain, storageDirectory, storageSize, Map.empty)
+      validateBlockCheckpoint(block, block, chain, freshTS, freshMap)
 
     checkpoint.map(_.hash) should be(Some(ch.hash))
   }

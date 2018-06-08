@@ -2,29 +2,67 @@ package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
 
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.models.Par
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rspace
+import coop.rchain.rspace.Blake2b256Hash
 
-import java.nio.file.Path
+import monix.execution.Scheduler
 
-class Checkpoint(val hash: ByteString, val location: Path, val size: Long) {
-  val dbLocation: Path = location.resolve(Base16.encode(hash.toByteArray))
+import scala.concurrent.SyncVar
+import scala.util.{Failure, Success, Try}
 
-  def toTuplespace(name: String): Tuplespace = {
-    val tsLocation = location.resolve(name)
+//runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
+class Checkpoint(val hash: ByteString, runtime: SyncVar[Runtime]) {
 
-    tsLocation.toFile.mkdir()
-    Tuplespace.copyDB(dbLocation, tsLocation)
+  def updated(terms: List[Par])(implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
+    val hot   = getHot()
+    val error = eval(terms, hot)
+    val newHash = error.fold[Either[Throwable, ByteString]](
+      Right(ByteString.copyFrom(rspace.getCheckpoint(hot.store).bytes.toArray)))(Left(_))
+    runtime.put(hot)
 
-    new Tuplespace(name, location, size)
+    newHash.map(new Checkpoint(_, runtime))
   }
 
-  def toTuplespace: Tuplespace = {
-    val name       = Tuplespace.randomName
-    val tsLocation = location.resolve(name)
+  def storageRepr: String = {
+    val hot    = getHot()
+    val result = StoragePrinter.prettyPrint(hot.store)
+    runtime.put(hot)
+    result
+  }
 
-    tsLocation.toFile.mkdir()
-    Tuplespace.copyDB(dbLocation, tsLocation)
+  private def getHot(): Runtime = {
+    val hot       = runtime.take()
+    val blakeHash = Blake2b256Hash.create(hash.toByteArray)
+    val hotStore  = hot.store
+    println(s"resetting...")
+    rspace.reset(hotStore, blakeHash)
+    println(s"hot store ready!")
+    hot
+  }
 
-    new Tuplespace(name, location, size)
+  private def eval(terms: List[Par], hot: Runtime)(
+      implicit scheduler: Scheduler): Option[Throwable] =
+    terms match {
+      case term :: rest =>
+        Try(hot.reducer.inj(term).unsafeRunSync) match {
+          case Success(_)  => eval(rest, hot)
+          case Failure(ex) => Some(ex)
+        }
+
+      case Nil => None
+    }
+}
+
+object Checkpoint {
+  def fromRuntime(runtime: SyncVar[Runtime]): Checkpoint = {
+    val hot  = runtime.take()
+    val hash = ByteString.copyFrom(rspace.getCheckpoint(hot.store).bytes.toArray)
+    runtime.put(hot)
+
+    new Checkpoint(hash, runtime)
   }
 }

@@ -84,6 +84,12 @@ object ProtoUtil {
   def deploys(b: BlockMessage): Seq[Deploy] =
     b.body.map(_.newCode).getOrElse(List.empty[Deploy])
 
+  def tuplespace(b: BlockMessage): Option[ByteString] =
+    for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.tuplespace
+
   def bonds(b: BlockMessage): Seq[Bond] =
     (for {
       bd <- b.body

@@ -8,16 +8,18 @@ import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
-import coop.rchain.catscontrib.{Capture, IOUtil}
+import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
 import coop.rchain.p2p.effects._
+import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.AtomicSyncVar
 
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable
 import scala.collection.immutable.{HashMap, HashSet}
+import scala.concurrent.SyncVar
 import java.nio.file.Path
 
 import monix.execution.Scheduler
@@ -53,18 +55,16 @@ sealed abstract class MultiParentCasperInstances {
         Applicative[F].pure[Option[Checkpoint]](None)
     }
 
-  //TODO: figure out Casper key management for validators
   def hashSetCasper[
       F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler: SafetyOracle](
       storageLocation: Path,
       storageSize: Long,
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
-    //TODO: Get rid of all the mutable data structures and write proper FP code
     new MultiParentCasper[F] {
       type BlockHash = ByteString
       type Validator = ByteString
 
-      // Extract hardcoded version
+      //TODO: Extract hardcoded version
       val version = 0L
 
       val _blockDag: AtomicSyncVar[BlockDag] = new AtomicSyncVar(
@@ -72,17 +72,12 @@ sealed abstract class MultiParentCasperInstances {
           blockLookup = HashMap[BlockHash, BlockMessage](genesis.blockHash -> genesis))
       )
 
+      private val runtime = new SyncVar[Runtime]()
+      runtime.put(Runtime.create(storageLocation, storageSize))
+      private val freshTS = Checkpoint.fromRuntime(runtime)
+
       val checkpoints: AtomicSyncVar[Map[ByteString, Checkpoint]] = new AtomicSyncVar(
-        InterpreterUtil
-          .computeBlockCheckpoint(
-            genesis,
-            genesis,
-            _blockDag.get,
-            storageLocation,
-            storageSize,
-            HashMap.empty[ByteString, Checkpoint]
-          )
-          ._2
+        HashMap(freshTS.hash -> freshTS)
       )
 
       private val blockBuffer: mutable.HashSet[BlockMessage] =
@@ -180,8 +175,7 @@ sealed abstract class MultiParentCasperInstances {
                 r,
                 genesis,
                 _blockDag.get,
-                storageLocation,
-                storageSize,
+                freshTS,
                 _
               ),
               _._2
@@ -228,8 +222,7 @@ sealed abstract class MultiParentCasperInstances {
                 block,
                 genesis,
                 _blockDag.get,
-                storageLocation,
-                storageSize,
+                freshTS,
                 _
               ),
               _._2
