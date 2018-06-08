@@ -5,7 +5,7 @@ import monix.eval.Coeval
 import coop.rchain.models.rholang.sort.ordering._
 
 //locallyFree is of type Coeval to make use of memoization
-case class ParSet private (ps: SortedHashSet[Par],
+case class ParSet private (ps: SortedParHashSet,
                            connectiveUsed: Boolean,
                            locallyFree: Coeval[BitSet]) {
 
@@ -24,13 +24,13 @@ case class ParSet private (ps: SortedHashSet[Par],
 
 object ParSet {
   def apply(ps: Seq[Par], connectiveUsed: Boolean, locallyFree: Coeval[BitSet]): ParSet =
-    ParSet(SortedHashSet(ps), connectiveUsed, locallyFree.memoize)
+    ParSet(SortedParHashSet(ps), connectiveUsed, locallyFree.memoize)
 
   def apply(ps: Seq[Par], connectiveUsed: Boolean = false): ParSet = {
-    val shs = SortedHashSet(ps)
+    val shs = SortedParHashSet(ps)
     ParSet(shs, connectiveUsed, Coeval.delay(updateLocallyFree(shs)).memoize)
   }
 
-  def updateLocallyFree(ps: SortedHashSet[Par]): BitSet =
+  def updateLocallyFree(ps: SortedParHashSet): BitSet =
     ps.sortedPars.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)
 }

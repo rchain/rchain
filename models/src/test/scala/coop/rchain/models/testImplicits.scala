@@ -29,9 +29,9 @@ object testImplicits {
 
   implicit val arbPar = implicitly[Arbitrary[Par]]
 
-  implicit val arbParTreeset: Arbitrary[SortedHashSet[Par]] =
+  implicit val arbParTreeset: Arbitrary[SortedParHashSet] =
     Arbitrary(
       Arbitrary
         .arbitrary[Seq[Par]]
-        .map(pars => SortedHashSet(pars)))
+        .map(pars => SortedParHashSet(pars)))
 }

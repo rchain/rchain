@@ -14,13 +14,13 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
 
-class SortedHashSetSpec extends FlatSpec with Matchers {
+class SortedParHashSetSpec extends FlatSpec with Matchers {
 
   // toByteArray method is using the same method calls as real protobuf's serialization
-  private[this] def serializeESet(parTreeSet: SortedHashSet[Par]): Array[Byte] =
+  private[this] def serializeESet(parTreeSet: SortedParHashSet): Array[Byte] =
     ESet(ps = parTreeSet.sortedPars).toByteArray
 
-  private[this] def roundtripTest(parTreeSet: SortedHashSet[Par]): Assertion =
+  private[this] def roundtripTest(parTreeSet: SortedParHashSet): Assertion =
     ESet.parseFrom(serializeESet(parTreeSet)) should ===(ESet(ps = parTreeSet.sortedPars))
 
   val pars: Seq[Par] = {
@@ -39,7 +39,7 @@ class SortedHashSetSpec extends FlatSpec with Matchers {
     Seq(parGround, parExpr, parMethods)
   }
 
-  def sample = SortedHashSet[Par](pars)
+  def sample = SortedParHashSet(pars)
 
   "ParTreeSet" should "preserve structure during round trip protobuf serialization" in {
     roundtripTest(sample)

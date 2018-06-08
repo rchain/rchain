@@ -2,7 +2,7 @@ package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.{KeyValuePair, Par, SortedHashSet}
+import coop.rchain.models.{KeyValuePair, Par, SortedParHashSet}
 import cats.implicits._
 import cats.syntax._
 import coop.rchain.models.rholang.implicits._
@@ -37,7 +37,7 @@ object GroundSortMatcher {
           .map(
             sortedPars =>
               ScoredTerm(ESetBody(
-                           ParSet(SortedHashSet(sortedPars.map(_.term.get)),
+                           ParSet(SortedParHashSet(sortedPars.map(_.term.get)),
                                   gs.connectiveUsed,
                                   gs.locallyFree)),
                          Node(Score.ESET, sortedPars.map(_.score): _*)))

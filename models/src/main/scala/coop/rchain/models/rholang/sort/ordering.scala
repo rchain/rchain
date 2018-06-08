@@ -2,14 +2,14 @@ package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.rholang.sort.ScoredTerm._
 
 object ordering {
-  implicit val parOrdering: Ordering[Par] = new Ordering[Par] {
-    override def compare(x: Par, y: Par): Int =
-      (for {
-        xSorted <- ParSortMatcher.sortMatch(x)
-        ySorted <- ParSortMatcher.sortMatch(y)
-      } yield ScoredTerm.ordering.compare(xSorted, ySorted))
-        .fold(th => throw new RuntimeException(th.getMessage), score => score)
+
+  implicit class SortOps(ps: List[Par]) {
+    def sort: List[Par] =
+      ps.map(par => ParSortMatcher.sortMatch(par).fold(th => throw th, score => score))
+        .sorted
+        .map(_.term)
   }
 }
