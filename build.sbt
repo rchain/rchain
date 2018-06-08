@@ -2,6 +2,7 @@ import Dependencies._
 import BNFC._
 import Rholang._
 import NativePackagerHelper._
+import com.typesafe.sbt.packager.docker._
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
@@ -112,10 +113,13 @@ lazy val models = (project in file("models"))
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
-  .enablePlugins(sbtdocker.DockerPlugin, RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
+  .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
     version := "0.4.1",
     name := "rnode",
+    maintainer := "Pyrofex, Inc. <info@pyrofex.net>",
+    packageSummary := "RChain Node",
+    packageDescription := "RChain Node - the RChain blockchain node server software.",
     libraryDependencies ++=
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
@@ -140,28 +144,30 @@ lazy val node = (project in file("node"))
         oldStrategy(x)
     },
     /* Dockerization */
-    dockerfile in docker := {
-      val artifact: File     = assembly.value
-      val artifactTargetPath = s"/${artifact.name}"
-      val entry: File        = baseDirectory(_ / "main.sh").value
-      val entryTargetPath    = "/bin"
-      val rholangExamples = (baseDirectory in rholang).value / "examples"
-      new Dockerfile {
-        from("openjdk:8u171-jre-slim-stretch")
-        add(artifact, artifactTargetPath)
-        copy(rholangExamples, "/usr/share/rnode/examples")
-        env("RCHAIN_TARGET_JAR", artifactTargetPath)
-        add(entry, entryTargetPath)
-        run("apt", "update")
-        run("apt", "install", "-yq", "libsodium18")
-        run("apt", "install", "-yq", "openssl")
-        entryPoint("/bin/main.sh")
-      }
+    dockerUsername := Some(organization.value),
+    dockerUpdateLatest := true,
+    dockerBaseImage := "openjdk:8u171-jre-slim-stretch",
+    dockerCommands := {
+      val daemon = (daemonUser in Docker).value
+      Seq(
+        Cmd("FROM", dockerBaseImage.value),
+        ExecCmd("RUN", "apt", "update"),
+        ExecCmd("RUN", "apt", "install", "-yq", "libsodium18"),
+        ExecCmd("RUN", "apt", "install", "-yq", "openssl"),
+        Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
+        Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
+        Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
+        Cmd("USER", daemon),
+        ExecCmd("ENTRYPOINT", "bin/rnode"),
+        ExecCmd("CMD")
+      )
     },
+    mappings in Docker ++= {
+       val base = (defaultLinuxInstallLocation in Docker).value
+       directory((baseDirectory in rholang).value / "examples")
+         .map { case (f, p) => f -> s"$base/$p" }
+     },
     /* Packaging */
-    maintainer in Linux := "Pyrofex, Inc. <info@pyrofex.net>",
-    packageSummary in Linux := "RChain Node",
-    packageDescription in Linux := "RChain Node - the RChain blockchain node server software.",
     linuxPackageMappings ++= {
       val file = baseDirectory.value / "rnode.service"
       val rholangExamples = directory((baseDirectory in rholang).value / "examples")
@@ -169,7 +175,7 @@ lazy val node = (project in file("node"))
       Seq(packageMapping(file -> "/lib/systemd/system/rnode.service"), packageMapping(rholangExamples:_*))
     },
     /* Debian */
-   debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
+    debianPackageDependencies in Debian ++= Seq("openjdk-8-jre-headless (>= 1.8.0.171)",
                                                 "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)",  //ubuntu & debian
                                                 "bash (>= 2.05a-11)",
                                                 "libsodium18 (>= 1.0.8-5) | libsodium23 (>= 1.0.16-2)"),
@@ -181,7 +187,7 @@ lazy val node = (project in file("node"))
     maintainerScripts in Rpm := maintainerScriptsAppendFromFile((maintainerScripts in Rpm).value)(
       RpmConstants.Post -> (sourceDirectory.value / "rpm" / "scriptlets" / "post")
     ),
-rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
+    rpmPrerequisites := Seq("java-1.8.0-openjdk-headless >= 1.8.0.171",
                         //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
                         "openssl",
                         "libsodium >= 1.0.14-1")
