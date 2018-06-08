@@ -18,11 +18,11 @@ class ConnectToBootstrapSpec
 
   val encoder = BaseEncoding.base16().lowerCase()
 
-  val src: ProtocolNode = protocolNode("src", 30300)
-  val remote: PeerNode  = peerNode("remote", 30301)
-  val srcKeys           = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
-  val remoteKeys        = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
-  val nonce             = encoder.decode("00112233")
+  val src: PeerNode    = peerNode("src", 30300)
+  val remote: PeerNode = peerNode("remote", 30301)
+  val srcKeys          = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
+  val remoteKeys       = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
+  val nonce            = encoder.decode("00112233")
 
   type Effect[A] = CommErrT[Id, A]
 
@@ -83,17 +83,15 @@ class ConnectToBootstrapSpec
 
   private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ EncryptionHandshakeMessage(_, _) =>
-      hs.response[Effect](ProtocolNode(remote), remoteKeys).value.right.get
+      hs.response[Effect](remote, remoteKeys).value.right.get
   }
 
-  private val failEverything = kp(Left[CommError, ProtocolResponse](unknownProtocol("unknown")))
+  private val failEverything = kp(Left[CommError, ProtocolMessage](unknownProtocol("unknown")))
 
   private val sndPhaseSucc: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
     case hs @ FrameMessage(_, _) =>
       Right(
-        FrameMessage(
-          frameResponse(ProtocolNode(remote), hs.header.get, Array.empty[Byte], Array.empty[Byte]),
-          1))
+        FrameMessage(frameResponse(remote, hs.header.get, Array.empty[Byte], Array.empty[Byte]), 1))
   }
 
   private def generateResponses(
@@ -107,6 +105,4 @@ class ConnectToBootstrapSpec
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
-  private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(peerNode(name, port))
 }

@@ -67,7 +67,7 @@ object RholangCLI {
               writeHumanReadable(fileName, par)
             } else {
               val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-              waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+              waitThenPrintStorageContents(evaluatorFuture, runtime.space.store)
             }
           case Left(error) =>
             System.err.println(error)
@@ -76,7 +76,7 @@ object RholangCLI {
         repl(runtime)
       }
     } finally {
-      runtime.store.close()
+      runtime.close()
     }
   }
 
@@ -112,7 +112,7 @@ object RholangCLI {
         buildNormalizedTerm(new StringReader(line)).runAttempt match {
           case Right(par) =>
             val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-            waitThenPrintStorageContents(evaluatorFuture, runtime.store)
+            waitThenPrintStorageContents(evaluatorFuture, runtime.space.store)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
             Console.err.print(ie.toString)

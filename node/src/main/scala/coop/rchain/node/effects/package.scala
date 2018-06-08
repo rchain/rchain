@@ -133,10 +133,10 @@ package object effects {
   def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
-      def ping(node: ProtocolNode): F[Boolean] =
+      def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
-          req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)
+          req = PingMessage(ProtocolMessage.ping(src), System.currentTimeMillis)
           res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
         } yield res.isDefined
     }
@@ -147,12 +147,6 @@ package object effects {
                              conf.port(),
                              conf.certificatePath.toFile,
                              conf.keyPath.toFile)(src)
-
-  def udpTransportLayer(src: PeerNode)(implicit
-                                       ev1: Log[Task],
-                                       ev2: Time[Task],
-                                       ev3: Metrics[Task]): TransportLayer[Task] =
-    new UdpTransportLayer(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 }

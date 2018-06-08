@@ -24,7 +24,7 @@ class SslSessionServerInterceptor() extends ServerInterceptor {
 
     override def onMessage(message: ReqT): Unit =
       message match {
-        case TLRequest(Some(Protocol(Some(Header(Some(sender), _, _)), _, _))) =>
+        case TLRequest(Some(Protocol(Some(Header(Some(sender), _, _)), _))) =>
           val sslSession: Option[SSLSession] = Option(
             call.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION))
           if (sslSession.isEmpty) {

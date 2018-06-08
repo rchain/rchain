@@ -190,9 +190,9 @@ class CryptoChannelsSpec
     val runtime   = Runtime.create(dbDir, size)(Capture.taskCapture)
 
     try {
-      test((runtime.reducer, runtime.store))
+      test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.store.close()
+      runtime.close()
       recursivelyDeletePath(dbDir)
     }
   }

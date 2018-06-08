@@ -13,18 +13,17 @@ import CommunicationResponse._
 class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
     extends NodeDiscovery[F] {
 
-  private val local = ProtocolNode(src)
-  private val table = PeerTable(local)
+  private val table = PeerTable(src)
 
   private def updateLastSeen(peer: PeerNode): F[Unit] =
-    table.observe[F](ProtocolNode(peer), add = true)
+    table.observe[F](peer, add = true)
 
   private val id: NodeIdentifier = src.id
 
   def addNode(peer: PeerNode): F[Unit] =
     for {
       _ <- updateLastSeen(peer)
-      _ <- Metrics[F].setGauge("peers", table.peers.length)
+      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield ()
 
   /**
@@ -40,7 +39,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   def findMorePeers(limit: Int): F[Seq[PeerNode]] = {
     val dists = table.sparseness().toArray
 
-    def find(peerSet: Set[ProtocolNode], potentials: Set[PeerNode], i: Int): F[Seq[PeerNode]] =
+    def find(peerSet: Set[PeerNode], potentials: Set[PeerNode], i: Int): F[Seq[PeerNode]] =
       if (peerSet.nonEmpty && potentials.size < limit && i < dists.length) {
         val dist = dists(i)
         /*
@@ -82,7 +81,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
 
   private def handlePing(sender: PeerNode, ping: PingMessage): F[CommunicationResponse] =
     ping
-      .response(local)
+      .response(src)
       .traverse { pong =>
         Metrics[F].incrementCounter("ping-recv-count").as(pong)
       }
@@ -95,7 +94,7 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
   private def handleLookup(sender: PeerNode, lookup: LookupMessage): F[CommunicationResponse] =
     (for {
       id   <- lookup.lookupId
-      resp <- lookup.response(local, table.lookup(id))
+      resp <- lookup.response(src, table.lookup(id))
     } yield {
       Metrics[F].incrementCounter("lookup-recv-count").as(resp)
     }).sequence.map(_.fold(notHandled)(m => handledWithMessage(m)))
@@ -109,13 +108,13 @@ class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: 
       _ <- Log[F].info(s"Forgetting about $sender.")
       _ <- Capture[F].capture(table.remove(sender.key))
       _ <- Metrics[F].incrementCounter("disconnect-recv-count")
-      _ <- Metrics[F].setGauge("peers", table.peers.length)
+      _ <- Metrics[F].setGauge("peers", table.peers.length.toLong)
     } yield handledWitoutMessage
 
-  private def lookup(key: Seq[Byte], remoteNode: ProtocolNode): F[Seq[PeerNode]] =
+  private def lookup(key: Seq[Byte], remoteNode: PeerNode): F[Seq[PeerNode]] =
     for {
       _   <- Metrics[F].incrementCounter("protocol-lookup-send")
-      req = LookupMessage(ProtocolMessage.lookup(local, key), System.currentTimeMillis)
+      req = LookupMessage(ProtocolMessage.lookup(src, key), System.currentTimeMillis)
       r <- TransportLayer[F]
             .roundTrip(req, remoteNode, 500.milliseconds)
             .map(_.toOption

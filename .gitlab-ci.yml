@@ -1,13 +1,35 @@
 stages:
   - test
+  - deploy
 
 test:integration-test-for-p2p-network:
   stage: test 
   tags:
     - preloaded-ubuntu1804 
-
   script:
     - ./scripts/install_bnfc.sh
-    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
     - sudo python3.6 -m pip install argparse docker pexpect requests
     - sudo ./scripts/p2p-test-tool.py -b -p 1
+
+test:integration-test-for-artifact-creation:
+  stage: test 
+  tags:
+    - preloaded-ubuntu1804 
+  script:
+    - ./scripts/install_bnfc.sh
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
+
+deploy:deploy-rnode-to-dockerhub:
+  stage: deploy 
+  tags:
+    - preloaded-ubuntu1804 
+  script:
+    - ./scripts/install_bnfc.sh
+    - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
+    - echo $DOCKER_PASSWORD | sudo docker login -u $DOCKER_USERNAME --password-stdin
+    - sudo docker tag  coop.rchain/rnode:latest rchain/rnode:${CI_COMMIT_REF_NAME}
+    - sudo docker push rchain/rnode:${CI_COMMIT_REF_NAME} 
+  only:
+    - master
+    - dev

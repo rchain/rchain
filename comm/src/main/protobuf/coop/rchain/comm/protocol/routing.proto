@@ -22,11 +22,6 @@ message Header {
     uint64 seq            = 3;
 }
 
-message ReturnHeader {
-    uint64 timestamp      = 1;
-    uint64 seq            = 2;
-}
-
 message Ping {
 }
 
@@ -46,16 +41,15 @@ message Disconnect {
 
 message Protocol {
     Header header                           = 1;
-    ReturnHeader return_header              = 2;
 
     oneof message {
-        google.protobuf.Any upstream        = 3;
+        google.protobuf.Any upstream        = 2;
 
-        Ping                ping            = 4;
-        Pong                pong            = 5;
-        Lookup              lookup          = 6;
-        LookupResponse      lookup_response = 7;
-        Disconnect          disconnect      = 8;
+        Ping                ping            = 3;
+        Pong                pong            = 4;
+        Lookup              lookup          = 5;
+        LookupResponse      lookup_response = 6;
+        Disconnect          disconnect      = 7;
     }
 }
 
