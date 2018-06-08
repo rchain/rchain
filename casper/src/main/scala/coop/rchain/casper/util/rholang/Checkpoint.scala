@@ -15,7 +15,7 @@ import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class Checkpoint(val hash: ByteString, runtime: SyncVar[Runtime]) {
+class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
 
   def updated(terms: List[Par])(implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
     val hot   = getHot()
@@ -36,12 +36,13 @@ class Checkpoint(val hash: ByteString, runtime: SyncVar[Runtime]) {
 
   private def getHot(): Runtime = {
     val hot       = runtime.take()
-    val blakeHash = Blake2b256Hash.create(hash.toByteArray)
-    val hotStore  = hot.store
-    println(s"resetting...")
-    rspace.reset(hotStore, blakeHash)
-    println(s"hot store ready!")
-    hot
+    val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
+    Try(rspace.reset(hot.store, blakeHash)) match {
+      case Success(_) => hot
+      case Failure(ex) =>
+        runtime.put(hot)
+        throw ex
+    }
   }
 
   private def eval(terms: List[Par], hot: Runtime)(
