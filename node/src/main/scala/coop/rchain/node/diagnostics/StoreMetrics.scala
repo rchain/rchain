@@ -31,6 +31,8 @@ object StoreMetrics extends StoreMetricsInstances {
     def c(name: String, value: Option[StoreUsageCount]): F[Unit] =
       for {
         _ <- m.setGauge(name + "-count", value.map(_.count).getOrElse(0))
+        _ <- m.setGauge(name + "-peak-rate", value.map(_.peakRate.toLong).getOrElse(0))
+        _ <- m.setGauge(name + "-current-rate", value.map(_.currentRate.toLong).getOrElse(0))
         _ <- m.setGauge(name + "-avg-ms", value.map(_.avgMilliseconds.toLong).getOrElse(0))
       } yield ()
 

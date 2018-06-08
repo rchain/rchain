@@ -162,7 +162,7 @@ package object diagnostics {
 
   def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _], data_dir: Path): StoreMetrics[F] = {
     def convert(c: coop.rchain.rspace.StoreCount): Option[StoreUsageCount] =
-      Some(StoreUsageCount(c.count, c.avgMilliseconds))
+      Some(StoreUsageCount(c.count, c.avgMilliseconds, c.peakRate, c.currentRate))
 
     new StoreMetrics[F] {
       def storeUsage: F[StoreUsage] =

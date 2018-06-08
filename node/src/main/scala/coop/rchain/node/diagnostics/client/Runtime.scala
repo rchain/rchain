@@ -114,26 +114,24 @@ object Runtime {
        |""".stripMargin
 
   def showStoreUsage(storeUsage: StoreUsage): String = {
-
-    def getCount(value: Option[StoreUsageCount]): Long = value.map(_.count).getOrElse(0)
-
-    def getAvg(value: Option[StoreUsageCount]): String =
-      value.map(_.avgMilliseconds.formatted("%.2f")).getOrElse("-")
+    def writeCounts(name: String, value: Option[StoreUsageCount]): String =
+      s"""
+         |  + RSpace $name
+         |    - Total Count: ${value.map(_.count).getOrElse(0)}
+         |    - Average (ms): ${value.map(_.avgMilliseconds.formatted("%.2f")).getOrElse("-")}
+         |    - Peak Rate (events/sec): ${value.map(_.peakRate).getOrElse(0)}
+         |    - Current Rate (events/sec): ${value.map(_.currentRate).getOrElse(0)}
+          """
 
     s"""Store metrics:
        |  - Total Size On Disk: ${storeUsage.totalSizeOnDisk.toHumanReadableSize}
        |  - RSpace Size On Disk: ${storeUsage.rspaceSizeOnDisk.toHumanReadableSize}
        |  - RSpace Data Entries: ${storeUsage.rspaceDataEntries}
-       |  - RSpace Consumes Count: ${getCount(storeUsage.rspaceConsumesCount)}
-       |  - RSpace Avg Consume(ms): ${getAvg(storeUsage.rspaceConsumesCount)}
-       |  - RSpace Produces Count: ${getCount(storeUsage.rspaceProducesCount)}
-       |  - RSpace Avg Produce(ms): ${getAvg(storeUsage.rspaceProducesCount)}
-       |  - RSpace Consumes COMM Count: ${getCount(storeUsage.rspaceConsumesCommCount)}
-       |  - RSpace Avg Consume COMM (ms): ${getAvg(storeUsage.rspaceConsumesCommCount)}
-       |  - RSpace Produce COMM Count: ${getCount(storeUsage.rspaceProducesCommCount)}
-       |  - RSpace Avg Produce COMM (ms): ${getAvg(storeUsage.rspaceProducesCommCount)}
-       |  - RSpace Install COMM Count: ${getCount(storeUsage.rspaceInstallCommCount)}
-       |  - RSpace Avg Install COMM (ms): ${getAvg(storeUsage.rspaceInstallCommCount)}
+       |  ${writeCounts("Consumes", storeUsage.rspaceConsumesCount)}
+       |  ${writeCounts("Produces", storeUsage.rspaceProducesCount)}
+       |  ${writeCounts("Consumes COMM", storeUsage.rspaceConsumesCommCount)}
+       |  ${writeCounts("Produces COMM", storeUsage.rspaceProducesCommCount)}
+       |  ${writeCounts("Install COMM", storeUsage.rspaceInstallCommCount)}
        |""".stripMargin
   }
 }

@@ -80,6 +80,8 @@ message NodeCoreMetrics {
 message StoreUsageCount {
   int64 count = 1;
   double avgMilliseconds = 2;
+  int32 peakRate = 3;
+  int32 currentRate = 4;
 }
 
 message StoreUsage {
