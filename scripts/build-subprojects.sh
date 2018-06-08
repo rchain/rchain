@@ -22,9 +22,9 @@ case "$SUBPROJECT" in "rosette")
 "test_artifact_creation")
 
     sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate \
-        node/rpm:packageBin \
-        node/debian:packageBin \
-        node/universal:packageZipTarball
+        deployment/rpm:packageBin \
+        deployment/debian:packageBin \
+        deployment/universal:packageZipTarball
     ;;
 
 "rnode-dockerhub-push")

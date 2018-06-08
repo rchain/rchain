@@ -20,14 +20,14 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
   ssh-add <(cat /tmp/id_rsa)
 
   # Generate rnode debian and rpm packages - push to repo and then to p2p test net
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin 
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/rpm:packageBin deployment/debian:packageBin
 
   # Copy to repo so it can be externally downloaded
   artifacts_dir=$(mktemp -d /tmp/artifacts.XXXXXXXX)
-  cp node/target/*.deb ${artifacts_dir}/rnode.deb
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
-  cp node/target/*.deb ${artifacts_dir}/rnode_${TRAVIS_BRANCH}_all.deb
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-${TRAVIS_BRANCH}.noarch.rpm
+  cp deployment/target/*.deb ${artifacts_dir}/rnode.deb
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
+  cp deployment/target/*.deb ${artifacts_dir}/rnode_${TRAVIS_BRANCH}_all.deb
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-${TRAVIS_BRANCH}.noarch.rpm
   scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -CP 10003 ${artifacts_dir}/* ${SSH_USERNAME}@repo.rchain.space:/usr/share/nginx/html/
 

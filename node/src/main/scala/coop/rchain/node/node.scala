@@ -22,7 +22,7 @@ import coop.rchain.p2p
 import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.Resources._
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
@@ -38,8 +38,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       && conf.key.toOption.isEmpty
       && !conf.certificatePath.toFile.exists()) {
     println(s"No certificate found at path ${conf.certificatePath}")
-    println("Generating a X.509 certificate for the node")
-    CertificateHelper.generate(conf.data_dir().toString)
+    println("Generating a X.509 certificate and secret key for the node")
+
+    import coop.rchain.shared.Resources._
+    val keyPair = CertificateHelper.generateKeyPair()
+    val cert    = CertificateHelper.generate(keyPair)
+    withResource(new java.io.PrintWriter(conf.certificatePath.toFile)) { pw =>
+      pw.write(CertificatePrinter.print(cert))
+    }
+    withResource(new java.io.PrintWriter(conf.keyPath.toFile)) { pw =>
+      pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
+    }
   }
 
   if (!conf.certificatePath.toFile.exists()) {
@@ -68,7 +77,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     publicKey
       .flatMap(CertificateHelper.publicAddress)
       .getOrElse {
-        println("Certificate must contain a secp256r1 EC Public Key")
+        println("Certificate must contain a secp256k1 EC Public Key")
         System.exit(1)
         Array[Byte]()
       }

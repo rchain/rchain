@@ -50,19 +50,19 @@ create_test_network_resources() {
     if [[ $i == 0 ]]; then
       sudo tee -a ${var_lib_rnode_dir}/node.key.pem > /dev/null <<EOF
 -----BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+
-g8t//2FTXTBeZIb2cL3l2LUNE+WhRANCAATMzyfe1GgAOd9Il/QDmC2qIPSq5lWf
-qG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9Q
+MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQg/ZEgb5PG44ZOAXY+EzSb
+UNSVby0mr1PX1Hy+BJ9XyGahRANCAAQJ817pMgw5mFjdXTBC6/zL4HaOYtM+65Nj
+/Pgo2muAt2KGga/nwsnt3dw2gPV8yNX360F6LTd9IXJfUlg/lkI5
 -----END PRIVATE KEY-----
 EOF
       sudo tee -a ${var_lib_rnode_dir}/node.certificate.pem > /dev/null <<EOF
 -----BEGIN CERTIFICATE-----
-MIIBDzCBtgIJAPjozz8MWcJ9MAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs
-MB4XDTE4MDUyODE3MDkwN1oXDTE5MDUyODE3MDkwN1owEDEOMAwGA1UEAwwFbG9j
-YWwwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATMzyfe1GgAOd9Il/QDmC2qIPSq
-5lWfqG32qyyBT5QaZcvOnrLLGirVsi40LIeXP9hhLUEQ2Ryz8lVG38p0Ka9QMAoG
-CCqGSM49BAMCA0gAMEUCIQD31PVXPJ+EbBLKI6ekF/I1bE8vqU/Z1ao0Gtlwag2J
-NwIgO8sL6OEemqIcg3FlOdm57YucyRxJsqV0RGJNFrHGeR0=
+MIIBCzCBswIJALXNoHL5j0MhMAoGCCqGSM49BAMCMBAxDjAMBgNVBAMMBWxvY2Fs
+MB4XDTE4MDUyNTE5MDQwNloXDTE5MDUyNTE5MDQwNlowEDEOMAwGA1UEAwwFbG9j
+YWwwVjAQBgcqhkjOPQIBBgUrgQQACgNCAAQJ817pMgw5mFjdXTBC6/zL4HaOYtM+
+65Nj/Pgo2muAt2KGga/nwsnt3dw2gPV8yNX360F6LTd9IXJfUlg/lkI5MAoGCCqG
+SM49BAMCA0cAMEQCIBVrOjuUa4E2vAT4kyxXsMgWbWSU9Eeppu5eVIVSk8NsAiBi
+4dOh4YxeUkYTmLZCGiwlO1UsUVYsi8WxMiOGTYrtfg==
 -----END CERTIFICATE-----
 EOF
    fi
@@ -70,7 +70,7 @@ EOF
     if [[ $i == 0 ]]; then
       rnode_cmd="--port 30304 --standalone"
     else
-      rnode_cmd="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@169.254.1.2:30304"
+      rnode_cmd="--bootstrap rnode://020ad06db542a859bee8d32b904d1c4320c62528@169.254.1.2:30304"
     fi
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \
@@ -139,13 +139,13 @@ delete_test_network_resources() {
 
 create_artifacts() {
   artifacts_dir=$(mktemp -d /tmp/artifacts.XXXXXXXX)
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin
-  cp node/target/*.deb ${artifacts_dir}/
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/
-  cp node/target/*.deb ${artifacts_dir}/rnode.deb
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
-  cp node/target/*.deb ${artifacts_dir}/rnode_dev_all.deb
-  cp node/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-dev.noarch.rpm
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/rpm:packageBin deployment/debian:packageBin
+  cp deployment/target/*.deb ${artifacts_dir}/
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/
+  cp deployment/target/*.deb ${artifacts_dir}/rnode.deb
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode.rpm
+  cp deployment/target/*.deb ${artifacts_dir}/rnode_dev_all.deb
+  cp deployment/target/rpm/RPMS/noarch/*.rpm ${artifacts_dir}/rnode-dev.noarch.rpm
   scp -CP 10003 ${artifacts_dir}/* root@repo.rchain.space:/usr/share/nginx/html/
   #eval `ssh-agent -s`
   #ssh-add <(cat ~/.ssh/travis_id_rsa)
@@ -262,14 +262,14 @@ create_docker_rnode_image() {
   fi
   echo "Creating RChain rnode docker image coop.rchain/rnode from git src via sbt"
   if [[ "$1" == "local" ]]; then
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/docker
   elif [[ $1 && $2 ]]; then
     git_dir=$(mktemp -d /tmp/rchain-git.XXXXXXXX)
     cd ${git_dir}
     git clone $1 
     cd rchain
     git checkout $2
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/docker
   else
     echo "Unsupported"
   fi
@@ -297,7 +297,7 @@ check_network_convergence() {
 if [[ "${TRAVIS}" == "true" ]]; then
   repl_load_count=100
   echo "Running in TRAVIS CI"
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate deployment/docker
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
 

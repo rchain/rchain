@@ -10,7 +10,7 @@ object Dependencies {
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
-  val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.58"
+  val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.59"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
@@ -40,10 +40,7 @@ object Dependencies {
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.8.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64-fedora"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "osx-x86_64"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.0.3"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
@@ -53,6 +50,17 @@ object Dependencies {
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.+"
 
   // format: on
+
+  val nettyTcnativeAssemblyExclusions: Seq[String] =
+    if(osClassifier == "osx-x86_64")
+      Seq("netty-tcnative-openssl-static-2.0.9.Final-SNAPSHOT-linux-x86_64.jar")
+    else Seq("netty-tcnative-2.0.8.Final-osx-x86_64.jar")
+
+  val nettyTcnativeDebianExclusions: Seq[String] =
+    Seq("netty-tcnative-2.0.8.Final-osx-x86_64.jar")
+
+  val nettyTcnativeFedoraExclusions: Seq[String] =
+    Seq("netty-tcnative-2.0.8.Final-osx-x86_64.jar")
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4")
 
