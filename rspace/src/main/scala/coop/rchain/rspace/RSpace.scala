@@ -34,6 +34,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
         m.get(pattern, matchCandidate) match {
           case None =>
             findMatchingDataCandidate(channel, remaining, pattern, indexedDatum +: prefix)
+          case Some(mat) if persist =>
+            Some((DataCandidate(channel, Datum(mat, persist), dataIndex), data))
           case Some(mat) =>
             Some((DataCandidate(channel, Datum(mat, persist), dataIndex), prefix ++ remaining))
         }
