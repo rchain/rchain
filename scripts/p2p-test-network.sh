@@ -5,9 +5,9 @@
 # "delete testnet" removes all testnet resources
 
 if [[ "${TRAVIS}" == "true" ]]; then
-  set -eox pipefail # x enables verbosity on CI environment for debugging
+  set -eo pipefail # x enables verbosity on CI environment for debugging
 else
-  set -eox pipefail
+  set -eo pipefail
 fi
 
 NETWORK_UID="1" # Unique identifier for network if you wanted to run multiple test networks
