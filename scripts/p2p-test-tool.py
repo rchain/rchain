@@ -223,7 +223,7 @@ def test_node_eval_of_rholang_files(container):
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
         print(file_path)
-        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} --eval {file_path}'], user='root')
+        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} --eval {file_path}'])
         for line in eval_r.output.decode('utf-8').splitlines():
             if 'ERROR' in line.upper():
                 print(line)
@@ -273,7 +273,7 @@ def check_network_convergence(container):
 
     while count < 200:
         cmd = f'curl -s {container.name}:9095'
-        r = container.exec_run(cmd=cmd, user='root').output.decode('utf-8')
+        r = container.exec_run(cmd=cmd).output.decode('utf-8')
         print(r)
         print(f"checking {count} of {timeout} seconds")
         for line in r.splitlines():
@@ -411,7 +411,7 @@ def test_repl_load(container):
             repl_node[i]['name'] = f"repl{i}.{args.network}"
             repl_node[i]['volume'] = client.volumes.create()
 
-            cmd = (f"sudo docker run --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
+            cmd = (f"sudo docker run -u root --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
                    f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
                    f"--network {args.network} {args.image} "
                    f"--grpc-host {container.name} -r")
