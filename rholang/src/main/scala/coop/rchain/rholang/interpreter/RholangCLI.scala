@@ -56,22 +56,16 @@ object RholangCLI {
 
     try {
       if (conf.file.supplied) {
-        val fileName: String = conf.file()
-        val source           = reader(fileName)
-        buildNormalizedTerm(source).runAttempt match {
-          case Right(par) =>
-            if (conf.binary()) {
-              writeBinary(fileName, par)
-            } else if (conf.text()) {
-              writeHumanReadable(fileName, par)
-            } else {
-              val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-              waitForSuccess(evaluatorFuture)
-              printStorageContents(runtime.space.store)
-            }
-          case Left(error) =>
-            System.err.println(error)
-        }
+        val fileName = conf.file()
+
+        val processTerm : Par => Unit =
+          if (conf.binary()) writeBinary(fileName)
+          else if (conf.text()) writeHumanReadable(fileName)
+          else evaluateFile(runtime)
+
+        val source = reader(fileName)
+
+        processFile(source, processTerm)
       } else {
         repl(runtime)
       }
@@ -127,6 +121,15 @@ object RholangCLI {
     repl(runtime)
   }
 
+  def processFile(source:Reader, runner : Par => Unit) : Unit = {
+    buildNormalizedTerm(source).runAttempt match {
+      case Right(par) =>
+        runner(par)
+      case Left(error) =>
+        System.err.println(error)
+    }
+  }
+
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
@@ -176,7 +179,7 @@ object RholangCLI {
         throw e
     }
 
-  private def writeHumanReadable(fileName: String, sortedTerm: Par): Unit = {
+  private def writeHumanReadable(fileName: String)(sortedTerm: Par): Unit = {
     val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
     new java.io.PrintWriter(compiledFileName) {
       write(sortedTerm.toString)
@@ -185,12 +188,18 @@ object RholangCLI {
     println(s"Compiled $fileName to $compiledFileName")
   }
 
-  private def writeBinary(fileName: String, sortedTerm: Par): Unit = {
+  private def writeBinary(fileName: String)(sortedTerm: Par): Unit = {
     val binaryFileName = fileName.replaceAll(".rho$", "") + ".bin"
     val output         = new BufferedOutputStream(new FileOutputStream(binaryFileName))
     output.write(sortedTerm.toByteString.toByteArray)
     output.close()
     println(s"Compiled $fileName to $binaryFileName")
+  }
+
+  def evaluateFile(runtime : Runtime) (par : Par): Unit = {
+    val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+    waitForSuccess(evaluatorFuture)
+    printStorageContents(runtime.space.store)
   }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
