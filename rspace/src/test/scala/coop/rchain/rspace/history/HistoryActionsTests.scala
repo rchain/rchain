@@ -360,12 +360,6 @@ abstract class HistoryActionsTests[T] extends HistoryTestsBase[T, TestKey, ByteV
     }
   }
 
-  "getLeaves on an empty store" should "return an empty sequence" in
-    withTestTrieStore { store =>
-      val leaves = getRoot(store).map(getLeaves(store, _))
-      leaves.value shouldBe empty
-    }
-
   "insert 6 things and getLeaves" should "return all of the leaves" in
     withTestTrieStore { store =>
       val expected: Vector[Leaf[TestKey, ByteVector]] = Vector(

@@ -263,10 +263,10 @@ package object history {
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
-      parents: Seq[(Int, Node)]): (Option[Node], Seq[(Int, Node)]) =
+      parents: Seq[(Int, Node)]): (Pointer, Option[Node], Seq[(Int, Node)]) =
     parents match {
       case Nil =>
-        (None, Seq.empty[(Int, Node)])
+        (LeafPointer(hash), None, Seq.empty[(Int, Node)])
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
         pointerBlock.children match {
@@ -278,7 +278,8 @@ package object history {
           case Vector(_) => propagateLeafUpward(hash, tail)
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the leaf.
-          case _ => (Some(Node(pointerBlock.updated(List((byte, LeafPointer(hash)))))), tail)
+          case _ =>
+            (EmptyPointer, Some(Node(pointerBlock.updated(List((byte, LeafPointer(hash)))))), tail)
         }
     }
 
@@ -286,12 +287,13 @@ package object history {
   private[this] def deleteLeaf[T, K, V](
       store: ITrieStore[T, K, V],
       txn: T,
-      parents: Seq[(Int, Node)]): (Option[Node], Seq[(Int, Node)]) =
+      parents: Seq[(Int, Node)]): (Pointer, Option[Node], Seq[(Int, Node)]) =
     parents match {
       case Nil =>
-        (None, Seq.empty[(Int, Node)])
+        (EmptyPointer, None, Seq.empty[(Int, Node)])
       case (byte, Node(pointerBlock)) +: tail =>
-        val updated = (Some(Node(pointerBlock.updated(List((byte, EmptyPointer))))), tail)
+        val updated =
+          (EmptyPointer, Some(Node(pointerBlock.updated(List((byte, EmptyPointer))))), tail)
         // Get the children of the immediate parent
         pointerBlock.childrenWithIndex match {
           // If there are no children, then something is wrong, because one of the children
@@ -350,9 +352,9 @@ package object history {
             // If the "tip" is equal to a leaf containing the given key and value, commence
             // with the deletion process.
             case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
-              val (hd, nodesToRehash) = deleteLeaf(store, txn, parents)
+              val (ptr, hd, nodesToRehash) = deleteLeaf(store, txn, parents)
               hd match {
-                case None => store.putRoot(txn, EmptyPointer); true
+                case None => store.putRoot(txn, ptr); true
                 case Some(hd) =>
                   val rehashedNodes = rehash[K, V](hd, nodesToRehash)
                   val newRootHash   = insertTries[T, K, V](store, txn, rehashedNodes).get
