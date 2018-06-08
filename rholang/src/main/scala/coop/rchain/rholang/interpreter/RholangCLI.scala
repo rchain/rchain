@@ -12,11 +12,11 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.implicits.VectorPar
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{Yylex, parser}
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.{ScallopConf, stringListConverter}
+import org.rogach.scallop.{stringListConverter, ScallopConf}
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -121,12 +121,8 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    buildNormalizedTerm(source).runAttempt match {
-      case Right(par) =>
-        processTerm(par)
-      case Left(error) =>
-        System.err.println(error)
-    }
+    buildNormalizedTerm(source).runAttempt
+      .fold(System.err.println, processTerm)
   }
 
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
