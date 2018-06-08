@@ -8,6 +8,7 @@ import org.scalacheck.Gen.{const, frequency, resize, sized}
 import coop.rchain.models.rholang.sort.ordering._
 
 import scala.collection.immutable.BitSet
+import monix.eval.Coeval
 
 object testImplicits {
   val genBitSet = for { bitMask <- Arbitrary.arbitrary[Array[Long]] } yield
@@ -22,6 +23,9 @@ object testImplicits {
 
   implicit val arbByteArray: Arbitrary[ByteString] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(ba => ByteString.copyFrom(ba)))
+
+  implicit def coeval[A: Arbitrary]: Arbitrary[Coeval[A]] =
+    Arbitrary(Arbitrary.arbitrary[A].map(a => Coeval.delay(a)))
 
   implicit val arbPar = implicitly[Arbitrary[Par]]
 

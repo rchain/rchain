@@ -1,27 +1,35 @@
 package coop.rchain.models
 
 import scala.collection.immutable.BitSet
+import monix.eval.Coeval
 import coop.rchain.models.rholang.sort.ordering._
 
-case class ParSet private (ps: SortedHashSet[Par], connectiveUsed: Boolean) {
-  lazy val locallyFree: BitSet = ParSet.updateLocallyFree(ps)
+//locallyFree is of type Coeval to make use of memoization
+case class ParSet private (ps: SortedHashSet[Par],
+                           connectiveUsed: Boolean,
+                           locallyFree: Coeval[BitSet]) {
 
   override def equals(o: scala.Any): Boolean = o match {
     case parSet: ParSet =>
-      this.ps == parSet.ps && this.connectiveUsed == parSet.connectiveUsed && this.locallyFree == parSet.locallyFree
+      this.ps == parSet.ps && this.connectiveUsed == parSet.connectiveUsed && this.locallyFree.value == parSet.locallyFree.value
     case _ => false
   }
 
   override def hashCode(): Int = (
     37 * this.ps.hashCode() +
       37 * this.connectiveUsed.hashCode() +
-      37 * this.locallyFree.hashCode()
+      37 * this.locallyFree.value.hashCode()
   )
 }
 
 object ParSet {
-  def apply(ps: Seq[Par], connectiveUsed: Boolean = false): ParSet =
-    ParSet(SortedHashSet(ps), connectiveUsed)
+  def apply(ps: Seq[Par], connectiveUsed: Boolean, locallyFree: Coeval[BitSet]): ParSet =
+    ParSet(SortedHashSet(ps), connectiveUsed, locallyFree.memoize)
+
+  def apply(ps: Seq[Par], connectiveUsed: Boolean = false): ParSet = {
+    val shs = SortedHashSet(ps)
+    ParSet(shs, connectiveUsed, Coeval.delay(updateLocallyFree(shs)).memoize)
+  }
 
   def updateLocallyFree(ps: SortedHashSet[Par]): BitSet =
     ps.sortedPars.foldLeft(BitSet())((acc, p) => acc | p.locallyFree)

@@ -36,9 +36,11 @@ object GroundSortMatcher {
           .map(_.sorted)
           .map(
             sortedPars =>
-              ScoredTerm(
-                ESetBody(ParSet(SortedHashSet(sortedPars.map(_.term.get)), gs.connectiveUsed)),
-                Node(Score.ESET, sortedPars.map(_.score): _*)))
+              ScoredTerm(ESetBody(
+                           ParSet(SortedHashSet(sortedPars.map(_.term.get)),
+                                  gs.connectiveUsed,
+                                  gs.locallyFree)),
+                         Node(Score.ESET, sortedPars.map(_.score): _*)))
       case EMapBody(gm) =>
         def sortKeyValuePair(kv: KeyValuePair): Either[Throwable, ScoredTerm[KeyValuePair]] =
           for {

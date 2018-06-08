@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
 
 import scala.collection.immutable.{BitSet, Vector}
+import monix.eval.Coeval
 import coop.rchain.models.rholang.sort.ordering._
 
 sealed trait VarSort
@@ -150,7 +151,8 @@ object CollectionNormalizeMatcher {
         foldMatch(input.knownFree, ps.toList, ETuple.apply)
       case cs: CollectSet =>
         val constructor: (Seq[Par], BitSet, Boolean) => ParSet =
-          (pars, locallyFree, connectiveUsed) => ParSet(SortedHashSet(pars), connectiveUsed)
+          (pars, locallyFree, connectiveUsed) =>
+            ParSet(SortedHashSet(pars), connectiveUsed, Coeval.delay(locallyFree))
         foldMatch(input.knownFree, cs.listproc_.asScala.toList, constructor)
       case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
     }

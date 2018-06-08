@@ -115,9 +115,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     result.par should be(
       inputs.par.prepend(
         ParSet(
-          SortedHashSet(Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
-                                 GInt(7),
-                                 GInt(8).prepend(EVar(FreeVar(1))))),
+          Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
+                   GInt(7),
+                   GInt(8).prepend(EVar(FreeVar(1)))),
           connectiveUsed = true
         )))
     result.knownFree should be(

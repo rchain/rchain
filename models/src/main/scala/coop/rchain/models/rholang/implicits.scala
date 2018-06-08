@@ -325,7 +325,7 @@ object implicits {
         case GByteArray(_)              => BitSet()
         case EListBody(e)               => e.locallyFree
         case ETupleBody(e)              => e.locallyFree
-        case ESetBody(e)                => e.locallyFree
+        case ESetBody(e)                => e.locallyFree.value
         case EMapBody(e)                => e.locallyFree
         case EVarBody(EVar(v))          => VarLocallyFree.locallyFree(v.get)
         case EEvalBody(chan)            => ChannelLocallyFree.locallyFree(chan)

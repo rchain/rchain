@@ -55,7 +55,7 @@ class ParSetSpec extends FlatSpec with Matchers {
       )
     )
 
-    parSet.locallyFree should ===(BitSet(2))
+    parSet.locallyFree.value should ===(BitSet(2))
   }
 
 }

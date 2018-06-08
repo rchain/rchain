@@ -291,11 +291,16 @@ object Substitute {
               newLocallyFree = locallyFree.until(env.shift)
             } yield Expr(exprInstance = ETupleBody(ETuple(pss, newLocallyFree, connectiveUsed)))
 
-          case ESetBody(ParSet(SortedHashSet(ps), connectiveUsed)) =>
+          case ESetBody(ParSet(SortedHashSet(ps), connectiveUsed, locallyFree)) =>
             for {
               pss <- ps.toList
                       .traverse(p => s1(p))
-            } yield Expr(exprInstance = ESetBody(ParSet(SortedHashSet(pss.toSeq), connectiveUsed)))
+            } yield
+              Expr(
+                exprInstance = ESetBody(
+                  ParSet(SortedHashSet(pss.toSeq),
+                         connectiveUsed,
+                         locallyFree.map(_.until(env.shift)))))
 
           case EMapBody(EMap(kvs, locallyFree, connectiveUsed)) =>
             for {
