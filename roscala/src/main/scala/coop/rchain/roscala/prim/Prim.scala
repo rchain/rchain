@@ -28,6 +28,7 @@ abstract class Prim extends Ob {
 }
 
 object Prim {
+
   /**
     * The mapping from primnum to function-name show below.
     *
@@ -360,7 +361,7 @@ object Prim {
     * 326	update!
     * 327	actor-new
     */
-  val map = Map(202 -> flPlus , 232 -> fxPlus)
+  val map = Map(202 -> flPlus, 232 -> fxPlus)
 
   def nthPrim(n: Int): Prim = map(n)
 }

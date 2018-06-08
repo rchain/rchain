@@ -57,7 +57,7 @@ object Location {
 
       case GlobalVar(offset) =>
         if (offset < globalEnv.numberOfSlots())
-          globalEnv.slot(offset)
+          globalEnv.slot.unsafeGet(offset)
         else
           Invalid
 
