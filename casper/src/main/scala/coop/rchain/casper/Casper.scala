@@ -35,6 +35,7 @@ trait Casper[F[_], A] {
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockMessage]] {
   def blockDag: F[BlockDag]
   def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]]
+  def close(): F[Unit]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
@@ -53,6 +54,7 @@ sealed abstract class MultiParentCasperInstances {
       def blockDag: F[BlockDag]                = BlockDag().pure[F]
       def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
         Applicative[F].pure[Option[Checkpoint]](None)
+      def close(): F[Unit] = ().pure[F]
     }
 
   def hashSetCasper[
@@ -195,6 +197,11 @@ sealed abstract class MultiParentCasperInstances {
 
       def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] = Capture[F].capture {
         checkpoints.get.get(hash)
+      }
+
+      def close(): F[Unit] = Capture[F].capture {
+        val _runtime = runtime.take()
+        _runtime.close()
       }
 
       private def isValid(block: BlockMessage): F[Boolean] =

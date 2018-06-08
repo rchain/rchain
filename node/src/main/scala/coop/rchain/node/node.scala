@@ -291,6 +291,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                   .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
       _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
           else ().pure[Effect]
+      _ <- casperEffect.close()
       _ <- exit0.toEffect
     } yield ()
 
