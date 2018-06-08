@@ -7,15 +7,15 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.MonadTrans
 import coop.rchain.comm.CommError.CommErr
-import coop.rchain.comm.{PeerNode, ProtocolMessage, ProtocolNode}
+import coop.rchain.comm.{PeerNode, ProtocolMessage}
 
 trait TransportLayer[F[_]] {
 
   def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
+                remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]]
-  // TODO return PeerNode
-  def local: F[ProtocolNode]
+  // TODO return PeerNode, do we still neeed it?
+  def local: F[PeerNode]
   // TODO remove ProtocolMessage, use raw messages from protocol
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]]
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]]
@@ -35,11 +35,11 @@ sealed abstract class TransportLayerInstances {
       implicit evF: TransportLayer[F]): TransportLayer[EitherT[F, E, ?]] =
     new TransportLayer[EitherT[F, E, ?]] {
       def roundTrip(msg: ProtocolMessage,
-                    remote: ProtocolNode,
+                    remote: PeerNode,
                     timeout: Duration): EitherT[F, E, CommErr[ProtocolMessage]] =
         EitherT.liftF(evF.roundTrip(msg, remote, timeout))
 
-      def local: EitherT[F, E, ProtocolNode] =
+      def local: EitherT[F, E, PeerNode] =
         EitherT.liftF(evF.local)
       def send(msg: ProtocolMessage, p: PeerNode): EitherT[F, E, CommErr[Unit]] =
         EitherT.liftF(evF.send(msg, p))
