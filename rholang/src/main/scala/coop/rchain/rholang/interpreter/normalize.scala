@@ -206,7 +206,7 @@ object NameNormalizeMatcher {
 object ProcNormalizeMatcher {
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] = {
-    def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Option[Par] => T)(
+    def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
       normalizeMatch[M](subProc, input.copy(par = VectorPar()))
         .map(
@@ -216,11 +216,11 @@ object ProcNormalizeMatcher {
               subResult.knownFree
           ))
 
-    def binaryExp[T](subProcLeft: Proc,
-                     subProcRight: Proc,
-                     input: ProcVisitInputs,
-                     constructor: (Option[Par], Option[Par]) => T)(
-        implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
+    def binaryExp[T](
+        subProcLeft: Proc,
+        subProcRight: Proc,
+        input: ProcVisitInputs,
+        constructor: (Par, Par) => T)(implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
       for {
         leftResult <- normalizeMatch[M](subProcLeft, input.copy(par = VectorPar()))
         rightResult <- normalizeMatch[M](
@@ -308,7 +308,7 @@ object ProcNormalizeMatcher {
           case pvv: ProcVarVar =>
             input.env.get(pvv.var_) match {
               case Some((level, ProcSort, _, _)) =>
-                ProcVisitOutputs(input.par.prepend(EVar(Some(BoundVar(level)))), input.knownFree)
+                ProcVisitOutputs(input.par.prepend(EVar(BoundVar(level))), input.knownFree)
                   .pure[M]
               case Some((_, NameSort, line, col)) =>
                 err.raiseError(
@@ -579,8 +579,8 @@ object ProcNormalizeMatcher {
           sourcesP                                                         <- processSources(bindings)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
           bindingsSources                                                  <- processBindings(sources)
-          receipts <- ReceiveBindsSortMatcher
-                       .preSortBinds[M, VarSort](bindingsSources)
+          receipts = ReceiveBindsSortMatcher
+            .preSortBinds[M, VarSort](bindingsSources)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {

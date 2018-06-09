@@ -17,7 +17,7 @@ object StoragePrinter {
           val sends: Seq[Send] = data.flatMap {
             case Datum(as: Seq[Channel], persist: Boolean) =>
               channels.map { channel =>
-                Send(Some(channel), as.map { case Channel(Quote(p)) => p }, persist)
+                Send(channel, as.map { case Channel(Quote(p)) => p }, persist)
               }
           }
           sends.foldLeft(Par()) { (acc: Par, send: Send) =>
@@ -32,11 +32,11 @@ object StoragePrinter {
                                      persist: Boolean) =>
               val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
                 case (channel, pattern) =>
-                  ReceiveBind(pattern.patterns, Some(channel), pattern.remainder)
+                  ReceiveBind(pattern.patterns, channel, pattern.remainder)
               }
               continuation.taggedCont match {
-                case ParBody(p) => Receive(receiveBinds, Some(p), persist)
-                case _          => Receive(receiveBinds, Some(Par.defaultInstance), persist)
+                case ParBody(p) => Receive(receiveBinds, p, persist)
+                case _          => Receive(receiveBinds, Par.defaultInstance, persist)
               }
           }
           receives.foldLeft(Par()) { (acc: Par, receive: Receive) =>

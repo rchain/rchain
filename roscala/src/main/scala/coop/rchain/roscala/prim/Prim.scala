@@ -26,7 +26,8 @@ abstract class Prim extends Ob {
     dispatch(state, globalEnv)
 }
 
-object Prim{
+object Prim {
+
   /**
     * The mapping from primnum to function-name show below.
     *

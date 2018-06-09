@@ -4,7 +4,7 @@ import coop.rchain.models.Bundle
 import coop.rchain.models.rholang.implicits._
 
 object BundleSortMatcher {
-  def sortMatch(b: Bundle): Either[Throwable, ScoredTerm[Bundle]] = {
+  def sortMatch(b: Bundle): ScoredTerm[Bundle] = {
     val score: Int = if (b.writeFlag && b.readFlag) {
       Score.BUNDLE_READ_WRITE
     } else if (b.writeFlag && !b.readFlag) {
@@ -14,8 +14,8 @@ object BundleSortMatcher {
     } else {
       Score.BUNDLE_EQUIV
     }
-    ParSortMatcher
+    val sortedPar = ParSortMatcher
       .sortMatch(b.body)
-      .map(sortedPar => ScoredTerm(b.copy(body = sortedPar.term), Node(score, sortedPar.score)))
+    ScoredTerm(b.copy(body = sortedPar.term), Node(score, sortedPar.score))
   }
 }
