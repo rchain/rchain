@@ -7,7 +7,10 @@
 #include "Proc.h"
 #include "Method.h"
 #include "Pattern.h"
+#include "Table.h"
+
 #include "CommandLine.h"
+#include "Export.h"
 
 #include <google/protobuf/text_format.h>
 #include <Ob.pb.h>
@@ -127,10 +130,9 @@ void tupleObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObTy
 
     // A tuple is a list of objects.  Retrieve and call the handler for each of them.
     for (int i = 0; i < tup->numberOfElements(); i++) {
-        pOb ob = tup->nth(i);
-        std::string type = BASE(tup->nth(i))->typestring();
+        pOb el = tup->nth(i);
         ObjectCodePB::Object *elOb = pbTup->add_elements();
-        populateObjectByType(ob, elOb);
+        populateObjectByType(el, elOb);
     }
 }
 
@@ -159,6 +161,15 @@ void nivObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType
 
 void stdExtensionObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
     ObjectCodePB::StdExtension *sextob = lvob->mutable_std_extension();
+    StdExtension * se = (StdExtension *)ob;
+
+    // A StdExtension is similar to a tuple which is a list of objects.
+    //  Retrieve and call the handler for each of them.
+    for (int i = 0; i < se->numberOfSlots(); i++) {
+        pOb el = se->slot(i);
+        ObjectCodePB::Object *elOb = sextob->add_elements();
+        populateObjectByType(el, elOb);
+    }
 }
 
 void expandedLocationObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype ) {
@@ -488,6 +499,14 @@ void constPatternObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodeP
     populateObjectByType(cp->val, val);
 }
 
+void rblTableObjectHandler( ObjectCodePB::Object * lvob, pOb ob, ObjectCodePB::ObType pbtype) {
+    ObjectCodePB::RblTable *rtob = lvob->mutable_rbl_table();
+    RblTable * rt = (RblTable *)ob;
+
+    ObjectCodePB::Object *tbl = rtob->mutable_tbl();
+    populateObjectByType(rt->tbl, tbl);
+}
+
 
 
 
@@ -525,6 +544,7 @@ std::map<ExportObjectKey, std::pair<ExportObjectHandler, ExportObjectType> >  ha
     {"RblAtom",             {rblAtomExprObjectHandler, ObjectCodePB::OT_RBL_ATOM} },
     {"RblBool",             {rblboolObjectHandler,   ObjectCodePB::OT_RBL_BOOL} },
     {"RBLstring",           {rblstringObjectHandler, ObjectCodePB::OT_RBL_STRING} },
+    {"RblTable",            {rblTableObjectHandler,  ObjectCodePB::OT_RBL_TABLE} },
     {"ReflectiveMethodExpr",{reflectiveMethodExprObjectHandler, ObjectCodePB::OT_REFLECTIVE_METHOD_EXPR} },
     {"RequestExpr",         {requestExprObjectHandler, ObjectCodePB::OT_REQUEST_EXPR} },
     {"SendExpr",            {sendExprObjectHandler,  ObjectCodePB::OT_SEND_EXPR} },
