@@ -20,7 +20,7 @@ test:integration-test-for-artifact-creation:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
 
-test:integration-test-for-rholang
+test:integration-test-for-rholang:
   stage: test 
   tags:
     - preloaded-ubuntu1804 
