@@ -5,9 +5,11 @@ import cats.{Applicative, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
+import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.implicits._
 import coop.rchain.models.{Match, MatchCase, GPrivate => _, _}
@@ -251,6 +253,8 @@ object Reduce {
         case FreeVar(_) =>
           interpreterErrorM[M].raiseError(
             ReduceError("Unbound variable: attempting to evaluate a pattern"))
+        case VarInstance.Empty =>
+          interpreterErrorM[M].raiseError(ReduceError("Impossible var instance EMPTY"))
       }
 
     /**
@@ -276,6 +280,8 @@ object Reduce {
             par    <- eval(varue)
             evaled <- evalExpr(par)
           } yield Quote(evaled)
+        case ChannelInstance.Empty =>
+          interpreterErrorM[M].raiseError(ReduceError("Impossible channel instance EMPTY"))
       }
 
     def eval(mat: Match)(implicit env: Env[Par]): M[Unit] = {
