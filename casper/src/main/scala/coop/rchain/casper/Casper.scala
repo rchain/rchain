@@ -266,6 +266,8 @@ sealed abstract class MultiParentCasperInstances {
           case InvalidBlock =>
             Log[F].info(
               s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+          case InvalidBlockSignature => ().pure[F]
+          case Undecided             => ().pure[F]
         }
 
       private def canAdd(block: BlockMessage): BlockStatus = {
