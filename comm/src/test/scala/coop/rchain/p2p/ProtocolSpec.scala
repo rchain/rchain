@@ -65,8 +65,6 @@ class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with Ap
   def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
     kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
 
-  private def value[A](ea: Effect[A]): A = ea.value.right.get
-
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
