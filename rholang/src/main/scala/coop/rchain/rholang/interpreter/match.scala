@@ -11,7 +11,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.SpatialMatcher.OptionalFreeMap
 import coop.rchain.rholang.interpreter.SpatialMatcher.NonDetFreeMap
-import coop.rchain.rholang.interpreter.implicits.{
+import coop.rchain.models.rholang.implicits.{
   fromEList,
   fromExpr,
   BundleLocallyFree,

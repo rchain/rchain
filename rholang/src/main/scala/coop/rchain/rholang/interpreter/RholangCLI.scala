@@ -4,21 +4,20 @@ import java.io.{BufferedOutputStream, FileOutputStream, FileReader, Reader, Stri
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
-import cats.data.EitherT
-import cats.{Monad, _}
+import cats._
 import cats.implicits._
-import cats.syntax._
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.models.rholang.sort.ParSortMatcher
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.implicits.VectorPar
+import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.ScallopConf
+import org.rogach.scallop.{stringListConverter, ScallopConf}
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -42,7 +41,8 @@ object RholangCLI {
                              descr = "Map size (in bytes)",
                              default = Some(1024L * 1024L * 1024L))
 
-    val file = trailArg[String](required = false, descr = "Rholang source file")
+    val files =
+      trailArg[List[String]](required = false, descr = "Rholang source file")(stringListConverter)
 
     verify()
   }
@@ -55,22 +55,9 @@ object RholangCLI {
     val runtime = Runtime.create(conf.data_dir(), conf.map_size())
 
     try {
-      if (conf.file.supplied) {
-        val fileName: String = conf.file()
-        val source           = reader(fileName)
-        buildNormalizedTerm(source).runAttempt match {
-          case Right(par) =>
-            if (conf.binary()) {
-              writeBinary(fileName, par)
-            } else if (conf.text()) {
-              writeHumanReadable(fileName, par)
-            } else {
-              val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-              waitThenPrintStorageContents(evaluatorFuture, runtime.space.store)
-            }
-          case Left(error) =>
-            System.err.println(error)
-        }
+      if (conf.files.supplied) {
+        val fileNames = conf.files()
+        fileNames.foreach(f => processFile(conf, runtime, f))
       } else {
         repl(runtime)
       }
@@ -111,7 +98,8 @@ object RholangCLI {
         buildNormalizedTerm(new StringReader(line)).runAttempt match {
           case Right(par) =>
             val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
-            waitThenPrintStorageContents(evaluatorFuture, runtime.space.store)
+            waitForSuccess(evaluatorFuture)
+            printStorageContents(runtime.space.store)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
             Console.err.print(ie.toString)
@@ -125,6 +113,19 @@ object RholangCLI {
     repl(runtime)
   }
 
+  def processFile(conf: Conf, runtime: Runtime, fileName: String)(
+      implicit scheduler: Scheduler): Unit = {
+    val processTerm: Par => Unit =
+      if (conf.binary()) writeBinary(fileName)
+      else if (conf.text()) writeHumanReadable(fileName)
+      else evaluateFile(runtime)
+
+    val source = reader(fileName)
+
+    buildNormalizedTerm(source).runAttempt
+      .fold(System.err.println, processTerm)
+  }
+
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
@@ -134,12 +135,10 @@ object RholangCLI {
                                  DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
         par <- ParSortMatcher
-                .sortMatch[Coeval](Some(outputs.par))
+                .sortMatch(Some(outputs.par))
                 .map(_.term)
-                .flatMap {
-                  case None      => Coeval.raiseError[Par](SortMatchError("ParSortMatcher failed"))
-                  case Some(par) => Coeval.delay(par)
-                }
+                .leftMap(th => SortMatchError(th.getMessage))
+                .fold(err => Coeval.raiseError[Par](err), par => Coeval.delay(par))
       } yield par
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
@@ -159,24 +158,22 @@ object RholangCLI {
       }
 
   @tailrec
-  def waitThenPrintStorageContents(
-      evaluatorFuture: CancelableFuture[Unit],
-      store: IStore[Channel, BindPattern, Seq[Channel], TaggedContinuation]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[Unit]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(_)) => printStorageContents(store)
+        case Some(Success(_)) => ()
         case Some(Failure(e)) => throw e
         case None             => throw new Exception("Future claimed to be ready, but value was None")
       }
     } catch {
       case _: TimeoutException =>
         Console.println("This is taking a long time. Feel free to ^C and quit.")
-        waitThenPrintStorageContents(evaluatorFuture, store)
+        waitForSuccess(evaluatorFuture)
       case e: Exception =>
         throw e
     }
 
-  private def writeHumanReadable(fileName: String, sortedTerm: Par): Unit = {
+  private def writeHumanReadable(fileName: String)(sortedTerm: Par): Unit = {
     val compiledFileName = fileName.replaceAll(".rho$", "") + ".rhoc"
     new java.io.PrintWriter(compiledFileName) {
       write(sortedTerm.toString)
@@ -185,12 +182,18 @@ object RholangCLI {
     println(s"Compiled $fileName to $compiledFileName")
   }
 
-  private def writeBinary(fileName: String, sortedTerm: Par): Unit = {
+  private def writeBinary(fileName: String)(sortedTerm: Par): Unit = {
     val binaryFileName = fileName.replaceAll(".rho$", "") + ".bin"
     val output         = new BufferedOutputStream(new FileOutputStream(binaryFileName))
     output.write(sortedTerm.toByteString.toByteArray)
     output.close()
     println(s"Compiled $fileName to $binaryFileName")
+  }
+
+  def evaluateFile(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
+    val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+    waitForSuccess(evaluatorFuture)
+    printStorageContents(runtime.space.store)
   }
 
   private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(

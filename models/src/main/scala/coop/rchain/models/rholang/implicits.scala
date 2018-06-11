@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.models.rholang
 
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
@@ -40,9 +40,9 @@ object implicits {
     new Expr(exprInstance = ETupleBody(e))
   implicit def fromEList(e: ETuple): Expr = apply(e)
 
-  def apply(e: ESet): Expr =
+  def apply(e: ParSet): Expr =
     new Expr(exprInstance = ESetBody(e))
-  implicit def fromESet(e: ESet): Expr = apply(e)
+  implicit def fromESet(e: ParSet): Expr = apply(e)
 
   def apply(e: EMap): Expr =
     new Expr(exprInstance = EMapBody(e))
@@ -247,6 +247,13 @@ object implicits {
         None
       }
 
+    def singleConnective(): Option[Connective] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.size == 1) {
+        Some(p.connectives.head)
+      } else {
+        None
+      }
+
     def ++(that: Par) =
       Par(
         that.sends ++ p.sends,
@@ -318,7 +325,7 @@ object implicits {
         case GByteArray(_)              => BitSet()
         case EListBody(e)               => e.locallyFree
         case ETupleBody(e)              => e.locallyFree
-        case ESetBody(e)                => e.locallyFree
+        case ESetBody(e)                => e.locallyFree.value
         case EMapBody(e)                => e.locallyFree
         case EVarBody(EVar(v))          => VarLocallyFree.locallyFree(v.get)
         case EEvalBody(chan)            => ChannelLocallyFree.locallyFree(chan)

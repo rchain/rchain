@@ -70,8 +70,6 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b6      = chain.idToBlocks(6)
     val b8      = chain.idToBlocks(8)
 
-    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b8, v2 -> b6)
-
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
     def runSafetyOracle[F[_]: Monad: SafetyOracle]: F[Unit] =
@@ -143,8 +141,6 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b6      = chain.idToBlocks(6)
     val b7      = chain.idToBlocks(7)
     val b8      = chain.idToBlocks(8)
-
-    val latestBlocks = HashMap[Validator, BlockMessage](v1 -> b6, v2 -> b8, v3 -> b7)
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 

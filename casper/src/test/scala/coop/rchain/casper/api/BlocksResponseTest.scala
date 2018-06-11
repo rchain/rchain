@@ -79,6 +79,7 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
       def blockDag: F[BlockDag]                  = chain.pure[F]
       def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
         Applicative[F].pure[Option[Checkpoint]](None)
+      def close(): F[Unit] = ().pure[F]
     }
   implicit val casperEffect = testCasper[Id]
 

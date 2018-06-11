@@ -4,9 +4,9 @@ import cats.implicits._
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
-import coop.rchain.models.implicits.mkProtobufInstance
+import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter.SpatialMatcher._
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 //noinspection ConvertExpressionToSAM

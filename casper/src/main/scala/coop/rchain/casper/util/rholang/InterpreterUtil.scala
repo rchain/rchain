@@ -23,34 +23,21 @@ object InterpreterUtil {
   def computeParentsPostState(parents: Seq[BlockMessage],
                               genesis: BlockMessage,
                               dag: BlockDag,
-                              tsLocation: Path,
-                              tsSize: Long,
+                              default: Checkpoint,
                               checkpoints: Map[ByteString, Checkpoint])(
-      implicit scheduler: Scheduler): (Tuplespace, Map[ByteString, Checkpoint]) = {
-    val parentTuplespaces = parents
-      .flatMap(p => {
-        for {
-          bd <- p.body
-          ps <- bd.postState
-        } yield (p -> ps.tuplespace)
-      })
+      implicit scheduler: Scheduler): (Checkpoint, Map[ByteString, Checkpoint]) = {
+    val parentTuplespaces = parents.flatMap(p => ProtoUtil.tuplespace(p).map(p -> _))
 
     if (parentTuplespaces.isEmpty) {
-      //no parents to base off of -- start with new tuplespace
-      Tuplespace(tsLocation, tsSize) -> checkpoints
+      //no parents to base off of, so use defult
+      default -> checkpoints
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
-      val (checkpoint, updatedMap) = checkpoints
+      checkpoints
         .get(parentTuplespaces.head._2)
         .map(_ -> checkpoints)
         .getOrElse(
-          computeBlockCheckpoint(parentTuplespaces.head._1,
-                                 genesis,
-                                 dag,
-                                 tsLocation,
-                                 tsSize,
-                                 checkpoints))
-      checkpoint.toTuplespace -> updatedMap
+          computeBlockCheckpoint(parentTuplespaces.head._1, genesis, dag, default, checkpoints))
     } else {
       //In the case of multiple parents we need
       //to apply all of the deploys that have been
@@ -63,13 +50,10 @@ object InterpreterUtil {
           .reduce(DagOperations.greatestCommonAncestor(_, _, genesis, dag))
 
       val (checkpoint, updatedMap) = (for {
-        bd <- gca.body
-        ps <- bd.postState
-        t  = ps.tuplespace
-        ch <- checkpoints.get(t)
+        ts <- ProtoUtil.tuplespace(gca)
+        ch <- checkpoints.get(ts)
       } yield (ch -> checkpoints))
-        .getOrElse(computeBlockCheckpoint(gca, genesis, dag, tsLocation, tsSize, checkpoints))
-      val ts = checkpoint.toTuplespace
+        .getOrElse(computeBlockCheckpoint(gca, genesis, dag, default, checkpoints))
 
       val deploys = DagOperations
         .bfTraverse[BlockMessage](parentTuplespaces.map(_._1))(
@@ -78,8 +62,10 @@ object InterpreterUtil {
         .flatMap(ProtoUtil.deploys(_).reverse)
         .toIndexedSeq
         .reverse
-      deploys.foreach(_.term.foreach(ts.addTerm(_)))
-      ts -> updatedMap
+
+      //TODO: figure out what casper should do with errors in deploys
+      val Right(newCheckpoint) = checkpoint.updated(deploys.flatMap(_.term).toList)
+      newCheckpoint -> (updatedMap.updated(newCheckpoint.hash, newCheckpoint))
     }
   }
 
@@ -87,38 +73,30 @@ object InterpreterUtil {
                                deploys: Seq[Deploy],
                                genesis: BlockMessage,
                                dag: BlockDag,
-                               tsLocation: Path,
-                               tsSize: Long,
+                               default: Checkpoint,
                                checkpoints: Map[ByteString, Checkpoint])(
       implicit scheduler: Scheduler): (Checkpoint, Map[ByteString, Checkpoint]) = {
-    val (ts, updatedMap) =
-      computeParentsPostState(parents, genesis, dag, tsLocation, tsSize, checkpoints)
+    val (checkpoint, updatedMap) =
+      computeParentsPostState(parents, genesis, dag, default, checkpoints)
 
-    deploys.foreach(d => {
-      d.term.foreach(ts.addTerm(_))
-    })
-    val result = ts.checkpoint
-    ts.delete()
-    (result, updatedMap + (result.hash -> result))
+    val Right(newCheckpoint) = checkpoint.updated(deploys.flatMap(_.term).toList)
+    (newCheckpoint, updatedMap.updated(newCheckpoint.hash, newCheckpoint))
   }
 
   def computeBlockCheckpoint(b: BlockMessage,
                              genesis: BlockMessage,
                              dag: BlockDag,
-                             tsLocation: Path,
-                             tsSize: Long,
+                             default: Checkpoint,
                              checkpoints: Map[ByteString, Checkpoint])(
       implicit scheduler: Scheduler): (Checkpoint, Map[ByteString, Checkpoint]) = {
 
     val preComputedCheckPoint = for {
-      bd <- b.body
-      ps <- bd.postState
-      ts = ps.tuplespace
+      ts <- ProtoUtil.tuplespace(b)
       ch <- checkpoints.get(ts)
     } yield (ch -> checkpoints)
 
     preComputedCheckPoint.getOrElse(
-      computeBlockCheckpointFromDeploys(b, genesis, dag, tsLocation, tsSize, checkpoints)
+      computeBlockCheckpointFromDeploys(b, genesis, dag, default, checkpoints)
     )
   }
 
@@ -127,18 +105,14 @@ object InterpreterUtil {
   def validateBlockCheckpoint(b: BlockMessage,
                               genesis: BlockMessage,
                               dag: BlockDag,
-                              tsLocation: Path,
-                              tsSize: Long,
+                              default: Checkpoint,
                               checkpoints: Map[ByteString, Checkpoint])(
       implicit scheduler: Scheduler): (Option[Checkpoint], Map[ByteString, Checkpoint]) = {
 
-    val tsHash = for {
-      bd <- b.body
-      ps <- bd.postState
-    } yield ps.tuplespace
+    val tsHash = ProtoUtil.tuplespace(b)
 
     val (computedCheckpoint, updatedMap) =
-      computeBlockCheckpointFromDeploys(b, genesis, dag, tsLocation, tsSize, checkpoints)
+      computeBlockCheckpointFromDeploys(b, genesis, dag, default, checkpoints)
 
     if (tsHash.exists(_ == computedCheckpoint.hash)) {
       //hash in block matches computed hash!
@@ -153,8 +127,7 @@ object InterpreterUtil {
   private def computeBlockCheckpointFromDeploys(b: BlockMessage,
                                                 genesis: BlockMessage,
                                                 dag: BlockDag,
-                                                tsLocation: Path,
-                                                tsSize: Long,
+                                                default: Checkpoint,
                                                 checkpoints: Map[ByteString, Checkpoint])(
       implicit scheduler: Scheduler): (Checkpoint, Map[ByteString, Checkpoint]) = {
     val parents = ProtoUtil
@@ -168,8 +141,7 @@ object InterpreterUtil {
       deploys,
       genesis,
       dag,
-      tsLocation,
-      tsSize,
+      default,
       checkpoints
     )
   }
