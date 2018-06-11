@@ -19,7 +19,6 @@ import coop.rchain.crypto.signatures.Ed25519
 import coop.rchain.metrics.Metrics
 import coop.rchain.node.diagnostics._
 import coop.rchain.p2p
-import coop.rchain.p2p.Network.KeysStore
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Resources._
@@ -94,12 +93,9 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host    = conf.run.localhost
-  private val address = s"rnode://$name@$host:${conf.run.port()}"
-  private val src     = p2p.NetworkAddress.parse(address).right.get
-  private val remoteKeysPath =
-    conf.run.data_dir().resolve("keys").resolve(s"$name-rnode-remote.keys")
-  private val keysPath    = conf.run.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
+  private val host        = conf.run.localhost
+  private val address     = s"rnode://$name@$host:${conf.run.port()}"
+  private val src         = p2p.NetworkAddress.parse(address).right.get
   private val storagePath = conf.run.data_dir().resolve("rspace")
   private val storageSize = conf.run.map_size()
 
@@ -115,13 +111,11 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
 
   /** Capabilities for Effect */
-  implicit val encryptionEffect: Encryption[Task]       = effects.encryption(keysPath)
   implicit val logEffect: Log[Task]                     = effects.log
   implicit val timeEffect: Time[Task]                   = effects.time
   implicit val jvmMetricsEffect: JvmMetrics[Task]       = diagnostics.jvmMetrics
   implicit val metricsEffect: Metrics[Task]             = diagnostics.metrics
   implicit val nodeCoreMetricsEffect: NodeMetrics[Task] = diagnostics.nodeCoreMetrics
-  implicit val inMemoryPeerKeysEffect: KeysStore[Task]  = effects.remoteKeysKvs(remoteKeysPath)
   implicit val transportLayerEffect: TransportLayer[Task] =
     effects.tcpTranposrtLayer[Task](conf)(src)
   implicit val pingEffect: Ping[Task]                   = effects.ping(src)
