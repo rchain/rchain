@@ -25,8 +25,9 @@ trait BlockGenerator {
       deploys: Seq[Deploy] = Seq.empty[Deploy],
       tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
     for {
-      chain  <- blockDagState[F].get
-      nextId = chain.currentId + 1
+      chain             <- blockDagState[F].get
+      nextId            = chain.currentId + 1
+      nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, 0)
       postState = RChainState()
         .withTuplespace(tsHash)
         .withBonds(bonds)
@@ -58,7 +59,13 @@ trait BlockGenerator {
       }: _*)
       childMap = chain.childMap
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
-      newChain: BlockDag = BlockDag(idToBlocks, blockLookup, childMap, latestMessages, nextId)
-      _                  <- blockDagState[F].set(newChain)
+      updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
+      newChain: BlockDag = BlockDag(idToBlocks,
+                                    blockLookup,
+                                    childMap,
+                                    latestMessages,
+                                    nextId,
+                                    updatedSeqNumbers)
+      _ <- blockDagState[F].set(newChain)
     } yield block
 }

@@ -64,6 +64,29 @@ object Validate {
     }
   }
 
+  // TODO: Double check ordering of validity checks
+  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage, dag: BlockDag): F[Boolean] = {
+    val parentSeqNumber = b.justifications
+      .find {
+        case Justification(validator, _) => validator == b.sender
+      }
+      .fold(-1) {
+        case Justification(_, latestBlockHash) => dag.blockLookup(latestBlockHash).seqNum
+      }
+    val number = b.seqNum
+    val result = parentSeqNumber + 1 == number
+
+    if (result) {
+      true.pure[F]
+    } else {
+      Log[F].warn(
+        ignore(
+          b,
+          s"seq number $number is not one more than creator justification number $parentSeqNumber.")
+      ) *> false.pure[F]
+    }
+  }
+
   def parents[F[_]: Applicative: Log](b: BlockMessage,
                                       genesis: BlockMessage,
                                       dag: BlockDag): F[Boolean] = {
