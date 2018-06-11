@@ -74,7 +74,7 @@ object Validate {
       if (weight > 0) true.pure[F]
       else
         Log[F].warn(
-          ignore(b, s"because block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight.")
+          ignore(b, s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight.")
         ) *> false.pure[F]
     }
 
