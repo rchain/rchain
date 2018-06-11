@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import implicits._
+import coop.rchain.models.serialization.implicits._
 import testImplicits._
 import BitSetBytesMapper._
 import coop.rchain.rspace.Serialize
