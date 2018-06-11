@@ -16,7 +16,6 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 
 trait BlockGenerator {
-
   def createBlock[F[_]: Monad: BlockDagState](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
@@ -27,7 +26,7 @@ trait BlockGenerator {
     for {
       chain             <- blockDagState[F].get
       nextId            = chain.currentId + 1
-      nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, 0)
+      nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, -1) + 1
       postState = RChainState()
         .withTuplespace(tsHash)
         .withBonds(bonds)
@@ -47,7 +46,8 @@ trait BlockGenerator {
                            Some(header),
                            Some(body),
                            serializedJustifications,
-                           creator)
+                           creator,
+                           nextCreatorSeqNum)
       idToBlocks     = chain.idToBlocks + (nextId               -> block)
       blockLookup    = chain.blockLookup + (serializedBlockHash -> block)
       latestMessages = chain.latestMessages + (block.sender     -> serializedBlockHash)
