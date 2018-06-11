@@ -127,7 +127,7 @@ object SpatialMatcher {
   private[this] def noFrees(exprs: Seq[Expr]): Seq[Expr] =
     exprs.filter({ (expr) =>
       expr.exprInstance match {
-        case EVarBody(EVar(Some((v)))) =>
+        case EVarBody(EVar((v))) =>
           v.varInstance match {
             case FreeVar(_)  => false
             case Wildcard(_) => false
@@ -166,7 +166,7 @@ object SpatialMatcher {
       val pc = ParCount(noFrees(par))
       val wildcard: Boolean = par.exprs.exists { expr =>
         expr.exprInstance match {
-          case EVarBody(EVar(Some(v))) =>
+          case EVarBody(EVar(v)) =>
             v.varInstance match {
               case Wildcard(_) => true
               case FreeVar(_)  => true
@@ -483,7 +483,7 @@ object SpatialMatcher {
           {
             case expr =>
               expr.exprInstance match {
-                case EVarBody(EVar(Some(v))) =>
+                case EVarBody(EVar(v)) =>
                   v.varInstance match {
                     case FreeVar(level) => Some(level)
                     case _              => None
@@ -496,7 +496,7 @@ object SpatialMatcher {
 
         val wildcard: Boolean = pattern.exprs.exists { expr =>
           expr.exprInstance match {
-            case EVarBody(EVar(Some(v))) =>
+            case EVarBody(EVar(v)) =>
               v.varInstance match {
                 case Wildcard(_) => true
                 case _           => false
@@ -586,7 +586,7 @@ object SpatialMatcher {
         StateT.liftF(None)
       else
         for {
-          _ <- spatialMatch(target.chan.get, pattern.chan.get)
+          _ <- spatialMatch(target.chan, pattern.chan)
           _ <- foldMatch(target.data, pattern.data)
         } yield Unit
   }
@@ -598,14 +598,14 @@ object SpatialMatcher {
       else
         for {
           _ <- listMatchSingle[ReceiveBind](target.binds, pattern.binds, (p, rb) => p, None, false)
-          _ <- spatialMatch(target.body.get, pattern.body.get)
+          _ <- spatialMatch(target.body, pattern.body)
         } yield Unit
     }
 
   implicit val newSpatialMatcherInstance: SpatialMatcher[New, New] = fromFunction[New, New] {
     (target, pattern) =>
       if (target.bindCount == pattern.bindCount)
-        spatialMatch(target.p.get, pattern.p.get)
+        spatialMatch(target.p, pattern.p)
       else
         StateT.liftF(None)
   }
@@ -628,22 +628,22 @@ object SpatialMatcher {
         }
         case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) =>
           if (vp == vt) StateT.pure(Unit) else StateT.liftF(None)
-        case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t.get, p.get)
-        case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t.get, p.get)
+        case (ENotBody(ENot(t)), ENotBody(ENot(p))) => spatialMatch(t, p)
+        case (ENegBody(ENeg(t)), ENegBody(ENeg(p))) => spatialMatch(t, p)
         case (EMultBody(EMult(t1, t2)), EMultBody(EMult(p1, p2))) =>
           for {
-            _ <- spatialMatch(t1.get, p1.get)
-            _ <- spatialMatch(t2.get, p2.get)
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
           } yield Unit
         case (EDivBody(EDiv(t1, t2)), EDivBody(EDiv(p1, p2))) =>
           for {
-            _ <- spatialMatch(t1.get, p1.get)
-            _ <- spatialMatch(t2.get, p2.get)
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
           } yield Unit
         case (EPlusBody(EPlus(t1, t2)), EPlusBody(EPlus(p1, p2))) =>
           for {
-            _ <- spatialMatch(t1.get, p1.get)
-            _ <- spatialMatch(t2.get, p2.get)
+            _ <- spatialMatch(t1, p1)
+            _ <- spatialMatch(t2, p2)
           } yield Unit
         case (EEvalBody(chan1), EEvalBody(chan2)) =>
           spatialMatch(chan1, chan2)
@@ -654,7 +654,7 @@ object SpatialMatcher {
   implicit val matchSpatialMatcherInstance: SpatialMatcher[Match, Match] =
     fromFunction[Match, Match] { (target, pattern) =>
       for {
-        _ <- spatialMatch(target.target.get, pattern.target.get)
+        _ <- spatialMatch(target.target, pattern.target)
         _ <- foldMatch(target.cases, pattern.cases)
       } yield Unit
     }
@@ -702,7 +702,7 @@ object SpatialMatcher {
       if (target.patterns != pattern.patterns)
         StateT.liftF[Option, FreeMap, Unit](None)
       else
-        spatialMatch(target.source.get, pattern.source.get)
+        spatialMatch(target.source, pattern.source)
     }
 
   implicit val matchCaseSpatialMatcherInstance: SpatialMatcher[MatchCase, MatchCase] =
@@ -710,7 +710,7 @@ object SpatialMatcher {
       if (target.pattern != pattern.pattern)
         StateT.liftF(None)
       else
-        spatialMatch(target.source.get, pattern.source.get)
+        spatialMatch(target.source, pattern.source)
     }
 
   // This matches a single logical connective against a Par. If it can match

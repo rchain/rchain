@@ -8,8 +8,6 @@ object ordering {
 
   implicit class SortOps(ps: List[Par]) {
     def sort: List[Par] =
-      ps.map(par => ParSortMatcher.sortMatch(par).fold(th => throw th, score => score))
-        .sorted
-        .map(_.term)
+      ps.map(par => ParSortMatcher.sortMatch(par)).sorted.map(_.term)
   }
 }
