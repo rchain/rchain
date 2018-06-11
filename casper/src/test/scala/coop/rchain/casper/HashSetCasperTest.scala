@@ -13,6 +13,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
   import HashSetCasperTest.blockTuplespaceContents
 
+  val (otherSk, _)                = Ed25519.newKeyPair
   val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   val bonds                       = validators.zipWithIndex.map { case (v, i) => v -> (2 * i + 1) }.toMap
   val genesis                     = ProtoUtil.genesisBlock(bonds)
@@ -105,6 +106,19 @@ class HashSetCasperTest extends FlatSpec with Matchers {
       Id].createBlock
 
     MultiParentCasper[Id].addBlock(block)
+
+    logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
+  }
+
+  it should "reject blocks not from bonded validators" in {
+    val node = HashSetCasperTestNode.standalone(genesis)
+    import node._
+
+    val Some(block) = MultiParentCasper[Id].deploy(ProtoUtil.basicDeploy(0)) *> MultiParentCasper[
+      Id].createBlock
+    val signedBlock = ProtoUtil.signBlock(block, otherSk)
+
+    MultiParentCasper[Id].addBlock(signedBlock)
 
     logEff.warns.head.contains("CASPER: Ignoring block") should be(true)
   }
