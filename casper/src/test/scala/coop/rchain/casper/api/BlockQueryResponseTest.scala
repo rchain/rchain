@@ -65,6 +65,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
         ).pure[F]
       def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
         Applicative[F].pure[Option[Checkpoint]](None)
+      def close(): F[Unit] = ().pure[F]
     }
   implicit val casperEffect = testCasper[Id]
 
