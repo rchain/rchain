@@ -8,7 +8,6 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
-import implicits._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
 
@@ -60,8 +59,8 @@ case class PrettyPrinter(freeShift: Int,
         "[" + buildSeq(s) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
         "(" + buildSeq(s) + ")"
-      case ESetBody(ESet(s, _, _)) =>
-        "(" + buildSeq(s) + ")"
+      case ESetBody(ParSet(pars, _, _)) =>
+        "(" + buildSeq(pars.sortedPars.toSeq) + ")"
       case EMapBody(EMap(kvs, _, _)) =>
         "{" + ("" /: kvs.zipWithIndex) {
           case (string, (kv, i)) =>

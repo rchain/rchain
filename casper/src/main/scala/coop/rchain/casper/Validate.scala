@@ -64,6 +64,43 @@ object Validate {
     }
   }
 
+  // TODO: Double check ordering of validity checks
+  def sequenceNumber[F[_]: Applicative: Log](b: BlockMessage, dag: BlockDag): F[Boolean] = {
+    val creatorJustificationSeqNumber = b.justifications
+      .find {
+        case Justification(validator, _) => validator == b.sender
+      }
+      .fold(-1) {
+        case Justification(_, latestBlockHash) => dag.blockLookup(latestBlockHash).seqNum
+      }
+    val number = b.seqNum
+    val result = creatorJustificationSeqNumber + 1 == number
+
+    if (result) {
+      true.pure[F]
+    } else {
+      Log[F].warn(
+        ignore(
+          b,
+          s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber.")
+      ) *> false.pure[F]
+    }
+  }
+
+  def blockSender[F[_]: Applicative: Log](b: BlockMessage,
+                                          genesis: BlockMessage,
+                                          dag: BlockDag): F[Boolean] =
+    if (b == genesis) {
+      true.pure[F] //genesis block has a valid sender
+    } else {
+      val weight = ProtoUtil.weightFromSender(b, dag.blockLookup)
+      if (weight > 0) true.pure[F]
+      else
+        Log[F].warn(
+          ignore(b, s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight.")
+        ) *> false.pure[F]
+    }
+
   def parents[F[_]: Applicative: Log](b: BlockMessage,
                                       genesis: BlockMessage,
                                       dag: BlockDag): F[Boolean] = {

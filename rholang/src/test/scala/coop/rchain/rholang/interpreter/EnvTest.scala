@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.mutable
 
-import implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.Par
 
 class EnvSpec extends FlatSpec with Matchers {
