@@ -31,7 +31,7 @@ class InMemoryStoreTestsBase extends StorageTestsBase[String, Pattern, String, S
   override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[String, Pattern, String, StringsCaptor]
     val testSpace = new RSpace(testStore)
-    testStore.clear(())
+    testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
       f(testSpace)
     } finally {
