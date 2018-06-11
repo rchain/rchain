@@ -8,8 +8,7 @@ ulimit -s unlimited
 
 test_rbl_pass () {
     rbl_file=$1
-    ${ROSETTE_ROOT_DIR}/result/bin/rosette --quiet \
-        --boot-dir ${ESS_SYSDIR} ${rbl_file} | grep ^Pass
+    rosette --quiet ${rbl_file} | grep ^Pass
 }
 
 for rbl_file in $( ls ${RHOLANG_ROOT_DIR}/tests/*.rbl ); do

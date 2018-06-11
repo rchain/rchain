@@ -285,8 +285,6 @@ package object history {
 
   @tailrec
   private[this] def deleteLeaf[T, K, V](
-      store: ITrieStore[T, K, V],
-      txn: T,
       parents: Seq[(Int, Node)]): (Pointer, Option[Node], Seq[(Int, Node)]) =
     parents match {
       case Nil =>
@@ -303,7 +301,7 @@ package object history {
           // If there are is only one child, then we know that it is the thing we are trying to
           // delete, and we can go ahead and move up the trie.
           case Vector(_) =>
-            deleteLeaf(store, txn, tail)
+            deleteLeaf(tail)
           // If there are two children, then we know that one of them points down to the thing
           // we are trying to delete.  We then decide how to handle the other child based on
           // whether or not it is a Node or a Leaf
@@ -352,7 +350,7 @@ package object history {
             // If the "tip" is equal to a leaf containing the given key and value, commence
             // with the deletion process.
             case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
-              val (ptr, hd, nodesToRehash) = deleteLeaf(store, txn, parents)
+              val (ptr, hd, nodesToRehash) = deleteLeaf(parents)
               hd match {
                 case None => store.putRoot(txn, ptr); true
                 case Some(hd) =>

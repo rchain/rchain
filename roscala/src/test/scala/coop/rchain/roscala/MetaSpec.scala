@@ -2,6 +2,7 @@ package coop.rchain.roscala
 
 import coop.rchain.roscala.ob._
 import coop.rchain.roscala.prim.meta.{addObo, getObo}
+import coop.rchain.roscala.util.syntax._
 import org.scalatest.{FlatSpec, Matchers}
 
 class MetaSpec extends FlatSpec with Matchers {
@@ -30,8 +31,8 @@ class MetaSpec extends FlatSpec with Matchers {
     someOb.meta = Meta.empty
 
     // `offset = 0` will point to the first position in `someOb.extension.slot`
-    someOb.meta.map ++= Map(Symbol("key") -> LexVariable(level = 0, offset = 0, indirect = true))
-    someOb.extension.slot.append(Symbol("value"))
+    someOb.meta.map(Symbol("key")) = LexVariable(level = 0, offset = 0, indirect = true)
+    someOb.extension.slot += Symbol("value")
 
     val ctxt = Ctxt.argvec(3)
     ctxt.argvec.update(0, someOb.meta)

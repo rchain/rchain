@@ -174,11 +174,13 @@ class VmSpec extends FlatSpec with Matchers {
       OpRtn(next = true)
     )
 
+    val keyMeta = Meta(extensible = false)
+    keyMeta.map(Symbol("x")) = LexVariable(0, 0, indirect = false)
+
     val template = new Template(
       keyTuple = Tuple(Symbol("x")),
       pat = new IdVecPattern(new TupleExpr(Seq(Symbol("x")))),
-      keyMeta =
-        Meta(mutable.Map(Symbol("x") -> LexVariable(0, 0, indirect = false)), 0, extensible = false)
+      keyMeta = keyMeta
     )
 
     val lexVar = LexVariable(0, 0, indirect = false)

@@ -6,10 +6,10 @@ import cats._, cats.data._
 
 import coop.rchain.catscontrib.{MonadTrans, _}
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.comm.ProtocolNode
+import coop.rchain.comm.PeerNode
 
 trait Ping[F[_]] {
-  def ping(node: ProtocolNode): F[Boolean]
+  def ping(node: PeerNode): F[Boolean]
 }
 
 object Ping extends PingInstances {
@@ -17,7 +17,7 @@ object Ping extends PingInstances {
 
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit P: Ping[F]): Ping[T[F, ?]] =
     new Ping[T[F, ?]] {
-      def ping(node: ProtocolNode): T[F, Boolean] = P.ping(node).liftM[T]
+      def ping(node: PeerNode): T[F, Boolean] = P.ping(node).liftM[T]
     }
 }
 
