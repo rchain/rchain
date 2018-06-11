@@ -11,9 +11,10 @@ import org.scalatest.BeforeAndAfterAll
 trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
 
   "CORE-365: A joined consume on duplicate channels followed by two produces on that channel" should
-    "return a continuation and the produced data" in withTestStore { store =>
-    val r1 = consume(
-      store,
+    "return a continuation and the produced data" in withTestSpace { space =>
+    val store = space.store
+
+    val r1 = space.consume(
       List(Channel("friends"), Channel("friends")),
       List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
       new EntriesCaptor,
@@ -22,11 +23,11 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
     r1 shouldBe None
 
-    val r2 = produce(store, Channel("friends"), bob, persist = false)
+    val r2 = space.produce(Channel("friends"), bob, persist = false)
 
     r2 shouldBe None
 
-    val r3 = produce(store, Channel("friends"), bob, persist = false)
+    val r3 = space.produce(Channel("friends"), bob, persist = false)
 
     r3 shouldBe defined
 
@@ -37,17 +38,18 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 
   "CORE-365: Two produces on the same channel followed by a joined consume on duplicates of that channel" should
-    "return a continuation and the produced data" in withTestStore { store =>
-    val r1 = produce(store, Channel("friends"), bob, persist = false)
+    "return a continuation and the produced data" in withTestSpace { space =>
+    val store = space.store
+
+    val r1 = space.produce(Channel("friends"), bob, persist = false)
 
     r1 shouldBe None
 
-    val r2 = produce(store, Channel("friends"), bob, persist = false)
+    val r2 = space.produce(Channel("friends"), bob, persist = false)
 
     r2 shouldBe None
 
-    val r3 = consume(
-      store,
+    val r3 = space.consume(
       List(Channel("friends"), Channel("friends")),
       List(CityMatch(city = "Crystal Lake"), CityMatch(city = "Crystal Lake")),
       new EntriesCaptor,
@@ -63,9 +65,10 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
-    "return a continuation and the produced data" in withTestStore { store =>
-    val r1 = consume(
-      store,
+    "return a continuation and the produced data" in withTestSpace { space =>
+    val store = space.store
+
+    val r1 = space.consume(
       List(Channel("colleagues"), Channel("friends"), Channel("friends")),
       List(CityMatch(city = "Crystal Lake"),
            CityMatch(city = "Crystal Lake"),
@@ -76,15 +79,15 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
     r1 shouldBe None
 
-    val r2 = produce(store, Channel("friends"), bob, persist = false)
+    val r2 = space.produce(Channel("friends"), bob, persist = false)
 
     r2 shouldBe None
 
-    val r3 = produce(store, Channel("friends"), bob, persist = false)
+    val r3 = space.produce(Channel("friends"), bob, persist = false)
 
     r3 shouldBe None
 
-    val r4 = produce(store, Channel("colleagues"), alice, persist = false)
+    val r4 = space.produce(Channel("colleagues"), alice, persist = false)
 
     r4 shouldBe defined
 
@@ -95,9 +98,10 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 
   "CORE-365: A joined consume on multiple duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestStore { store =>
-    val r1 = consume(
-      store,
+    "return a continuation and the produced data" in withTestSpace { space =>
+    val store = space.store
+
+    val r1 = space.consume(
       List(
         Channel("family"),
         Channel("family"),
@@ -126,15 +130,15 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
     r1 shouldBe None
 
-    val r2  = produce(store, Channel("friends"), bob, persist = false)
-    val r3  = produce(store, Channel("family"), carol, persist = false)
-    val r4  = produce(store, Channel("colleagues"), alice, persist = false)
-    val r5  = produce(store, Channel("friends"), bob, persist = false)
-    val r6  = produce(store, Channel("family"), carol, persist = false)
-    val r7  = produce(store, Channel("colleagues"), alice, persist = false)
-    val r8  = produce(store, Channel("colleagues"), alice, persist = false)
-    val r9  = produce(store, Channel("family"), carol, persist = false)
-    val r10 = produce(store, Channel("family"), carol, persist = false)
+    val r2  = space.produce(Channel("friends"), bob, persist = false)
+    val r3  = space.produce(Channel("family"), carol, persist = false)
+    val r4  = space.produce(Channel("colleagues"), alice, persist = false)
+    val r5  = space.produce(Channel("friends"), bob, persist = false)
+    val r6  = space.produce(Channel("family"), carol, persist = false)
+    val r7  = space.produce(Channel("colleagues"), alice, persist = false)
+    val r8  = space.produce(Channel("colleagues"), alice, persist = false)
+    val r9  = space.produce(Channel("family"), carol, persist = false)
+    val r10 = space.produce(Channel("family"), carol, persist = false)
 
     r2 shouldBe None
     r3 shouldBe None
@@ -153,16 +157,18 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 
   "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
-    "return a continuation and the produced data" in withTestStore { store =>
-    val r1 = produce(store, Channel("friends"), bob, persist = false)
-    val r2 = produce(store, Channel("family"), carol, persist = false)
-    val r3 = produce(store, Channel("colleagues"), alice, persist = false)
-    val r4 = produce(store, Channel("friends"), bob, persist = false)
-    val r5 = produce(store, Channel("family"), carol, persist = false)
-    val r6 = produce(store, Channel("colleagues"), alice, persist = false)
-    val r7 = produce(store, Channel("colleagues"), alice, persist = false)
-    val r8 = produce(store, Channel("family"), carol, persist = false)
-    val r9 = produce(store, Channel("family"), carol, persist = false)
+    "return a continuation and the produced data" in withTestSpace { space =>
+    val store = space.store
+
+    val r1 = space.produce(Channel("friends"), bob, persist = false)
+    val r2 = space.produce(Channel("family"), carol, persist = false)
+    val r3 = space.produce(Channel("colleagues"), alice, persist = false)
+    val r4 = space.produce(Channel("friends"), bob, persist = false)
+    val r5 = space.produce(Channel("family"), carol, persist = false)
+    val r6 = space.produce(Channel("colleagues"), alice, persist = false)
+    val r7 = space.produce(Channel("colleagues"), alice, persist = false)
+    val r8 = space.produce(Channel("family"), carol, persist = false)
+    val r9 = space.produce(Channel("family"), carol, persist = false)
 
     r1 shouldBe None
     r2 shouldBe None
@@ -174,8 +180,7 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
     r8 shouldBe None
     r9 shouldBe None
 
-    val r10 = consume(
-      store,
+    val r10 = space.consume(
       List(
         Channel("family"),
         Channel("family"),
@@ -210,9 +215,10 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 
   "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
-    "return a continuation and the produced data" in withTestStore { store =>
-    val r1 = consume(
-      store,
+    "return a continuation and the produced data" in withTestSpace { space =>
+    val store = space.store
+
+    val r1 = space.consume(
       List(
         Channel("family"),
         Channel("colleagues"),
@@ -241,15 +247,15 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
     r1 shouldBe None
 
-    val r2  = produce(store, Channel("friends"), bob, persist = false)
-    val r3  = produce(store, Channel("family"), carol, persist = false)
-    val r4  = produce(store, Channel("colleagues"), alice, persist = false)
-    val r5  = produce(store, Channel("friends"), bob, persist = false)
-    val r6  = produce(store, Channel("family"), carol, persist = false)
-    val r7  = produce(store, Channel("colleagues"), alice, persist = false)
-    val r8  = produce(store, Channel("colleagues"), alice, persist = false)
-    val r9  = produce(store, Channel("family"), carol, persist = false)
-    val r10 = produce(store, Channel("family"), carol, persist = false)
+    val r2  = space.produce(Channel("friends"), bob, persist = false)
+    val r3  = space.produce(Channel("family"), carol, persist = false)
+    val r4  = space.produce(Channel("colleagues"), alice, persist = false)
+    val r5  = space.produce(Channel("friends"), bob, persist = false)
+    val r6  = space.produce(Channel("family"), carol, persist = false)
+    val r7  = space.produce(Channel("colleagues"), alice, persist = false)
+    val r8  = space.produce(Channel("colleagues"), alice, persist = false)
+    val r9  = space.produce(Channel("family"), carol, persist = false)
+    val r10 = space.produce(Channel("family"), carol, persist = false)
 
     r2 shouldBe None
     r3 shouldBe None
@@ -270,11 +276,12 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
 
 class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
 
-  override def withTestStore(f: T => Unit): Unit = {
+  override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
-    testStore.clear()
+    val testSpace = new RSpace[Channel, Pattern, Entry, EntriesCaptor](testStore)
+    testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
-      f(testStore)
+      f(testSpace)
     } finally {
       testStore.close()
     }
@@ -286,11 +293,12 @@ class LMDBStoreStorageExamplesTest extends StorageExamplesTests with BeforeAndAf
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  override def withTestStore(f: T => Unit): Unit = {
+  override def withTestSpace[R](f: T => R): R = {
     val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
+    val testSpace = new RSpace(testStore)
     try {
-      testStore.clear()
-      f(testStore)
+      testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
+      f(testSpace)
     } finally {
       testStore.close()
     }

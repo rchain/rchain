@@ -39,8 +39,8 @@ package object util {
 
   /** Removes the first occurrence of an element that matches the given predicate.
     */
-  def removeFirst[T](xs: List[T])(p: T => Boolean): List[T] = {
+  def removeFirst[T](xs: Seq[T])(p: T => Boolean): Seq[T] = {
     val (l1, l2) = xs.span(x => !p(x))
-    l1 ::: l2.drop(1)
+    l1 ++ (l2 drop 1)
   }
 }

@@ -1,11 +1,16 @@
 package coop.rchain.node
 
 import java.io.{File, PrintWriter}
-import io.grpc.Server
 
-import cats._, cats.data._, cats.implicits._
-import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import coop.rchain.casper.MultiParentCasper
+import io.grpc.Server
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.catscontrib._
+import Catscontrib._
+import ski._
+import TaskContrib._
+import coop.rchain.casper.{MultiParentCasper, SafetyOracle}
 import coop.rchain.casper.util.ProtoUtil.genesisBlock
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
@@ -33,8 +38,17 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       && conf.run.key.toOption.isEmpty
       && !conf.run.certificatePath.toFile.exists()) {
     println(s"No certificate found at path ${conf.run.certificatePath}")
-    println("Generating a X.509 certificate for the node")
-    CertificateHelper.generate(conf.run.data_dir().toString)
+    println("Generating a X.509 certificate and secret key for the node")
+
+    import coop.rchain.shared.Resources._
+    val keyPair = CertificateHelper.generateKeyPair()
+    val cert    = CertificateHelper.generate(keyPair)
+    withResource(new java.io.PrintWriter(conf.run.certificatePath.toFile)) { pw =>
+      pw.write(CertificatePrinter.print(cert))
+    }
+    withResource(new java.io.PrintWriter(conf.run.keyPath.toFile)) { pw =>
+      pw.write(CertificatePrinter.printPrivateKey(keyPair.getPrivate))
+    }
   }
 
   if (!conf.run.certificatePath.toFile.exists()) {
@@ -80,7 +94,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   import ApplicativeError_._
 
   /** Configuration */
-  private val host    = conf.run.fetchHost()
+  private val host    = conf.run.localhost
   private val address = s"rnode://$name@$host:${conf.run.port()}"
   private val src     = p2p.NetworkAddress.parse(address).right.get
   private val remoteKeysPath =
@@ -144,12 +158,13 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       })
     case None => newValidators
   }
+  implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
     storagePath,
     storageSize,
     genesisBlock(genesisBonds)
   )
-  implicit val packetHandlerEffect: PacketHandler[Effect] = effects.packetHandler[Effect](
+  implicit val packetHandlerEffect: PacketHandler[Effect] = PacketHandler.pf[Effect](
     casperPacketHandler[Effect]
   )
 
@@ -162,7 +177,8 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     for {
       runtime <- Runtime.create(storagePath, storageSize).pure[Effect]
       grpcServer <- {
-        implicit val storeMetrics = diagnostics.storeMetrics[Effect](runtime.store)
+        implicit val storeMetrics =
+          diagnostics.storeMetrics[Effect](runtime.space.store, conf.run.data_dir().normalize)
         GrpcServer
           .acquireServer[Effect](conf.grpcPort(), runtime)
       }
@@ -194,7 +210,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     println("Shutting down HTTP server....")
     resources.httpServer.stop()
     println("Shutting down interpreter runtime ...")
-    resources.runtime.store.close()
+    resources.runtime.close()
 
     println("Goodbye.")
   }
@@ -209,7 +225,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
     Task.delay {
       import scala.concurrent.duration._
       implicit val storeMetrics: StoreMetrics[Task] =
-        diagnostics.storeMetrics[Task](resources.runtime.store)
+        diagnostics.storeMetrics[Task](resources.runtime.space.store, conf.run.data_dir().normalize)
       scheduler.scheduleAtFixedRate(10.seconds, 10.second)(StoreMetrics.report[Task].unsafeRunSync)
     }
 
@@ -260,6 +276,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
 
   private def unrecoverableNodeProgram: Effect[Unit] =
     for {
+      _         <- Log[Effect].info(s"RChain Node ${BuildInfo.version}")
       resources <- acquireResources
       _         <- startResources(resources)
       _         <- addShutdownHook(resources).toEffect

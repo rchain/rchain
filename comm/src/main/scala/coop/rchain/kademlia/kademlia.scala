@@ -1,5 +1,6 @@
 package coop.rchain.kademlia
 
+import coop.rchain.comm.PeerNode
 import scala.collection.mutable
 
 import scala.annotation.tailrec
@@ -7,7 +8,6 @@ import scala.annotation.tailrec
 import cats._, cats.data._, cats.implicits._
 
 import coop.rchain.catscontrib.Capture
-import coop.rchain.comm.ProtocolNode
 import coop.rchain.p2p.effects.Ping
 
 trait Keyed {
@@ -32,17 +32,17 @@ object ReputationOrder extends Ordering[Reputable] {
   def compare(a: Reputable, b: Reputable) = a.reputation compare b.reputation
 }
 
-final case class PeerTableEntry[A <: Keyed](entry: A) extends Keyed {
+final case class PeerTableEntry[A](entry: A, gkey: A => Seq[Byte]) extends Keyed {
   var pinging           = false
-  override def key      = entry.key
+  val key               = gkey(entry)
   override def toString = s"#{PeerTableEntry $entry}"
 }
 
 object PeerTable {
 
-  def apply[A <: ProtocolNode](home: A,
-                               k: Int = PeerTable.Redundancy,
-                               alpha: Int = PeerTable.Alpha): PeerTable[A] =
+  def apply[A <: PeerNode](home: A,
+                           k: Int = PeerTable.Redundancy,
+                           alpha: Int = PeerTable.Alpha): PeerTable[A] =
     new PeerTable[A](home, k, alpha)
 
   // Number of bits considered in the distance function. Taken from the
@@ -78,7 +78,7 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, alpha: Int) {
+final class PeerTable[A <: PeerNode](home: A, private[kademlia] val k: Int, alpha: Int) {
 
   private[kademlia] type Entry = PeerTableEntry[A]
 
@@ -117,7 +117,7 @@ final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, 
                                         older: Entry,
                                         newer: A): F[Unit] =
     Ping[F].ping(older.entry).map { response =>
-      val winner = if (response) older else new Entry(newer)
+      val winner = if (response) older else new Entry(newer, _.key)
       ps synchronized {
         ps -= older
         ps += winner
@@ -151,7 +151,7 @@ final class PeerTable[A <: ProtocolNode](home: A, private[kademlia] val k: Int, 
                 }
               case None if add =>
                 if (ps.size < k) {
-                  Capture[F].capture(ps += new Entry(peer))
+                  Capture[F].capture(ps += new Entry(peer, _.key))
                 } else {
                   // ping first (oldest) element that isn't already being
                   // pinged. If it responds, move it to back (newest

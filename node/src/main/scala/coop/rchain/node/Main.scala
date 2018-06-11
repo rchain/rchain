@@ -1,5 +1,7 @@
 package coop.rchain.node
 
+import java.security.Security
+
 import coop.rchain.shared.StringOps._
 import cats.implicits._
 import scala.tools.jline.console._, completer.StringsCompleter
@@ -10,15 +12,20 @@ import coop.rchain.casper.util.comm.{DeployRuntime, DeployService, GrpcDeploySer
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
+
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.schedulers.SchedulerService
 import scala.util.{Failure, Success, Try}
 
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+
 object Main {
 
   def main(args: Array[String]): Unit = {
     val conf = Conf(args)
+
+    Security.insertProviderAt(new BouncyCastleProvider(), 1)
 
     implicit val io: SchedulerService = Scheduler.io("repl-io")
 
@@ -63,7 +70,7 @@ object Main {
             println("Node could not connect to bootstrap node.")
           case Left(error) => println(s"Failed! Reason: '$error")
         }
-      case None =>
+      case _ =>
         Task.delay {
           conf.printHelp()
         }

@@ -16,8 +16,9 @@ object LongOps {
       if (value < 1024) {
         value + " B"
       } else {
-        val z = 63 - numberOfLeadingZeros(value)
-        "%.1f %sB".formatLocal(Locale.US, value.toDouble / (1L << z), " KMGTPE".charAt(z / 10))
+        //division and then multiplication by 10 resets trailing bits
+        val z: Int = (63 - numberOfLeadingZeros(value)) / 10
+        "%.1f %sB".formatLocal(Locale.US, value.toDouble / (1L << (z * 10)), " KMGTPE".charAt(z))
       }
   }
 }

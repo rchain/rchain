@@ -17,6 +17,8 @@ import scala.concurrent.{ExecutionContext, Future}
 import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
+import coop.rchain.comm.protocol.routing.TLResponse.Payload
+import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
 
 // TODO Add State Monad to reuse channels to known peers
 class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
@@ -51,31 +53,50 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
         throw e
     }
 
-  private def client(endpoint: Endpoint) = {
-    val channel = NettyChannelBuilder
+  private def withClient[A](endpoint: Endpoint)(f: TransportLayerStub => Future[A]): Future[A] = {
+    val channel = clientChannel(endpoint)
+    val stub    = TransportLayerGrpc.stub(channel)
+    f(stub).andThen { case _ => channel.shutdown() }
+  }
+
+  private def clientChannel(endpoint: Endpoint) =
+    NettyChannelBuilder
       .forAddress(endpoint.host, endpoint.tcpPort)
       .negotiationType(NegotiationType.TLS)
       .sslContext(clientSslContext)
       .intercept(new SslSessionClientInterceptor())
       .build()
 
-    TransportLayerGrpc.stub(channel)
-  }
-
   def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
+                remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]] =
     for {
-      tlResponseErr <- Capture[F].capture {
+      tlResponseErr <- Capture[F].capture(
                         Try(
-                          Await.result(client(remote.endpoint).send(TLRequest(msg.proto.some)),
-                                       timeout)).toEither
-                          .leftMap(protocolException)
-                      }
+                          Await.result(
+                            withClient(remote.endpoint)(_.send(TLRequest(msg.proto.some))),
+                            timeout)
+                        ).toEither.leftMap(protocolException))
       pmErr <- tlResponseErr
                 .flatMap(tlr =>
                   tlr.payload match {
-                    case p if p.isProtocol => ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                    case p if p.isProtocol =>
+                      p match {
+                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _)) =>
+                          if (sender.id.toByteArray
+                                .map("%02x".format(_))
+                                .mkString == remote.id.toString) {
+                            ProtocolMessage.toProtocolMessage(tlr.getProtocol)
+                          } else {
+                            Left(
+                              internalCommunicationError(
+                                "The sender id is different from the remote id"))
+                          }
+
+                        case _ =>
+                          Left(
+                            internalCommunicationError("Was expecting a sender, nothing arrived"))
+                      }
                     case p if p.isNoResponse =>
                       Left(internalCommunicationError("Was expecting message, nothing arrived"))
                     case p if p.isInternalServerError =>
@@ -84,11 +105,11 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
                 .pure[F]
     } yield pmErr
 
-  val local: F[ProtocolNode] = ProtocolNode(src).pure[F]
+  val local: F[PeerNode] = src.pure[F]
 
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
     Capture[F]
-      .capture(client(peer.endpoint).send(TLRequest(msg.proto.some)))
+      .capture(withClient(peer.endpoint)(_.send(TLRequest(msg.proto.some))))
       .as(Right(()))
 
   def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] =

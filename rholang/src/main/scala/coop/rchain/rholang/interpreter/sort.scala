@@ -134,6 +134,7 @@ object Score {
   final val EOR      = 114
   final val EMETHOD  = 115
   final val EBYTEARR = 116
+  final val EEVAL    = 117
 
   // Other
   final val QUOTE    = 203
@@ -141,7 +142,6 @@ object Score {
 
   final val SEND              = 300
   final val RECEIVE           = 301
-  final val EVAL              = 302
   final val NEW               = 303
   final val MATCH             = 304
   final val BUNDLE_EQUIV      = 305
@@ -261,6 +261,11 @@ object ExprSortMatcher {
           .sortMatch[M](ev.v)
           .map(sortedVar =>
             constructExpr(EVarBody(EVar(sortedVar.term)), Node(Score.EVAR, sortedVar.score)))
+      case EEvalBody(chan) =>
+        ChannelSortMatcher
+          .sortMatch[M](chan)
+          .map(sortedChan =>
+            constructExpr(EEvalBody(sortedChan.term), Node(Score.EEVAL, sortedChan.score)))
       case ENotBody(en) =>
         ParSortMatcher
           .sortMatch[M](en.p)
@@ -477,14 +482,6 @@ object ReceiveSortMatcher {
       )
 }
 
-object EvalSortMatcher {
-  def sortMatch[M[_]](e: Eval)(implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[Eval]] =
-    ChannelSortMatcher
-      .sortMatch[M](e.channel)
-      .map(sortedChannel =>
-        ScoredTerm(Eval(sortedChannel.term), Node(Score.EVAL, sortedChannel.score)))
-}
-
 object NewSortMatcher {
   def sortMatch[M[_]: Functor](n: New)(
       implicit err: MonadError[M, InterpreterError]): M[ScoredTerm[New]] =
@@ -569,7 +566,6 @@ object ParSortMatcher {
                        .traverse(r => ReceiveSortMatcher.sortMatch[M](r))
                        .map(_.sorted)
           exprs   <- p.exprs.toList.traverse(e => ExprSortMatcher.sortMatch[M](e)).map(_.sorted)
-          evals   <- p.evals.toList.traverse(e => EvalSortMatcher.sortMatch[M](e)).map(_.sorted)
           news    <- p.news.toList.traverse(n => NewSortMatcher.sortMatch[M](n)).map(_.sorted)
           matches <- p.matches.toList.traverse(m => MatchSortMatcher.sortMatch[M](m)).map(_.sorted)
           bundles <- p.bundles.toList.traverse(b => BundleSortMatcher.sortMatch[M](b)).map(_.sorted)
@@ -581,7 +577,6 @@ object ParSortMatcher {
             sends = sends.map(_.term),
             receives = receives.map(_.term),
             exprs = exprs.map(_.term),
-            evals = evals.map(_.term),
             news = news.map(_.term),
             matches = matches.map(_.term),
             bundles = bundles.map(_.term),
@@ -593,7 +588,7 @@ object ParSortMatcher {
           parScore = Node(
             Score.PAR,
             sends.map(_.score) ++ receives.map(_.score) ++
-              exprs.map(_.score) ++ evals.map(_.score) ++ news.map(_.score) ++
+              exprs.map(_.score) ++ news.map(_.score) ++
               matches.map(_.score) ++ bundles.map(_.score) ++ ids.map(_.score) ++ connectives.map(
               _.score): _*
           )

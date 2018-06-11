@@ -141,9 +141,14 @@ object CollectionNormalizeMatcher {
                       (ps, lf, wc) =>
                         EList.apply(ps, lf, wc).update(_.optionalRemainder := remainderResult._1)))
 
-      case ct: CollectTuple => foldMatch(input.knownFree, ct.listproc_.asScala.toList, ETuple.apply)
-      case cs: CollectSet   => foldMatch(input.knownFree, cs.listproc_.asScala.toList, ESet.apply)
-      case cm: CollectMap   => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
+      case ct: CollectTuple =>
+        val ps = ct.tuple_ match {
+          case ts: TupleSingle   => Seq(ts.proc_)
+          case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.asScala.toList
+        }
+        foldMatch(input.knownFree, ps.toList, ETuple.apply)
+      case cs: CollectSet => foldMatch(input.knownFree, cs.listproc_.asScala.toList, ESet.apply)
+      case cm: CollectMap => foldMatchMap(cm.listkeyvaluepair_.asScala.toList)
     }
   }
 }
@@ -179,8 +184,8 @@ object NameNormalizeMatcher {
       case n: NameQuote => {
         def collapseQuoteEval(p: Par): Channel =
           p.singleEval() match {
-            case Some(Eval(chanNew)) => chanNew.get
-            case _                   => Quote(p)
+            case Some(chanNew) => chanNew.get
+            case _             => Quote(p)
           }
 
         ProcNormalizeMatcher
@@ -257,7 +262,7 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, leftResult.knownFree))
           lp = leftResult.par
-          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
             lp.connectives match {
               case List(Connective(ConnAndBody(ConnectiveBody(ps)))) =>
                 Connective(ConnAndBody(ConnectiveBody(ps :+ rightResult.par)))
@@ -277,7 +282,7 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]()))
           lp = leftResult.par
-          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.evals.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
+          resultConnective = if (lp.sends.isEmpty && lp.receives.isEmpty && lp.news.isEmpty && lp.exprs.isEmpty && lp.matches.isEmpty && lp.bundles.isEmpty) {
             lp.connectives match {
               case List(Connective(ConnOrBody(ConnectiveBody(ps)))) =>
                 Connective(ConnOrBody(ConnectiveBody(ps :+ rightResult.par)))
@@ -337,7 +342,7 @@ object ProcNormalizeMatcher {
         def collapseEvalQuote(chan: Channel): Par =
           chan.channelInstance match {
             case Quote(q) => q
-            case _        => Eval(chan)
+            case _        => Expr(EEvalBody(chan))
           }
 
         NameNormalizeMatcher
@@ -395,6 +400,9 @@ object ProcNormalizeMatcher {
 
       case p: PAnd => binaryExp(p.proc_1, p.proc_2, input, EAnd.apply)
       case p: POr  => binaryExp(p.proc_1, p.proc_2, input, EOr.apply)
+
+      case p: PExprs =>
+        normalizeMatch[M](p.proc_, input)
 
       case p: PSend => {
         import scala.collection.JavaConverters._

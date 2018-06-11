@@ -133,40 +133,20 @@ package object effects {
   def ping[F[_]: Monad: Capture: Metrics: TransportLayer](src: PeerNode): Ping[F] =
     new Ping[F] {
       import scala.concurrent.duration._
-      def ping(node: ProtocolNode): F[Boolean] =
+      def ping(node: PeerNode): F[Boolean] =
         for {
           _   <- Metrics[F].incrementCounter("protocol-ping-sends")
-          req = PingMessage(ProtocolMessage.ping(ProtocolNode(src)), System.currentTimeMillis)
+          req = PingMessage(ProtocolMessage.ping(src), System.currentTimeMillis)
           res <- TransportLayer[F].roundTrip(req, node, 500.milliseconds).map(_.toOption)
         } yield res.isDefined
     }
 
   def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
       implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.run.fetchHost(),
+    new TcpTransportLayer[F](conf.run.localhost,
                              conf.run.port(),
                              conf.run.certificatePath.toFile,
                              conf.run.keyPath.toFile)(src)
 
-  def udpTransportLayer(src: PeerNode)(implicit
-                                       ev1: Log[Task],
-                                       ev2: Time[Task],
-                                       ev3: Metrics[Task]): TransportLayer[Task] =
-    new UdpTransportLayer(src)
-
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
-
-  def packetHandler[F[_]: Applicative: Log](pf: PartialFunction[Packet, F[Option[Packet]]])(
-      implicit errorHandler: ApplicativeError_[F, CommError]): PacketHandler[F] =
-    new PacketHandler[F] {
-      def handlePacket(packet: Packet): F[Option[Packet]] = {
-        val errorMsg = s"Unable to handle packet $packet"
-        if (pf.isDefinedAt(packet)) pf(packet)
-        else
-          Log[F].error(errorMsg) *> errorHandler
-            .raiseError(unknownProtocol(errorMsg))
-            .as(none[Packet])
-      }
-    }
-
 }

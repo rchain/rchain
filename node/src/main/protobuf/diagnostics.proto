@@ -77,9 +77,23 @@ message NodeCoreMetrics {
   int64 peers = 7;
 }
 
+message StoreUsageCount {
+  int64 count = 1;
+  double avgMilliseconds = 2;
+  int32 peakRate = 3;
+  int32 currentRate = 4;
+}
+
 message StoreUsage {
-  int64 sizeOnDisk = 1;
-  int64 dataEntries = 2;
+  int64 totalSizeOnDisk = 1;
+  int64 rspaceSizeOnDisk = 2;
+  int64 rspaceDataEntries = 3;
+
+  StoreUsageCount rspaceConsumesCount = 4;
+  StoreUsageCount rspaceProducesCount = 5;
+  StoreUsageCount rspaceConsumesCommCount = 6;
+  StoreUsageCount rspaceProducesCommCount = 7;
+  StoreUsageCount rspaceInstallCommCount = 8;
 }
 
 service Diagnostics {
