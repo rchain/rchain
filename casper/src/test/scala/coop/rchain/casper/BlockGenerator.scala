@@ -16,7 +16,6 @@ import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 
 trait BlockGenerator {
-
   def createBlock[F[_]: Monad: BlockDagState](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
@@ -25,8 +24,9 @@ trait BlockGenerator {
       deploys: Seq[Deploy] = Seq.empty[Deploy],
       tsHash: ByteString = ByteString.EMPTY): F[BlockMessage] =
     for {
-      chain  <- blockDagState[F].get
-      nextId = chain.currentId + 1
+      chain             <- blockDagState[F].get
+      nextId            = chain.currentId + 1
+      nextCreatorSeqNum = chain.currentSeqNum.getOrElse(creator, -1) + 1
       postState = RChainState()
         .withTuplespace(tsHash)
         .withBonds(bonds)
@@ -46,7 +46,8 @@ trait BlockGenerator {
                            Some(header),
                            Some(body),
                            serializedJustifications,
-                           creator)
+                           creator,
+                           nextCreatorSeqNum)
       idToBlocks     = chain.idToBlocks + (nextId               -> block)
       blockLookup    = chain.blockLookup + (serializedBlockHash -> block)
       latestMessages = chain.latestMessages + (block.sender     -> serializedBlockHash)
@@ -58,7 +59,13 @@ trait BlockGenerator {
       }: _*)
       childMap = chain.childMap
         .++[(BlockHash, Set[BlockHash]), Map[BlockHash, Set[BlockHash]]](updatedChildren)
-      newChain: BlockDag = BlockDag(idToBlocks, blockLookup, childMap, latestMessages, nextId)
-      _                  <- blockDagState[F].set(newChain)
+      updatedSeqNumbers = chain.currentSeqNum.updated(creator, nextCreatorSeqNum)
+      newChain: BlockDag = BlockDag(idToBlocks,
+                                    blockLookup,
+                                    childMap,
+                                    latestMessages,
+                                    nextId,
+                                    updatedSeqNumbers)
+      _ <- blockDagState[F].set(newChain)
     } yield block
 }

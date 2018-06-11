@@ -15,19 +15,6 @@ message Disconnect {
 message Hello {
 }
 
-message EncryptionHandshake {
-  bytes  publicKey = 1;
-}
-
-message EncryptionHandshakeResponse {
-  bytes  publicKey     = 1;
-}
-
-message Frame {
-  bytes nonce       = 1;
-  bytes framed      = 2;
-}
-
 message ProtocolHandshake {
   bytes nonce       = 1;
 }
@@ -40,22 +27,12 @@ message Packet {
   bytes content     = 1;
 }
 
-message Frameable {
-  oneof message {
-    ProtocolHandshake           protocol_handshake            = 1;
-    ProtocolHandshakeResponse   protocol_handshake_response   = 2;
-    Packet                      packet                        = 3;
-  }
-}
-
 message Protocol {
     oneof message {
-        google.protobuf.Any         upstream                      = 1;
-
-        Disconnect                  diconnect                     = 2;
-        Hello                       hello                         = 3;
-        EncryptionHandshake         encryption_handshake          = 4;
-        EncryptionHandshakeResponse encryption_handshake_response = 5;
-        Frame                       frame                         = 6;
+        Disconnect                  diconnect                     = 1;
+        Hello                       hello                         = 2;
+        ProtocolHandshake           protocol_handshake            = 3;
+        ProtocolHandshakeResponse   protocol_handshake_response   = 4;
+        Packet                      packet                        = 5;
     }
 }

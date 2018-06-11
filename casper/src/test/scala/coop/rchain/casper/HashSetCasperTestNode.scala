@@ -9,7 +9,7 @@ import coop.rchain.casper.util.comm.TransportLayerTestImpl
 import coop.rchain.casper.util.comm.CommUtil.casperPacketHandler
 import coop.rchain.comm._
 import coop.rchain.metrics.Metrics
-import coop.rchain.p2p.effects.{Encryption, Kvs, PacketHandler, PublicPrivateKeys, TransportLayer}
+import coop.rchain.p2p.effects.{PacketHandler, TransportLayer}
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.p2p.Network.dispatch
 
@@ -29,15 +29,11 @@ class HashSetCasperTestNode(name: String,
   import HashSetCasperTestNode.{errorHandler, peerNode, randomBytes}
 
   private val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-$name")
-  private val srcKeys          = PublicPrivateKeys(randomBytes(4), randomBytes(4))
-  private val nonce            = randomBytes(4)
 
   implicit val logEff            = new LogStub[Id]
   implicit val timeEff           = new LogicalTime[Id]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Id]()
   implicit val transportLayerEff = tle
-  implicit val encryptionEff     = new EncryptionStub[Id](srcKeys, nonce)
-  implicit val keysStoreEff      = new Kvs.InMemoryKvs[Id, PeerNode, Encryption.Key]
   implicit val metricEff         = new Metrics.MetricsNOP[Id]
   implicit val errorHandlerEff   = errorHandler
   implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
@@ -82,7 +78,6 @@ object HashSetCasperTestNode {
       m <- nodes
       if n.local != m.local
     } {
-      n.keysStoreEff.put(m.local, m.srcKeys.pub)
       n.nodeDiscoveryEff.addNode(m.local)
     }
 

@@ -22,7 +22,7 @@ import org.scalatest._
 import scala.collection.immutable.BitSet
 
 class VarMatcherSpec extends FlatSpec with Matchers {
-  import implicits._
+  import coop.rchain.models.rholang.implicits._
   import SpatialMatcher._
   val wc = Wildcard(Var.WildcardMsg())
   "Matching ground with var" should "work" in {
