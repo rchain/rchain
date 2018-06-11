@@ -17,39 +17,39 @@ import scala.util.{Failure, Success, Try}
 class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
 
   def updated(terms: List[Par])(implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
-    val hot   = getHot()
-    val error = eval(terms, hot)
+    val active = getActive()
+    val error  = eval(terms, active)
     val newHash = error.fold[Either[Throwable, ByteString]](
-      Right(ByteString.copyFrom(hot.space.getCheckpoint().bytes.toArray)))(Left(_))
-    runtime.put(hot)
+      Right(ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)))(Left(_))
+    runtime.put(active)
 
     newHash.map(new Checkpoint(_, runtime))
   }
 
   def storageRepr: String = {
-    val hot    = getHot()
-    val result = StoragePrinter.prettyPrint(hot.space.store)
-    runtime.put(hot)
+    val active = getActive()
+    val result = StoragePrinter.prettyPrint(active.space.store)
+    runtime.put(active)
     result
   }
 
-  private def getHot(): Runtime = {
-    val hot       = runtime.take()
+  private def getActive(): Runtime = {
+    val active    = runtime.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
-    Try(hot.space.reset(blakeHash)) match {
-      case Success(_) => hot
+    Try(active.space.reset(blakeHash)) match {
+      case Success(_) => active
       case Failure(ex) =>
-        runtime.put(hot)
+        runtime.put(active)
         throw ex
     }
   }
 
-  private def eval(terms: List[Par], hot: Runtime)(
+  private def eval(terms: List[Par], active: Runtime)(
       implicit scheduler: Scheduler): Option[Throwable] =
     terms match {
       case term :: rest =>
-        Try(hot.reducer.inj(term).unsafeRunSync) match {
-          case Success(_)  => eval(rest, hot)
+        Try(active.reducer.inj(term).unsafeRunSync) match {
+          case Success(_)  => eval(rest, active)
           case Failure(ex) => Some(ex)
         }
 
@@ -59,9 +59,9 @@ class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
 
 object Checkpoint {
   def fromRuntime(runtime: SyncVar[Runtime]): Checkpoint = {
-    val hot  = runtime.take()
-    val hash = ByteString.copyFrom(hot.space.getCheckpoint().bytes.toArray)
-    runtime.put(hot)
+    val active = runtime.take()
+    val hash   = ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)
+    runtime.put(active)
 
     new Checkpoint(hash, runtime)
   }
