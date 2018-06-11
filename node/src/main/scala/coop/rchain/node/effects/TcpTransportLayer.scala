@@ -68,7 +68,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
       .build()
 
   def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
+                remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]] =
     for {
       tlResponseErr <- Capture[F].capture(
@@ -82,7 +82,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
                   tlr.payload match {
                     case p if p.isProtocol =>
                       p match {
-                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _, _)) =>
+                        case Payload.Protocol(Protocol(Some(Header(Some(sender), _, _)), _)) =>
                           if (sender.id.toByteArray
                                 .map("%02x".format(_))
                                 .mkString == remote.id.toString) {
@@ -105,7 +105,7 @@ class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
                 .pure[F]
     } yield pmErr
 
-  val local: F[ProtocolNode] = ProtocolNode(src).pure[F]
+  val local: F[PeerNode] = src.pure[F]
 
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
     Capture[F]

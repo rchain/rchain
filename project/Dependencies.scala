@@ -10,8 +10,8 @@ object Dependencies {
 
   // format: off
   val bitcoinjCore        = "org.bitcoinj"                % "bitcoinj-core"             % "0.14.6"
-  val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.58"
-  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.0.1"
+  val bouncyCastle        = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.59"
+  val catsCore            = "org.typelevel"              %% "cats-core"                 % "1.1.0"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % "0.2.1"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion

@@ -97,7 +97,7 @@ object GrpcServer {
               case Left(ie: InterpreterError) => s"Error: ${ie.toString}"
               case Left(ex)                   => s"Caught boxed exception: $ex"
               case Right(_) =>
-                s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
+                s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
             }
         }
         .map(ReplResponse(_))

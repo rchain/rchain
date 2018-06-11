@@ -2,7 +2,7 @@
 # With Docker CE installed, this will build a simple private RChain P2P test network.
 # The test network contains a bootstrap server and two more peers connecting to P2P network via bootstrap.
 # "local repo" as params builds from current repo you are in
-# "delete testnet" removes all testnet resources 
+# "delete testnet" removes all testnet resources
 
 if [[ "${TRAVIS}" == "true" ]]; then
   set -eo pipefail # x enables verbosity on CI environment for debugging
@@ -21,7 +21,7 @@ line_bar() {
     if [[ "${x}" == "${middle}" ]]; then
       printf %s ${text}
     fi
-    printf %s = 
+    printf %s =
   done
 echo
 }
@@ -46,8 +46,8 @@ create_test_network_resources() {
 
     var_lib_rnode_dir=$(mktemp -d /tmp/var_lib_rnode.XXXXXXXX)
 
-    echo "Creating node certificate"
     if [[ $i == 0 ]]; then
+      echo "Creating node certificate"
       sudo tee -a ${var_lib_rnode_dir}/node.key.pem > /dev/null <<EOF
 -----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgzndy5M7DWHG6IKC+
@@ -72,22 +72,25 @@ EOF
     else
       rnode_cmd="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@169.254.1.2:30304"
     fi
+    echo "starting docker container ${container_name}"
     sudo docker run -dit --name ${container_name} \
       -v ${var_lib_rnode_dir}:/var/lib/rnode \
       --network=${network_name} \
       coop.rchain/rnode ${rnode_cmd}
 
-    sudo docker exec ${container_name} sh -c "apt install -yq curl"
-    sleep 3 # slow down 
+    echo "docker container ${container_name} started"
+    sudo docker exec -u root ${container_name} sh -c "apt install -yq curl"
+    echo "installed curl in container ${container_name}"
+    sleep 3 # slow down
   done
-  
+
   line_bar
   echo "P2P test network build complete. Converging network."
   line_bar
   echo ""
   echo "Test network build has completed but it might take a minute for start-up of network and metrics to be available."
   echo ""
-  echo 'Run option "docker-help" to get more info on docker commands to interact with node containers'  
+  echo 'Run option "docker-help" to get more info on docker commands to interact with node containers'
   echo ""
 }
 
@@ -124,13 +127,13 @@ delete_test_network_resources() {
     echo "E: Requires network name as argument"
     exit
   fi
-  # Remove docker containers related to a network 
+  # Remove docker containers related to a network
   network_name=$1
   for i in $(docker container ls --all --format {{.Names}} | grep \.${network_name}$); do
     echo "Removing docker container $i"
     sudo docker container rm -f $i
   done
-  
+
   if [[ "$(sudo docker network list --format {{.Name}} | grep ^${network_name}$)" != "" ]]; then
     echo "Removing docker network ${network_name}"
     sudo docker network rm ${network_name}
@@ -169,7 +172,7 @@ run_tests_on_network() {
 
     # Test for network convergence before running all tests # simpler is above WAIT_TIME
     if [[ ${loop_count} == 1 ]]; then
-      check_network_convergence ${container_name} # Check that network has converged and api up before running tests 
+      check_network_convergence ${container_name} # Check that network has converged and api up before running tests
       loop_count=$(($loop_count+1))
     fi
 
@@ -178,10 +181,10 @@ run_tests_on_network() {
     line_bar
 
     if [[ $(sudo docker exec ${container_name} sh -c "curl -s 127.0.0.1:9095") ]]; then
-      echo "PASS: Could connect to metrics api" 
+      echo "PASS: Could connect to metrics api"
     else
       all_pass=false
-      echo "FAIL: Could not connect to metrics api" 
+      echo "FAIL: Could not connect to metrics api"
     fi
 
     expected_peers=2.0
@@ -194,18 +197,18 @@ run_tests_on_network() {
     fi
 
     if [[ $(sudo docker logs ${container_name} | grep 'Peers: 2.') ]]; then
-      echo "PASS: Correct log peers count" 
+      echo "PASS: Correct log peers count"
     else
       all_pass=false
-      echo "FAIL: Incorrect log peers count" 
+      echo "FAIL: Incorrect log peers count"
       sudo docker logs ${container_name} | grep 'Peers:'
     fi
 
     if [[ ! $(sudo docker logs ${container_name} | grep ERR) ]]; then
-      echo "PASS: No error messages contained in logs" 
+      echo "PASS: No error messages contained in logs"
     else
       all_pass=false
-      echo "FAIL: ERROR messages contained in logs" 
+      echo "FAIL: ERROR messages contained in logs"
       sudo docker logs ${container_name} | grep ERR
     fi
 
@@ -226,11 +229,11 @@ run_tests_on_network() {
     line_bar
     echo node: $container_name
     line_bar
-    echo "ICMP:" 
+    echo "ICMP:"
     echo "pinging bootstrap node"
     ping -c 2 169.254.1.2
     line_bar
-    echo "LOGS:" 
+    echo "LOGS:"
     logs=$(sudo docker logs ${container_name})
     echo "${logs}"
     line_bar
@@ -240,9 +243,9 @@ run_tests_on_network() {
     echo ""
   done
 
-  
+
   # Check for test failures
-  set -eo pipefail # turn back on exit immediately all pass check 
+  set -eo pipefail # turn back on exit immediately all pass check
   line_bar
   if [[ $all_pass == false ]]; then
     echo "ERROR: Not all network checks passed."
@@ -262,14 +265,14 @@ create_docker_rnode_image() {
   fi
   echo "Creating RChain rnode docker image coop.rchain/rnode from git src via sbt"
   if [[ "$1" == "local" ]]; then
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
   elif [[ $1 && $2 ]]; then
     git_dir=$(mktemp -d /tmp/rchain-git.XXXXXXXX)
     cd ${git_dir}
-    git clone $1 
+    git clone $1
     cd rchain
     git checkout $2
-    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+    sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
   else
     echo "Unsupported"
   fi
@@ -297,7 +300,7 @@ check_network_convergence() {
 if [[ "${TRAVIS}" == "true" ]]; then
   repl_load_count=100
   echo "Running in TRAVIS CI"
-  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker
+  sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/docker:publishLocal
   delete_test_network_resources "${network_name}"
   create_test_network_resources "${network_name}"
 
