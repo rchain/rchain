@@ -25,7 +25,6 @@ import coop.rchain.shared.Resources._
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
-import coop.rchain.node.effects.TLNodeDiscovery
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 

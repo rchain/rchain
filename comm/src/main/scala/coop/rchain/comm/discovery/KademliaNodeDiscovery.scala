@@ -1,11 +1,10 @@
-package coop.rchain.node.effects
+package coop.rchain.comm.discovery
 
 import scala.collection.mutable
 import scala.concurrent.duration._
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
-import coop.rchain.comm.discovery.PeerTable
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import coop.rchain.comm.transport._, CommunicationResponse._
