@@ -15,7 +15,7 @@ class Ctxt(var tag: Location,
            var argvec: Tuple,
            var env: Ob,
            var code: Code,
-           var ctxt: Ctxt,
+           var ctxt: Option[Ctxt],
            var self2: Ob,
            var selfEnv: Ob,
            var rcvr: Ob,
@@ -24,7 +24,7 @@ class Ctxt(var tag: Location,
 
   def applyK(result: Ob, loc: Location, state: State): Boolean =
     // Make continuation receive `result` at `tag`
-    ctxt.rcv(result, loc, state)
+    ctxt.get.rcv(result, loc, state)
 
   def arg(n: Int): Ob = this.argvec.value(n)
 
@@ -74,6 +74,21 @@ class Ctxt(var tag: Location,
   def scheduleStrand(state: State): Unit =
     state.strandPool += this
 
+  def reg(reg: Int): Ob =
+    reg match {
+      case 0 => this.rslt
+      case 1 => this.trgt
+      case 2 => this.argvec
+      case 3 => this.env
+      case 4 => this.code
+      case 5 => this.ctxt.getOrElse(Niv)
+      case 6 => this.self2
+      case 7 => this.selfEnv
+      case 8 => this.rcvr
+      case 9 => this.monitor
+      case _ => throw new IllegalArgumentException("Unknown register")
+    }
+
   def setReg(reg: Int, ob: Ob): Unit =
     reg match {
       case 0 => this.rslt = ob
@@ -81,7 +96,7 @@ class Ctxt(var tag: Location,
       case 2 => this.argvec = ob.asInstanceOf[Tuple]
       case 3 => this.env = ob
       case 4 => this.code = ob.asInstanceOf[Code]
-      case 5 => this.ctxt = ob.asInstanceOf[Ctxt]
+      case 5 => this.ctxt = Some(ob.asInstanceOf[Ctxt])
       case 6 => this.self2 = ob
       case 7 => this.selfEnv = ob
       case 8 => this.rcvr = ob
@@ -104,7 +119,7 @@ object Ctxt {
       argvec = Tuple(new Array[Ob](0)),
       env = Niv,
       code = code,
-      ctxt = continuation,
+      ctxt = Some(continuation),
       self2 = Niv,
       selfEnv = Niv,
       rcvr = Niv,
@@ -121,7 +136,25 @@ object Ctxt {
       trgt = Niv,
       argvec = tuple,
       env = continuation.env,
-      ctxt = continuation,
+      ctxt = Some(continuation),
+      code = continuation.code,
+      self2 = continuation.self2,
+      selfEnv = continuation.selfEnv,
+      rcvr = continuation.rcvr,
+      monitor = continuation.monitor
+    )
+
+  def apply(continuation: Ctxt): Ctxt =
+    new Ctxt(
+      tag = LocRslt,
+      nargs = 0,
+      outstanding = 0,
+      pc = 0,
+      rslt = Niv,
+      trgt = Niv,
+      argvec = Nil,
+      env = continuation.env,
+      ctxt = Some(continuation),
       code = continuation.code,
       self2 = continuation.self2,
       selfEnv = continuation.selfEnv,
