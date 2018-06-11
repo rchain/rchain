@@ -4,23 +4,19 @@ import cats.{Id, Monad}
 import cats.data.State
 import cats.implicits._
 import cats.mtl.implicits._
-
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.BlockDagState._
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-
 import monix.execution.Scheduler.Implicits.global
-
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+
+import scala.collection.immutable.HashMap
 
 class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with BlockGenerator {
 
@@ -41,6 +37,32 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
           bnext <- createBlock[F](Seq(bprev.blockHash), bonds = bonds)
         } yield bnext
     }
+
+  def createChainWithRoundRobinValidators[F[_]: Monad: BlockDagState](
+      length: Int,
+      validatorLength: Int): F[BlockMessage] = {
+    val validatorRoundRobinCycle = Stream.continually(0 until validatorLength).flatten
+    (0 until length).toList
+      .zip(validatorRoundRobinCycle)
+      .foldLeft(
+        for {
+          genesis             <- createBlock[F](Seq.empty)
+          emptyLatestMessages <- HashMap.empty[Validator, BlockHash].pure[F]
+        } yield (genesis, emptyLatestMessages)
+      ) {
+        case (acc, (_, validatorNum)) =>
+          val creator = ByteString.copyFrom(validatorNum.toString.getBytes)
+          for {
+            unwrappedAcc            <- acc
+            (block, latestMessages) = unwrappedAcc
+            bnext <- createBlock[F](parentsHashList = Seq(block.blockHash),
+                                    creator = creator,
+                                    justifications = latestMessages)
+            latestMessagesNext = latestMessages.updated(bnext.sender, bnext.blockHash)
+          } yield (bnext, latestMessagesNext)
+      }
+      .map(_._1)
+  }
 
   def signedBlock(i: Int)(implicit chain: BlockDag, sk: Array[Byte]): BlockMessage = {
     val block = chain.idToBlocks(i)
@@ -125,6 +147,33 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
     val chain = createChain[StateWithChain](n).runS(initState).value
 
     (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain)) should be(true)
+    log.warns should be(Nil)
+  }
+
+  "Sequence number validation" should "only accept 0 as the number for a block with no parents" in {
+    val chain = createChain[StateWithChain](1).runS(initState).value
+    val block = chain.idToBlocks(0)
+
+    Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(false)
+    Validate.sequenceNumber[Id](block, chain) should be(true)
+    log.warns.size should be(1)
+  }
+
+  it should "return false for non-sequential numbering" in {
+    val chain = createChain[StateWithChain](2).runS(initState).value
+    val block = chain.idToBlocks(1)
+
+    Validate.sequenceNumber[Id](block.withSeqNum(1), chain) should be(false)
+    log.warns.size should be(1)
+  }
+
+  it should "return true for sequential numbering" in {
+    val n              = 20
+    val validatorCount = 3
+    val chain =
+      createChainWithRoundRobinValidators[StateWithChain](n, validatorCount).runS(initState).value
+
+    (0 until n).forall(i => Validate.sequenceNumber[Id](chain.idToBlocks(i), chain)) should be(true)
     log.warns should be(Nil)
   }
 
