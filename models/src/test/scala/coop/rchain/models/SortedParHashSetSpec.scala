@@ -39,6 +39,7 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
     Seq(parGround, parExpr, parMethods)
   }
 
+  //TODO(mateusz.gorski): Once we handle `Empty` cases from scalapb use scalacheck generators
   def sample = SortedParHashSet(pars)
 
   "SortedParHashSet" should "preserve structure during round trip protobuf serialization" in {

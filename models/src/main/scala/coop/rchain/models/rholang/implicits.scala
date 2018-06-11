@@ -44,9 +44,9 @@ object implicits {
     new Expr(exprInstance = ESetBody(e))
   implicit def fromESet(e: ParSet): Expr = apply(e)
 
-  def apply(e: EMap): Expr =
+  def apply(e: ParMap): Expr =
     new Expr(exprInstance = EMapBody(e))
-  implicit def fromEMap(e: EMap): Expr = apply(e)
+  implicit def fromEMap(e: ParMap): Expr = apply(e)
 
   def apply(e: ENot): Expr =
     new Expr(exprInstance = ENotBody(e))
@@ -326,7 +326,7 @@ object implicits {
         case EListBody(e)               => e.locallyFree
         case ETupleBody(e)              => e.locallyFree
         case ESetBody(e)                => e.locallyFree.value
-        case EMapBody(e)                => e.locallyFree
+        case EMapBody(e)                => e.locallyFree.value
         case EVarBody(EVar(v))          => VarLocallyFree.locallyFree(v.get)
         case EEvalBody(chan)            => ChannelLocallyFree.locallyFree(chan)
         case ENotBody(ENot(p))          => p.get.locallyFree
