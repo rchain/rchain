@@ -50,10 +50,10 @@ package object effects {
 
   def tcpTranposrtLayer[F[_]: Monad: Capture: Metrics: Futurable](conf: Conf)(src: PeerNode)(
       implicit executionContext: ExecutionContext) =
-    new TcpTransportLayer[F](conf.localhost,
-                             conf.port(),
-                             conf.certificatePath.toFile,
-                             conf.keyPath.toFile)(src)
+    new TcpTransportLayer[F](conf.run.localhost,
+                             conf.run.port(),
+                             conf.run.certificatePath.toFile,
+                             conf.run.keyPath.toFile)(src)
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
 }

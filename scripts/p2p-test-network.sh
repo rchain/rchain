@@ -68,9 +68,9 @@ EOF
    fi
 
     if [[ $i == 0 ]]; then
-      rnode_cmd="--port 30304 --standalone"
+      rnode_cmd="run --port 30304 --standalone"
     else
-      rnode_cmd="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@169.254.1.2:30304"
+      rnode_cmd="run --bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@169.254.1.2:30304"
     fi
     echo "starting docker container ${container_name}"
     sudo docker run -dit --name ${container_name} \
