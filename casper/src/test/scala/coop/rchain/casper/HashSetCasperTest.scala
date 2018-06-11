@@ -223,12 +223,7 @@ object HashSetCasperTest {
       implicit casper: MultiParentCasper[Id]): String = {
     val tsHash           = block.body.get.postState.get.tuplespace
     val Some(checkpoint) = MultiParentCasper[Id].tsCheckpoint(tsHash)
-    val storage = {
-      val ts     = checkpoint.toTuplespace
-      val result = ts.storageRepr
-      ts.delete()
-      result
-    }
-    storage
+
+    checkpoint.storageRepr
   }
 }
