@@ -6,7 +6,7 @@ import java.util
 import com.google.protobuf.CodedInputStream
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.BoundVar
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.rholang.sort.ordering._
@@ -41,7 +41,7 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
 
   def sample = SortedParHashSet(pars)
 
-  "ParTreeSet" should "preserve structure during round trip protobuf serialization" in {
+  "SortedParHashSet" should "preserve structure during round trip protobuf serialization" in {
     roundtripTest(sample)
   }
 
@@ -58,4 +58,26 @@ class SortedParHashSetSpec extends FlatSpec with Matchers {
       }
     } should be(true)
   }
+
+  it should "deduplicate its elements where last seen element wins" in {
+    def deduplicate(in: Seq[Par]): Set[Par] =
+      in.foldLeft(Set.empty[Par])(_ + _)
+
+    val elements: Seq[Par] = Seq(
+      GInt(1),
+      GInt(1),
+      GBool(true),
+      GBool(true),
+      GBool(false),
+      EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2)),
+      EMethod("nth", EVar(BoundVar(2)), List(GInt(1)), locallyFree = BitSet(2))
+    )
+
+    val expected = deduplicate(elements)
+
+    val shs = SortedParHashSet(elements)
+
+    shs.sortedPars should contain theSameElementsAs (expected)
+  }
+
 }
