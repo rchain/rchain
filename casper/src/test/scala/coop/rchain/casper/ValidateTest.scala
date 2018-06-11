@@ -168,7 +168,7 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   }
 
   it should "return true for sequential numbering" in {
-    val n = 20
+    val n              = 20
     val validatorCount = 3
     val chain =
       createChainWithRoundRobinValidators[StateWithChain](n, validatorCount).runS(initState).value
