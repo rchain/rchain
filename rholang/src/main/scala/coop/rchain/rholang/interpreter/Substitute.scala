@@ -18,6 +18,12 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
+  private def asSortMatchError(th: Throwable): InterpreterError =
+    SortMatchError(th.getMessage)
+
+  private def fromEither[M[_]: InterpreterErrorsM, A](either: Either[Throwable, A]): M[A] =
+    interpreterErrorM[M].fromEither(either.leftMap(asSortMatchError))
+
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(
       f: (A, B) => C)(implicit evA: Substitute[M, A], evB: Substitute[M, B], env: Env[Par]): M[C] =
     (evA.substitute(termA), evB.substitute(termB)).mapN(f)
@@ -101,7 +107,11 @@ object Substitute {
                          }
         } yield channelSubst
       override def substitute(term: Channel)(implicit env: Env[Par]): M[Channel] =
-        substituteNoSort(term).map(channelSubst => ChannelSortMatcher.sortMatch(channelSubst).term)
+        for {
+          channelSubst <- substituteNoSort(term)
+          sortedChan <- fromEither[M, ScoredTerm[Channel]](
+                         ChannelSortMatcher.sortMatch(channelSubst))
+        } yield sortedChan.term
     }
 
   implicit def substitutePar[M[_]: InterpreterErrorsM]: Substitute[M, Par] =
@@ -145,7 +155,10 @@ object Substitute {
             )
         } yield par
       override def substitute(term: Par)(implicit env: Env[Par]): M[Par] =
-        substituteNoSort(term).map(par => ParSortMatcher.sortMatch(par).term)
+        for {
+          par       <- substituteNoSort(term)
+          sortedPar <- fromEither[M, ScoredTerm[Par]](ParSortMatcher.sortMatch(par))
+        } yield sortedPar.term.get
     }
 
   implicit def substituteSend[M[_]: InterpreterErrorsM]: Substitute[M, Send] =
@@ -163,7 +176,10 @@ object Substitute {
           )
         } yield send
       override def substitute(term: Send)(implicit env: Env[Par]): M[Send] =
-        substituteNoSort(term).map(send => SendSortMatcher.sortMatch(send).term)
+        for {
+          send       <- substituteNoSort(term)
+          sortedSend <- fromEither[M, ScoredTerm[Send]](SendSortMatcher.sortMatch(send))
+        } yield sortedSend.term
     }
 
   implicit def substituteReceive[M[_]: InterpreterErrorsM]: Substitute[M, Receive] =
@@ -171,7 +187,7 @@ object Substitute {
       override def substituteNoSort(term: Receive)(implicit env: Env[Par]): M[Receive] =
         for {
           bindsSub <- term.binds.toList.traverse {
-                       case ReceiveBind(xs, chan, rem, freeCount) =>
+                       case ReceiveBind(xs, Some(chan), rem, freeCount) =>
                          substituteChannel[M].substituteNoSort(chan).map { (subChannel: Channel) =>
                            ReceiveBind(xs, subChannel, rem, freeCount)
                          }
@@ -187,7 +203,10 @@ object Substitute {
           )
         } yield rec
       override def substitute(term: Receive)(implicit env: Env[Par]): M[Receive] =
-        substituteNoSort(term).map(rec => ReceiveSortMatcher.sortMatch(rec).term)
+        for {
+          rec           <- substituteNoSort(term)
+          sortedReceive <- fromEither[M, ScoredTerm[Receive]](ReceiveSortMatcher.sortMatch(rec))
+        } yield sortedReceive.term
 
     }
 
@@ -199,7 +218,10 @@ object Substitute {
           neu    = New(term.bindCount, newSub, term.locallyFree.until(env.shift))
         } yield neu
       override def substitute(term: New)(implicit env: Env[Par]): M[New] =
-        substituteNoSort(term).map(newSub => NewSortMatcher.sortMatch(newSub).term)
+        for {
+          newSub      <- substituteNoSort(term)
+          sortedMatch <- fromEither[M, ScoredTerm[New]](NewSortMatcher.sortMatch(newSub))
+        } yield sortedMatch.term
     }
 
   implicit def substituteMatch[M[_]: InterpreterErrorsM]: Substitute[M, Match] =
@@ -208,7 +230,7 @@ object Substitute {
         for {
           targetSub <- substitutePar[M].substituteNoSort(term.target.get)
           casesSub <- term.cases.toList.traverse {
-                       case MatchCase(_case, _par, freeCount) =>
+                       case MatchCase(_case, Some(_par), freeCount) =>
                          substitutePar[M]
                            .substituteNoSort(_par)(env.shift(freeCount))
                            .map(par => MatchCase(_case, par, freeCount))
@@ -216,7 +238,10 @@ object Substitute {
           mat = Match(targetSub, casesSub, term.locallyFree.until(env.shift), term.connectiveUsed)
         } yield mat
       override def substitute(term: Match)(implicit env: Env[Par]): M[Match] =
-        substituteNoSort(term).map(mat => MatchSortMatcher.sortMatch(mat).term)
+        for {
+          mat         <- substituteNoSort(term)
+          sortedMatch <- fromEither[M, ScoredTerm[Match]](MatchSortMatcher.sortMatch(mat))
+        } yield sortedMatch.term
     }
 
   implicit def substituteExpr[M[_]: InterpreterErrorsM]: Substitute[M, Expr] =

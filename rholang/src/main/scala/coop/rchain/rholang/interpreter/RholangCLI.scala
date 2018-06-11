@@ -134,10 +134,11 @@ object RholangCLI {
                                  DebruijnIndexMap[VarSort](),
                                  DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
-        par <- Coeval.delay(
-                ParSortMatcher
-                  .sortMatch(outputs.par)
-                  .term)
+        par <- ParSortMatcher
+                .sortMatch(Some(outputs.par))
+                .map(_.term)
+                .leftMap(th => SortMatchError(th.getMessage))
+                .fold(err => Coeval.raiseError[Par](err), par => Coeval.delay(par))
       } yield par
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
