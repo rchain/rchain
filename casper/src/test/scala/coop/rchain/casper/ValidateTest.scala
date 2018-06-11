@@ -32,12 +32,13 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
   override def beforeEach(): Unit =
     log.reset()
 
-  def createChain[F[_]: Monad: BlockDagState](length: Int): F[BlockMessage] =
-    (0 until length).foldLeft(createBlock[F](Seq.empty)) {
+  def createChain[F[_]: Monad: BlockDagState](length: Int,
+                                              bonds: Seq[Bond] = Seq.empty[Bond]): F[BlockMessage] =
+    (0 until length).foldLeft(createBlock[F](Seq.empty, bonds = bonds)) {
       case (block, _) =>
         for {
           bprev <- block
-          bnext <- createBlock[F](Seq(bprev.blockHash))
+          bnext <- createBlock[F](Seq(bprev.blockHash), bonds = bonds)
         } yield bnext
     }
 
@@ -125,6 +126,19 @@ class ValidateTest extends FlatSpec with Matchers with BeforeAndAfterEach with B
 
     (0 until n).forall(i => Validate.blockNumber[Id](chain.idToBlocks(i), chain)) should be(true)
     log.warns should be(Nil)
+  }
+
+  "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in {
+    val validator    = ByteString.copyFromUtf8("Validator")
+    val impostor     = ByteString.copyFromUtf8("Impostor")
+    val chain        = createChain[StateWithChain](3, List(Bond(validator, 1))).runS(initState).value
+    val genesis      = chain.idToBlocks(0)
+    val validBlock   = chain.idToBlocks(1).withSender(validator)
+    val invalidBlock = chain.idToBlocks(2).withSender(impostor)
+
+    Validate.blockSender[Id](genesis, genesis, chain) should be(true)
+    Validate.blockSender[Id](validBlock, genesis, chain) should be(true)
+    Validate.blockSender[Id](invalidBlock, genesis, chain) should be(false)
   }
 
   "Parent validation" should "return true for proper justifications and false otherwise" in {

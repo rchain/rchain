@@ -78,6 +78,16 @@ object ProtoUtil {
       mainParent <- blocks.get(parentHash)
     } yield mainParent
 
+  def weightFromValidator(b: BlockMessage,
+                          validator: ByteString,
+                          blocks: collection.Map[ByteString, BlockMessage]): Int =
+    mainParent(blocks, b)
+      .map(weightMap(_).getOrElse(validator, 0))
+      .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+
+  def weightFromSender(b: BlockMessage, blocks: collection.Map[ByteString, BlockMessage]): Int =
+    weightFromValidator(b, b.sender, blocks)
+
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 

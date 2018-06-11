@@ -90,9 +90,12 @@ sealed abstract class MultiParentCasperInstances {
 
       def addBlock(b: BlockMessage): F[Unit] =
         for {
-          validSig <- Validate.blockSignature[F](b)
-          attempt <- if (validSig) attemptAdd(b)
-                    else InvalidBlockSignature.pure[F]
+          validSig    <- Validate.blockSignature[F](b)
+          dag         <- blockDag
+          validSender <- Validate.blockSender[F](b, genesis, dag)
+          attempt <- if (!validSig) InvalidBlockSignature.pure[F]
+                    else if (!validSender) InvalidSender.pure[F]
+                    else attemptAdd(b)
           _ <- attempt match {
                 case Valid => reAttemptBuffer
                 case _     => ().pure[F]
@@ -101,7 +104,6 @@ sealed abstract class MultiParentCasperInstances {
           tip       = estimates.head
           _ <- Log[F].info(
                 s"CASPER: New fork-choice tip is block ${PrettyPrinter.buildString(tip.blockHash)}.")
-          dag <- blockDag
           // TODO: Replace with getMainChainUntilLastFinalizedBlock
           forkchoice = getMainChain(dag, tip, IndexedSeq.empty[BlockMessage])
           forkchoiceSafety <- forkchoice.toList.traverse(block =>
