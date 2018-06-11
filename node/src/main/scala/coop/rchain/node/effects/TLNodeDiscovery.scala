@@ -5,10 +5,11 @@ import scala.concurrent.duration._
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import coop.rchain.metrics.Metrics
-import coop.rchain.kademlia.PeerTable
+import coop.rchain.comm.discovery.PeerTable
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
-import CommunicationResponse._
+import coop.rchain.comm.transport._, CommunicationResponse._
+import coop.rchain.comm.discovery._
 
 class TLNodeDiscovery[F[_]: Monad: Capture: Log: Time: Metrics: TransportLayer: Ping](src: PeerNode)
     extends NodeDiscovery[F] {

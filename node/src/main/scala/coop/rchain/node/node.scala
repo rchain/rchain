@@ -26,6 +26,8 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.node.effects.TLNodeDiscovery
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -95,7 +97,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   /** Configuration */
   private val host        = conf.run.localhost
   private val address     = s"rnode://$name@$host:${conf.run.port()}"
-  private val src         = p2p.NetworkAddress.parse(address).right.get
+  private val src         = PeerNode.parse(address).right.get
   private val storagePath = conf.run.data_dir().resolve("rspace")
   private val storageSize = conf.run.map_size()
 

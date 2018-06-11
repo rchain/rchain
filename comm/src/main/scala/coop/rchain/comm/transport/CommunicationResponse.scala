@@ -1,4 +1,4 @@
-package coop.rchain.p2p.effects
+package coop.rchain.comm.transport
 
 import coop.rchain.comm.ProtocolMessage
 

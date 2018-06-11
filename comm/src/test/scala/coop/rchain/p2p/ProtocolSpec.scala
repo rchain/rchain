@@ -3,12 +3,13 @@ package coop.rchain.p2p
 import org.scalatest._
 import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, CommMessages._, Network.defaultTimeout
+import coop.rchain.comm._, CommError._, Network.defaultTimeout
 import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.metrics.Metrics
-
+import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.discovery._
 import EffectsTestInstances._
 
 class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {

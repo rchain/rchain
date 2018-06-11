@@ -1,6 +1,5 @@
 package coop.rchain.comm
 
-import coop.rchain.kademlia
 import coop.rchain.comm.protocol.routing._
 import scala.util.control.NonFatal
 

@@ -2,6 +2,7 @@ package coop.rchain.p2p
 
 import coop.rchain.p2p.effects._
 
+import coop.rchain.comm.discovery._
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 import com.google.protobuf.any.{Any => AnyProto}
 import coop.rchain.comm.protocol.routing, routing.Header
@@ -15,46 +16,11 @@ import scala.util.control.NonFatal
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import com.google.protobuf.ByteString
-import CommunicationResponse._
-/*
- * Inspiration from ethereum:
- *
- *   enode://92c9722c6cd441b9d64cc3f365cdd6cda822c7496b8131078a7362b576526092b58531aa2e5914c4e87e0e574bca4497e68f35a7b66c153ee73b6c7dfc958a34@10.0.0.3:30303
- *
- * =>
- *
- *   rnode://<key>@<host>:<udp-port>
- */
-final case class NetworkAddress(scheme: String, key: String, host: String, port: Int)
-
-case object NetworkAddress {
-  def parse(str: String): Either[CommError, PeerNode] =
-    try {
-      val uri = Uri.parse(str)
-
-      val addy =
-        for {
-          scheme <- uri.scheme
-          key    <- uri.user
-          host   <- uri.host
-          port   <- uri.port
-        } yield NetworkAddress(scheme, key, host, port)
-
-      addy match {
-        case Some(NetworkAddress(_, key, host, port)) =>
-          Right(PeerNode(NodeIdentifier(key), Endpoint(host, port, port)))
-        case _ => Left(ParseError(s"bad address: $str"))
-      }
-    } catch {
-      case NonFatal(_) => Left(ParseError(s"bad address: $str"))
-    }
-}
+import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
 
 object Network {
 
   type ErrorHandler[F[_]] = ApplicativeError_[F, CommError]
-
-  import CommMessages._
 
   val defaultTimeout: Duration = Duration(500, MILLISECONDS)
 
@@ -94,7 +60,7 @@ object Network {
         } yield ()
 
     for {
-      bootstrapAddr <- errorHandler[F].fromEither(NetworkAddress.parse(bootstrapAddrStr))
+      bootstrapAddr <- errorHandler[F].fromEither(PeerNode.parse(bootstrapAddrStr))
       _             <- Log[F].info(s"Bootstrapping from $bootstrapAddr.")
       _             <- connectAttempt(attempt = 1, defaultTimeout, bootstrapAddr)
       _             <- Log[F].info(s"Connected $bootstrapAddr.")

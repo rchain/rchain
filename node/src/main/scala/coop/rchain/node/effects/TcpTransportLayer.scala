@@ -19,6 +19,7 @@ import io.netty.handler.ssl.{ClientAuth, SslContext}
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import coop.rchain.comm.protocol.routing.TLResponse.Payload
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
+import coop.rchain.comm.transport._
 
 // TODO Add State Monad to reuse channels to known peers
 class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](

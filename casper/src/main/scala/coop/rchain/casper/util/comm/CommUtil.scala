@@ -10,7 +10,8 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
-import coop.rchain.p2p.CommMessages, CommMessages._
+import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.discovery._
 import coop.rchain.p2p.Network.ErrorHandler
 
 import scala.util.Try

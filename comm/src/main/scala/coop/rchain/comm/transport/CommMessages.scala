@@ -1,4 +1,4 @@
-package coop.rchain.p2p
+package coop.rchain.comm.transport
 
 import coop.rchain.comm._, CommError._
 import com.google.protobuf.ByteString
