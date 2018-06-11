@@ -17,7 +17,10 @@ object StoragePrinter {
           val sends: Seq[Send] = data.flatMap {
             case Datum(as: Seq[Channel], persist: Boolean) =>
               channels.map { channel =>
-                Send(Some(channel), as.map { case Channel(Quote(p)) => p }, persist)
+                Send(Some(channel), as.map {
+                  case Channel(Quote(p)) => p
+                  case Channel(_)        => Par() // Should never happen
+                }, persist)
               }
           }
           sends.foldLeft(Par()) { (acc: Par, send: Send) =>
