@@ -14,6 +14,13 @@ class Tuple(val value: Array[Ob]) extends Ob {
 
   def update(arg: Int, ob: Ob): Unit = value.update(arg, ob)
 
+  /* Assumes that last element in `Tuple` is a `Tuple` */
+  def unwind(): Tuple = {
+    val prefix = this.value.take(this.value.length - 1)
+    val rest   = this.value.last.asInstanceOf[Tuple]
+    new Tuple(prefix ++ rest.value)
+  }
+
   def numberOfElements(): Int = value.length
 }
 
@@ -23,4 +30,4 @@ object Tuple {
   def apply(obs: Ob*): Tuple = new Tuple(obs.toArray[Ob])
 }
 
-object Nil extends Ob
+object Nil extends Tuple(null)
