@@ -75,23 +75,20 @@ class LMDBTrieStore[K, V] private (val env: Env[ByteBuffer],
     _dbRoot.drop(txn)
   }
 
-  private val ROOT_KEY: ByteBuffer = {
-    val rootName = "CURRENT_ROOT".getBytes(StandardCharsets.UTF_8)
-    val buffer   = ByteBuffer.allocateDirect(rootName.length)
-    buffer.put(rootName)
-    buffer.flip()
-    buffer
-  }
-
-  private[rspace] def getRoot(txn: Txn[ByteBuffer]): Option[Blake2b256Hash] =
-    Option(_dbRoot.get(txn, ROOT_KEY)).map { (buffer: ByteBuffer) =>
+  private[rspace] def getRoot(txn: Txn[ByteBuffer], branch: Branch): Option[Blake2b256Hash] = {
+    val encodedBranch     = Codec[Branch].encode(branch).get
+    val encodedBranchBuff = encodedBranch.bytes.toDirectByteBuffer
+    Option(_dbRoot.get(txn, encodedBranchBuff)).map { (buffer: ByteBuffer) =>
       Codec[Blake2b256Hash].decode(BitVector(buffer)).map(_.value).get
     }
+  }
 
-  private[rspace] def putRoot(txn: Txn[ByteBuffer], hash: Blake2b256Hash): Unit = {
-    val encodedHash     = Codec[Blake2b256Hash].encode(hash).get
-    val encodedHashBuff = encodedHash.bytes.toDirectByteBuffer
-    if (!_dbRoot.put(txn, ROOT_KEY, encodedHashBuff)) {
+  private[rspace] def putRoot(txn: Txn[ByteBuffer], branch: Branch, hash: Blake2b256Hash): Unit = {
+    val encodedBranch     = Codec[Branch].encode(branch).get
+    val encodedBranchBuff = encodedBranch.bytes.toDirectByteBuffer
+    val encodedHash       = Codec[Blake2b256Hash].encode(hash).get
+    val encodedHashBuff   = encodedHash.bytes.toDirectByteBuffer
+    if (!_dbRoot.put(txn, encodedBranchBuff, encodedHashBuff)) {
       throw new Exception(s"could not persist: $hash")
     }
   }
@@ -102,8 +99,8 @@ object LMDBTrieStore {
   def create[K, V](env: Env[ByteBuffer])(implicit
                                          codecK: Codec[K],
                                          codecV: Codec[V]): LMDBTrieStore[K, V] = {
-    val dbTrie: Dbi[ByteBuffer] = env.openDbi("Trie", MDB_CREATE)
-    val dbRoot: Dbi[ByteBuffer] = env.openDbi("Root", MDB_CREATE)
-    new LMDBTrieStore[K, V](env, dbTrie, dbRoot)
+    val dbTrie: Dbi[ByteBuffer]  = env.openDbi("Trie", MDB_CREATE)
+    val dbRoots: Dbi[ByteBuffer] = env.openDbi("Roots", MDB_CREATE)
+    new LMDBTrieStore[K, V](env, dbTrie, dbRoots)
   }
 }

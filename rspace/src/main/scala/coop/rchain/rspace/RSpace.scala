@@ -3,14 +3,15 @@ package coop.rchain.rspace
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Leaf
+import coop.rchain.rspace.history.{Branch, Leaf}
 import coop.rchain.rspace.internal._
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.util.Random
 
-class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, K] {
+class RSpace[C, P, A, K](val store: IStore[C, P, A, K], val branch: Branch)
+    extends ISpace[C, P, A, K] {
 
   private val logger: Logger = Logger[this.type]
 
@@ -281,7 +282,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
 
   def reset(hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.putRoot(txn, hash)
+      store.trieStore.putRoot(txn, branch, hash)
       val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, hash)
       store.clear(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })

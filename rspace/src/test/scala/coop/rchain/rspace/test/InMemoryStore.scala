@@ -2,7 +2,7 @@ package coop.rchain.rspace.test
 
 import cats.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.history.ITrieStore
+import coop.rchain.rspace.history.{Branch, ITrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util.{dropIndex, removeFirst}
 import coop.rchain.shared.AttemptOps._
@@ -38,7 +38,8 @@ object State {
 }
 
 class InMemoryStore[C, P, A, K](
-    val trieStore: ITrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]]
+    val trieStore: ITrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]],
+    val trieBranch: Branch
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K] {
   val TRANSACTION_TIMEOUT = 100L
@@ -269,6 +270,7 @@ object InMemoryStore {
 
   def create[C, P, A, K]()(implicit sc: Serialize[C], sk: Serialize[K]): InMemoryStore[C, P, A, K] =
     new InMemoryStore[C, P, A, K](
-      trieStore =
-        new DummyTrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]])
+      new DummyTrieStore[Transaction[State[C, P, A, K]], Blake2b256Hash, GNAT[C, P, A, K]],
+      Branch("dummy")
+    )
 }
