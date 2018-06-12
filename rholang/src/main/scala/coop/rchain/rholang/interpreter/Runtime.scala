@@ -2,6 +2,9 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
 
+import cats.Functor
+import cats.implicits._
+import cats.mtl.FunctorTell
 import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.{ChanVar, Quote}
 import coop.rchain.models.Expr.ExprInstance.GString
@@ -9,6 +12,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{ISpace, LMDBStore, RSpace}
 import monix.eval.Task
@@ -16,9 +20,10 @@ import monix.eval.Task
 import scala.collection.immutable
 
 class Runtime private (val reducer: Reduce[Task],
-                       val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation]) {
-
-  def close(): Unit = space.close()
+                       val space: ISpace[Channel, BindPattern, Seq[Channel], TaggedContinuation],
+                       var errorLog: Runtime.ErrorLog) {
+  def readAndClearErrorVector(): Vector[InterpreterError] = errorLog.readAndClearErrorVector()
+  def close(): Unit                                       = space.close()
 }
 
 object Runtime {
@@ -44,6 +49,40 @@ object Runtime {
         )
     }
 
+  class ErrorLog extends FunctorTell[Task, InterpreterError] {
+    private var errorVector: Vector[InterpreterError] = Vector.empty
+    val functor                                       = implicitly[Functor[Task]]
+    override def tell(e: InterpreterError): Task[Unit] =
+      Task.now {
+        this.synchronized {
+          errorVector = errorVector :+ e
+        }
+      }
+
+    override def writer[A](a: A, e: InterpreterError): Task[A] =
+      Task.now {
+        this.synchronized {
+          errorVector = errorVector :+ e
+        }
+        a
+      }
+
+    override def tuple[A](ta: (InterpreterError, A)): Task[A] =
+      Task.now {
+        this.synchronized {
+          errorVector = errorVector :+ ta._1
+        }
+        ta._2
+      }
+
+    def readAndClearErrorVector(): Vector[InterpreterError] =
+      this.synchronized {
+        val ret = errorVector
+        errorVector = Vector.empty
+        ret
+      }
+  }
+
   def create(dataDir: Path, mapSize: Long)(implicit captureTask: Capture[Task]): Runtime = {
 
     if (Files.notExists(dataDir)) Files.createDirectories(dataDir)
@@ -52,7 +91,9 @@ object Runtime {
       LMDBStore
         .create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dataDir, mapSize)
 
-    val space = new RSpace(store)
+    val space                                            = new RSpace(store)
+    val errorLog                                         = new ErrorLog()
+    implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
 
     lazy val dispatcher: Dispatch[Task, Seq[Channel], TaggedContinuation] =
       RholangAndScalaDispatcher.create(space, dispatchTable)
@@ -88,6 +129,6 @@ object Runtime {
 
     assert(res.forall(_.isEmpty))
 
-    new Runtime(dispatcher.reducer, space)
+    new Runtime(dispatcher.reducer, space, errorLog)
   }
 }

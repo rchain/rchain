@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
 
+import cats.mtl.FunctorTell
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.crypto.codec.Base16
@@ -43,8 +44,8 @@ trait PersistentStoreTester {
 }
 
 class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
-
   "evalExpr" should "handle simple addition" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val addExpr      = EPlus(GInt(7), GInt(8))
@@ -55,9 +56,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val expected = Seq(Expr(GInt(15)))
     result.exprs should be(expected)
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "leave ground values alone" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val groundExpr   = GInt(7)
@@ -68,9 +71,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
 
     val expected = Seq(Expr(GInt(7)))
     result.exprs should be(expected)
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "handle equality between arbitary processes" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val eqExpr       = EEq(GPrivate("private_name"), GPrivate("private_name"))
@@ -80,9 +85,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "evalExpr" should "substitute before comparison." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val reducer           = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       implicit val emptyEnv = Env.makeEnv(Par(), Par())
@@ -92,9 +99,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
     val expected = Seq(Expr(GBool(true)))
     result.exprs should be(expected)
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of Bundle" should "evaluate contents of bundle" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val bundleSend =
@@ -117,6 +126,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List()
           )
       ))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   // Await.result wraps any Exception with ExecutionException so we need to catch it, unwrap and rethrow
@@ -129,6 +139,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     }
 
   it should "throw an error if names are used against their polarity" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     /* for (n <- @bundle+ { y } ) { }  -> for (n <- y) { }
      */
     val y = GString("y")
@@ -136,14 +147,15 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
       Seq(ReceiveBind(Seq(Quote(Par())), Quote(Bundle(y, readFlag = false, writeFlag = true)))),
       Par())
 
-    an[ReduceError] should be thrownBy {
-      withTestSpace { space =>
-        implicit val env = Env[Par]()
-        val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
-        val task         = reducer.eval(receive).map(_ => space.store.toMap)
-        runAndRethrowBoxedErrors(task)
-      }
+    val receiveResult = withTestSpace { space =>
+      implicit val env = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val task         = reducer.eval(receive).map(_ => space.store.toMap)
+      Await.result(task.runAsync, 3.seconds)
     }
+    receiveResult should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(
+      Vector(ReduceError("Trying to read from non-readable channel.")))
 
     /* @bundle- { x } !(7) -> x!(7)
      */
@@ -151,17 +163,19 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     val send =
       Send(Channel(Quote(Bundle(x, writeFlag = false, readFlag = true))), Seq(Expr(GInt(7))))
 
-    an[ReduceError] should be thrownBy {
-      withTestSpace { space =>
-        implicit val env = Env[Par]()
-        val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
-        val task         = reducer.eval(send).map(_ => space.store.toMap)
-        runAndRethrowBoxedErrors(task)
-      }
+    val sendResult = withTestSpace { space =>
+      implicit val env = Env[Par]()
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val task         = reducer.eval(send).map(_ => space.store.toMap)
+      Await.result(task.runAsync, 3.seconds)
     }
+    sendResult should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(
+      Vector(ReduceError("Trying to send on non-writeable channel.")))
   }
 
   "eval of Send" should "place something in the tuplespace." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
       val send =
@@ -184,9 +198,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List()
           )
       ))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   it should "verify that Bundle is writeable before sending on Bundle " in {
+    implicit val errorLog = new Runtime.ErrorLog()
     /* @bundle+ { x } !(7) -> x!(7)
      */
     val x = GString("channel")
@@ -203,9 +219,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     result should be(
       HashMap(List(Channel(Quote(x))) ->
         Row(List(Datum[List[Channel]](List[Channel](Quote(GInt(7))), false)), List())))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of single channel Receive" should "place something in the tuplespace." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val receive =
         Receive(Seq(
@@ -243,9 +261,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             )
           )
       ))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   it should "verify that bundle is readable if receiving on Bundle" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     /* for (@Nil <- @bundle- { y } ) { }  -> for (n <- y) { }
      */
 
@@ -276,9 +296,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 false))
           )
       ))
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Receive" should "meet in the tuplespace and proceed." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val send =
       Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val receive = Receive(
@@ -306,6 +328,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -322,9 +345,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send on (7 + 8) | Receive on 15" should "meet in the tuplespace and proceed." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val send =
       Send(Quote(EPlus(GInt(7), GInt(8))), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val receive = Receive(
@@ -353,6 +378,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -369,9 +395,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send of Receive | Receive" should "meet in the tuplespace and proceed." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val simpleReceive = Receive(
       Seq(ReceiveBind(Seq(Quote(GInt(2))), Quote(GInt(2)))),
       Par(),
@@ -414,6 +442,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               ))
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -439,9 +468,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               ))
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "Simple match" should "capture and add to the environment." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val result = withTestSpace { space =>
       val pattern = Send(ChanVar(FreeVar(0)), List(GInt(7), EVar(FreeVar(1))), false, BitSet())
         .withConnectiveUsed(true)
@@ -480,9 +511,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           )
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send | Send | Receive join" should "meet in the tuplespace and proceed." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val send1 =
       Send(Quote(GString("channel1")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val send2 =
@@ -517,6 +550,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val receiveFirstResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -534,6 +568,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
 
     val interleavedResult = withTestSpace { space =>
       val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
@@ -551,9 +586,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of Send with remainder receive" should "capture the remainder." in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val send =
       Send(Quote(GString("channel")), List(GInt(7), GInt(8), GInt(9)), false, BitSet())
     val receive =
@@ -578,9 +615,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of nth method" should "pick out the nth item from a list" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val nthCall: Expr =
       EMethod("nth", EList(List(GInt(7), GInt(8), GInt(9), GInt(10))), List[Par](GInt(2)))
     val directResult: Par = withTestSpace { space =>
@@ -615,9 +654,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
           Row(List(Datum[List[Channel]](List[Channel](Quote(GString("Success"))), false)), List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of nth method in send position" should "change what is sent" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val nthCallEvalToSend: Expr =
       EMethod("nth",
               EList(
@@ -649,9 +690,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
             List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     import coop.rchain.models.serialization.implicits._
     val proc = Receive(Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GString("channel")))),
                        Par(),
@@ -677,30 +720,34 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   it should "return an error when `toByteArray` is called with arguments" in {
+    implicit val errorLog = new Runtime.ErrorLog()
     val toByteArrayWithArgumentsCall: EMethod =
       EMethod(
         "toByteArray",
         Par(sends = Seq(Send(Quote(GString("result")), List(GString("Success")), false, BitSet()))),
         List[Par](GInt(1)))
 
-    an[ReduceError] should be thrownBy {
-      val result = withTestSpace { space =>
-        val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
-        implicit val env = Env[Par]()
-        val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
-        val inspectTask = for {
-          _ <- nthTask
-        } yield space.store.toMap
-        runAndRethrowBoxedErrors(inspectTask)
-      }
+    val result = withTestSpace { space =>
+      val reducer      = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      implicit val env = Env[Par]()
+      val nthTask      = reducer.eval(toByteArrayWithArgumentsCall)
+      val inspectTask = for {
+        _ <- nthTask
+      } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
     }
+    result should be(HashMap.empty)
+    errorLog.readAndClearErrorVector should be(
+      Vector(ReduceError("Error: toByteArray does not take arguments")))
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
     import coop.rchain.models.serialization.implicits._
+    implicit val errorLog         = new Runtime.ErrorLog()
     val testString                = "testing testing"
     val base16Repr                = Base16.encode(testString.getBytes)
     val proc: Par                 = GString(base16Repr)
@@ -725,6 +772,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
               List())
       )
     )
+    errorLog.readAndClearErrorVector should be(Vector.empty[InterpreterError])
   }
 
   "variable references" should "be substituted before being used." in {
@@ -748,10 +796,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val result = withTestSpace { space =>
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
-      val env         = Env[Par]()
-      val task        = reducer.eval(proc)(env)
-      val inspectTask = for { _ <- task } yield space.store.toMap
+      implicit val errorLog = new Runtime.ErrorLog()
+      val reducer           = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env               = Env[Par]()
+      val task              = reducer.eval(proc)(env)
+      val inspectTask       = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 
@@ -775,10 +824,11 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
     )
 
     val result = withTestSpace { space =>
-      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
-      val env         = Env[Par]()
-      val task        = reducer.eval(proc)(env)
-      val inspectTask = for { _ <- task } yield space.store.toMap
+      implicit val errorLog = new Runtime.ErrorLog()
+      val reducer           = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env               = Env[Par]()
+      val task              = reducer.eval(proc)(env)
+      val inspectTask       = for { _ <- task } yield space.store.toMap
       Await.result(inspectTask.runAsync, 3.seconds)
     }
 

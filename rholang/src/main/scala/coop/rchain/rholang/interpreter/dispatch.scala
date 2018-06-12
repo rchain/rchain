@@ -1,11 +1,12 @@
 package coop.rchain.rholang.interpreter
 
 import cats.Parallel
+import cats.mtl.FunctorTell
 import coop.rchain.catscontrib.Capture
 import coop.rchain.models.Channel.ChannelInstance.Quote
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.errors.InterpreterErrorsM
+import coop.rchain.rholang.interpreter.errors.{InterpreterError, InterpreterErrorsM}
 import coop.rchain.rspace.ISpace
 import coop.rchain.rspace.pure.PureRSpace
 
@@ -50,7 +51,8 @@ object RholangOnlyDispatcher {
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
-      parallel: Parallel[M, F]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+      parallel: Parallel[M, F],
+      ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     val pureSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation] =
       new PureRSpace(tuplespace)
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
@@ -91,7 +93,8 @@ object RholangAndScalaDispatcher {
       implicit
       intepreterErrorsM: InterpreterErrorsM[M],
       captureM: Capture[M],
-      parallel: Parallel[M, F]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
+      parallel: Parallel[M, F],
+      ft: FunctorTell[M, InterpreterError]): Dispatch[M, Seq[Channel], TaggedContinuation] = {
     val pureSpace: PureRSpace[M, Channel, BindPattern, Seq[Channel], TaggedContinuation] =
       new PureRSpace(tuplespace)
     lazy val dispatcher: Dispatch[M, Seq[Channel], TaggedContinuation] =
