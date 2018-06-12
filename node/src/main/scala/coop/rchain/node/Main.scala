@@ -70,10 +70,7 @@ object Main {
             println("Node could not connect to bootstrap node.")
           case Left(error) => println(s"Failed! Reason: '$error")
         }
-      case _ =>
-        Task.delay {
-          conf.printHelp()
-        }
+      case _ => Task.delay(conf.printHelp())
     }
     exec.unsafeRunSync
   }

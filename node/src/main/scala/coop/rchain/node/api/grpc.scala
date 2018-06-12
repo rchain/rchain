@@ -1,5 +1,6 @@
-package coop.rchain.node
+package coop.rchain.node.api
 
+import coop.rchain.node.diagnostics
 import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 
