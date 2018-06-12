@@ -20,7 +20,7 @@ class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
     val active = getActive()
     val error  = eval(terms, active)
     val newHash = error.fold[Either[Throwable, ByteString]](
-      Right(ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)))(Left(_))
+      Right(ByteString.copyFrom(active.space.getCheckpoint().root.bytes.toArray)))(Left(_))
     runtime.put(active)
 
     newHash.map(new Checkpoint(_, runtime))
@@ -60,7 +60,7 @@ class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
 object Checkpoint {
   def fromRuntime(runtime: SyncVar[Runtime]): Checkpoint = {
     val active = runtime.take()
-    val hash   = ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)
+    val hash   = ByteString.copyFrom(active.space.getCheckpoint().root.bytes.toArray)
     runtime.put(active)
 
     new Checkpoint(hash, runtime)
