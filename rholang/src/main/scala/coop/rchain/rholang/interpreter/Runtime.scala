@@ -49,17 +49,17 @@ object Runtime {
         )
     }
 
-  class ErrorLog() extends FunctorTell[Task, InterpreterError] {
+  class ErrorLog extends FunctorTell[Task, InterpreterError] {
     private var errorVector: Vector[InterpreterError] = Vector.empty
     val functor                                       = implicitly[Functor[Task]]
-    def tell(e: InterpreterError): Task[Unit] =
+    override def tell(e: InterpreterError): Task[Unit] =
       Task.now {
         this.synchronized {
           errorVector = errorVector :+ e
         }
       }
 
-    def writer[A](a: A, e: InterpreterError): Task[A] =
+    override def writer[A](a: A, e: InterpreterError): Task[A] =
       Task.now {
         this.synchronized {
           errorVector = errorVector :+ e
@@ -67,7 +67,7 @@ object Runtime {
         a
       }
 
-    def tuple[A](ta: (InterpreterError, A)): Task[A] =
+    override def tuple[A](ta: (InterpreterError, A)): Task[A] =
       Task.now {
         this.synchronized {
           errorVector = errorVector :+ ta._1
