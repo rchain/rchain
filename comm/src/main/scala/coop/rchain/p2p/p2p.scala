@@ -17,6 +17,7 @@ import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import com.google.protobuf.ByteString
 import coop.rchain.comm.transport._, CommunicationResponse._, CommMessages._
+import coop.rchain.shared._
 
 object Network {
 

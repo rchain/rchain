@@ -27,6 +27,7 @@ import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
+import coop.rchain.shared._
 
 object GrpcServer {
 

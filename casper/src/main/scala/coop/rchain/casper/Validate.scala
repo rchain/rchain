@@ -12,7 +12,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
 
-import coop.rchain.p2p.effects.Log
+import coop.rchain.shared.Log
 
 import scala.util.Try
 

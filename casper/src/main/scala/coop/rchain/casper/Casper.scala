@@ -15,7 +15,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared.AtomicSyncVar
+import coop.rchain.shared.{AtomicSyncVar, Log, Time}
 
 import scala.annotation.tailrec
 import scala.collection.mutable

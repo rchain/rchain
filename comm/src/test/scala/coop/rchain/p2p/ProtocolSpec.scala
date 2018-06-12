@@ -11,6 +11,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.comm.discovery._
 import EffectsTestInstances._
+import coop.rchain.shared._
 
 class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 

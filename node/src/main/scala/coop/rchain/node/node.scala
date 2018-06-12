@@ -27,6 +27,7 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
+import coop.rchain.shared._
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
