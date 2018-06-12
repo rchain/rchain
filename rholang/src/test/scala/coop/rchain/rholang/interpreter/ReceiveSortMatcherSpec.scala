@@ -74,7 +74,7 @@ class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
           emptyMap
         )
       )
-    val result = ReceiveBindsSortMatcher.preSortBinds[Coeval, VarSort](binds).value
+    val result = ReceiveBindsSortMatcher.preSortBinds[Coeval, VarSort](binds)
     result should be(sortedBinds)
   }
 }
