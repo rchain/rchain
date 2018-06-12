@@ -9,7 +9,8 @@ final case class BlockDag(idToBlocks: Map[Int, BlockMessage],
                           blockLookup: Map[BlockHash, BlockMessage],
                           childMap: Map[BlockHash, Set[BlockHash]],
                           latestMessages: Map[Validator, BlockHash],
-                          currentId: Int)
+                          currentId: Int,
+                          currentSeqNum: Map[Validator, Int])
 
 object BlockDag {
   def apply(): BlockDag =
@@ -18,6 +19,7 @@ object BlockDag {
       HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[BlockHash, HashSet[BlockHash]],
       HashMap.empty[Validator, BlockHash],
-      0
+      0,
+      HashMap.empty[Validator, Int]
     )
 }

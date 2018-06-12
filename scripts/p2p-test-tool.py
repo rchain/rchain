@@ -23,7 +23,7 @@ parser.add_argument("-b", "--boot",
 parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="--port 30304 --standalone",
+                    default="run --port 30304 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
@@ -55,7 +55,7 @@ parser.add_argument("-n", "--network",
 parser.add_argument("--peer-command",
                     dest='peer_command',
                     type=str,
-                    default="--bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@bootstrap.rchain.coop:30304",
+                    default="run --bootstrap rnode://23ea7ec9e3e42054c062c879d8c766a111f3ad37@bootstrap.rchain.coop:30304",
                     help="peer container run command")
 parser.add_argument("-p", "--peers-amount",
                     dest='peers_amount',
@@ -111,7 +111,7 @@ if len(sys.argv)==1:
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
-RNODE_CMD = 'rnode'
+RNODE_CMD = '/opt/docker/bin/rnode'
 
 
 def main():
@@ -207,12 +207,12 @@ def run_tests():
 
 
 def deploy_demo():
-    cmd = f"{RNODE_CMD} --deploy-demo"
+    cmd = f"{RNODE_CMD} deploy-demo"
     for container in client.containers.list(all=True, filters={"name":f"peer\d.{args.network}"}):
         try:
             r = container.exec_run(cmd=cmd, user='root', detach=True)
             if r.exit_code:
-                raise Exception(f"ERROR: There was an issue executing --demo-deploy command on {container.name}")
+                raise Exception(f"ERROR: There was an issue executing --deploy-demo command on {container.name}")
         except Exception as e:
             print(e)
 
@@ -223,7 +223,7 @@ def test_node_eval_of_rholang_files(container):
     r = container.exec_run(['sh', '-c', cmd])
     for file_path in r.output.decode('utf-8').splitlines():
         print(file_path)
-        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} --eval {file_path}'])
+        eval_r = container.exec_run(['sh', '-c', f'{RNODE_CMD} eval {file_path}'])
         for line in eval_r.output.decode('utf-8').splitlines():
             if 'ERROR' in line.upper():
                 print(line)
@@ -414,7 +414,7 @@ def test_repl_load(container):
             cmd = (f"sudo docker run -u root --rm -it -v {repl_node[i]['volume'].name}:{args.rnode_directory} "
                    f"--cpuset-cpus={args.cpuset_cpus} --memory={args.memory} --name {repl_node[i]['name']} "
                    f"--network {args.network} {args.image} "
-                   f"--grpc-host {container.name} -r")
+                   f"--grpc-host {container.name} repl")
             print(f"docker repl cmd: {cmd}")
             repl_cmds = args.repl_cmds
             conn = replwrap.REPLWrapper(cmd, args.prompt, None)

@@ -4,7 +4,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.DagOperations
-import coop.rchain.casper.util.ProtoUtil.{mainParent, parents, weightMap}
+import coop.rchain.casper.util.ProtoUtil.{parents, weightFromValidator, weightMap}
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{Map, Set}
@@ -73,9 +73,7 @@ object Estimator {
             val b         = blockLookup(hash)
             val currScore = acc.getOrElse(hash, 0)
 
-            val validatorWeight = mainParent(blockLookup, b)
-              .map(weightMap(_).getOrElse(validator, 0))
-              .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+            val validatorWeight = weightFromValidator(b, validator, blockLookup)
 
             acc.updated(hash, currScore + validatorWeight)
         }

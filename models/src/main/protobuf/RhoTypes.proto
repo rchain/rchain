@@ -172,7 +172,7 @@ message ETuple {
 }
 
 message ESet {
-    repeated Par ps = 1 ;
+    repeated Par ps = 1;
     bytes locallyFree = 3 [(scalapb.field).type = "scala.collection.immutable.BitSet"];
     bool connective_used = 4;
 }

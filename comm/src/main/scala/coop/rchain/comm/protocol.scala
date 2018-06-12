@@ -16,7 +16,6 @@ import com.google.protobuf.ByteString
   */
 trait ProtocolMessage {
   val proto: Protocol
-  val timestamp: Long
 
   def header: Option[Header] = proto.header
 
