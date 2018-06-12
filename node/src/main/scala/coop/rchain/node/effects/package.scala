@@ -1,19 +1,19 @@
 package coop.rchain.node
 
 import coop.rchain.comm.protocol.rchain.Packet
-import coop.rchain.p2p, p2p.NetworkAddress
+import coop.rchain.p2p
 import coop.rchain.p2p.effects._
 import coop.rchain.comm._, CommError._
 import coop.rchain.metrics.Metrics
 import java.io.{File, FileInputStream, FileOutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
-
 import scala.tools.jline.console._, completer.StringsCompleter
-
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, TaskContrib._
 import monix.eval.Task
 import scala.concurrent.ExecutionContext
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 package object effects {
 

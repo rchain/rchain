@@ -1,8 +1,9 @@
-package coop.rchain.p2p.effects
+package coop.rchain.comm.discovery
+
+import coop.rchain.comm.transport._
 
 import cats.Monad
 import cats.data.EitherT
-
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.{MonadTrans, _}
 import coop.rchain.comm.{PeerNode, ProtocolMessage}
