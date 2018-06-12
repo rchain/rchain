@@ -103,7 +103,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
         val consumeRef    = Consume.create(channels, patterns, continuation, persist)
         val currentEvents = eventLog.take()
-        eventLog.put(currentEvents :+ consumeRef)
+        eventLog.put(consumeRef +: currentEvents)
 
         /*
          * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -137,7 +137,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
             val commRef       = COMM(consumeRef, dataCandidates.map(_.datum.source))
             val currentEvents = eventLog.take()
-            eventLog.put(currentEvents :+ commRef)
+            eventLog.put(commRef +: currentEvents)
 
             dataCandidates
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
@@ -167,7 +167,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
       val consumeRef    = Consume.create(channels, patterns, continuation, true)
       val currentEvents = eventLog.take()
-      eventLog.put(currentEvents :+ consumeRef)
+      eventLog.put(consumeRef +: currentEvents)
 
       /*
        * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -202,7 +202,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
           val commRef       = COMM(consumeRef, dataCandidates.map(_.datum.source))
           val currentEvents = eventLog.take()
-          eventLog.put(currentEvents :+ commRef)
+          eventLog.put(commRef +: currentEvents)
 
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
@@ -248,7 +248,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
         val produceRef    = Produce.create(channel, data, persist)
         val currentEvents = eventLog.take()
-        eventLog.put(currentEvents :+ produceRef)
+        eventLog.put(produceRef +: currentEvents)
 
         /*
          * Find produce candidate
@@ -296,7 +296,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
 
             val commRef       = COMM(consumeRef, dataCandidates.map(_.datum.source))
             val currentEvents = eventLog.take()
-            eventLog.put(currentEvents :+ commRef)
+            eventLog.put(commRef +: currentEvents)
 
             if (!persistK) {
               store.removeWaitingContinuation(txn, channels, continuationIndex)

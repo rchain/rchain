@@ -393,10 +393,10 @@ trait HistoryActionsTests
 
     val Checkpoint(_, log) = space.getCheckpoint()
 
-    log should contain theSameElementsAs Seq(expectedConsume,
-                                             expectedProduce1,
-                                             expectedProduce2,
-                                             commEvent)
+    log should contain theSameElementsInOrderAs Seq(commEvent,
+                                                    expectedProduce2,
+                                                    expectedProduce1,
+                                                    expectedConsume)
   }
 }
 
