@@ -215,6 +215,7 @@ sealed abstract class MultiParentCasperInstances {
           dag <- Capture[F].capture { _blockDag.get }
           bn  <- Validate.blockNumber[F](block, dag)
           p   <- Validate.parents[F](block, genesis, dag)
+          s   <- Validate.sequenceNumber[F](block, dag)
           //only try checkpoint if other validity checks pass
           ch <- if (bn && p) validateTransactions(block)
                else Monad[F].pure[Option[RuntimeManager]](None)
