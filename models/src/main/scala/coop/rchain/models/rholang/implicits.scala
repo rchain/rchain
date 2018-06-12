@@ -1,7 +1,9 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.models.rholang
 
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
@@ -40,9 +42,9 @@ object implicits {
     new Expr(exprInstance = ETupleBody(e))
   implicit def fromEList(e: ETuple): Expr = apply(e)
 
-  def apply(e: ESet): Expr =
+  def apply(e: ParSet): Expr =
     new Expr(exprInstance = ESetBody(e))
-  implicit def fromESet(e: ESet): Expr = apply(e)
+  implicit def fromESet(e: ParSet): Expr = apply(e)
 
   def apply(e: EMap): Expr =
     new Expr(exprInstance = EMapBody(e))
@@ -139,7 +141,7 @@ object implicits {
     )
 
   def apply(c: Connective): Par =
-    new Par(connectives = Vector(c), connectiveUsed = true)
+    new Par(connectives = Vector(c), connectiveUsed = ConnectiveLocallyFree.connectiveUsed(c))
 
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
@@ -204,7 +206,7 @@ object implicits {
     def prepend(c: Connective): Par =
       p.copy(
         connectives = c +: p.connectives,
-        connectiveUsed = true
+        connectiveUsed = p.connectiveUsed || ConnectiveLocallyFree.connectiveUsed(c)
       )
 
     def singleEval(): Option[Channel] =
@@ -243,6 +245,13 @@ object implicits {
           case Seq(single) => Some(single)
           case _           => None
         }
+      } else {
+        None
+      }
+
+    def singleConnective(): Option[Connective] =
+      if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.size == 1) {
+        Some(p.connectives.head)
       } else {
         None
       }
@@ -318,7 +327,7 @@ object implicits {
         case GByteArray(_)              => BitSet()
         case EListBody(e)               => e.locallyFree
         case ETupleBody(e)              => e.locallyFree
-        case ESetBody(e)                => e.locallyFree
+        case ESetBody(e)                => e.locallyFree.value
         case EMapBody(e)                => e.locallyFree
         case EVarBody(EVar(v))          => VarLocallyFree.locallyFree(v.get)
         case EEvalBody(chan)            => ChannelLocallyFree.locallyFree(chan)
@@ -410,5 +419,19 @@ object implicits {
     new HasLocallyFree[MatchCase] {
       def connectiveUsed(mc: MatchCase) = mc.source.get.connectiveUsed
       def locallyFree(mc: MatchCase)    = mc.source.get.locallyFree
+    }
+
+  implicit val ConnectiveLocallyFree: HasLocallyFree[Connective] =
+    new HasLocallyFree[Connective] {
+      def connectiveUsed(conn: Connective) =
+        conn.connectiveInstance match {
+          case ConnAndBody(_) => true
+          case ConnOrBody(_)  => true
+          case ConnNotBody(_) => true
+          case VarRefBody(_)  => false
+        }
+      // Because connectives can only be used in patterns, we don't need to
+      // calculate what is locally free inside
+      def locallyFree(conn: Connective) = BitSet()
     }
 }

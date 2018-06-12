@@ -1045,6 +1045,28 @@ trait StorageActionsTests extends StorageTestsBase[String, Pattern, String, Stri
     store.eventsCounter.getConsumesCommCount shouldBe 3
     store.eventsCounter.getInstallCommCount shouldBe 0
   }
+
+  "A persistent produce" should "be available for multiple matches (CORE-633)" in withTestSpace {
+    space =>
+      val channel = "chan"
+
+      val r1 = space.produce(channel, data = "datum", persist = true)
+
+      r1 shouldBe None
+
+      val r2 = space.consume(
+        List(channel, channel),
+        List(Wildcard, Wildcard),
+        new StringsCaptor,
+        persist = false
+      )
+
+      r2 shouldBe defined
+
+      runK(r2)
+
+      getK(r2).results should contain(List("datum", "datum"))
+  }
 }
 
 class InMemoryStoreStorageActionsTests

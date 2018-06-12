@@ -2,11 +2,12 @@ package coop.rchain.p2p
 
 import org.scalatest._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, NetworkProtocol._
+import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import cats._
 import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
+import coop.rchain.comm.transport._, CommMessages._
 
 import EffectsTestInstances._
 

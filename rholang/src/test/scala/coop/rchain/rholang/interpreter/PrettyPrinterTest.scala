@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.{Send, _}
-import coop.rchain.rholang.interpreter.implicits.{GPrivate, _}
+import coop.rchain.models.rholang.implicits.{GPrivate, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
@@ -48,7 +48,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(
     Par(),
-    DebruijnIndexMap[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
+    IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DebruijnLevelMap[VarSort]())
 
   "List" should "Print" in {
@@ -82,7 +82,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
 
-  val inputs = ProcVisitInputs(Par(), DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
   val p: Par = Par()
 
@@ -576,7 +576,7 @@ class IncrementTester extends FlatSpec with Matchers {
 
 class NamePrinterSpec extends FlatSpec with Matchers {
 
-  val inputs = NameVisitInputs(DebruijnIndexMap[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
 
   "NameWildcard" should "Print" in {
     val nw = new NameWildcard()

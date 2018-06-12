@@ -25,7 +25,8 @@ import coop.rchain.shared.Resources._
 import monix.eval.Task
 import monix.execution.Scheduler
 import diagnostics.MetricsServer
-import coop.rchain.node.effects.TLNodeDiscovery
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
@@ -95,7 +96,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   /** Configuration */
   private val host        = conf.run.localhost
   private val address     = s"rnode://$name@$host:${conf.run.port()}"
-  private val src         = p2p.NetworkAddress.parse(address).right.get
+  private val src         = PeerNode.parse(address).right.get
   private val storagePath = conf.run.data_dir().resolve("rspace")
   private val storageSize = conf.run.map_size()
 
@@ -154,7 +155,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   }
   implicit val turanOracleEffect: SafetyOracle[Effect] = SafetyOracle.turanOracle[Effect]
   implicit val casperEffect: MultiParentCasper[Effect] = MultiParentCasper.hashSetCasper[Effect](
-    storagePath,
+    storagePath.resolve("casper"),
     storageSize,
     genesisBlock(genesisBonds)
   )
@@ -286,6 +287,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
                   .toEffect >>= (addr => p2p.Network.connectToBootstrap[Effect](addr)))
       _ <- if (res.isRight) MonadOps.forever(p2p.Network.findAndConnect[Effect], 0)
           else ().pure[Effect]
+      _ <- casperEffect.close()
       _ <- exit0.toEffect
     } yield ()
 

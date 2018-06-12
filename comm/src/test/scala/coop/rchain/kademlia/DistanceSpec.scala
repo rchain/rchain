@@ -1,4 +1,4 @@
-package coop.rchain.kademlia
+package coop.rchain.comm.discovery
 
 import org.scalatest._
 import scala.util.{Success, Try}
@@ -8,7 +8,7 @@ import cats._
 
 import coop.rchain.catscontrib.Capture
 import coop.rchain.comm._
-import coop.rchain.p2p.effects.Ping
+import coop.rchain.comm.discovery._
 
 object b {
   val rand                   = new scala.util.Random(System.currentTimeMillis)
