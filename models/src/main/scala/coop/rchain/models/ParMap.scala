@@ -27,4 +27,13 @@ object ParMap {
   def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean, locallyFree: BitSet): ParMap =
     new ParMap(SortedParMap(seq), connectiveUsed, Coeval.delay(locallyFree).memoize)
 
+  def apply(seq: Seq[(Par, Par)], connectiveUsed: Boolean): ParMap =
+    ParMap(seq, connectiveUsed, Coeval.delay(updateLocallyFree(seq)))
+
+  def updateLocallyFree(ps: Seq[(Par, Par)]): BitSet =
+    ps.foldLeft(BitSet()) {
+      case (acc, (key, value)) =>
+        acc | key.locallyFree | value.locallyFree
+    }
+
 }
