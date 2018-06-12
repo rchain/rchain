@@ -7,9 +7,10 @@ import java.util.concurrent.TimeoutException
 import cats._
 import cats.implicits._
 import coop.rchain.catscontrib.Capture._
+import coop.rchain.models.rholang.sort.ParSortMatcher
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.implicits.VectorPar
+import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
@@ -133,13 +134,10 @@ object RholangCLI {
                                  DebruijnIndexMap[VarSort](),
                                  DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
-        par <- ParSortMatcher
-                .sortMatch[Coeval](Some(outputs.par))
-                .map(_.term)
-                .flatMap {
-                  case None      => Coeval.raiseError[Par](SortMatchError("ParSortMatcher failed"))
-                  case Some(par) => Coeval.delay(par)
-                }
+        par <- Coeval.delay(
+                ParSortMatcher
+                  .sortMatch(outputs.par)
+                  .term)
       } yield par
     } catch {
       case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))

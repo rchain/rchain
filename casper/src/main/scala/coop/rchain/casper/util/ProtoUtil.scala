@@ -78,11 +78,27 @@ object ProtoUtil {
       mainParent <- blocks.get(parentHash)
     } yield mainParent
 
+  def weightFromValidator(b: BlockMessage,
+                          validator: ByteString,
+                          blocks: collection.Map[ByteString, BlockMessage]): Int =
+    mainParent(blocks, b)
+      .map(weightMap(_).getOrElse(validator, 0))
+      .getOrElse(weightMap(b).getOrElse(validator, 0)) //no parents means genesis -- use itself
+
+  def weightFromSender(b: BlockMessage, blocks: collection.Map[ByteString, BlockMessage]): Int =
+    weightFromValidator(b, b.sender, blocks)
+
   def parents(b: BlockMessage): Seq[ByteString] =
     b.header.map(_.parentsHashList).getOrElse(List.empty[ByteString])
 
   def deploys(b: BlockMessage): Seq[Deploy] =
     b.body.map(_.newCode).getOrElse(List.empty[Deploy])
+
+  def tuplespace(b: BlockMessage): Option[ByteString] =
+    for {
+      bd <- b.body
+      ps <- bd.postState
+    } yield ps.tuplespace
 
   def bonds(b: BlockMessage): Seq[Bond] =
     (for {

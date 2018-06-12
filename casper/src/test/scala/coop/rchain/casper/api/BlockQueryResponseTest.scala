@@ -22,7 +22,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val blockNumber = 0L
-    val timestamp   = 1527191663
+    val timestamp   = 1527191663L
     val ps          = RChainState().withBlockNumber(blockNumber)
     val body        = Body().withPostState(ps)
     val header      = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
@@ -33,7 +33,7 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
   val secondHashString                  = "123456789101112131415161718192"
   val blockHash: BlockHash              = ProtoUtil.stringToByteString(secondHashString)
   val blockNumber                       = 1L
-  val timestamp                         = 1527191665
+  val timestamp                         = 1527191665L
   val ps: RChainState                   = RChainState().withBlockNumber(blockNumber)
   val deployCount                       = 10
   val randomDeploys: IndexedSeq[Deploy] = (0 until deployCount).map(_ => Deploy.defaultInstance)
@@ -61,10 +61,12 @@ class BlockQueryResponseTest extends FlatSpec with Matchers {
           ),
           HashMap.empty[BlockHash, HashSet[BlockHash]],
           HashMap.empty[Validator, BlockHash],
-          0
+          0,
+          HashMap.empty[Validator, Int]
         ).pure[F]
       def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
         Applicative[F].pure[Option[Checkpoint]](None)
+      def close(): F[Unit] = ().pure[F]
     }
   implicit val casperEffect = testCasper[Id]
 

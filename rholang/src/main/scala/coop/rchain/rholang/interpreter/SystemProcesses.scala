@@ -10,7 +10,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{ISpace, IStore}
 import monix.eval.Task
-import implicits._
+import coop.rchain.models.rholang.implicits._
 
 import scala.util.Try
 
@@ -51,7 +51,7 @@ object SystemProcesses {
   }
 
   object IsByteArray {
-    import implicits._
+    import coop.rchain.models.rholang.implicits._
     def unapply(p: Channel): Option[Array[Byte]] =
       p match {
         case Channel(Quote(par)) =>

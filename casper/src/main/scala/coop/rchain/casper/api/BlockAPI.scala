@@ -62,12 +62,7 @@ object BlockAPI {
                  .tsCheckpoint(tsHash)
                  .map(maybeCheckPoint => {
                    maybeCheckPoint
-                     .map(checkpoint => {
-                       val ts     = checkpoint.toTuplespace
-                       val result = ts.storageRepr
-                       ts.delete()
-                       result
-                     })
+                     .map(_.storageRepr)
                      .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
                  })
       timestamp       <- header.timestamp.pure[F]

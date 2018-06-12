@@ -20,7 +20,10 @@ object Dispatch {
 
   // TODO: Make this function total
   def buildEnv(dataList: Seq[Seq[Channel]]): Env[Par] =
-    Env.makeEnv(dataList.flatten.map({ case Channel(Quote(p)) => p }): _*)
+    Env.makeEnv(dataList.flatten.map({
+      case Channel(Quote(p)) => p
+      case Channel(_)        => Par() // Should never happen
+    }): _*)
 }
 
 class RholangOnlyDispatcher[M[_]] private (_reducer: => Reduce[M])(implicit captureM: Capture[M])
