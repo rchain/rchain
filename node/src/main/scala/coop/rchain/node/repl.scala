@@ -3,6 +3,7 @@ package coop.rchain.node
 import coop.rchain.shared.StringOps._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski.kp
+import coop.rchain.node.effects.ReplClient
 
 class ReplRuntime(conf: Conf) {
 

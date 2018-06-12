@@ -9,6 +9,7 @@ import scala.collection.JavaConverters._
 
 import coop.rchain.comm._
 import coop.rchain.casper.util.comm.{DeployRuntime, DeployService, GrpcDeployService}
+import coop.rchain.node.effects.{GrpcReplClient, ReplClient}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16

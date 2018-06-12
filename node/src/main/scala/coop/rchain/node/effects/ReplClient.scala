@@ -1,4 +1,4 @@
-package coop.rchain.node
+package coop.rchain.node.effects
 
 import java.io.File
 
