@@ -78,7 +78,7 @@ lazy val comm = (project in file("comm"))
       PB.gens.java                        -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
     )
-  ).dependsOn(shared)
+  ).dependsOn(shared, crypto)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
