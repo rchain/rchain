@@ -111,7 +111,7 @@ if len(sys.argv)==1:
 # Define globals
 args = parser.parse_args()
 client = docker.from_env()
-RNODE_CMD = 'rnode'
+RNODE_CMD = '/opt/docker/bin/rnode'
 
 
 def main():
@@ -212,7 +212,7 @@ def deploy_demo():
         try:
             r = container.exec_run(cmd=cmd, user='root', detach=True)
             if r.exit_code:
-                raise Exception(f"ERROR: There was an issue executing --demo-deploy command on {container.name}")
+                raise Exception(f"ERROR: There was an issue executing --deploy-demo command on {container.name}")
         except Exception as e:
             print(e)
 
