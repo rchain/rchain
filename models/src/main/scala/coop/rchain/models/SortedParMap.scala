@@ -15,7 +15,7 @@ case class SortedParMap(private val ps: Map[Par, Par])
 
   override def iterator: Iterator[(Par, Par)] = sortedMap.toIterator
 
-  override def +[V1 >: Par](kv: (Par, V1)): Map[Par, V1] = sortedMap.toMap
+  override def +[V1 >: Par](kv: (Par, V1)): Map[Par, V1] = sortedMap.toMap + kv
 
   override def -(key: Par): SortedParMap = SortedParMap(ps - key)
 
