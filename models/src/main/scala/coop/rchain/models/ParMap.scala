@@ -5,7 +5,7 @@ import monix.eval.Coeval
 import scala.collection.immutable.BitSet
 import coop.rchain.models.rholang.implicits._
 
-case class ParMap private (ps: SortedParMap, connectiveUsed: Boolean, locallyFree: Coeval[BitSet]) {
+case class ParMap(ps: SortedParMap, connectiveUsed: Boolean, locallyFree: Coeval[BitSet]) {
 
   override def equals(o: scala.Any): Boolean = o match {
     case parMap: ParMap =>
