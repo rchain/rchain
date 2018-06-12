@@ -129,10 +129,8 @@ object RholangCLI {
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
-        term <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
-        inputs = ProcVisitInputs(VectorPar(),
-                                 DebruijnIndexMap[VarSort](),
-                                 DebruijnLevelMap[VarSort]())
+        term    <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
+        inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
         par <- Coeval.delay(
                 ParSortMatcher

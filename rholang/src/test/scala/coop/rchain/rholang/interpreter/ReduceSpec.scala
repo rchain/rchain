@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
@@ -721,6 +722,70 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
                 Datum[List[Channel]](
                   List[Channel](Quote(Expr(GByteArray(ByteString.copyFrom(testString.getBytes))))),
                   persist = false)),
+              List())
+      )
+    )
+  }
+
+  "variable references" should "be substituted before being used." in {
+    val proc = New(
+      bindCount = 1,
+      p = Par(
+        sends = List(
+          Send(chan = Channel(ChanVar(BoundVar(0))),
+               data = List(EEvalBody(ChanVar(BoundVar(0)))),
+               persistent = false)),
+        receives = List(
+          Receive(
+            binds = List(
+              ReceiveBind(patterns = List(Quote(Connective(VarRefBody(VarRef(0, 1))))),
+                          source = ChanVar(BoundVar(0)),
+                          freeCount = 0)),
+            body = Send(chan = Quote(GString("result")), data = List(GString("true"))),
+            bindCount = 0
+          ))
+      )
+    )
+
+    val result = withTestSpace { space =>
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env         = Env[Par]()
+      val task        = reducer.eval(proc)(env)
+      val inspectTask = for { _ <- task } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("true"))), persist = false)),
+              List())
+      )
+    )
+  }
+  it should "be substituted before being used in a match." in {
+    val proc = New(
+      bindCount = 1,
+      p = Match(
+        target = EVar(BoundVar(0)),
+        cases = List(
+          MatchCase(pattern = Connective(VarRefBody(VarRef(0, 1))),
+                    source = Send(chan = Quote(GString("result")), data = List(GString("true")))))
+      )
+    )
+
+    val result = withTestSpace { space =>
+      val reducer     = RholangOnlyDispatcher.create[Task, Task.Par](space).reducer
+      val env         = Env[Par]()
+      val task        = reducer.eval(proc)(env)
+      val inspectTask = for { _ <- task } yield space.store.toMap
+      Await.result(inspectTask.runAsync, 3.seconds)
+    }
+
+    result should be(
+      HashMap(
+        List(Channel(Quote(GString("result")))) ->
+          Row(List(Datum[List[Channel]](List[Channel](Quote(GString("true"))), persist = false)),
               List())
       )
     )

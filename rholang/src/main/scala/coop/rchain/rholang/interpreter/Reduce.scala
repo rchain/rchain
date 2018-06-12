@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.implicits._
-import cats.{Applicative, Parallel, Eval => _}
+import cats.{Applicative, FlatMap, Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Capture
 import coop.rchain.crypto.codec.Base16
@@ -86,7 +86,7 @@ object Reduce {
 
       for {
         substData <- data.toList.traverse(
-                      substitutePar[M].substitute(_).map(p => Channel(Quote(p))))
+                      substitutePar[M].substitute(_)(0, env).map(p => Channel(Quote(p))))
         res <- tupleSpace.produce(Channel(chan), substData, persist = persistent)
         _   <- go(res)
       } yield ()
@@ -203,7 +203,7 @@ object Reduce {
         quote <- eval(send.chan.get)
         data  <- send.data.toList.traverse(x => evalExpr(x))
 
-        subChan <- substituteQuote[M].substitute(quote)
+        subChan <- substituteQuote[M].substitute(quote)(0, env)
         unbundled <- subChan.value.singleBundle() match {
                       case Some(value) =>
                         if (!value.writeFlag) {
@@ -221,10 +221,13 @@ object Reduce {
       for {
         binds <- receive.binds.toList
                   .traverse(rb =>
-                    unbundleReceive(rb).map(q =>
-                      (BindPattern(rb.patterns, rb.remainder, rb.freeCount), q)))
+                    for {
+                      q <- unbundleReceive(rb)
+                      substPatterns <- rb.patterns.toList.traverse(pattern =>
+                                        substituteChannel[M].substitute(pattern)(1, env))
+                    } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q))
         // TODO: Allow for the environment to be stored with the body in the Tuplespace
-        substBody <- substitutePar[M].substitute(receive.body.get)(env.shift(receive.bindCount))
+        substBody <- substitutePar[M].substitute(receive.body.get)(0, env.shift(receive.bindCount))
         _         <- consume(binds, substBody, receive.persistent)
       } yield ()
 
@@ -297,28 +300,36 @@ object Reduce {
           )
         )
 
-      @annotation.tailrec
-      def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] =
-        cases match {
-          case Nil => Applicative[M].pure(())
-          case singleCase +: caseRem =>
-            val matchResult = SpatialMatcher
-              .spatialMatch(target, singleCase.pattern.get)
-              .runS(SpatialMatcher.emptyMap)
-            matchResult match {
-              case None => firstMatch(target, caseRem)
-              case Some(freeMap) => {
-                val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
-                eval(singleCase.source.get)(newEnv)
+      def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] = {
+        def firstMatchM(
+            state: Tuple2[Par, Seq[MatchCase]]): M[Either[Tuple2[Par, Seq[MatchCase]], Unit]] = {
+          val (target, cases) = state
+          cases match {
+            case Nil => Applicative[M].pure(Right(()))
+            case singleCase +: caseRem =>
+              substitutePar[M].substitute(singleCase.pattern.get)(1, env).flatMap { pattern =>
+                val matchResult =
+                  SpatialMatcher
+                    .spatialMatch(target, pattern)
+                    .runS(SpatialMatcher.emptyMap)
+                matchResult match {
+                  case None => Applicative[M].pure(Left((target, caseRem)))
+                  case Some(freeMap) => {
+                    val newEnv: Env[Par] = addToEnv(env, freeMap, singleCase.freeCount)
+                    eval(singleCase.source.get)(newEnv).map(Right(_))
+                  }
+                }
               }
-            }
+          }
         }
+        FlatMap[M].tailRecM[Tuple2[Par, Seq[MatchCase]], Unit]((target, cases))(firstMatchM)
+      }
 
       for {
         evaledTarget <- evalExpr(mat.target.get)
         // TODO(kyle): Make the matcher accept an environment, instead of
         // substituting it.
-        substTarget <- substitutePar[M].substitute(evaledTarget)(env)
+        substTarget <- substitutePar[M].substitute(evaledTarget)(0, env)
         _           <- firstMatch(substTarget, mat.cases)
       } yield ()
     }
@@ -343,7 +354,7 @@ object Reduce {
     private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Quote] =
       for {
         quote <- eval(rb.source.get)
-        subst <- substituteQuote[M].substitute(quote)
+        subst <- substituteQuote[M].substitute(quote)(0, env)
         // Check if we try to read from bundled channel
         unbndl <- subst.quote.get.singleBundle() match {
                    case Some(value) =>
@@ -453,15 +464,15 @@ object Reduce {
             v1 <- evalExpr(p1.get)
             v2 <- evalExpr(p2.get)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substitutePar[M].substitute(v1)
-            sv2 <- substitutePar[M].substitute(v2)
+            sv1 <- substitutePar[M].substitute(v1)(0, env)
+            sv2 <- substitutePar[M].substitute(v2)(0, env)
           } yield GBool(sv1 == sv2)
         case ENeqBody(ENeq(p1, p2)) =>
           for {
             v1  <- evalExpr(p1.get)
             v2  <- evalExpr(p2.get)
-            sv1 <- substitutePar[M].substitute(v1)
-            sv2 <- substitutePar[M].substitute(v2)
+            sv1 <- substitutePar[M].substitute(v1)(0, env)
+            sv2 <- substitutePar[M].substitute(v2)(0, env)
           } yield GBool(sv1 != sv2)
         case EAndBody(EAnd(p1, p2)) =>
           for {
