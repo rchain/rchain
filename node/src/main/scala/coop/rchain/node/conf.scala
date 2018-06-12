@@ -82,7 +82,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
         .getOrElse(Paths.get(data_dir().toString, "node.certificate.pem"))
 
     def keyPath: Path =
-      certificate.toOption
+      key.toOption
         .getOrElse(Paths.get(data_dir().toString, "node.key.pem"))
 
     def fetchHost(): String =

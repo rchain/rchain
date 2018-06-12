@@ -33,22 +33,15 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
   def checkClientTrusted(x509Certificates: Array[X509Certificate],
                          authType: String,
                          sslEngine: SSLEngine): Unit = {
-    val sslSession = Option(sslEngine.getHandshakeSession)
+    Option(sslEngine.getHandshakeSession)
       .getOrElse(throw new CertificateException("No handshake session"))
 
-    Option(sslEngine.getSSLParameters.getEndpointIdentificationAlgorithm) match {
-      case Some(identityAlg) if identityAlg.nonEmpty =>
-        val cert = x509Certificates.head
-        val peerHost = CertificateHelper
-          .publicAddress(cert.getPublicKey)
-          .map(_.map("%02x".format(_)).mkString)
-          .getOrElse(
-            throw new CertificateException(s"Certificate's public key has the wrong algorithm"))
-        checkIdentity(Some(peerHost), cert, identityAlg)
-
-      case _ =>
-        throw new CertificateException("No endpoint identification algorithm")
-    }
+    val cert = x509Certificates.head
+    val peerHost = CertificateHelper
+      .publicAddressString(cert.getPublicKey)
+      .getOrElse(
+        throw new CertificateException(s"Certificate's public key has the wrong algorithm"))
+    checkIdentity(Some(peerHost), cert, "https")
   }
 
   def checkClientTrusted(x509Certificates: Array[X509Certificate], authType: String): Unit =
@@ -72,8 +65,8 @@ private class HostnameTrustManager extends X509ExtendedTrustManager {
         val peerHost = Option(sslSession.getPeerHost)
         checkIdentity(peerHost, cert, identityAlg)
         CertificateHelper
-          .publicAddress(cert.getPublicKey)
-          .filter(_.map("%02x".format(_)).mkString == peerHost.getOrElse(""))
+          .publicAddressString(cert.getPublicKey)
+          .filter(_ == peerHost.getOrElse(""))
           .getOrElse(throw new CertificateException(
             s"Certificate's public address doesn't match the hostname"))
 
