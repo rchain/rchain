@@ -56,8 +56,9 @@ object CertificateHelper {
 
   def readKeyPair(keyFile: File): KeyPair = {
     import coop.rchain.shared.Resources._
-    val str =
-      withResource(Source.fromFile(keyFile))(_.getLines().filter(!_.contains("KEY")).mkString)
+    val str = withResource(Source.fromFile(keyFile)) {
+      _.getLines().filter(!_.contains("KEY")).mkString
+    }
     val spec     = new PKCS8EncodedKeySpec(Base64.getDecoder.decode(str))
     val kf       = KeyFactory.getInstance("EC", "BC")
     val sk       = kf.generatePrivate(spec).asInstanceOf[ECPrivateKey]

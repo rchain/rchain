@@ -1,10 +1,8 @@
-package coop.rchain.node.effects
+package coop.rchain.comm.transport
 
 import java.net.Socket
 import java.security.KeyStore
 import java.security.cert.{CertificateException, X509Certificate}
-
-import coop.rchain.node.CertificateHelper
 
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import io.netty.util.internal.EmptyArrays
