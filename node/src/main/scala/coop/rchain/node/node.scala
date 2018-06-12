@@ -27,7 +27,7 @@ import monix.execution.Scheduler
 import diagnostics.MetricsServer
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
-import coop.rchain.shared._
+import coop.rchain.shared._, ThrowableOps._
 import coop.rchain.node.api._
 
 import scala.io.Source
@@ -85,12 +85,6 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
       }
       .map("%02x".format(_))
       .mkString
-  }
-
-  implicit class ThrowableOps(th: Throwable) {
-    def containsMessageWith(str: String): Boolean =
-      if (th.getCause == null) th.getMessage.contains(str)
-      else th.getMessage.contains(str) || th.getCause.containsMessageWith(str)
   }
 
   import ApplicativeError_._
