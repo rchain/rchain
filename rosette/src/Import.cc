@@ -87,7 +87,7 @@ bool readImportCode() {
 
 fprintf(stderr, "%s", __PRETTY_FUNCTION__);
 
-    // Read the existing address book.
+    // Read the Object Code from disk
     std::fstream input(ImportFile, std::ios::in | std::ios::binary);
     if (!input) {
         warning("Import File %s not found.", ImportFile);
