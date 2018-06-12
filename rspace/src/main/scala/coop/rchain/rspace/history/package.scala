@@ -324,47 +324,51 @@ package object history {
   def delete[T, K, V](store: ITrieStore[T, K, V], key: K, value: V)(implicit
                                                                     codecK: Codec[K],
                                                                     codecV: Codec[V]): Boolean =
-    store.withTxn(store.createTxnWrite()) { (txn: T) =>
-      // We take the current root hash, preventing other threads from operating on the Trie
-      val currentRootHash: Blake2b256Hash =
-        store.getRoot(txn) match {
-          case p: NonEmptyPointer => p.hash
-          //TODO: remove this hack
-          case _ => return false
-        }
-      // Get the current root node
-      store.get(txn, currentRootHash) match {
-        case None =>
-          throw new LookupException(s"No node at $currentRootHash")
-        case Some(currentRoot) =>
-          // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
-          val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
-          // Using this path, get the parents of the given leaf.
-          val (tip, parents) = getParents(store, txn, encodedKey, 0, currentRoot)
-          tip match {
-            // If the "tip" is a node, a leaf with a given key and value does not exist
-            // so we put the current root hash back and return false.
-            case Node(_) =>
-              logger.debug(s"workingRootHash: $currentRootHash")
-              false
-            // If the "tip" is equal to a leaf containing the given key and value, commence
-            // with the deletion process.
-            case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
-              val (ptr, hd, nodesToRehash) = deleteLeaf(parents)
-              hd match {
-                case None => store.putRoot(txn, ptr); true
-                case Some(hd) =>
-                  val rehashedNodes = rehash[K, V](hd, nodesToRehash)
-                  val newRootHash   = insertTries[T, K, V](store, txn, rehashedNodes).get
-                  store.putRoot(txn, NodePointer(newRootHash))
-                  logger.debug(s"workingRootHash: $newRootHash")
-                  true
-              }
-            // The entry is not in the trie
-            case Leaf(_, _) => false
+    store
+      .withTxn(store.createTxnWrite()) { (txn: T) =>
+        // We take the current root hash, preventing other threads from operating on the Trie
+        val maybeCurrentRootHash: Option[Blake2b256Hash] =
+          store.getRoot(txn) match {
+            case p: NonEmptyPointer => Some(p.hash)
+            case _                  => None
           }
+        // Get the current root node
+        maybeCurrentRootHash.map { currentRootHash =>
+          store.get(txn, currentRootHash) match {
+            case None =>
+              throw new LookupException(s"No node at $currentRootHash")
+            case Some(currentRoot) =>
+              // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
+              val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
+              // Using this path, get the parents of the given leaf.
+              val (tip, parents) = getParents(store, txn, encodedKey, 0, currentRoot)
+              tip match {
+                // If the "tip" is a node, a leaf with a given key and value does not exist
+                // so we put the current root hash back and return false.
+                case Node(_) =>
+                  logger.debug(s"workingRootHash: $currentRootHash")
+                  false
+                // If the "tip" is equal to a leaf containing the given key and value, commence
+                // with the deletion process.
+                case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
+                  val (ptr, hd, nodesToRehash) = deleteLeaf(parents)
+                  hd match {
+                    case None => store.putRoot(txn, ptr); true
+                    case Some(hd) =>
+                      val rehashedNodes = rehash[K, V](hd, nodesToRehash)
+                      val newRootHash   = insertTries[T, K, V](store, txn, rehashedNodes).get
+                      store.putRoot(txn, NodePointer(newRootHash))
+                      logger.debug(s"workingRootHash: $newRootHash")
+                      true
+                  }
+                // The entry is not in the trie
+                case Leaf(_, _) => false
+              }
+          }
+        }
       }
-    }
+      .getOrElse(false)
+
   import scodec.Codec
   import scodec.bits.{BitVector, ByteVector}
   import scodec.codecs._
