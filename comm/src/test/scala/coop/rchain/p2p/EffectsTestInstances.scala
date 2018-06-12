@@ -10,6 +10,8 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.p2p.effects._
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
@@ -47,9 +49,8 @@ object EffectsTestInstances {
     def handleCommunications: ProtocolMessage => F[CommunicationResponse] = ???
   }
 
-  class TransportLayerStub[F[_]: Capture: Applicative](src: ProtocolNode)
-      extends TransportLayer[F] {
-    type Responses = ProtocolNode => (ProtocolMessage => CommErr[ProtocolMessage])
+  class TransportLayerStub[F[_]: Capture: Applicative](src: PeerNode) extends TransportLayer[F] {
+    type Responses = PeerNode => (ProtocolMessage => CommErr[ProtocolMessage])
     var reqresp: Option[Responses]      = None
     var requests: List[ProtocolMessage] = List.empty[ProtocolMessage]
 
@@ -62,14 +63,14 @@ object EffectsTestInstances {
     }
 
     def roundTrip(msg: ProtocolMessage,
-                  remote: ProtocolNode,
+                  remote: PeerNode,
                   timeout: Duration = Duration(500, MILLISECONDS)): F[CommErr[ProtocolMessage]] =
       Capture[F].capture {
         requests = requests :+ msg
         reqresp.get.apply(remote).apply(msg)
       }
 
-    def local: F[ProtocolNode] = src.pure[F]
+    def local: F[PeerNode] = src.pure[F]
     def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] =
       Capture[F].capture {
         requests = requests :+ msg
@@ -78,32 +79,6 @@ object EffectsTestInstances {
     def broadcast(msg: ProtocolMessage, peers: Seq[PeerNode]): F[Seq[CommErr[Unit]]] = ???
 
     def receive(dispatch: ProtocolMessage => F[CommunicationResponse]): F[Unit] = ???
-  }
-
-  import Encryption._
-
-  class EncryptionStub[F[_]: Applicative](keys: PublicPrivateKeys, nonce: Nonce)
-      extends Encryption[F] {
-
-    var encryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
-    var decryptions: List[(Key, Key, Nonce, Array[Byte])] = Nil
-
-    def reset(): Unit = {
-      encryptions = Nil
-      decryptions = Nil
-    }
-
-    def fetchKeys: F[PublicPrivateKeys] = keys.pure[F]
-    def generateNonce: F[Nonce]         = nonce.pure[F]
-    def encrypt(pub: Key, sec: Key, nonce: Nonce, message: Array[Byte]): F[Array[Byte]] = {
-      encryptions = encryptions :+ (pub, sec, nonce, message)
-      message.pure[F]
-    }
-
-    def decrypt(pub: Key, sec: Key, nonce: Nonce, cipher: Array[Byte]): F[Array[Byte]] = {
-      decryptions = decryptions :+ (pub, sec, nonce, cipher)
-      cipher.pure[F]
-    }
   }
 
   class LogStub[F[_]: Applicative] extends Log[F] {

@@ -2,11 +2,12 @@ package coop.rchain.p2p
 
 import org.scalatest._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, NetworkProtocol._
+import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
 import cats._
-import coop.rchain.catscontrib._, ski._, Encryption._
+import coop.rchain.catscontrib._, ski._
 import coop.rchain.metrics.Metrics
+import coop.rchain.comm.transport._, CommMessages._
 
 import EffectsTestInstances._
 
@@ -16,30 +17,21 @@ class ConnectToBootstrapSpec
     with BeforeAndAfterEach
     with AppendedClues {
 
-  val encoder = BaseEncoding.base16().lowerCase()
-
-  val src: ProtocolNode = protocolNode("src", 30300)
-  val remote: PeerNode  = peerNode("remote", 30301)
-  val srcKeys           = PublicPrivateKeys(encoder.decode("ff00ff00"), encoder.decode("cc00cc00"))
-  val remoteKeys        = PublicPrivateKeys(encoder.decode("ee00ee00"), encoder.decode("dd00dd00"))
-  val nonce             = encoder.decode("00112233")
-
   type Effect[A] = CommErrT[Id, A]
+
+  val src: PeerNode    = peerNode("src", 30300)
+  val remote: PeerNode = peerNode("remote", 30301)
 
   implicit val logEff            = new LogStub[Effect]
   implicit val timeEff           = new LogicalTime[Effect]
   implicit val metricEff         = new Metrics.MetricsNOP[Effect]
   implicit val nodeDiscoveryEff  = new NodeDiscoveryStub[Effect]()
   implicit val transportLayerEff = new TransportLayerStub[Effect](src)
-  implicit val encryptionEff     = new EncryptionStub[Effect](srcKeys, nonce)
-  implicit val keysStoreEff      = new Kvs.InMemoryKvs[Effect, PeerNode, Key]
 
   override def beforeEach(): Unit = {
     logEff.reset()
     nodeDiscoveryEff.reset()
     transportLayerEff.reset()
-    encryptionEff.reset()
-    keysStoreEff.keys.map(_.map(k => keysStoreEff.delete(k)))
   }
 
   describe("Node when connecting to bootstrap") {
@@ -71,7 +63,7 @@ class ConnectToBootstrapSpec
 
     it("should connect smoothly if there are no issues.") {
       // given
-      transportLayerEff.setResponses(kp(generateResponses(fstPhase, sndPhaseSucc)))
+      transportLayerEff.setResponses(kp(alwaysSuccess))
       // when
       val result = Network.connectToBootstrap[Effect](remote.toAddress, maxNumOfAttempts = 5)
       // then
@@ -81,32 +73,15 @@ class ConnectToBootstrapSpec
     }
   }
 
-  private val fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
-    case hs @ EncryptionHandshakeMessage(_, _) =>
-      hs.response[Effect](ProtocolNode(remote), remoteKeys).value.right.get
-  }
+  // TODO extract common trait for comm tests
+  def alwaysSuccess: ProtocolMessage => CommErr[ProtocolMessage] =
+    kp(Right(ProtocolHandshakeResponseMessage(protocolHandshake(src))))
 
-  private val failEverything = kp(Left[CommError, ProtocolResponse](unknownProtocol("unknown")))
-
-  private val sndPhaseSucc: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]] = {
-    case hs @ FrameMessage(_, _) =>
-      Right(
-        FrameMessage(
-          frameResponse(ProtocolNode(remote), hs.header.get, Array.empty[Byte], Array.empty[Byte]),
-          1))
-  }
-
-  private def generateResponses(
-      fstPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]],
-      sndPhase: PartialFunction[ProtocolMessage, CommErr[ProtocolMessage]])
-    : ProtocolMessage => CommErr[ProtocolMessage] =
-    fstPhase orElse sndPhase
+  private val failEverything = kp(Left[CommError, ProtocolMessage](unknownProtocol("unknown")))
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
   private def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
-  private def protocolNode(name: String, port: Int): ProtocolNode =
-    ProtocolNode(peerNode(name, port))
 }

@@ -11,8 +11,8 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.TaggedContinuation.TaggedCont.ScalaBodyRef
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.{BindPattern, Channel, TaggedContinuation, Var}
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rholang.interpreter.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.{ISpace, LMDBStore, RSpace}
 import monix.eval.Task

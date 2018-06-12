@@ -17,14 +17,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
   type StateWithChain[A] = State[BlockDag, A]
-  val initState =
-    BlockDag(
-      HashMap.empty[Int, BlockMessage],
-      HashMap.empty[BlockHash, BlockMessage],
-      HashMap.empty[BlockHash, HashSet[BlockHash]],
-      HashMap.empty[Validator, BlockHash],
-      0
-    )
+  val initState = BlockDag()
 
   val v1     = ByteString.copyFromUtf8("Validator One")
   val v2     = ByteString.copyFromUtf8("Validator Two")
@@ -86,6 +79,7 @@ class BlocksResponseTest extends FlatSpec with Matchers with BlockGenerator {
       def blockDag: F[BlockDag]                  = chain.pure[F]
       def tsCheckpoint(hash: ByteString): F[Option[Checkpoint]] =
         Applicative[F].pure[Option[Checkpoint]](None)
+      def close(): F[Unit] = ().pure[F]
     }
   implicit val casperEffect = testCasper[Id]
 

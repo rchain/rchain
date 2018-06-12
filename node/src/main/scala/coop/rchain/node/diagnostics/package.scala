@@ -13,7 +13,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.catscontrib._
 import Catscontrib._
-import coop.rchain.p2p.effects.NodeDiscovery
+import coop.rchain.comm.discovery._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import javax.management.ObjectName
@@ -160,7 +160,10 @@ package object diagnostics {
         }
     }
 
-  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _], data_dir: Path): StoreMetrics[F] =
+  def storeMetrics[F[_]: Capture](store: IStore[_, _, _, _], data_dir: Path): StoreMetrics[F] = {
+    def convert(c: coop.rchain.rspace.StoreCount): Option[StoreUsageCount] =
+      Some(StoreUsageCount(c.count, c.avgMilliseconds, c.peakRate, c.currentRate))
+
     new StoreMetrics[F] {
       def storeUsage: F[StoreUsage] =
         Capture[F].capture {
@@ -170,13 +173,15 @@ package object diagnostics {
             totalSizeOnDisk = totalSize,
             rspaceSizeOnDisk = storeCounters.sizeOnDisk,
             rspaceDataEntries = storeCounters.dataEntries,
-            rspaceConsumesCount = storeCounters.consumesCount,
-            rspaceConsumeAvgMilliseconds = storeCounters.consumeAvgMilliseconds,
-            rspaceProducesCount = storeCounters.producesCount,
-            rspaceProduceAvgMilliseconds = storeCounters.produceAvgMilliseconds
+            rspaceConsumesCount = convert(storeCounters.consumesCount),
+            rspaceProducesCount = convert(storeCounters.producesCount),
+            rspaceConsumesCommCount = convert(storeCounters.consumesCommCount),
+            rspaceProducesCommCount = convert(storeCounters.producesCommCount),
+            rspaceInstallCommCount = convert(storeCounters.installCommCount)
           )
         }
     }
+  }
 
   def metrics[F[_]: Capture]: Metrics[F] =
     new Metrics[F] {

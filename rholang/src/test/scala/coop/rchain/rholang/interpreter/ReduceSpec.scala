@@ -13,7 +13,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.errors.ReduceError
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.storage.implicits._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace._
@@ -713,7 +713,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   "eval of `toByteArray` method on any process" should "return that process serialized" in {
     val errorLog                                         = new Runtime.ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
-    import coop.rchain.models.implicits._
+    import coop.rchain.models.serialization.implicits._
     val proc = Receive(Seq(ReceiveBind(Seq(ChanVar(FreeVar(0))), Quote(GString("channel")))),
                        Par(),
                        false,
@@ -765,7 +765,7 @@ class ReduceSpec extends FlatSpec with Matchers with PersistentStoreTester {
   }
 
   "eval of hexToBytes" should "transform encoded string to byte array (not the rholang term)" in {
-    import coop.rchain.models.implicits._
+    import coop.rchain.models.serialization.implicits._
     val errorLog                                         = new Runtime.ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
     val testString                                       = "testing testing"
