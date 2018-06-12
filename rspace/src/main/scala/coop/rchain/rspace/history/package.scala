@@ -11,6 +11,7 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.seq._
 import coop.rchain.shared.AttemptOps._
 import scodec.Codec
+import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -115,15 +116,27 @@ package object history {
   private[this] def rehash[K, V](trie: Trie[K, V], parents: Seq[(Int, Trie[K, V])])(
       implicit
       codecK: Codec[K],
-      codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
+      codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] = {
+    val lastOpt = parents.lastOption.map(_._2)
     parents.scanLeft((Trie.hash[K, V](trie), trie)) {
+      // root
+      case ((lastHash, _), (offset, current @ Node(pb))) if lastOpt.contains(current) =>
+        val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
+        (Trie.hash[K, V](node), node)
+      case ((lastHash, x), (offset, Node(pb))) if pb.children.isEmpty =>
+        val b = offset.toByte
+        val node = x match {
+          case Leaf(key, value)     => Skip(ByteVector.fromByte(b), LeafPointer(lastHash))
+          case Node(pointerBlock)   => Skip(ByteVector.fromByte(b), NodePointer(lastHash))
+          case Skip(affix, pointer) => Skip(ByteVector.fromByte(b) ++ affix, pointer)
+        }
+        (Trie.hash[K, V](node), node)
+      // intermediate
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
-      case ((lastHash, _), (offset, s @ Skip(affix, ptr))) =>
-        // TODO: handle skip nodes
-        (Trie.hash[K, V](s), s)
     }
+  }
 
   private[this] def insertTries[T, K, V](
       store: ITrieStore[T, K, V],
