@@ -10,6 +10,7 @@ import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.SyncVar
+import coop.rchain.shared.SyncVarOps._
 import scala.util.Random
 
 class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
@@ -101,9 +102,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
         logger.debug(s"""|consume: searching for data matching <patterns: $patterns>
               |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-        val consumeRef    = Consume.create(channels, patterns, continuation, persist)
-        val currentEvents = eventLog.take()
-        eventLog.put(consumeRef +: currentEvents)
+        val consumeRef = Consume.create(channels, patterns, continuation, persist)
+        eventLog.update(consumeRef +: _)
 
         /*
          * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -135,9 +135,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
           case Some(dataCandidates) =>
             store.eventsCounter.registerConsumeCommEvent()
 
-            val commRef       = COMM(consumeRef, dataCandidates.map(_.datum.source))
-            val currentEvents = eventLog.take()
-            eventLog.put(commRef +: currentEvents)
+            eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
             dataCandidates
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
@@ -165,9 +163,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
       logger.debug(s"""|install: searching for data matching <patterns: $patterns>
                        |at <channels: $channels>""".stripMargin.replace('\n', ' '))
 
-      val consumeRef    = Consume.create(channels, patterns, continuation, true)
-      val currentEvents = eventLog.take()
-      eventLog.put(consumeRef +: currentEvents)
+      val consumeRef = Consume.create(channels, patterns, continuation, true)
+      eventLog.update(consumeRef +: _)
 
       /*
        * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -200,9 +197,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
         case Some(dataCandidates) =>
           store.eventsCounter.registerInstallCommEvent()
 
-          val commRef       = COMM(consumeRef, dataCandidates.map(_.datum.source))
-          val currentEvents = eventLog.take()
-          eventLog.put(commRef +: currentEvents)
+          eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData, _), dataIndex)
@@ -246,9 +241,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
         logger.debug(s"""|produce: searching for matching continuations
               |at <groupedChannels: $groupedChannels>""".stripMargin.replace('\n', ' '))
 
-        val produceRef    = Produce.create(channel, data, persist)
-        val currentEvents = eventLog.take()
-        eventLog.put(produceRef +: currentEvents)
+        val produceRef = Produce.create(channel, data, persist)
+        eventLog.update(produceRef +: _)
 
         /*
          * Find produce candidate
@@ -294,9 +288,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
                                dataCandidates)) =>
             store.eventsCounter.registerProduceCommEvent()
 
-            val commRef       = COMM(consumeRef, dataCandidates.map(_.datum.source))
-            val currentEvents = eventLog.take()
-            eventLog.put(commRef +: currentEvents)
+            eventLog.update(COMM(consumeRef, dataCandidates.map(_.datum.source)) +: _)
 
             if (!persistK) {
               store.removeWaitingContinuation(txn, channels, continuationIndex)
