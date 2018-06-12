@@ -6,7 +6,7 @@ import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.{GPrivate => _, _}
 import coop.rchain.rholang.interpreter.Substitute._
 import coop.rchain.rholang.interpreter.errors.SubstituteError
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
 

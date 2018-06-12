@@ -25,7 +25,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator {
       HashMap.empty[BlockHash, BlockMessage],
       HashMap.empty[BlockHash, HashSet[BlockHash]],
       HashMap.empty[Validator, BlockHash],
-      0
+      0,
+      HashMap.empty[Validator, Int]
     )
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram

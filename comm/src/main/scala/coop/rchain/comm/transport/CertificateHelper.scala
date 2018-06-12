@@ -1,4 +1,4 @@
-package coop.rchain.node
+package coop.rchain.comm.transport
 
 import java.io.{File, FileInputStream}
 import java.math.BigInteger

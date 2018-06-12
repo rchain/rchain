@@ -19,14 +19,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 
 class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
   type StateWithChain[A] = State[BlockDag, A]
-  val initState =
-    BlockDag(
-      HashMap.empty[Int, BlockMessage],
-      HashMap.empty[BlockHash, BlockMessage],
-      HashMap.empty[BlockHash, HashSet[BlockHash]],
-      HashMap.empty[Validator, BlockHash],
-      0
-    )
+  val initState = BlockDag()
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Turan Oracle" should "detect finality as appropriate" in {
@@ -74,8 +67,6 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    val b6      = chain.idToBlocks(6)
-    val b8      = chain.idToBlocks(8)
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
@@ -145,9 +136,6 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    val b6      = chain.idToBlocks(6)
-    val b7      = chain.idToBlocks(7)
-    val b8      = chain.idToBlocks(8)
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 

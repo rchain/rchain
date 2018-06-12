@@ -1,9 +1,9 @@
-package coop.rchain.models
+package coop.rchain.models.serialization
 
 import cats.implicits._
+import coop.rchain.models._
+import coop.rchain.rspace.Serialize
 import scalapb.{GeneratedMessage, GeneratedMessageCompanion, Message}
-import coop.rchain.models.Channel.ChannelInstance.Quote
-import coop.rchain.rspace.{Serialize, Match => StorageMatch}
 
 object implicits {
   def mkProtobufInstance[T <: GeneratedMessage with Message[T]](

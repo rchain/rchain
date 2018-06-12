@@ -1,6 +1,5 @@
 package coop.rchain.comm
 
-import coop.rchain.kademlia
 import coop.rchain.comm.protocol.routing._
 import scala.util.control.NonFatal
 
@@ -70,8 +69,7 @@ final case class DisconnectMessage(proto: Protocol, timestamp: Long) extends Pro
   */
 final case class LookupResponseMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
-final case class UpstreamMessage(proto: Protocol, timestamp: Long)  extends ProtocolMessage
-final case class UpstreamResponse(proto: Protocol, timestamp: Long) extends ProtocolMessage
+final case class UpstreamMessage(proto: Protocol, timestamp: Long) extends ProtocolMessage
 
 /**
   * Utility functions for working with protocol buffers.

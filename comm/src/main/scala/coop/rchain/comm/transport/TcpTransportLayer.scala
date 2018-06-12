@@ -1,4 +1,4 @@
-package coop.rchain.node.effects
+package coop.rchain.comm.transport
 
 import java.io.File
 
@@ -17,6 +17,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import io.grpc.netty._
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import coop.rchain.comm.protocol.routing.TransportLayerGrpc.TransportLayerStub
+import coop.rchain.comm.transport._
 
 // TODO Add State Monad to reuse channels to known peers
 class TcpTransportLayer[F[_]: Monad: Capture: Metrics: Futurable](
