@@ -635,3 +635,4 @@ void writeExportCode() {
       warning("Failed to write object code to %s.", ExportFile);
     }
 }
+
