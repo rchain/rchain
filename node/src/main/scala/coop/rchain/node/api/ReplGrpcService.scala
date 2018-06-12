@@ -30,34 +30,35 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
-private[api] class DeployImpl[F[_]: Monad: MultiParentCasper: Futurable]
-    extends DeployServiceGrpc.DeployService {
-  override def doDeploy(d: DeployString): Future[DeployServiceResponse] =
-    InterpreterUtil.mkTerm(d.term) match {
-      case Right(term) =>
-        val deploy = Deploy(
-          user = d.user,
-          nonce = d.nonce,
-          term = Some(term),
-          sig = d.sig
-        )
-        val f = for {
-          _ <- MultiParentCasper[F].deploy(deploy)
-        } yield DeployServiceResponse(true, "Success!")
+private[api] class ReplGrpcService(runtime: Runtime)(implicit scheduler: Scheduler)
+    extends ReplGrpc.Repl {
+  import RholangCLI.{buildNormalizedTerm, evaluate}
 
-        f.toFuture
+  def exec(reader: Reader): Future[ReplResponse] =
+    Task
+      .coeval(buildNormalizedTerm(reader))
+      .attempt
+      .flatMap {
+        case Left(er) =>
+          er match {
+            case _: InterpreterError => Task.now(s"Error: ${er.toString}")
+            case th: Throwable       => Task.now(s"Error: $th")
+          }
+        case Right(term) =>
+          evaluate(runtime.reducer, term).attempt.map {
+            case Left(ie: InterpreterError) => s"Error: ${ie.toString}"
+            case Left(ex)                   => s"Caught boxed exception: $ex"
+            case Right(_) =>
+              s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+          }
+      }
+      .map(ReplResponse(_))
+      .executeAsync
+      .runAsync
 
-      case Left(err) =>
-        Future.successful(DeployServiceResponse(false, s"Error in parsing term: \n$err"))
-    }
+  def run(request: CmdRequest): Future[ReplResponse] =
+    exec(new StringReader(request.line))
 
-  override def createBlock(e: Empty): Future[MaybeBlockMessage] = BlockAPI.createBlock[F].toFuture
-
-  override def addBlock(b: BlockMessage): Future[Empty] = BlockAPI.addBlock[F](b).toFuture
-
-  override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
-    BlockAPI.getBlockQueryResponse[F](q).toFuture
-
-  override def showBlocks(e: Empty): Future[BlocksResponse] =
-    BlockAPI.getBlocksResponse[F].toFuture
+  def eval(request: EvalRequest): Future[ReplResponse] =
+    exec(new StringReader(request.program))
 }

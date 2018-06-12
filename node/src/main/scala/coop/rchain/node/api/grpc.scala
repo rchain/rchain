@@ -39,9 +39,9 @@ object GrpcServer {
     Capture[F].capture {
       ServerBuilder
         .forPort(port)
-        .addService(ReplGrpc.bindService(new ReplImpl(runtime), scheduler))
+        .addService(ReplGrpc.bindService(new ReplGrpcService(runtime), scheduler))
         .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
-        .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
+        .addService(DeployServiceGrpc.bindService(new DeployGrpcService[F], scheduler))
         .build
     }
 
