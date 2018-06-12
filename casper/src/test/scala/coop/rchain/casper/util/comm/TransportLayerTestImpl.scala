@@ -5,10 +5,9 @@ import cats.implicits._
 
 import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError.{peerNodeNotFound, CommErr}
-import coop.rchain.comm.{PeerNode, ProtocolMessage, ProtocolNode}
+import coop.rchain.comm.{PeerNode, ProtocolMessage}
 import coop.rchain.p2p.effects._
-import coop.rchain.p2p.FrameMessage
-import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
+import coop.rchain.p2p.Network.ErrorHandler
 import coop.rchain.metrics.Metrics
 
 import scala.concurrent.duration.Duration
@@ -20,10 +19,10 @@ class TransportLayerTestImpl[F[_]: Monad: Capture](
     extends TransportLayer[F] {
 
   def roundTrip(msg: ProtocolMessage,
-                remote: ProtocolNode,
+                remote: PeerNode,
                 timeout: Duration): F[CommErr[ProtocolMessage]] = ???
 
-  def local: F[ProtocolNode] = ProtocolNode(identity).pure[F]
+  def local: F[PeerNode] = identity.pure[F]
 
   def send(msg: ProtocolMessage, peer: PeerNode): F[CommErr[Unit]] = Capture[F].capture {
     val maybeQ = msgQueues.get(peer)

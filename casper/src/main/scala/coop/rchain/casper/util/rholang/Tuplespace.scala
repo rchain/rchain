@@ -20,7 +20,7 @@ class Tuplespace(val name: String, val location: Path, val size: Long) {
     runtime.reducer.inj(term).unsafeRunSync
 
   def hash: Array[Byte] = {
-    val bytes = ByteString.copyFromUtf8(StoragePrinter.prettyPrint(runtime.store))
+    val bytes = ByteString.copyFromUtf8(StoragePrinter.prettyPrint(runtime.space.store))
     Blake2b256.hash(bytes.toByteArray)
   }
 
@@ -36,10 +36,10 @@ class Tuplespace(val name: String, val location: Path, val size: Long) {
   }
 
   def storageRepr: String =
-    StoragePrinter.prettyPrint(runtime.store)
+    StoragePrinter.prettyPrint(runtime.space.store)
 
   def delete(): Unit = {
-    runtime.store.close()
+    runtime.close()
     dbLocation.resolve("lock.mdb").toFile.delete()
     dbLocation.resolve("data.mdb").toFile.delete()
     dbLocation.toFile.delete()

@@ -10,7 +10,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
 import coop.rchain.catscontrib.{Capture, IOUtil}
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.Network.{ErrorHandler, KeysStore}
+import coop.rchain.p2p.Network.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.shared.AtomicSyncVar
 
@@ -55,7 +55,7 @@ sealed abstract class MultiParentCasperInstances {
 
   //TODO: figure out Casper key management for validators
   def hashSetCasper[
-      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler: SafetyOracle](
+      F[_]: Monad: Capture: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler: SafetyOracle](
       storageLocation: Path,
       storageSize: Long,
       genesis: BlockMessage)(implicit scheduler: Scheduler): MultiParentCasper[F] =
