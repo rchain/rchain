@@ -181,24 +181,16 @@ package object history {
             val newLeaf     = Leaf(key, value)
             val newLeafHash = Trie.hash(newLeaf)
             store.put(txn, newLeafHash, newLeaf)
-
-            val (tip, parents) = getParents(store, txn, encodedKeyNew, 0, currentRoot)
-
-            def alreadyExists: PartialFunction[(Trie[K, V], Trie[K, V]), Unit] = {
-              case (_, existingLeaf: Leaf[K, V]) if existingLeaf == newLeaf =>
-                logger.debug(s"workingRootHash: $currentRootHash")
-            }
-
             // Using the path we created from the key, get the existing parents of the new leaf.
-            def hasCommonPrefix: PartialFunction[(Trie[K, V], Trie[K, V]), Unit] = {
+            val (tip, parents) = getParents(store, txn, encodedKeyNew, 0, currentRoot)
+            (currentRoot, tip) match {
+              case (_, existingLeaf @ Leaf(_, _)) if existingLeaf == newLeaf =>
+                logger.debug(s"workingRootHash: $currentRootHash")
               // If the "tip" is an existing leaf with a different key than the new leaf, then
               // we are in a situation where the new leaf shares some common prefix with the
               // existing leaf.
               case (_, existingLeaf @ Leaf(ek, _)) if key != ek =>
                 insertLeafWithCommonPrefix(encodedKeyNew, newLeafHash, parents, existingLeaf, ek)
-            }
-
-            def isLeafAndHasNewValue: PartialFunction[(Trie[K, V], Trie[K, V]), Unit] = {
               // If the "tip" is an existing leaf with the same key as the new leaf, but the
               // existing leaf and new leaf have different values, then we are in the situation
               // where we are "updating" an existing leaf
@@ -215,15 +207,12 @@ package object history {
                 val newRootHash   = insertTries(store, txn, rehashedNodes).get
                 store.putRoot(txn, NodePointer(newRootHash))
                 logger.debug(s"workingRootHash: $newRootHash")
-            }
-
-            def isRootAndHasNewValue: PartialFunction[(Trie[K, V], Trie[K, V]), Unit] = {
               case (_: Leaf[K, V], Leaf(ek, ev)) if key == ek && value != ev =>
+                // Update the pointer block of the immediate parent at the given index
+                // to point to the new leaf instead of the existing leaf
                 store.putRoot(txn, LeafPointer(newLeafHash))
                 logger.debug(s"workingRootHash: $newLeafHash")
-            }
 
-            def isPointerBlock: PartialFunction[(Trie[K, V], Trie[K, V]), Unit] = {
               // If the "tip" is an existing node, then we can add the new leaf's hash to the node's
               // pointer block and rehash.
               case (_, Node(pb)) =>
@@ -235,17 +224,6 @@ package object history {
                 store.putRoot(txn, NodePointer(newRootHash))
                 logger.debug(s"workingRootHash: $newRootHash")
             }
-
-            def unknownStructure: PartialFunction[(Trie[K, V], Trie[K, V]), Unit] = {
-              case _ => throw new RuntimeException("Fatal error during history.insert")
-            }
-
-            (alreadyExists orElse
-              hasCommonPrefix orElse
-              isLeafAndHasNewValue orElse
-              isRootAndHasNewValue orElse
-              isPointerBlock orElse
-              unknownStructure)(currentRoot, tip)
         }
       }
     }
