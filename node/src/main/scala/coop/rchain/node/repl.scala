@@ -13,14 +13,14 @@ class ReplRuntime(conf: Conf) {
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
     """.red
 
-  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplService]: F[Boolean] = {
+  def replProgram[F[_]: Capture: Monad: ConsoleIO: ReplClient]: F[Boolean] = {
     val rep: F[Boolean] = for {
       line <- ConsoleIO[F].readLine.map(Option.apply)
       res <- line.map(_.trim) match {
               case Some("")   => ConsoleIO[F].println("").as(true)
               case Some(":q") => false.pure[F]
               case Some(program) =>
-                (ReplService[F].run(program) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
+                (ReplClient[F].run(program) >>= (s => ConsoleIO[F].println(s.blue))).as(true)
               case _ => false.pure[F]
             }
     } yield res
@@ -33,10 +33,10 @@ class ReplRuntime(conf: Conf) {
     ConsoleIO[F].println(logo) >>= kp(repl)
   }
 
-  def evalProgram[F[_]: Monad: ReplService: ConsoleIO](fileName: String): F[Unit] =
+  def evalProgram[F[_]: Monad: ReplClient: ConsoleIO](fileName: String): F[Unit] =
     for {
       _   <- ConsoleIO[F].println(s"Evaluating from $fileName")
-      res <- ReplService[F].eval(fileName)
+      res <- ReplClient[F].eval(fileName)
       _   <- ConsoleIO[F].println(res)
       _   <- ConsoleIO[F].close
     } yield ()

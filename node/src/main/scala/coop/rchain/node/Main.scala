@@ -29,8 +29,8 @@ object Main {
 
     implicit val io: SchedulerService = Scheduler.io("repl-io")
 
-    implicit val replService: ReplService[Task] =
-      new GrpcReplService(conf.grpcHost(), conf.grpcPort())
+    implicit val replService: ReplClient[Task] =
+      new GrpcReplClient(conf.grpcHost(), conf.grpcPort())
     implicit val diagnosticsService: diagnostics.client.DiagnosticsService[Task] =
       new diagnostics.client.GrpcDiagnosticsService(conf.grpcHost(), conf.grpcPort())
     implicit val deployService: DeployService[Task] =

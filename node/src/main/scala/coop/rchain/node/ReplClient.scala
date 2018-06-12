@@ -10,16 +10,16 @@ import coop.rchain.shared.Resources._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
 
-trait ReplService[F[_]] {
+trait ReplClient[F[_]] {
   def run(line: String): F[String]
   def eval(line: String): F[String]
 }
 
-object ReplService {
-  def apply[F[_]](implicit ev: ReplService[F]): ReplService[F] = ev
+object ReplClient {
+  def apply[F[_]](implicit ev: ReplClient[F]): ReplClient[F] = ev
 }
 
-class GrpcReplService(host: String, port: Int) extends ReplService[Task] {
+class GrpcReplClient(host: String, port: Int) extends ReplClient[Task] {
 
   private val channel: ManagedChannel =
     ManagedChannelBuilder.forAddress(host, port).usePlaintext(true).build
