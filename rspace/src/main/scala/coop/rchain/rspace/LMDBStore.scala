@@ -330,22 +330,15 @@ object LMDBStore {
     * @tparam A A type representing a piece of data
     * @tparam K A type representing a continuation
     */
-  def create[C, P, A, K](path: Path, mapSize: Long, noTls: Boolean = true)(
-      implicit sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K]): LMDBStore[C, P, A, K] = {
+  def create[C, P, A, K](path: Path, mapSize: Long)(implicit sc: Serialize[C],
+                                                    sp: Serialize[P],
+                                                    sa: Serialize[A],
+                                                    sk: Serialize[K]): LMDBStore[C, P, A, K] = {
 
     implicit val codecC: Codec[C] = sc.toCodec
     implicit val codecP: Codec[P] = sp.toCodec
     implicit val codecA: Codec[A] = sa.toCodec
     implicit val codecK: Codec[K] = sk.toCodec
-
-    val flags =
-      if (noTls)
-        List(EnvFlags.MDB_NOTLS)
-      else
-        List.empty[EnvFlags]
 
     val env: Env[ByteBuffer] =
       Env
@@ -353,7 +346,7 @@ object LMDBStore {
         .setMapSize(mapSize)
         .setMaxDbs(8)
         .setMaxReaders(126)
-        .open(path.toFile, flags: _*)
+        .open(path.toFile)
 
     val dbGNATs: Dbi[ByteBuffer] = env.openDbi(dataTableName, MDB_CREATE)
     val dbJoins: Dbi[ByteBuffer] = env.openDbi(joinsTableName, MDB_CREATE)
