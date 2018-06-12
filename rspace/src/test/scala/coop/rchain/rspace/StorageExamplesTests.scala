@@ -279,7 +279,7 @@ class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
   override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
     val testSpace = new RSpace[Channel, Pattern, Entry, EntriesCaptor](testStore)
-    testStore.clear(())
+    testStore.withTxn(testStore.createTxnWrite())(testStore.clear)
     try {
       f(testSpace)
     } finally {

@@ -3,13 +3,14 @@ package coop.rchain.roscala.prim
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
 import coop.rchain.roscala.ob._
+import coop.rchain.roscala.prim.fixnum.fxPlus
+import coop.rchain.roscala.prim.rblfloat.flPlus
 
 abstract class Prim extends Ob {
   def fn(ctxt: Ctxt, globalEnv: GlobalEnv): Ob
 
   // TODO: Add error case
   def dispatchHelper(state: State, globalEnv: GlobalEnv): Ob =
-    //val n = state.ctxt.nargs
     fn(state.ctxt, globalEnv)
 
   override def dispatch(state: State, globalEnv: GlobalEnv): Ob = {
@@ -26,7 +27,8 @@ abstract class Prim extends Ob {
     dispatch(state, globalEnv)
 }
 
-object Prim{
+object Prim {
+
   /**
     * The mapping from primnum to function-name show below.
     *
@@ -359,5 +361,7 @@ object Prim{
     * 326	update!
     * 327	actor-new
     */
-  val map: Map[Int, Prim] = Map.empty
+  val map = Map(202 -> flPlus, 232 -> fxPlus)
+
+  def nthPrim(n: Int): Prim = map(n)
 }

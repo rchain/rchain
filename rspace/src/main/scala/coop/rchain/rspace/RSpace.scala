@@ -34,6 +34,8 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
         m.get(pattern, matchCandidate) match {
           case None =>
             findMatchingDataCandidate(channel, remaining, pattern, indexedDatum +: prefix)
+          case Some(mat) if persist =>
+            Some((DataCandidate(channel, Datum(mat, persist), dataIndex), data))
           case Some(mat) =>
             Some((DataCandidate(channel, Datum(mat, persist), dataIndex), prefix ++ remaining))
         }
@@ -110,6 +112,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
                   |at <channels: $channels>""".stripMargin.replace('\n', ' '))
             None
           case Some(dataCandidates) =>
+            store.eventsCounter.registerConsumeCommEvent()
             dataCandidates
               .sortBy(_.datumIndex)(Ordering[Int].reverse)
               .foreach {
@@ -159,10 +162,11 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
                                        WaitingContinuation(patterns, continuation, persist = true))
           for (channel <- channels) store.addJoin(txn, channel, channels)
           logger.debug(s"""|consume: no data found,
-                           |storing <(patterns, continuation): ($patterns, $continuation)>
-                           |at <channels: $channels>""".stripMargin.replace('\n', ' '))
+                |storing <(patterns, continuation): ($patterns, $continuation)>
+                |at <channels: $channels>""".stripMargin.replace('\n', ' '))
           None
         case Some(dataCandidates) =>
+          store.eventsCounter.registerInstallCommEvent()
           dataCandidates.foreach {
             case DataCandidate(candidateChannel, Datum(_, persistData), dataIndex)
                 if !persistData =>
@@ -247,6 +251,7 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K]) extends ISpace[C, P, A, 
                                WaitingContinuation(_, continuation, persistK),
                                continuationIndex,
                                dataCandidates)) =>
+            store.eventsCounter.registerProduceCommEvent()
             if (!persistK) {
               store.removeWaitingContinuation(txn, channels, continuationIndex)
             }
