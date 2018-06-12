@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
 import coop.rchain.shared.AttemptOps._
@@ -36,11 +37,11 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
 
   val helloHash: Blake2b256Hash = Blake2b256Hash.create("hello".getBytes())
 
-  val fullPb: PointerBlock = PointerBlock.fromVector(Vector.fill(256)(Some(helloHash)))
+  val fullPb: PointerBlock = PointerBlock.fromVector(Vector.fill(256)(LeafPointer(helloHash)))
 
   "An empty PointerBlock" should "have the expected hash" in {
 
-    val expected = "2b69702a889248a4d6620475a105dccd5e0d4230aca8a492aaf6510e55d55b02"
+    val expected = "27cee3d346eb76d15aa439d1840db71030276e75b495e031c7eb4638a5286312"
 
     emptyPbHash.bytes.toHex shouldBe expected
   }
@@ -65,26 +66,26 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
 
   "A PointerBlock with a known item at index 1" should "have the expected hash" in {
 
-    val pb = emptyPb.updated(List((1, Some(helloHash))))
+    val pb = emptyPb.updated(List((1, LeafPointer(helloHash))))
 
     val attemptedActual = implicitly[Codec[PointerBlock]]
       .encode(pb)
       .map((vector: BitVector) => Blake2b256Hash.create(vector.bytes.toArray).bytes.toHex)
 
-    val expected = "b11665e990d461db27f850481ad538662cc5321d67f9688c3a6ae77fa4b63f03"
+    val expected = "4074823128c150c0e68d0ecddbd5db1c5d4f75661ebc37461a4badd85a329835"
 
     attemptedActual.get shouldBe expected
   }
 
   "A PointerBlock with a known item at index 42" should "have the expected hash" in {
 
-    val pb = emptyPb.updated(List((42, Some(helloHash))))
+    val pb = emptyPb.updated(List((42, LeafPointer(helloHash))))
 
     val attemptedActual = implicitly[Codec[PointerBlock]]
       .encode(pb)
       .map((vector: BitVector) => Blake2b256Hash.create(vector.bytes.toArray).bytes.toHex)
 
-    val expected = "bc50d1148e6c4197bc978a80e424d4a0b3f065496102d376ba6c138a2ed2c3a7"
+    val expected = "54c4559c870bcaa6459faf121aec85e43318b9c55bab297652da6fdbbfa669ad"
 
     attemptedActual.get shouldBe expected
   }
@@ -95,7 +96,7 @@ class PointerBlockTests extends FlatSpec with Matchers with Checkers with Config
       .encode(fullPb)
       .map((vector: BitVector) => Blake2b256Hash.create(vector.bytes.toArray).bytes.toHex)
 
-    val expected = "2b5e43a142c6b5e1b2ff614185d76d1e215b0efe627e124b4244006f4da4ed64"
+    val expected = "51893a2c8a876cd99f841acf6cc1ddf429fc8d905d5897ddb9a7a44910e6c538"
 
     attemptedActual.get shouldBe expected
   }

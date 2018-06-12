@@ -31,6 +31,21 @@ package object roscala {
     val monitor = 9
   }
 
+  def regName(reg: Int): String =
+    reg match {
+      case 0 => "rslt"
+      case 1 => "trgt"
+      case 2 => "argvec"
+      case 3 => "env"
+      case 4 => "code"
+      case 5 => "ctxt"
+      case 6 => "self"
+      case 7 => "selfEnv"
+      case 8 => "rcvr"
+      case 9 => "monitor"
+      case _ => "unknown"
+    }
+
   object VmLiteralName {
     val `0`   = 0
     val `1`   = 1

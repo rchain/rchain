@@ -7,9 +7,11 @@ import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
+import coop.rchain.models.rholang.sort._
 import coop.rchain.rholang.interpreter.errors.{InterpreterErrorsM, SubstituteError}
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import errors._
+import coop.rchain.models.rholang.sort.ordering._
 
 trait Substitute[M[_], A] {
   def substitute(term: A)(implicit depth: Int, env: Env[Par]): M[A]
@@ -17,7 +19,6 @@ trait Substitute[M[_], A] {
 }
 
 object Substitute {
-
   def substitute2[M[_]: Monad, A, B, C](termA: A, termB: B)(f: (A, B) => C)(
       implicit evA: Substitute[M, A],
       evB: Substitute[M, B],
@@ -121,10 +122,7 @@ object Substitute {
                          }
         } yield channelSubst
       override def substitute(term: Channel)(implicit depth: Int, env: Env[Par]): M[Channel] =
-        for {
-          channelSubst <- substituteNoSort(term)
-          sortedChan   <- ChannelSortMatcher.sortMatch[M](channelSubst)
-        } yield sortedChan.term
+        substituteNoSort(term).map(channelSubst => ChannelSortMatcher.sortMatch(channelSubst).term)
     }
 
   implicit def substitutePar[M[_]: InterpreterErrorsM]: Substitute[M, Par] =
@@ -183,10 +181,7 @@ object Substitute {
             )
         } yield par
       override def substitute(term: Par)(implicit depth: Int, env: Env[Par]): M[Par] =
-        for {
-          par       <- substituteNoSort(term)
-          sortedPar <- ParSortMatcher.sortMatch[M](par)
-        } yield sortedPar.term.get
+        substituteNoSort(term).map(par => ParSortMatcher.sortMatch(par).term)
     }
 
   implicit def substituteSend[M[_]: InterpreterErrorsM]: Substitute[M, Send] =
@@ -204,10 +199,7 @@ object Substitute {
           )
         } yield send
       override def substitute(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
-        for {
-          send       <- substituteNoSort(term)
-          sortedSend <- SendSortMatcher.sortMatch[M](send)
-        } yield sortedSend.term
+        substituteNoSort(term).map(send => SendSortMatcher.sortMatch(send).term)
     }
 
   implicit def substituteReceive[M[_]: InterpreterErrorsM]: Substitute[M, Receive] =
@@ -215,7 +207,7 @@ object Substitute {
       override def substituteNoSort(term: Receive)(implicit depth: Int, env: Env[Par]): M[Receive] =
         for {
           bindsSub <- term.binds.toList.traverse {
-                       case ReceiveBind(patterns, Some(chan), rem, freeCount) =>
+                       case ReceiveBind(patterns, chan, rem, freeCount) =>
                          for {
                            subChannel <- substituteChannel[M].substituteNoSort(chan)
                            subPatterns <- patterns.toList.traverse(
@@ -236,10 +228,7 @@ object Substitute {
           )
         } yield rec
       override def substitute(term: Receive)(implicit depth: Int, env: Env[Par]): M[Receive] =
-        for {
-          rec           <- substituteNoSort(term)
-          sortedReceive <- ReceiveSortMatcher.sortMatch[M](rec)
-        } yield sortedReceive.term
+        substituteNoSort(term).map(rec => ReceiveSortMatcher.sortMatch(rec).term)
 
     }
 
@@ -251,10 +240,7 @@ object Substitute {
           neu    = New(term.bindCount, newSub, term.locallyFree.until(env.shift))
         } yield neu
       override def substitute(term: New)(implicit depth: Int, env: Env[Par]): M[New] =
-        for {
-          newSub      <- substituteNoSort(term)
-          sortedMatch <- NewSortMatcher.sortMatch[M](newSub)
-        } yield sortedMatch.term
+        substituteNoSort(term).map(newSub => NewSortMatcher.sortMatch(newSub).term)
     }
 
   implicit def substituteMatch[M[_]: InterpreterErrorsM]: Substitute[M, Match] =
@@ -263,7 +249,7 @@ object Substitute {
         for {
           targetSub <- substitutePar[M].substituteNoSort(term.target.get)
           casesSub <- term.cases.toList.traverse {
-                       case MatchCase(Some(_case), Some(_par), freeCount) =>
+                       case MatchCase(_case, _par, freeCount) =>
                          for {
                            par <- substitutePar[M].substituteNoSort(_par)(depth,
                                                                           env.shift(freeCount))
@@ -273,10 +259,7 @@ object Substitute {
           mat = Match(targetSub, casesSub, term.locallyFree.until(env.shift), term.connectiveUsed)
         } yield mat
       override def substitute(term: Match)(implicit depth: Int, env: Env[Par]): M[Match] =
-        for {
-          mat         <- substituteNoSort(term)
-          sortedMatch <- MatchSortMatcher.sortMatch[M](mat)
-        } yield sortedMatch.term
+        substituteNoSort(term).map(mat => MatchSortMatcher.sortMatch(mat).term)
     }
 
   implicit def substituteExpr[M[_]: InterpreterErrorsM]: Substitute[M, Expr] =
@@ -326,12 +309,16 @@ object Substitute {
               newLocallyFree = locallyFree.until(env.shift)
             } yield Expr(exprInstance = ETupleBody(ETuple(pss, newLocallyFree, connectiveUsed)))
 
-          case ESetBody(ESet(ps, locallyFree, connectiveUsed)) =>
+          case ESetBody(ParSet(SortedParHashSet(ps), connectiveUsed, locallyFree)) =>
             for {
               pss <- ps.toList
                       .traverse(p => s1(p))
-              newLocallyFree = locallyFree.until(env.shift)
-            } yield Expr(exprInstance = ESetBody(ESet(pss, newLocallyFree, connectiveUsed)))
+            } yield
+              Expr(
+                exprInstance = ESetBody(
+                  ParSet(SortedParHashSet(pss.toSeq),
+                         connectiveUsed,
+                         locallyFree.map(_.until(env.shift)))))
 
           case EMapBody(EMap(kvs, locallyFree, connectiveUsed)) =>
             for {
@@ -372,9 +359,6 @@ object Substitute {
             substitutePar[M].substituteNoSort(p).map(p => Connective(ConnNotBody(p)))
         }
       override def substitute(term: Connective)(implicit depth: Int, env: Env[Par]): M[Connective] =
-        for {
-          con       <- substituteNoSort(term)
-          sortedCon <- ConnectiveSortMatcher.sortMatch[M](con)
-        } yield sortedCon.term
+        substituteNoSort(term).map(con => ConnectiveSortMatcher.sortMatch(con).term)
     }
 }

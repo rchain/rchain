@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.{Send, _}
-import coop.rchain.rholang.interpreter.implicits.{GPrivate, _}
+import coop.rchain.models.rholang.implicits.{GPrivate, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
@@ -521,7 +521,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value.par)
-    result shouldBe "match 47 == 47 { true => new x0 in { x0!(47) } ; false => new x0 in { x0!(47) } }"
+    result shouldBe "match (47 == 47) { true => new x0 in { x0!(47) } ; false => new x0 in { x0!(47) } }"
   }
 
   "PMatch" should "Print" in {

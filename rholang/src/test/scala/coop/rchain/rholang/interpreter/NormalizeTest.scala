@@ -8,7 +8,7 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   _
 }
 import org.scalatest._
-
+import coop.rchain.models.rholang.sort.ordering._
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Channel.ChannelInstance._
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -18,7 +18,7 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.rspace.Serialize
 import errors._
-import implicits._
+import coop.rchain.models.rholang.implicits._
 import monix.eval.Coeval
 import org.scalactic.TripleEqualsSupport
 
@@ -76,9 +76,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 
   "Tuple" should "delegate" in {
     val tupleData = new ListProc()
-    tupleData.add(new PVar(new ProcVarVar("Q")))
     tupleData.add(new PEval(new NameVar("y")))
-    val tuple = new PCollect(new CollectTuple(tupleData))
+    val tuple =
+      new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
     result.par should be(
@@ -94,10 +94,10 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
   }
   "Tuple" should "propagate free variables" in {
     val tupleData = new ListProc()
-    tupleData.add(new PVar(new ProcVarVar("Q")))
     tupleData.add(new PGround(new GroundInt(7)))
     tupleData.add(new PPar(new PGround(new GroundInt(7)), new PVar(new ProcVarVar("Q"))))
-    val tuple = new PCollect(new CollectTuple(tupleData))
+    val tuple =
+      new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     an[UnexpectedReuseOfProcContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
@@ -114,11 +114,12 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
     result.par should be(
       inputs.par.prepend(
-        ESet(List[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
-                       GInt(7),
-                       GInt(8).prepend(EVar(FreeVar(1)))),
-             locallyFree = BitSet(1),
-             connectiveUsed = true)))
+        ParSet(
+          Seq[Par](EPlus(EVar(BoundVar(1)), EVar(FreeVar(0))),
+                   GInt(7),
+                   GInt(8).prepend(EVar(FreeVar(1)))),
+          connectiveUsed = true
+        )))
     result.knownFree should be(
       inputs.knownFree.newBindings(List(("R", ProcSort, 0, 0), ("Q", ProcSort, 0, 0)))._1)
   }

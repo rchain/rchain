@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.util.withResource
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._

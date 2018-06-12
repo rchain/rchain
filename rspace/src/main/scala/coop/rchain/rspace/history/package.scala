@@ -45,12 +45,18 @@ package object history {
           // We use an explicit match here instead of flatMapping in order to make this function
           // tail-recursive
           pointerBlock.toVector(index) match {
-            case None =>
+            case EmptyPointer =>
               None
-            case Some(hash: Blake2b256Hash) =>
+            case NodePointer(hash: Blake2b256Hash) =>
               store.get(txn, hash) match {
                 case Some(next) => loop(txn, depth + 1, next)
                 case None       => throw new LookupException(s"No node at $hash")
+              }
+
+            case LeafPointer(hash: Blake2b256Hash) =>
+              store.get(txn, hash) match {
+                case Some(next) => loop(txn, depth + 1, next)
+                case _          => throw new LookupException(s"No node at $hash")
               }
           }
         case Leaf(lk, lv) if key == lk =>
@@ -58,6 +64,7 @@ package object history {
         case Leaf(_, _) =>
           None
       }
+
     store.withTxn(store.createTxnRead()) { (txn: T) =>
       for {
         currentRootHash <- store.getRoot(txn)
@@ -71,43 +78,47 @@ package object history {
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
     keys.traverse[Option, V]((k: K) => lookup(store, k))
 
-  @tailrec
-  private[this] def getParents[T, K, V](
-      store: ITrieStore[T, K, V],
-      txn: T,
-      path: Seq[Byte],
-      depth: Int,
-      curr: Trie[K, V],
-      acc: Seq[(Int, Node)] = Seq.empty): (Trie[K, V], Seq[(Int, Node)]) =
-    curr match {
-      case node @ Node(pointerBlock) =>
-        val index: Int = JByte.toUnsignedInt(path(depth))
-        pointerBlock.toVector(index) match {
-          case None =>
-            (curr, acc)
-          case Some(nextHash) =>
-            store.get(txn, nextHash) match {
-              case None =>
-                throw new LookupException(s"No node at $nextHash")
-              case Some(next) =>
-                getParents(store, txn, path, depth + 1, next, (index, node) +: acc)
-            }
-        }
-      case leaf =>
-        (leaf, acc)
-    }
+  private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
+                                        txn: T,
+                                        path: Seq[Byte],
+                                        curr: Trie[K, V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
+
+    @tailrec
+    def parents(depth: Int,
+                curr: Trie[K, V],
+                acc: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+      curr match {
+        case node @ Node(pointerBlock) =>
+          val index: Int = JByte.toUnsignedInt(path(depth))
+          pointerBlock.toVector(index) match {
+            case EmptyPointer =>
+              (curr, acc)
+            case next: NonEmptyPointer =>
+              store.get(txn, next.hash) match {
+                case None =>
+                  throw new LookupException(s"No node at ${next.hash}")
+                case Some(next) =>
+                  parents(depth + 1, next, (index, node) +: acc)
+              }
+          }
+        case leaf =>
+          (leaf, acc)
+      }
+
+    parents(0, curr, Seq.empty)
+  }
 
   // TODO(ht): make this more efficient
   private[this] def commonPrefix[A: Eq](a: Seq[A], b: Seq[A]): Seq[A] =
     a.zip(b).takeWhile { case (l, r) => l === r }.map(_._1)
 
-  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
+  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Trie[K, V])])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
     nodes.scanLeft((Trie.hash[K, V](trie), trie)) {
       case ((lastHash, _), (offset, Node(pb))) =>
-        val node = Node(pb.updated(List((offset, Some(lastHash)))))
+        val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
     }
 
@@ -140,7 +151,7 @@ package object history {
           val newLeafHash = Trie.hash(newLeaf)
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
-          val (tip, parents) = getParents(store, txn, encodedKeyNew, 0, currentRoot)
+          val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
           tip match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
@@ -159,8 +170,8 @@ package object history {
               val hd = Node(
                 PointerBlock
                   .create()
-                  .updated(List((newLeafIndex, Some(newLeafHash)),
-                                (existingLeafIndex, Some(Trie.hash[K, V](existingLeaf)))))
+                  .updated(List((newLeafIndex, LeafPointer(newLeafHash)),
+                                (existingLeafIndex, LeafPointer(Trie.hash[K, V](existingLeaf)))))
               )
               val emptyNode     = Node(PointerBlock.create())
               val emptyNodes    = sharedPath.map((b: Byte) => (JByte.toUnsignedInt(b), emptyNode))
@@ -177,7 +188,7 @@ package object history {
               // to point to the new leaf instead of the existing leaf
               val (hd, tl) = parents match {
                 case (idx, Node(pointerBlock)) +: remaining =>
-                  (Node(pointerBlock.updated(List((idx, Some(newLeafHash))))), remaining)
+                  (Node(pointerBlock.updated(List((idx, LeafPointer(newLeafHash))))), remaining)
                 case Seq() =>
                   throw new InsertException("A leaf had no parents")
               }
@@ -190,7 +201,7 @@ package object history {
             case Node(pb) =>
               val pathLength    = parents.length
               val newLeafIndex  = JByte.toUnsignedInt(encodedKeyNew(pathLength))
-              val hd            = Node(pb.updated(List((newLeafIndex, Some(newLeafHash)))))
+              val hd            = Node(pb.updated(List((newLeafIndex, LeafPointer(newLeafHash)))))
               val rehashedNodes = rehash[K, V](hd, parents)
               val newRootHash   = insertTries(store, txn, rehashedNodes).get
               store.putRoot(txn, newRootHash)
@@ -202,12 +213,12 @@ package object history {
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
-      parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+      parents: Seq[(Int, Trie[K, V])]): (Node, Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
       case Seq((byte, Node(pointerBlock))) =>
-        (Node(pointerBlock.updated(List((byte, Some(hash))))), Seq.empty[(Int, Node)])
+        (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), Seq.empty[(Int, Node)])
       // Otherwise,
       case (byte, Node(pointerBlock)) +: tail =>
         // Get the children of the immediate parent
@@ -220,24 +231,23 @@ package object history {
           case Vector(_) => propagateLeafUpward(hash, tail)
           // Otherwise, if there are > 2 children, we can update the parent node's Vector
           // at the given index to point to the leaf.
-          case _ => (Node(pointerBlock.updated(List((byte, Some(hash))))), tail)
+          case _ => (Node(pointerBlock.updated(List((byte, LeafPointer(hash))))), tail)
         }
     }
 
   @tailrec
-  private[this] def deleteLeaf[T, K, V](store: ITrieStore[T, K, V],
-                                        txn: T,
-                                        parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+  private[this] def deleteLeaf[T, K, V](
+      parents: Seq[(Int, Trie[K, V])]): (Node, Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `None`
       case Seq((index, Node(pointerBlock))) =>
-        (Node(pointerBlock.updated(List((index, None)))), Seq.empty[(Int, Node)])
+        (Node(pointerBlock.updated(List((index, EmptyPointer)))), Seq.empty[(Int, Node)])
       // Otherwise,
       case (byte, Node(pointerBlock)) +: tail =>
-        val updated = (Node(pointerBlock.updated(List((byte, None)))), tail)
+        val updated = (Node(pointerBlock.updated(List((byte, EmptyPointer)))), tail)
         // Get the children of the immediate parent
-        pointerBlock.children match {
+        pointerBlock.childrenWithIndex match {
           // If there are no children, then something is wrong, because one of the children
           // should point down to the thing we are trying to delete.
           case Vector() =>
@@ -245,20 +255,18 @@ package object history {
           // If there are is only one child, then we know that it is the thing we are trying to
           // delete, and we can go ahead and move up the trie.
           case Vector(_) =>
-            deleteLeaf(store, txn, tail)
+            deleteLeaf(tail)
           // If there are two children, then we know that one of them points down to the thing
           // we are trying to delete.  We then decide how to handle the other child based on
           // whether or not it is a Node or a Leaf
           case c @ Vector(_, _) =>
-            val otherHash = c.collect { case (childByte, child) if childByte != byte => child }.head
-            store.get(txn, otherHash) match {
+            val otherPointer = c.collect { case (child, childByte) if childByte != byte => child }.head
+            otherPointer match {
               // If the other child is a Node, then we leave it intact, and update the parent node's
               // Vector at the given index to `None`.
-              case Some(Node(_)) => updated
+              case NodePointer(_) => updated
               // If the other child is a Leaf, then we must propagate it up the trie.
-              case Some(Leaf(_, _)) => propagateLeafUpward(otherHash, tail)
-              // If there is nothing there, something has gone wrong
-              case None => throw new DeleteException(s"No value at $otherHash")
+              case LeafPointer(otherHash) => propagateLeafUpward(otherHash, tail)
             }
           // Otherwise if there are > 2 children, update the parent node's Vector at the given
           // index to `None`.
@@ -282,7 +290,7 @@ package object history {
           // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
           val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
           // Using this path, get the parents of the given leaf.
-          val (tip, parents) = getParents(store, txn, encodedKey, 0, currentRoot)
+          val (tip, parents) = getParents(store, txn, encodedKey, currentRoot)
           tip match {
             // If the "tip" is a node, a leaf with a given key and value does not exist
             // so we put the current root hash back and return false.
@@ -292,7 +300,7 @@ package object history {
             // If the "tip" is equal to a leaf containing the given key and value, commence
             // with the deletion process.
             case leaf @ Leaf(_, _) if leaf == Leaf(key, value) =>
-              val (hd, nodesToRehash) = deleteLeaf(store, txn, parents)
+              val (hd, nodesToRehash) = deleteLeaf(parents)
               val rehashedNodes       = rehash[K, V](hd, nodesToRehash)
               val newRootHash         = insertTries[T, K, V](store, txn, rehashedNodes).get
               store.putRoot(txn, newRootHash)
@@ -303,4 +311,20 @@ package object history {
           }
       }
     }
+  import scodec.Codec
+  import scodec.bits.{BitVector, ByteVector}
+  import scodec.codecs._
+
+  implicit val codecPointer: Codec[Pointer] =
+    discriminated[Pointer]
+      .by(uint8)
+      .subcaseP(0) {
+        case value: LeafPointer => value
+      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      .subcaseP(1) {
+        case node: NodePointer => node
+      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
+      .subcaseP(2) {
+        case nothing: EmptyPointer.type => nothing
+      }(provide(EmptyPointer))
 }

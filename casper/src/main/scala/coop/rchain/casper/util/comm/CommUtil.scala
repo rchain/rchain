@@ -10,15 +10,15 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.rchain.Packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
-import coop.rchain.p2p.Network.{frameMessage, ErrorHandler, KeysStore}
-import coop.rchain.p2p.NetworkProtocol
+import coop.rchain.comm.transport._, CommMessages._
+import coop.rchain.comm.discovery._
+import coop.rchain.p2p.Network.ErrorHandler
 
 import scala.util.Try
 
 object CommUtil {
 
-  def sendBlock[
-      F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+  def sendBlock[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] = {
     val serializedBlock = b.toByteString
     val hashString      = PrettyPrinter.buildString(b.blockHash)
@@ -29,8 +29,7 @@ object CommUtil {
     } yield ()
   }
 
-  def sendBlockRequest[
-      F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+  def sendBlockRequest[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       r: BlockRequest): F[Unit] = {
     val serialized = r.toByteString
     val hashString = PrettyPrinter.buildString(r.hash)
@@ -42,14 +41,14 @@ object CommUtil {
     } yield ()
   }
 
-  def sendToPeers[
-      F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+  def sendToPeers[F[_]: Monad: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       serializedMessage: ByteString): F[List[PeerNode]] =
     for {
       peers <- NodeDiscovery[F].peers
+      local <- TransportLayer[F].local
       sends <- peers.toList.traverse { peer =>
-                frameMessage[F](peer, nonce => NetworkProtocol.framePacket(peer, serializedMessage))
-                  .flatMap(msg => TransportLayer[F].send(msg, peer).map(_ -> peer))
+                val msg = PacketMessage(packet(local, serializedMessage))
+                TransportLayer[F].send(msg, peer).map(res => (res, peer))
               }
       successes <- sends.traverse {
                     case (Left(err), _) =>
@@ -60,7 +59,7 @@ object CommUtil {
     } yield successes.flatten
 
   def casperPacketHandler[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       peer: PeerNode): PartialFunction[Packet, F[Option[Packet]]] =
     Function
       .unlift(
@@ -81,13 +80,11 @@ object CommUtil {
         case r: BlockRequest =>
           for {
             dag   <- MultiParentCasper[F].blockDag
+            local <- TransportLayer[F].local
             block = dag.blockLookup.get(r.hash).map(_.toByteString)
-            frame <- block.traverse(
-                      serializedMessage =>
-                        frameMessage[F](peer,
-                                        nonce =>
-                                          NetworkProtocol.framePacket(peer, serializedMessage)))
-            send     <- frame.traverse(msg => TransportLayer[F].send(msg, peer))
+            maybeMsg = block.map(serializedMessage =>
+              PacketMessage(packet(local, serializedMessage)))
+            send     <- maybeMsg.traverse(msg => TransportLayer[F].send(msg, peer))
             hash     = PrettyPrinter.buildString(r.hash)
             logIntro = s"Received request for block $hash from $peer. "
             _ <- send match {
@@ -101,7 +98,7 @@ object CommUtil {
       }
 
   private def handleNewBlock[
-      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: Encryption: KeysStore: ErrorHandler](
+      F[_]: Monad: MultiParentCasper: NodeDiscovery: TransportLayer: Log: Time: ErrorHandler](
       b: BlockMessage): F[Unit] =
     for {
       _ <- Log[F].info(s"CASPER: Received ${PrettyPrinter.buildString(b)}.")

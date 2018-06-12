@@ -6,13 +6,22 @@ import scala.collection.mutable
 import Ob.logger
 import coop.rchain.roscala.GlobalEnv
 import coop.rchain.roscala.Vm.State
+import java.util.concurrent.ConcurrentHashMap
+
+import coop.rchain.roscala.util.{LockedMap, Slot}
 
 abstract class Ob {
-  val slot: mutable.ArrayBuffer[Ob] = mutable.ArrayBuffer[Ob]()
-  var meta: Meta                    = _
-  var parent: Ob                    = _
+  val slot       = Slot()
+  var meta: Meta = _
+  var parent: Ob = _
 
   def dispatch(state: State, globalEnv: GlobalEnv): Ob = Niv
+
+  def extendWith(keyMeta: Ob, argvec: Tuple): Ob =
+    if (keyMeta == NilMeta)
+      this
+    else
+      argvec.becomeExtension(keyMeta.asInstanceOf[Meta], this)
 
   def invoke(state: State, globalEnv: GlobalEnv): Ob = Niv
 
@@ -40,27 +49,29 @@ abstract class Ob {
   def getLex(indirect: Boolean, level: Int, offset: Int): Ob = {
     var p = this
 
-    for (_ <- 0 to level) p = p.parent
+    for (_ <- 0 until level) p = p.parent
 
     if (indirect) {
       p = p.asInstanceOf[Actor].extension
     }
 
-    p.slot.lift(offset).getOrElse(Invalid)
+    p.slot(offset).getOrElse(Invalid)
   }
 
   def setLex(indirect: Boolean, level: Int, offset: Int, value: Ob): Ob = {
     var p = this
 
-    for (_ <- 0 to level) p = p.parent
+    for (_ <- 0 until level) p = p.parent
 
     if (indirect) {
       p = p.asInstanceOf[Actor].extension
     }
 
-    p.slot.update(offset, value)
+    p.slot(offset) = value
     value
   }
+
+  def numberOfSlots = slot.size
 }
 
 object Ob {

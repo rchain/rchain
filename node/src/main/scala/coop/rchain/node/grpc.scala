@@ -25,6 +25,8 @@ import java.io.{Reader, StringReader}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 object GrpcServer {
 
@@ -97,7 +99,7 @@ object GrpcServer {
               case Left(ie: InterpreterError) => s"Error: ${ie.toString}"
               case Left(ex)                   => s"Caught boxed exception: $ex"
               case Right(_) =>
-                s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.store)}"
+                s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
             }
         }
         .map(ReplResponse(_))

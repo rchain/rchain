@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import cats.instances.option._
 import cats.instances.vector._
 import cats.syntax.traverse._
+import coop.rchain.rspace.Blake2b256Hash
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
@@ -36,7 +37,7 @@ trait ITrieStore[T, K, V] {
             case ((nexts, leaves), Node(pointerBlock)) =>
               val children =
                 pointerBlock.children
-                  .map(_._2)
+                  .map { _.hash }
                   .traverse[Option, Trie[K, V]](hash => get(txn, hash))
                   .getOrElse(throw new LookupException("something went wrong"))
               (nexts ++ children, leaves)

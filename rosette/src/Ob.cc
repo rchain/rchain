@@ -394,6 +394,7 @@ pOb obcpy(pOb dest, pOb src, int sz) {
     memcpy(dest, src, sz);
     dest->header.all = 0;
     dest->header.fields.size = sz;
+    dest->objectId = nextId++;  // New object gets a new ID
     if (FOREIGN(src)) {
         SET_FLAG(HDR_FLAGS(dest), f_foreign);
     } else {

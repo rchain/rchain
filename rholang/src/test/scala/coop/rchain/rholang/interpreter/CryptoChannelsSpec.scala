@@ -12,9 +12,9 @@ import coop.rchain.models.Expr.ExprInstance.{GBool, GByteArray, GString}
 import coop.rchain.models.Var.VarInstance.Wildcard
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.implicits._
+import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.implicits._
+import coop.rchain.models.rholang.implicits._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.{IStore, Serialize}
@@ -190,9 +190,9 @@ class CryptoChannelsSpec
     val runtime   = Runtime.create(dbDir, size)(Capture.taskCapture)
 
     try {
-      test((runtime.reducer, runtime.store))
+      test((runtime.reducer, runtime.space.store))
     } finally {
-      runtime.store.close()
+      runtime.close()
       recursivelyDeletePath(dbDir)
     }
   }

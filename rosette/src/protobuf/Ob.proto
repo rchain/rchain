@@ -6,11 +6,10 @@ syntax = "proto3";
 
 package ObjectCodePB;
 
-
-
+// Object code export contains Rosette Objects, and CodeBlocks.
 message ObjectCode {
-    repeated CodeBlock code_block = 1;
-//    ObjectStore object_store = 2;     // Possible future use
+    repeated Object objects = 1;
+    repeated CodeBlock code_block = 2;
 }
 
 // A single code block contains a litvec with objects on which the code operates,
@@ -34,14 +33,6 @@ message LitVec {
     repeated Object ob = 1;
 }
 
-// These two messages are for possible future use. Not currently implemented.
-// message ObjectReference {
-//     uint64 object_id = 1;
-// }
-// message ObjectStore {
-//     repeated Object objects = 1;
-// }
-
 // Rather than implement all 100+ object types existing in Rosette, We will only implement those
 // used in loading boot.rbl, plus any deemed necessary by the Roscala VM guys.
 
@@ -62,7 +53,18 @@ message Char {
 message Code {
     // Handle by reference. ID in parent Object.
 }
+message ComplexPattern {
+    Object patvec = 1;
+    Object offsetvec = 2;
+}
+message CompoundPattern {
+    Object expr = 1;
+}
+message ConstPattern {
+    Object val = 1;
+}
 message ExpandedLocation {
+    string value = 1;
 }
 message Fixnum {
     int32 value = 1;
@@ -76,6 +78,15 @@ message FreeExpr {
 }
 message GotoExpr {
     Object label = 1;
+}
+message IdAmprRestPattern {
+    Object expr = 1;
+}
+message IdPattern {
+    Object symbol = 1;
+}
+message IdVecPattern {
+    Object expr = 1;
 }
 message IfExpr {
     Object condition = 1;
@@ -91,6 +102,8 @@ message LetExpr {
     Object body = 2;
 }
 message LetrecExpr {
+    Object bindings = 1;
+    Object body = 2;
 }
 message MethodExpr {
     Object identity = 1;
@@ -101,6 +114,13 @@ message Niv {
 }
 message NullExpr {
 }
+message Prim {
+    Object id = 1;
+//    Object fn = 2;
+    uint32 minargs = 3;
+    uint32 maxargs = 4;
+    uint32 primnum = 5;
+}
 message Proc {
     Object env = 1;
     Object code = 2;
@@ -108,6 +128,9 @@ message Proc {
     Object source = 4;
 }
 message ProcExpr {
+    Object identity = 1;
+    Object formals = 2;
+    Object body = 3;
 }
 message QuoteExpr {
     Object expr = 1;
@@ -120,13 +143,29 @@ message RBLBool {
 message RBLstring {
     string value = 1;
 }
+message RblTable {
+    // The tbl is a Tuple that appears to contain the key/val pairs in consecutive elements.
+    //  Rosette internally keeps a hash of these for quick access.
+
+    // message Entry {
+    //     Object key = 1;
+    //     Object val = 2;
+    // }
+
+    Object tbl = 1;
+}
 message ReflectiveMethodExpr {
+    Object identity = 1;
+    Object formals = 2;
+    Object body = 3;
 }
 message RequestExpr {
     Object target = 1;
     Object msg = 2;
 }
 message SendExpr {
+    Object target = 1;
+    Object msg = 2;
 }
 message SeqExpr {
     Object subexprs = 1;
@@ -136,6 +175,10 @@ message SetExpr {
     Object val = 2;
 }
 message StdExtension {
+    repeated Object elements = 1;
+}
+message StdMeta {
+    Object extension = 1;
 }
 message StdMthd {
     Object code = 1;
@@ -145,11 +188,17 @@ message StdMthd {
 message Symbol {
     string name = 1;
 }
+message Sysval {
+    string value = 1;
+}
 message TblObject {
     Object validextent = 1;
     Object keyvec = 2;
 }
 message Template {
+    Object keytuple = 1;
+    Object pat = 2;
+    Object keymeta = 3;
 }
 message Tuple {
     repeated Object elements = 1;
@@ -194,6 +243,16 @@ enum ObType {
     OT_STD_EXTENSION = 31;
     OT_RBL_ATOM = 32;
     OT_NULL_EXPR = 33;
+    OT_COMPOUND_PATTERN = 34;
+    OT_COMPLEX_PATTERN = 35;
+    OT_STD_META = 36;
+    OT_ID_VEC_PATTERN = 37;
+    OT_ID_AMPR_REST_PATTERN = 38;
+    OT_ID_PATTERN = 39;
+    OT_PRIM = 40;
+    OT_SYSVAL = 41;
+    OT_CONST_PATTERN = 42;
+    OT_RBL_TABLE = 43;
     OT_UNKNOWN = 999;
 }
 
@@ -241,5 +300,15 @@ message Object {
         Template template = 41;
         Tuple tuple = 42;
         TupleExpr tuple_expr = 43;
+        CompoundPattern compound_pattern = 44;
+        ComplexPattern complex_pattern = 45;
+        StdMeta std_meta = 46;
+        IdVecPattern id_vec_pattern = 47;
+        IdAmprRestPattern id_ampr_rest_pattern = 48;
+        IdPattern id_pattern = 49;
+        Prim prim = 50;
+        Sysval sysval = 51;
+        ConstPattern const_pattern = 52;
+        RblTable rbl_table = 53;
     }
 }

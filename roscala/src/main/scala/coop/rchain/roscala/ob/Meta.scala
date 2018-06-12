@@ -1,7 +1,13 @@
 package coop.rchain.roscala.ob
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.ReentrantReadWriteLock
+
 import coop.rchain.roscala._
 import coop.rchain.roscala.Location._
+import coop.rchain.roscala.util.LockedMap
+import coop.rchain.roscala.util.syntax._
 
 import scala.collection.mutable
 
@@ -10,8 +16,8 @@ import scala.collection.mutable
   * `refCount` holds the number of objects that share this meta entity.
   * `extensible` declares if key-value pairs can be added. Only `Actor`s and `TblObject`s are extensible.
   */
-case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensible: Boolean)
-    extends Ob {
+class Meta(val refCount: AtomicInteger, var extensible: Boolean) extends Ob {
+  val map = new LockedMap[Ob, Location]()
 
   /** Add key-value pair for a given meta-client pair
     *
@@ -23,50 +29,60 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
     * TODO: Add case where `meta` is shared
     */
   def add(client: Ob, key: Ob, value: Ob, ctxt: Ctxt)(globalEnv: GlobalEnv): Ob = {
-    map.get(key) match {
-      case Some(location) =>
-        // `key` already exists
-        setValWrt(location, client, value)(globalEnv)
+    val lock = map.lock
 
-      case None =>
-        // key-value pair does not exist already
+    lock.writeLock().withLock {
 
-        // Add key-value pair to `client`
-        val offset = client match {
-          case actor: Actor => actor.addSlot(value)
+      map(key) match {
+        case Some(location) =>
+          // `key` already exists
+          setValWrt(location, client, value)(globalEnv)
 
-          case _ =>
-            suicide("Meta.add")
-            0
-        }
+        case None =>
+          // key-value pair does not exist already
 
-        // Add mapping of `key` to location that describes where `value` lives
-        map(key) = LexVariable(level = 0, offset = offset, indirect = true)
+          // Add key-value pair to `client`
+          val offset = client match {
+            case actor: Actor => actor.addSlot(value)
+
+            case _ =>
+              suicide("Meta.add")
+              0
+          }
+
+          // Add mapping of `key` to location that describes where `value` lives
+          map(key) = LexVariable(level = 0, offset = offset, indirect = true)
+      }
+
+      client
     }
-
-    client
   }
 
   /**
     * Get value for `key` in `client`
     */
   def get(client: Ob, key: Ob)(globalEnv: GlobalEnv): Ob = {
-    var container = client
+    val lock = map.lock
 
-    map.get(key) match {
-      case Some(location) =>
-        location match {
-          case LexVariable(_, offset, indirect) =>
-            if (indirect) {
-              container = client.asInstanceOf[Actor].extension
-            }
+    lock.readLock().withLock {
 
-            container.slot(offset)
+      var container = client
 
-          case _ => valWrt(location, client)(globalEnv)
-        }
+      map(key) match {
+        case Some(location) =>
+          location match {
+            case LexVariable(_, offset, indirect) =>
+              if (indirect) {
+                container = client.asInstanceOf[Actor].extension
+              }
 
-      case None => Absent
+              container.slot(offset).get
+
+            case _ => valWrt(location, client)(globalEnv)
+          }
+
+        case None => Absent
+      }
     }
   }
 
@@ -82,5 +98,11 @@ case class Meta(map: mutable.Map[Ob, Location], var refCount: Int, var extensibl
 }
 
 object Meta {
-  def empty = Meta(map = mutable.Map(), 0, extensible = true)
+  def empty =
+    new Meta(new AtomicInteger(0), extensible = true)
+
+  def apply(extensible: Boolean): Meta =
+    new Meta(new AtomicInteger(0), extensible)
 }
+
+object NilMeta extends Ob
