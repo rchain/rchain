@@ -13,6 +13,8 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.Network.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 import coop.rchain.shared.AtomicSyncVar
 
 import scala.annotation.tailrec
@@ -268,6 +270,7 @@ sealed abstract class MultiParentCasperInstances {
           case InvalidBlock =>
             Log[F].info(
               s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+          case _ => throw new Error("Should never reach")
         }
 
       private def canAdd(block: BlockMessage): BlockStatus = {

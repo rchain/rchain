@@ -206,7 +206,7 @@ object NameNormalizeMatcher {
 object ProcNormalizeMatcher {
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] = {
-    def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Option[Par] => T)(
+    def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
       normalizeMatch[M](subProc, input.copy(par = VectorPar()))
         .map(
@@ -216,11 +216,11 @@ object ProcNormalizeMatcher {
               subResult.knownFree
           ))
 
-    def binaryExp[T](subProcLeft: Proc,
-                     subProcRight: Proc,
-                     input: ProcVisitInputs,
-                     constructor: (Option[Par], Option[Par]) => T)(
-        implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
+    def binaryExp[T](
+        subProcLeft: Proc,
+        subProcRight: Proc,
+        input: ProcVisitInputs,
+        constructor: (Par, Par) => T)(implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
       for {
         leftResult <- normalizeMatch[M](subProcLeft, input.copy(par = VectorPar()))
         rightResult <- normalizeMatch[M](
@@ -308,7 +308,7 @@ object ProcNormalizeMatcher {
           case pvv: ProcVarVar =>
             input.env.get(pvv.var_) match {
               case Some((level, ProcSort, _, _)) =>
-                ProcVisitOutputs(input.par.prepend(EVar(Some(BoundVar(level)))), input.knownFree)
+                ProcVisitOutputs(input.par.prepend(EVar(BoundVar(level))), input.knownFree)
                   .pure[M]
               case Some((_, NameSort, line, col)) =>
                 err.raiseError(
@@ -334,6 +334,31 @@ object ProcNormalizeMatcher {
             ProcVisitOutputs(
               input.par.prepend(EVar(Wildcard(Var.WildcardMsg()))).withConnectiveUsed(true),
               input.knownFree.addWildcard(p.line_num, p.col_num)).pure[M]
+        }
+
+      case p: PVarRef =>
+        input.env.getDeep(p.var_) match {
+          case None =>
+            err.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
+          case Some(((idx, kind, line, col), depth)) =>
+            kind match {
+              case ProcSort =>
+                p.varrefkind_ match {
+                  case _: VarRefKindProc =>
+                    ProcVisitOutputs(input.par.prepend(Connective(VarRefBody(VarRef(idx, depth)))),
+                                     input.knownFree).pure[M]
+                  case _ =>
+                    err.raiseError(UnexpectedProcContext(p.var_, line, col, p.line_num, p.col_num))
+                }
+              case NameSort =>
+                p.varrefkind_ match {
+                  case _: VarRefKindName =>
+                    ProcVisitOutputs(input.par.prepend(Connective(VarRefBody(VarRef(idx, depth)))),
+                                     input.knownFree).pure[M]
+                  case _ =>
+                    err.raiseError(UnexpectedNameContext(p.var_, line, col, p.line_num, p.col_num))
+                }
+            }
         }
 
       case _: PNil => ProcVisitOutputs(input.par, input.knownFree).pure[M]
@@ -456,7 +481,8 @@ object ProcNormalizeMatcher {
           formalsResults <- p.listname_.asScala.toList.foldM(initAcc)(
                              (acc, n: Name) => {
                                NameNormalizeMatcher
-                                 .normalizeMatch[M](n, NameVisitInputs(DebruijnIndexMap(), acc._2))
+                                 .normalizeMatch[M](n,
+                                                    NameVisitInputs(input.env.pushDown(), acc._2))
                                  .map(result => (result.chan +: acc._1, result.knownFree))
                              }
                            )
@@ -525,7 +551,7 @@ object ProcNormalizeMatcher {
               names
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
-                    .normalizeMatch[M](n, NameVisitInputs(DebruijnIndexMap(), acc._2))
+                    .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
                     .map(result => (result.chan +: acc._1, result.knownFree))
                 })
                 .flatMap(formalsResults =>
@@ -579,8 +605,8 @@ object ProcNormalizeMatcher {
           sourcesP                                                         <- processSources(bindings)
           (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
           bindingsSources                                                  <- processBindings(sources)
-          receipts <- ReceiveBindsSortMatcher
-                       .preSortBinds[M, VarSort](bindingsSources)
+          receipts = ReceiveBindsSortMatcher
+            .preSortBinds[M, VarSort](bindingsSources)
           mergedFrees <- receipts.toList.foldM[M, DebruijnLevelMap[VarSort]](
                           DebruijnLevelMap[VarSort]())((env, receipt) =>
                           env.merge(receipt._2) match {
@@ -707,7 +733,7 @@ object ProcNormalizeMatcher {
                                 patternResult <- normalizeMatch[M](
                                                   pattern,
                                                   ProcVisitInputs(VectorPar(),
-                                                                  DebruijnIndexMap[VarSort](),
+                                                                  input.env.pushDown(),
                                                                   DebruijnLevelMap[VarSort]()))
                                 caseEnv    = input.env.absorbFree(patternResult.knownFree)._1
                                 boundCount = patternResult.knownFree.countNoWildcards
@@ -753,13 +779,13 @@ object ProcNormalizeMatcher {
   * @param knownFree
   */
 case class ProcVisitInputs(par: Par,
-                           env: DebruijnIndexMap[VarSort],
+                           env: IndexMapChain[VarSort],
                            knownFree: DebruijnLevelMap[VarSort])
 // Returns the update Par and an updated map of free variables.
 case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
 
-case class NameVisitInputs(env: DebruijnIndexMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
+case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class NameVisitOutputs(chan: Channel, knownFree: DebruijnLevelMap[VarSort])
 
-case class CollectVisitInputs(env: DebruijnIndexMap[VarSort], knownFree: DebruijnLevelMap[VarSort])
+case class CollectVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
 case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])
