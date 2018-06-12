@@ -30,25 +30,34 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
-object GrpcServer {
+private[api] class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {
+  import RholangCLI.{buildNormalizedTerm, evaluate}
 
-  def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable](
-      port: Int,
-      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
-    Capture[F].capture {
-      ServerBuilder
-        .forPort(port)
-        .addService(ReplGrpc.bindService(new ReplImpl(runtime), scheduler))
-        .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
-        .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
-        .build
-    }
+  def exec(reader: Reader): Future[ReplResponse] =
+    Task
+      .coeval(buildNormalizedTerm(reader))
+      .attempt
+      .flatMap {
+        case Left(er) =>
+          er match {
+            case _: InterpreterError => Task.now(s"Error: ${er.toString}")
+            case th: Throwable       => Task.now(s"Error: $th")
+          }
+        case Right(term) =>
+          evaluate(runtime.reducer, term).attempt.map {
+            case Left(ie: InterpreterError) => s"Error: ${ie.toString}"
+            case Left(ex)                   => s"Caught boxed exception: $ex"
+            case Right(_) =>
+              s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+          }
+      }
+      .map(ReplResponse(_))
+      .executeAsync
+      .runAsync
 
-  def start[F[_]: FlatMap: Capture: Log](server: Server): F[Unit] =
-    for {
-      _ <- Capture[F].capture(server.start)
-      _ <- Log[F].info("gRPC server started, listening on ")
-    } yield ()
+  def run(request: CmdRequest): Future[ReplResponse] =
+    exec(new StringReader(request.line))
 
+  def eval(request: EvalRequest): Future[ReplResponse] =
+    exec(new StringReader(request.program))
 }

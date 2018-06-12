@@ -30,25 +30,34 @@ import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
 import coop.rchain.shared._
 
-object GrpcServer {
+private[api] class DeployImpl[F[_]: Monad: MultiParentCasper: Futurable]
+    extends DeployServiceGrpc.DeployService {
+  override def doDeploy(d: DeployString): Future[DeployServiceResponse] =
+    InterpreterUtil.mkTerm(d.term) match {
+      case Right(term) =>
+        val deploy = Deploy(
+          user = d.user,
+          nonce = d.nonce,
+          term = Some(term),
+          sig = d.sig
+        )
+        val f = for {
+          _ <- MultiParentCasper[F].deploy(deploy)
+        } yield DeployServiceResponse(true, "Success!")
 
-  def acquireServer[
-      F[_]: Capture: Monad: MultiParentCasper: NodeDiscovery: StoreMetrics: JvmMetrics: NodeMetrics: Futurable](
-      port: Int,
-      runtime: Runtime)(implicit scheduler: Scheduler): F[Server] =
-    Capture[F].capture {
-      ServerBuilder
-        .forPort(port)
-        .addService(ReplGrpc.bindService(new ReplImpl(runtime), scheduler))
-        .addService(DiagnosticsGrpc.bindService(diagnostics.grpc[F], scheduler))
-        .addService(DeployServiceGrpc.bindService(new DeployImpl[F], scheduler))
-        .build
+        f.toFuture
+
+      case Left(err) =>
+        Future.successful(DeployServiceResponse(false, s"Error in parsing term: \n$err"))
     }
 
-  def start[F[_]: FlatMap: Capture: Log](server: Server): F[Unit] =
-    for {
-      _ <- Capture[F].capture(server.start)
-      _ <- Log[F].info("gRPC server started, listening on ")
-    } yield ()
+  override def createBlock(e: Empty): Future[MaybeBlockMessage] = BlockAPI.createBlock[F].toFuture
 
+  override def addBlock(b: BlockMessage): Future[Empty] = BlockAPI.addBlock[F](b).toFuture
+
+  override def showBlock(q: BlockQuery): Future[BlockQueryResponse] =
+    BlockAPI.getBlockQueryResponse[F](q).toFuture
+
+  override def showBlocks(e: Empty): Future[BlocksResponse] =
+    BlockAPI.getBlocksResponse[F].toFuture
 }
