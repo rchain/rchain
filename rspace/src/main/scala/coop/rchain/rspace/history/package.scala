@@ -78,44 +78,41 @@ package object history {
       implicit codecK: Codec[K]): Option[immutable.Seq[V]] =
     keys.traverse[Option, V]((k: K) => lookup(store, k))
 
-  @tailrec
-  private[this] def getParents[T, K, V](
-      store: ITrieStore[T, K, V],
-      txn: T,
-      path: Seq[Byte],
-      depth: Int,
-      curr: Trie[K, V],
-      acc: Seq[(Int, Node)] = Seq.empty): (Trie[K, V], Seq[(Int, Node)]) =
-    curr match {
-      case node @ Node(pointerBlock) =>
-        val index: Int = JByte.toUnsignedInt(path(depth))
-        pointerBlock.toVector(index) match {
-          case EmptyPointer =>
-            (curr, acc)
-          case NodePointer(nextHash) =>
-            store.get(txn, nextHash) match {
-              case None =>
-                throw new LookupException(s"No node at $nextHash")
-              case Some(next) =>
-                getParents(store, txn, path, depth + 1, next, (index, node) +: acc)
-            }
-          case LeafPointer(nextHash) =>
-            store.get(txn, nextHash) match {
-              case None =>
-                throw new LookupException(s"No node at $nextHash")
-              case Some(next) =>
-                getParents(store, txn, path, depth + 1, next, (index, node) +: acc)
-            }
-        }
-      case leaf =>
-        (leaf, acc)
-    }
+  private[this] def getParents[T, K, V](store: ITrieStore[T, K, V],
+                                        txn: T,
+                                        path: Seq[Byte],
+                                        curr: Trie[K, V]): (Trie[K, V], Seq[(Int, Trie[K, V])]) = {
+
+    @tailrec
+    def parents(depth: Int,
+                curr: Trie[K, V],
+                acc: Seq[(Int, Trie[K, V])]): (Trie[K, V], Seq[(Int, Trie[K, V])]) =
+      curr match {
+        case node @ Node(pointerBlock) =>
+          val index: Int = JByte.toUnsignedInt(path(depth))
+          pointerBlock.toVector(index) match {
+            case EmptyPointer =>
+              (curr, acc)
+            case next: NonEmptyPointer =>
+              store.get(txn, next.hash) match {
+                case None =>
+                  throw new LookupException(s"No node at ${next.hash}")
+                case Some(next) =>
+                  parents(depth + 1, next, (index, node) +: acc)
+              }
+          }
+        case leaf =>
+          (leaf, acc)
+      }
+
+    parents(0, curr, Seq.empty)
+  }
 
   // TODO(ht): make this more efficient
   private[this] def commonPrefix[A: Eq](a: Seq[A], b: Seq[A]): Seq[A] =
     a.zip(b).takeWhile { case (l, r) => l === r }.map(_._1)
 
-  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
+  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Trie[K, V])])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
@@ -154,7 +151,7 @@ package object history {
           val newLeafHash = Trie.hash(newLeaf)
           store.put(txn, newLeafHash, newLeaf)
           // Using the path we created from the key, get the existing parents of the new leaf.
-          val (tip, parents) = getParents(store, txn, encodedKeyNew, 0, currentRoot)
+          val (tip, parents) = getParents(store, txn, encodedKeyNew, currentRoot)
           tip match {
             // If the "tip" is the same as the new leaf, then the given (key, value) pair is
             // already in the Trie, so we put the rootHash back and continue
@@ -216,7 +213,7 @@ package object history {
   @tailrec
   private[this] def propagateLeafUpward[T, K, V](
       hash: Blake2b256Hash,
-      parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+      parents: Seq[(Int, Trie[K, V])]): (Node, Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to point to the Leaf.
@@ -239,7 +236,8 @@ package object history {
     }
 
   @tailrec
-  private[this] def deleteLeaf[T, K, V](parents: Seq[(Int, Node)]): (Node, Seq[(Int, Node)]) =
+  private[this] def deleteLeaf[T, K, V](
+      parents: Seq[(Int, Trie[K, V])]): (Node, Seq[(Int, Trie[K, V])]) =
     parents match {
       // If the list parents only contains a single Node, we know we are at the root, and we
       // can update the Vector at the given index to `None`
@@ -292,7 +290,7 @@ package object history {
           // Serialize and convert the key to a `Seq[Byte]`.  This becomes our "path" down the Trie.
           val encodedKey = codecK.encode(key).map(_.bytes.toSeq).get
           // Using this path, get the parents of the given leaf.
-          val (tip, parents) = getParents(store, txn, encodedKey, 0, currentRoot)
+          val (tip, parents) = getParents(store, txn, encodedKey, currentRoot)
           tip match {
             // If the "tip" is a node, a leaf with a given key and value does not exist
             // so we put the current root hash back and return false.

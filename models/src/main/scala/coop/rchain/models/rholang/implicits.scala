@@ -2,6 +2,8 @@ package coop.rchain.models.rholang
 
 import coop.rchain.models.Channel.ChannelInstance
 import coop.rchain.models.Channel.ChannelInstance._
+import coop.rchain.models.Connective.ConnectiveInstance
+import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance
@@ -139,7 +141,7 @@ object implicits {
     )
 
   def apply(c: Connective): Par =
-    new Par(connectives = Vector(c), connectiveUsed = true)
+    new Par(connectives = Vector(c), connectiveUsed = ConnectiveLocallyFree.connectiveUsed(c))
 
   implicit def fromSend(s: Send): Par                             = apply(s)
   implicit def fromReceive(r: Receive): Par                       = apply(r)
@@ -204,7 +206,7 @@ object implicits {
     def prepend(c: Connective): Par =
       p.copy(
         connectives = c +: p.connectives,
-        connectiveUsed = true
+        connectiveUsed = p.connectiveUsed || ConnectiveLocallyFree.connectiveUsed(c)
       )
 
     def singleEval(): Option[Channel] =
@@ -417,5 +419,19 @@ object implicits {
     new HasLocallyFree[MatchCase] {
       def connectiveUsed(mc: MatchCase) = mc.source.get.connectiveUsed
       def locallyFree(mc: MatchCase)    = mc.source.get.locallyFree
+    }
+
+  implicit val ConnectiveLocallyFree: HasLocallyFree[Connective] =
+    new HasLocallyFree[Connective] {
+      def connectiveUsed(conn: Connective) =
+        conn.connectiveInstance match {
+          case ConnAndBody(_) => true
+          case ConnOrBody(_)  => true
+          case ConnNotBody(_) => true
+          case VarRefBody(_)  => false
+        }
+      // Because connectives can only be used in patterns, we don't need to
+      // calculate what is locally free inside
+      def locallyFree(conn: Connective) = BitSet()
     }
 }

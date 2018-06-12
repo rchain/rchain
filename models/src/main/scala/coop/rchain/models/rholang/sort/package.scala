@@ -137,9 +137,10 @@ package object sort {
     final val BUNDLE_WRITE      = 307
     final val BUNDLE_READ_WRITE = 308
 
-    final val CONNECTIVE_NOT = 400
-    final val CONNECTIVE_AND = 401
-    final val CONNECTIVE_OR  = 402
+    final val CONNECTIVE_NOT    = 400
+    final val CONNECTIVE_AND    = 401
+    final val CONNECTIVE_OR     = 402
+    final val CONNECTIVE_VARREF = 403
 
     final val PAR = 999
   }

@@ -433,6 +433,7 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
           Connective(
             ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
                                            New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+          Connective(VarRefBody(VarRef(0, 2))),
           Connective(ConnNotBody(Par()))
         ),
         connectiveUsed = true
@@ -446,7 +447,8 @@ class ParSortMatcherSpec extends FlatSpec with Matchers {
               List(EVar(FreeVar(0)), Send(ChanVar(FreeVar(1)), List(EVar(FreeVar(2))), false))))),
           Connective(
             ConnOrBody(ConnectiveBody(List(New(1, EVar(Wildcard(Var.WildcardMsg()))),
-                                           New(2, EVar(Wildcard(Var.WildcardMsg())))))))
+                                           New(2, EVar(Wildcard(Var.WildcardMsg()))))))),
+          Connective(VarRefBody(VarRef(0, 2)))
         ),
         connectiveUsed = true
       )
