@@ -13,7 +13,7 @@ class AtomicSyncVar[A](init: A) {
   def get: A = underlying.get
 
   //Use case: capture an intermediate result in the process of updating the var.
-  def mapAndUpdate[B](f: (A) => B, g: (B) => A): Either[Throwable, B] = {
+  def mapAndUpdate[B](f: A => B, g: B => A): Either[Throwable, B] = {
     val curr = underlying.take()
 
     Try(f(curr))

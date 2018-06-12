@@ -14,26 +14,27 @@ import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
-class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
+class RuntimeManager private (runtime: SyncVar[Runtime]) {
+  type StateHash = ByteString
 
-  def updated(terms: List[Par])(implicit scheduler: Scheduler): Either[Throwable, Checkpoint] = {
-    val active = getActive()
+  def updated(hash: StateHash, terms: List[Par])(
+      implicit scheduler: Scheduler): Either[Throwable, (StateHash)] = {
+    val active = getActive(hash)
     val error  = eval(terms, active)
-    val newHash = error.fold[Either[Throwable, ByteString]](
+    val newHash = error.fold[Either[Throwable, StateHash]](
       Right(ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)))(Left(_))
     runtime.put(active)
-
-    newHash.map(new Checkpoint(_, runtime))
+    newHash
   }
 
-  def storageRepr: String = {
-    val active = getActive()
+  def storageRepr(hash: StateHash): String = {
+    val active = getActive(hash)
     val result = StoragePrinter.prettyPrint(active.space.store)
     runtime.put(active)
     result
   }
 
-  private def getActive(): Runtime = {
+  private def getActive(hash: StateHash): Runtime = {
     val active    = runtime.take()
     val blakeHash = Blake2b256Hash.fromByteArray(hash.toByteArray)
     Try(active.space.reset(blakeHash)) match {
@@ -57,12 +58,14 @@ class Checkpoint private (val hash: ByteString, runtime: SyncVar[Runtime]) {
     }
 }
 
-object Checkpoint {
-  def fromRuntime(runtime: SyncVar[Runtime]): Checkpoint = {
+object RuntimeManager {
+  type StateHash = ByteString
+
+  def fromRuntime(runtime: SyncVar[Runtime]): (StateHash, RuntimeManager) = {
     val active = runtime.take()
     val hash   = ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)
     runtime.put(active)
 
-    new Checkpoint(hash, runtime)
+    (hash, new RuntimeManager(runtime))
   }
 }
