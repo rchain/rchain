@@ -29,32 +29,32 @@ case class PrettyPrinter(freeShift: Int,
 
   def buildString(e: Expr): String =
     e.exprInstance match {
-      case ENegBody(ENeg(p)) => "-" + buildString(p.get).wrapWithBraces
-      case ENotBody(ENot(p)) => "~" + buildString(p.get).wrapWithBraces
+      case ENegBody(ENeg(p)) => "-" + buildString(p).wrapWithBraces
+      case ENotBody(ENot(p)) => "~" + buildString(p).wrapWithBraces
       case EMultBody(EMult(p1, p2)) =>
-        (buildString(p1.get) + " * " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " * " + buildString(p2)).wrapWithBraces
       case EDivBody(EDiv(p1, p2)) =>
-        (buildString(p1.get) + " / " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " / " + buildString(p2)).wrapWithBraces
       case EPlusBody(EPlus(p1, p2)) =>
-        (buildString(p1.get) + " + " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " + " + buildString(p2)).wrapWithBraces
       case EMinusBody(EMinus(p1, p2)) =>
-        (buildString(p1.get) + " - " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " - " + buildString(p2)).wrapWithBraces
       case EAndBody(EAnd(p1, p2)) =>
-        (buildString(p1.get) + " && " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " && " + buildString(p2)).wrapWithBraces
       case EOrBody(EOr(p1, p2)) =>
-        (buildString(p1.get) + " || " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " || " + buildString(p2)).wrapWithBraces
       case EEqBody(EEq(p1, p2)) =>
-        (buildString(p1.get) + " == " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " == " + buildString(p2)).wrapWithBraces
       case ENeqBody(ENeq(p1, p2)) =>
-        (buildString(p1.get) + " != " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " != " + buildString(p2)).wrapWithBraces
       case EGtBody(EGt(p1, p2)) =>
-        (buildString(p1.get) + " > " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " > " + buildString(p2)).wrapWithBraces
       case EGteBody(EGte(p1, p2)) =>
-        (buildString(p1.get) + " >= " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " >= " + buildString(p2)).wrapWithBraces
       case ELtBody(ELt(p1, p2)) =>
-        (buildString(p1.get) + " < " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " < " + buildString(p2)).wrapWithBraces
       case ELteBody(ELte(p1, p2)) =>
-        (buildString(p1.get) + " <= " + buildString(p2.get)).wrapWithBraces
+        (buildString(p1) + " <= " + buildString(p2)).wrapWithBraces
       case EListBody(EList(s, _, _, _)) =>
         "[" + buildSeq(s) + "]"
       case ETupleBody(ETuple(s, _, _)) =>
@@ -64,13 +64,13 @@ case class PrettyPrinter(freeShift: Int,
       case EMapBody(EMap(kvs, _, _)) =>
         "{" + ("" /: kvs.zipWithIndex) {
           case (string, (kv, i)) =>
-            string + buildString(kv.key.get) + " : " + buildString(kv.value.get) + {
+            string + buildString(kv.key) + " : " + buildString(kv.value) + {
               if (i != kvs.length - 1) ", "
               else ""
             }
         } + "}"
 
-      case EVarBody(EVar(v)) => buildString(v.get)
+      case EVarBody(EVar(v)) => buildString(v)
       case EEvalBody(chan)   => "*" + buildString(chan)
       case GBool(b)          => b.toString
       case GInt(i)           => i.toString
@@ -79,7 +79,7 @@ case class PrettyPrinter(freeShift: Int,
       // TODO: Figure out if we can prevent ScalaPB from generating
       case ExprInstance.Empty => "Nil"
       case EMethodBody(method) =>
-        "(" + buildString(method.target.get) + ")." + method.methodName + "(" + method.arguments
+        "(" + buildString(method.target) + ")." + method.methodName + "(" + method.arguments
           .map(buildString)
           .mkString(",") + ")"
       case ExprInstance.GByteArray(bs) => Base16.encode(bs.toByteArray)
@@ -108,7 +108,7 @@ case class PrettyPrinter(freeShift: Int,
       case v: Var     => buildString(v)
       case c: Channel => buildString(c)
       case s: Send =>
-        buildString(s.chan.get) + {
+        buildString(s.chan) + {
           if (s.persistent) "!!("
           else "!("
         } + buildSeq(s.data) + ")"
@@ -127,7 +127,7 @@ case class PrettyPrinter(freeShift: Int,
                 .buildPattern(bind.patterns)
             (bind.freeCount + previousFree, string + bindString + {
               if (r.persistent) " <= " else " <- "
-            } + buildString(bind.source.get) + {
+            } + buildString(bind.source) + {
               if (i != r.binds.length - 1) " ; "
               else ""
             })
@@ -135,21 +135,21 @@ case class PrettyPrinter(freeShift: Int,
 
         "for( " + bindsString + " ) { " + this
           .copy(boundShift = boundShift + totalFree)
-          .buildString(r.body.get) + " }"
+          .buildString(r.body) + " }"
 
       case b: Bundle =>
-        BundleOps.showInstance.show(b) + "{ " + buildString(b.body.get) + " }"
+        BundleOps.showInstance.show(b) + "{ " + buildString(b.body) + " }"
 
       case n: New =>
         "new " + buildVariables(n.bindCount) + " in { " + this
           .copy(boundShift = boundShift + n.bindCount)
-          .buildString(n.p.get) + " }"
+          .buildString(n.p) + " }"
 
       case e: Expr =>
         buildString(e)
 
       case m: Match =>
-        "match " + buildString(m.target.get) + " { " +
+        "match " + buildString(m.target) + " { " +
           ("" /: m.cases.zipWithIndex) {
             case (string, (matchCase, i)) =>
               string + buildMatchCase(matchCase) + {
@@ -226,10 +226,10 @@ case class PrettyPrinter(freeShift: Int,
         freeId = boundId,
         baseId = setBaseId()
       )
-      .buildString(matchCase.pattern.get) + " => " +
+      .buildString(matchCase.pattern) + " => " +
       this
         .copy(boundShift = boundShift + patternFree)
-        .buildString(matchCase.source.get)
+        .buildString(matchCase.source)
   }
 
   private def isEmpty(p: Par) =

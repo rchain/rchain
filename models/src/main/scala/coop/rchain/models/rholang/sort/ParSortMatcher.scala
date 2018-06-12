@@ -1,47 +1,37 @@
 package coop.rchain.models.rholang.sort
 
 import coop.rchain.models.Par
+import ordering._
 import cats.implicits._
 
 object ParSortMatcher {
-  def sortMatch(parOption: Option[Par]): Either[Throwable, ScoredTerm[Par]] =
-    parOption match {
-      case Some(p) =>
-        for {
-          sends <- p.sends.toList.traverse(s => SendSortMatcher.sortMatch(s)).map(_.sorted)
-          receives <- p.receives.toList
-                       .traverse(r => ReceiveSortMatcher.sortMatch(r))
-                       .map(_.sorted)
-          exprs   <- p.exprs.toList.traverse(e => ExprSortMatcher.sortMatch(e)).map(_.sorted)
-          news    <- p.news.toList.traverse(n => NewSortMatcher.sortMatch(n)).map(_.sorted)
-          matches <- p.matches.toList.traverse(m => MatchSortMatcher.sortMatch(m)).map(_.sorted)
-          bundles <- p.bundles.toList.traverse(b => BundleSortMatcher.sortMatch(b)).map(_.sorted)
-          connectives <- p.connectives.toList
-                          .traverse(c => ConnectiveSortMatcher.sortMatch(c))
-                          .map(_.sorted)
-          ids = p.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
-          sortedPar = Par(
-            sends = sends.map(_.term),
-            receives = receives.map(_.term),
-            exprs = exprs.map(_.term),
-            news = news.map(_.term),
-            matches = matches.map(_.term),
-            bundles = bundles.map(_.term),
-            connectives = connectives.map(_.term),
-            ids = ids.map(_.term),
-            locallyFree = p.locallyFree,
-            connectiveUsed = p.connectiveUsed
-          )
-          parScore = Node(
-            Score.PAR,
-            sends.map(_.score) ++ receives.map(_.score) ++
-              exprs.map(_.score) ++ news.map(_.score) ++
-              matches.map(_.score) ++ bundles.map(_.score) ++ ids.map(_.score) ++ connectives.map(
-              _.score): _*
-          )
-
-        } yield ScoredTerm(sortedPar, parScore)
-
-      case None => Left(new IllegalArgumentException("ParSortMatcher was passed None"))
-    }
+  def sortMatch(par: Par): ScoredTerm[Par] = {
+    val sends       = par.sends.toList.map(s => SendSortMatcher.sortMatch(s)).sorted
+    val receives    = par.receives.toList.map(r => ReceiveSortMatcher.sortMatch(r)).sorted
+    val exprs       = par.exprs.toList.map(e => ExprSortMatcher.sortMatch(e)).sorted
+    val news        = par.news.toList.map(n => NewSortMatcher.sortMatch(n)).sorted
+    val matches     = par.matches.toList.map(m => MatchSortMatcher.sortMatch(m)).sorted
+    val bundles     = par.bundles.toList.map(b => BundleSortMatcher.sortMatch(b)).sorted
+    val connectives = par.connectives.toList.map(c => ConnectiveSortMatcher.sortMatch(c)).sorted
+    val ids         = par.ids.map(g => ScoredTerm(g, Node(Score.PRIVATE, Leaf(g.id)))).sorted
+    val sortedPar = Par(
+      sends = sends.map(_.term),
+      receives = receives.map(_.term),
+      exprs = exprs.map(_.term),
+      news = news.map(_.term),
+      matches = matches.map(_.term),
+      bundles = bundles.map(_.term),
+      connectives = connectives.map(_.term),
+      ids = ids.map(_.term),
+      locallyFree = par.locallyFree,
+      connectiveUsed = par.connectiveUsed
+    )
+    val parScore = Node(
+      Score.PAR,
+      sends.map(_.score) ++ receives.map(_.score) ++ exprs.map(_.score) ++ news
+        .map(_.score) ++ matches.map(_.score) ++ bundles.map(_.score) ++ ids
+        .map(_.score) ++ connectives.map(_.score): _*
+    )
+    ScoredTerm(sortedPar, parScore)
+  }
 }

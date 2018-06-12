@@ -25,6 +25,8 @@ import java.io.{Reader, StringReader}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 object GrpcServer {
 
@@ -93,11 +95,18 @@ object GrpcServer {
               case th: Throwable       => Task.now(s"Error: $th")
             }
           case Right(term) =>
-            evaluate(runtime.reducer, term).attempt.map {
-              case Left(ie: InterpreterError) => s"Error: ${ie.toString}"
-              case Left(ex)                   => s"Caught boxed exception: $ex"
-              case Right(_) =>
-                s"Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+            evaluate(runtime, term).attempt.map {
+              case Left(ex) => s"Caught boxed exception: $ex"
+              case Right(errors) => {
+                val errorStr =
+                  if (errors.isEmpty)
+                    ""
+                  else
+                    errors
+                      .map(_.toString())
+                      .mkString("Errors received during evaluation:\n", "\n", "\n")
+                s"${errorStr}Storage Contents:\n ${StoragePrinter.prettyPrint(runtime.space.store)}"
+              }
             }
         }
         .map(ReplResponse(_))

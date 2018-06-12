@@ -1,14 +1,10 @@
-package coop.rchain.kademlia
+package coop.rchain.comm.discovery
 
 import coop.rchain.comm.PeerNode
 import scala.collection.mutable
-
 import scala.annotation.tailrec
-
 import cats._, cats.data._, cats.implicits._
-
 import coop.rchain.catscontrib.Capture
-import coop.rchain.p2p.effects.Ping
 
 trait Keyed {
   def key: Seq[Byte]
@@ -78,12 +74,12 @@ object PeerTable {
   * network discovery and routing protocol.
   *
   */
-final class PeerTable[A <: PeerNode](home: A, private[kademlia] val k: Int, alpha: Int) {
+final class PeerTable[A <: PeerNode](home: A, private[discovery] val k: Int, alpha: Int) {
 
-  private[kademlia] type Entry = PeerTableEntry[A]
+  private[discovery] type Entry = PeerTableEntry[A]
 
-  private[kademlia] val width = home.key.size // in bytes
-  private[kademlia] val table = Array.fill(8 * width) {
+  private[discovery] val width = home.key.size // in bytes
+  private[discovery] val table = Array.fill(8 * width) {
     new mutable.ListBuffer[Entry]
   }
 
@@ -96,7 +92,7 @@ final class PeerTable[A <: PeerNode](home: A, private[kademlia] val k: Int, alph
     * @return `Some(Int)` if `a` and `b` are comparable in this table,
     * `None` otherwise.
     */
-  private[kademlia] def distance(a: Seq[Byte], b: Seq[Byte]): Option[Int] = {
+  private[discovery] def distance(a: Seq[Byte], b: Seq[Byte]): Option[Int] = {
     @tailrec
     def highBit(idx: Int): Int =
       if (idx == width) 8 * width
@@ -110,8 +106,8 @@ final class PeerTable[A <: PeerNode](home: A, private[kademlia] val k: Int, alph
     else Some(highBit(0))
   }
 
-  private[kademlia] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
-  private[kademlia] def distance(other: A): Option[Int]            = distance(other.key)
+  private[discovery] def distance(otherKey: Seq[Byte]): Option[Int] = distance(home.key, otherKey)
+  private[discovery] def distance(other: A): Option[Int]            = distance(other.key)
 
   private def ping[F[_]: Functor: Ping](ps: mutable.ListBuffer[Entry],
                                         older: Entry,

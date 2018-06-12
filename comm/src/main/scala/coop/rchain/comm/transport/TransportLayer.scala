@@ -1,5 +1,6 @@
-package coop.rchain.p2p.effects
+package coop.rchain.comm.transport
 
+import coop.rchain.p2p.effects._
 import java.net.SocketAddress
 import scala.concurrent.duration.{Duration, MILLISECONDS}
 

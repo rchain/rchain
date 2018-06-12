@@ -67,8 +67,6 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    val b6      = chain.idToBlocks(6)
-    val b8      = chain.idToBlocks(8)
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 
@@ -138,9 +136,6 @@ class CliqueOracleTest extends FlatSpec with Matchers with BlockGenerator {
     val b2      = chain.idToBlocks(2)
     val b3      = chain.idToBlocks(3)
     val b4      = chain.idToBlocks(4)
-    val b6      = chain.idToBlocks(6)
-    val b7      = chain.idToBlocks(7)
-    val b8      = chain.idToBlocks(8)
 
     implicit val turanOracleEffect = SafetyOracle.turanOracle[Id]
 

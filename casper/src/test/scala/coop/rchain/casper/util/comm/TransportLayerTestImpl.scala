@@ -12,6 +12,7 @@ import coop.rchain.metrics.Metrics
 
 import scala.concurrent.duration.Duration
 import scala.collection.mutable
+import coop.rchain.comm.transport._
 
 class TransportLayerTestImpl[F[_]: Monad: Capture](
     identity: PeerNode,

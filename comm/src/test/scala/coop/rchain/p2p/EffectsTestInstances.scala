@@ -10,6 +10,8 @@ import coop.rchain.catscontrib._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.p2p.effects._
+import coop.rchain.comm.transport._
+import coop.rchain.comm.discovery._
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {

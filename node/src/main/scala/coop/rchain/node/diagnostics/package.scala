@@ -13,7 +13,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.node.model.diagnostics._
 import coop.rchain.catscontrib._
 import Catscontrib._
-import coop.rchain.p2p.effects.NodeDiscovery
+import coop.rchain.comm.discovery._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import javax.management.ObjectName
