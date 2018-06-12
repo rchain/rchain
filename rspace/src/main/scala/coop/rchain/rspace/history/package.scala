@@ -115,14 +115,17 @@ package object history {
   private[this] def commonPrefix[A: Eq](a: Seq[A], b: Seq[A]): Seq[A] =
     a.zip(b).takeWhile { case (l, r) => l === r }.map(_._1)
 
-  private[this] def rehash[K, V](trie: Node, nodes: Seq[(Int, Node)])(
+  private[this] def rehash[K, V](trie: Trie[K, V], parents: Seq[(Int, Trie[K, V])])(
       implicit
       codecK: Codec[K],
       codecV: Codec[V]): Seq[(Blake2b256Hash, Trie[K, V])] =
-    nodes.scanLeft((Trie.hash[K, V](trie), trie)) {
+    parents.scanLeft((Trie.hash[K, V](trie), trie)) {
       case ((lastHash, _), (offset, Node(pb))) =>
         val node = Node(pb.updated(List((offset, NodePointer(lastHash)))))
         (Trie.hash[K, V](node), node)
+      case ((lastHash, _), (offset, s @ Skip(affix, ptr))) =>
+        // TODO: handle skip nodes
+        (Trie.hash[K, V](s), s)
     }
 
   private[this] def insertTries[T, K, V](
@@ -329,4 +332,14 @@ package object history {
       .subcaseP(2) {
         case nothing: EmptyPointer.type => nothing
       }(provide(EmptyPointer))
+
+  implicit val codecNonEmptyPointer: Codec[NonEmptyPointer] =
+    discriminated[NonEmptyPointer]
+      .by(uint8)
+      .subcaseP(0) {
+        case value: LeafPointer => value
+      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      .subcaseP(1) {
+        case node: NodePointer => node
+      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
 }

@@ -144,7 +144,7 @@ class TrieStructureTests
     store.withTxn(store.createTxnRead()) { implicit txn =>
       expectNode(rootHex, Seq((1, NodePointer(level1Hex))))
       expectNode(level1Hex, Seq((0, NodePointer(level2Hex))))
-      expectNode(level2Hex, Seq((0, NodePointer(level3Hex))))
+      expectSkip(level2Hex, ByteVector(Seq(0).map(_.toByte)), NodePointer(level3Hex))
       expectNode(level3Hex, Seq((0, LeafPointer(leaf1Hex)), (1, LeafPointer(leaf2Hex))))
 
       val expectedLeaf1Hash = Blake2b256Hash
@@ -180,4 +180,17 @@ class TrieStructureTests
       case default => fail(s"Expected a node under $currentHex, got $default")
     }
 
+  def expectSkip(currentHex: String, expectedAffix: ByteVector, expectedPointer: NonEmptyPointer)(
+      implicit txn: Txn[ByteBuffer],
+      store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
+    store.get(txn,
+              Blake2b256Hash
+                .fromHex(currentHex)) match {
+      case Some(Skip(affix, pointer)) =>
+        affix shouldBe expectedAffix
+        pointer shouldBe expectedPointer
+      //byteVector shouldEqual ByteVector((Seq(0)).map(_.toByte))
+
+      case default => fail(s"Expected a skip node under $currentHex, got $default")
+    }
 }
