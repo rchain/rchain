@@ -26,8 +26,11 @@ test:integration-test-for-rholang:
     - preloaded-ubuntu1804 
   script:
     - ./scripts/install_bnfc.sh
-    - ./scripts/build-rhoscala-rbls.sh
     - ./scripts/test-rholang-rbls.sh
+    - sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate rholangCLI/assembly
+    - rm -f rholang/tests/*.rbl
+    - rm -f rholang/failure_tests/*.rbl
+
 
 deploy:deploy-rnode-to-dockerhub:
   stage: deploy 
