@@ -5,8 +5,7 @@ import java.nio.file.{Files, Path}
 
 import cats.implicits._
 import coop.rchain.rspace._
-import coop.rchain.rspace.extended._
-import coop.rchain.rspace.util.ignore
+import coop.rchain.rspace.util.{ignore, runKs}
 
 import scala.collection.immutable.Seq
 import scala.collection.mutable
