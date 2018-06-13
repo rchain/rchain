@@ -538,7 +538,9 @@ object Reduce {
       }
     }
 
-    private[this] def nth: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+    type MethodType = (Par, Seq[Par]) => Env[Par] => M[Par]
+
+    private[this] def nth: MethodType = {
       def localNth(ps: Seq[Par], nth: Int): Either[ReduceError, Par] =
         if (ps.isDefinedAt(nth)) {
           Right(ps(nth))
@@ -569,7 +571,7 @@ object Reduce {
         }
     }
 
-    private[this] def toByteArray: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+    private[this] def toByteArray: MethodType = {
       def serialize(p: Par): Either[ReduceError, Array[Byte]] =
         Either
           .fromTry(Try(Serialize[Par].encode(p)))
@@ -590,7 +592,7 @@ object Reduce {
         }
     }
 
-    private[this] def hexToBytes: (Par, Seq[Par]) => Env[Par] => M[Par] = {
+    private[this] def hexToBytes: MethodType = {
       (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
         {
           if (args.nonEmpty) {
@@ -613,7 +615,7 @@ object Reduce {
         }
     }
 
-    def methodTable(method: String): Option[(Par, Seq[Par]) => Env[Par] => M[Par]] =
+    def methodTable(method: String): Option[MethodType] =
       method match {
         case "nth"         => Some(nth)
         case "toByteArray" => Some(toByteArray)
