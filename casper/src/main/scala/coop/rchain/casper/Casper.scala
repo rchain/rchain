@@ -196,10 +196,10 @@ sealed abstract class MultiParentCasperInstances {
       def blockDag: F[BlockDag] = Capture[F].capture { _blockDag.get }
 
       def storageContents(hash: StateHash): F[String] = Capture[F].capture {
-        if (knownStateHashesContainer.get.intersect(Set(hash)).isEmpty) {
-          s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
-        } else {
+        if (knownStateHashesContainer.get.contains(hash)) {
           runtimeManager.storageRepr(hash)
+        } else {
+          s"Tuplespace hash ${Base16.encode(hash.toByteArray)} not found!"
         }
       }
 

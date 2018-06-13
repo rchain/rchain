@@ -32,7 +32,7 @@ object InterpreterUtil {
                               runtimeManager)
 
     val Right(postDeploysStateHash) =
-      runtimeManager.updated(postStateHash, deploys.flatMap(_.term).toList)
+      runtimeManager.computeState(postStateHash, deploys.flatMap(_.term).toList)
     (postDeploysStateHash, updatedStateHashes + postDeploysStateHash)
   }
 
@@ -45,15 +45,15 @@ object InterpreterUtil {
       implicit scheduler: Scheduler): (StateHash, Set[StateHash]) = {
 
     val blockStateHash = ProtoUtil.tuplespace(b).get
-    if (knownStateHashes.intersect(Set(blockStateHash)).isEmpty) {
+    if (knownStateHashes.contains(blockStateHash)) {
+      (blockStateHash, knownStateHashes)
+    } else {
       computeBlockCheckpointFromDeploys(b,
                                         genesis,
                                         dag,
                                         defaultStateHash,
                                         knownStateHashes,
                                         runtimeManager)
-    } else {
-      (blockStateHash, knownStateHashes)
     }
   }
 
@@ -102,15 +102,15 @@ object InterpreterUtil {
     } else if (parentTuplespaces.size == 1) {
       //For a single parent we look up its checkpoint
       val parentStateHash = parentTuplespaces.head._2
-      if (knownStateHashes.intersect(Set(parentStateHash)).isEmpty) {
+      if (knownStateHashes.contains(parentStateHash)) {
+        (parentStateHash, knownStateHashes)
+      } else {
         computeBlockCheckpoint(parentTuplespaces.head._1,
                                genesis,
                                dag,
                                defaultStateHash,
                                knownStateHashes,
                                runtimeManager)
-      } else {
-        (parentStateHash, knownStateHashes)
       }
     } else {
       //In the case of multiple parents we need
@@ -125,15 +125,15 @@ object InterpreterUtil {
 
       val gcaStateHash = ProtoUtil.tuplespace(gca).get
       val (computedGcaStateHash, _) =
-        if (knownStateHashes.intersect(Set(gcaStateHash)).isEmpty) {
+        if (knownStateHashes.contains(gcaStateHash)) {
+          (gcaStateHash, knownStateHashes)
+        } else {
           computeBlockCheckpoint(gca,
                                  genesis,
                                  dag,
                                  defaultStateHash,
                                  knownStateHashes,
                                  runtimeManager)
-        } else {
-          (gcaStateHash, knownStateHashes)
         }
 
       val deploys = DagOperations
@@ -146,7 +146,7 @@ object InterpreterUtil {
 
       //TODO: figure out what casper should do with errors in deploys
       val Right(resultStateHash) =
-        runtimeManager.updated(computedGcaStateHash, deploys.flatMap(_.term).toList)
+        runtimeManager.computeState(computedGcaStateHash, deploys.flatMap(_.term).toList)
       (resultStateHash, knownStateHashes + resultStateHash)
     }
   }

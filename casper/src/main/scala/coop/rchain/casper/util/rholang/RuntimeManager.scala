@@ -12,13 +12,13 @@ import monix.execution.Scheduler
 
 import scala.concurrent.SyncVar
 import scala.util.{Failure, Success, Try}
+import RuntimeManager.StateHash
 
 //runtime is a SyncVar for thread-safety, as all checkpoints share the same "hot store"
 class RuntimeManager private (runtime: SyncVar[Runtime]) {
-  type StateHash = ByteString
 
-  def updated(hash: StateHash, terms: List[Par])(
-      implicit scheduler: Scheduler): Either[Throwable, (StateHash)] = {
+  def computeState(hash: StateHash, terms: List[Par])(
+      implicit scheduler: Scheduler): Either[Throwable, StateHash] = {
     val active = getActive(hash)
     val error  = eval(terms, active)
     val newHash = error.fold[Either[Throwable, StateHash]](
