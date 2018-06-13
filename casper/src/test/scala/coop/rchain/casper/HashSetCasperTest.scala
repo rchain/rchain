@@ -143,14 +143,14 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     val deploys = (0 until 3).map(i => ProtoUtil.basicDeploy(i))
 
     val Some(block1) = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val signedBlock1 = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val signedBlock1 = ProtoUtil.signBlock(block1.withSeqNum(0), validatorKeys.head)
 
     nodes(0).casperEff.addBlock(signedBlock1)
     nodes(1).receive()
     nodes(2).transportLayerEff.msgQueues(nodes(2).local).clear //nodes(2) misses this block
 
     val Some(block2) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
-    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+    val signedBlock2 = ProtoUtil.signBlock(block2.withSeqNum(1), validatorKeys.head)
 
     nodes(0).casperEff.addBlock(signedBlock2)
     nodes(1).receive() //receives block2
@@ -190,9 +190,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
 
     // Creates a pair that constitutes equivocation blocks
     val Some(block1)      = nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-    val signedBlock1      = ProtoUtil.signBlock(block1, validatorKeys.head)
+    val signedBlock1      = ProtoUtil.signBlock(block1.withSeqNum(0), validatorKeys.head)
     val Some(block1Prime) = nodes(0).casperEff.deploy(deploys(1)) *> nodes(0).casperEff.createBlock
-    val signedBlock1Prime = ProtoUtil.signBlock(block1Prime, validatorKeys.head)
+    val signedBlock1Prime = ProtoUtil.signBlock(block1Prime.withSeqNum(0), validatorKeys.head)
 
     nodes(1).casperEff.addBlock(signedBlock1)
     nodes(0).transportLayerEff.msgQueues(nodes(0).local).clear //nodes(0) misses this block
@@ -208,9 +208,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(2).casperEff.contains(signedBlock1Prime) should be(true)
 
     val Some(block2) = nodes(1).casperEff.deploy(deploys(2)) *> nodes(1).casperEff.createBlock
-    val signedBlock2 = ProtoUtil.signBlock(block2, validatorKeys.head)
+    val signedBlock2 = ProtoUtil.signBlock(block2.withSeqNum(0), validatorKeys(1))
     val Some(block3) = nodes(2).casperEff.deploy(deploys(3)) *> nodes(2).casperEff.createBlock
-    val signedBlock3 = ProtoUtil.signBlock(block3, validatorKeys.head)
+    val signedBlock3 = ProtoUtil.signBlock(block3.withSeqNum(0), validatorKeys(2))
 
     nodes(2).casperEff.addBlock(signedBlock3)
     nodes(1).casperEff.addBlock(signedBlock2)
@@ -223,7 +223,7 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     nodes(1).casperEff.contains(signedBlock1Prime) should be(true)
 
     val Some(block4) = nodes(1).casperEff.deploy(deploys(4)) *> nodes(1).casperEff.createBlock
-    val signedBlock4 = ProtoUtil.signBlock(block4, validatorKeys.head)
+    val signedBlock4 = ProtoUtil.signBlock(block4.withSeqNum(1), validatorKeys(1))
 
     nodes(1).casperEff.addBlock(signedBlock4)
 

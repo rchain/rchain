@@ -2,23 +2,35 @@ package coop.rchain.casper
 
 import cats.Applicative
 import cats.implicits._
-
 import com.google.protobuf.ByteString
-
 import coop.rchain.casper.Estimator.{BlockHash, Validator}
+import coop.rchain.casper.Validate.ignore
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil
-
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Ed25519
-
 import coop.rchain.p2p.effects.Log
 
+import scala.collection.mutable
 import scala.util.Try
 
 object Validate {
   def ignore(b: BlockMessage, reason: String): String =
     s"CASPER: Ignoring block ${PrettyPrinter.buildString(b.blockHash)} because $reason"
+
+  def missingBlocks[F[_]: Applicative: Log](block: BlockMessage, dag: BlockDag): F[Boolean] = {
+    val parentsPresent = ProtoUtil.parents(block).forall(p => dag.blockLookup.contains(p))
+    val justificationsPresent =
+      block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
+    if (parentsPresent && justificationsPresent) {
+      true.pure[F]
+    } else {
+      for {
+        _ <- Log[F].debug(
+              s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}.")
+      } yield false
+    }
+  }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
     if (b.sigAlgorithm == "ed25519") {
@@ -31,12 +43,14 @@ object Validate {
       if (isValid) {
         true.pure[F]
       } else {
-        Log[F].warn(ignore(b, "signature is invalid.")) *> false.pure[F]
+        for {
+          _ <- Log[F].warn(ignore(b, "signature is invalid."))
+        } yield false
       }
     } else {
-      Log[F].warn(
-        ignore(b, s"signature algorithm ${b.sigAlgorithm} is unsupported.")
-      ) *> false.pure[F]
+      for {
+        _ <- Log[F].warn(ignore(b, s"signature algorithm ${b.sigAlgorithm} is unsupported."))
+      } yield false
     }
 
   def blockNumber[F[_]: Applicative: Log](b: BlockMessage, dag: BlockDag): F[Boolean] = {
@@ -59,8 +73,9 @@ object Validate {
           ignore(b, s"block number $number is not one more than parent number $n.")
         )
       })
-
-      log *> false.pure[F]
+      for {
+        _ <- log
+      } yield false
     }
   }
 
@@ -79,11 +94,11 @@ object Validate {
     if (result) {
       true.pure[F]
     } else {
-      Log[F].warn(
-        ignore(
-          b,
-          s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber.")
-      ) *> false.pure[F]
+      for {
+        _ <- Log[F].warn(ignore(
+              b,
+              s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."))
+      } yield false
     }
   }
 
@@ -94,11 +109,13 @@ object Validate {
       true.pure[F] //genesis block has a valid sender
     } else {
       val weight = ProtoUtil.weightFromSender(b, dag.blockLookup)
-      if (weight > 0) true.pure[F]
+      if (weight > 0)
+        true.pure[F]
       else
-        Log[F].warn(
-          ignore(b, s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight.")
-        ) *> false.pure[F]
+        for {
+          _ <- Log[F].warn(
+                ignore(b, s"block creator ${PrettyPrinter.buildString(b.sender)} has 0 weight."))
+        } yield false
     }
 
   def parents[F[_]: Applicative: Log](b: BlockMessage,
@@ -108,9 +125,9 @@ object Validate {
 
     if (b.justifications.isEmpty) {
       if (bParents.exists(_ != genesis.blockHash))
-        Log[F].warn(
-          ignore(b, "justification is empty, but block has non-genesis parents.")
-        ) *> false.pure[F]
+        for {
+          _ <- Log[F].warn(ignore(b, "justification is empty, but block has non-genesis parents."))
+        } yield false
       else
         true.pure[F]
     } else {
@@ -125,9 +142,10 @@ object Validate {
       if (bParents == trueParents)
         true.pure[F]
       else
-        Log[F].warn(
-          ignore(b, "block parents did not match estimate based on justification.")
-        ) *> false.pure[F]
+        for {
+          _ <- Log[F].warn(
+                ignore(b, "block parents did not match estimate based on justification."))
+        } yield false
     }
   }
 }

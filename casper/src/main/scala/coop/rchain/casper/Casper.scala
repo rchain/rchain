@@ -24,6 +24,7 @@ import scala.collection.immutable.{HashMap, HashSet}
 import scala.concurrent.SyncVar
 import java.nio.file.Path
 
+import coop.rchain.casper.Estimator.{BlockHash, Validator}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import monix.execution.Scheduler
 
@@ -95,8 +96,8 @@ sealed abstract class MultiParentCasperInstances {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
-          attempt <- if (!validSig) InvalidBlockSignature.pure[F]
-                    else if (!validSender) InvalidSender.pure[F]
+          attempt <- if (!validSig) InvalidBlock.pure[F]
+                    else if (!validSender) InvalidBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
                 case Valid => reAttemptBuffer
@@ -210,23 +211,6 @@ sealed abstract class MultiParentCasperInstances {
         _runtime.close()
       }
 
-      private def isValid(block: BlockMessage): F[Boolean] =
-        for {
-          dag <- Capture[F].capture { _blockDag.get }
-          bn  <- Validate.blockNumber[F](block, dag)
-          p   <- Validate.parents[F](block, genesis, dag)
-          s   <- Validate.sequenceNumber[F](block, dag)
-          //only try checkpoint if other validity checks pass
-          ch <- if (bn && p) validateTransactions(block)
-               else Monad[F].pure[Option[RuntimeManager]](None)
-          //_  <- if (bn && p && ch.isEmpty) Log[F].warn(Validate.ignore(block, "tuplespace hash could not be reproduced.")
-          //      else ().pure[F]
-          //TODO: Put tuplespace validation back in after we have
-          //      tuplespace replay. Cannot put it in now because
-          //      it fails on unforgable names (no way to replicate
-          //      the same unforgable name without an execution trace).
-        } yield bn && p //should be ch.isDefined
-
       //invalid blocks return None and don't update the checkpoints
       private def validateTransactions(block: BlockMessage): F[Option[StateHash]] =
         Capture[F].capture {
@@ -244,6 +228,73 @@ sealed abstract class MultiParentCasperInstances {
             )
           maybeCheckPoint
         }
+
+      private def attemptAdd(b: BlockMessage): F[BlockStatus] =
+        for {
+          status <- validate(b)
+          _      <- addEffects(status, b)
+        } yield status
+
+      // TODO: There must be a way to do this without code duplication
+      private def validate(block: BlockMessage): F[BlockStatus] =
+        for {
+          dag <- Capture[F].capture { _blockDag.get }
+          status <- for {
+                     result <- Validate.missingBlocks[F](block, dag)
+                   } yield { if (result) { Valid } else { MissingBlocks } }
+          status <- status match {
+                     case Valid =>
+                       for {
+                         result <- Validate.blockNumber[F](block, dag)
+                       } yield { if (result) { Valid } else { InvalidBlockNumber } }
+                     case _ => status.pure[F]
+                   }
+          status <- status match {
+                     case Valid =>
+                       for {
+                         result <- Validate.parents[F](block, genesis, dag)
+                       } yield { if (result) { Valid } else { InvalidParents } }
+                     case _ => status.pure[F]
+                   }
+          status <- status match {
+                     case Valid =>
+                       for {
+                         result <- Validate.sequenceNumber[F](block, dag)
+                       } yield { if (result) { Valid } else { InvalidSequenceNumber } }
+                     case _ => status.pure[F]
+                   }
+
+          //TODO: Put tuplespace validation back in after we have
+          //      tuplespace replay. Cannot put it in now because
+          //      it fails on unforgable names (no way to replicate
+          //      the same unforgable name without an execution trace).
+
+          // We want to catch equivocations only after we confirm that the block
+          // completing the equivocation is otherwise valid.
+          status <- status match {
+                     case Valid => equivocationsCheck(block, dag, expectedBlockRequests)
+                     case _     => status.pure[F]
+                   }
+        } yield status
+
+      private def equivocationsCheck(
+          block: BlockMessage,
+          dag: BlockDag,
+          expectedBlockRequests: mutable.HashSet[BlockHash]): F[BlockStatus] = {
+        val justificationOfCreator = block.justifications
+          .find {
+            case Justification(validator: Validator, _) => validator == block.sender
+          }
+          .getOrElse(Justification.defaultInstance)
+          .latestBlockHash
+        val latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
+        val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
+        if (isNotEquivocation) {
+          Applicative[F].pure(Valid)
+        } else {
+          Applicative[F].pure(Equivocation)
+        }
+      }
 
       // TODO: Handle slashing
       private def addEffects(status: BlockStatus, block: BlockMessage): F[Unit] =
@@ -268,37 +319,26 @@ sealed abstract class MultiParentCasperInstances {
                           BlockRequest(Base16.encode(hash.toByteArray), hash)))
             } yield ()
           case Equivocation =>
-            Log[F].info(
-              s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
+            if (expectedBlockRequests.contains(block.blockHash)) {
+              // We add this equivocation as is was pulled in through a justification of another block
+              addToState(block) *> CommUtil.sendBlock[F](block) *> Log[F].info(
+                s"CASPER: Added ${PrettyPrinter.buildString(block.blockHash)}")
+            } else {
+              Log[F].info(
+                s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
+            }
+          case InvalidSequenceNumber =>
+            // We need to handle invalid sequence numbers separately as the invalid block tracker
+            // assumes the sequence numbers inserted are valid.
+            throw new Error("InvalidSequenceNumber unimplemented")
           case InvalidBlock =>
-            Log[F].info(
-              s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+            for {
+              _ <- Log[F].info(
+                    s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+            } yield ()
+          // TODO: Handle slashable invalid blocks
           case _ => throw new Error("Should never reach")
         }
-
-      private def canAdd(block: BlockMessage): BlockStatus = {
-        val dag            = _blockDag.get
-        val parentsPresent = parents(block).forall(p => dag.blockLookup.contains(p))
-        val justificationsPresent =
-          block.justifications.forall(j => dag.blockLookup.contains(j.latestBlockHash))
-        if (parentsPresent && justificationsPresent) {
-          val justificationOfCreator = block.justifications
-            .find {
-              case Justification(validator: Validator, _) => validator == block.sender
-            }
-            .getOrElse(Justification.defaultInstance)
-            .latestBlockHash
-          val latestMessageOfCreator = dag.latestMessages.getOrElse(block.sender, ByteString.EMPTY)
-          val isNotEquivocation      = justificationOfCreator == latestMessageOfCreator
-          if (isNotEquivocation || expectedBlockRequests.contains(block.blockHash)) {
-            Undecided
-          } else {
-            Equivocation
-          }
-        } else {
-          MissingBlocks
-        }
-      }
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
@@ -325,25 +365,6 @@ sealed abstract class MultiParentCasperInstances {
               childMap = newChildMap
             )
           })
-        }
-
-      private def attemptAdd(b: BlockMessage): F[BlockStatus] =
-        canAdd(b) match {
-          case MissingBlocks =>
-            for {
-              _ <- addEffects(MissingBlocks, b)
-            } yield MissingBlocks
-          case Equivocation =>
-            for {
-              _ <- addEffects(Equivocation, b)
-            } yield Equivocation
-          case Undecided =>
-            for {
-              valid  <- isValid(b)
-              result = if (valid) Valid else InvalidBlock
-              _      <- addEffects(result, b)
-            } yield result
-          case _ => throw new Error("Should never reach")
         }
 
       private def reAttemptBuffer: F[Unit] = {
