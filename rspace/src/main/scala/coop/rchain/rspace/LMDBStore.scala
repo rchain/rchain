@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
 
-import coop.rchain.rspace.history.{initialize, LMDBTrieStore}
+import coop.rchain.rspace.history.{initialize, Branch, LMDBTrieStore}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.util._
 import coop.rchain.shared.AttemptOps._
@@ -31,7 +31,8 @@ class LMDBStore[C, P, A, K] private (
     _dbJoins: Dbi[ByteBuffer],
     _trieUpdateCount: AtomicLong,
     _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
-    val trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]]
+    val trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]],
+    val trieBranch: Branch
 )(implicit
   codecC: Codec[C],
   codecP: Codec[P],
@@ -292,12 +293,12 @@ class LMDBStore[C, P, A, K] private (
     // TODO: Prune TrieUpdate log here
     pruneHistory(trieUpdates).foreach {
       case TrieUpdate(_, Insert, channelsHash, gnat) =>
-        history.insert(trieStore, channelsHash, gnat)
+        history.insert(trieStore, trieBranch, channelsHash, gnat)
       case TrieUpdate(_, Delete, channelsHash, gnat) =>
-        history.delete(trieStore, channelsHash, gnat)
+        history.delete(trieStore, trieBranch, channelsHash, gnat)
     }
     withTxn(createTxnRead()) { txn =>
-      trieStore.getRoot(txn).getOrElse(throw new Exception("Could not get root hash"))
+      trieStore.getRoot(txn, trieBranch).getOrElse(throw new Exception("Could not get root hash"))
     }
   }
 
@@ -362,10 +363,18 @@ object LMDBStore {
     val trieUpdates     = new SyncVar[Seq[TrieUpdate[C, P, A, K]]]()
     trieUpdates.put(Seq.empty)
 
-    val trieStore = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+    val trieStore  = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
+    val trieBranch = Branch.master
 
-    initialize(trieStore)
+    initialize(trieStore, trieBranch)
 
-    new LMDBStore[C, P, A, K](env, path, dbGNATs, dbJoins, trieUpdateCount, trieUpdates, trieStore)
+    new LMDBStore[C, P, A, K](env,
+                              path,
+                              dbGNATs,
+                              dbJoins,
+                              trieUpdateCount,
+                              trieUpdates,
+                              trieStore,
+                              trieBranch)
   }
 }

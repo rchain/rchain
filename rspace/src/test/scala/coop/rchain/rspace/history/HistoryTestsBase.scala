@@ -14,13 +14,13 @@ trait HistoryTestsBase[T, K, V]
     with GeneratorDrivenPropertyChecks
     with Configuration {
 
-  def getRoot(store: ITrieStore[T, K, V]): Option[Blake2b256Hash] =
-    store.withTxn(store.createTxnRead())(txn => store.getRoot(txn))
+  def getRoot(store: ITrieStore[T, K, V], branch: Branch): Option[Blake2b256Hash] =
+    store.withTxn(store.createTxnRead())(txn => store.getRoot(txn, branch))
 
-  def setRoot(store: ITrieStore[T, K, V], hash: Blake2b256Hash): Unit =
+  def setRoot(store: ITrieStore[T, K, V], branch: Branch, hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.get(txn, hash) match {
-        case Some(Node(_)) => store.putRoot(txn, hash)
+        case Some(Node(_)) => store.putRoot(txn, branch, hash)
         case _             => throw new Exception(s"no node at $hash")
       }
     }
@@ -55,5 +55,5 @@ trait HistoryTestsBase[T, K, V]
 
   /** A fixture for creating and running a test with a fresh instance of the test store.
     */
-  def withTestTrieStore[R](f: ITrieStore[T, K, V] => R): R
+  def withTestTrieStore[R](f: (ITrieStore[T, K, V], Branch) => R): R
 }
