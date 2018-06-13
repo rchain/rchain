@@ -364,7 +364,7 @@ object LMDBStore {
     trieUpdates.put(Seq.empty)
 
     val trieStore  = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
-    val trieBranch = Branch("master")
+    val trieBranch = Branch.master
 
     initialize(trieStore, trieBranch)
 

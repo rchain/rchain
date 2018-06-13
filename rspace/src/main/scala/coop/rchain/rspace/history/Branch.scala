@@ -7,6 +7,8 @@ case class Branch(name: String)
 
 object Branch {
 
+  val master: Branch = Branch("master")
+
   implicit val codecBranch: Codec[Branch] =
     utf8.as[Branch]
 }

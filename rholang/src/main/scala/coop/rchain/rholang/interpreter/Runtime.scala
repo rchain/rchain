@@ -92,7 +92,7 @@ object Runtime {
       LMDBStore
         .create[Channel, BindPattern, Seq[Channel], TaggedContinuation](dataDir, mapSize)
 
-    val space                                            = new RSpace(store, Branch("master"))
+    val space                                            = new RSpace(store, Branch.master)
     val errorLog                                         = new ErrorLog()
     implicit val ft: FunctorTell[Task, InterpreterError] = errorLog
 
