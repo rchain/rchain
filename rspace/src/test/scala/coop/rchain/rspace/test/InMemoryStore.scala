@@ -42,7 +42,6 @@ class InMemoryStore[C, P, A, K](
     val trieBranch: Branch
 )(implicit sc: Serialize[C], sk: Serialize[K])
     extends IStore[C, P, A, K] {
-  val TRANSACTION_TIMEOUT = 100L
 
   private implicit val codecC: Codec[C] = sc.toCodec
   val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
@@ -67,7 +66,7 @@ class InMemoryStore[C, P, A, K](
 
     val name: String = "read-" + Thread.currentThread().getId
 
-    private[this] val state = stateRef.get(TRANSACTION_TIMEOUT).get
+    private[this] val state = stateRef.get
 
     override def commit(): Unit = {}
     override def abort(): Unit  = {}
@@ -83,7 +82,7 @@ class InMemoryStore[C, P, A, K](
     new Transaction[StateType] {
       val name: String = "write-" + Thread.currentThread().getId
 
-      private[this] val initial = stateRef.take(TRANSACTION_TIMEOUT)
+      private[this] val initial = stateRef.take
       private[this] var current = initial
 
       override def commit(): Unit =

@@ -58,13 +58,7 @@ object BlockAPI {
         val ps = block.body.flatMap(_.postState)
         ps.fold(ByteString.EMPTY)(_.tuplespace).pure[F]
       }
-      tsDesc <- MultiParentCasper[F]
-                 .tsCheckpoint(tsHash)
-                 .map(maybeCheckPoint => {
-                   maybeCheckPoint
-                     .map(_.storageRepr)
-                     .getOrElse(s"Tuplespace hash ${Base16.encode(tsHash.toByteArray)} not found!")
-                 })
+      tsDesc          <- MultiParentCasper[F].storageContents(tsHash)
       timestamp       <- header.timestamp.pure[F]
       mainParent      <- header.parentsHashList.headOption.getOrElse(ByteString.EMPTY).pure[F]
       parentsHashList <- header.parentsHashList.pure[F]

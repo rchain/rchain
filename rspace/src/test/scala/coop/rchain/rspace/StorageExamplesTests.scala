@@ -4,8 +4,8 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.extended._
 import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.util._
 import coop.rchain.rspace.test.InMemoryStore
 import org.scalatest.BeforeAndAfterAll
 
@@ -275,7 +275,8 @@ trait StorageExamplesTests extends StorageTestsBase[Channel, Pattern, Entry, Ent
   }
 }
 
-class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
+class InMemoryStoreStorageExamplesTestsBase
+    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor] {
 
   override def withTestSpace[R](f: T => R): R = {
     val testStore = InMemoryStore.create[Channel, Pattern, Entry, EntriesCaptor]
@@ -289,13 +290,21 @@ class InMemoryStoreStorageExamplesTests extends StorageExamplesTests {
   }
 }
 
-class LMDBStoreStorageExamplesTest extends StorageExamplesTests with BeforeAndAfterAll {
+class InMemoryStoreStorageExamplesTests
+    extends InMemoryStoreStorageExamplesTestsBase
+    with StorageExamplesTests
+
+class LMDBStoreStorageExamplesTestBase
+    extends StorageTestsBase[Channel, Pattern, Entry, EntriesCaptor]
+    with BeforeAndAfterAll {
 
   val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
   val mapSize: Long = 1024L * 1024L * 1024L
 
+  def noTls: Boolean = false
+
   override def withTestSpace[R](f: T => R): R = {
-    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize)
+    val testStore = LMDBStore.create[Channel, Pattern, Entry, EntriesCaptor](dbDir, mapSize, noTls)
     val testSpace = new RSpace(testStore, Branch("master"))
     try {
       testStore.withTxn(testStore.createTxnWrite())(txn => testStore.clear(txn))
@@ -310,3 +319,7 @@ class LMDBStoreStorageExamplesTest extends StorageExamplesTests with BeforeAndAf
     super.afterAll()
   }
 }
+
+class LMDBStoreStorageExamplesTest
+    extends LMDBStoreStorageExamplesTestBase
+    with StorageExamplesTests
