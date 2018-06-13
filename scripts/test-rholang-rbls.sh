@@ -24,3 +24,10 @@ for rbl_file in $( ls ${RHOLANG_ROOT_DIR}/failure_tests/*.rbl ); do
         exit 1
     fi
 done
+
+for rbl_file in $( ls ${RHOLANG_ROOT_DIR}/tests/mercury-tut/*.rbl ); do
+    if [[ ! $(test_rbl_pass ${rbl_file}) ]]; then
+        echo '[error] - rbl file ${rbl_file} did not return "Pass"'
+        exit 1
+    fi
+done
