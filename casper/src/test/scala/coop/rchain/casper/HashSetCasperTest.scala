@@ -182,7 +182,9 @@ class HashSetCasperTest extends FlatSpec with Matchers {
     node.casperEff.contains(signedBlock1) should be(true)
     node.casperEff.contains(signedBlock1Prime) should be(false) // Ignores addition of equivocation pair
   }
-  it should "not ignore equivocation blocks that are missing parents of proper nodes" in {
+
+  // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
+  it should "not ignore equivocation blocks that are required for parents of proper nodes" in {
     val nodes   = HashSetCasperTestNode.network(3, genesis)
     val deploys = (0 to 5).map(i => ProtoUtil.basicDeploy(i))
 
