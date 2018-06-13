@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.extended._
+import coop.rchain.rspace.util._
 import coop.rchain.rspace.test.InMemoryStore
 import org.scalatest.BeforeAndAfterAll
 
