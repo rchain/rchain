@@ -84,11 +84,20 @@ object RholangCLI {
     Console.println(StoragePrinter.prettyPrint(store))
   }
 
-  def evaluate(reducer: Reduce[Task], normalizedTerm: Par): Task[Unit] =
+  private def printErrors(errors: Vector[InterpreterError]) =
+    if (!errors.isEmpty) {
+      Console.println("Errors received during evaluation:")
+      for {
+        error <- errors
+      } Console.println(error.toString())
+    }
+
+  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
     for {
-      _ <- Task.now(printNormalizedTerm(normalizedTerm))
-      _ <- reducer.inj(normalizedTerm)
-    } yield ()
+      _      <- Task.now(printNormalizedTerm(normalizedTerm))
+      _      <- runtime.reducer.inj(normalizedTerm)
+      errors <- Task.now(runtime.readAndClearErrorVector)
+    } yield errors
 
   @tailrec
   def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
@@ -97,7 +106,7 @@ object RholangCLI {
       case Some(line) =>
         buildNormalizedTerm(new StringReader(line)).runAttempt match {
           case Right(par) =>
-            val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+            val evaluatorFuture = evaluate(runtime, par).runAsync
             waitForSuccess(evaluatorFuture)
             printStorageContents(runtime.space.store)
           case Left(ie: InterpreterError) =>
@@ -129,10 +138,8 @@ object RholangCLI {
   def buildNormalizedTerm(source: Reader): Coeval[Par] =
     try {
       for {
-        term <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
-        inputs = ProcVisitInputs(VectorPar(),
-                                 DebruijnIndexMap[VarSort](),
-                                 DebruijnLevelMap[VarSort]())
+        term    <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
+        inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
         outputs <- normalizeTerm[Coeval](term, inputs)
         par <- Coeval.delay(
                 ParSortMatcher
@@ -157,12 +164,12 @@ object RholangCLI {
       }
 
   @tailrec
-  def waitForSuccess(evaluatorFuture: CancelableFuture[Unit]): Unit =
+  def waitForSuccess(evaluatorFuture: CancelableFuture[Vector[InterpreterError]]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(_)) => ()
-        case Some(Failure(e)) => throw e
-        case None             => throw new Exception("Future claimed to be ready, but value was None")
+        case Some(Success(errors)) => printErrors(errors)
+        case Some(Failure(e))      => throw e
+        case None                  => throw new Exception("Future claimed to be ready, but value was None")
       }
     } catch {
       case _: TimeoutException =>
@@ -190,7 +197,7 @@ object RholangCLI {
   }
 
   def evaluateFile(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
-    val evaluatorFuture = evaluate(runtime.reducer, par).runAsync
+    val evaluatorFuture = evaluate(runtime, par).runAsync
     waitForSuccess(evaluatorFuture)
     printStorageContents(runtime.space.store)
   }

@@ -22,11 +22,14 @@ object ArbitraryInstances {
   val arbNonEmptyString =
     Arbitrary(Gen.nonEmptyListOf[Char](Arbitrary.arbChar.arbitrary).map(_.mkString))
 
-  implicit def arbitraryDatum[T](implicit arbT: Arbitrary[T]): Arbitrary[Datum[T]] =
+  implicit def arbitraryDatum[C, T](chan: C)(implicit
+                                             arbT: Arbitrary[T],
+                                             serializeC: Serialize[C],
+                                             serializeT: Serialize[T]): Arbitrary[Datum[T]] =
     Arbitrary(for {
       t <- arbT.arbitrary
       b <- Arbitrary.arbitrary[Boolean]
-    } yield Datum(t, b))
+    } yield Datum.create(chan, t, b))
 
   implicit val arbitraryBlake2b256Hash: Arbitrary[Blake2b256Hash] =
     Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(bytes => Blake2b256Hash.create(bytes)))
@@ -78,53 +81,64 @@ object ArbitraryInstances {
         .map(_.toMap))
   }
 
-  implicit val arbitraryNonEmptyMapStringDatumString: Arbitrary[Map[String, Datum[String]]] = {
+  implicit def arbitraryNonEmptyMapStringDatumString(
+      implicit serializeString: Serialize[String]): Arbitrary[Map[String, Datum[String]]] =
     Arbitrary(
       Gen
         .sized { size =>
           Gen.nonEmptyContainerOf[Seq, (String, Datum[String])](for {
             str <- arbNonEmptyString.arbitrary
-            dat <- Arbitrary.arbitrary[Datum[String]]
+            dat <- arbitraryDatum[String, String](str).arbitrary
           } yield (str, dat))
         }
         .map(_.toMap))
-  }
 
-  def arbitraryWaitingContinuation(
-      patternsLength: Int): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
+  def arbitraryWaitingContinuation(chans: List[String])(
+      implicit
+      serializeString: Serialize[String],
+      serializePattern: Serialize[Pattern],
+      serializeStringsCaptor: Serialize[StringsCaptor],
+  ): Arbitrary[WaitingContinuation[Pattern, StringsCaptor]] =
     Arbitrary(
       for {
-        pats    <- Gen.containerOfN[List, Pattern](patternsLength, Arbitrary.arbitrary[Pattern])
+        pats    <- Gen.containerOfN[List, Pattern](chans.length, Arbitrary.arbitrary[Pattern])
         boolean <- Arbitrary.arbitrary[Boolean]
-      } yield WaitingContinuation(pats, new StringsCaptor, boolean)
+      } yield WaitingContinuation.create(chans, pats, new StringsCaptor, boolean)
     )
 
-  implicit val arbitraryGnat: Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] = {
+  implicit def arbitraryGnat(implicit
+                             serializeString: Serialize[String],
+                             serializePattern: Serialize[Pattern],
+                             serializeStringsCaptor: Serialize[StringsCaptor])
+    : Arbitrary[GNAT[String, Pattern, String, StringsCaptor]] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       for {
         chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
-        data  <- Gen.nonEmptyContainerOf[List, Datum[String]](Arbitrary.arbitrary[Datum[String]])
+        data <- Gen.nonEmptyContainerOf[List, Datum[String]](
+                 arbitraryDatum[String, String](chans.head).arbitrary)
         wks <- Gen.nonEmptyContainerOf[List, WaitingContinuation[Pattern, StringsCaptor]](
-                arbitraryWaitingContinuation(constrainedSize).arbitrary)
+                arbitraryWaitingContinuation(chans).arbitrary)
       } yield GNAT(chans, data, wks)
     })
-  }
 
-  implicit val arbitraryNonEmptyMapListStringWaitingContinuation
-    : Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] = {
+  implicit def arbitraryNonEmptyMapListStringWaitingContinuation(
+      implicit
+      serializeString: Serialize[String],
+      serializePattern: Serialize[Pattern],
+      serializeStringsCaptor: Serialize[StringsCaptor])
+    : Arbitrary[Map[List[String], WaitingContinuation[Pattern, StringsCaptor]]] =
     Arbitrary(Gen.sized { size =>
       val constrainedSize = if (size > 1) size else 1
       Gen
         .nonEmptyContainerOf[List, (List[String], WaitingContinuation[Pattern, StringsCaptor])](
           for {
-            wc    <- arbitraryWaitingContinuation(constrainedSize).arbitrary
-            chans <- Gen.containerOfN[List, String](wc.patterns.length, Arbitrary.arbitrary[String])
+            chans <- Gen.containerOfN[List, String](constrainedSize, Arbitrary.arbitrary[String])
+            wc    <- arbitraryWaitingContinuation(chans).arbitrary
           } yield (chans, wc)
         )
         .map(_.toMap)
     })
-  }
 
   /**
    Credit: https://gist.github.com/etorreborre/d0616e704ed85d7276eb12b025df8ab0

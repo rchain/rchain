@@ -39,7 +39,7 @@ object Main {
     val exec: Task[Unit] = conf.subcommand match {
       case Some(conf.eval) => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
-        new ReplRuntime(conf).evalProgram[Task](conf.eval.fileName.toOption.get)
+        new ReplRuntime(conf).evalProgram[Task](conf.eval.fileNames.toOption.get)
       }
       case Some(conf.repl) => {
         implicit val consoleIO: ConsoleIO[Task] = effects.consoleIO(createConsole)
