@@ -134,9 +134,10 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
 
     logger.info(s"uPnP: ${upnp.localAddress} -> ${upnp.externalAddress}")
 
-    upnp.localAddress match {
-      case Some(addy) => Some(addy)
-      case None => {
+    (upnp.localAddress, upnp.externalAddress) match {
+      case (_, Some(addy)) => Some(InetAddress.getByName(addy))
+      case (Some(addy), _) => Some(addy)
+      case _ => {
         val ifaces = NetworkInterface.getNetworkInterfaces.asScala.map(_.getInterfaceAddresses)
         val addresses = ifaces
           .flatMap(_.asScala)
