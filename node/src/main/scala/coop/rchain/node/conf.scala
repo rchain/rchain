@@ -113,7 +113,7 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
     default = None,
     descr = "Base16 encoding of the Ed25519 private key to use for signing a proposed block.")
 
-  lazy val localhost: String =
+  lazy val fetchHost: String =
     host.toOption match {
       case Some(host) => host
       case None       => whoami(port()).fold("localhost")(_.getHostAddress)
