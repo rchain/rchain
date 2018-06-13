@@ -316,7 +316,9 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
     }
 
   def getCheckpoint(): Checkpoint = {
-    val root   = store.getCheckpoint()
+    val root = store
+      .getCheckpoint()
+      .getOrElse(throw new Exception("Couldn't get checkpoint for an empty Trie"))
     val events = eventLog.take()
     eventLog.put(Seq.empty)
     Checkpoint(root, events)
