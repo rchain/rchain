@@ -22,7 +22,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.prop.PropertyChecks
-import org.scalatest.{Assertion, Matchers, Outcome, fixture}
+import org.scalatest.{fixture, Assertion, Matchers, Outcome}
 
 import scala.collection.immutable.BitSet
 import scala.concurrent.Await
