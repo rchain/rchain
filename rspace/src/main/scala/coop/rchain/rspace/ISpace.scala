@@ -72,15 +72,15 @@ trait ISpace[C, P, A, K] {
 
   /** Gets a checkpoint.
     *
-    * @return A BLAKE2b256 representing the checkpoint
+    * @return A [[Checkpoint]]
     */
-  def getCheckpoint(): Blake2b256Hash
+  def getCheckpoint(): Checkpoint
 
-  /** Resets the given store to the given checkpoint.
+  /** Resets the store to the given root.
     *
-    * @param hash A BLAKE2b256 Hash representing the checkpoint
+    * @param root A BLAKE2b256 Hash representing the checkpoint
     */
-  def reset(hash: Blake2b256Hash): Unit
+  def reset(root: Blake2b256Hash): Unit
 
   /** Resets the given store an empty state.
     */

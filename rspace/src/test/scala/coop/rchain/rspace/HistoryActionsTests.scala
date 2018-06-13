@@ -5,12 +5,14 @@ import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, Wildc
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, GNAT, Row, WaitingContinuation}
 import coop.rchain.rspace.test.ArbitraryInstances._
+import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import org.scalacheck.Prop
 import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 import scodec.Codec
 
 import scala.collection.immutable.Seq
 
+//noinspection ZeroIndexToHead
 trait HistoryActionsTests
     extends StorageTestsBase[String, Pattern, String, StringsCaptor]
     with GeneratorDrivenPropertyChecks
@@ -53,15 +55,17 @@ trait HistoryActionsTests
   }
 
   "getCheckpoint on an empty store" should "return the expected hash" in withTestSpace { space =>
-    val ex = the[Exception] thrownBy (space.getCheckpoint() shouldBe None)
-    ex.getMessage shouldBe "Couldn't get checkpoint hash for an empty trie"
+    space.getCheckpoint().root shouldBe None
   }
 
   "consume then getCheckpoint" should "return the expected hash and the TrieStore should contain the expected value" in
     withTestSpace { space =>
-      val gnat = GNAT(List("ch1"),
-                      List.empty[Datum[String]],
-                      List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+      val channels = List("ch1")
+      val gnat = GNAT(
+        channels,
+        List.empty[Datum[String]],
+        List(
+          WaitingContinuation.create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
 
       val channelsHash: Blake2b256Hash = space.store.hashChannels(gnat.channels)
 
@@ -74,16 +78,21 @@ trait HistoryActionsTests
 
       history.lookup(space.store.trieStore, channelsHash) shouldBe None
 
-      space.getCheckpoint() shouldBe expectedHash
+      space.getCheckpoint().root shouldBe Some(expectedHash)
 
       history.lookup(space.store.trieStore, channelsHash).value shouldBe gnat
     }
 
   "consume twice then getCheckpoint" should "persist the expected values in the TrieStore" in
     withTestSpace { space =>
-      val gnat1 = GNAT(List("ch1"),
-                       List.empty[Datum[String]],
-                       List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+      val gnat1 = {
+        val channels = List("ch1")
+        GNAT(channels,
+             List.empty[Datum[String]],
+             List(
+               WaitingContinuation
+                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+      }
 
       val channelsHash1: Blake2b256Hash = space.store.hashChannels(gnat1.channels)
 
@@ -92,9 +101,14 @@ trait HistoryActionsTests
                     gnat1.wks.head.continuation,
                     gnat1.wks.head.persist)
 
-      val gnat2 = GNAT(List("ch2"),
-                       List.empty[Datum[String]],
-                       List(WaitingContinuation(List[Pattern](Wildcard), new StringsCaptor, false)))
+      val gnat2 = {
+        val channels = List("ch2")
+        GNAT(channels,
+             List.empty[Datum[String]],
+             List(
+               WaitingContinuation
+                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+      }
 
       val channelsHash2: Blake2b256Hash = space.store.hashChannels(gnat2.channels)
 
@@ -183,16 +197,20 @@ trait HistoryActionsTests
 
       history.lookup(space.store.trieStore, channelsHash) shouldBe None
 
-      the[Exception] thrownBy space
-        .getCheckpoint() should have message "Couldn't get checkpoint hash for an empty trie"
+      space.getCheckpoint().root shouldBe None
       history.lookup(space.store.trieStore, channelsHash) shouldBe None
     }
 
   "getCheckpoint, consume, reset" should "result in an empty store" in
     withTestSpace { space =>
-      val gnat1 = GNAT(List("ch1"),
-                       List.empty[Datum[String]],
-                       List(WaitingContinuation(List(Wildcard), new StringsCaptor, false)))
+      val gnat1 = {
+        val channels = List("ch1")
+        GNAT(channels,
+             List.empty[Datum[String]],
+             List(
+               WaitingContinuation
+                 .create(channels, List[Pattern](Wildcard), new StringsCaptor, false)))
+      }
 
       space.consume(gnat1.channels,
                     gnat1.wks.head.patterns,
@@ -201,7 +219,7 @@ trait HistoryActionsTests
 
       space.store.isEmpty shouldBe false
 
-      space.reset
+      space.reset()
 
       space.store.isEmpty shouldBe true
     }
@@ -209,17 +227,21 @@ trait HistoryActionsTests
   "getCheckpoint, consume, getCheckpoint, reset to first checkpoint, reset to second checkpoint" should
     "result in a store that contains the consume and appropriate join map" in withTestSpace {
     space =>
-      val gnat1 =
-        GNAT(List("ch1", "ch2"),
+      val gnat1 = {
+        val channels = List("ch1", "ch2")
+        GNAT(channels,
              List.empty[Datum[String]],
-             List(WaitingContinuation(List(Wildcard, Wildcard), new StringsCaptor, false)))
+             List(
+               WaitingContinuation
+                 .create(channels, List[Pattern](Wildcard, Wildcard), new StringsCaptor, false)))
+      }
 
       space.consume(gnat1.channels,
                     gnat1.wks.head.patterns,
                     gnat1.wks.head.continuation,
                     gnat1.wks.head.persist)
 
-      val checkpoint1 = space.getCheckpoint()
+      val root1 = space.getCheckpoint().root
 
       val contents1: Map[Seq[String], Row[Pattern, String, StringsCaptor]] = space.store.toMap
 
@@ -242,7 +264,7 @@ trait HistoryActionsTests
 
       // Rollback to second checkpoint
 
-      space.reset(checkpoint1)
+      space.reset(root1.get)
 
       space.store.isEmpty shouldBe false
 
@@ -269,7 +291,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $size produces")
-            (State(space.getCheckpoint(), space.store.toMap), chunkNo)
+            (State(space.getCheckpoint().root.get, space.store.toMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -293,7 +315,7 @@ trait HistoryActionsTests
             val num  = "%02d".format(chunkNo)
             val size = "%02d".format(consumes.size)
             logger.debug(s"$num: checkpointing $size consumes")
-            (State(space.getCheckpoint(), space.store.toMap), chunkNo)
+            (State(space.getCheckpoint().root.get, space.store.toMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
@@ -323,13 +345,41 @@ trait HistoryActionsTests
             val consumesSize = "%02d".format(consumes.size)
             val producesSize = "%02d".format(produces.size)
             logger.debug(s"$num: checkpointing $consumesSize consumes and $producesSize produces")
-            (State(space.getCheckpoint(), space.store.toMap), chunkNo)
+            (State(space.getCheckpoint().root.get, space.store.toMap), chunkNo)
         }
 
         validateIndexedStates(space, states)
       }
     }
     check(prop)
+  }
+
+  "consume, produce, produce" should "result in the expected trace log" in withTestSpace { space =>
+    val channels = List("ch1", "ch2")
+    val patterns = List[Pattern](Wildcard, Wildcard)
+    val k        = new StringsCaptor
+    val data     = List("datum1", "datum2")
+
+    space.consume(channels, patterns, k, false)
+
+    space.produce(channels(0), data(0), false)
+
+    space.produce(channels(1), data(1), false)
+
+    val expectedConsume = Consume.create(channels, patterns, k, false)
+
+    val expectedProduce1 = Produce.create(channels(0), data(0), false)
+
+    val expectedProduce2 = Produce.create(channels(1), data(1), false)
+
+    val commEvent = COMM(expectedConsume, Seq(expectedProduce1, expectedProduce2))
+
+    val Checkpoint(_, log) = space.getCheckpoint()
+
+    log should contain theSameElementsInOrderAs Seq(commEvent,
+                                                    expectedProduce2,
+                                                    expectedProduce1,
+                                                    expectedConsume)
   }
 }
 
