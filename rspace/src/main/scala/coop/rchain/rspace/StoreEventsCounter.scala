@@ -87,9 +87,9 @@ private[rspace] class StoreEventsCounter(
       val now         = nanoTime
       val currentRate = eventsQueue.asScala.count(x => now - x <= registrationIntervalNanoseconds)
       val avgTimeMilliseconds = if (comm) {
-        0.0
-      } else {
         exSum.avgTimeMilliseconds
+      } else {
+        0.0
       }
       StoreCount(exSum.count, avgTimeMilliseconds, exSum.peakRate, currentRate)
     }
