@@ -19,8 +19,6 @@ case object EmptyPointer                     extends Pointer
 sealed trait Trie[+K, +V]                         extends Product with Serializable
 final case class Leaf[K, V](key: K, value: V)     extends Trie[K, V]
 final case class Node(pointerBlock: PointerBlock) extends Trie[Nothing, Nothing]
-final case class Extension(affix: ByteVector, pointer: NonEmptyPointer)
-    extends Trie[Nothing, Nothing]
 
 object Trie {
 
@@ -33,9 +31,6 @@ object Trie {
       .subcaseP(1) {
         case (node: Node) => node
       }(PointerBlock.codecPointerBlock.as[Node])
-      .subcaseP(2) {
-        case (node: Extension) => node
-      }((codecByteVector :: codecNonEmptyPointer).as[Extension])
 
   def hash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): Blake2b256Hash =
     codecTrie[K, V]
