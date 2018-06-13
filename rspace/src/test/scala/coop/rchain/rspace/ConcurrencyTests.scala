@@ -171,12 +171,11 @@ trait ConcurrencyTests extends StorageTestsBase[Channel, Pattern, Entry, Entries
                   phone = "698-555-1212")
 }
 
-//TODO: Uncomment when problem with InMemoryStore will be solved.
-//class InMemoryStoreConcurrencyTests
-//    extends InMemoryStoreStorageExamplesTestsBase
-//    with ConcurrencyTests {
-//  override def version: String = "InMemory"
-//}
+class InMemoryStoreConcurrencyTests
+    extends InMemoryStoreStorageExamplesTestsBase
+    with ConcurrencyTests {
+  override def version: String = "InMemory"
+}
 
 class LMDBStoreConcurrencyTestsWithTls
     extends LMDBStoreStorageExamplesTestBase
