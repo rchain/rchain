@@ -12,7 +12,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.effects._
 import coop.rchain.comm.transport._, CommMessages._
 import coop.rchain.comm.discovery._
-import coop.rchain.p2p.Network.ErrorHandler
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.shared._
 
 import scala.util.Try

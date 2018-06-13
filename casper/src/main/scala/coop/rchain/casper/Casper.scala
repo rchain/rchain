@@ -10,7 +10,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.{Checkpoint, InterpreterUtil}
 import coop.rchain.catscontrib._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.Network.ErrorHandler
+import coop.rchain.comm.CommError.ErrorHandler
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.comm.transport._

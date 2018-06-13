@@ -192,7 +192,7 @@ lazy val node = (project in file("node"))
                         "openssl",
                         "libsodium >= 1.0.14-1")
   )
-  .dependsOn(casper, comm, crypto, rholang)
+  .dependsOn(casper, comm % "compile->compile;test->test", crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
