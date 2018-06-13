@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import scala.collection.generic.CanBuildFrom
 import scala.collection.immutable.HashSet
-import scala.collection.{mutable, GenSet, SetLike}
+import scala.collection.{mutable, SetLike}
 import coop.rchain.models.rholang.sort.ordering._
 
 //Enforce ordering and uniqueness.
