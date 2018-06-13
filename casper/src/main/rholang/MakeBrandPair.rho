@@ -1,0 +1,29 @@
+//scalapackage coop.rchain.rholang.security
+
+//Based on sealer/unsealer pattern in http://erights.org/elib/capability/ode/ode-capabilities.html
+//
+//This design pattern makes it possible to restrict *access* to data/methods, but
+//not necessarily *knowledge* of the data/methods (because everything is public 
+//on a blockchain). However, restricting access is enough to ensure security in
+//some situations. For example one could seal the method on a "purse" object which
+//extracts the tokens inside, thus allowing only those with the unsealer to 
+//take coins out of the purse.
+contract @"MakeBrandPair"(return) = {
+  new seal, unseal, key in {
+    contract seal(@data, return) = {
+      new sealedData in {
+        contract sealedData(@input, return) = {
+          bundle+{
+            match input == *key {
+              true => { return!([data]) }
+              _ => { return!([]) }
+            }
+          }
+        } |
+        return!(*sealedData)
+      }
+    } |
+    contract unseal(sealedData, return) = { sealedData!(*key, *return) } |
+    return!([*seal, *unseal])
+  }
+}

@@ -1,4 +1,4 @@
-//scalapackage coop.rchain.casper.genesis.contracts
+//scalapackage coop.rchain.rholang.collection
 
 contract @["LinkedList", "head"](@list, return) = {
   match list {
