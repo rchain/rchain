@@ -294,10 +294,7 @@ sealed abstract class MultiParentCasperInstances {
                      case _ => status.pure[F]
                    }
 
-          //TODO: Put tuplespace validation back in after we have
-          //      tuplespace replay. Cannot put it in now because
-          //      it fails on unforgable names (no way to replicate
-          //      the same unforgable name without an execution trace).
+          //TODO: Put tuplespace validation back in after we have deterministic unforgeable names.
 
           // We want to catch equivocations only after we confirm that the block
           // completing the equivocation is otherwise valid.
