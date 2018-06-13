@@ -20,19 +20,6 @@ test:integration-test-for-artifact-creation:
     - ./scripts/install_bnfc.sh
     - sudo sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate node/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball 
 
-test:integration-test-for-rholang:
-  stage: test 
-  tags:
-    - preloaded-ubuntu1804 
-  script:
-    - ./scripts/install_bnfc.sh
-    - sbt -Dsbt.log.noformat=true clean rholang/bnfc:generate rholang/assembly rholangCLI/assembly
-    # Note: We only test rholangCLI builds correctly but don't run anything with it.
-    - ./scripts/test-rholang-rbls.sh
-    - rm -f rholang/tests/*.rbl
-    - rm -f rholang/failure_tests/*.rbl
-
-
 deploy:deploy-rnode-to-dockerhub:
   stage: deploy 
   tags:
