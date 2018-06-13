@@ -15,12 +15,16 @@ trait HistoryTestsBase[T, K, V]
     with Configuration {
 
   def getRoot(store: ITrieStore[T, K, V]): Option[Blake2b256Hash] =
-    store.withTxn(store.createTxnRead())(txn => store.getRoot(txn))
+    store.withTxn(store.createTxnRead())(txn =>
+      store.getRoot(txn) match {
+        case p: NonEmptyPointer => Some(p.hash)
+        case _                  => None
+    })
 
   def setRoot(store: ITrieStore[T, K, V], hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
       store.get(txn, hash) match {
-        case Some(Node(_)) => store.putRoot(txn, hash)
+        case Some(Node(_)) => store.putRoot(txn, NodePointer(hash))
         case _             => throw new Exception(s"no node at $hash")
       }
     }

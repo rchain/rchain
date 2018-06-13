@@ -3,7 +3,7 @@ package coop.rchain.rspace
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
-import coop.rchain.rspace.history.Leaf
+import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Log, Produce}
 
@@ -316,16 +316,31 @@ class RSpace[C, P, A, K](val store: IStore[C, P, A, K])(implicit
     }
 
   def getCheckpoint(): Checkpoint = {
-    val root   = store.getCheckpoint()
+    val root = store
+      .getCheckpoint()
+      .getOrElse(throw new Exception("Couldn't get checkpoint for an empty Trie"))
     val events = eventLog.take()
     eventLog.put(Seq.empty)
     Checkpoint(root, events)
   }
 
+  def reset(): Unit =
+    store.withTxn(store.createTxnWrite()) { txn =>
+      store.trieStore.putRoot(txn, EmptyPointer)
+      store.clear(txn)
+    }
+
   def reset(hash: Blake2b256Hash): Unit =
     store.withTxn(store.createTxnWrite()) { txn =>
-      store.trieStore.putRoot(txn, hash)
-      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] = store.trieStore.getLeaves(txn, hash)
+      val pointer = store.trieStore.get(txn, hash) match {
+        case Some(Node(_))    => NodePointer(hash)
+        case Some(Leaf(_, _)) => LeafPointer(hash)
+        case None             => throw new Exception(s"Couldn't reset to element with hash $hash")
+      }
+
+      store.trieStore.putRoot(txn, pointer)
+      val leaves: Seq[Leaf[Blake2b256Hash, GNAT[C, P, A, K]]] =
+        store.trieStore.getLeaves(txn, hash)
       store.clear(txn)
       store.bulkInsert(txn, leaves.map { case Leaf(k, v) => (k, v) })
     }

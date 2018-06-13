@@ -82,6 +82,10 @@ trait ISpace[C, P, A, K] {
     */
   def reset(root: Blake2b256Hash): Unit
 
+  /** Resets the given store an empty state.
+    */
+  def reset(): Unit
+
   /** Closes
     */
   def close(): Unit

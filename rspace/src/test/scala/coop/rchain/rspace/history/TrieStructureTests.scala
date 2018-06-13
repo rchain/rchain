@@ -14,32 +14,10 @@ class TrieStructureTests
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
-  def withTrie[R](f: Trie[TestKey, ByteVector] => R): R =
-    withTestTrieStore { store =>
-      store.withTxn(store.createTxnRead()) { txn =>
-        val trieOpt = store.get(txn, store.getRoot(txn).get)
-        trieOpt should not be empty
-        f(trieOpt.get)
-      }
-    }
-
-  def withTrieTxnAndStore[R](
-      f: (ITrieStore[Txn[ByteBuffer], TestKey, ByteVector],
-          Txn[ByteBuffer],
-          Trie[TestKey, ByteVector]) => R): R =
-    withTestTrieStore { store =>
-      store.withTxn(store.createTxnRead()) { txn =>
-        val trieOpt = store.get(txn, store.getRoot(txn).get)
-        trieOpt should not be empty
-        f(store, txn, trieOpt.get)
-      }
-    }
-
   private[this] val SingleElementData = new {
     val key1    = TestData.key1
     val val1    = TestData.val1
-    val rootHex = "f8758db35082dc03c90db2e1686e2a72394a7618f74e4e8cea2da516896b8a68"
-    val leafHex = "8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
+    val rootHex = "8d329ed700f130f40b15b73b1bd4f7b70d982acb9dce55e58f58425038f5db1c"
   }
 
   private[this] val CommonPrefixData = new {
@@ -56,29 +34,10 @@ class TrieStructureTests
     val leaf2Hex  = "f22c71982cf8663fb1ea77a444233c99d8c00cd187b0253cfc4213228fea6625"
   }
 
-  "insert's effect" should "be visible in the outer read transaction" ignore {
-    withTrieTxnAndStore { (store, txn, trie) =>
-      import SingleElementData._
-      insert(store, key1, val1)
-      // Insert was made in a nested transaction, so it's effect should be visible
-      store.get(txn, store.getRoot(txn).get) should not be None
-    }
-  }
-
-  behavior of "A trie"
-  it should "be created as an empty pointer block" in
-    withTrie {
-      case Node(PointerBlock(vector)) =>
-        vector should have size 256
-        vector should contain only EmptyPointer
-      case _ => fail("expected a node")
-    }
-
   it should "have two levels after inserting one element" in {
     withTestTrieStore { implicit store =>
       import SingleElementData._
       insert(store, key1, val1)
-
       assertSingleElementTrie
     }
   }
@@ -88,7 +47,6 @@ class TrieStructureTests
       import CommonPrefixData._
       insert(store, key1, val1)
       insert(store, key2, val2)
-
       assertCommonPrefixTrie
     }
   }
@@ -116,8 +74,9 @@ class TrieStructureTests
 
       store.withTxn(store.createTxnWrite()) { txn =>
         store.putRoot(txn,
-                      Blake2b256Hash
-                        .fromHex(SingleElementData.rootHex))
+                      LeafPointer(
+                        Blake2b256Hash
+                          .fromHex(SingleElementData.rootHex)))
       }
 
       assertSingleElementTrie
@@ -129,9 +88,8 @@ class TrieStructureTests
       implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
     import SingleElementData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
-      expectNode(rootHex, Seq((1, LeafPointer(leafHex))))
       val expectedLeafHash = Blake2b256Hash
-        .fromHex(leafHex)
+        .fromHex(rootHex)
 
       store.get(txn, expectedLeafHash) shouldBe Some(Leaf(key1, val1))
     }
