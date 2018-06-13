@@ -24,7 +24,7 @@ class PointerBlock private (val toVector: Vector[Pointer]) {
       case (p: NonEmptyPointer, i) => (p, i)
     }
 
-  override def toString: String = s"PointerBlock(toVector: ${toVector.toString})"
+  override def toString: String = s"PointerBlock(toVector: ${childrenWithIndex})"
 
   override def equals(obj: scala.Any): Boolean = obj match {
     case pb: PointerBlock => pb.toVector == toVector

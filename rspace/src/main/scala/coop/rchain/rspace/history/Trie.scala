@@ -37,7 +37,7 @@ object Trie {
       }(PointerBlock.codecPointerBlock.as[Node])
       .subcaseP(2) {
         case (skip: Skip) => skip
-      }((variableSizeBits(uint8, bytes) :: codecNonEmptyPointer).as[Skip])
+      }((variableSizeBytes(uint8, bytes) :: codecNonEmptyPointer).as[Skip])
 
   def hash[K, V](trie: Trie[K, V])(implicit codecK: Codec[K], codecV: Codec[V]): Blake2b256Hash =
     codecTrie[K, V]

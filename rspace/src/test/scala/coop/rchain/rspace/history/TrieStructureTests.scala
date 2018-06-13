@@ -8,13 +8,15 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
 
+import scala.collection.immutable
+
 class TrieStructureTests
-    extends HistoryTestsBase[Txn[ByteBuffer], TestKey, ByteVector]
+    extends HistoryTestsBase[Txn[ByteBuffer], TestKey4, ByteVector]
     with LMDBTrieStoreFixtures {
 
   implicit val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
-  def withTrie[R](f: Trie[TestKey, ByteVector] => R): R =
+  def withTrie[R](f: Trie[TestKey4, ByteVector] => R): R =
     withTestTrieStore { store =>
       store.withTxn(store.createTxnRead()) { txn =>
         val trieOpt = store.get(txn, store.getRoot(txn).get)
@@ -24,9 +26,9 @@ class TrieStructureTests
     }
 
   def withTrieTxnAndStore[R](
-      f: (ITrieStore[Txn[ByteBuffer], TestKey, ByteVector],
+      f: (ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector],
           Txn[ByteBuffer],
-          Trie[TestKey, ByteVector]) => R): R =
+          Trie[TestKey4, ByteVector]) => R): R =
     withTestTrieStore { store =>
       store.withTxn(store.createTxnRead()) { txn =>
         val trieOpt = store.get(txn, store.getRoot(txn).get)
@@ -125,8 +127,65 @@ class TrieStructureTests
     }
   }
 
+  implicit def lift2TestKey5(s: String): TestKey5 = {
+    TestKey5.create(s.map(c => Integer.parseInt(c.toString)))
+  }
+
+  it should "insert skip node " in withTestTrieStoreKey5 { store =>
+    val k1: TestKey5 = "10000"
+    insert(store, k1, TestData.val1)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
+      root.pointerBlock.children should have size 1
+      root.pointerBlock.childrenWithIndex(0)._2 shouldBe 1
+
+      val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skip.pointer shouldBe a [LeafPointer]
+      skip.affix shouldBe ByteVector(0, 0, 0, 0)
+
+      val leaf = store.get(txn, skip.pointer.hash).get.asInstanceOf[Leaf[TestKey5, ByteVector]]
+      leaf.key shouldBe k1
+      leaf.value shouldBe TestData.val1
+    }
+  }
+
+  it should "build two levels of skip nodes" in withTestTrieStoreKey5 { store =>
+    val k1: TestKey5 = "01000"
+    val k2: TestKey5 = "01100"
+    insert(store, k1, TestData.val1)
+    insert(store, k2, TestData.val1)
+
+    store.withTxn(store.createTxnRead()) { txn =>
+      val root = store.get(txn, store.getRoot(txn).get).get.asInstanceOf[Node]
+      root.pointerBlock.children should have size 1
+      root.pointerBlock.childrenWithIndex(0)._2 shouldBe 0
+
+      val skip = store.get(txn, root.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skip.pointer shouldBe a [NodePointer]
+      skip.affix shouldBe ByteVector(1)
+
+      val node = store.get(txn, skip.pointer.hash).get.asInstanceOf[Node]
+
+      node.pointerBlock.children should have size 2
+      node.pointerBlock.childrenWithIndex(0)._2 shouldBe 0
+      node.pointerBlock.childrenWithIndex(1)._2 shouldBe 1
+
+      node.pointerBlock.childrenWithIndex(0)._1 shouldBe a [NodePointer] // do we need skip pointers?
+      node.pointerBlock.childrenWithIndex(1)._1 shouldBe a [NodePointer]
+
+      val skipLeaf1 = store.get(txn, node.pointerBlock.children(0).hash).get.asInstanceOf[Skip]
+      skipLeaf1.pointer shouldBe a [LeafPointer]
+      skipLeaf1.affix shouldBe ByteVector(0, 0)
+
+      val skipLeaf2 = store.get(txn, node.pointerBlock.children(1).hash).get.asInstanceOf[Skip]
+      skipLeaf2.pointer shouldBe a [LeafPointer]
+      skipLeaf2.affix shouldBe ByteVector(0, 0)
+    }
+  }
+
   private[this] def assertSingleElementTrie(
-      implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
+      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) = {
     import SingleElementData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
       expectNode(rootHex, Seq((1, LeafPointer(leafHex))))
@@ -139,13 +198,11 @@ class TrieStructureTests
   }
 
   private[this] def assertCommonPrefixTrie(
-      implicit store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) = {
+      implicit store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) = {
     import CommonPrefixData._
     store.withTxn(store.createTxnRead()) { implicit txn =>
       expectNode(rootHex, Seq((1, NodePointer(level1Hex))))
-      //TODO this is wrong for sure
       expectSkip(level1Hex, ByteVector(Seq(0,0).map(_.toByte)), NodePointer(level3Hex))
-//      expectNode(level1Hex, Seq((0, NodePointer(level2Hex))))
       expectNode(level3Hex, Seq((0, LeafPointer(leaf1Hex)), (1, LeafPointer(leaf2Hex))))
 
       val expectedLeaf1Hash = Blake2b256Hash
@@ -164,7 +221,7 @@ class TrieStructureTests
 
   private[this] def expectNode(currentHex: String, childHexes: Seq[(Int, Pointer)])(
       implicit txn: Txn[ByteBuffer],
-      store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
+      store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) =
     store.get(txn,
               Blake2b256Hash
                 .fromHex(currentHex)) match {
@@ -183,7 +240,7 @@ class TrieStructureTests
 
   def expectSkip(currentHex: String, expectedAffix: ByteVector, expectedPointer: NonEmptyPointer)(
       implicit txn: Txn[ByteBuffer],
-      store: ITrieStore[Txn[ByteBuffer], TestKey, ByteVector]) =
+      store: ITrieStore[Txn[ByteBuffer], TestKey4, ByteVector]) =
     store.get(txn,
               Blake2b256Hash
                 .fromHex(currentHex)) match {

@@ -29,17 +29,17 @@ trait HistoryTestsBase[T, K, V]
     store.withTxn(store.createTxnRead())(txn => store.getLeaves(txn, hash))
 
   object TestData {
-    val key1 = TestKey.create(Seq(1, 0, 0, 0))
+    val key1 = TestKey4.create(Seq(1, 0, 0, 0))
     val val1 = ByteVector("value1".getBytes)
-    val key2 = TestKey.create(Seq(1, 0, 0, 1))
+    val key2 = TestKey4.create(Seq(1, 0, 0, 1))
     val val2 = ByteVector("value2".getBytes)
-    val key3 = TestKey.create(Seq(1, 0, 1, 0))
+    val key3 = TestKey4.create(Seq(1, 0, 1, 0))
     val val3 = ByteVector("value3".getBytes)
-    val key4 = TestKey.create(Seq(1, 0, 1, 1))
+    val key4 = TestKey4.create(Seq(1, 0, 1, 1))
     val val4 = ByteVector("value4".getBytes)
-    val key5 = TestKey.create(Seq(1, 0, 2, 1))
+    val key5 = TestKey4.create(Seq(1, 0, 2, 1))
     val val5 = ByteVector("value5".getBytes)
-    val key6 = TestKey.create(Seq(1, 0, 0, 2))
+    val key6 = TestKey4.create(Seq(1, 0, 0, 2))
     val val6 = ByteVector("value6".getBytes)
   }
 
