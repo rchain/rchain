@@ -209,7 +209,7 @@ object Reduce {
       */
     def eval(send: Send)(implicit env: Env[Par]): M[Unit] =
       for {
-        quote <- eval(send.chan.get)
+        quote <- eval(send.chan)
         data  <- send.data.toList.traverse(x => evalExpr(x))
 
         subChan <- substituteQuote[M].substitute(quote)(0, env)
@@ -614,6 +614,15 @@ object Reduce {
       }
     }
 
+    private[this] def method(methodName: String, expectedArgsLength: Int, argsLength: Int)(
+        thunk: => M[Par]): M[Par] =
+      if (argsLength != expectedArgsLength) {
+        interpreterErrorM[M].raiseError(
+          ReduceError(s"Error: $methodName expects $expectedArgsLength argument(s)"))
+      } else {
+        thunk
+      }
+
     private[this] def union: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
       def union(baseExpr: Expr, otherExpr: Expr): M[Expr] =
         (baseExpr.exprInstance, otherExpr.exprInstance) match {
@@ -633,11 +642,8 @@ object Reduce {
               ))
 
         }
-      if (args.length != 1) {
-        interpreterErrorM[M].raiseError(
-          ReduceError("Error: union expects 1 argument")
-        )
-      } else {
+
+      method("union", 1, args.length) {
         for {
           baseExpr  <- evalSingleExpr(p)(env)
           otherExpr <- evalSingleExpr(args(0))(env)
@@ -662,19 +668,81 @@ object Reduce {
             interpreterErrorM[M].raiseError(
               ReduceError("Error: union applied to something that wasn't a set or a map"))
         }
-
-      if (args.length != 1) {
-        interpreterErrorM[M].raiseError(
-          ReduceError("Error: diff expects 1 argument")
-        )
-      } else {
+      method("diff", 1, args.length) {
         for {
           baseExpr  <- evalSingleExpr(p)(env)
           otherExpr <- evalSingleExpr(args(0))(env)
           result    <- diff(baseExpr, otherExpr)
         } yield result
       }
+    }
 
+    private[this] def add: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def add(baseExpr: Expr, par: Par): M[Expr] =
+        baseExpr.exprInstance match {
+          case ESetBody(base @ ParSet(basePs, _, _)) =>
+            Applicative[M].pure[Expr](
+              ESetBody(
+                ParSet(basePs + par,
+                       base.connectiveUsed || par.connectiveUsed,
+                       base.locallyFree.map(b => b | par.locallyFree))))
+
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: add can be called only with one Par as argument."))
+        }
+
+      method("add", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          element  <- evalExpr(args(0))(env)
+          result   <- add(baseExpr, element)
+        } yield result
+      }
+    }
+
+    private[this] def delete: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def delete(baseExpr: Expr, par: Expr): M[Expr] =
+        baseExpr.exprInstance match {
+          case ESetBody(base @ ParSet(basePs, _, _)) =>
+            Applicative[M].pure[Expr](
+              ESetBody(
+                ParSet(basePs - par,
+                       base.connectiveUsed || par.connectiveUsed,
+                       base.locallyFree.map(b => b | par.locallyFree))))
+
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: add can be called only with one Par as argument."))
+        }
+
+      method("delete", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          element  <- evalSingleExpr(args(0))(env)
+          result   <- delete(baseExpr, element)
+        } yield result
+      }
+    }
+
+    private[this] def contains: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
+      def contains(baseExpr: Expr, par: Par): M[Expr] =
+        baseExpr.exprInstance match {
+          case ESetBody(base @ ParSet(basePs, _, _)) =>
+            Applicative[M].pure[Expr](GBool(basePs.contains(par)))
+
+          case _ =>
+            interpreterErrorM[M].raiseError(
+              ReduceError("Error: add can be called only with one Par as argument."))
+        }
+
+      method("contains", 1, args.length) {
+        for {
+          baseExpr <- evalSingleExpr(p)(env)
+          element  <- evalSingleExpr(args(0))(env)
+          result   <- contains(baseExpr, element)
+        } yield result
+      }
     }
 
     def methodTable(method: String): Option[MethodType] =
@@ -684,10 +752,10 @@ object Reduce {
         case "hexToBytes"  => Some(hexToBytes)
         case "union"       => Some(union)
         case "diff"        => Some(diff)
-//        case "add"         => Some(add)
-//        case "delete"      => Some(delete)
-        //       case "contains"    => Some(contains)
-        case _ => None
+        case "add"         => Some(add)
+        case "delete"      => Some(delete)
+        case "contains"    => Some(contains)
+        case _             => None
       }
 
     def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
