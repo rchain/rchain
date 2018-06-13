@@ -91,13 +91,43 @@ sealed abstract class MultiParentCasperInstances {
       private val expectedBlockRequests: mutable.HashSet[BlockHash] =
         new mutable.HashSet[BlockHash]()
 
+      type SequenceNumber = Int
+
+      case class InvalidBlockRecord(
+          invalidBlockSeqNum: Option[SequenceNumber],
+          invalidBlockDiscoveryStatuses: Map[Validator, Option[SequenceNumber]])
+      object InvalidBlockRecord {
+        def apply(): InvalidBlockRecord =
+          InvalidBlockRecord(none[SequenceNumber], Map.empty[Validator, Option[SequenceNumber]])
+      }
+
+      sealed trait EquivocationDiscoveryStatus
+      case class EquivocationDiscovered(sequenceNumber: SequenceNumber)
+          extends EquivocationDiscoveryStatus
+      case class EquivocationHalfDiscovered(sequenceNumber: SequenceNumber, blockHash: BlockHash)
+          extends EquivocationDiscoveryStatus
+      case object EquivocationOblivious extends EquivocationDiscoveryStatus
+      case class EquivocationRecord(
+          equivocationBaseBlockSeqNum: Option[SequenceNumber],
+          equivocationBlockDiscoveryStatuses: Map[Validator, EquivocationDiscoveryStatus])
+
+      // Used to keep track of when other validators detect the invalid produced at the sequence number
+      // identified by the first element of the tuple. If no invalid blocks have been produced by that
+      // validator, the sequence number is None.
+      private val invalidBlockTracker: mutable.HashMap[Validator, InvalidBlockRecord] =
+        new mutable.HashMap[Validator, InvalidBlockRecord]()
+      // Used to keep track of when other validators detect the equivocation consisting of the base block
+      // at the sequence number identified by the first element of the tuple.
+      private val equivocationsTracker: mutable.HashMap[Validator, EquivocationRecord] =
+        new mutable.HashMap[Validator, EquivocationRecord]()
+
       def addBlock(b: BlockMessage): F[Unit] =
         for {
           validSig    <- Validate.blockSignature[F](b)
           dag         <- blockDag
           validSender <- Validate.blockSender[F](b, genesis, dag)
-          attempt <- if (!validSig) InvalidBlock.pure[F]
-                    else if (!validSender) InvalidBlock.pure[F]
+          attempt <- if (!validSig) InvalidUnslashableBlock.pure[F]
+                    else if (!validSender) InvalidUnslashableBlock.pure[F]
                     else attemptAdd(b)
           _ <- attempt match {
                 case Valid => reAttemptBuffer
@@ -327,18 +357,38 @@ sealed abstract class MultiParentCasperInstances {
               Log[F].info(
                 s"CASPER: Did not add block ${PrettyPrinter.buildString(block.blockHash)} as that would add an equivocation to the BlockDAG")
             }
+          case InvalidBlockNumber =>
+            handleInvalidBlockEffect(block)
+          case InvalidParents =>
+            handleInvalidBlockEffect(block)
           case InvalidSequenceNumber =>
             // We need to handle invalid sequence numbers separately as the invalid block tracker
             // assumes the sequence numbers inserted are valid.
             throw new Error("InvalidSequenceNumber unimplemented")
-          case InvalidBlock =>
+          case InvalidUnslashableBlock =>
             for {
               _ <- Log[F].info(
                     s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
             } yield ()
-          // TODO: Handle slashable invalid blocks
           case _ => throw new Error("Should never reach")
         }
+
+      private def handleInvalidBlockEffect(block: BlockMessage): F[Unit] =
+        for {
+          _ <- Log[F].info(
+                s"CASPER: Did not add invalid block ${PrettyPrinter.buildString(block.blockHash)}")
+          _ <- Capture[F].capture {
+                val invalidBlockRecord =
+                  invalidBlockTracker.getOrElse(block.sender, InvalidBlockRecord())
+                val updatedInvalidBlockRecord = invalidBlockRecord.invalidBlockSeqNum match {
+                  case Some(_) => invalidBlockRecord
+                  case None =>
+                    InvalidBlockRecord(Some(block.seqNum),
+                                       invalidBlockRecord.invalidBlockDiscoveryStatuses)
+                }
+                invalidBlockTracker.update(block.sender, updatedInvalidBlockRecord)
+              }
+        } yield ()
 
       private def addToState(block: BlockMessage): F[Unit] =
         Capture[F].capture {
@@ -374,7 +424,7 @@ sealed abstract class MultiParentCasperInstances {
 
         def removeInvalidBlocksFromBuffer(attempts: List[(BlockMessage, BlockStatus)]) =
           attempts.flatMap {
-            case (b, InvalidBlock) =>
+            case (b, InvalidUnslashableBlock) =>
               blockBuffer -= b
               None
             case pair =>
