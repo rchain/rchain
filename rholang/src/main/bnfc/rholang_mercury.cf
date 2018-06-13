@@ -25,6 +25,7 @@ _. Proc16 ::= "{" Proc "}" ;
 PGround.      Proc16 ::= Ground ;
 PCollect.     Proc16 ::= Collection ;
 PVar.         Proc16 ::= ProcVar ;
+PVarRef.      Proc13 ::= VarRefKind Var ;
 PNil.         Proc16 ::= "Nil" ;
 PNegation.    Proc15 ::= "~" Proc15 ;
 PConjunction. Proc14 ::= Proc14 "/\\" Proc15 ;
@@ -140,6 +141,9 @@ RemainderEmpty. Remainder ::= "" ;
 NameRemainderVar.   NameRemainder ::= "..." "@" ProcVar ;
 NameRemainderEmpty. NameRemainder ::= "" ;
 
+-- VarRefKind:
+VarRefKindProc. VarRefKind ::= "=" ;
+VarRefKindName. VarRefKind ::= "=" "*" ;
 
 token Var (((letter | '\'') (letter | digit | '_' | '\'')*)|(('_') (letter | digit | '_' | '\'')+)) ;
 

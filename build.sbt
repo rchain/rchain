@@ -78,7 +78,7 @@ lazy val comm = (project in file("comm"))
       PB.gens.java                        -> (sourceManaged in Compile).value,
       scalapb.gen(javaConversions = true) -> (sourceManaged in Compile).value
     )
-  ).dependsOn(shared)
+  ).dependsOn(shared, crypto)
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -208,7 +208,7 @@ lazy val rholang = (project in file("rholang"))
       "-language:higherKinds",
       "-Yno-adapted-args"
     ),
-    libraryDependencies ++= commonDependencies ++ Seq(monix, scallop),
+    libraryDependencies ++= commonDependencies ++ Seq(catsMtl, monix, scallop),
     mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,

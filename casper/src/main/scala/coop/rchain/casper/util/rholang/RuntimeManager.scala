@@ -21,8 +21,8 @@ class RuntimeManager private (runtime: SyncVar[Runtime]) {
       implicit scheduler: Scheduler): Either[Throwable, StateHash] = {
     val active = getActive(hash)
     val error  = eval(terms, active)
-    val newHash = error.fold[Either[Throwable, StateHash]](
-      Right(ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)))(Left(_))
+    val newHash = error.fold[Either[Throwable, ByteString]](
+      Right(ByteString.copyFrom(active.space.getCheckpoint().root.bytes.toArray)))(Left(_))
     runtime.put(active)
     newHash
   }
@@ -63,7 +63,7 @@ object RuntimeManager {
 
   def fromRuntime(runtime: SyncVar[Runtime]): (StateHash, RuntimeManager) = {
     val active = runtime.take()
-    val hash   = ByteString.copyFrom(active.space.getCheckpoint().bytes.toArray)
+    val hash   = ByteString.copyFrom(active.space.getCheckpoint().root.bytes.toArray)
     runtime.put(active)
 
     (hash, new RuntimeManager(runtime))

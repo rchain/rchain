@@ -1,7 +1,6 @@
-package coop.rchain.node.effects
+package coop.rchain.comm.transport
 
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.node.CertificateHelper
 
 import io.grpc._
 import javax.net.ssl.SSLSession
