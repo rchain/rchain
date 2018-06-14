@@ -11,7 +11,7 @@ import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.IStore
 import monix.eval.Task
 import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.{ScallopConf, stringListConverter}
+import org.rogach.scallop.{stringListConverter, ScallopConf}
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -84,19 +84,13 @@ object RholangCLI {
       } Console.println(error.toString())
     }
 
-  def runEvaluate(runtime: Runtime, term: Par): Task[Vector[errors.InterpreterError]] =
-    for {
-      _      <- Task.now(printNormalizedTerm(term))
-      result <- Interpreter.evaluate(runtime, term)
-    } yield (result)
-
   @tailrec
   def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
         Interpreter.buildNormalizedTerm(new StringReader(line)).runAttempt match {
-          case Right(par) => evaluatePar(runtime)(par)
+          case Right(par)                 => evaluatePar(runtime)(par)
           case Left(ie: InterpreterError) =>
             // we don't want to print stack trace for user errors
             Console.err.print(ie.toString)
@@ -159,8 +153,13 @@ object RholangCLI {
   }
 
   def evaluatePar(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
-    val evaluatorFuture = runEvaluate(runtime, par).runAsync
-    waitForSuccess(evaluatorFuture)
+    val evaluatorTask =
+      for {
+        _      <- Task.now(printNormalizedTerm(par))
+        result <- Interpreter.evaluate(runtime, par)
+      } yield (result)
+
+    waitForSuccess(evaluatorTask.runAsync)
     printStorageContents(runtime.space.store)
   }
 }
