@@ -702,7 +702,7 @@ object Reduce {
     }
 
     private[this] def delete: MethodType = { (p: Par, args: Seq[Par]) => (env: Env[Par]) =>
-      def delete(baseExpr: Expr, par: Expr): M[Expr] =
+      def delete(baseExpr: Expr, par: Par): M[Expr] =
         baseExpr.exprInstance match {
           case ESetBody(base @ ParSet(basePs, _, _)) =>
             Applicative[M].pure[Expr](
@@ -719,7 +719,7 @@ object Reduce {
       method("delete", 1, args.length) {
         for {
           baseExpr <- evalSingleExpr(p)(env)
-          element  <- evalSingleExpr(args(0))(env)
+          element  <- evalExpr(args(0))(env)
           result   <- delete(baseExpr, element)
         } yield result
       }
@@ -739,7 +739,7 @@ object Reduce {
       method("contains", 1, args.length) {
         for {
           baseExpr <- evalSingleExpr(p)(env)
-          element  <- evalSingleExpr(args(0))(env)
+          element  <- evalExpr(args(0))(env)
           result   <- contains(baseExpr, element)
         } yield result
       }
