@@ -1,23 +1,17 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.{BufferedOutputStream, FileOutputStream, FileReader, Reader, StringReader}
+import java.io.{BufferedOutputStream, FileOutputStream, FileReader, StringReader}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 
-import cats._
-import cats.implicits._
 import coop.rchain.catscontrib.Capture._
-import coop.rchain.models.rholang.sort.ParSortMatcher
 import coop.rchain.models.{BindPattern, Channel, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rspace.IStore
-import monix.eval.{Coeval, Task}
+import monix.eval.Task
 import monix.execution.{CancelableFuture, Scheduler}
-import org.rogach.scallop.{stringListConverter, ScallopConf}
+import org.rogach.scallop.{ScallopConf, stringListConverter}
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
