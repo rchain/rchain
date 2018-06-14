@@ -32,7 +32,8 @@ class LMDBStore[C, P, A, K] private (
     _trieUpdateCount: AtomicLong,
     _trieUpdates: SyncVar[Seq[TrieUpdate[C, P, A, K]]],
     val trieStore: LMDBTrieStore[Blake2b256Hash, GNAT[C, P, A, K]],
-    val trieBranch: Branch
+    val trieBranch: Branch,
+    val eventsCounter: StoreEventsCounter
 )(implicit
   codecC: Codec[C],
   codecP: Codec[P],
@@ -44,8 +45,6 @@ class LMDBStore[C, P, A, K] private (
   val joinCodec: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
   private[rspace] type T = Txn[ByteBuffer]
-
-  val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
 
   private[rspace] def createTxnRead(): T = env.txnRead
 
@@ -366,6 +365,8 @@ object LMDBStore {
     val trieStore  = LMDBTrieStore.create[Blake2b256Hash, GNAT[C, P, A, K]](env)
     val trieBranch = Branch.master
 
+    val eventsCounter: StoreEventsCounter = new StoreEventsCounter()
+
     initialize(trieStore, trieBranch)
 
     new LMDBStore[C, P, A, K](env,
@@ -375,6 +376,7 @@ object LMDBStore {
                               trieUpdateCount,
                               trieUpdates,
                               trieStore,
-                              trieBranch)
+                              trieBranch,
+                              eventsCounter)
   }
 }
