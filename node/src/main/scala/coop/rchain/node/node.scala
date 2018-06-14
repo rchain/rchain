@@ -87,7 +87,7 @@ class NodeRuntime(conf: Conf)(implicit scheduler: Scheduler) {
   private val keysPath                 = conf.data_dir().resolve("keys").resolve(s"$name-rnode.keys")
   private val storagePath              = conf.data_dir().resolve("rspace")
   private val storageSize              = conf.map_size()
-  private val defaultTimeout: Duration = Duration(conf.defaultTimeout(), MILLISECONDS)
+  private val defaultTimeout: Duration = Duration(conf.defaultTimeout().toLong, MILLISECONDS)
 
   /** Final Effect + helper methods */
   type CommErrT[F[_], A] = EitherT[F, CommError, A]

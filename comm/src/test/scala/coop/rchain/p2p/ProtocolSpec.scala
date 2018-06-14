@@ -1,9 +1,10 @@
 package coop.rchain.p2p
 
+import scala.concurrent.duration.{Duration, MILLISECONDS}
 import org.scalatest._
 import coop.rchain.comm.protocol.rchain._
 import com.google.common.io.BaseEncoding
-import coop.rchain.comm._, CommError._, NetworkProtocol._, Network.defaultTimeout
+import coop.rchain.comm._, CommError._, NetworkProtocol._
 import coop.rchain.p2p.effects._
 import cats._, cats.data._, cats.implicits._
 import coop.rchain.catscontrib._, Catscontrib._, ski._, Encryption._
@@ -13,7 +14,8 @@ import EffectsTestInstances._
 
 class ProtocolSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
-  val encoder = BaseEncoding.base16().lowerCase()
+  val encoder                  = BaseEncoding.base16().lowerCase()
+  val defaultTimeout: Duration = Duration(1, MILLISECONDS)
 
   val src: ProtocolNode = protocolNode("src", 30300)
   val remote: PeerNode  = peerNode("remote", 30301)

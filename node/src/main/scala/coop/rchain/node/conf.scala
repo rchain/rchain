@@ -27,7 +27,8 @@ final case class Conf(arguments: Seq[String]) extends ScallopConf(arguments) {
                 "Path to node's private key PEM file, that is being used for TLS communication")
 
   val defaultTimeout =
-    opt[Int](default = Some(1000), descr = "Default timeout for roundtrip connections. Default 1 second.")
+    opt[Int](default = Some(1000),
+             descr = "Default timeout for roundtrip connections. Default 1 second.")
 
   val port =
     opt[Int](default = Some(30304), short = 'p', descr = "Network port to use.")
