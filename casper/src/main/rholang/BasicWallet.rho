@@ -1,0 +1,74 @@
+//scalapackage coop.rchain.rholang.wallet
+
+//assumes standard purse API from MakeMint
+contract @"BasicWallet"(@purse, @algorithm, @pk, return) = {
+  new algorithmKnown, cryptoVerifyCh in {
+    match algorithm {
+      "ed25519" => {
+        algorithmKnown!(true) | cryptoVerifyCh!("ed25519Verify")
+      }
+      _ => {
+        algorithmKnown!(false)
+      }
+    } |
+    for(@ak <- algorithmKnown) {
+      match ak {
+        false => { return!([]) }
+        true => {
+          for (cryptoVerify <- cryptoVerifyCh) {
+            new basicWallet, withdraw, verify, nonceCh in {
+              nonceCh!(-1) |
+              contract verify(@nonce, @sig, return) = {
+                for(@prevNonce <- nonceCh) {
+                  match nonce == (prevNonce + 1) {
+                    true => { 
+                      new result in {
+                        cryptoVerify!(nonce.toByteArray(), sig.hexToBytes(), pk.hexToBytes(), *result) |
+                        for(@r <- result) {
+                          match r {
+                            true => { nonceCh!(nonce) | return!(true) }
+                            _    => { nonceCh!(prevNonce) | return!(false) }
+                          }
+                        }
+                      }
+                    }
+                    _ => { nonceCh!(prevNonce) | return!(false) }
+                  }
+                }
+              } |
+              contract withdraw(@amount, return) = {
+                new destPurseCh, success in {
+                  @[purse, "sprout"]!(*destPurseCh) | for(@destPurse <- destPurseCh) {
+                    @[destPurse, "deposit"]!(amount, purse, *success) | for(@s <- success) {
+                      match s {
+                        true => { return!([destPurse]) }
+                        _ => { return!([]) }
+                      }
+                    }
+                  }
+                }
+              } |
+              contract @[*basicWallet, "getBalance"](return) = {
+                @[purse, "getBalance"]!(*return)
+              } |
+              contract @[*basicWallet, "deposit"](@amount, @src, success) = {
+                @[purse, "deposit"]!(amount, src, *success)
+              } |
+              contract @[*basicWallet, "withdraw"](@amount, @nonce, @sig, return) = {
+                new verifyResult in {
+                  verify!(nonce, sig, *verifyResult) | for(@r <- verifyResult) {
+                    match r {
+                      true => { withdraw!(amount, *return) }
+                      _    => { return!([]) }
+                    }
+                  }
+                }
+              } |
+              return!([*basicWallet])
+            }
+          }
+        }
+      }
+    }
+  }
+}

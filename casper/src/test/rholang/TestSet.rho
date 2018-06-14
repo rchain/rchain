@@ -57,10 +57,10 @@ contract @["TestSet", "after"](desc, continuation) = {
   for(@result <- desc) {
     match result {
       true => {
-        desc!(true) | { *continuation }
+        desc!(result) | { *continuation }
       }
       _ => {
-        desc!(false)
+        desc!(result)
       }
     }
   }

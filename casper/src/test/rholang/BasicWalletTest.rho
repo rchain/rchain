@@ -1,0 +1,110 @@
+//scalapackage coop.rchain.rholang.wallet
+
+//requires BasicWallet, MakeMint, TestSet, LinkedList
+@"sk"!("1388803416a5869f3d4682fb3fae738278287b80d1a5a52ddf89be8eb9dac59d") |
+@"pk"!("79d16233dedf8e8e4cc25272b2b98ac096dac9239ade20dcee5987a1c1d101c7") |
+@"sig0"!("0ca4f1c775a6f8061bb60d16bf6ec41e4851fe100edfb3443c19b9ea5cfeb709a57d00fbc5ba42e1396dc0d28a645bdc8904d06659e713c3b9ce1a54c6cbe800") |
+@"sig1"!("908aa6f32e45b54f0b9f23a528090d11d04d538abd92067cdb5f4782df88e4a4413da8923b73b6862804afb146d7c70a8583fe90183da455a651f53253c97109") |
+@"invalidSig"!("b8cea97ee7afdab7eb6ebabe8fde9ca8f9dbd3b877e8fe6b6cfd4bcef5cfdcfccec9fd8de9e39df4b6f5a2f7b6d9da8cffef48fab85faddbaab8ebca4af4ab07") |
+
+contract @"deposit"(@wallet, @amount, @otherPurse, return) = {
+  new deposit in {
+    contract deposit(return) = {
+      @[wallet, "deposit"]!(amount, otherPurse, *return)
+    } |
+    return!(*deposit)
+  }
+} |
+
+contract @"withdraw"(@wallet, @amount, @nonce, @sig, return) = {
+  new withdraw in {
+    contract withdraw(return) = {
+      @[wallet, "withdraw"]!(amount, nonce, sig, *return)
+    } |
+    return!(*withdraw)
+  }
+} |
+
+contract @"getBalance"(@wallet, return) = {
+  new getBalance in {
+    contract getBalance(return) = {
+      @[wallet, "getBalance"]!(*return)
+    } |
+    return!(*getBalance)
+  }
+} |
+
+@"MakeMint"!("mint") | for(@mint <- @"mint") {
+  @[mint, "makePurse"]!(100, "purse") |
+  @[mint, "makePurse"]!(30, "otherPurse") |
+  for(
+    @purse <- @"purse"; 
+    @otherPurse <- @"otherPurse"; 
+    @pk <- @"pk";
+    @sig0 <- @"sig0";
+    @sig1 <- @"sig1";
+    @invalidSig <- @"invalidSig"
+  ) {
+    contract @"newWallet"(@algorithm, return) = {
+      new makeWallet in {
+        contract makeWallet(return) = {
+          @"BasicWallet"!(purse, algorithm, pk, *return)
+        } |
+        return!(*makeWallet)
+      }
+    } |
+  
+  
+    @"newWallet"!("fake21564", "badAlgorithm") |
+    @"TestSet"!(
+      "A wallet should not be created if the signature algorithm is unknown.",
+      [
+        ["badAlgorithm", []]
+      ]
+    ) |
+  
+    @"BasicWallet"!(purse, "ed25519", pk, "wallet") |
+    for(@[wallet] <- @"wallet") {
+      @"getBalance"!(wallet, "walletBalance") |
+      @"deposit"!(wallet, 300, otherPurse, "overdrawDep") |
+      @"deposit"!(wallet, 30, otherPurse, "depWallet") |
+      @"withdraw"!(wallet, 60, 0, invalidSig, "failWithdraw") |
+      @"withdraw"!(wallet, 60, 0, sig0, "withdraw0Nonce") |
+      @"withdraw"!(wallet, 10, 1, sig1, "withdraw1Nonce") |
+      @"TestSet"!(
+        "Wallet deposit should work as expected.",
+        [
+          ["walletBalance", 100],
+          ["overdrawDep", false],
+          ["depWallet", true],
+          ["walletBalance", 130]
+        ]
+      )
+      
+      /* TODO: Uncomment when Rholang bug is fixed
+      @["TestSet", "after"]!("Wallet deposit should work as expected.", {
+        @"TestSet"!(
+          "Wallet withdraw should not accept invalid signatures or nonces.",
+          [
+            ["failWithdraw", []], //bad signature
+            ["withdraw1Nonce", []] //nonce out of order
+          ]
+        ) |
+        
+        for(doWithdraw <- @"withdraw0Nonce") {
+          doWithdraw!("wPurse") | for(@wPurse <- @"wPurse") {
+            @"getBalance"!(wPurse, "purseBalance") |
+            @"TestSet"!(
+              "Wallet withdraw should work as expected.",
+              [
+                ["purseBalance", 60],
+                ["walletBalance", 40]
+              ]
+            )
+          }
+        }
+      })
+      */
+    }
+  }
+}

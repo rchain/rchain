@@ -78,8 +78,7 @@ class InterpreterUtilTest extends FlatSpec with Matchers with BlockGenerator {
     val b3 = chain.idToBlocks(3)
 
     val (genCh, genMap) = computeBlockCheckpoint(genesis, genesis, chain, freshTS, freshMap)
-    println("genCh computed")
-    val genPostState = genCh.storageRepr
+    val genPostState    = genCh.storageRepr
     genPostState.contains("@{2}!(2)") should be(true)
     genPostState.contains("@{123}!(5)") should be(true)
 
