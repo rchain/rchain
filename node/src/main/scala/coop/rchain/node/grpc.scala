@@ -4,18 +4,21 @@ import coop.rchain.p2p.effects._
 import io.grpc.{Server, ServerBuilder}
 
 import scala.concurrent.Future
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import com.google.protobuf.empty.Empty
 import coop.rchain.casper.{MultiParentCasper, PrettyPrinter}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.protocol.{Deploy, DeployServiceGrpc, DeployServiceResponse, DeployString}
 import coop.rchain.casper.util.rholang.InterpreterUtil
-import coop.rchain.catscontrib._, Catscontrib._
+import coop.rchain.catscontrib._
+import Catscontrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.node.model.repl._
 import coop.rchain.node.model.diagnostics._
-import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RholangCLI, Runtime, errors}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -27,6 +30,8 @@ import coop.rchain.node.diagnostics.{JvmMetrics, NodeMetrics, StoreMetrics}
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.comm.transport._
 import coop.rchain.comm.discovery._
+import coop.rchain.models.Par
+import coop.rchain.rholang.interpreter.Interpreter._
 
 object GrpcServer {
 
@@ -82,8 +87,6 @@ object GrpcServer {
   }
 
   class ReplImpl(runtime: Runtime)(implicit scheduler: Scheduler) extends ReplGrpc.Repl {
-    import RholangCLI.{buildNormalizedTerm, evaluate}
-
     def exec(reader: Reader): Future[ReplResponse] =
       Task
         .coeval(buildNormalizedTerm(reader))
@@ -95,7 +98,7 @@ object GrpcServer {
               case th: Throwable       => Task.now(s"Error: $th")
             }
           case Right(term) =>
-            evaluate(runtime, term).attempt.map {
+            runEvaluate(runtime, term).attempt.map {
               case Left(ex) => s"Caught boxed exception: $ex"
               case Right(errors) => {
                 val errorStr =
@@ -118,5 +121,16 @@ object GrpcServer {
 
     def eval(request: EvalRequest): Future[ReplResponse] =
       exec(new StringReader(request.program))
+
+    def runEvaluate(runtime:Runtime, term : Par) : Task[Vector[errors.InterpreterError]] =
+      for {
+        _ <- Task.now(printNormalizedTerm(term))
+        result <- evaluate(runtime, term)
+      } yield (result)
+
+    private def printNormalizedTerm(normalizedTerm: Par): Unit = {
+      Console.println("\nEvaluating:")
+      Console.println(PrettyPrinter().buildString(normalizedTerm))
+    }
   }
 }

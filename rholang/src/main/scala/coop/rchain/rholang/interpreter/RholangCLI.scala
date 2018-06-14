@@ -67,8 +67,6 @@ object RholangCLI {
   }
 
   def reader(fileName: String): FileReader = new FileReader(fileName)
-  def lexer(fileReader: Reader): Yylex     = new Yylex(fileReader)
-  def parser(lexer: Yylex): parser         = new parser(lexer, lexer.getSymbolFactory())
 
   private def printPrompt(): Unit =
     Console.print("\nrholang> ")
@@ -92,21 +90,20 @@ object RholangCLI {
       } Console.println(error.toString())
     }
 
-  def evaluate(runtime: Runtime, normalizedTerm: Par): Task[Vector[InterpreterError]] =
+  def runEvaluate(runtime: Runtime, term: Par): Task[Vector[errors.InterpreterError]] =
     for {
-      _      <- Task.now(printNormalizedTerm(normalizedTerm))
-      _      <- runtime.reducer.inj(normalizedTerm)
-      errors <- Task.now(runtime.readAndClearErrorVector)
-    } yield errors
+      _      <- Task.now(printNormalizedTerm(term))
+      result <- Interpreter.evaluate(runtime, term)
+    } yield (result)
 
   @tailrec
   def repl(runtime: Runtime)(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
-        buildNormalizedTerm(new StringReader(line)).runAttempt match {
+        Interpreter.buildNormalizedTerm(new StringReader(line)).runAttempt match {
           case Right(par) =>
-            val evaluatorFuture = evaluate(runtime, par).runAsync
+            val evaluatorFuture = runEvaluate(runtime, par).runAsync
             waitForSuccess(evaluatorFuture)
             printStorageContents(runtime.space.store)
           case Left(ie: InterpreterError) =>
@@ -131,37 +128,11 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    buildNormalizedTerm(source).runAttempt
+    Interpreter
+      .buildNormalizedTerm(source)
+      .runAttempt
       .fold(System.err.println, processTerm)
   }
-
-  def buildNormalizedTerm(source: Reader): Coeval[Par] =
-    try {
-      for {
-        term    <- buildAST(source).fold(err => Coeval.raiseError(err), proc => Coeval.delay(proc))
-        inputs  = ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
-        outputs <- normalizeTerm[Coeval](term, inputs)
-        par <- Coeval.delay(
-                ParSortMatcher
-                  .sortMatch(outputs.par)
-                  .term)
-      } yield par
-    } catch {
-      case th: Throwable => Coeval.raiseError(UnrecognizedInterpreterError(th))
-    }
-
-  private def buildAST(source: Reader): Either[InterpreterError, Proc] =
-    Either
-      .catchNonFatal {
-        val lxr = lexer(source)
-        val ast = parser(lxr)
-        ast.pProc()
-      }
-      .leftMap {
-        case ex: Exception if ex.getMessage.toLowerCase.contains("syntax") =>
-          SyntaxError(ex.getMessage)
-        case th => UnrecognizedInterpreterError(th)
-      }
 
   @tailrec
   def waitForSuccess(evaluatorFuture: CancelableFuture[Vector[InterpreterError]]): Unit =
@@ -197,28 +168,8 @@ object RholangCLI {
   }
 
   def evaluateFile(runtime: Runtime)(par: Par)(implicit scheduler: Scheduler): Unit = {
-    val evaluatorFuture = evaluate(runtime, par).runAsync
+    val evaluatorFuture = runEvaluate(runtime, par).runAsync
     waitForSuccess(evaluatorFuture)
     printStorageContents(runtime.space.store)
   }
-
-  private def normalizeTerm[M[_]](term: Proc, inputs: ProcVisitInputs)(
-      implicit err: MonadError[M, InterpreterError]): M[ProcVisitOutputs] =
-    ProcNormalizeMatcher.normalizeMatch[M](term, inputs).flatMap { normalizedTerm =>
-      if (normalizedTerm.knownFree.count > 0) {
-        if (normalizedTerm.knownFree.wildcards.isEmpty) {
-          val topLevelFreeList = normalizedTerm.knownFree.env.map {
-            case (name, (_, _, line, col)) => s"$name at $line:$col"
-          }
-          err.raiseError(UnrecognizedNormalizerError(
-            s"Top level free variables are not allowed: ${topLevelFreeList.mkString("", ", ", "")}."))
-        } else {
-          val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
-            case (line, col) => s"_ (wildcard) at $line:$col"
-          }
-          err.raiseError(UnrecognizedNormalizerError(
-            s"Top level wildcards are not allowed: ${topLevelWildcardList.mkString("", ", ", "")}."))
-        }
-      } else normalizedTerm.pure[M]
-    }
 }
